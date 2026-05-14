@@ -46,10 +46,6 @@ function getResponse(content) {
     if (cleaned.includes("avec qui")) {
         return isUpper ? "AVEC QUETTE" : "Avec quette";
     }
-
-        if (cleaned.includes("test")) {
-        return isUpper ? "ECHO ?" : "Echo ?";
-    }
     
     if (cleaned.includes("pour quoi faire")) {
         return isUpper ? "POUR FAIRE FEUR" : "Pour faire feur";
