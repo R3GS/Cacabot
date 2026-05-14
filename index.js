@@ -29,6 +29,10 @@ function getResponse(content) {
         return isUpper ? "AVEC FEUR" : "Avec feur";
     }
 
+    if (cleaned.endsWith("oui")) {
+    return isUpper ? "STITI" : "Stiti";
+}
+    
     if (cleaned.includes("avec qui")) {
         return isUpper ? "AVEC QUETTE" : "Avec quette";
     }
