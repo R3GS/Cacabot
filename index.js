@@ -61,7 +61,7 @@ function getResponse(content) {
         return isUpper ? "À QUETTE" : "À quette";
     }
 
-    if (cleaned.includes("non")) {
+    if (cleaned.endsWith("non")) {
         return isUpper ? "BRIL" : "Bril";
     }
 
@@ -75,12 +75,12 @@ function getResponse(content) {
     if (isCestQuoi) {
         return isUpper ? "C'EST FEUR" : "C'est feur";
     }
-
-    if (isDeQuoi) {
+   
+    if (cleaned.includes("de quoi")
         return isUpper ? "DE FEUR" : "De feur";
     }
 
-    if (isDeQui) {
+    if (cleaned.includes("de qui")
         return isUpper ? "DE QUETTE" : "De quette";
     }
 
