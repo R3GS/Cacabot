@@ -65,6 +65,10 @@ function getResponse(content) {
         return isUpper ? "BRIL" : "Bril";
     }
 
+    if (cleaned.endsWith("bite")) {
+        return isUpper ? "QUOICOUBITE" : "Quoicoubite";
+    }
+
     const isCestQui = cleaned.includes("c est qui") || cleaned.includes("cest qui");
     const isCestQuoi = cleaned.includes("c est quoi") || cleaned.includes("cest quoi");
 
