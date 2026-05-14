@@ -76,11 +76,11 @@ function getResponse(content) {
         return isUpper ? "C'EST FEUR" : "C'est feur";
     }
    
-    if (cleaned.includes("de quoi")
+    if (cleaned.includes("de quoi")) {
         return isUpper ? "DE FEUR" : "De feur";
     }
 
-    if (cleaned.includes("de qui")
+    if (cleaned.includes("de qui")) {
         return isUpper ? "DE QUETTE" : "De quette";
     }
 
