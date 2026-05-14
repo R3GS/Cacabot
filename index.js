@@ -76,6 +76,14 @@ function getResponse(content) {
         return isUpper ? "C'EST FEUR" : "C'est feur";
     }
 
+    if (isDeQuoi) {
+        return isUpper ? "DE FEUR" : "De feur";
+    }
+
+    if (isDeQui) {
+        return isUpper ? "DE QUETTE" : "De quette";
+    }
+
     // =========================
     // MESSAGES EXACTS UNIQUEMENT
     // =========================
