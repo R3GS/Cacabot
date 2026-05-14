@@ -25,13 +25,23 @@ function getResponse(content) {
     // PHRASES CONTENANT LES MOTS
     // =========================
 
+    if (cleaned.includes("henry tran") || cleaned.includes("singapour")) {
+
+        const videos = [
+            "https://discord.com/channels/1128032963595075605/1128032964924670053/1504609616858845317",
+            "https://discord.com/channels/1128032963595075605/1128032964924670053/1504609644763414679"
+        ];
+
+        return Math.random() < 0.5 ? videos[0] : videos[1];
+    }
+    
     if (cleaned.includes("avec quoi")) {
         return isUpper ? "AVEC FEUR" : "Avec feur";
     }
 
     if (cleaned.endsWith("oui")) {
     return isUpper ? "STITI" : "Stiti";
-}
+    }
     
     if (cleaned.includes("avec qui")) {
         return isUpper ? "AVEC QUETTE" : "Avec quette";
