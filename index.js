@@ -90,7 +90,7 @@ function getResponse(content) {
         "D'ici peu, tu vas être en retard à quelque chose d’important mais ça va rien changer au final.",
         "Demain, sans prévenir, tu comprendras sur insta un truc fondamental sur la vie… et tu diras «ah ok» avant de retourner scroller.",
         "Les anciens avaient prédit ton arrivée dans un texte gravé sur une caisse de supermarché Lidl en 2004.",
-        "Tu vas bientôt traverser une période SUPER IMPORTANTE de ta vie, mais genre en ville, entre deux merdes de chien.",
+        "Tu vas bientôt vivre un moment SUPER IMPORTANT de ta vie, mais genre entre deux merdes de chien.",
         "Un inconnu va dire ton prénom dans une phrase très sérieuse sans savoir pourquoi, et ça va te hanter.",
         "Les signes étaient là depuis le début : ticket de caisse froissé, pigeon qui te regarde, lumière bizarre au plafond... Méfie-toi...",
         "Tu vas prendre une décision débile qui sera interprétée comme une prophétie par quelqu’un d’autre.",
