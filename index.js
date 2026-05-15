@@ -77,7 +77,7 @@ if (command === "!animal") {
         "Un lapin", "Un loup", "Un mouton", "Un ours", "Un sanglier", "Un tigre"
         ];
 
-    const etats = [
+    const etatslist = [
         "en burn-out.", "sous coke.", "dépressif.", "qui a la diarrhée.", "cleptomane.", "alcoolique.", "casse-couilles.",
         "vétéran de la Seconde Guerre Mondiale.", "youtubeur.", "en costard.", "gay.", "asthmatique.", "qui sent la tartiflette.",
         "complètement con.", "complètement con.", "de merde.", "transgenre (sois fièr.e).", "sataniste.", "fan de Feldup.", "rockstar.",
@@ -89,8 +89,8 @@ if (command === "!animal") {
         "qui étale son caca sur les murs.", "perdu dans sa vie.", "trader à Los Angeles.", "nostalgique des années 2000.", "transphobe.", "raciste."
         ];
 
-    const animauxl = animaux[Math.floor(Math.random() * animaux.length)];
-    const etats = etats[Math.floor(Math.random() * etats.length)];
+    const animal = animaux[Math.floor(Math.random() * animaux.length)];
+    const etat = etatsList[Math.floor(Math.random() * etatsList.length)];
 
     return `${base}\n**${animal} ${etat}**`;
 }
