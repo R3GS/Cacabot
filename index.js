@@ -115,7 +115,8 @@ if (command === "!animal") {
         "Une grenouille", "Une biche", "Une guêpe", "Une brebis", "Une marmotte", "Une souris", "Une dinde", "Une oie", "Une poule", "Une taupe",
         "Une musaraigne", "Une abeille", "Une chienne", "Une chatte", "Une truie", "Une larve", "Une tortue", "Une pieuvre", "Une crevette",
         "Une autruche", "Une coccinelle", "Une belette", "Une sardine", "Une otarie", "Une panthère", "Une huître", "Une moule", "Une antilope", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une "
-
+    ];
+    
     const etatsMasc = [
         "recherché pour le meurtre de 6 enfants.", "vétéran de la Seconde Guerre Mondiale.", "dépressif.", "gay.", "complètement con.", "bourré.",
         "perdu dans sa vie.", "plombier, mais aussi docteur, ingénieur, professeur, livreur de pizza, méchanicien, soldat, policier et astronaute.",
@@ -131,7 +132,7 @@ if (command === "!animal") {
         "avec un fort accent belge.", "qui vote RN.", "fan de Norman.", "avec 2 de QI.", "SDF.", "sous kétamine.", "qui s'est chié dessus.",
         "addict à l'Oasis Tropical.", "DJ en Teknival.", "de la mafia italienne.","adepte du fameux «je ne suis pas raciste, j'ai un ami noir».",
         "coprophage.", "à la recherche du gros JDG.", "qui se lève à 4h du mat pour aller au taf.", "sous traitement hormonal.",
-        "en manifestation LGBT.", "qui pleure sur un exercice de maths devant son père qui lui gueule dessus.", "genderfluid."
+        "en manifestation LGBT.", "qui pleure sur un exercice de maths devant son père qui lui gueule dessus.", "genderfluid.",
         "en 4K Ultra HD IMAX Surround Dolby Digital.", "devant une série Netflix de merde.", "qui utilise la commande !destin.", "trisomique.",
         "qui étale son caca sur les murs.", "nostalgique des années 2000.", "transphobe.", "raciste.", "qui a raté 6 fois son bac.", "qui adore McFly & Calito."
     ];
