@@ -74,7 +74,7 @@ function getResponse(content) {
             "Hmmm, ton animal spirituel est...\n**un putain de moustique de merde.**",
             "Hmmm, ton animal spirituel est...\n**un axolotl transgenre (sois fièr.e).**",
             "Hmmm, ton animal spirituel est...\n**un raton laveur sataniste.**",
-            "Hmmm, ton animal spirituel est...\n**un perroquet fan de Feldup.**"
+            "Hmmm, ton animal spirituel est...\n**un perroquet fan de Feldup.**",
             "Hmmm, ton animal spirituel est...\n**un mulot mathématicien.**",
             "Hmmm, ton animal spirituel est...\n**un singe addict à TikTok.**",
             "Hmmm, ton animal spirituel est...\n**un poisson avec un fort accent belge.**",
