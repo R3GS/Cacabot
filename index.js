@@ -44,8 +44,8 @@ function getResponse(content) {
         return {
             data: new EmbedBuilder()
                 .setColor(0x8e44ad)
-                .setTitle("💩 Aide à Cacabot")
-                .setDescription("Hey ! Voici Cacabot, qui, malgré son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\nPour découvrir les différentes commandes disponibles de Cacabot,\n↓ choisis une catégorie ↓")
+                .setTitle("💩 AIDE A CACABOT")
+                .setDescription("Hey ! Voici Cacabot, qui, malgré son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\n\nPour découvrir les différentes commandes disponibles de Cacabot, choisis l'une des catégories ci-dessous !")
         };
     }
     if (raw.toLowerCase().match(/!aternos\b/)) {
