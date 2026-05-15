@@ -403,13 +403,6 @@ client.on('messageCreate', async (message) => {
 
     const response = getResponse(message.content);
 
-    if (!response) return;
-
-    if (response === "VIDEO") {
-        await message.reply("https://www.coiffbot.fr/feur.mp4");
-        return;
-    }
-
     if (response?.menu) {
         const menu = new StringSelectMenuBuilder()
             .setCustomId('help_menu')
