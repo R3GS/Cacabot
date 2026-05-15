@@ -53,7 +53,7 @@ function getResponse(content) {
     }
 
     if (raw.toLowerCase().match(/!discord\b/)) {
-        return "Si vous souhaitez inviter vos ami.es, voici le lien d'invitation du serveur Discord : ** https://discord.com/invite/maAbUYb **";
+        return "Si vous souhaitez inviter vos ami.es, voici le lien d'invitation du serveur Discord :\n** https://discord.com/invite/maAbUYb **";
     }
 
 // =========================
