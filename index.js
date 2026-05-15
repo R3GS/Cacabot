@@ -83,27 +83,8 @@ if (command === "!animal") {
 
     const base = "Hmmm, ton animal spirituel est...";
 
-    const animaux = [
-        "Un rat de RER", "Un pigeon", "Un chat errant", "Un renard", "Un dauphin", "Un corbeau", "Un hamster", "Un chien", "Un crapaud", "Un panda",
-        "Un hérisson", "Un taureau", "Un papillon", "Un putain de moustique", "Un axolotl", "Un raton laveur", "Un perroquet", "Un singe",
-        "Un poisson", "Un lièvre", "Un scarabée", "Un suricate", "Un éléphant", "Un rhinocéros", "Un toucan", "Un capybara", "Un cheval",
-        "Un bousier", "Un pingouin", "Un Pikachu", "Un mulot", "Un cochon", "Un lion", "Un moucheron", "Un chevreuil", "Un castor", "Un chacal",
-        "Un aigle", "Un dromadaire", "Un gorille", "Un guépard", "Un hibou", "Un hippopotame", "Un jaguar", "Un kangourou", "Un koala",
-        "Un léopard", "Un lynx", "Un phoque", "Un serpent", "Un zèbre", "Un âne", "Un canard", "Un cerf", "Un chameau", "Un coq", "Un dindon",
-        "Un lapin", "Un loup", "Un mouton", "Un ours", "Un sanglier", "Un tigre"
-        ];
-
     const etatslist = [
-        "en burn-out.", "sous coke.", "dépressif.", "qui a la diarrhée.", "recherché pour le meurtre de 6 enfants.", "alcoolique.", "casse-couilles.",
-        "vétéran de la Seconde Guerre Mondiale.", "qui collectionne les bouchons de liège.", "qui ouvre un courrier de l'URSSAF.", "gay.", "asthmatique.",
-        "qui pue du cul.", "complètement con.", "de merde.", "transgenre 🏳️‍⚧️", "sataniste.", "fan de Feldup.", "rockstar.",
-        "addict à TikTok.", "avec un fort accent belge.", "qui vote RN.", "fan de Norman.", "avec 2 de QI.", "SDF.", "bourré.",
-        "sous kétamine.", "qui s'est chié dessus.", "addict à l'Oasis Tropical.", "DJ en Teknival.", "de la mafia italienne.",
-        "adepte du fameux «je ne suis pas raciste, j'ai un ami noir».", "coprophage.", "à la recherche du gros JDG.", "qui adore McFly & Carlito.", "qui a raté 6 fois son bac.",
-        "qui se lève à 4h du mat pour aller au taf.", "sous traitement hormonal.", "en manifestation LGBT.", "qui pleure sur un exercice de maths devant son père qui lui gueule dessus.",
-        "en 4K Ultra HD IMAX Surround Dolby Digital.", "devant une série Netflix de merde.", "qui utilise la commande !destin.", "trisomique.",
-        "qui étale son caca sur les murs.", "perdu dans sa vie.", "plombier, mais aussi docteur, ingénieur, professeur, livreur de pizza, méchanicien, soldat, policier et astronaute.",
-        "nostalgique des années 2000.", "transphobe.", "raciste."
+        
         ];
 
     const animal = animaux[Math.floor(Math.random() * animaux.length)];
@@ -111,6 +92,75 @@ if (command === "!animal") {
 
     return `${base}\n**${animal} ${etat}**`;
 }
+
+
+if (command === "!animal") {
+
+    const base = "Hmmm, ton animal spirituel est...";
+
+    const animauxMasc = [
+        "Un rat de RER", "Un pigeon", "Un chat errant", "Un renard", "Un dauphin", "Un corbeau", "Un hamster", "Un chien", "Un crapaud", "Un panda",
+        "Un hérisson", "Un taureau", "Un papillon", "Un putain de moustique", "Un axolotl", "Un raton laveur", "Un perroquet", "Un singe",
+        "Un poisson", "Un lièvre", "Un scarabée", "Un suricate", "Un éléphant", "Un rhinocéros", "Un toucan", "Un capybara", "Un cheval",
+        "Un bousier", "Un pingouin", "Un Pikachu", "Un mulot", "Un cochon", "Un lion", "Un moucheron", "Un chevreuil", "Un castor", "Un chacal",
+        "Un aigle", "Un dromadaire", "Un gorille", "Un guépard", "Un hibou", "Un hippopotame", "Un jaguar", "Un kangourou", "Un koala",
+        "Un léopard", "Un lynx", "Un phoque", "Un serpent", "Un zèbre", "Un âne", "Un canard", "Un cerf", "Un chameau", "Un coq", "Un dindon",
+        "Un lapin", "Un loup", "Un mouton", "Un ours", "Un sanglier", "Un tigre", "Un accarien", "Un crocodile", "Un alligator", "Un cochon dinde",
+        "Un furet", "Un alpaga", "Un mille-pattes", "Un ver de terre", "Un bandicoot", "Un blaireau", "Un bonobo", "Un morse"
+    ];
+
+    const animauxFem = [
+        "Une girafe", "Une loutre", "Une mouette", "Une hyène", "Une mouche", "Une fourmi", "Une horrible araignée", "Une mouche à merde", "Une chouette",
+        "Une baleine", "Une hirondelle", "Une lionne", "Une louve", "Une jument", "Une chèvre", "Une chauve-souris", "Une gazelle", "Une vache",
+        "Une grenouille", "Une biche", "Une guêpe", "Une brebis", "Une marmotte", "Une souris", "Une dinde", "Une oie", "Une poule", "Une taupe",
+        "Une musaraigne", "Une abeille", "Une chienne", "Une chatte", "Une truie", "Une larve", "Une tortue", "Une pieuvre", "Une crevette",
+        "Une autruche", "Une coccinelle", "Une belette", "Une sardine", "Une otarie", "Une panthère", "Une huître", "Une moule", "Une antilope", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une "
+
+    const etatsMasc = [
+        "recherché pour le meurtre de 6 enfants.", "vétéran de la Seconde Guerre Mondiale.", "dépressif.", "gay.", "complètement con.", "bourré.",
+        "perdu dans sa vie.", "plombier, mais aussi docteur, ingénieur, professeur, livreur de pizza, méchanicien, soldat, policier et astronaute.",
+    ];
+
+    const etatsFem = [
+        "recherchée pour le meurtre de 6 enfants.", "dépressive.", "lesbienne.", "complètement conne.", "bourrée.", "perdue dans sa vie."
+    ];
+
+    const etatsNeutres = [
+        "en burn-out.", "sous coke.", "qui a la diarrhée.", "alcoolique.", "casse-couilles.", "qui collectionne les bouchons de liège.", "qui fuit l'URSSAF.",
+        "asthmatique.", "qui pue du cul.",  "de merde.", "transgenre 🏳️‍⚧️", "sataniste.", "fan de Feldup.", "rockstar.", "addict à TikTok.",
+        "avec un fort accent belge.", "qui vote RN.", "fan de Norman.", "avec 2 de QI.", "SDF.", "sous kétamine.", "qui s'est chié dessus.",
+        "addict à l'Oasis Tropical.", "DJ en Teknival.", "de la mafia italienne.","adepte du fameux «je ne suis pas raciste, j'ai un ami noir».",
+        "coprophage.", "à la recherche du gros JDG.", "qui se lève à 4h du mat pour aller au taf.", "sous traitement hormonal.",
+        "en manifestation LGBT.", "qui pleure sur un exercice de maths devant son père qui lui gueule dessus.", "genderfluid."
+        "en 4K Ultra HD IMAX Surround Dolby Digital.", "devant une série Netflix de merde.", "qui utilise la commande !destin.", "trisomique.",
+        "qui étale son caca sur les murs.", "nostalgique des années 2000.", "transphobe.", "raciste.", "qui a raté 6 fois son bac.", "qui adore McFly & Calito."
+    ];
+
+    const isFem = Math.random() < 0.5;
+
+    let animal;
+    let etat;
+
+    if (isFem) {
+
+        animal = animauxFem[Math.floor(Math.random() * animauxFem.length)];
+
+        const liste = [...etatsFem, ...etatsNeutres];
+
+        etat = liste[Math.floor(Math.random() * liste.length)];
+
+    } else {
+
+        animal = animauxMasc[Math.floor(Math.random() * animauxMasc.length)];
+
+        const liste = [...etatsMasc, ...etatsNeutres];
+
+        etat = liste[Math.floor(Math.random() * liste.length)];
+    }
+
+    return `${base}\n**${animal} ${etat}**`;
+}
+
 
 // =========================
 //         !DESTIN
@@ -266,9 +316,7 @@ if (command === "!animal") {
     if (cleaned.includes("c est qui")) {
         return isUpper ? "C'EST QUETTE" : "C'est quette";
     }
-    if (cleaned === "ntm jax") {
-        return "https://cdn.discordapp.com/attachments/1206232717444775956/1504653708770672741/Capture_decran_2026-05-15_031617.png";
-    }
+
     if (cleaned.includes("cest qui")) {
         return isUpper ? "C'EST QUETTE" : "C'est quette";
     }
@@ -295,7 +343,10 @@ if (command === "!animal") {
     if (cleaned === "a" || cleaned === "ha" || cleaned === "ah") {
         return "B";
     }
-
+    if (cleaned === "ntm jax") {
+        return "https://cdn.discordapp.com/attachments/1206232717444775956/1504653708770672741/Capture_decran_2026-05-15_031617.png";
+    }
+    
     // =========================
     // QUOI / QUI CLASSIQUES
     // =========================
