@@ -31,7 +31,7 @@ function getResponse(content) {
         isUpper ? upper : normal;
 
 // =========================
-//        COMMANDES
+//     COMMANDES RANDOM
 // =========================
 
     if (raw.toLowerCase().match(/!aternos\b/)) {
@@ -41,6 +41,10 @@ function getResponse(content) {
     if (raw.toLowerCase().match(/!discord\b/)) {
         return "Si vous souhaitez inviter vos ami.es, voici le lien d'invitation du serveur Discord : ** https://discord.com/invite/maAbUYb **";
     }
+
+// =========================
+//         !EPSYS
+// =========================
 
     if (command === "!epsys") {
         const gifs = [
@@ -55,47 +59,38 @@ function getResponse(content) {
         return gifs[Math.floor(Math.random() * gifs.length)];
     }
 
-    if (command === "!animal") {
-        const animals = [
-            "Hmmm, ton animal spirituel est...\n**un rat de RER en burn-out.**",
-            "Hmmm, ton animal spirituel est...\n**un pigeon sous coke.**",
-            "Hmmm, ton animal spirituel est...\n**un chat errant dépressif.**",
-            "Hmmm, ton animal spirituel est...\n**un taureau qui a la diarrhée.**",
-            "Hmmm, ton animal spirituel est...\n**un renard cleptomane.**",
-            "Hmmm, ton animal spirituel est...\n**un dauphin alcoolique.**",
-            "Hmmm, ton animal spirituel est...\n**un corbeau casse-couilles.**",
-            "Hmmm, ton animal spirituel est...\n**un hamster vétéran de la Seconde Guerre Mondiale.**",
-            "Hmmm, ton animal spirituel est...\n**un chien youtubeur.**",
-            "Hmmm, ton animal spirituel est...\n**un crapeau en costard.**",
-            "Hmmm, ton animal spirituel est...\n**un panda gay.**",
-            "Hmmm, ton animal spirituel est...\n**un hérisson asthmatique.**",
-            "Hmmm, ton animal spirituel est...\n**une loutre qui sent la tartiflette.**",
-            "Hmmm, ton animal spirituel est...\n**un papillon complètement con.**",
-            "Hmmm, ton animal spirituel est...\n**un putain de moustique de merde.**",
-            "Hmmm, ton animal spirituel est...\n**un axolotl transgenre (sois fièr.e).**",
-            "Hmmm, ton animal spirituel est...\n**un raton laveur sataniste.**",
-            "Hmmm, ton animal spirituel est...\n**un perroquet fan de Feldup.**",
-            "Hmmm, ton animal spirituel est...\n**un mulot mathématicien.**",
-            "Hmmm, ton animal spirituel est...\n**un singe addict à TikTok.**",
-            "Hmmm, ton animal spirituel est...\n**un poisson avec un fort accent belge.**",
-            "Hmmm, ton animal spirituel est...\n**un lièvre qui croit en l'astrologie.**",
-            "Hmmm, ton animal spirituel est...\n**un scarabé qui vote RN.**",
-            "Hmmm, ton animal spirituel est...\n**un suricate fan de Norman.**",
-            "Hmmm, ton animal spirituel est...\n**un éléphant avec 2 de QI.**",
-            "Hmmm, ton animal spirituel est...\n**un rhinocéros SDF.**",
-            "Hmmm, ton animal spirituel est...\n**un toucan bourré.**",
-            "Hmmm, ton animal spirituel est...\n**un capybara sous kétamine.**",
-            "Hmmm, ton animal spirituel est...\n**un cheval qui s'est chié dessus.**",
-            "Hmmm, ton animal spirituel est...\n**un membre de Regaïa addict à l'Oasis Tropical.**",
-            "Hmmm, ton animal spirituel est...\n**un Pikachu DJ en Teknival.**",
-            "Hmmm, ton animal spirituel est...\n**un bousier de la mafia italienne.**",
-            "Hmmm, ton animal spirituel est...\n**un moucheron amoureux de Lady Gaga.**",
-            "Hmmm, ton animal spirituel est...\n**un lion mangeur de caca.**",
-            "Hmmm, ton animal spirituel est...\n**un panda roux à la recherche du gros JDG.**",
-        ];
+// =========================
+//          !ANIMAL
+// =========================
 
-    return animals[Math.floor(Math.random() * animals.length)];
+const animaux = [
+    "Un rat de RER", "Un pigeon", "Un chat errant", "Un renard", "Un dauphin", "Un corbeau", "Un hamster", "Un chien", "Un crapaud", "Un panda",
+    "Un hérisson", "Un taureau", "Un papillon", "Un putain de moustique", "Un axolotl", "Un raton laveur", "Un perroquet", "Un singe",
+    "Un poisson", "Un lièvre", "Un scarabée", "Un suricate", "Un éléphant", "Un rhinocéros", "Un toucan", "Un capybara", "Un cheval",
+    "Un bousier", "Un pingouin", "Un Pikachu", "Un mulot", "Un cochon", "Un lion", "Un moucheron", "Un chevreuil"
+];
+
+const etats = [
+    "en burn-out.", "sous coke.", "dépressif.", "qui a la diarrhée.", "cleptomane.", "alcoolique.", "casse-couilles.",
+    "vétéran de la Seconde Guerre Mondiale.", "youtubeur.", "en costard.", "gay.", "asthmatique.", "qui sent la tartiflette.",
+    "complètement con.", "complètement con.", "de merde.", "transgenre (sois fièr.e).", "sataniste.", "fan de Feldup.", "rockstar.",
+    "addict à TikTok.", "avec un fort accent belge.", "qui vote RN.", "fan de Norman.", "avec 2 de QI.", "SDF.", "bourré.",
+    "sous kétamine.", "qui s'est chié dessus.", "addict à l'Oasis Tropical.", "DJ en Teknival.", "de la mafia italienne.",
+    "amoureux de Lady Gaga.", "mangeur de caca.", "à la recherche du gros JDG."
+];
+
+if (command === "!animal") {
+    const base = "Hmmm, ton animal spirituel est...";
+
+    const animal = animaux[Math.floor(Math.random() * animaux.length)];
+    const etat = etats[Math.floor(Math.random() * etats.length)];
+
+    return `${base} **${animal} ${etat}**`;
 }
+
+// =========================
+//         !DESTIN
+// =========================
 
     if (command === "!destin") {
     const destin = [
