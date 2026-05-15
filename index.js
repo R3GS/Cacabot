@@ -96,16 +96,16 @@ function getResponse(content) {
             "Tu vas prendre une décision débile qui sera interprétée comme une prophétie par quelqu’un d’autre.",
             "Ton futur dépend d’un truc que t’as oublié dans une poche de veste depuis 3 mois.",
             "Un jour, tu vas survivre à un moment important sans réaliser que c’en était un.",
-            "Un jour tu vas réaliser que t’as survécu à 100% de tes jours difficiles, et c’est déjà très bien <3",
-            "Tu vas progresser sans t’en rendre compte, il faut que tu tiennes bon, c'est juste temporaire <3",
+            "Un jour tu vas réaliser que t’as survécu à 100% de tes jours difficiles, et c’est déjà très bien.",
+            "Tu vas progresser sans t’en rendre compte, il faut que tu tiennes bon, c'est juste temporaire.",
             "Sans prévenir, un détail minuscule va te redonner l'envie de vivre.",
             "Tu vas réussir un truc que t’avais enterré mentalement depuis longtemps, et ça va faire bizarre. Mais ça va faire du bien.",
-            "T’as déjà changé plus que tu ne le crois, mais ton cerveau ne veut pas te le dire. Alors c'est moi qui m'en charge : Tu as changé, et c'est beau <3",
+            "T’as déjà changé plus que tu ne le crois, mais ton cerveau ne veut pas te le dire. Alors c'est moi qui m'en charge : Tu as changé, et c'est beau.",
             "Peu importe ce que les gens disent, ton identité n’a pas besoin d’autorisation pour exister.",
             "Quelque part dans l’univers, une version de toi est heureuse d’être exactement ce qu’elle est.",
             "Le monde est bizarre, mais ton existence dedans est valide.",
             "Tu vas rencontrer des gens qui te comprendront sans que tu leur expliques ce que tu es, et ça va te surprendre.",
-            "Y a aucune version correcte de toi à atteindre, tu es déjà toi et c'est tout ce qui compte <3",
+            "Y a aucune version correcte de toi à atteindre, tu es déjà toi et c'est tout ce qui compte.",
             "Dans un univers alternatif, quelqu’un te remercie d’exister, sans raison précise. Et c’est suffisant."
             "Ton destin est écrit sur une boîte de raviolis périmés depuis 2017.",
             "Une porte automatique va te reconnaître et hésiter à s’ouvrir, volontairement.",
@@ -115,7 +115,7 @@ function getResponse(content) {
             "Tu vas acquérir le pouvoir d'être un putain de génie mais uniquement entre 3h12 et 3h14 du matin.",
             "Ton futur dépend d’un objet que t’as jeté sans t’en rendre compte en 2022.",
             "Un jour, tu vas réussir un truc incroyable et tu vas prétendre que c’était intentionnel alors que non.",
-            "Tu vas progresser sans t’en rendre compte et un jour tu vas réaliser que t’as survécu à 100% de tes pires jours. Beau travail, continue comme ça <3",
+            "Tu vas progresser sans t’en rendre compte et un jour tu vas réaliser que t’as survécu à 100% de tes pires jours. Beau travail, continue comme ça.",
             "Sans prévenir, un détail ridicule va te redonner foi en la vie pendant 11 minutes, puis disparaître. Ça arrive à tout le monde, tkt pas.",
             "Ton destin c’est un ticket de caisse Lidl froissé avec écrit dessus «bonne chance fdp» en tout petit.",
             "Tu vas rater un moment clé de ta vie parce que t’étais en train de fixer un mur comme si c’était ton daron.",
@@ -126,6 +126,14 @@ function getResponse(content) {
             "Tu vas bientôt avoir une révélation existentielle au rayon surgelés du Leclerc de Roubaix à 16h37.",
             "Ton destin c’est un truc écrit à l’encre qui bave et même lui il sait pas trop où il va.",
             "Tu meurs demain."
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1504679674561953792/image.png"
+            "https://i.pinimg.com/736x/23/55/f2/2355f2363ccca5871974b2289216e6a6.jpg"
+            "https://i.pinimg.com/736x/3b/28/9e/3b289efdc603a8e916906e797fa6652c.jpg"
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1504681138864521247/destin.mp4"
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1504681627748401203/destin.mp4"
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1504682385290170418/destin.mp4"
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1504685026057519144/destin.mp4"
+
         ];
 
         return destin[Math.floor(Math.random() * destin.length)];
