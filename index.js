@@ -78,7 +78,10 @@ const etats = [
     "complètement con.", "complètement con.", "de merde.", "transgenre (sois fièr.e).", "sataniste.", "fan de Feldup.", "rockstar.",
     "addict à TikTok.", "avec un fort accent belge.", "qui vote RN.", "fan de Norman.", "avec 2 de QI.", "SDF.", "bourré.",
     "sous kétamine.", "qui s'est chié dessus.", "addict à l'Oasis Tropical.", "DJ en Teknival.", "de la mafia italienne.",
-    "amoureux de Lady Gaga.", "mangeur de caca.", "à la recherche du gros JDG."
+    "amoureux de Lady Gaga.", "mangeur de caca.", "à la recherche du gros JDG.", "qui adore McFly & Carlito.", "qui rate son bac.",
+    "qui se lève à 4h du mat pour aller au taf.", "sous traitement hormonal.", "en manifestation LGBT.", "qui révise son oral du bac blanc.",
+    "en 4K Ultra HD IMAX Surround Dolby Digital.", "devant une série Netflix de merde.", "qui utilise la commande !destin.", "trisomique.",
+    "qui étale son caca sur les murs.", "perdu dans sa vie.", "trader à Los Angeles.", "nostalgique des années 2000.", "transphobe.", "raciste."
 ];
 
 if (command === "!animal") {
