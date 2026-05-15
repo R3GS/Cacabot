@@ -17,18 +17,17 @@ const client = new Client({
 });
 
 function getResponse(content) {
-    function getResponse(content) {
     const raw = content;
 
     const cleaned = raw
         .toLowerCase()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9\s]/g, "")
+        .replace(/[^a-z0-9\s!]/g, "")
         .replace(/\s+/g, " ")
         .trim();
 
-    const command = cleaned.split(" ")[0];
+    const command = raw.trim().split(" ")[0].toLowerCase();
 
     const isUpper =
         raw.length > 0 &&
