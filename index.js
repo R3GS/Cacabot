@@ -15,11 +15,19 @@ function getResponse(content) {
 
     const cleaned = raw
         .toLowerCase()
-        .replace(/[^a-zàâçéèêëîïôûùüÿñæœ\s]/gi, "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") // enlève les accents
+        .replace(/[^a-z0-9\s]/g, "")
         .replace(/\s+/g, " ")
         .trim();
 
-    const isUpper = raw === raw.toUpperCase();
+    const isUpper =
+        raw.length > 0 &&
+        raw === raw.toUpperCase() &&
+        raw !== raw.toLowerCase();
+
+    const reply = (normal, upper = normal.toUpperCase()) =>
+        isUpper ? upper : normal;
 
     // =========================
     // PHRASES CONTENANT LES MOTS
@@ -94,7 +102,7 @@ function getResponse(content) {
     if (cleaned.includes("cest a qui")) {
         return isUpper ? "C'EST À QUETTE" : "C'est à quette";
     }
-
+    
     if (cleaned.includes("67")) {
         return "https://media.discordapp.net/attachments/1480734932933542049/1504170153317761085/67.gif?ex=6a07549e&is=6a06031e&hm=6801e85955300a01ad5fd2b6e6f05b116b147c8c67f5e9ee7cbbb6551d2c0cfa&=&width=878&height=822";
     }
@@ -111,11 +119,11 @@ function getResponse(content) {
         return isUpper ? "QUOICOUBITE" : "Quoicoubite";
     }
 
-        if (cleaned.includes("c est qui")) {
+    if (cleaned.includes("c est qui")) {
         return isUpper ? "C'EST QUETTE" : "C'est quette";
     }
 
-    (cleaned.includes("cest qui")) {
+    if (cleaned.includes("cest qui")) {
         return isUpper ? "C'EST QUETTE" : "C'est quette";
     }
 
