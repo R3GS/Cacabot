@@ -281,9 +281,6 @@ if (command === "!animal") {
     if (cleaned.includes("de qui")) {
         return isUpper ? "DE QUETTE" : "De quette";
     }
-        if (cleaned.includes("proutisme")) {
-        return ":cacaboudin:";
-    }
 
     // =========================
     // MESSAGES EXACTS UNIQUEMENT
