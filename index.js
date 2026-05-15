@@ -42,7 +42,7 @@ function getResponse(content) {
 
         return Math.random() < 0.5 ? videos[0] : videos[1];
     }
-    
+
     if (cleaned.includes("avec quoi")) {
         return isUpper ? "AVEC FEUR" : "Avec feur";
     }
@@ -50,7 +50,7 @@ function getResponse(content) {
     if (cleaned.endsWith("oui")) {
         return isUpper ? "STITI" : "Stiti";
     }
-    
+
     if (cleaned.includes("bac blanc")) {
         return "https://cdn.discordapp.com/attachments/720057528867618909/1504075425985466481/1778669924015-18e38746e64899fb.png";
     }
@@ -58,11 +58,11 @@ function getResponse(content) {
     if (cleaned.includes("lexys")) {
         return "https://cdn.discordapp.com/attachments/720057528867618909/1498102442200404120/bac_blanc.gif";
     }
-    
+
     if (cleaned.includes("avec qui")) {
         return isUpper ? "AVEC QUETTE" : "Avec quette";
     }
-    
+
     if (cleaned.includes("pour quoi faire")) {
         return isUpper ? "POUR FAIRE FEUR" : "Pour faire feur";
     }
@@ -106,7 +106,7 @@ function getResponse(content) {
     if (cleaned.includes("c est a qui")) {
         return isUpper ? "C'EST À QUETTE" : "C'est à quette";
     }
-    
+
     if (cleaned.includes("cest a qui")) {
         return isUpper ? "C'EST À QUETTE" : "C'est à quette";
     }
@@ -118,7 +118,19 @@ function getResponse(content) {
     if (cleaned.includes("SIX SEVEN")) {
         return "https://media.discordapp.net/attachments/1480734932933542049/1504170153317761085/67.gif";
     }
-    
+
+    if (cleaned === "monster" || cleaned.includes(" monster ") || cleaned.startsWith("monster ") || cleaned.endsWith("monster")) {
+        return "https://cdn.discordapp.com/attachments/1480756332373213275/1504649546045718758/pape_monster.png";
+    }
+
+    if (cleaned.includes("https://tenor.com/view/markiplier-mark-thumbs-up-nice-job-good-job-gif-25373350")) {
+        return "https://tenor.com/view/markiplier-mark-thumbs-up-nice-job-good-job-gif-25373350";
+    }
+
+    if (cleaned.includes("cadillac")) {
+        return "https://media.discordapp.net/attachments/720057528867618910/1496418452099825674/cadillac-removebg-preview.png";
+    }
+
     if (cleaned.endsWith("non")) {
         return isUpper ? "BRIL" : "Bril";
     }
@@ -142,7 +154,7 @@ function getResponse(content) {
     if (cleaned.includes("cest quoi")) {
         return isUpper ? "C'EST FEUR" : "C'est feur";
     }
-   
+
     if (cleaned.includes("de quoi")) {
         return isUpper ? "DE FEUR" : "De feur";
     }
