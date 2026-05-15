@@ -293,8 +293,9 @@ return `${base}\n**${animal} ${etat}**`;
     if (cleaned === "monster" || cleaned.includes(" monster ") || cleaned.startsWith("monster ") || cleaned.endsWith("monster")) {
         return "https://cdn.discordapp.com/attachments/1480756332373213275/1504649546045718758/pape_monster.png";
     }
-    if (includes("https://tenor.com/view/markiplier-mark-thumbs-up-nice-job-good-job-gif-25373350")) {
+    if (cleaned.includes("markiplier") || cleaned.includes("thumbs up")) {
         return "https://tenor.com/view/markiplier-mark-thumbs-up-nice-job-good-job-gif-25373350";
+    }
     }
     if (cleaned.endsWith("non")) {
         return isUpper ? "BRIL" : "Bril";
