@@ -116,7 +116,7 @@ function getResponse(content) {
         return "https://media.discordapp.net/attachments/1480734932933542049/1504170153317761085/67.gif";
     }
 
-    if (cleaned.includes("SIX SEVEN")) {
+    if (cleaned.includes("six seven")) {
         return "https://media.discordapp.net/attachments/1480734932933542049/1504170153317761085/67.gif";
     }
 
@@ -149,7 +149,7 @@ function getResponse(content) {
     }
 
     if (raw.toLowerCase().match(/!aternos\b/)) {
-    return "L'IP actuelle du serveur Minecraft de Regaïa est : __papierprout.aternos.me__";
+    return "L'IP actuelle du serveur Minecraft de Regaïa est : **papierprout.aternos.me**";
 }
 
     if (command === "!epsys") {
