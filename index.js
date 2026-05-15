@@ -12,7 +12,7 @@ const client = new Client({
 });
 
 // =========================
-// FEUR STATS STORAGE
+// FEUR STATS
 // =========================
 
 const STATS_FILE = "./feurStats.json";
@@ -78,9 +78,7 @@ function getResponse(content, message) {
     if (raw.toLowerCase().startsWith("!feur")) {
         const user = message.mentions.users.first();
 
-        if (!user) {
-            return "Mentionne quelqu'un : !feur @pseudo";
-        }
+        if (!user) return "Mentionne quelqu'un : !feur @pseudo";
 
         const id = user.id;
         const stats = feurStats[id];
@@ -105,17 +103,12 @@ function getResponse(content, message) {
     // =========================
 
     if (cleaned.includes("henry tran") || cleaned.includes("singapour")) {
-
         const videos = [
             "https://cdn.discordapp.com/attachments/1128032964924670053/1504609617638854817/SINGAPOUR_1.mp4",
             "https://cdn.discordapp.com/attachments/1128032964924670053/1504609645313134824/SINGAPOUR_2.mp4"
         ];
-
         return Math.random() < 0.5 ? videos[0] : videos[1];
     }
-
-    if (cleaned.includes("avec quoi")) return isUpper ? "AVEC FEUR" : "Avec feur";
-    if (cleaned.endsWith("oui")) return isUpper ? "STITI" : "Stiti";
 
     if (cleaned.includes("bac blanc")) {
         return "https://cdn.discordapp.com/attachments/720057528867618909/1504075425985466481/1778669924015-18e38746e64899fb.png";
@@ -124,9 +117,6 @@ function getResponse(content, message) {
     if (cleaned.includes("lexys")) {
         return "https://cdn.discordapp.com/attachments/720057528867618909/1498102442200404120/bac_blanc.gif";
     }
-
-    if (cleaned.includes("avec qui")) return isUpper ? "AVEC QUETTE" : "Avec quette";
-    if (cleaned.includes("pourquoi")) return isUpper ? "POURFEUR" : "Pourfeur";
 
     if (cleaned.includes("67") || cleaned.includes("six seven")) {
         return "https://media.discordapp.net/attachments/1480734932933542049/1504170153317761085/67.gif";
@@ -143,11 +133,28 @@ function getResponse(content, message) {
         return "https://cdn.discordapp.com/attachments/1206232717444775956/1504653708770672741/Capture_decran_2026-05-15_031617.png";
     }
 
-    if (cleaned === "hein") return isUpper ? "DEUX" : "Deux";
-    if (cleaned === "de") return isUpper ? "TROIS" : "Trois";
-    if (cleaned === "a" || cleaned === "ha" || cleaned === "ah") return "B";
+    // =========================
+    // QUOI / QUI
+    // =========================
 
-    return null;
+    const quoiRegex = /^(quoi+|kwa|kouwa|kua|quoient)$/i;
+    const lower = cleaned.replace(/\s+/g, " ");
+
+    const isQuoi = quoiRegex.test(lower);
+    const isQui = lower === "qui";
+
+    if (!isQuoi && !isQui) return null;
+
+    if (isQui) return isUpper ? "QUETTE" : "Quette";
+
+    if (lower === "quoient") return isUpper ? "FEURENT" : "Feurent";
+
+    if (lower.startsWith("quoi")) {
+        if (Math.random() < 0.5) return isUpper ? "QUOICOUBEH" : "Quoicoubeh";
+        return isUpper ? "FEUR" : "Feur";
+    }
+
+    return isUpper ? "FEUR" : "Feur";
 }
 
 // =========================
@@ -162,7 +169,7 @@ client.on('messageCreate', async (message) => {
     if (!response) return;
 
     // =========================
-    // FEUR TRACKING (FIXED)
+    // FEUR TRACKING
     // =========================
 
     const target = message.mentions.users.first();
@@ -176,11 +183,8 @@ client.on('messageCreate', async (message) => {
 
         const text = message.content.toLowerCase();
 
-        if (text.includes("feurent")) {
-            feurStats[id].feurent++;
-        } else if (text.includes("feur")) {
-            feurStats[id].feur++;
-        }
+        if (text.includes("feurent")) feurStats[id].feurent++;
+        else if (text.includes("feur")) feurStats[id].feur++;
 
         saveStats();
     }
