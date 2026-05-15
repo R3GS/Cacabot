@@ -12,6 +12,7 @@ const client = new Client({
 
 function getResponse(content) {
     const raw = content;
+    const command = raw.trim().toLowerCase().split(" ")[0];
 
     const cleaned = raw
         .toLowerCase()
@@ -143,15 +144,15 @@ function getResponse(content) {
         return isUpper ? "C'EST QUETTE" : "C'est quette";
     }
 
-    if (cleaned.includes("ntm jax")) {
+    if (cleaned === "ntm jax") {
         return "https://cdn.discordapp.com/attachments/1206232717444775956/1504653708770672741/Capture_decran_2026-05-15_031617.png";
     }
 
-    if (cleaned === "!aternos") {
+    if (command === "!aternos") {
         return "L'IP du serveur Minecraft de Regaïa est : papierprout.aternos.me";
     }
 
-    if (cleaned === "!epsys") {
+    if (command === "!epsys") {
         const gifs = [
             "https://cdn.discordapp.com/attachments/1480734932933542049/1504170153317761085/67.gif",
             "https://cdn.discordapp.com/attachments/1480734932933542049/1504168424136245368/Caramell_Dansen.gif",
