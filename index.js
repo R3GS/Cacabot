@@ -44,8 +44,8 @@ function getResponse(content) {
         return {
             data: new EmbedBuilder()
                 .setColor(0x8e44ad)
-                .setTitle("📌 Help Menu")
-                .setDescription("Choisis une catégorie ↓")
+                .setTitle("💩 Aide à Cacabot")
+                .setDescription("Hey ! Voici Cacabot, qui, malgré son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\nPour découvrir les différentes commandes disponibles de Cacabot,\n↓ choisis une catégorie ↓")
         };
     }
     if (raw.toLowerCase().match(/!aternos\b/)) {
@@ -350,7 +350,6 @@ client.on('messageCreate', async (message) => {
             .addOptions(
                 { label: 'Fun', value: 'fun' },
                 { label: 'Utilitaire', value: 'util' },
-                { label: 'RP', value: 'rp' }
             );
 
         const row = new ActionRowBuilder().addComponents(menu);
@@ -399,13 +398,6 @@ client.on('interactionCreate', async (interaction) => {
             .setColor(0x3498db)
             .setTitle("🛠 Utilitaire")
             .setDescription("!discord\n!aternos");
-    }
-
-    if (value === 'rp') {
-        embed = new EmbedBuilder()
-            .setColor(0x9b59b6)
-            .setTitle("🎭 RP")
-            .setDescription("à compléter");
     }
 
     if (!embed) {
