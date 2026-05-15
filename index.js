@@ -84,7 +84,8 @@ if (command === "!choix") {
         "Oui… mais t’es pas prêt.e", "Non. Mauvaise idée de base.", "Oui, mais t'assumes.", "Franchement je sais pas mais ça sent la merde.",
         "Oui mais ça va mal finir.", "Non mais tu vas quand même le faire donc bon.", "Non vas te faire enculer.", "J'ai demandé à ma maman... Elle a dit oui.",
         "ABSOLUMENT!", "Euuuh... Non ?", "C'est quoi cette question de con encore ? Non.", "Oui, oui, oui et encore oui !", "Pitié oui.", "Pitié non.",
-        "Mange tes morts à la place de poser ce genre de questions.", "Tout à fait... J'ai menti."
+        "Mange tes morts à la place de poser ce genre de questions.", "Totalement... Sauf que non, j'ai menti.", "Vous pensez ? Moi j'pense pas.",
+        "https://cdn.discordapp.com/attachments/1128032964924670053/1504924989781053581/vous-pensez-moi-je-pense-pas.gif"
     ];
 
     return reponses[Math.floor(Math.random() * reponses.length)];
@@ -435,7 +436,7 @@ client.on('interactionCreate', async (interaction) => {
             embed = new EmbedBuilder()
                 .setColor(0xffcc00)
                 .setTitle("🎉 Fun")
-                .setDescription("**!animal** ➜ Devine votre animal spirituel parmi près de 7000 combinaisons !\n**!destin** ➜ Prédit votre destin et fait part des évènements de votre futur.\n**!epsys** ➜ Poste des GIFs aléatoire d'Epsys, parce que.");
+                .setDescription("**!animal** ➜ Devine votre animal spirituel parmi près de 7000 combinaisons !\n**!destin** ➜ Prédit votre destin et fait part des évènements de votre futur.\n**!epsys** ➜ Poste des GIFs aléatoire d'Epsys, parce que.\n**!choix** ➜ Vous avez du mal à faire un choix ? Demandez à Cacabot.");
         }
 
         if (value === 'util') {
