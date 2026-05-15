@@ -81,8 +81,6 @@ function getResponse(content) {
 
 if (command === "!choix") {
 
-    if (command === "!choix") {
-
     // 20% de chance de répéter le message
     if (Math.random() < 0.2) {
 
