@@ -379,36 +379,79 @@ client.once('ready', () => {
 client.login(process.env.TOKEN);
 
 client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isStringSelectMenu()) return;
-    if (interaction.customId !== 'help_menu') return;
 
-    const value = interaction.values[0];
+    // =========================
+    // MENU SELECT
+    // =========================
 
-    let embed;
+    if (interaction.isStringSelectMenu()) {
 
-    if (value === 'fun') {
-        embed = new EmbedBuilder()
-            .setColor(0xffcc00)
-            .setTitle("🎉 Fun")
-            .setDescription("!animal\n!destin\n!epsys");
+        if (interaction.customId !== 'help_menu') return;
+
+        const value = interaction.values[0];
+
+        let embed;
+
+        if (value === 'fun') {
+            embed = new EmbedBuilder()
+                .setColor(0xffcc00)
+                .setTitle("🎉 Fun")
+                .setDescription("!animal\n!destin\n!epsys");
+        }
+
+        if (value === 'util') {
+            embed = new EmbedBuilder()
+                .setColor(0x3498db)
+                .setTitle("🛠 Utilitaire")
+                .setDescription("!discord\n!aternos");
+        }
+
+        if (!embed) {
+            embed = new EmbedBuilder()
+                .setColor(0xff0000)
+                .setTitle("Erreur")
+                .setDescription("Catégorie inconnue");
+        }
+
+        const backButton = new ButtonBuilder()
+            .setCustomId('help_back')
+            .setLabel('⬅ Retour')
+            .setStyle(ButtonStyle.Secondary);
+
+        const row = new ActionRowBuilder().addComponents(backButton);
+
+        return interaction.update({
+            embeds: [embed],
+            components: [row]
+        });
     }
 
-    if (value === 'util') {
-        embed = new EmbedBuilder()
-            .setColor(0x3498db)
-            .setTitle("🛠 Utilitaire")
-            .setDescription("!discord\n!aternos");
-    }
+    // =========================
+    // BOUTON RETOUR
+    // =========================
 
-    if (!embed) {
-        embed = new EmbedBuilder()
-            .setColor(0xff0000)
-            .setTitle("Erreur")
-            .setDescription("Catégorie inconnue");
-    }
+    if (interaction.isButton()) {
 
-    return interaction.update({
-        embeds: [embed],
-        components: []
-    });
+        if (interaction.customId !== 'help_back') return;
+
+        const embed = new EmbedBuilder()
+            .setColor(0x00ffff)
+            .setTitle("💩 AIDE A CACABOT")
+            .setDescription("Hey ! Voici Cacabot, qui, malgré son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\n\nPour découvrir les différentes commandes disponibles de Cacabot, choisis l'une des catégories ci-dessous !");
+
+        const menu = new StringSelectMenuBuilder()
+            .setCustomId('help_menu')
+            .setPlaceholder('Choisis une catégorie')
+            .addOptions(
+                { label: 'Fun', value: 'fun' },
+                { label: 'Utilitaire', value: 'util' }
+            );
+
+        const row = new ActionRowBuilder().addComponents(menu);
+
+        return interaction.update({
+            embeds: [embed],
+            components: [row]
+        });
+    }
 });
