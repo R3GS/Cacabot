@@ -282,7 +282,7 @@ if (command === "!animal") {
         return isUpper ? "DE QUETTE" : "De quette";
     }
         if (cleaned.includes("proutisme")) {
-        return isUpper ? ":cacaboudin:";
+        return ":cacaboudin:";
     }
 
     // =========================
