@@ -98,6 +98,9 @@ if (command === "!choix") {
         "Oui mais ça va mal finir.", "Non mais tu vas quand même le faire donc bon.", "Non vas te faire enculer.", "J'ai demandé à ma maman... Elle a dit oui.",
         "ABSOLUMENT!", "Euuuh... Non ?", "C'est quoi cette question de con encore ? Non.", "Oui, oui, oui et encore oui !", "Pitié oui.", "Pitié non.",
         "Mange tes morts à la place de poser ce genre de questions.", "Totalement... Sauf que non, j'ai menti.", "Vous pensez ? Moi j'pense pas. C'est mon avis.",
+        "Affirmatif.", "Oui je pensent.", "Ouient.", "Oui (stiti).", "É-VI-DEM-MENT", "Bah oui t'es débile ou quoi?", "Well yes, but actually no.",
+        "Alors... Je savais la réponse, mais j'ai oublié...", "Tu crois jsuis Akinator fdp?", "Peut-êtreeeee.", "Fût un temps, on tuait des gens pour des questions moins connes que ça.",
+        "Non + pas lu + ratio + ntm", "nn", "oe", "https://tenor.com/view/ui-jday-mister-jd-gif-25079300", "https://tenor.com/view/mais-oui-seb-jdg-mais-oui-gif-19057953",
         "https://cdn.discordapp.com/attachments/1128032964924670053/1504924989781053581/vous-pensez-moi-je-pense-pas.gif"
     ];
 
