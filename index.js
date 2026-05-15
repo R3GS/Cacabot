@@ -148,9 +148,9 @@ function getResponse(content) {
         return "https://cdn.discordapp.com/attachments/1206232717444775956/1504653708770672741/Capture_decran_2026-05-15_031617.png";
     }
 
-    if (command === "!aternos") {
-        return "L'IP du serveur Minecraft de Regaïa est : papierprout.aternos.me";
-    }
+    if (raw.toLowerCase().match(/!aternos\b/)) {
+    return "L'IP du serveur Minecraft de Regaïa est : papierprout.aternos.me";
+}
 
     if (command === "!epsys") {
         const gifs = [
