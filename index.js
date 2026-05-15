@@ -185,7 +185,7 @@ return `${base}\n**${animal} ${etat}**`;
         "Un homme que tu côtoies va malheureusement se couper accidentellement le zgeg avec une machette.",
         "Y a un truc qui pue dans ton frigo, pense à le jeter avant de choper la coulante.",
         "Un événement totalement nul mais humiliant va te définir socialement dans l'année qui va suivre.",
-        "Tu vas rire au mauvais moment, et ton destin va s’en souvenir.",
+        "Tu vas rire au mauvais moment, et tu vas t’en souvenir toute ta vie.",
         "Un inconnu qui te croisera dans la rue va te juger personnellement très bientôt.",
         "Tu vas perdre un débat politique contre un chat errant.",
         "Un jour, tu comprendras un truc important… et tu l’oublieras 3 secondes après.",
@@ -297,6 +297,9 @@ return `${base}\n**${animal} ${etat}**`;
     }
     if (cleaned.includes("c est a quoi")) {
         return isUpper ? "C'EST À FEUR" : "C'est à feur";
+    }
+    if (cleaned.includes("Lexi")) {
+        return isUpper ? "ntm lexi tu casses les couilles";
     }
     if (cleaned.includes("c est a qui")) {
         return isUpper ? "C'EST À QUETTE" : "C'est à quette";
