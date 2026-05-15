@@ -18,7 +18,6 @@ const client = new Client({
 
 function getResponse(content) {
     const raw = content;
-    const lower = raw.toLowerCase();
     const command = lower.split(" ")[0];
 
     const cleaned = raw
