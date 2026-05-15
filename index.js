@@ -115,8 +115,6 @@ function getResponse(content) {
         return "https://media.discordapp.net/attachments/1480734932933542049/1504170153317761085/67.gif";
     }
 
-    }
-
     if (cleaned.includes("SIX SEVEN")) {
         return "https://media.discordapp.net/attachments/1480734932933542049/1504170153317761085/67.gif";
     }
