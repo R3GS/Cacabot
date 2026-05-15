@@ -85,7 +85,7 @@ if (command === "!animal") {
     const animal = animaux[Math.floor(Math.random() * animaux.length)];
     const etat = etats[Math.floor(Math.random() * etats.length)];
 
-    return `${base} **${animal} ${etat}**`;
+    return `${base}\n**${animal} ${etat}**`;
 }
 
 // =========================
