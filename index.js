@@ -63,32 +63,34 @@ function getResponse(content) {
 //          !ANIMAL
 // =========================
 
-const animaux = [
-    "Un rat de RER", "Un pigeon", "Un chat errant", "Un renard", "Un dauphin", "Un corbeau", "Un hamster", "Un chien", "Un crapaud", "Un panda",
-    "Un hérisson", "Un taureau", "Un papillon", "Un putain de moustique", "Un axolotl", "Un raton laveur", "Un perroquet", "Un singe",
-    "Un poisson", "Un lièvre", "Un scarabée", "Un suricate", "Un éléphant", "Un rhinocéros", "Un toucan", "Un capybara", "Un cheval",
-    "Un bousier", "Un pingouin", "Un Pikachu", "Un mulot", "Un cochon", "Un lion", "Un moucheron", "Un chevreuil", "Un castor", "Un chacal",
-    "Un aigle", "Un dromadaire", "Un gorille", "Un guépard", "Un hibou", "Un hippopotame", "Un jaguar", "Un kangourou", "Un koala",
-    "Un léopard", "Un lynx", "Un phoque", "Un serpent", "Un zèbre", "Un âne", "Un canard", "Un cerf", "Un chameau", "Un coq", "Un dindon",
-    "Un lapin", "Un loup", "Un mouton", "Un ours", "Un sanglier", "Un tigre"
-
-const etats = [
-    "en burn-out.", "sous coke.", "dépressif.", "qui a la diarrhée.", "cleptomane.", "alcoolique.", "casse-couilles.",
-    "vétéran de la Seconde Guerre Mondiale.", "youtubeur.", "en costard.", "gay.", "asthmatique.", "qui sent la tartiflette.",
-    "complètement con.", "complètement con.", "de merde.", "transgenre (sois fièr.e).", "sataniste.", "fan de Feldup.", "rockstar.",
-    "addict à TikTok.", "avec un fort accent belge.", "qui vote RN.", "fan de Norman.", "avec 2 de QI.", "SDF.", "bourré.",
-    "sous kétamine.", "qui s'est chié dessus.", "addict à l'Oasis Tropical.", "DJ en Teknival.", "de la mafia italienne.",
-    "amoureux de Lady Gaga.", "mangeur de caca.", "à la recherche du gros JDG.", "qui adore McFly & Carlito.", "qui rate son bac.",
-    "qui se lève à 4h du mat pour aller au taf.", "sous traitement hormonal.", "en manifestation LGBT.", "qui révise son oral du bac blanc.",
-    "en 4K Ultra HD IMAX Surround Dolby Digital.", "devant une série Netflix de merde.", "qui utilise la commande !destin.", "trisomique.",
-    "qui étale son caca sur les murs.", "perdu dans sa vie.", "trader à Los Angeles.", "nostalgique des années 2000.", "transphobe.", "raciste."
-];
-
 if (command === "!animal") {
+
     const base = "Hmmm, ton animal spirituel est...";
 
-    const animal = animaux[Math.floor(Math.random() * animaux.length)];
-    const etat = etats[Math.floor(Math.random() * etats.length)];
+    const animaux = [
+        "Un rat de RER", "Un pigeon", "Un chat errant", "Un renard", "Un dauphin", "Un corbeau", "Un hamster", "Un chien", "Un crapaud", "Un panda",
+        "Un hérisson", "Un taureau", "Un papillon", "Un putain de moustique", "Un axolotl", "Un raton laveur", "Un perroquet", "Un singe",
+        "Un poisson", "Un lièvre", "Un scarabée", "Un suricate", "Un éléphant", "Un rhinocéros", "Un toucan", "Un capybara", "Un cheval",
+        "Un bousier", "Un pingouin", "Un Pikachu", "Un mulot", "Un cochon", "Un lion", "Un moucheron", "Un chevreuil", "Un castor", "Un chacal",
+        "Un aigle", "Un dromadaire", "Un gorille", "Un guépard", "Un hibou", "Un hippopotame", "Un jaguar", "Un kangourou", "Un koala",
+        "Un léopard", "Un lynx", "Un phoque", "Un serpent", "Un zèbre", "Un âne", "Un canard", "Un cerf", "Un chameau", "Un coq", "Un dindon",
+        "Un lapin", "Un loup", "Un mouton", "Un ours", "Un sanglier", "Un tigre"
+        ];
+
+    const etats = [
+        "en burn-out.", "sous coke.", "dépressif.", "qui a la diarrhée.", "cleptomane.", "alcoolique.", "casse-couilles.",
+        "vétéran de la Seconde Guerre Mondiale.", "youtubeur.", "en costard.", "gay.", "asthmatique.", "qui sent la tartiflette.",
+        "complètement con.", "complètement con.", "de merde.", "transgenre (sois fièr.e).", "sataniste.", "fan de Feldup.", "rockstar.",
+        "addict à TikTok.", "avec un fort accent belge.", "qui vote RN.", "fan de Norman.", "avec 2 de QI.", "SDF.", "bourré.",
+        "sous kétamine.", "qui s'est chié dessus.", "addict à l'Oasis Tropical.", "DJ en Teknival.", "de la mafia italienne.",
+        "amoureux de Lady Gaga.", "mangeur de caca.", "à la recherche du gros JDG.", "qui adore McFly & Carlito.", "qui rate son bac.",
+        "qui se lève à 4h du mat pour aller au taf.", "sous traitement hormonal.", "en manifestation LGBT.", "qui révise son oral du bac blanc.",
+        "en 4K Ultra HD IMAX Surround Dolby Digital.", "devant une série Netflix de merde.", "qui utilise la commande !destin.", "trisomique.",
+        "qui étale son caca sur les murs.", "perdu dans sa vie.", "trader à Los Angeles.", "nostalgique des années 2000.", "transphobe.", "raciste."
+        ];
+
+    const animauxl = animaux[Math.floor(Math.random() * animaux.length)];
+    const etats = etats[Math.floor(Math.random() * etats.length)];
 
     return `${base}\n**${animal} ${etat}**`;
 }
