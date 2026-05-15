@@ -298,9 +298,6 @@ return `${base}\n**${animal} ${etat}**`;
     if (cleaned.includes("c est a quoi")) {
         return isUpper ? "C'EST À FEUR" : "C'est à feur";
     }
-    if (cleaned.includes("lexi")) {
-        return "ntm lexi tu casses les couilles";
-    }
     if (cleaned.includes("c est a qui")) {
         return isUpper ? "C'EST À QUETTE" : "C'est à quette";
     }
