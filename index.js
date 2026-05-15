@@ -110,13 +110,15 @@ function getResponse(content) {
     if (cleaned.includes("cest a qui")) {
         return isUpper ? "C'EST À QUETTE" : "C'est à quette";
     }
-    
-    if (cleaned.includes("67")) {
-        return "https://media.discordapp.net/attachments/1480734932933542049/1504170153317761085/67.gif?ex=6a07549e&is=6a06031e&hm=6801e85955300a01ad5fd2b6e6f05b116b147c8c67f5e9ee7cbbb6551d2c0cfa&=&width=878&height=822";
+
+    if (cleaned === "67" || cleaned.includes(" 67 ") || cleaned.startsWith("67 ") || cleaned.endsWith(" 67")) {
+        return "https://media.discordapp.net/attachments/1480734932933542049/1504170153317761085/67.gif";
+    }
+
     }
 
     if (cleaned.includes("SIX SEVEN")) {
-        return "https://media.discordapp.net/attachments/1480734932933542049/1504170153317761085/67.gif?ex=6a07549e&is=6a06031e&hm=6801e85955300a01ad5fd2b6e6f05b116b147c8c67f5e9ee7cbbb6551d2c0cfa&=&width=878&height=822";
+        return "https://media.discordapp.net/attachments/1480734932933542049/1504170153317761085/67.gif";
     }
     
     if (cleaned.endsWith("non")) {
