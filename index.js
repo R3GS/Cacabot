@@ -79,8 +79,8 @@ if (command === "!animal") {
 
     const etatslist = [
         "en burn-out.", "sous coke.", "dépressif.", "qui a la diarrhée.", "cleptomane.", "alcoolique.", "casse-couilles.",
-        "vétéran de la Seconde Guerre Mondiale.", "youtubeur.", "en costard.", "gay.", "asthmatique.", "qui sent la tartiflette.",
-        "complètement con.", "complètement con.", "de merde.", "transgenre (sois fièr.e).", "sataniste.", "fan de Feldup.", "rockstar.",
+        "vétéran de la Seconde Guerre Mondiale.", "avec une chaîne YouTube vraiment nulle.", "en costard.", "gay.", "asthmatique.", "qui sent le roquefort.",
+        "complètement con.", "de merde.", "transgenre (sois fièr.e).", "sataniste.", "fan de Feldup.", "rockstar.",
         "addict à TikTok.", "avec un fort accent belge.", "qui vote RN.", "fan de Norman.", "avec 2 de QI.", "SDF.", "bourré.",
         "sous kétamine.", "qui s'est chié dessus.", "addict à l'Oasis Tropical.", "DJ en Teknival.", "de la mafia italienne.",
         "amoureux de Lady Gaga.", "mangeur de caca.", "à la recherche du gros JDG.", "qui adore McFly & Carlito.", "qui rate son bac.",
