@@ -149,7 +149,7 @@ function getResponse(content) {
     }
 
     if (raw.toLowerCase().match(/!aternos\b/)) {
-    return "L'IP du serveur Minecraft de Regaïa est : papierprout.aternos.me";
+    return "L'IP actuelle du serveur Minecraft de Regaïa est : __papierprout.aternos.me__";
 }
 
     if (command === "!epsys") {
