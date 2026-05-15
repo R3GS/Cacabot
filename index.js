@@ -36,8 +36,8 @@ function getResponse(content) {
     if (cleaned.includes("henry tran") || cleaned.includes("singapour")) {
 
         const videos = [
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1504609617638854817/SINGAPOUR_1.mp4?ex=6a079c67&is=6a064ae7&hm=e1c735cf1832acf172f04f26eee64b86e97b23625a6855d105587e9617175c68&",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1504609645313134824/SINGAPOUR_2.mp4?ex=6a079c6d&is=6a064aed&hm=4223c4b92b57102d627f85725af9e8efe96d001f08ba0830bb916add15a73583&"
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1504609617638854817/SINGAPOUR_1.mp4",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1504609645313134824/SINGAPOUR_2.mp4"
         ];
 
         return Math.random() < 0.5 ? videos[0] : videos[1];
@@ -48,7 +48,15 @@ function getResponse(content) {
     }
 
     if (cleaned.endsWith("oui")) {
-    return isUpper ? "STITI" : "Stiti";
+        return isUpper ? "STITI" : "Stiti";
+    }
+    
+    if (cleaned.includes("bac blanc")) {
+        return "https://cdn.discordapp.com/attachments/720057528867618909/1504075425985466481/1778669924015-18e38746e64899fb.png";
+    }
+
+    if (cleaned.includes("lexys")) {
+        return "https://cdn.discordapp.com/attachments/720057528867618909/1498102442200404120/bac_blanc.gif";
     }
     
     if (cleaned.includes("avec qui")) {
