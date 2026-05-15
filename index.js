@@ -82,7 +82,7 @@ function getResponse(content) {
 if (command === "!choix") {
 
     // 20% de chance de répéter le message
-    if (Math.random() < 0.2) {
+    if (Math.random() < 0.1) {
 
         const texte = raw
             .replace(/^!choix\s*/i, "")
