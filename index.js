@@ -64,11 +64,11 @@ function getResponse(content) {
     }
 
     if (cleaned.includes("c est a quoi") || cleaned.includes("cest a quoi")) {
-        return isUpper ? "À FEUR" : "À feur";
+        return isUpper ? "C'EST À FEUR" : "C'est à feur";
     }
 
     if cleaned.includes("c est à quoi")) || cleaned.includes("cest à quoi"))
-        return isUpper ? "À FEUR" : "À feur";
+        return isUpper ? "C'EST À FEUR" : "C'est à feur";
     }
 
     if (cleaned.includes("67") || cleaned.includes("SIX SEVEN")) {
@@ -76,7 +76,7 @@ function getResponse(content) {
     }
 
     if (cleaned.includes("c est a qui") || cleaned.includes("cest a qui")) || cleaned.includes("c est à qui")) || cleaned.includes("cest à qui")) {
-        return isUpper ? "À QUETTE" : "À quette";
+        return isUpper ? "C'EST À QUETTE" : "C'est à quette";
     }
 
     if (cleaned.endsWith("non")) {
