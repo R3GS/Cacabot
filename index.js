@@ -394,14 +394,14 @@ client.on('interactionCreate', async (interaction) => {
             embed = new EmbedBuilder()
                 .setColor(0xffcc00)
                 .setTitle("🎉 Fun")
-                .setDescription("!animal ➜ Devine votre animal spirituel parmi plus de 3100 combinaisons ! Mystère et boule de gomme...\n!destin ➜ Prédit votre destin et fait part des évènements de votre futur. LA MAGIIIEEEEE !\n!epsys ➜ Poste des GIFs aléatoire d'Epsys, parce que.");
+                .setDescription("**!animal** ➜ Devine votre animal spirituel parmi plus de 3100 combinaisons !\n**!destin** ➜ Prédit votre destin et fait part des évènements de votre futur.\n**!epsys** ➜ Poste des GIFs aléatoire d'Epsys, parce que.");
         }
 
         if (value === 'util') {
             embed = new EmbedBuilder()
                 .setColor(0x3498db)
                 .setTitle("🛠 Utilitaire")
-                .setDescription("!discord ➜ Obtenir le lien officiel d'invitation de Regaïa.\n!aternos ➜ Obtenir l'IP du serveur Aternos (Minecraft) de Regaïa.");
+                .setDescription("**!discord** ➜ Obtenir le lien officiel d'invitation de Regaïa.\n**!aternos** ➜ Obtenir l'IP du serveur Aternos (Minecraft) de Regaïa.");
         }
 
         if (!embed) {
