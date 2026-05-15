@@ -83,21 +83,6 @@ if (command === "!animal") {
 
     const base = "Hmmm, ton animal spirituel est...";
 
-    const etatslist = [
-        
-        ];
-
-    const animal = animaux[Math.floor(Math.random() * animaux.length)];
-    const etat = etatslist[Math.floor(Math.random() * etatslist.length)];
-
-    return `${base}\n**${animal} ${etat}**`;
-}
-
-
-if (command === "!animal") {
-
-    const base = "Hmmm, ton animal spirituel est...";
-
     const animauxMasc = [
         "Un rat de RER", "Un pigeon", "Un chat errant", "Un renard", "Un dauphin", "Un corbeau", "Un hamster", "Un chien", "Un crapaud", "Un panda",
         "Un hérisson", "Un taureau", "Un papillon", "Un putain de moustique", "Un axolotl", "Un raton laveur", "Un perroquet", "Un singe",
@@ -139,27 +124,15 @@ if (command === "!animal") {
 
     const isFem = Math.random() < 0.5;
 
-    let animal;
-    let etat;
+const animalList = isFem ? animauxFem : animauxMasc;
+const etatList = isFem
+    ? [...etatsFem, ...etatsNeutres]
+    : [...etatsMasc, ...etatsNeutres];
 
-    if (isFem) {
+const animal = animalList[Math.floor(Math.random() * animalList.length)];
+const etat = etatList[Math.floor(Math.random() * etatList.length)];
 
-        animal = animauxFem[Math.floor(Math.random() * animauxFem.length)];
-
-        const liste = [...etatsFem, ...etatsNeutres];
-
-        etat = liste[Math.floor(Math.random() * liste.length)];
-
-    } else {
-
-        animal = animauxMasc[Math.floor(Math.random() * animauxMasc.length)];
-
-        const liste = [...etatsMasc, ...etatsNeutres];
-
-        etat = liste[Math.floor(Math.random() * liste.length)];
-    }
-
-    return `${base}\n**${animal} ${etat}**`;
+return `${base}\n**${animal} ${etat}**`;
 }
 
 
