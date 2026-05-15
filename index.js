@@ -90,7 +90,7 @@ if (command === "!animal") {
         ];
 
     const animal = animaux[Math.floor(Math.random() * animaux.length)];
-    const etat = etatsList[Math.floor(Math.random() * etatsList.length)];
+    const etat = etatslist[Math.floor(Math.random() * etatslist.length)];
 
     return `${base}\n**${animal} ${etat}**`;
 }
