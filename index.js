@@ -76,6 +76,21 @@ function getResponse(content) {
     }
 
 // =========================
+//         !CHOIX
+// =========================
+
+if (command === "!choix") {
+    const reponses = [
+        "Oui… mais t’es pas prêt.e", "Non. Mauvaise idée de base.", "Oui, mais t'assumes.", "Franchement je sais pas mais ça sent la merde.",
+        "Oui mais ça va mal finir.", "Non mais tu vas quand même le faire donc bon.", "Non vas te faire enculer.", "J'ai demandé à ma maman... Elle a dit oui.",
+        "ABSOLUMENT!", "Euuuh... Non ?", "C'est quoi cette question de con encore ? Non.", "Oui, oui, oui et encore oui !", "Pitié oui.", "Pitié non.",
+        "Mange tes morts à la place de poser ce genre de questions.", "Tout à fait... J'ai menti."
+    ];
+
+    return reponses[Math.floor(Math.random() * reponses.length)];
+}
+
+// =========================
 //          !ANIMAL
 // =========================
 
@@ -278,7 +293,7 @@ return `${base}\n**${animal} ${etat}**`;
     if (cleaned === "monster" || cleaned.includes(" monster ") || cleaned.startsWith("monster ") || cleaned.endsWith("monster")) {
         return "https://cdn.discordapp.com/attachments/1480756332373213275/1504649546045718758/pape_monster.png";
     }
-    if (cleaned.includes("https://tenor.com/view/markiplier-mark-thumbs-up-nice-job-good-job-gif-25373350")) {
+    if (includes("https://tenor.com/view/markiplier-mark-thumbs-up-nice-job-good-job-gif-25373350")) {
         return "https://tenor.com/view/markiplier-mark-thumbs-up-nice-job-good-job-gif-25373350";
     }
     if (cleaned.endsWith("non")) {
