@@ -288,11 +288,9 @@ if (command === "!animal") {
     if (cleaned === "hein") {
         return isUpper ? "DEUX" : "Deux";
     }
-
     if (cleaned === "de") {
         return isUpper ? "TROIS" : "Trois";
     }
-
     if (cleaned === "a" || cleaned === "ha" || cleaned === "ah") {
         return "B";
     }
@@ -318,12 +316,10 @@ if (command === "!animal") {
     if (isQui) {
         return isUpper ? "QUETTE" : "Quette";
     }
-
     // QUOIENT
     if (lower === "quoient") {
         return isUpper ? "FEURENT" : "Feurent";
     }
-
     // QUOI
     if (lower.startsWith("quoi")) {
         if (Math.random() < 0.5) {
