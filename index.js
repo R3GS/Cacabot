@@ -80,6 +80,21 @@ function getResponse(content) {
 // =========================
 
 if (command === "!choix") {
+
+    if (command === "!choix") {
+
+    // 20% de chance de répéter le message
+    if (Math.random() < 0.2) {
+
+        const texte = raw
+            .replace(/^!choix\s*/i, "")
+            .trim();
+
+        if (texte.length > 0) {
+            return `“${texte}” ☝️🤓\nNon tais-toi et oublie cette idée stp`;
+        }
+    }
+
     const reponses = [
         "Oui, mais le monde n'est pas encore prêt.", "Non. Mauvaise idée de base.", "Oui, mais t'assumes.", "Franchement je sais pas mais ça sent la merde.",
         "Oui mais ça va mal finir.", "Non mais tu vas quand même le faire donc bon.", "Non vas te faire enculer.", "J'ai demandé à ma maman... Elle a dit oui.",
