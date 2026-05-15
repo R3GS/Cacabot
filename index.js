@@ -79,7 +79,7 @@ function getResponse(content) {
         return isUpper ? "C'EST À QUETTE" : "C'est à quette";
     }
 
-    if (cleaned.includes("67") || cleaned.includes("SIX SEVEN")) {
+    if (cleaned.includes("67")) || (cleaned.includes("SIX SEVEN")) {
         return "https://media.discordapp.net/attachments/1480734932933542049/1504170153317761085/67.gif?ex=6a07549e&is=6a06031e&hm=6801e85955300a01ad5fd2b6e6f05b116b147c8c67f5e9ee7cbbb6551d2c0cfa&=&width=878&height=822";
     }
 
@@ -91,14 +91,11 @@ function getResponse(content) {
         return isUpper ? "QUOICOUBITE" : "Quoicoubite";
     }
 
-    const isCestQui = cleaned.includes("c est qui") || cleaned.includes("cest qui");
-    const isCestQuoi = cleaned.includes("c est quoi") || cleaned.includes("cest quoi");
-
-    if (isCestQui) {
+        if (cleaned.includes("c est qui")) || (cleaned.includes("cest qui")) {
         return isUpper ? "C'EST QUETTE" : "C'est quette";
     }
 
-    if (isCestQuoi) {
+    if (cleaned.includes("c est quoi")) || (cleaned.includes("cest quoi")) {
         return isUpper ? "C'EST FEUR" : "C'est feur";
     }
    
