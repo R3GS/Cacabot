@@ -99,7 +99,7 @@ if (command === "!animal") {
         "Une baleine", "Une hirondelle", "Une lionne", "Une louve", "Une jument", "Une chèvre", "Une chauve-souris", "Une gazelle", "Une vache",
         "Une grenouille", "Une biche", "Une guêpe", "Une brebis", "Une marmotte", "Une souris", "Une dinde", "Une oie", "Une poule", "Une taupe",
         "Une musaraigne", "Une abeille", "Une chienne", "Une chatte", "Une truie", "Une larve", "Une tortue", "Une pieuvre", "Une crevette",
-        "Une autruche", "Une coccinelle", "Une belette", "Une sardine", "Une otarie", "Une panthère", "Une huître", "Une moule", "Une antilope", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une ", "Une "
+        "Une autruche", "Une coccinelle", "Une belette", "Une sardine", "Une otarie", "Une panthère", "Une huître", "Une moule", "Une antilope"
     ];
     
     const etatsMasc = [
@@ -420,7 +420,7 @@ client.on('interactionCreate', async (interaction) => {
             embed = new EmbedBuilder()
                 .setColor(0xffcc00)
                 .setTitle("🎉 Fun")
-                .setDescription("**!animal** ➜ Devine votre animal spirituel parmi plus de 3100 combinaisons !\n**!destin** ➜ Prédit votre destin et fait part des évènements de votre futur.\n**!epsys** ➜ Poste des GIFs aléatoire d'Epsys, parce que.");
+                .setDescription("**!animal** ➜ Devine votre animal spirituel parmi près de 7000 combinaisons !\n**!destin** ➜ Prédit votre destin et fait part des évènements de votre futur.\n**!epsys** ➜ Poste des GIFs aléatoire d'Epsys, parce que.");
         }
 
         if (value === 'util') {
