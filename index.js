@@ -143,6 +143,27 @@ function getResponse(content) {
         return isUpper ? "C'EST QUETTE" : "C'est quette";
     }
 
+    if (cleaned.includes("ntm jax")) {
+        return "https://cdn.discordapp.com/attachments/1206232717444775956/1504653708770672741/Capture_decran_2026-05-15_031617.png";
+    }
+
+    if (cleaned === "!aternos") {
+        return "L'IP du serveur Minecraft de Regaïa est : papierprout.aternos.me";
+    }
+
+    if (cleaned === "!epsys") {
+        const gifs = [
+            "https://cdn.discordapp.com/attachments/1480734932933542049/1504170153317761085/67.gif",
+            "https://cdn.discordapp.com/attachments/1480734932933542049/1504168424136245368/Caramell_Dansen.gif",
+            "https://cdn.discordapp.com/attachments/720057528867618909/1486636493417222216/2a088883-36e7-4eb4-ab2c-0d4942e21bfb.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1478476705642319985/ezgif-403e246b59051aa3.gif",
+            "https://tenor.com/view/r3gs_-capuche-love-hearts-gif-22642553",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1478480836683759636/ezgif-4910f713e8f8f838.gif"
+        ];
+
+    return gifs[Math.floor(Math.random() * gifs.length)];
+}
+
     if (cleaned.includes("cest qui")) {
         return isUpper ? "C'EST QUETTE" : "C'est quette";
     }
