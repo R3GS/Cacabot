@@ -39,7 +39,7 @@ function getResponse(content) {
     }
 
     if (raw.toLowerCase().match(/!discord\b/)) {
-        return "Le lien d'invitation du serveur Discord est : **https://discord.com/invite/maAbUYb**";
+        return "Le lien d'invitation du serveur Discord est : ** https://discord.com/invite/maAbUYb **";
     }
 
     if (command === "!epsys") {
