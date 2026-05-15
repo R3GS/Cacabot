@@ -1,6 +1,12 @@
 require('dotenv').config();
 
-const { Client, GatewayIntentBits } = require('discord.js');
+const {
+    Client,
+    GatewayIntentBits,
+    EmbedBuilder,
+    ActionRowBuilder,
+    StringSelectMenuBuilder
+} = require('discord.js');
 
 const client = new Client({
     intents: [
