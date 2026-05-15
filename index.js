@@ -55,7 +55,49 @@ function getResponse(content) {
         return gifs[Math.floor(Math.random() * gifs.length)];
     }
 
-   if (command === "!destin") {
+    if (command === "!animal") {
+    const animals = [
+        "Hmmm, ton animal spirituel est...\n**un rat de RER en burn-out.**",
+        "Hmmm, ton animal spirituel est...\n**un pigeon sous coke.**",
+        "Hmmm, ton animal spirituel est...\n**un chat errant dépressif.**",
+        "Hmmm, ton animal spirituel est...\n**un taureau qui a la diarrhée.**",
+        "Hmmm, ton animal spirituel est...\n**un renard cleptomane.**",
+        "Hmmm, ton animal spirituel est...\n**un dauphin alcoolique.**",
+        "Hmmm, ton animal spirituel est...\n**un corbeau casse-couilles.**",
+        "Hmmm, ton animal spirituel est...\n**un hamster vétéran de la Seconde Guerre Mondiale.**",
+        "Hmmm, ton animal spirituel est...\n**un chien youtubeur.**",
+        "Hmmm, ton animal spirituel est...\n**un crapeau en costard.**",
+        "Hmmm, ton animal spirituel est...\n**un panda gay.**",
+        "Hmmm, ton animal spirituel est...\n**un hérisson asthmatique.**",
+        "Hmmm, ton animal spirituel est...\n**une loutre qui sent la tartiflette.**",
+        "Hmmm, ton animal spirituel est...\n**un papillon complètement con.**",
+        "Hmmm, ton animal spirituel est...\n**un putain de moustique de merde.**",
+        "Hmmm, ton animal spirituel est...\n**un axolotl transgenre (sois fièr.e).**",
+        "Hmmm, ton animal spirituel est...\n**un raton laveur sataniste.**",
+        "Hmmm, ton animal spirituel est...\n**un perroquet fan de Feldup.**"
+        "Hmmm, ton animal spirituel est...\n**un mulot mathématicien.**",
+        "Hmmm, ton animal spirituel est...\n**un singe addict à TikTok.**",
+        "Hmmm, ton animal spirituel est...\n**un poisson avec un fort accent belge.**",
+        "Hmmm, ton animal spirituel est...\n**un lièvre qui croit en l'astrologie.**",
+        "Hmmm, ton animal spirituel est...\n**un scarabé qui vote RN.**",
+        "Hmmm, ton animal spirituel est...\n**un suricate fan de Norman.**",
+        "Hmmm, ton animal spirituel est...\n**un éléphant avec 2 de QI.**",
+        "Hmmm, ton animal spirituel est...\n**un rhinocéros SDF.**",
+        "Hmmm, ton animal spirituel est...\n**un toucan bourré.**",
+        "Hmmm, ton animal spirituel est...\n**un capybara sous kétamine.**",
+        "Hmmm, ton animal spirituel est...\n**un cheval qui s'est chié dessus.**",
+        "Hmmm, ton animal spirituel est...\n**un membre de Regaïa addict à l'Oasis Tropical.**",
+        "Hmmm, ton animal spirituel est...\n**un Pikachu DJ en Teknival.**",
+        "Hmmm, ton animal spirituel est...\n**un bousier de la mafia italienne.**",
+        "Hmmm, ton animal spirituel est...\n**un moucheron amoureux de Lady Gaga.**",
+        "Hmmm, ton animal spirituel est...\n**un lion mangeur de caca.**",
+        "Hmmm, ton animal spirituel est...\n**un panda roux à la recherche du gros JDG.**",
+    ];
+
+    return animals[Math.floor(Math.random() * animals.length)];
+}
+
+    if (command === "!destin") {
     const destin = [
         "Tu multiplieras ton nombre de neurones par 2 le vendredi 28 Juillet 2034.",
         "Tu deviendras une légende locale dans un Intermarché paumé.",
