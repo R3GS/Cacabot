@@ -113,7 +113,11 @@ if (command === "!choix") {
 
 if (command === "!animal") {
 
-    const base = "Hmmm, ton animal spirituel est...";
+    const cible = message.mentions.users.first();
+
+    const base = cible
+        ? `Hmmm, l'animal spirituel de ${cible} est...`
+        : "Hmmm, ton animal spirituel est...";
 
     const animauxMasc = [
         "Un rat de RER", "Un pigeon", "Un chat errant", "Un renard", "Un dauphin", "Un corbeau", "Un hamster", "Un chien", "Un crapaud", "Un panda",
@@ -156,15 +160,17 @@ if (command === "!animal") {
 
     const isFem = Math.random() < 0.5;
 
-const animalList = isFem ? animauxFem : animauxMasc;
-const etatList = isFem
-    ? [...etatsFem, ...etatsNeutres]
-    : [...etatsMasc, ...etatsNeutres];
+    const animalList = isFem ? animauxFem : animauxMasc;
 
-const animal = animalList[Math.floor(Math.random() * animalList.length)];
-const etat = etatList[Math.floor(Math.random() * etatList.length)];
+    const etatList = isFem
+        ? [...etatsFem, ...etatsNeutres]
+        : [...etatsMasc, ...etatsNeutres];
 
-return `${base}\n**${animal} ${etat}**`;
+    const animal = animalList[Math.floor(Math.random() * animalList.length)];
+
+    const etat = etatList[Math.floor(Math.random() * etatList.length)];
+
+    return `${base}\n**${animal} ${etat}**`;
 }
 
 
