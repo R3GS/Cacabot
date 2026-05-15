@@ -55,7 +55,7 @@ function getResponse(content) {
     }
 
     if (raw.toLowerCase().match(/!discord\b/)) {
-        return "Si vous souhaitez inviter vos ami.es, voici le lien d'invitation du serveur Discord :\n** https://discord.com/invite/maAbUYb **";
+        return "Si vous souhaitez inviter vos ami.es, voici le lien d'invitation du serveur Discord :\n**https://discord.com/invite/maAbUYb **";
     }
 
 // =========================
@@ -94,15 +94,16 @@ if (command === "!animal") {
         ];
 
     const etatslist = [
-        "en burn-out.", "sous coke.", "dépressif.", "qui a la diarrhée.", "cleptomane.", "alcoolique.", "casse-couilles.",
-        "vétéran de la Seconde Guerre Mondiale.", "avec une chaîne YouTube vraiment nulle.", "en costard.", "gay.", "asthmatique.", "qui sent le roquefort.",
-        "complètement con.", "de merde.", "transgenre (sois fièr.e).", "sataniste.", "fan de Feldup.", "rockstar.",
+        "en burn-out.", "sous coke.", "dépressif.", "qui a la diarrhée.", "recherché pour le meurtre de 6 enfants.", "alcoolique.", "casse-couilles.",
+        "vétéran de la Seconde Guerre Mondiale.", "qui collectionne les bouchons de liège.", "qui ouvre un courrier de l'URSSAF.", "gay.", "asthmatique.",
+        "qui pue du cul.", "complètement con.", "de merde.", "transgenre 🏳️‍⚧️", "sataniste.", "fan de Feldup.", "rockstar.",
         "addict à TikTok.", "avec un fort accent belge.", "qui vote RN.", "fan de Norman.", "avec 2 de QI.", "SDF.", "bourré.",
         "sous kétamine.", "qui s'est chié dessus.", "addict à l'Oasis Tropical.", "DJ en Teknival.", "de la mafia italienne.",
-        "amoureux de Lady Gaga.", "mangeur de caca.", "à la recherche du gros JDG.", "qui adore McFly & Carlito.", "qui rate son bac.",
-        "qui se lève à 4h du mat pour aller au taf.", "sous traitement hormonal.", "en manifestation LGBT.", "qui révise son oral du bac blanc.",
+        "adepte du fameux «je ne suis pas raciste, j'ai un ami noir».", "coprophage.", "à la recherche du gros JDG.", "qui adore McFly & Carlito.", "qui a raté 6 fois son bac.",
+        "qui se lève à 4h du mat pour aller au taf.", "sous traitement hormonal.", "en manifestation LGBT.", "qui pleure sur un exercice de maths devant son père qui lui gueule dessus.",
         "en 4K Ultra HD IMAX Surround Dolby Digital.", "devant une série Netflix de merde.", "qui utilise la commande !destin.", "trisomique.",
-        "qui étale son caca sur les murs.", "perdu dans sa vie.", "trader à Los Angeles.", "nostalgique des années 2000.", "transphobe.", "raciste."
+        "qui étale son caca sur les murs.", "perdu dans sa vie.", "plombier, mais aussi docteur, ingénieur, professeur, livreur de pizza, méchanicien, soldat, policier et astronaute.",
+        "nostalgique des années 2000.", "transphobe.", "raciste."
         ];
 
     const animal = animaux[Math.floor(Math.random() * animaux.length)];
