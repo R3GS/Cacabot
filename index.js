@@ -43,7 +43,7 @@ function getResponse(content) {
     if (command === "!help") {
         return {
             data: new EmbedBuilder()
-                .setColor(0x8e44ad)
+                .setColor(0x00ffff)
                 .setTitle("💩 AIDE A CACABOT")
                 .setDescription("Hey ! Voici Cacabot, qui, malgré son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\n\nPour découvrir les différentes commandes disponibles de Cacabot, choisis l'une des catégories ci-dessous !")
         };
