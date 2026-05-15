@@ -63,7 +63,11 @@ function getResponse(content) {
         return isUpper ? "POURFEUR" : "Pourfeur";
     }
 
-    if (cleaned.includes("c est a quoi") || cleaned.includes("cest a quoi")) || cleaned.includes("c est à quoi")) || cleaned.includes("cest à quoi")) {
+    if (cleaned.includes("c est a quoi") || cleaned.includes("cest a quoi")) {
+        return isUpper ? "À FEUR" : "À feur";
+    }
+
+    if cleaned.includes("c est à quoi")) || cleaned.includes("cest à quoi"))
         return isUpper ? "À FEUR" : "À feur";
     }
 
