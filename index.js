@@ -272,7 +272,7 @@ if (command === "!animal") {
     if (cleaned.includes("cest qui")) {
         return isUpper ? "C'EST QUETTE" : "C'est quette";
     }
-    if (cleaned.includes("c est quoi")) {
+    if (cleaned.includes("cest quoi")) {
         return isUpper ? "C'EST FEUR" : "C'est feur";
     }
     if (cleaned.includes("de quoi")) {
