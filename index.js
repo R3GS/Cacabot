@@ -30,6 +30,31 @@ function getResponse(content) {
     const reply = (normal, upper = normal.toUpperCase()) =>
         isUpper ? upper : normal;
 
+// =========================
+//        COMMANDES
+// =========================
+
+    if (raw.toLowerCase().match(/!aternos\b/)) {
+        return "L'IP actuelle du serveur Minecraft de Regaïa est : **papierprout.aternos.me**";
+    }
+
+    if (raw.toLowerCase().match(/!discord\b/)) {
+        return "Le lien d'invitation du serveur Discord est : **https://discord.com/invite/maAbUYb**";
+    }
+
+    if (command === "!epsys") {
+        const gifs = [
+            "https://cdn.discordapp.com/attachments/1480734932933542049/1504170153317761085/67.gif",
+            "https://cdn.discordapp.com/attachments/1480734932933542049/1504168424136245368/Caramell_Dansen.gif",
+            "https://cdn.discordapp.com/attachments/720057528867618909/1486636493417222216/2a088883-36e7-4eb4-ab2c-0d4942e21bfb.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1478476705642319985/ezgif-403e246b59051aa3.gif",
+            "https://tenor.com/view/r3gs_-capuche-love-hearts-gif-22642553",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1478480836683759636/ezgif-4910f713e8f8f838.gif"
+        ];
+
+        return gifs[Math.floor(Math.random() * gifs.length)];
+    }
+    
     // =========================
     // PHRASES CONTENANT LES MOTS
     // =========================
@@ -147,23 +172,6 @@ function getResponse(content) {
     if (cleaned === "ntm jax") {
         return "https://cdn.discordapp.com/attachments/1206232717444775956/1504653708770672741/Capture_decran_2026-05-15_031617.png";
     }
-
-    if (raw.toLowerCase().match(/!aternos\b/)) {
-    return "L'IP actuelle du serveur Minecraft de Regaïa est : **papierprout.aternos.me**";
-}
-
-    if (command === "!epsys") {
-        const gifs = [
-            "https://cdn.discordapp.com/attachments/1480734932933542049/1504170153317761085/67.gif",
-            "https://cdn.discordapp.com/attachments/1480734932933542049/1504168424136245368/Caramell_Dansen.gif",
-            "https://cdn.discordapp.com/attachments/720057528867618909/1486636493417222216/2a088883-36e7-4eb4-ab2c-0d4942e21bfb.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1478476705642319985/ezgif-403e246b59051aa3.gif",
-            "https://tenor.com/view/r3gs_-capuche-love-hearts-gif-22642553",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1478480836683759636/ezgif-4910f713e8f8f838.gif"
-        ];
-
-    return gifs[Math.floor(Math.random() * gifs.length)];
-}
 
     if (cleaned.includes("cest qui")) {
         return isUpper ? "C'EST QUETTE" : "C'est quette";
