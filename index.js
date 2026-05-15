@@ -64,7 +64,7 @@ function getResponse(content) {
             "Tu vas te péter la gueule sur un trottoir le mois prochain (fais gaffe).",
             "Tu vas vouloir trop forcer un pet lundi prochain. Bon courage.",
             "Tu croiseras ton sosie parfait dans un Lidl mardi prochain à 14h32."
-            "Ta transidentité n'est pas un fardeau. Sois fièr.e de toi chouchou <3"
+            "Ta transidentité n'est pas un fardeau. Sois fièr.e de toi chouchou."
             "Un homme que tu côtoies va malheureusement se couper accidentellement le zgeg avec une machette."
             "Y a un truc qui pue dans ton frigo, pense à le jeter avant de choper la coulante."
             "Un événement totalement nul mais humiliant va te définir socialement dans l'année qui va suivre.",
