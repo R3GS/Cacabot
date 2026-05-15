@@ -17,16 +17,18 @@ const client = new Client({
 });
 
 function getResponse(content) {
+    function getResponse(content) {
     const raw = content;
-    const command = lower.split(" ")[0];
 
     const cleaned = raw
         .toLowerCase()
         .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "") // enlève les accents
+        .replace(/[\u0300-\u036f]/g, "")
         .replace(/[^a-z0-9\s]/g, "")
         .replace(/\s+/g, " ")
         .trim();
+
+    const command = cleaned.split(" ")[0];
 
     const isUpper =
         raw.length > 0 &&
