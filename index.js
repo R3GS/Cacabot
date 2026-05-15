@@ -410,6 +410,25 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
+    if (response?.menu) {
+        const menu = new StringSelectMenuBuilder()
+            .setCustomId('help_menu')
+            .setPlaceholder('Choisis une catégorie')
+            .addOptions(
+                { label: 'Fun', value: 'fun' },
+                { label: 'Utilitaire', value: 'util' },
+                { label: 'RP', value: 'rp' }
+            );
+
+        const row = new ActionRowBuilder().addComponents(menu);
+
+        await message.reply({
+            embeds: [response.data],
+            components: [row]
+        });
+
+        return;
+    }
     await message.reply(response);
 });
 
@@ -418,3 +437,38 @@ client.once('ready', () => {
 });
 
 client.login(process.env.TOKEN);
+
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isStringSelectMenu()) return;
+    if (interaction.customId !== 'help_menu') return;
+
+    const value = interaction.values[0];
+
+    let embed;
+
+    if (value === 'fun') {
+        embed = new EmbedBuilder()
+            .setColor(0xffcc00)
+            .setTitle("🎉 Fun")
+            .setDescription("!animal\n!destin\n!epsys");
+    }
+
+    if (value === 'util') {
+        embed = new EmbedBuilder()
+            .setColor(0x3498db)
+            .setTitle("🛠 Utilitaire")
+            .setDescription("!discord\n!aternos");
+    }
+
+    if (value === 'rp') {
+        embed = new EmbedBuilder()
+            .setColor(0x9b59b6)
+            .setTitle("🎭 RP")
+            .setDescription("à compléter");
+    }
+
+    return interaction.update({
+        embeds: [embed],
+        components: []
+    });
+});
