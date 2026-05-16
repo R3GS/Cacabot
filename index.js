@@ -174,6 +174,14 @@ function getResponse(raw) {
         return { needsBang: true };
     }
 
+    // =========================
+    //         !PUNCH
+    // =========================
+
+    if (command === "!punch") {
+        return { needsPunch: true };
+    }
+
 
     // =========================
     //         !DESTIN
@@ -463,7 +471,6 @@ const danceGifsSolo = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042079795904583/silvagunner-siivagunner.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080232247377/fnaf-fredbear-dancing-to-happy.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505054866823970867/srpelo.gif",
-    "https://cdn.discordapp.com/attachments/1128032964924670053/1505189887249219624/markiplier-tiktok-dance-markiplier-dance.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080932696295/mario-dancer-break-dance.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042081318441161/dance-nsjdnsnd.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042081826078802/caine.gif",
@@ -487,7 +494,6 @@ const danceGifsSolo = [
 
 const danceGifsDuo = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505046260233797720/caine-musical.gif",
-    "https://cdn.discordapp.com/attachments/1128032964924670053/1505190604001247282/jojos-bizarre-adventure-dance.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505046261038977104/zevent-zevent2021.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505046261441761392/dance.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505046262112845855/caramelldansen-dance.gif",
@@ -631,6 +637,30 @@ function buildBangEmbed(description) {
     const gif = bangGifs[Math.floor(Math.random() * bangGifs.length)];
     return new EmbedBuilder()
         .setColor(0xc2461d)
+        .setDescription(description)
+        .setImage(gif);
+}
+
+// =========================
+//     LOGIQUE !PUNCH
+// =========================
+
+const punchGifs = [
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505192207693381694/punch.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505192208037576794/the-boys-soldier-boy.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505192216065212476/markiplier.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505192216715460730/marvel-rivals.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505192219064139786/dehya-genshin-impact.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505192219701936298/ignited-bonnie-the-joy-of-creation.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505192220335144970/the-amazing-digital-circus-digital-circus.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505192221140324352/smg4-mario.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505192221517807727/le_cercle.gif"
+];
+
+function buildPunchEmbed(description) {
+    const gif = punchGifs[Math.floor(Math.random() * punchGifs.length)];
+    return new EmbedBuilder()
+        .setColor(0x51c21d)
         .setDescription(description)
         .setImage(gif);
 }
@@ -784,7 +814,7 @@ client.on('messageCreate', async (message) => {
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (!cible) {
-            return message.reply("Mentionne quelqu'un que tu veux rizz !");
+            return message.reply("Choisis quelqu'un que tu veux rizz !");
         }
 
         if (cible.id === message.author.id) {
@@ -839,13 +869,43 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [embed], components: [row] });
     }
 
+    // !punch
+    if (response?.needsPunch) {
+        const cible = message.mentions.users.first();
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            return message.reply("Mentionne quelqu'un que tu veux frapper !");
+        }
+
+        if (cible.id === message.author.id) {
+            return message.reply("Tu ne peux pas te frapper toi-m\u00eame ! 'Fin si mais... Ne le fais pas.");
+        }
+
+        if (cible.id === client.user.id) {
+            const embed = buildPunchEmbed(`\ud83e\udd1c **${auteurNom}** me frappe ! A\u00efeuh !`);
+            return message.reply({ embeds: [embed] });
+        }
+
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        const embed = buildPunchEmbed(`\ud83e\udd1c **${auteurNom}** frappe **${cibleNom}** !`);
+
+        const punchBackButton = new ButtonBuilder()
+            .setCustomId(`punch_back_${message.author.id}_${cible.id}_${auteurNom}`)
+            .setLabel("\ud83e\udd1c Frapper en retour")
+            .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(punchBackButton);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
     // !help
     if (response?.data) {
         const menu = new StringSelectMenuBuilder()
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, bang, rizz, rire', value: 'fun' },
+                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, punch, bang, rizz, rire', value: 'fun' },
                 { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos', value: 'util' },
             );
 
@@ -1027,6 +1087,30 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // =========================
+    // BOUTON PUNCH BACK
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith("punch_back_")) {
+        const parts = interaction.customId.split("_");
+        // format: punch_back_{originalAuthorId}_{targetId}_{originalAuthorNom}
+        const originalAuthorId = parts[2];
+        const targetId = parts[3];
+        const originalAuthorNom = parts.slice(4).join("_");
+        const clickerId = interaction.user.id;
+
+        if (clickerId === originalAuthorId) {
+            return interaction.reply({ content: "Mais ne te frappe pas, voyons !", ephemeral: true });
+        }
+        if (clickerId !== targetId) {
+            return interaction.reply({ content: "Non ! Reste en dehors de la bagarre !", ephemeral: true });
+        }
+
+        const retourNom = interaction.member?.displayName ?? interaction.user.username;
+        const embed = buildPunchEmbed(`\ud83e\udd1c **${retourNom}** frappe **${originalAuthorNom}** en retour !`);
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
     // MENU SELECT
     // =========================
 
@@ -1049,6 +1133,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!hug", value: "Faites un c\u00e2lin \u00e0 quelqu'un sur le serveur !" },
                     { name: "!danse", value: "Dansez avec quelqu'un sur le serveur !" },
                     { name: "!insulte", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
+                    { name: "!punch", value: "Frappez quelqu'un sur le serveur !" },
                     { name: "!bang", value: "Tirez sur quelqu'un sur le serveur !" },
                     { name: "!rizz", value: "Rizzez quelqu'un sur le serveur !" },
                     { name: "!rire", value: "Riez un bon coup !" }
@@ -1094,7 +1179,7 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, bang, rizz, rire', value: 'fun' },
+                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, punch, bang, rizz, rire', value: 'fun' },
                 { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos', value: 'util' }
             );
         const row = new ActionRowBuilder().addComponents(menu);
