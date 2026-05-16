@@ -1647,8 +1647,13 @@ client.on('interactionCreate', async (interaction) => {
                 { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys', value: 'random' }
             );
 
+        const funBackButton = new ButtonBuilder()
+            .setCustomId(`help_back_${helpAuthorId}`)
+            .setLabel('\u2b05 Retour')
+            .setStyle(ButtonStyle.Secondary);
         const funRow = new ActionRowBuilder().addComponents(funMenu);
-        return interaction.update({ embeds: [funEmbed], components: [funRow] });
+        const funBackRow = new ActionRowBuilder().addComponents(funBackButton);
+        return interaction.update({ embeds: [funEmbed], components: [funRow, funBackRow] });
     }
 
     // =========================
@@ -1678,8 +1683,13 @@ client.on('interactionCreate', async (interaction) => {
                     { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys', value: 'random' }
                 );
 
+            const funBackButton = new ButtonBuilder()
+                .setCustomId(`help_back_${helpAuthorId}`)
+                .setLabel('\u2b05 Retour')
+                .setStyle(ButtonStyle.Secondary);
             const funRow = new ActionRowBuilder().addComponents(funMenu);
-            return interaction.update({ embeds: [funEmbed], components: [funRow] });
+            const funBackRow = new ActionRowBuilder().addComponents(funBackButton);
+            return interaction.update({ embeds: [funEmbed], components: [funRow, funBackRow] });
         }
 
         if (value === 'util') {
