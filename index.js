@@ -159,6 +159,22 @@ function getResponse(raw) {
     }
 
     // =========================
+    //         !RIZZ
+    // =========================
+
+    if (command === "!rizz") {
+        return { needsRizz: true };
+    }
+
+    // =========================
+    //         !RIZZ
+    // =========================
+
+    if (command === "!rizz") {
+        return { needsRizz: true };
+    }
+
+    // =========================
     //         !DESTIN
     // =========================
 
@@ -561,6 +577,58 @@ function buildLaughEmbed(description) {
 }
 
 // =========================
+//     LOGIQUE !RIZZ
+// =========================
+
+const rizzGifs = [
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076332000968725/rizz-rizz-face_1.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076350158110751/chica-fnaf-movie.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076350787125288/rizz-rizz-face.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076352234295456/shrek-shrek-meme.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076353026752584/ai-baby.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076357317529650/hehe.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076357766582292/rizz-monkey.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076358152327278/bee.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076359242842213/rizz-fnaf-rizz.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076363105669250/five-nights-at-freddys-freddy.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076364376539317/dob-dob-dob-rizz.gif"
+];
+
+function buildRizzEmbed(description) {
+    const gif = rizzGifs[Math.floor(Math.random() * rizzGifs.length)];
+    return new EmbedBuilder()
+        .setColor(0xff00bb)
+        .setDescription(description)
+        .setImage(gif);
+}
+
+// =========================
+//     LOGIQUE !RIZZ
+// =========================
+
+const rizzGifs = [
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076332000968725/rizz-rizz-face_1.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076350158110751/chica-fnaf-movie.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076350787125288/rizz-rizz-face.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076352234295456/shrek-shrek-meme.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076353026752584/ai-baby.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076357317529650/hehe.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076357766582292/rizz-monkey.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076358152327278/bee.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076359242842213/rizz-fnaf-rizz.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076363105669250/five-nights-at-freddys-freddy.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505076364376539317/dob-dob-dob-rizz.gif"
+];
+
+function buildRizzEmbed(description) {
+    const gif = rizzGifs[Math.floor(Math.random() * rizzGifs.length)];
+    return new EmbedBuilder()
+        .setColor(0xff00bb)
+        .setDescription(description)
+        .setImage(gif);
+}
+
+// =========================
 //     LISTENER MESSAGES
 // =========================
 
@@ -703,13 +771,73 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [embed], components: [row] });
     }
 
+    // !rizz
+    if (response?.needsRizz) {
+        const cible = message.mentions.users.first();
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            return message.reply("Choisis quelqu'un que tu veux rizz !");
+        }
+
+        if (cible.id === message.author.id) {
+            return message.reply("Tu ne peux pas te rizz toi-m\u00eame !");
+        }
+
+        if (cible.id === client.user.id) {
+            const embed = buildRizzEmbed(`\ud83d\uddff **${auteurNom}** me rizz ! Eh beh \ud83d\ude0a`);
+            return message.reply({ embeds: [embed] });
+        }
+
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        const embed = buildRizzEmbed(`\ud83d\uddff **${auteurNom}** rizz **${cibleNom}** !`);
+
+        const rizzBackButton = new ButtonBuilder()
+            .setCustomId(`rizz_back_${message.author.id}_${cible.id}_${auteurNom}`)
+            .setLabel("\ud83d\uddff Rizz en retour")
+            .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(rizzBackButton);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
+    // !rizz
+    if (response?.needsRizz) {
+        const cible = message.mentions.users.first();
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            return message.reply("Choisis quelqu'un que tu veux rizz !");
+        }
+
+        if (cible.id === message.author.id) {
+            return message.reply("Tu ne peux pas te rizz toi-m\u00eame !");
+        }
+
+        if (cible.id === client.user.id) {
+            const embed = buildRizzEmbed(`\ud83d\uddff **${auteurNom}** me rizz ! Eh beh !`);
+            return message.reply({ embeds: [embed] });
+        }
+
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        const embed = buildRizzEmbed(`\ud83d\uddff **${auteurNom}** rizz **${cibleNom}** !`);
+
+        const rizzBackButton = new ButtonBuilder()
+            .setCustomId(`rizz_back_${message.author.id}_${cible.id}_${auteurNom}`)
+            .setLabel("\ud83d\uddff Rizz en retour")
+            .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(rizzBackButton);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
     // !help
     if (response?.data) {
         const menu = new StringSelectMenuBuilder()
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, rire', value: 'fun' },
+                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, rizz, rire', value: 'fun' },
                 { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos', value: 'util' },
             );
 
@@ -829,10 +957,63 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isButton() && interaction.customId.startsWith("laugh_with_")) {
         const parts = interaction.customId.split("_");
         // format: laugh_with_{originalAuthorId}_{originalAuthorNom}
+        const originalAuthorId = parts[2];
         const originalAuthorNom = parts.slice(3).join("_");
+
+        if (interaction.user.id === originalAuthorId) {
+            return interaction.reply({ content: "Tu vas rire avec toi-m\u00eame...? Attends, tu te sens bien ?", ephemeral: true });
+        }
 
         const reurNom = interaction.member?.displayName ?? interaction.user.username;
         const embed = buildLaughEmbed(`\ud83d\ude06 **${reurNom}** rit avec **${originalAuthorNom}** !`);
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
+    // BOUTON RIZZ BACK
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith("rizz_back_")) {
+        const parts = interaction.customId.split("_");
+        // format: rizz_back_{originalAuthorId}_{targetId}_{originalAuthorNom}
+        const originalAuthorId = parts[2];
+        const targetId = parts[3];
+        const originalAuthorNom = parts.slice(4).join("_");
+        const clickerId = interaction.user.id;
+
+        if (clickerId === originalAuthorId) {
+            return interaction.reply({ content: "Tu vas te rizz en retour ? Hein ?", ephemeral: true });
+        }
+        if (clickerId !== targetId) {
+            return interaction.reply({ content: "Ce rizz ne t'\u00e9tait pas adress\u00e9 \ud83d\ude14", ephemeral: true });
+        }
+
+        const retourNom = interaction.member?.displayName ?? interaction.user.username;
+        const embed = buildRizzEmbed(`\ud83d\uddff **${retourNom}** rizz **${originalAuthorNom}** en retour !`);
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
+    // BOUTON RIZZ BACK
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith("rizz_back_")) {
+        const parts = interaction.customId.split("_");
+        // format: rizz_back_{originalAuthorId}_{targetId}_{originalAuthorNom}
+        const originalAuthorId = parts[2];
+        const targetId = parts[3];
+        const originalAuthorNom = parts.slice(4).join("_");
+        const clickerId = interaction.user.id;
+
+        if (clickerId === originalAuthorId) {
+            return interaction.reply({ content: "Tu vas te rizz en retour ? Hein ?", ephemeral: true });
+        }
+        if (clickerId !== targetId) {
+            return interaction.reply({ content: "Ce rizz ne t'\u00e9tait pas adress\u00e9...", ephemeral: true });
+        }
+
+        const retourNom = interaction.member?.displayName ?? interaction.user.username;
+        const embed = buildRizzEmbed(`\ud83d\uddff **${retourNom}** rizz **${originalAuthorNom}** en retour !`);
         return interaction.reply({ embeds: [embed] });
     }
 
@@ -859,6 +1040,8 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!hug", value: "Faites un c\u00e2lin \u00e0 quelqu'un sur le serveur !" },
                     { name: "!danse", value: "Dansez avec quelqu'un sur le serveur !" },
                     { name: "!insulte", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
+                    { name: "!rizz", value: "Rizzez quelqu'un sur le serveur !" },
+                    { name: "!rizz", value: "Rizzez quelqu'un sur le serveur !" },
                     { name: "!rire", value: "Riez un bon coup !" }
                 );
         }
@@ -902,7 +1085,7 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, rire', value: 'fun' },
+                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, rizz, rire', value: 'fun' },
                 { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos', value: 'util' }
             );
         const row = new ActionRowBuilder().addComponents(menu);
