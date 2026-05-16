@@ -353,11 +353,11 @@ function getAnimalResponse(message) {
 // =========================
  
 const kissGifs = [
-    "https://tenor.com/view/adventure-time-princess-bubble-gum-marceline-kiss-kissing-gif-5320559",
-    "https://tenor.com/view/catradora-catra-adora-kiss-shera-gif-5780974298210838431",
-    "https://tenor.com/view/arcane-arcane-season-2-caitlyn-vi-kiss-gif-11850463142888252592",
-    "https://tenor.com/view/littlebigwhale-gomart-twitch-zevent-kiss-gif-23612046",
-    "https://media.tenor.com/UVieyAt1QSIAAAAj/two-men-kissing.gif"
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505016959584964811/adventure-time-princess-bubble-gum.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505016959153082529/two-men-kissing.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505016958847025324/littlebigwhale-gomart.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505016958154969261/arcane-arcane-season-2.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505016957789802586/catradora-catra.gif"
 ];
  
 function buildKissEmbed(auteurNom, cibleNom) {
@@ -394,6 +394,16 @@ client.on('messageCreate', async (message) => {
  
         const auteurNom = message.member?.displayName ?? message.author.username;
         const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+ 
+        // Cas : self-kiss
+        if (cible.id === message.author.id) {
+            return message.reply(`💋 **${auteurNom}** s'embrasse ! Attends... Comment c'est possible ?`);
+        }
+ 
+        // Cas : kiss sur Cacabot lui-même
+        if (cible.id === client.user.id) {
+            return message.reply(`💋 **${auteurNom}** m'embrasse ! Awww merci <3`);
+        }
  
         const embed = buildKissEmbed(auteurNom, cibleNom);
  
