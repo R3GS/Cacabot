@@ -338,6 +338,7 @@ function getResponse(raw) {
     if (cleaned.includes("de quoi")) return reply("De feur");
     if (cleaned.includes("de qui")) return reply("De quette");
     if (cleaned.endsWith("quoi")) return reply("Feur");
+    if (cleaned.includes(" feur ") || cleaned === "feur" || cleaned.startsWith("feur ") || cleaned.endsWith(" feur")) return "\"Feur\" ? Tu veux me voler mon job ?";
 
     // =========================
     // MESSAGES EXACTS UNIQUEMENT
