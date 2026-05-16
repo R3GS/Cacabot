@@ -38,31 +38,7 @@ function getResponse(content) {
 
     const reply = (normal, upper = normal.toUpperCase()) =>
         isUpper ? upper : normal;
-
-    client.on('messageCreate', async (message) => {
-        if (message.author.bot) return;
-
-        const raw = message.content;
-        const command = raw.trim().split(" ")[0].toLowerCase();
-
-        // !help
-        if (command === "!help") {
-            return message.reply({
-                embeds: [embed],
-                components: [row]
-            });
-        }
-
-        // !animal
-        if (command === "!animal") {
-            return message.reply("ok animal");
-        }
-
-        const response = getResponse(message.content);
-        if (!response) return;
-
-        return message.reply(response);
-});
+};
 
 // =========================
 //     COMMANDES RANDOM
@@ -136,13 +112,29 @@ if (command === "!choix") {
 //          !ANIMAL
 // =========================
 
-if (command === "!animal") {
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
 
-    const cible = message.mentions.users.first();
+    const raw = message.content;
+    const command = raw.trim().split(" ")[0].toLowerCase();
 
-    const base = cible
-        ? `Hmmm, l'animal spirituel de ${cible} est...`
-        : "Hmmm, ton animal spirituel est...";
+    // !help
+    if (command === "!help") {
+        return message.reply("embed help ici");
+    }
+
+    // !animal
+    if (command === "!animal") {
+
+        const cible = message.mentions.users.first();
+
+        const base = cible
+            ? `Hmmm, l'animal spirituel de ${cible} est...`
+            : "Hmmm, ton animal spirituel est...";
+
+        const isFem = Math.random() < 0.5;
+
+        const animalList = isFem ? animauxFem : animauxMasc;
 
     const animauxMasc = [
         "Un rat de RER", "Un pigeon", "Un chat errant", "Un renard", "Un dauphin", "Un corbeau", "Un hamster", "Un chien", "Un crapaud", "Un panda",
@@ -187,15 +179,21 @@ if (command === "!animal") {
 
     const animalList = isFem ? animauxFem : animauxMasc;
 
-    const etatList = isFem
-        ? [...etatsFem, ...etatsNeutres]
-        : [...etatsMasc, ...etatsNeutres];
+        const etatList = isFem
+            ? [...etatsFem, ...etatsNeutres]
+            : [...etatsMasc, ...etatsNeutres];
 
-    const animal = animalList[Math.floor(Math.random() * animalList.length)];
-    const etat = etatList[Math.floor(Math.random() * etatList.length)];
+        const animal = animalList[Math.floor(Math.random() * animalList.length)];
+        const etat = etatList[Math.floor(Math.random() * etatList.length)];
 
-    return `${base}\n**${animal} ${etat}**`;
-}
+        return message.reply(`${base}\n**${animal} ${etat}**`);
+    }
+
+    const response = getResponse(raw);
+    if (!response) return;
+
+    return message.reply(response);
+});
 
 
 // =========================
