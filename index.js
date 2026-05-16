@@ -389,7 +389,7 @@ client.on('messageCreate', async (message) => {
         const cible = message.mentions.users.first();
  
         if (!cible) {
-            return message.reply("Euuh... Tu veux embrasser qui du coup ?");
+            return message.reply("Mentionne quelqu'un pour l'embrasser !");
         }
  
         const auteurNom = message.member?.displayName ?? message.author.username;
