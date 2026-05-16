@@ -397,12 +397,14 @@ client.on('messageCreate', async (message) => {
  
         // Cas : self-kiss
         if (cible.id === message.author.id) {
-            return message.reply(`💋 **${auteurNom}** s'embrasse ! Attends... Comment c'est possible ?`);
+            const embedSelf = buildKissEmbed(auteurNom, auteurNom).setDescription(`💋 **${auteurNom}** s'embrasse ! Attends... Comment c'est possible ?`);
+            return message.reply({ embeds: [embedSelf] });
         }
  
         // Cas : kiss sur Cacabot lui-même
         if (cible.id === client.user.id) {
-            return message.reply(`💋 **${auteurNom}** m'embrasse ! Awww merci <3`);
+            const embedBot = buildKissEmbed(auteurNom, "Cacabot").setDescription(`💋 **${auteurNom}** m'embrasse ! Awww merci <3`);
+            return message.reply({ embeds: [embedBot] });
         }
  
         const embed = buildKissEmbed(auteurNom, cibleNom);
