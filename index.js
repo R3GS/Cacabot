@@ -361,7 +361,6 @@ function getResponse(raw) {
     // =========================
 
     if (cleaned === "hein") return reply("Deux");
-    if (cleaned === "re") return reply("Nard");
     if (cleaned === "de") return reply("Trois");
     if (cleaned === "a" || cleaned === "ha" || cleaned === "ah") return "B";
     if (cleaned === "ntm jax") return "https://cdn.discordapp.com/attachments/1206232717444775956/1504653708770672741/Capture_decran_2026-05-15_031617.png";
@@ -393,13 +392,17 @@ function getResponse(raw) {
 //     LOGIQUE !ANIMAL
 // =========================
 
-function getAnimalResponse(message) {
-    const cible = message.mentions.users.first();
+function getAnimalResponse(message, cibleUser) {
+    const cible = cibleUser ?? message.mentions.users.first();
+
+    const cibleNom = cible
+        ? (message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username)
+        : null;
 
     const base = cible
         ? (cible.id === client.user.id
             ? "Mon animal spirituel est..."
-            : `Hmmm, l'animal spirituel de ${cible} est...`)
+            : `Hmmm, l'animal spirituel de **${cibleNom}** est...`)
         : "Hmmm, ton animal spirituel est...";
 
     const animauxMasc = [
@@ -823,16 +826,12 @@ client.on('messageCreate', async (message) => {
             const result = findMemberByName(message.guild, args);
             if (result.multiple) {
                 askDisambiguation(message, message.guild, result.candidates, (user) => {
-                    const fakeMsg = Object.create(message);
-                    fakeMsg.mentions = { users: { first: () => user } };
-                    message.reply(getAnimalResponse(fakeMsg));
+                    message.reply(getAnimalResponse(message, user));
                 });
                 return;
             }
             if (result.found) {
-                const fakeMsg = Object.create(message);
-                fakeMsg.mentions = { users: { first: () => result.found.user } };
-                return message.reply(getAnimalResponse(fakeMsg));
+                return message.reply(getAnimalResponse(message, result.found.user));
             }
         }
         return message.reply(getAnimalResponse(message));
