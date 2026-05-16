@@ -463,6 +463,7 @@ const danceGifsSolo = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042079795904583/silvagunner-siivagunner.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080232247377/fnaf-fredbear-dancing-to-happy.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505054866823970867/srpelo.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505189887249219624/markiplier-tiktok-dance-markiplier-dance.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080932696295/mario-dancer-break-dance.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042081318441161/dance-nsjdnsnd.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042081826078802/caine.gif",
@@ -486,6 +487,7 @@ const danceGifsSolo = [
 
 const danceGifsDuo = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505046260233797720/caine-musical.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505190604001247282/jojos-bizarre-adventure-dance.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505046261038977104/zevent-zevent2021.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505046261441761392/dance.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505046262112845855/caramelldansen-dance.gif",
@@ -782,7 +784,7 @@ client.on('messageCreate', async (message) => {
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (!cible) {
-            return message.reply("Choisis quelqu'un que tu veux rizz !");
+            return message.reply("Mentionne quelqu'un que tu veux rizz !");
         }
 
         if (cible.id === message.author.id) {
