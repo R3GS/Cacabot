@@ -467,7 +467,7 @@ client.on('messageCreate', async (message) => {
         const cible = message.mentions.users.first();
 
         if (!cible) {
-            return message.reply("Mentionne quelqu'un pour lui faire un câlin !");
+            return message.reply("Euuh... Tu veux câliner qui du coup ?");
         }
 
         const auteurNom = message.member?.displayName ?? message.author.username;
@@ -503,8 +503,8 @@ client.on('messageCreate', async (message) => {
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une catégorie')
             .addOptions(
-                { label: 'Fun', value: 'fun' },
-                { label: 'Utilitaire', value: 'util' },
+                { label: '🎉 Fun', description: '!animal, !destin, !epsys, !choix, !kiss, !hug', value: 'fun' },
+                { label: '🛠 Utilitaire', description: '!discord, !aternos', value: 'util' },
             );
 
         const row = new ActionRowBuilder().addComponents(menu);
@@ -543,7 +543,7 @@ client.on('interactionCreate', async (interaction) => {
 
         // L'auteur original essaie de cliquer
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "'Fin, c'est ton bisou, du coup...'", ephemeral: true });
+            return interaction.reply({ content: "Bah c'est ton bisou, nan ?", ephemeral: true });
         }
 
         // Quelqu'un d'autre que la cible essaie de cliquer
@@ -571,7 +571,7 @@ client.on('interactionCreate', async (interaction) => {
         const clickerId = interaction.user.id;
 
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "C'est... C'est ton câlin, du coup.", ephemeral: true });
+            return interaction.reply({ content: "C'est... C'est ton câlin du coup...", ephemeral: true });
         }
 
         if (clickerId !== targetId) {
@@ -596,15 +596,25 @@ client.on('interactionCreate', async (interaction) => {
         if (value === 'fun') {
             embed = new EmbedBuilder()
                 .setColor(0xffcc00)
-                .setTitle("🎉 Fun")
-                .setDescription("**!animal** ➜ Devine votre animal spirituel parmi près de 7000 combinaisons !\n**!destin** ➜ Prédit votre destin et fait part des évènements de votre futur.\n**!epsys** ➜ Poste des GIFs aléatoires d'Epsys, parce que.\n**!choix** ➜ Vous avez du mal à faire un choix ? Demandez à Cacabot.\n**!kiss** ➜ Embrassez quelqu'un sur le serveur !\n**!hug** ➜ Faites un câlin à quelqu'un sur le serveur !");
+                .setDescription("# 🎉 Fun")
+                .addFields(
+                    { name: "!animal", value: "Devine votre animal spirituel parmi près de 7000 combinaisons !" },
+                    { name: "!destin", value: "Prédit votre destin et fait part des évènements de votre futur." },
+                    { name: "!epsys", value: "Poste des GIFs aléatoires d'Epsys, parce que." },
+                    { name: "!choix", value: "Vous avez du mal à faire un choix ? Demandez à Cacabot." },
+                    { name: "!kiss", value: "Embrassez quelqu'un sur le serveur !" },
+                    { name: "!hug", value: "Faites un câlin à quelqu'un sur le serveur !" }
+                );
         }
 
         if (value === 'util') {
             embed = new EmbedBuilder()
                 .setColor(0x3498db)
-                .setTitle("🛠 Utilitaire")
-                .setDescription("**!discord** ➜ Obtenir le lien officiel d'invitation de Regaïa.\n**!aternos** ➜ Obtenir l'IP du serveur Aternos (Minecraft) de Regaïa.");
+                .setDescription("# 🛠 Utilitaire")
+                .addFields(
+                    { name: "!discord", value: "Obtenir le lien officiel d'invitation de Regaïa." },
+                    { name: "!aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Regaïa." }
+                );
         }
 
         if (!embed) {
@@ -641,8 +651,8 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une catégorie')
             .addOptions(
-                { label: 'Fun', value: 'fun' },
-                { label: 'Utilitaire', value: 'util' }
+                { label: '🎉 Fun', description: '!animal, !destin, !epsys, !choix, !kiss, !hug', value: 'fun' },
+                { label: '🛠 Utilitaire', description: '!discord, !aternos', value: 'util' }
             );
 
         const row = new ActionRowBuilder().addComponents(menu);
