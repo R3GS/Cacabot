@@ -817,6 +817,23 @@ client.on('messageCreate', async (message) => {
 
     // !animal
     if (response?.needsMention) {
+        const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+        if (!message.mentions.users.first() && args.length > 0) {
+            const result = findMemberByName(message.guild, args);
+            if (result.multiple) {
+                askDisambiguation(message, message.guild, result.candidates, (user) => {
+                    const fakeMsg = Object.create(message);
+                    fakeMsg.mentions = { users: { first: () => user } };
+                    message.reply(getAnimalResponse(fakeMsg));
+                });
+                return;
+            }
+            if (result.found) {
+                const fakeMsg = Object.create(message);
+                fakeMsg.mentions = { users: { first: () => result.found.user } };
+                return message.reply(getAnimalResponse(fakeMsg));
+            }
+        }
         return message.reply(getAnimalResponse(message));
     }
 
