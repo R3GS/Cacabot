@@ -1214,7 +1214,6 @@ client.on('messageCreate', async (message) => {
 
         const embed = new EmbedBuilder()
             .setColor(0x5865f2)
-            .setTitle(`Avatar de ${cible.username}`)
             .setImage(cible.displayAvatarURL({ dynamic: true, size: 1024 }));
 
         return message.reply({ embeds: [embed] });
