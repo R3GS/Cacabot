@@ -1,7 +1,7 @@
 require('dotenv').config();
 const fs = require('fs');
 
-const TOP_FILE = './top.json';
+const TOP_FILE = require('path').join(__dirname, 'top.json');
 function loadTop() {
     try { return JSON.parse(fs.readFileSync(TOP_FILE, 'utf-8')); } catch { return { messages: {} }; }
 }
