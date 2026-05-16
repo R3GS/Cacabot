@@ -337,6 +337,7 @@ function getResponse(raw) {
     if (cleaned.includes("cest quoi")) return reply("C'est feur");
     if (cleaned.includes("de quoi")) return reply("De feur");
     if (cleaned.includes("de qui")) return reply("De quette");
+    if (cleaned.endsWith("quoi")) return reply("Feur");
 
     // =========================
     // MESSAGES EXACTS UNIQUEMENT
@@ -346,7 +347,6 @@ function getResponse(raw) {
     if (cleaned === "de") return reply("Trois");
     if (cleaned === "a" || cleaned === "ha" || cleaned === "ah") return "B";
     if (cleaned === "ntm jax") return "https://cdn.discordapp.com/attachments/1206232717444775956/1504653708770672741/Capture_decran_2026-05-15_031617.png";
-    if (cleaned === "feur") return reply("Vole pas le travail des IA.");
 
     // =========================
     // QUOI / QUI CLASSIQUES
