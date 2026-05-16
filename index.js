@@ -1,15 +1,36 @@
 require('dotenv').config();
-const fs = require('fs');
+const JSONBIN_ID = '6a08f315adc21f119aaed5c7';
+const JSONBIN_KEY = '$2a$10$4aNH8UsrNWZXAfraECrYp.yAWPzFvnOY7EAc8oifTNLrpfN3dnRuq';
+const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_ID}`;
 
-const TOP_FILE = require('path').join(__dirname, 'top.json');
-function loadTop() {
-    try { return JSON.parse(fs.readFileSync(TOP_FILE, 'utf-8')); } catch { return { messages: {} }; }
+let topData = { messages: {} };
+
+async function loadTop() {
+    try {
+        const res = await fetch(JSONBIN_URL + '/latest', {
+            headers: { 'X-Master-Key': JSONBIN_KEY }
+        });
+        const json = await res.json();
+        topData = json.record;
+        console.log('\u2705 topData charg\u00e9 depuis JSONBin');
+    } catch (err) {
+        console.error('Erreur chargement JSONBin:', err);
+    }
 }
-function saveTop(data) {
-    fs.writeFileSync(TOP_FILE, JSON.stringify(data, null, 2));
+
+async function saveTop() {
+    try {
+        await fetch(JSONBIN_URL, {
+            method: 'PUT',
+            headers: { 'X-Master-Key': JSONBIN_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify(topData)
+        });
+    } catch (err) {
+        console.error('Erreur sauvegarde JSONBin:', err);
+    }
 }
-let topData = loadTop();
-setInterval(() => saveTop(topData), 5 * 60 * 1000);
+
+setInterval(() => saveTop(), 5 * 60 * 1000);
 
 const {
     Client,
@@ -2005,6 +2026,7 @@ client.on('interactionCreate', async (interaction) => {
 
 client.once('ready', async () => {
     console.log(`\u2705 ${client.user.tag} est connect\u00e9`);
+    await loadTop();
     for (const guild of client.guilds.cache.values()) {
         await guild.members.fetch().catch(() => {});
     }
