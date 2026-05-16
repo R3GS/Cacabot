@@ -126,11 +126,11 @@ client.on('messageCreate', async (message) => {
     // !animal
     if (command === "!animal") {
 
-        const cible = message.mentions.users.first();
+    const cible = message.mentions.users.first();
 
-        const base = cible
-            ? `Hmmm, l'animal spirituel de ${cible} est...`
-            : "Hmmm, ton animal spirituel est...";
+    const base = cible
+        ? `Hmmm, l'animal spirituel de ${cible} est...`
+        : "Hmmm, ton animal spirituel est...";
 
     const animauxMasc = [
         "Un rat de RER", "Un pigeon", "Un chat errant", "Un renard", "Un dauphin", "Un corbeau", "Un hamster", "Un chien", "Un crapaud", "Un panda",
@@ -175,21 +175,15 @@ client.on('messageCreate', async (message) => {
 
     const animalList = isFem ? animauxFem : animauxMasc;
 
-        const etatList = isFem
-            ? [...etatsFem, ...etatsNeutres]
-            : [...etatsMasc, ...etatsNeutres];
+    const etatList = isFem
+        ? [...etatsFem, ...etatsNeutres]
+        : [...etatsMasc, ...etatsNeutres];
 
-        const animal = animalList[Math.floor(Math.random() * animalList.length)];
-        const etat = etatList[Math.floor(Math.random() * etatList.length)];
+    const animal = animalList[Math.floor(Math.random() * animalList.length)];
+    const etat = etatList[Math.floor(Math.random() * etatList.length)];
 
-        return message.reply(`${base}\n**${animal} ${etat}**`);
-    }
-
-    const response = getResponse(raw);
-    if (!response) return;
-
-    return message.reply(response);
-});
+    return message.reply(`${base}\n**${animal} ${etat}**`);
+}
 
 
 // =========================
