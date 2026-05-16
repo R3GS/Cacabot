@@ -1562,6 +1562,96 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // =========================
+    // MENU SELECT FUN
+    // =========================
+
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_fun_')) {
+        const helpAuthorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== helpAuthorId) {
+            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
+
+        const value = interaction.values[0];
+        let embed;
+
+        if (value === 'interact') {
+            embed = new EmbedBuilder()
+                .setColor(0xff6b6b)
+                .setDescription("# \ud83d\udc46 Interact")
+                .addFields(
+                    { name: "!kiss", value: "Embrassez quelqu'un sur le serveur !" },
+                    { name: "!hug", value: "Faites un c\u00e2lin \u00e0 quelqu'un sur le serveur !" },
+                    { name: "!danse", value: "Dansez avec quelqu'un sur le serveur !" },
+                    { name: "!insulte", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
+                    { name: "!die", value: "Mourez en direct sur le serveur !" },
+                    { name: "!punch", value: "Frappez quelqu'un sur le serveur !" },
+                    { name: "!bang", value: "Tirez sur quelqu'un sur le serveur !" },
+                    { name: "!rizz", value: "Rizzez quelqu'un sur le serveur !" },
+                    { name: "!rire", value: "Riez un bon coup !" }
+                );
+        }
+
+        if (value === 'discussion') {
+            embed = new EmbedBuilder()
+                .setColor(0x6bb5ff)
+                .setDescription("# \ud83d\udcac Discussion")
+                .addFields(
+                    { name: "!question", value: "Lance une question al\u00e9atoire parmi 6 cat\u00e9gories !" },
+                    { name: "!choix", value: "Vous avez du mal \u00e0 faire un choix ? Demandez \u00e0 Cacabot." }
+                );
+        }
+
+        if (value === 'random') {
+            embed = new EmbedBuilder()
+                .setColor(0xa855f7)
+                .setDescription("# \ud83d\udca5 Random")
+                .addFields(
+                    { name: "!destin", value: "Pr\u00e9dit votre destin et fait part des \u00e9v\u00e8nements de votre futur." },
+                    { name: "!animal", value: "Devine votre animal spirituel parmi pr\u00e8s de 7000 combinaisons !" },
+                    { name: "!epsys", value: "Poste des GIFs al\u00e9atoires d'Epsys, parce que." }
+                );
+        }
+
+        if (!embed) {
+            embed = new EmbedBuilder().setColor(0xff0000).setTitle("Erreur").setDescription("Cat\u00e9gorie inconnue");
+        }
+
+        const backButton = new ButtonBuilder()
+            .setCustomId(`help_fun_back_${helpAuthorId}`)
+            .setLabel('\u2b05 Retour')
+            .setStyle(ButtonStyle.Secondary);
+        const backRow = new ActionRowBuilder().addComponents(backButton);
+        return interaction.update({ embeds: [embed], components: [backRow] });
+    }
+
+    // =========================
+    // BOUTON RETOUR FUN
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('help_fun_back_')) {
+        const helpAuthorId = interaction.customId.split('_')[3];
+        if (interaction.user.id !== helpAuthorId) {
+            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
+
+        const funEmbed = new EmbedBuilder()
+            .setColor(0xffcc00)
+            .setDescription("# \ud83c\udf89 Fun\nChoisis une cat\u00e9gorie !");
+
+        const funMenu = new StringSelectMenuBuilder()
+            .setCustomId(`help_fun_${helpAuthorId}`)
+            .setPlaceholder('Choisis une cat\u00e9gorie')
+            .addOptions(
+                { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insulte, die, punch, bang, rizz, rire, danse', value: 'interact' },
+                { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
+                { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys', value: 'random' }
+            );
+
+        const funRow = new ActionRowBuilder().addComponents(funMenu);
+        return interaction.update({ embeds: [funEmbed], components: [funRow] });
+    }
+
+    // =========================
     // MENU SELECT
     // =========================
 
@@ -1575,25 +1665,21 @@ client.on('interactionCreate', async (interaction) => {
         let embed;
 
         if (value === 'fun') {
-            embed = new EmbedBuilder()
+            const funEmbed = new EmbedBuilder()
                 .setColor(0xffcc00)
-                .setDescription("# \ud83c\udf89 Fun")
-                .addFields(
-                    { name: "!animal", value: "Devine votre animal spirituel parmi pr\u00e8s de 7000 combinaisons !" },
-                    { name: "!destin", value: "Pr\u00e9dit votre destin et fait part des \u00e9v\u00e8nements de votre futur." },
-                    { name: "!epsys", value: "Poste des GIFs al\u00e9atoires d'Epsys, parce que." },
-                    { name: "!choix", value: "Vous avez du mal \u00e0 faire un choix ? Demandez \u00e0 Cacabot." },
-                    { name: "!kiss", value: "Embrassez quelqu'un sur le serveur !" },
-                    { name: "!hug", value: "Faites un c\u00e2lin \u00e0 quelqu'un sur le serveur !" },
-                    { name: "!danse", value: "Dansez avec quelqu'un sur le serveur !" },
-                    { name: "!insulte", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
-                    { name: "!die", value: "Mourez en direct sur le serveur !" },
-                    { name: "!punch", value: "Frappez quelqu'un sur le serveur !" },
-                    { name: "!bang", value: "Tirez sur quelqu'un sur le serveur !" },
-                    { name: "!rizz", value: "Rizzez quelqu'un sur le serveur !" },
-                    { name: "!rire", value: "Riez un bon coup !" },
-                    { name: "!question", value: "Lance une question al\u00e9atoire !" }
+                .setDescription("# \ud83c\udf89 Fun\nChoisis une cat\u00e9gorie !");
+
+            const funMenu = new StringSelectMenuBuilder()
+                .setCustomId(`help_fun_${helpAuthorId}`)
+                .setPlaceholder('Choisis une cat\u00e9gorie')
+                .addOptions(
+                    { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insulte, die, punch, bang, rizz, rire, danse', value: 'interact' },
+                    { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
+                    { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys', value: 'random' }
                 );
+
+            const funRow = new ActionRowBuilder().addComponents(funMenu);
+            return interaction.update({ embeds: [funEmbed], components: [funRow] });
         }
 
         if (value === 'util') {
