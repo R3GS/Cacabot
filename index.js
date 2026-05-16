@@ -200,6 +200,14 @@ function getResponse(raw) {
     }
 
     // =========================
+    //         !QUESTION
+    // =========================
+
+    if (command === "!question") {
+        return { needsQuestion: true };
+    }
+
+    // =========================
     //         !DIE
     // =========================
 
@@ -213,6 +221,14 @@ function getResponse(raw) {
 
     if (command === "!serveur") {
         return { needsServeur: true };
+    }
+
+    // =========================
+    //         !QUESTION
+    // =========================
+
+    if (command === "!question") {
+        return { needsQuestion: true };
     }
 
 
@@ -1193,13 +1209,36 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [embed] });
     }
 
+    // !question
+    if (response?.needsQuestion) {
+        const embed = new EmbedBuilder()
+            .setColor(0x9b59b6)
+            .setTitle("\u2753 Question du soir")
+            .setDescription("Choisis une cat\u00e9gorie pour recevoir une question al\u00e9atoire !");
+
+        const menu = new StringSelectMenuBuilder()
+            .setCustomId('question_menu')
+            .setPlaceholder('Choisis une cat\u00e9gorie')
+            .addOptions(
+                { label: '\ud83d\udde3\ufe0f D\u00e9bats / Opinions', value: 'debats' },
+                { label: '\ud83e\udd2b Confession / Introspection', value: 'confession' },
+                { label: '\ud83e\udd14 Hypoth\u00e9tiques', value: 'hypothetiques' },
+                { label: '\ud83c\udfe0 Sp\u00e9ciales Rega\u00efa', value: 'serveur' },
+                { label: '\ud83e\udde0 Philosophie de comptoir', value: 'philosophie' },
+                { label: '\ud83c\udfb2 Al\u00e9atoires / Chaos', value: 'aleatoires' }
+            );
+
+        const row = new ActionRowBuilder().addComponents(menu);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
     // !help
     if (response?.data) {
         const menu = new StringSelectMenuBuilder()
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire', value: 'fun' },
+                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire, question', value: 'fun' },
                 { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos, serveur', value: 'util' },
             );
 
@@ -1445,6 +1484,150 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // =========================
+    // MENU SELECT QUESTION
+    // =========================
+
+    if (interaction.isStringSelectMenu() && interaction.customId === 'question_menu') {
+        const questionsDebats = [
+            "Si tu pouvais supprimer une invention de l'histoire, laquelle ce serait ?",
+            "T'as un super-pouvoir inutile, lequel ?",
+            "T'es plut\u00f4t \"mourir en h\u00e9ros\" ou \"survivre en l\u00e2che\" ?",
+            "Pizza ananas : crime contre l'humanit\u00e9 ou g\u00e9nie incompris ?",
+            "T'\u00e9changerais ta vie contre celle de quelqu'un d'autre ? Qui ?",
+            "Les chats ou les chiens ? Justifie.",
+            "T'es plut\u00f4t matin ou soir ? Et t'assumes ?",
+            "Le pass\u00e9 ou le futur : tu pourrais visiter lequel ?",
+            "T'aurais pr\u00e9f\u00e9r\u00e9 na\u00eetre 50 ans plus t\u00f4t ou 50 ans plus tard ?",
+            "T'es plut\u00f4t \"tout planifier\" ou \"improviser jusqu'au chaos\" ?",
+            "T'es d'accord que les gens qui mettent du lait avant les c\u00e9r\u00e9ales sont dangereux ?",
+            "Si t'avais \u00e0 choisir entre perdre la vue ou l'ou\u00efe, ce serait quoi ?",
+            "T'es plut\u00f4t mer ou montagne ? Et si t'as dit ni l'un ni l'autre, t'as tort.",
+            "Minecraft ou Fortnite \u2014 le d\u00e9bat ultime. Tranche.",
+            "Les films ou les s\u00e9ries ? T'as le droit d'h\u00e9siter mais pas longtemps.",
+            "T'pr\u00e9f\u00e8res \u00eatre trop chaud ou trop froid ?",
+            "T'es \"je r\u00e9ponds aux messages dans la seconde\" ou \"je laisse mariner 3 jours\" ?",
+            "Si t'\u00e9tais un personnage de jeu vid\u00e9o, t'aurais quel r\u00f4le ? Tank, DPS, support ?",
+            "T'es plut\u00f4t quelqu'un qui lit les instructions ou qui fonce et voit ce qui se passe ?",
+            "Quel est le film/s\u00e9rie que tout le monde aime mais que toi tu trouves nul ?"
+        ];
+
+        const questionsConfession = [
+            "Quelle est la chose la plus stupide que t'as faite pour impressionner quelqu'un ?",
+            "T'as un talent cach\u00e9 que personne sur ce serveur conna\u00eet ?",
+            "Quelle est ta honte secr\u00e8te en mati\u00e8re de musique ?",
+            "T'as d\u00e9j\u00e0 menti pour \u00e9viter une soir\u00e9e ? Sur quoi ?",
+            "Quel est le truc le plus enfantin que tu fais encore aujourd'hui ?",
+            "T'as d\u00e9j\u00e0 fait semblant de pas voir quelqu'un dans la rue pour \u00e9viter de lui parler ?",
+            "Quelle est la chose la plus bizarre que t'aies mang\u00e9e ?",
+            "T'as une peur que t'assumes pas en public ?",
+            "Quel est le moment le plus g\u00eanant de ta vie scolaire ?",
+            "T'as d\u00e9j\u00e0 pleur\u00e9 devant un film/s\u00e9rie que t'aurais jamais avou\u00e9 ?",
+            "T'as d\u00e9j\u00e0 eu une phase \"cringe\" dont tu parles plus ? Raconte.",
+            "Quel est le mensonge le plus \u00e9labor\u00e9 que t'as jamais racont\u00e9 ?",
+            "T'as une habitude bizarre que tu fais quand t'es seul.e ?",
+            "Quel est le truc que t'as achet\u00e9 et que t'as jamais utilis\u00e9 ?",
+            "T'as d\u00e9j\u00e0 googl\u00e9 quelque chose de tellement bizarre que t'aurais jamais montr\u00e9 ton historique ?",
+            "Quelle est la d\u00e9cision la plus impulsive que t'as prise et dont t'es fi\u00e8r.e ?",
+            "T'as d\u00e9j\u00e0 rat\u00e9 quelque chose d'important \u00e0 cause d'une s\u00e9rie/jeu ?",
+            "Quel est le conseil le plus nul qu'on t'a jamais donn\u00e9 ?",
+            "Quel est le truc que tu fais et que tu sais que c'est mal mais tu le fais quand m\u00eame ?",
+            "T'as une opinion impopulaire que t'assumes compl\u00e8tement ?"
+        ];
+
+        const questionsHypothetiques = [
+            "T'es le dernier humain sur Terre, mais t'as le choix d'un animal comme compagnon. Lequel ?",
+            "Si t'avais 24h pour faire n'importe quoi sans cons\u00e9quences, ce serait quoi ?",
+            "T'apprends que t'es en fait un personnage de fiction. Dans quel univers t'es ?",
+            "T'as 1 million d'euros mais tu dois tout d\u00e9penser en 24h. Comment ?",
+            "Si tu pouvais vivre dans n'importe quelle \u00e9poque de l'histoire, ce serait laquelle ?",
+            "T'as le pouvoir de lire dans les pens\u00e9es, mais seulement d'une personne pour toujours. Qui ?",
+            "Si t'\u00e9tais invisible pendant une heure, tu ferais quoi ?",
+            "T'apprends que le monde finit dans 48h. Ta derni\u00e8re journ\u00e9e ressemble \u00e0 quoi ?",
+            "Si tu pouvais ma\u00eetriser instantan\u00e9ment n'importe quelle comp\u00e9tence, ce serait laquelle ?",
+            "T'as le choix : vivre 200 ans en bonne sant\u00e9 ou vivre normal mais avec 3 v\u0153ux. Tu choisis quoi ?",
+            "Si t'avais un bouton pour effacer un souvenir de ta m\u00e9moire, t'en effacerais un ?",
+            "T'es propuls\u00e9.e dans un jeu vid\u00e9o au hasard. Quel jeu t'esp\u00e8res tomber ?",
+            "Si tu pouvais avoir une conversation avec toi-m\u00eame dans 10 ans, tu demanderais quoi ?",
+            "T'as le choix entre voler ou \u00eatre invisible. T'es team quoi ?",
+            "Si t'\u00e9tais un super-vilain, quelle serait ton obsession principale ?",
+            "T'as la possibilit\u00e9 de tout recommencer depuis tes 10 ans avec ta m\u00e9moire actuelle. Tu acceptes ?",
+            "Si t'avais acc\u00e8s au cerveau de n'importe qui pendant 10 minutes, qui ce serait ?",
+            "T'apprends que t'as un jumeau/une jum\u00e8le quelque part. Ta r\u00e9action ?",
+            "Si tu pouvais changer une loi dans ton pays, ce serait laquelle ?",
+            "T'es seul.e sur une \u00eele d\u00e9serte avec une console et un seul jeu pour toujours. Lequel ?"
+        ];
+
+        const questionsServeur = [
+            "Qui sur ce serveur survivrait le plus longtemps dans un film d'horreur ?",
+            "Si Rega\u00efa \u00e9tait un pays, quelle serait sa capitale et son plat national ?",
+            "Qui sur ce serveur serait le/la premier.e \u00e0 trahir le groupe en mode apocalypse zombie ?",
+            "Si les membres de ce serveur formaient un groupe de musique, quel genre ce serait ?",
+            "Qui serait le/la meilleur.e pr\u00e9sident.e du serveur ? Et le/la pire ?",
+            "Si ce serveur \u00e9tait une s\u00e9rie TV, quel genre ce serait ?",
+            "Qui serait le/la dernier.e debout lors d'une soir\u00e9e entre membres du serveur ?",
+            "Si chaque membre avait un animal spirituel, lequel t'attribuerais-tu ?",
+            "Quel membre du serveur serait le plus susceptible de devenir c\u00e9l\u00e8bre ? Pour quoi ?",
+            "Si vous deviez partir en road trip ensemble, qui conduit et qui dort tout le trajet ?"
+        ];
+
+        const questionsPhilosophie = [
+            "Est-ce qu'on peut vraiment faire confiance \u00e0 quelqu'un qui n'aime pas les animaux ?",
+            "T'es plut\u00f4t \"le voyage compte plus que la destination\" ou \"juste arriver vite\" ?",
+            "Est-ce qu'un.e ami.e qui te ment pour te prot\u00e9ger, c'est encore un.e vrai.e ami.e ?",
+            "Si personne te voit faire quelque chose de bien, \u00e7a compte quand m\u00eame ?",
+            "Est-ce que c'est mieux d'avoir v\u00e9cu quelque chose d'intense et de douloureux plut\u00f4t que rien du tout ?",
+            "T'es d'accord que les gens changent vraiment, ou ils font juste semblant ?",
+            "Est-ce qu'il y a des choses qu'on devrait garder secr\u00e8tes m\u00eame avec ses meilleurs ami.es ?",
+            "T'es plut\u00f4t \"les regrets c'est utile\" ou \"no regrets, on assume tout\" ?",
+            "Si le bonheur \u00e9tait une comp\u00e9tence, t'aurais quel niveau ?",
+            "Est-ce qu'on choisit vraiment qui on aime ou c'est juste le hasard ?"
+        ];
+
+        const questionsAleatoires = [
+            "T'as d\u00e9j\u00e0 parl\u00e9 \u00e0 une plante ? Elle t'a r\u00e9pondu ?",
+            "Quel est le son le plus agaçant au monde selon toi ?",
+            "Si t'avais \u00e0 sentir comme quelque chose pour toujours, ce serait quoi ?",
+            "T'es capable de manger la m\u00eame chose tous les jours pendant un an pour 10 000\u20ac ? C'est quoi le plat ?",
+            "Quel animal aurait le meilleur compte Instagram selon toi ?",
+            "Si t'avais \u00e0 choisir une musique pour ta propre mort, ce serait laquelle ?",
+            "T'arrives \u00e0 d\u00e9crire ta personnalit\u00e9 avec seulement trois emojis ?",
+            "Quel est le film dont tu connais tous les dialogues par c\u0153ur sans l'avoir voulu ?",
+            "T'as d\u00e9j\u00e0 eu une dispute avec quelqu'un sur quelque chose de compl\u00e8tement inutile ? C'\u00e9tait quoi ?",
+            "Si ta vie \u00e9tait un genre de film, ce serait lequel ?",
+            "Quel est le mot que tu trouves le plus beau dans n'importe quelle langue ?",
+            "T'es du genre \u00e0 lire les termes et conditions ou tu cliques \"Accepter\" les yeux ferm\u00e9s ?",
+            "Si t'\u00e9tais une boisson, tu serais laquelle ?",
+            "T'as d\u00e9j\u00e0 eu un r\u00eave tellement bizarre que t'as mis des heures \u00e0 t'en remettre ?",
+            "Quel est le truc le plus inutile que tu sais faire et dont t'es fi\u00e8r.e ?",
+            "Si ta vie avait une bande-son, quel genre de musique ce serait ?",
+            "T'es plut\u00f4t \"j'arrive en avance\" ou \"en retard mais avec style\" ?",
+            "Quel est le truc que tout le monde fait en public et que personne avoue ?",
+            "Si t'\u00e9tais un m\u00e8me, t'aurais quel format ?",
+            "Quelle est la question que t'aurais voulu qu'on te pose ce soir ?"
+        ];
+
+        const categories = {
+            debats: { questions: questionsDebats, label: '\ud83d\udde3\ufe0f D\u00e9bats / Opinions', color: 0xe74c3c },
+            confession: { questions: questionsConfession, label: '\ud83e\udd2b Confession / Introspection', color: 0x9b59b6 },
+            hypothetiques: { questions: questionsHypothetiques, label: '\ud83e\udd14 Hypoth\u00e9tiques', color: 0x3498db },
+            serveur: { questions: questionsServeur, label: '\ud83c\udfe0 Sp\u00e9ciales Rega\u00efa', color: 0x2ecc71 },
+            philosophie: { questions: questionsPhilosophie, label: '\ud83e\udde0 Philosophie de comptoir', color: 0xf39c12 },
+            aleatoires: { questions: questionsAleatoires, label: '\ud83c\udfb2 Al\u00e9atoires / Chaos', color: 0x1abc9c }
+        };
+
+        const value = interaction.values[0];
+        const cat = categories[value];
+        const question = cat.questions[Math.floor(Math.random() * cat.questions.length)];
+
+        const embed = new EmbedBuilder()
+            .setColor(cat.color)
+            .setTitle(cat.label)
+            .setDescription(`\u2753 ${question}`);
+
+        return interaction.update({ embeds: [embed], components: [] });
+    }
+
+    // =========================
     // MENU SELECT
     // =========================
 
@@ -1472,7 +1655,8 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!punch", value: "Frappez quelqu'un sur le serveur !" },
                     { name: "!bang", value: "Tirez sur quelqu'un sur le serveur !" },
                     { name: "!rizz", value: "Rizzez quelqu'un sur le serveur !" },
-                    { name: "!rire", value: "Riez un bon coup !" }
+                    { name: "!rire", value: "Riez un bon coup !" },
+                    { name: "!question", value: "Lance une question al\u00e9atoire !" }
                 );
         }
 
@@ -1516,7 +1700,7 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire', value: 'fun' },
+                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire, question', value: 'fun' },
                 { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos, serveur', value: 'util' }
             );
         const row = new ActionRowBuilder().addComponents(menu);
