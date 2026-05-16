@@ -14,7 +14,8 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers
     ]
 });
 
@@ -714,8 +715,9 @@ function buildDieEmbed(description) {
 //     RECHERCHE PAR PSEUDO
 // =========================
 
-function findMemberByName(guild, query) {
+async function findMemberByName(guild, query) {
     if (!guild) return { found: null, multiple: false };
+    await guild.members.fetch();
     const q = query.toLowerCase();
     const matches = guild.members.cache.filter(m =>
         (m.displayName && m.displayName.toLowerCase() === q) ||
@@ -750,7 +752,7 @@ client.on('messageCreate', async (message) => {
         if (!cible) {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
-                const result = findMemberByName(message.guild, args);
+                const result = await findMemberByName(message.guild, args);
                 if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
                 if (result.found) cible = result.found.user;
             }
@@ -789,7 +791,7 @@ client.on('messageCreate', async (message) => {
         if (!cible) {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
-                const result = findMemberByName(message.guild, args);
+                const result = await findMemberByName(message.guild, args);
                 if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
                 if (result.found) cible = result.found.user;
             }
@@ -828,7 +830,7 @@ client.on('messageCreate', async (message) => {
         if (!cible) {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
-                const result = findMemberByName(message.guild, args);
+                const result = await findMemberByName(message.guild, args);
                 if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
                 if (result.found) cible = result.found.user;
             }
@@ -863,7 +865,7 @@ client.on('messageCreate', async (message) => {
         if (!cible) {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
-                const result = findMemberByName(message.guild, args);
+                const result = await findMemberByName(message.guild, args);
                 if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
                 if (result.found) cible = result.found.user;
             }
@@ -913,7 +915,7 @@ client.on('messageCreate', async (message) => {
         if (!cible) {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
-                const result = findMemberByName(message.guild, args);
+                const result = await findMemberByName(message.guild, args);
                 if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
                 if (result.found) cible = result.found.user;
             }
@@ -953,7 +955,7 @@ client.on('messageCreate', async (message) => {
         if (!cible) {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
-                const result = findMemberByName(message.guild, args);
+                const result = await findMemberByName(message.guild, args);
                 if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
                 if (result.found) cible = result.found.user;
             }
@@ -992,7 +994,7 @@ client.on('messageCreate', async (message) => {
         if (!cible) {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
-                const result = findMemberByName(message.guild, args);
+                const result = await findMemberByName(message.guild, args);
                 if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
                 if (result.found) cible = result.found.user;
             }
