@@ -207,30 +207,6 @@ function getResponse(raw) {
         return { needsQuestion: true };
     }
 
-    // =========================
-    //         !DIE
-    // =========================
-
-    if (command === "!die") {
-        return { needsDie: true };
-    }
-
-    // =========================
-    //         !SERVEUR
-    // =========================
-
-    if (command === "!serveur") {
-        return { needsServeur: true };
-    }
-
-    // =========================
-    //         !QUESTION
-    // =========================
-
-    if (command === "!question") {
-        return { needsQuestion: true };
-    }
-
 
     // =========================
     //         !DESTIN
@@ -370,6 +346,7 @@ function getResponse(raw) {
     if (cleaned === "de") return reply("Trois");
     if (cleaned === "a" || cleaned === "ha" || cleaned === "ah") return "B";
     if (cleaned === "ntm jax") return "https://cdn.discordapp.com/attachments/1206232717444775956/1504653708770672741/Capture_decran_2026-05-15_031617.png";
+    if (cleaned === "feur") return reply("Vole pas le travail des IA.");
 
     // =========================
     // QUOI / QUI CLASSIQUES
@@ -1134,30 +1111,6 @@ client.on('messageCreate', async (message) => {
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (cible && cible.id === client.user.id) {
-            return message.reply("Tu veux \"me mourir\" ? Non merci.").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
-        }
-
-        if (cible && cible.id !== message.author.id) {
-            return message.reply(`Tu ne peux pas \"mourir quelqu'un\" ce n'est pas possible, **${auteurNom}**`).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
-        }
-
-        const embed = buildDieEmbed(`\u2620\ufe0f **${auteurNom}** meurt...`);
-
-        const dieButton = new ButtonBuilder()
-            .setCustomId(`die_with_${message.author.id}_${auteurNom}`)
-            .setLabel("\u2620\ufe0f Mourir avec")
-            .setStyle(ButtonStyle.Primary);
-
-        const row = new ActionRowBuilder().addComponents(dieButton);
-        return message.reply({ embeds: [embed], components: [row] });
-    }
-
-    // !die
-    if (response?.needsDie) {
-        const cible = message.mentions.users.first();
-        const auteurNom = message.member?.displayName ?? message.author.username;
-
-        if (cible && cible.id === client.user.id) {
             return message.reply("Tu veux \u00abme mourir\u00bb ? Non merci.").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
 
@@ -1458,26 +1411,6 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: "Tu est d\u00e9j\u00e0 mort(e)...", ephemeral: true });
         }
 
-        const reurNom = interaction.member?.displayName ?? interaction.user.username;
-        const embed = buildDieEmbed(`\u2620\ufe0f **${reurNom}** meurt avec **${originalAuthorNom}**...`);
-        return interaction.reply({ embeds: [embed] });
-    }
-
-    // =========================
-    // BOUTON DIE WITH
-    // =========================
-
-    if (interaction.isButton() && interaction.customId.startsWith("die_with_")) {
-        const parts = interaction.customId.split("_");
-        // format: die_with_{originalAuthorId}_{originalAuthorNom}
-        const originalAuthorId = parts[2];
-        const originalAuthorNom = parts.slice(3).join("_");
-        const clickerId = interaction.user.id;
-
-        if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Tu est d\u00e9j\u00e0 mort(e)...", ephemeral: true });
-        }
-
         const mourrantNom = interaction.member?.displayName ?? interaction.user.username;
         const embed = buildDieEmbed(`\u2620\ufe0f **${mourrantNom}** meurt avec **${originalAuthorNom}**...`);
         return interaction.reply({ embeds: [embed] });
@@ -1650,7 +1583,6 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!hug", value: "Faites un c\u00e2lin \u00e0 quelqu'un sur le serveur !" },
                     { name: "!danse", value: "Dansez avec quelqu'un sur le serveur !" },
                     { name: "!insulte", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
-                    { name: "!die", value: "Mourez dramatiquement !" },
                     { name: "!die", value: "Mourez en direct sur le serveur !" },
                     { name: "!punch", value: "Frappez quelqu'un sur le serveur !" },
                     { name: "!bang", value: "Tirez sur quelqu'un sur le serveur !" },
