@@ -428,7 +428,6 @@ const danceGifsSolo = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042079376478209/shreck.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042079795904583/silvagunner-siivagunner.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080232247377/fnaf-fredbear-dancing-to-happy.gif",
-    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080567918734/luigi-twerk.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080932696295/mario-dancer-break-dance.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042081318441161/dance-nsjdnsnd.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042081826078802/caine.gif",
