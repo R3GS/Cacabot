@@ -135,6 +135,14 @@ function getResponse(raw) {
     }
 
     // =========================
+    //         !DANCE
+    // =========================
+
+    if (command === "!dance") {
+        return { needsDance: true };
+    }
+
+    // =========================
     //         !DESTIN
     // =========================
 
@@ -412,6 +420,65 @@ function buildHugEmbed(auteurNom, cibleNom) {
 }
 
 // =========================
+//     LOGIQUE !DANCE
+// =========================
+
+const danceGifsSolo = [
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042079074619402/dancing-groovy.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042079376478209/shreck.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042079795904583/silvagunner-siivagunner.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080232247377/fnaf-fredbear-dancing-to-happy.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080567918734/luigi-twerk.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080932696295/mario-dancer-break-dance.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042081318441161/dance-nsjdnsnd.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042081826078802/caine.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042082383925318/tadc-kinger.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042089015119974/baldi-default.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042089363243179/-.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042089682014328/dancing-family.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042090000777306/osaka-dance.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042090294509658/bailes.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042090625597501/black-kid-dancing.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042090952884336/rat-rat-dance.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042091233775695/spongebob-dance-spongebob-joget.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042091795939378/arcane-league-of-legends.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042092219695174/steve-minecraft.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505044391314591847/gandalf-dance.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505045016324739084/jdg-dance.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505045505678512268/cat.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046876494237746/je-suis-jeune-misterjday.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505047149082316932/misterjday-jday.gif"
+];
+
+const danceGifsDuo = [
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046260233797720/caine-musical.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046261038977104/zevent-zevent2021.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046261441761392/dance.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046262112845855/caramelldansen-dance.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046262523891752/jinx-ekko.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046262985134230/jdg-joueur-du-grenier.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046263647965244/zevent2021-zevent.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046264352477354/dance-minecraft.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046264901799977/gif-meme.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046265376014496/pomni-and-jax-daisy-bell.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046271549771857/jam-baghera.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046272032247980/furina-neuvillette.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046272589955225/genshin-genshin-impact.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046273080823920/danganronpa-monokuma.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046273525284964/dachuu-chuuya.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505046274112753694/gumball-and-darwin.gif"
+];
+
+function buildDanceEmbed(description, solo) {
+    const gifs = solo ? danceGifsSolo : danceGifsDuo;
+    const gif = gifs[Math.floor(Math.random() * gifs.length)];
+    return new EmbedBuilder()
+        .setColor(0xba2222)
+        .setDescription(description)
+        .setImage(gif);
+}
+
+// =========================
 //     LISTENER MESSAGES
 // =========================
 
@@ -497,13 +564,45 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [embed], components: [row] });
     }
 
+    // !dance — solo ou duo selon la mention
+    if (response?.needsDance) {
+        const cible = message.mentions.users.first();
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        // Cas : danse solo (pas de mention)
+        if (!cible) {
+            const embed = buildDanceEmbed(`🕺 **${auteurNom}** s'ambiance comme jamais !`, true);
+            return message.reply({ embeds: [embed] });
+        }
+
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+
+        // Cas : danse avec Cacabot
+        if (cible.id === client.user.id) {
+            const embed = buildDanceEmbed(`🕺 **${auteurNom}** danse avec moi !`, false);
+            return message.reply({ embeds: [embed] });
+        }
+
+        // Cas : danse duo normale
+        const embed = buildDanceEmbed(`🕺 **${auteurNom}** danse avec **${cibleNom}** !`, false);
+
+        const danceBackButton = new ButtonBuilder()
+            .setCustomId(`dance_back_${message.author.id}_${cible.id}_${auteurNom}`)
+            .setLabel("🕺 Rejoindre la danse")
+            .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(danceBackButton);
+
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
     // !help — embed + menu déroulant
     if (response?.data) {
         const menu = new StringSelectMenuBuilder()
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une catégorie')
             .addOptions(
-                { label: '🎉 Fun', description: '!animal, !destin, !epsys, !choix, !kiss, !hug', value: 'fun' },
+                { label: '🎉 Fun', description: '!animal, !destin, !epsys, !choix, !kiss, !hug, !dance', value: 'fun' },
                 { label: '🛠 Utilitaire', description: '!discord, !aternos', value: 'util' },
             );
 
@@ -543,7 +642,7 @@ client.on('interactionCreate', async (interaction) => {
 
         // L'auteur original essaie de cliquer
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Bah c'est ton bisou, nan ?", ephemeral: true });
+            return interaction.reply({ content: "Tu peux pas t'embrasser toi-même... 💀", ephemeral: true });
         }
 
         // Quelqu'un d'autre que la cible essaie de cliquer
@@ -571,7 +670,7 @@ client.on('interactionCreate', async (interaction) => {
         const clickerId = interaction.user.id;
 
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "C'est... C'est ton câlin du coup...", ephemeral: true });
+            return interaction.reply({ content: "Tu peux pas te câliner toi-même... 💀", ephemeral: true });
         }
 
         if (clickerId !== targetId) {
@@ -580,6 +679,32 @@ client.on('interactionCreate', async (interaction) => {
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
         const embed = buildHugEmbed(retourNom, originalAuthorNom);
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
+    // BOUTON DANCE BACK
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith("dance_back_")) {
+        const parts = interaction.customId.split("_");
+        // format: dance_back_{originalAuthorId}_{targetId}_{originalAuthorNom}
+        const originalAuthorId = parts[2];
+        const targetId = parts[3];
+        const originalAuthorNom = parts.slice(4).join("_");
+
+        const clickerId = interaction.user.id;
+
+        if (clickerId === originalAuthorId) {
+            return interaction.reply({ content: "Tu danses déjà ! 🕺", ephemeral: true });
+        }
+
+        if (clickerId !== targetId) {
+            return interaction.reply({ content: "Non, tu n'es pas invité.e sur le dancefloor cette fois !", ephemeral: true });
+        }
+
+        const retourNom = interaction.member?.displayName ?? interaction.user.username;
+        const embed = buildDanceEmbed(`🕺 **${retourNom}** danse avec **${originalAuthorNom}** !`, false);
         return interaction.reply({ embeds: [embed] });
     }
 
@@ -598,12 +723,20 @@ client.on('interactionCreate', async (interaction) => {
                 .setColor(0xffcc00)
                 .setDescription("# 🎉 Fun")
                 .addFields(
-                    { name: "!animal", value: "Devine votre animal spirituel parmi près de 7000 combinaisons !" },
-                    { name: "!destin", value: "Prédit votre destin et fait part des évènements de votre futur." },
-                    { name: "!epsys", value: "Poste des GIFs aléatoires d'Epsys, parce que." },
-                    { name: "!choix", value: "Vous avez du mal à faire un choix ? Demandez à Cacabot." },
-                    { name: "!kiss", value: "Embrassez quelqu'un sur le serveur !" },
-                    { name: "!hug", value: "Faites un câlin à quelqu'un sur le serveur !" }
+                    { name: "──────────────", value: "**!animal**
+Devinez votre animal spirituel parmi près de 7000 combinaisons !" },
+                    { name: "──────────────", value: "**!destin**
+Prédit votre destin et fait part des évènements de votre futur." },
+                    { name: "──────────────", value: "**!epsys**
+Poste des GIFs aléatoires d'Epsys, parce que." },
+                    { name: "──────────────", value: "**!choix**
+Vous avez du mal à faire un choix ? Demandez à Cacabot." },
+                    { name: "──────────────", value: "**!kiss**
+Embrassez quelqu'un sur le serveur !" },
+                    { name: "──────────────", value: "**!hug**
+Faites un câlin à quelqu'un sur le serveur !" },
+                    { name: "──────────────", value: "**!dance**
+Dansez avec quelqu'un du serveur !" }
                 );
         }
 
@@ -612,8 +745,10 @@ client.on('interactionCreate', async (interaction) => {
                 .setColor(0x3498db)
                 .setDescription("# 🛠 Utilitaire")
                 .addFields(
-                    { name: "!discord", value: "Obtenir le lien officiel d'invitation de Regaïa." },
-                    { name: "!aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Regaïa." }
+                    { name: "──────────────", value: "**!discord**
+Obtenir le lien officiel d'invitation de Regaïa." },
+                    { name: "──────────────", value: "**!aternos**
+Obtenir l'IP du serveur Aternos (Minecraft) de Regaïa." }
                 );
         }
 
@@ -651,8 +786,8 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une catégorie')
             .addOptions(
-                { label: '🎉 Fun', description: 'animal, destin, epsys, choix, kiss, hug', value: 'fun' },
-                { label: '🛠 Utilitaire', description: 'discord, aternos', value: 'util' }
+                { label: '🎉 Fun', description: '!animal, !destin, !epsys, !choix, !kiss, !hug, !dance', value: 'fun' },
+                { label: '🛠 Utilitaire', description: '!discord, !aternos', value: 'util' }
             );
 
         const row = new ActionRowBuilder().addComponents(menu);
