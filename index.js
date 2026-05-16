@@ -716,15 +716,66 @@ function buildDieEmbed(description) {
 // =========================
 
 function findMemberByName(guild, query) {
-    if (!guild) return { found: null, multiple: false };
+    if (!guild) return { found: null, multiple: false, candidates: [] };
     const q = query.toLowerCase();
-    const matches = guild.members.cache.filter(m =>
+
+    // Recherche exacte d'abord
+    const exact = guild.members.cache.filter(m =>
         (m.displayName && m.displayName.toLowerCase() === q) ||
         (m.user.username && m.user.username.toLowerCase() === q)
     );
-    if (matches.size === 0) return { found: null, multiple: false };
-    if (matches.size > 1) return { found: null, multiple: true };
-    return { found: matches.first(), multiple: false };
+    if (exact.size === 1) return { found: exact.first(), multiple: false, candidates: [] };
+    if (exact.size > 1) {
+        const candidates = exact.map(m => m.displayName ?? m.user.username);
+        return { found: null, multiple: true, candidates };
+    }
+
+    // Recherche partielle
+    const partial = guild.members.cache.filter(m =>
+        (m.displayName && m.displayName.toLowerCase().includes(q)) ||
+        (m.user.username && m.user.username.toLowerCase().includes(q))
+    );
+    if (partial.size === 0) return { found: null, multiple: false, candidates: [] };
+    if (partial.size === 1) return { found: partial.first(), multiple: false, candidates: [] };
+    const candidates = partial.map(m => m.displayName ?? m.user.username);
+    return { found: null, multiple: true, candidates };
+}
+
+async function askDisambiguation(message, guild, candidates, callback) {
+    const list = candidates.map(c => `* **${c}**`).join('\n');
+    const prompt = await message.reply(`Il y a **${candidates.length}** personnes avec un pseudo similaire. Tu voulais parler de qui ? Essaie d'\u00eatre plus pr\u00e9cis.e !\n${list}`);
+
+    const filter = m => m.author.id === message.author.id;
+    const collector = message.channel.createMessageCollector({ filter, time: 20000 });
+
+    collector.on('collect', m => {
+        const q = m.content.trim().toLowerCase();
+        const match = candidates.find(c => c.toLowerCase() === q);
+        if (match) {
+            collector.stop('found');
+            m.delete().catch(() => {});
+            prompt.delete().catch(() => {});
+            const member = guild.members.cache.find(mb =>
+                (mb.displayName && mb.displayName === match) ||
+                (mb.user.username && mb.user.username === match)
+            );
+            if (member) callback(member.user);
+        } else {
+            const retry = candidates.map(c => `* **${c}**`).join('\n');
+            message.reply(`Ce pseudo ne correspond pas exactement \u00e0 l'un des choix. Essaie encore !\n${retry}`)
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 5000));
+            m.delete().catch(() => {});
+        }
+    });
+
+    collector.on('end', (_, reason) => {
+        if (reason !== 'found') {
+            prompt.delete().catch(() => {});
+            message.reply("Bon... On abandonne alors !").then(msg =>
+                setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000)
+            );
+        }
+    });
 }
 
 // =========================
@@ -752,7 +803,10 @@ client.on('messageCreate', async (message) => {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
                 const result = findMemberByName(message.guild, args);
-                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
                 if (result.found) cible = result.found.user;
             }
         }
@@ -791,7 +845,10 @@ client.on('messageCreate', async (message) => {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
                 const result = findMemberByName(message.guild, args);
-                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
                 if (result.found) cible = result.found.user;
             }
         }
@@ -830,7 +887,10 @@ client.on('messageCreate', async (message) => {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
                 const result = findMemberByName(message.guild, args);
-                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
                 if (result.found) cible = result.found.user;
             }
         }
@@ -865,7 +925,10 @@ client.on('messageCreate', async (message) => {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
                 const result = findMemberByName(message.guild, args);
-                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
                 if (result.found) cible = result.found.user;
             }
         }
@@ -915,7 +978,10 @@ client.on('messageCreate', async (message) => {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
                 const result = findMemberByName(message.guild, args);
-                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
                 if (result.found) cible = result.found.user;
             }
         }
@@ -955,7 +1021,10 @@ client.on('messageCreate', async (message) => {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
                 const result = findMemberByName(message.guild, args);
-                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
                 if (result.found) cible = result.found.user;
             }
         }
@@ -994,7 +1063,10 @@ client.on('messageCreate', async (message) => {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
                 const result = findMemberByName(message.guild, args);
-                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
                 if (result.found) cible = result.found.user;
             }
         }
