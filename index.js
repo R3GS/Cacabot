@@ -662,7 +662,7 @@ client.on('messageCreate', async (message) => {
         const insultBackButton = new ButtonBuilder()
             .setCustomId(`insult_back_${message.author.id}_${cible.id}_${auteurNom}`)
             .setLabel("🖕 Insulter en retour")
-            .setStyle(ButtonStyle.Danger);
+            .setStyle(ButtonStyle.Primary);
 
         const row = new ActionRowBuilder().addComponents(insultBackButton);
 
