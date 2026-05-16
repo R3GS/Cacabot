@@ -127,6 +127,14 @@ function getResponse(raw) {
     }
 
     // =========================
+    //         !HUG
+    // =========================
+
+    if (command === "!hug") {
+        return { needsHug: true };
+    }
+
+    // =========================
     //         !DESTIN
     // =========================
 
@@ -296,7 +304,9 @@ function getAnimalResponse(message) {
     const cible = message.mentions.users.first();
 
     const base = cible
-        ? `Hmmm, l'animal spirituel de ${cible} est...`
+        ? (cible.id === client.user.id
+            ? "Mon animal spirituel est..."
+            : `Hmmm, l'animal spirituel de ${cible} est...`)
         : "Hmmm, ton animal spirituel est...";
 
     const animauxMasc = [
@@ -372,6 +382,36 @@ function buildKissEmbed(auteurNom, cibleNom) {
 }
 
 // =========================
+//     LOGIQUE !HUG
+// =========================
+
+const hugGifs = [
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505031085006782555/the-boys-the-boys-homelander.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505031086063878264/hug-annie-january.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505031087016120450/horty-baghera-jones.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505031089394024448/marceline-bubbline.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505031093131280414/catradora-hug.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505031094758543410/gumball-darwin.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505031096491049091/queenie-kinger.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505031104724209724/hug-anime.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505032164201332786/jinx-ekko.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505032164582887535/vi-hug-caitlyn-hug.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505032164901912696/yes.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505032165228937306/freddy-fazbear-hug-freddy.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505032165568548967/bonnie-fnaf-hug-bonnie.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505032165895962684/jinx-arcane-arcane-season-2.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505032464832135278/etoiles-alex.gif"
+];
+
+function buildHugEmbed(auteurNom, cibleNom) {
+    const gif = hugGifs[Math.floor(Math.random() * hugGifs.length)];
+    return new EmbedBuilder()
+        .setColor(0x69d2ff)
+        .setDescription(`🫂 **${auteurNom}** fait un câlin à **${cibleNom}** !`)
+        .setImage(gif);
+}
+
+// =========================
 //     LISTENER MESSAGES
 // =========================
 
@@ -418,6 +458,41 @@ client.on('messageCreate', async (message) => {
             .setStyle(ButtonStyle.Primary);
 
         const row = new ActionRowBuilder().addComponents(kissBackButton);
+
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
+    // !hug — nécessite l'objet message pour les mentions
+    if (response?.needsHug) {
+        const cible = message.mentions.users.first();
+
+        if (!cible) {
+            return message.reply("Euuh... Tu veux câliner qui du coup ?");
+        }
+
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+
+        // Cas : self-hug
+        if (cible.id === message.author.id) {
+            const embedSelf = buildHugEmbed(auteurNom, auteurNom).setDescription(`🫂 **${auteurNom}** se fait un câlin... Ça va aller...`);
+            return message.reply({ embeds: [embedSelf] });
+        }
+
+        // Cas : hug sur Cacabot
+        if (cible.id === client.user.id) {
+            const embedBot = buildHugEmbed(auteurNom, "Cacabot").setDescription(`🫂 **${auteurNom}** me fait un câlin !`);
+            return message.reply({ embeds: [embedBot] });
+        }
+
+        const embed = buildHugEmbed(auteurNom, cibleNom);
+
+        const hugBackButton = new ButtonBuilder()
+            .setCustomId(`hug_back_${message.author.id}_${cible.id}_${auteurNom}`)
+            .setLabel("🫂 Câliner en retour")
+            .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(hugBackButton);
 
         return message.reply({ embeds: [embed], components: [row] });
     }
@@ -483,6 +558,32 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // =========================
+    // BOUTON HUG BACK
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith("hug_back_")) {
+        const parts = interaction.customId.split("_");
+        // format: hug_back_{originalAuthorId}_{targetId}_{originalAuthorNom}
+        const originalAuthorId = parts[2];
+        const targetId = parts[3];
+        const originalAuthorNom = parts.slice(4).join("_");
+
+        const clickerId = interaction.user.id;
+
+        if (clickerId === originalAuthorId) {
+            return interaction.reply({ content: "Tu peux pas te câliner toi-même... 💀", ephemeral: true });
+        }
+
+        if (clickerId !== targetId) {
+            return interaction.reply({ content: "Pas gentil de voler les câlins des autres :/", ephemeral: true });
+        }
+
+        const retourNom = interaction.member?.displayName ?? interaction.user.username;
+        const embed = buildHugEmbed(retourNom, originalAuthorNom);
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
     // MENU SELECT
     // =========================
 
@@ -496,7 +597,7 @@ client.on('interactionCreate', async (interaction) => {
             embed = new EmbedBuilder()
                 .setColor(0xffcc00)
                 .setTitle("🎉 Fun")
-                .setDescription("**!animal** ➜ Devine votre animal spirituel parmi près de 7000 combinaisons !\n**!destin** ➜ Prédit votre destin et fait part des évènements de votre futur.\n**!epsys** ➜ Poste des GIFs aléatoires d'Epsys, parce que.\n**!choix** ➜ Vous avez du mal à faire un choix ? Demandez à Cacabot.\n**!kiss** ➜ Embrassez quelqu'un sur le serveur !");
+                .setDescription("**!animal** ➜ Devine votre animal spirituel parmi près de 7000 combinaisons !\n**!destin** ➜ Prédit votre destin et fait part des évènements de votre futur.\n**!epsys** ➜ Poste des GIFs aléatoires d'Epsys, parce que.\n**!choix** ➜ Vous avez du mal à faire un choix ? Demandez à Cacabot.\n**!kiss** ➜ Embrassez quelqu'un sur le serveur !\n**!hug** ➜ Faites un câlin à quelqu'un sur le serveur !");
         }
 
         if (value === 'util') {
