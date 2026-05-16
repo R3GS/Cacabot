@@ -135,26 +135,26 @@ function getResponse(raw) {
     }
 
     // =========================
-    //         !DANCE
+    //         !DANSE
     // =========================
 
-    if (command === "!dance") {
+    if (command === "!danse") {
         return { needsDance: true };
     }
 
     // =========================
-    //         !INSULT
+    //         !INSULTE
     // =========================
 
-    if (command === "!insult") {
+    if (command === "!insulte") {
         return { needsInsult: true };
     }
 
     // =========================
-    //         !LAUGH
+    //         !RIRE
     // =========================
 
-    if (command === "!laugh") {
+    if (command === "!rire") {
         return { needsLaugh: true };
     }
 
@@ -709,7 +709,7 @@ client.on('messageCreate', async (message) => {
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, dance, insult, laugh', value: 'fun' },
+                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, rire', value: 'fun' },
                 { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos', value: 'util' },
             );
 
@@ -828,16 +828,11 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.isButton() && interaction.customId.startsWith("laugh_with_")) {
         const parts = interaction.customId.split("_");
-        const originalAuthorId = parts[2];        // ← ajouter cette ligne
+        // format: laugh_with_{originalAuthorId}_{originalAuthorNom}
         const originalAuthorNom = parts.slice(3).join("_");
 
-        // ← ajouter ce bloc
-        if (interaction.user.id === originalAuthorId) {
-            return interaction.reply({ content: "Tu vas rire avec toi-même...? Attends, tu te sens bien ?", ephemeral: true });
-        }
-
         const reurNom = interaction.member?.displayName ?? interaction.user.username;
-        const embed = buildLaughEmbed(`😆 **${reurNom}** rit avec **${originalAuthorNom}** !`);
+        const embed = buildLaughEmbed(`\ud83d\ude06 **${reurNom}** rit avec **${originalAuthorNom}** !`);
         return interaction.reply({ embeds: [embed] });
     }
 
@@ -862,9 +857,9 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!choix", value: "Vous avez du mal \u00e0 faire un choix ? Demandez \u00e0 Cacabot." },
                     { name: "!kiss", value: "Embrassez quelqu'un sur le serveur !" },
                     { name: "!hug", value: "Faites un c\u00e2lin \u00e0 quelqu'un sur le serveur !" },
-                    { name: "!dance", value: "Dansez avec quelqu'un sur le serveur !" },
-                    { name: "!insult", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
-                    { name: "!laugh", value: "Riez un bon coup !" }
+                    { name: "!danse", value: "Dansez avec quelqu'un sur le serveur !" },
+                    { name: "!insulte", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
+                    { name: "!rire", value: "Riez un bon coup !" }
                 );
         }
 
@@ -907,7 +902,7 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, dance, insult, laugh', value: 'fun' },
+                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, rire', value: 'fun' },
                 { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos', value: 'util' }
             );
         const row = new ActionRowBuilder().addComponents(menu);
