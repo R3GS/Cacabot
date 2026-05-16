@@ -711,6 +711,22 @@ function buildDieEmbed(description) {
 }
 
 // =========================
+//     RECHERCHE PAR PSEUDO
+// =========================
+
+function findMemberByName(guild, query) {
+    if (!guild) return { found: null, multiple: false };
+    const q = query.toLowerCase();
+    const matches = guild.members.cache.filter(m =>
+        (m.displayName && m.displayName.toLowerCase() === q) ||
+        (m.user.username && m.user.username.toLowerCase() === q)
+    );
+    if (matches.size === 0) return { found: null, multiple: false };
+    if (matches.size > 1) return { found: null, multiple: true };
+    return { found: matches.first(), multiple: false };
+}
+
+// =========================
 //     LISTENER MESSAGES
 // =========================
 
@@ -728,13 +744,22 @@ client.on('messageCreate', async (message) => {
 
     // !kiss
     if (response?.needsKiss) {
-        const cible = message.mentions.users.first();
+        let cible = message.mentions.users.first();
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
+                if (result.found) cible = result.found.user;
+            }
+        }
 
         if (!cible) {
             return message.reply("Euuh... Tu veux embrasser qui du coup ?");
         }
 
-        const auteurNom = message.member?.displayName ?? message.author.username;
         const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
 
         if (cible.id === message.author.id) {
@@ -758,13 +783,22 @@ client.on('messageCreate', async (message) => {
 
     // !hug
     if (response?.needsHug) {
-        const cible = message.mentions.users.first();
+        let cible = message.mentions.users.first();
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
+                if (result.found) cible = result.found.user;
+            }
+        }
 
         if (!cible) {
             return message.reply("Euuh... Tu veux c\u00e2liner qui du coup ?");
         }
 
-        const auteurNom = message.member?.displayName ?? message.author.username;
         const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
 
         if (cible.id === message.author.id) {
@@ -788,8 +822,17 @@ client.on('messageCreate', async (message) => {
 
     // !dance
     if (response?.needsDance) {
-        const cible = message.mentions.users.first();
+        let cible = message.mentions.users.first();
         const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
+                if (result.found) cible = result.found.user;
+            }
+        }
 
         if (!cible) {
             const embed = buildDanceEmbed(`\ud83d\udd7a **${auteurNom}** s'ambiance comme jamais !`, true);
@@ -814,8 +857,17 @@ client.on('messageCreate', async (message) => {
 
     // !insult
     if (response?.needsInsult) {
-        const cible = message.mentions.users.first();
+        let cible = message.mentions.users.first();
         const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
+                if (result.found) cible = result.found.user;
+            }
+        }
 
         if (!cible) {
             return message.reply("Mentionne quelqu'un pour l'insulter !");
@@ -855,8 +907,17 @@ client.on('messageCreate', async (message) => {
 
     // !rizz
     if (response?.needsRizz) {
-        const cible = message.mentions.users.first();
+        let cible = message.mentions.users.first();
         const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
+                if (result.found) cible = result.found.user;
+            }
+        }
 
         if (!cible) {
             return message.reply("Choisis quelqu'un que tu veux rizz !");
@@ -886,8 +947,17 @@ client.on('messageCreate', async (message) => {
 
     // !bang
     if (response?.needsBang) {
-        const cible = message.mentions.users.first();
+        let cible = message.mentions.users.first();
         const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
+                if (result.found) cible = result.found.user;
+            }
+        }
 
         if (!cible) {
             return message.reply("Mentionne la personne sur qui tu veux tirer !");
@@ -916,8 +986,17 @@ client.on('messageCreate', async (message) => {
 
     // !punch
     if (response?.needsPunch) {
-        const cible = message.mentions.users.first();
+        let cible = message.mentions.users.first();
         const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
+                if (result.found) cible = result.found.user;
+            }
+        }
 
         if (!cible) {
             return message.reply("Mentionne quelqu'un que tu veux frapper !");
