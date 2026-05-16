@@ -953,7 +953,7 @@ client.on('messageCreate', async (message) => {
             return message.reply("Tu veux \"me mourir\" ? Non merci.");
         }
 
-        if (cible) {
+        if (cible && cible.id !== message.author.id) {
             return message.reply(`Tu ne peux pas \"mourir quelqu'un\" ce n'est pas possible, **${auteurNom}**`);
         }
 
