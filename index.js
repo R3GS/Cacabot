@@ -407,7 +407,7 @@ client.on('messageCreate', async (message) => {
 
     // fallback
     return isUpper ? "FEUR" : "Feur";
-}
+})
 
     // MENU HELP
     if (response?.data) {
