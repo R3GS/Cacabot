@@ -1,4 +1,15 @@
 require('dotenv').config();
+const fs = require('fs');
+
+const TOP_FILE = './top.json';
+function loadTop() {
+    try { return JSON.parse(fs.readFileSync(TOP_FILE, 'utf-8')); } catch { return { messages: {} }; }
+}
+function saveTop(data) {
+    fs.writeFileSync(TOP_FILE, JSON.stringify(data, null, 2));
+}
+let topData = loadTop();
+setInterval(() => saveTop(topData), 5 * 60 * 1000);
 
 const {
     Client,
@@ -205,6 +216,22 @@ function getResponse(raw) {
 
     if (command === "!avatar") {
         return { needsAvatar: true };
+    }
+
+    // =========================
+    //         !TOP
+    // =========================
+
+    if (command === "!top") {
+        return { needsTop: true };
+    }
+
+    // =========================
+    //         !SETMESSAGES
+    // =========================
+
+    if (command === "!setmessages") {
+        return { needsSetMessages: true };
     }
 
     // =========================
@@ -815,6 +842,13 @@ async function askDisambiguation(message, guild, candidates, callback) {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
+    // Comptage messages pour !top
+    if (message.guild) {
+        const uid = message.author.id;
+        if (!topData.messages[uid]) topData.messages[uid] = 0;
+        topData.messages[uid]++;
+    }
+
     const response = getResponse(message.content);
 
     if (response === null || response === undefined) return;
@@ -1258,6 +1292,50 @@ client.on('messageCreate', async (message) => {
             .setImage(cible.displayAvatarURL({ dynamic: true, size: 1024 }));
 
         return message.reply({ embeds: [embed] });
+    }
+
+    // !top
+    if (response?.needsTop) {
+        const sorted = Object.entries(topData.messages)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10);
+
+        if (sorted.length === 0) {
+            return message.reply("Pas encore de donn\u00e9es !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+        }
+
+        const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
+        const fields = await Promise.all(sorted.map(async ([uid, count], i) => {
+            const member = message.guild.members.cache.get(uid);
+            const name = member?.displayName ?? `Membre inconnu`;
+            const medal = medals[i] ?? `**${i + 1}.**`;
+            return { name: `${medal} ${name}`, value: `${count} messages`, inline: false };
+        }));
+
+        const embed = new EmbedBuilder()
+            .setColor(0xffd700)
+            .setTitle('\ud83c\udfc6 Top 10 des membres les plus actifs')
+            .addFields(fields)
+            .setFooter({ text: 'Compt\u00e9 depuis l'initialisation du bot' });
+
+        return message.reply({ embeds: [embed] });
+    }
+
+    // !setmessages
+    if (response?.needsSetMessages) {
+        const cible = message.mentions.users.first();
+        const args = message.content.trim().split(/\s+/);
+        const count = parseInt(args[args.length - 1]);
+
+        if (!cible || isNaN(count)) {
+            return message.reply("Usage : `!setmessages @Membre NombreDeMessages`").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+        }
+
+        topData.messages[cible.id] = count;
+        saveTop(topData);
+
+        const nom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        return message.reply(`\u2705 **${nom}** : ${count} messages enregistr\u00e9s !`).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
     }
 
     // !serveur
