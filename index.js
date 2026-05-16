@@ -1189,7 +1189,7 @@ client.on('messageCreate', async (message) => {
     // !help
     if (response?.data) {
         const menu = new StringSelectMenuBuilder()
-            .setCustomId('help_menu')
+            .setCustomId(`help_menu_${message.author.id}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
                 { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire, question', value: 'fun' },
@@ -1565,8 +1565,11 @@ client.on('interactionCreate', async (interaction) => {
     // MENU SELECT
     // =========================
 
-    if (interaction.isStringSelectMenu()) {
-        if (interaction.customId !== 'help_menu') return;
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_menu_')) {
+        const helpAuthorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== helpAuthorId) {
+            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
 
         const value = interaction.values[0];
         let embed;
@@ -1612,7 +1615,7 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         const backButton = new ButtonBuilder()
-            .setCustomId('help_back')
+            .setCustomId(`help_back_${helpAuthorId}`)
             .setLabel('\u2b05 Retour')
             .setStyle(ButtonStyle.Secondary);
         const row = new ActionRowBuilder().addComponents(backButton);
@@ -1623,14 +1626,18 @@ client.on('interactionCreate', async (interaction) => {
     // BOUTON RETOUR
     // =========================
 
-    if (interaction.isButton() && interaction.customId === 'help_back') {
+    if (interaction.isButton() && interaction.customId.startsWith('help_back_')) {
+        const helpAuthorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== helpAuthorId) {
+            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
         const embed = new EmbedBuilder()
             .setColor(0x00ffff)
             .setTitle("\ud83d\udca9 AIDE \u00c0 CACABOT")
             .setDescription("Hey ! Voici Cacabot, qui, malgr\u00e9 son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\n\nPour d\u00e9couvrir les diff\u00e9rentes commandes disponibles de Cacabot, choisis l'une des cat\u00e9gories ci-dessous !");
 
         const menu = new StringSelectMenuBuilder()
-            .setCustomId('help_menu')
+            .setCustomId(`help_menu_${helpAuthorId}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
                 { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire, question', value: 'fun' },
