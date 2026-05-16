@@ -436,7 +436,7 @@ const danceGifsSolo = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042079376478209/shreck.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042079795904583/silvagunner-siivagunner.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080232247377/fnaf-fredbear-dancing-to-happy.gif",
-    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080567918734/luigi-twerk.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505054866823970867/srpelo.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080932696295/mario-dancer-break-dance.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042081318441161/dance-nsjdnsnd.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042081826078802/caine.gif",
@@ -818,39 +818,30 @@ client.on('interactionCreate', async (interaction) => {
         let embed;
 
         if (value === 'fun') {
-            embed = new EmbedBuilder()
-                .setColor(0xffcc00)
-                .setDescription("# 🎉 Fun")
-                .addFields(
-                    { name: "──────────────", value: "**!animal**
-Devinez votre animal spirituel parmi près de 7000 combinaisons !" },
-                    { name: "──────────────", value: "**!destin**
-Prédit votre destin et fait part des évènements de votre futur." },
-                    { name: "──────────────", value: "**!epsys**
-Poste des GIFs aléatoires d'Epsys, parce que." },
-                    { name: "──────────────", value: "**!choix**
-Vous avez du mal à faire un choix ? Demandez à Cacabot." },
-                    { name: "──────────────", value: "**!kiss**
-Embrassez quelqu'un sur le serveur !" },
-                    { name: "──────────────", value: "**!hug**
-Faites un câlin à quelqu'un sur le serveur !" },
-                    { name: "──────────────", value: "**!dance**
-Dansez avec quelqu'un du serveur !" },
-                    { name: "!insult", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" }
-                );
-        }
+    embed = new EmbedBuilder()
+        .setColor(0xffcc00)
+        .setDescription("# 🎉 Fun")
+        .addFields(
+            { name: "!animal", value: "Devine votre animal spirituel parmi près de 7000 combinaisons !" },
+            { name: "!destin", value: "Prédit votre destin et fait part des évènements de votre futur." },
+            { name: "!epsys", value: "Poste des GIFs aléatoires d'Epsys, parce que." },
+            { name: "!choix", value: "Vous avez du mal à faire un choix ? Demandez à Cacabot." },
+            { name: "!kiss", value: "Embrassez quelqu'un sur le serveur !" },
+            { name: "!hug", value: "Faites un câlin à quelqu'un sur le serveur !" },
+            { name: "!dance", value: "Dansez avec quelqu'un sur le serveur !" },
+            { name: "!insult", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" }
+        );
+}
 
-        if (value === 'util') {
-            embed = new EmbedBuilder()
-                .setColor(0x3498db)
-                .setDescription("# 🛠 Utilitaire")
-                .addFields(
-                    { name: "──────────────", value: "**!discord**
-Obtenir le lien officiel d'invitation de Regaïa." },
-                    { name: "──────────────", value: "**!aternos**
-Obtenir l'IP du serveur Aternos (Minecraft) de Regaïa." }
-                );
-        }
+if (value === 'util') {
+    embed = new EmbedBuilder()
+        .setColor(0x3498db)
+        .setDescription("# 🛠 Utilitaire")
+        .addFields(
+            { name: "!discord", value: "Obtenir le lien officiel d'invitation de Regaïa." },
+            { name: "!aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Regaïa." }
+        );
+}
 
         if (!embed) {
             embed = new EmbedBuilder()
