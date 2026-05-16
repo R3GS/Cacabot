@@ -602,8 +602,8 @@ client.on('messageCreate', async (message) => {
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une catégorie')
             .addOptions(
-                { label: '🎉 Fun', description: '!animal, !destin, !epsys, !choix, !kiss, !hug, !dance', value: 'fun' },
-                { label: '🛠 Utilitaire', description: '!discord, !aternos', value: 'util' },
+                { label: '🎉 Fun', description: 'animal, destin, epsys, choix, kiss, hug, dance', value: 'fun' },
+                { label: '🛠 Utilitaire', description: 'discord, aternos', value: 'util' },
             );
 
         const row = new ActionRowBuilder().addComponents(menu);
