@@ -1316,7 +1316,7 @@ client.on('messageCreate', async (message) => {
             .setColor(0xffd700)
             .setTitle('\ud83c\udfc6 Top 10 des membres les plus actifs')
             .addFields(fields)
-            .setFooter({ text: 'Compt\u00e9 depuis l'initialisation du bot' });
+            .setFooter({ text: "Compt\u00e9 depuis l'initialisation du bot" });
 
         return message.reply({ embeds: [embed] });
     }
