@@ -361,6 +361,7 @@ function getResponse(raw) {
     // =========================
 
     if (cleaned === "hein") return reply("Deux");
+    if (cleaned === "re") return reply("Nard");
     if (cleaned === "de") return reply("Trois");
     if (cleaned === "a" || cleaned === "ha" || cleaned === "ah") return "B";
     if (cleaned === "ntm jax") return "https://cdn.discordapp.com/attachments/1206232717444775956/1504653708770672741/Capture_decran_2026-05-15_031617.png";
