@@ -753,13 +753,13 @@ client.on('messageCreate', async (message) => {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
                 const result = await findMemberByName(message.guild, args);
-                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
+                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
                 if (result.found) cible = result.found.user;
             }
         }
 
         if (!cible) {
-            return message.reply("Euuh... Tu veux embrasser qui du coup ?");
+            return message.reply("Euuh... Tu veux embrasser qui du coup ?").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
         }
 
         const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
@@ -792,13 +792,13 @@ client.on('messageCreate', async (message) => {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
                 const result = await findMemberByName(message.guild, args);
-                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
+                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
                 if (result.found) cible = result.found.user;
             }
         }
 
         if (!cible) {
-            return message.reply("Euuh... Tu veux c\u00e2liner qui du coup ?");
+            return message.reply("Euuh... Tu veux c\u00e2liner qui du coup ?").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
         }
 
         const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
@@ -831,7 +831,7 @@ client.on('messageCreate', async (message) => {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
                 const result = await findMemberByName(message.guild, args);
-                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
+                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
                 if (result.found) cible = result.found.user;
             }
         }
@@ -866,17 +866,17 @@ client.on('messageCreate', async (message) => {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
                 const result = await findMemberByName(message.guild, args);
-                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
+                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
                 if (result.found) cible = result.found.user;
             }
         }
 
         if (!cible) {
-            return message.reply("Mentionne quelqu'un pour l'insulter !");
+            return message.reply("Mentionne quelqu'un pour l'insulter !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
         }
 
         if (cible.id === message.author.id) {
-            return message.reply("Tu ne peux pas t'insulter toi-m\u00eame... Mentionne quelqu'un plut\u00f4t !");
+            return message.reply("Tu ne peux pas t'insulter toi-m\u00eame... Mentionne quelqu'un plut\u00f4t !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
         }
 
         if (cible.id === client.user.id) {
@@ -916,17 +916,17 @@ client.on('messageCreate', async (message) => {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
                 const result = await findMemberByName(message.guild, args);
-                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
+                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
                 if (result.found) cible = result.found.user;
             }
         }
 
         if (!cible) {
-            return message.reply("Choisis quelqu'un que tu veux rizz !");
+            return message.reply("Choisis quelqu'un que tu veux rizz !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
         }
 
         if (cible.id === message.author.id) {
-            return message.reply("Tu ne peux pas te rizz toi-m\u00eame !");
+            return message.reply("Tu ne peux pas te rizz toi-m\u00eame !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
         }
 
         if (cible.id === client.user.id) {
@@ -956,17 +956,17 @@ client.on('messageCreate', async (message) => {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
                 const result = await findMemberByName(message.guild, args);
-                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
+                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
                 if (result.found) cible = result.found.user;
             }
         }
 
         if (!cible) {
-            return message.reply("Mentionne la personne sur qui tu veux tirer !");
+            return message.reply("Mentionne la personne sur qui tu veux tirer !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
         }
 
         if (cible.id === message.author.id) {
-            return message.reply("\u00c9vite de te tirer dessus :(");
+            return message.reply("\u00c9vite de te tirer dessus :(").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
         }
 
         if (cible.id === client.user.id) {
@@ -995,17 +995,17 @@ client.on('messageCreate', async (message) => {
             const args = message.content.trim().split(/\s+/).slice(1).join(" ");
             if (args.length > 0) {
                 const result = await findMemberByName(message.guild, args);
-                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !");
+                if (result.multiple) return message.reply("Ziziblement, il y a plusieurs personnes qui ont un pseudo similaire :/\nMentionne-la directement !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
                 if (result.found) cible = result.found.user;
             }
         }
 
         if (!cible) {
-            return message.reply("Mentionne quelqu'un que tu veux frapper !");
+            return message.reply("Mentionne quelqu'un que tu veux frapper !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
         }
 
         if (cible.id === message.author.id) {
-            return message.reply("Tu ne peux pas te frapper toi-m\u00eame ! 'Fin si mais... Ne le fais pas.");
+            return message.reply("Tu ne peux pas te frapper toi-m\u00eame ! 'Fin si mais... Ne le fais pas.").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
         }
 
         if (cible.id === client.user.id) {
@@ -1031,11 +1031,11 @@ client.on('messageCreate', async (message) => {
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (cible && cible.id === client.user.id) {
-            return message.reply("Tu veux \"me mourir\" ? Non merci.");
+            return message.reply("Tu veux \"me mourir\" ? Non merci.").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
         }
 
         if (cible && cible.id !== message.author.id) {
-            return message.reply(`Tu ne peux pas \"mourir quelqu'un\" ce n'est pas possible, **${auteurNom}**`);
+            return message.reply(`Tu ne peux pas \"mourir quelqu'un\" ce n'est pas possible, **${auteurNom}**`).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
         }
 
         const embed = buildDieEmbed(`\u2620\ufe0f **${auteurNom}** meurt...`);
@@ -1055,11 +1055,11 @@ client.on('messageCreate', async (message) => {
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (cible && cible.id === client.user.id) {
-            return message.reply("Tu veux \u00abme mourir\u00bb ? Non merci.");
+            return message.reply("Tu veux \u00abme mourir\u00bb ? Non merci.").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
         }
 
         if (cible && cible.id !== message.author.id) {
-            return message.reply(`Tu ne peux pas \u00abmourir quelqu'un\u00bb ce n'est pas possible, **${auteurNom}**`);
+            return message.reply(`Tu ne peux pas \u00abmourir quelqu'un\u00bb ce n'est pas possible, **${auteurNom}**`).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
         }
 
         const embed = buildDieEmbed(`\u2620\ufe0f **${auteurNom}** meurt...`);
