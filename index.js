@@ -192,11 +192,27 @@ function getResponse(raw) {
     }
 
     // =========================
+    //         !SERVEUR
+    // =========================
+
+    if (command === "!serveur") {
+        return { needsServeur: true };
+    }
+
+    // =========================
     //         !DIE
     // =========================
 
     if (command === "!die") {
         return { needsDie: true };
+    }
+
+    // =========================
+    //         !SERVEUR
+    // =========================
+
+    if (command === "!serveur") {
+        return { needsServeur: true };
     }
 
 
@@ -1144,6 +1160,39 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [embed], components: [row] });
     }
 
+    // !serveur
+    if (response?.needsServeur) {
+        const guild = message.guild;
+        if (!guild) return;
+
+        await guild.fetch();
+        const owner = await guild.fetchOwner();
+
+        const createdAt = guild.createdAt.toLocaleDateString('fr-FR', {
+            day: 'numeric', month: 'long', year: 'numeric'
+        });
+
+        const embed = new EmbedBuilder()
+            .setColor(0x00ebff)
+            .setTitle(guild.name)
+            .setThumbnail(guild.iconURL({ dynamic: true, size: 256 }))
+            .setDescription(guild.description || '*Aucune description*')
+            .addFields(
+                { name: '\ud83d\udc51 Propri\u00e9taire', value: owner.user.tag, inline: true },
+                { name: '\ud83d\udcc5 Cr\u00e9ation', value: createdAt, inline: true },
+                { name: '\u200b', value: '\u200b', inline: true },
+                { name: '\ud83d\udc65 Membres', value: `${guild.memberCount}`, inline: true },
+                { name: '\ud83d\udcac Salons', value: `${guild.channels.cache.size}`, inline: true },
+                { name: '\ud83c\udff7\ufe0f R\u00f4les', value: `${guild.roles.cache.size}`, inline: true },
+                { name: '\ud83d\ude80 Niveau de boost', value: `Niveau ${guild.premiumTier}`, inline: true },
+                { name: '\ud83d\udcab Boosts', value: `${guild.premiumSubscriptionCount}`, inline: true },
+                { name: '\ud83c\udd94 ID', value: guild.id, inline: true }
+            )
+            .setFooter({ text: 'Regaia' });
+
+        return message.reply({ embeds: [embed] });
+    }
+
     // !help
     if (response?.data) {
         const menu = new StringSelectMenuBuilder()
@@ -1151,7 +1200,7 @@ client.on('messageCreate', async (message) => {
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
                 { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire', value: 'fun' },
-                { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos', value: 'util' },
+                { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos, serveur', value: 'util' },
             );
 
         const row = new ActionRowBuilder().addComponents(menu);
@@ -1433,7 +1482,8 @@ client.on('interactionCreate', async (interaction) => {
                 .setDescription("# \ud83d\udee0 Utilitaire")
                 .addFields(
                     { name: "!discord", value: "Obtenir le lien officiel d'invitation de Rega\u00efa." },
-                    { name: "!aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." }
+                    { name: "!aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." },
+                    { name: "!serveur", value: "Afficher les informations du serveur." }
                 );
         }
 
@@ -1467,7 +1517,7 @@ client.on('interactionCreate', async (interaction) => {
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
                 { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire', value: 'fun' },
-                { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos', value: 'util' }
+                { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos, serveur', value: 'util' }
             );
         const row = new ActionRowBuilder().addComponents(menu);
         return interaction.update({ embeds: [embed], components: [row] });
