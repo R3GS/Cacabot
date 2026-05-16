@@ -729,7 +729,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!choix", value: "Vous avez du mal à faire un choix ? Demandez à Cacabot." },
                     { name: "!kiss", value: "Embrassez quelqu'un sur le serveur !" },
                     { name: "!hug", value: "Faites un câlin à quelqu'un sur le serveur !" },
-                    { name: "!dance", value: "Dansez avec quelqu'un du serveur !" }
+                    { name: "!dance", value: "Dansez avec quelqu'un sur le serveur !" }
                 );
         }
 
@@ -777,8 +777,8 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une catégorie')
             .addOptions(
-                { label: '🎉 Fun', description: '!animal, !destin, !epsys, !choix, !kiss, !hug, !dance', value: 'fun' },
-                { label: '🛠 Utilitaire', description: '!discord, !aternos', value: 'util' }
+                { label: '🎉 Fun', description: 'animal, destin, epsys, choix, kiss, hug, dance', value: 'fun' },
+                { label: '🛠 Utilitaire', description: 'discord, aternos', value: 'util' }
             );
 
         const row = new ActionRowBuilder().addComponents(menu);
