@@ -192,6 +192,22 @@ function getResponse(raw) {
     }
 
     // =========================
+    //         !PROFIL
+    // =========================
+
+    if (command === "!profil") {
+        return { needsProfil: true };
+    }
+
+    // =========================
+    //         !AVATAR
+    // =========================
+
+    if (command === "!avatar") {
+        return { needsAvatar: true };
+    }
+
+    // =========================
     //         !SERVEUR
     // =========================
 
@@ -1130,6 +1146,80 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [embed], components: [row] });
     }
 
+    // !profil
+    if (response?.needsProfil) {
+        let cible = message.mentions.users.first();
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
+                if (result.found) cible = result.found.user;
+            }
+        }
+
+        if (!cible) cible = message.author;
+
+        const member = message.guild?.members.cache.get(cible.id);
+        const joinedAt = member?.joinedAt
+            ? member.joinedAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+            : 'Inconnue';
+        const createdAt = cible.createdAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+        const roles = member?.roles.cache
+            .filter(r => r.id !== message.guild.id)
+            .sort((a, b) => b.position - a.position)
+            .map(r => `<@&${r.id}>`)
+            .slice(0, 5)
+            .join(' ') || 'Aucun';
+
+        const embed = new EmbedBuilder()
+            .setColor(0x5865f2)
+            .setTitle(member?.displayName ?? cible.username)
+            .setThumbnail(cible.displayAvatarURL({ dynamic: true, size: 256 }))
+            .addFields(
+                { name: '\ud83d\udc64 Pseudo', value: `@${cible.username}`, inline: true },
+                { name: '\ud83c\udd94 ID', value: cible.id, inline: true },
+                { name: '\u200b', value: '\u200b', inline: true },
+                { name: '\ud83d\udcc5 Arriv\u00e9e sur le serveur', value: joinedAt, inline: true },
+                { name: '\ud83c\udf82 Compte cr\u00e9\u00e9 le', value: createdAt, inline: true },
+                { name: '\u200b', value: '\u200b', inline: true },
+                { name: '\ud83c\udff7\ufe0f R\u00f4les', value: roles, inline: false }
+            );
+
+        return message.reply({ embeds: [embed] });
+    }
+
+    // !avatar
+    if (response?.needsAvatar) {
+        let cible = message.mentions.users.first();
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
+                if (result.found) cible = result.found.user;
+            }
+        }
+
+        if (!cible) cible = message.author;
+
+        const embed = new EmbedBuilder()
+            .setColor(0x5865f2)
+            .setTitle(`Avatar de ${cible.username}`)
+            .setImage(cible.displayAvatarURL({ dynamic: true, size: 1024 }));
+
+        return message.reply({ embeds: [embed] });
+    }
+
     // !serveur
     if (response?.needsServeur) {
         const guild = message.guild;
@@ -1193,7 +1283,7 @@ client.on('messageCreate', async (message) => {
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
                 { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire, question', value: 'fun' },
-                { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos, serveur', value: 'util' },
+                { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos, serveur, profil, avatar', value: 'util' },
             );
 
         const row = new ActionRowBuilder().addComponents(menu);
@@ -1699,7 +1789,9 @@ client.on('interactionCreate', async (interaction) => {
                 .addFields(
                     { name: "!discord", value: "Obtenir le lien officiel d'invitation de Rega\u00efa." },
                     { name: "!aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." },
-                    { name: "!serveur", value: "Afficher les informations du serveur." }
+                    { name: "!serveur", value: "Afficher les informations du serveur." },
+                    { name: "!profil", value: "Afficher le profil d'un membre." },
+                    { name: "!avatar", value: "Afficher l'avatar d'un membre en grand." }
                 );
         }
 
@@ -1737,7 +1829,7 @@ client.on('interactionCreate', async (interaction) => {
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
                 { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire, question', value: 'fun' },
-                { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos, serveur', value: 'util' }
+                { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos, serveur, profil, avatar', value: 'util' }
             );
         const row = new ActionRowBuilder().addComponents(menu);
         return interaction.update({ embeds: [embed], components: [row] });
