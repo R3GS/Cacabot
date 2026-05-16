@@ -183,7 +183,7 @@ client.on('messageCreate', async (message) => {
     const etat = etatList[Math.floor(Math.random() * etatList.length)];
 
     return message.reply(`${base}\n**${animal} ${etat}**`);
-}
+});
 
 
 // =========================
