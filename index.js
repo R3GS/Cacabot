@@ -1,5 +1,5 @@
 require('dotenv').config();
- 
+
 const {
     Client,
     GatewayIntentBits,
@@ -9,7 +9,7 @@ const {
     ButtonBuilder,
     ButtonStyle
 } = require('discord.js');
- 
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -17,11 +17,11 @@ const client = new Client({
         GatewayIntentBits.MessageContent
     ]
 });
- 
+
 // =========================
 //     FONCTION PRINCIPALE
 // =========================
- 
+
 function getResponse(raw) {
     const cleaned = raw
         .toLowerCase()
@@ -30,21 +30,21 @@ function getResponse(raw) {
         .replace(/[^a-z0-9\s!]/g, "")
         .replace(/\s+/g, " ")
         .trim();
- 
+
     const command = raw.trim().split(" ")[0].toLowerCase();
- 
+
     const isUpper =
         raw.length > 0 &&
         raw === raw.toUpperCase() &&
         raw !== raw.toLowerCase();
- 
+
     const reply = (normal, upper = normal.toUpperCase()) =>
         isUpper ? upper : normal;
- 
+
     // =========================
     //         !HELP
     // =========================
- 
+
     if (command === "!help") {
         return {
             data: new EmbedBuilder()
@@ -53,23 +53,23 @@ function getResponse(raw) {
                 .setDescription("Hey ! Voici Cacabot, qui, malgré son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\n\nPour découvrir les différentes commandes disponibles de Cacabot, choisis l'une des catégories ci-dessous !")
         };
     }
- 
+
     // =========================
     //     COMMANDES UTILITAIRES
     // =========================
- 
+
     if (raw.toLowerCase().match(/!aternos\b/)) {
         return "L'IP actuelle du serveur Minecraft de Regaïa est : **papierprout.aternos.me**";
     }
- 
+
     if (raw.toLowerCase().match(/!discord\b/)) {
         return "Si vous souhaitez inviter vos ami.es, voici le lien d'invitation du serveur Discord :\n**https://discord.com/invite/maAbUYb**";
     }
- 
+
     // =========================
     //         !EPSYS
     // =========================
- 
+
     if (command === "!epsys") {
         const gifs = [
             "https://cdn.discordapp.com/attachments/1480734932933542049/1504170153317761085/67.gif",
@@ -79,23 +79,23 @@ function getResponse(raw) {
             "https://tenor.com/view/r3gs_-capuche-love-hearts-gif-22642553",
             "https://cdn.discordapp.com/attachments/1128032964924670053/1478480836683759636/ezgif-4910f713e8f8f838.gif"
         ];
- 
+
         return gifs[Math.floor(Math.random() * gifs.length)];
     }
- 
+
     // =========================
     //         !CHOIX
     // =========================
- 
+
     if (command === "!choix") {
- 
+
         if (Math.random() < 0.1) {
             const texte = raw.replace(/^!choix\s*/i, "").trim();
             if (texte.length > 0) {
                 return `"${texte}" ☝️🤓\nNon tais-toi et oublie cette idée stp`;
             }
         }
- 
+
         const reponses = [
             "Oui, mais le monde n'est pas encore prêt.", "Non. Mauvaise idée de base.", "Oui, mais t'assumes.", "Franchement je sais pas mais ça sent la merde.",
             "Oui mais ça va mal finir.", "Non mais tu vas quand même le faire donc bon.", "Non vas te faire enculer.", "J'ai demandé à ma maman... Elle a dit oui.",
@@ -106,30 +106,30 @@ function getResponse(raw) {
             "Non + pas lu + ratio + ntm", "nn", "oe", "https://tenor.com/view/ui-jday-mister-jd-gif-25079300", "https://tenor.com/view/mais-oui-seb-jdg-mais-oui-gif-19057953",
             "https://cdn.discordapp.com/attachments/1128032964924670053/1504924989781053581/vous-pensez-moi-je-pense-pas.gif"
         ];
- 
+
         return reponses[Math.floor(Math.random() * reponses.length)];
     }
- 
+
     // =========================
     //         !ANIMAL
     // =========================
- 
+
     if (command === "!animal") {
         return { needsMention: true };
     }
- 
+
     // =========================
     //         !KISS
     // =========================
- 
+
     if (command === "!kiss") {
         return { needsKiss: true };
     }
- 
+
     // =========================
     //         !DESTIN
     // =========================
- 
+
     if (command === "!destin") {
         const destin = [
             "Tu multiplieras ton nombre de neurones par 2 le vendredi 28 Juillet 2034.",
@@ -209,14 +209,14 @@ function getResponse(raw) {
             "https://cdn.discordapp.com/attachments/1128032964924670053/1504682385290170418/destin.mp4",
             "https://cdn.discordapp.com/attachments/1128032964924670053/1504685026057519144/destin.mp4"
         ];
- 
+
         return destin[Math.floor(Math.random() * destin.length)];
     }
- 
+
     // =========================
     // PHRASES CONTENANT LES MOTS
     // =========================
- 
+
     if (cleaned.includes("henry tran") || cleaned.includes("singapour")) {
         const videos = [
             "https://cdn.discordapp.com/attachments/1128032964924670053/1504609617638854817/SINGAPOUR_1.mp4",
@@ -255,50 +255,50 @@ function getResponse(raw) {
     if (cleaned.includes("cest quoi")) return reply("C'est feur");
     if (cleaned.includes("de quoi")) return reply("De feur");
     if (cleaned.includes("de qui")) return reply("De quette");
- 
+
     // =========================
     // MESSAGES EXACTS UNIQUEMENT
     // =========================
- 
+
     if (cleaned === "hein") return reply("Deux");
     if (cleaned === "de") return reply("Trois");
     if (cleaned === "a" || cleaned === "ha" || cleaned === "ah") return "B";
     if (cleaned === "ntm jax") return "https://cdn.discordapp.com/attachments/1206232717444775956/1504653708770672741/Capture_decran_2026-05-15_031617.png";
- 
+
     // =========================
     // QUOI / QUI CLASSIQUES
     // =========================
- 
+
     const quoiRegex = /^(quoi+|kwa|kouwa|kua|quoient)$/i;
     const lower = cleaned.replace(/\s+/g, " ");
     const isQuoi = quoiRegex.test(lower);
     const isQui = lower === "qui";
- 
+
     if (!isQuoi && !isQui) return null;
- 
+
     if (Math.random() < 0.05) return "VIDEO";
- 
+
     if (isQui) return reply("Quette");
     if (lower === "quoient") return reply("Feurent");
     if (lower.startsWith("quoi")) {
         if (Math.random() < 0.5) return reply("Quoicoubeh");
         return reply("Feur");
     }
- 
+
     return reply("Feur");
 }
- 
+
 // =========================
 //     LOGIQUE !ANIMAL
 // =========================
- 
+
 function getAnimalResponse(message) {
     const cible = message.mentions.users.first();
- 
+
     const base = cible
         ? `Hmmm, l'animal spirituel de ${cible} est...`
         : "Hmmm, ton animal spirituel est...";
- 
+
     const animauxMasc = [
         "Un rat de RER", "Un pigeon", "Un chat errant", "Un renard", "Un dauphin", "Un corbeau", "Un hamster", "Un chien", "Un crapaud", "Un panda",
         "Un hérisson", "Un taureau", "Un papillon", "Un putain de moustique", "Un axolotl", "Un raton laveur", "Un perroquet", "Un singe",
@@ -309,7 +309,7 @@ function getAnimalResponse(message) {
         "Un lapin", "Un loup", "Un mouton", "Un ours", "Un sanglier", "Un tigre", "Un accarien", "Un crocodile", "Un alligator", "Un cochon dinde",
         "Un furet", "Un alpaga", "Un mille-pattes", "Un ver de terre", "Un bandicoot", "Un blaireau", "Un bonobo", "Un morse"
     ];
- 
+
     const animauxFem = [
         "Une girafe", "Une loutre", "Une mouette", "Une hyène", "Une mouche", "Une fourmi", "Une horrible araignée", "Une mouche à merde", "Une chouette",
         "Une baleine", "Une hirondelle", "Une lionne", "Une louve", "Une jument", "Une chèvre", "Une chauve-souris", "Une gazelle", "Une vache",
@@ -317,16 +317,16 @@ function getAnimalResponse(message) {
         "Une musaraigne", "Une abeille", "Une chienne", "Une chatte", "Une truie", "Une larve", "Une tortue", "Une pieuvre", "Une crevette",
         "Une autruche", "Une coccinelle", "Une belette", "Une sardine", "Une otarie", "Une panthère", "Une huître", "Une moule", "Une antilope"
     ];
- 
+
     const etatsMasc = [
         "recherché pour le meurtre de 6 enfants.", "vétéran de la Seconde Guerre Mondiale.", "dépressif.", "gay.", "complètement con.", "bourré.",
         "perdu dans sa vie.", "plombier, mais aussi docteur, ingénieur, professeur, livreur de pizza, méchanicien, soldat, policier et astronaute.",
     ];
- 
+
     const etatsFem = [
         "recherchée pour le meurtre de 6 enfants.", "dépressive.", "lesbienne.", "complètement conne.", "bourrée.", "perdue dans sa vie."
     ];
- 
+
     const etatsNeutres = [
         "en burn-out.", "sous coke.", "qui a la diarrhée.", "alcoolique.", "casse-couilles.", "qui collectionne les bouchons de liège.", "qui fuit l'URSSAF.",
         "asthmatique.", "qui pue du cul.", "de merde.", "transgenre 🏳️‍⚧️", "sataniste.", "fan de Feldup.", "rockstar.", "addict à TikTok.",
@@ -337,21 +337,21 @@ function getAnimalResponse(message) {
         "en 4K Ultra HD IMAX Surround Dolby Digital.", "devant une série Netflix de merde.", "qui utilise la commande !destin.", "trisomique.",
         "qui étale son caca sur les murs.", "nostalgique des années 2000.", "transphobe.", "raciste.", "qui a raté 6 fois son bac.", "qui adore McFly & Calito."
     ];
- 
+
     const isFem = Math.random() < 0.5;
     const animalList = isFem ? animauxFem : animauxMasc;
     const etatList = isFem ? [...etatsFem, ...etatsNeutres] : [...etatsMasc, ...etatsNeutres];
- 
+
     const animal = animalList[Math.floor(Math.random() * animalList.length)];
     const etat = etatList[Math.floor(Math.random() * etatList.length)];
- 
+
     return `${base}\n**${animal} ${etat}**`;
 }
- 
+
 // =========================
 //     LOGIQUE !KISS
 // =========================
- 
+
 const kissGifs = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505016959584964811/adventure-time-princess-bubble-gum.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505016959153082529/two-men-kissing.gif",
@@ -363,7 +363,6 @@ const kissGifs = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505022904386064548/ezgif-336d393cc8b2e34b.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505022903991664640/animash-boys-love.gif"
 ];
- 
 function buildKissEmbed(auteurNom, cibleNom) {
     const gif = kissGifs[Math.floor(Math.random() * kissGifs.length)];
     return new EmbedBuilder()
@@ -371,58 +370,58 @@ function buildKissEmbed(auteurNom, cibleNom) {
         .setDescription(`💋 **${auteurNom}** embrasse **${cibleNom}** !`)
         .setImage(gif);
 }
- 
+
 // =========================
 //     LISTENER MESSAGES
 // =========================
- 
+
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
- 
+
     const response = getResponse(message.content);
- 
+
     if (response === null || response === undefined) return;
- 
+
     // !animal — nécessite l'objet message pour les mentions
     if (response?.needsMention) {
         return message.reply(getAnimalResponse(message));
     }
- 
+
     // !kiss — nécessite l'objet message pour les mentions
     if (response?.needsKiss) {
         const cible = message.mentions.users.first();
- 
+
         if (!cible) {
-            return message.reply("Mentionne quelqu'un pour l'embrasser !");
+            return message.reply("Euuh... Tu veux embrasser qui du coup ?");
         }
- 
+
         const auteurNom = message.member?.displayName ?? message.author.username;
         const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
- 
+
         // Cas : self-kiss
         if (cible.id === message.author.id) {
             const embedSelf = buildKissEmbed(auteurNom, auteurNom).setDescription(`💋 **${auteurNom}** s'embrasse ! Attends... Comment c'est possible ?`);
             return message.reply({ embeds: [embedSelf] });
         }
- 
+
         // Cas : kiss sur Cacabot lui-même
         if (cible.id === client.user.id) {
             const embedBot = buildKissEmbed(auteurNom, "Cacabot").setDescription(`💋 **${auteurNom}** m'embrasse ! Awww merci <3`);
             return message.reply({ embeds: [embedBot] });
         }
- 
+
         const embed = buildKissEmbed(auteurNom, cibleNom);
- 
+
         const kissBackButton = new ButtonBuilder()
-            .setCustomId(`kiss_back_${message.author.id}_${auteurNom}`)
+            .setCustomId(`kiss_back_${message.author.id}_${cible.id}_${auteurNom}`)
             .setLabel("💋 Embrasser en retour")
             .setStyle(ButtonStyle.Primary);
- 
+
         const row = new ActionRowBuilder().addComponents(kissBackButton);
- 
+
         return message.reply({ embeds: [embed], components: [row] });
     }
- 
+
     // !help — embed + menu déroulant
     if (response?.data) {
         const menu = new StringSelectMenuBuilder()
@@ -432,103 +431,111 @@ client.on('messageCreate', async (message) => {
                 { label: 'Fun', value: 'fun' },
                 { label: 'Utilitaire', value: 'util' },
             );
- 
+
         const row = new ActionRowBuilder().addComponents(menu);
- 
+
         return message.reply({
             embeds: [response.data],
             components: [row]
         });
     }
- 
+
     // Réponse texte simple
     if (typeof response === "string") {
         if (response.trim().length === 0) return;
         return message.reply({ content: response });
     }
 });
- 
+
 // =========================
 //     LISTENER INTERACTIONS
 // =========================
- 
+
 client.on('interactionCreate', async (interaction) => {
- 
+
     // =========================
     // BOUTON KISS BACK
     // =========================
- 
+
     if (interaction.isButton() && interaction.customId.startsWith("kiss_back_")) {
         const parts = interaction.customId.split("_");
-        // format: kiss_back_{originalAuthorId}_{originalAuthorNom}
+        // format: kiss_back_{originalAuthorId}_{targetId}_{originalAuthorNom}
         const originalAuthorId = parts[2];
-        const originalAuthorNom = parts.slice(3).join("_");
- 
-        // Seul la cible du kiss peut embrasser en retour
-        if (interaction.user.id !== originalAuthorId) {
-            const retourNom = interaction.member?.displayName ?? interaction.user.username;
-            const embed = buildKissEmbed(retourNom, originalAuthorNom);
- 
-            return interaction.reply({ embeds: [embed] });
+        const targetId = parts[3];
+        const originalAuthorNom = parts.slice(4).join("_");
+
+        const clickerId = interaction.user.id;
+
+        // L'auteur original essaie de cliquer
+        if (clickerId === originalAuthorId) {
+            return interaction.reply({ content: "Tu peux pas t'embrasser toi-même... 💀", ephemeral: true });
         }
- 
-        return interaction.reply({ content: "Tu peux pas t'embrasser toi-même... 💀", ephemeral: true });
+
+        // Quelqu'un d'autre que la cible essaie de cliquer
+        if (clickerId !== targetId) {
+            return interaction.reply({ content: "Pas sympa de voler les bisous des autres :/", ephemeral: true });
+        }
+
+        // C'est bien la cible qui clique
+        const retourNom = interaction.member?.displayName ?? interaction.user.username;
+        const embed = buildKissEmbed(retourNom, originalAuthorNom);
+        return interaction.reply({ embeds: [embed] });
     }
- 
+
     // =========================
     // MENU SELECT
     // =========================
- 
+
     if (interaction.isStringSelectMenu()) {
         if (interaction.customId !== 'help_menu') return;
- 
+
         const value = interaction.values[0];
         let embed;
- 
+
         if (value === 'fun') {
             embed = new EmbedBuilder()
                 .setColor(0xffcc00)
                 .setTitle("🎉 Fun")
                 .setDescription("**!animal** ➜ Devine votre animal spirituel parmi près de 7000 combinaisons !\n**!destin** ➜ Prédit votre destin et fait part des évènements de votre futur.\n**!epsys** ➜ Poste des GIFs aléatoires d'Epsys, parce que.\n**!choix** ➜ Vous avez du mal à faire un choix ? Demandez à Cacabot.\n**!kiss** ➜ Embrassez quelqu'un sur le serveur !");
         }
- 
+
         if (value === 'util') {
             embed = new EmbedBuilder()
                 .setColor(0x3498db)
                 .setTitle("🛠 Utilitaire")
                 .setDescription("**!discord** ➜ Obtenir le lien officiel d'invitation de Regaïa.\n**!aternos** ➜ Obtenir l'IP du serveur Aternos (Minecraft) de Regaïa.");
         }
- 
+
         if (!embed) {
             embed = new EmbedBuilder()
                 .setColor(0xff0000)
                 .setTitle("Erreur")
                 .setDescription("Catégorie inconnue");
         }
- 
+
         const backButton = new ButtonBuilder()
             .setCustomId('help_back')
             .setLabel('⬅ Retour')
             .setStyle(ButtonStyle.Secondary);
- 
+
         const row = new ActionRowBuilder().addComponents(backButton);
- 
+
         return interaction.update({
             embeds: [embed],
             components: [row]
         });
     }
- 
+
     // =========================
     // BOUTON RETOUR
     // =========================
- 
+
     if (interaction.isButton() && interaction.customId === 'help_back') {
         const embed = new EmbedBuilder()
             .setColor(0x00ffff)
             .setTitle("💩 AIDE À CACABOT")
             .setDescription("Hey ! Voici Cacabot, qui, malgré son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\n\nPour découvrir les différentes commandes disponibles de Cacabot, choisis l'une des catégories ci-dessous !");
- 
+
         const menu = new StringSelectMenuBuilder()
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une catégorie')
@@ -536,22 +543,22 @@ client.on('interactionCreate', async (interaction) => {
                 { label: 'Fun', value: 'fun' },
                 { label: 'Utilitaire', value: 'util' }
             );
- 
+
         const row = new ActionRowBuilder().addComponents(menu);
- 
+
         return interaction.update({
             embeds: [embed],
             components: [row]
         });
     }
 });
- 
+
 // =========================
 //         CONNEXION
 // =========================
- 
+
 client.once('ready', () => {
     console.log(`✅ ${client.user.tag} est connecté`);
 });
- 
+
 client.login(process.env.TOKEN);
