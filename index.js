@@ -467,7 +467,7 @@ client.on('messageCreate', async (message) => {
         const cible = message.mentions.users.first();
 
         if (!cible) {
-            return message.reply("Euuh... Tu veux câliner qui du coup ?");
+            return message.reply("Mentionne quelqu'un pour lui faire un câlin !");
         }
 
         const auteurNom = message.member?.displayName ?? message.author.username;
@@ -543,7 +543,7 @@ client.on('interactionCreate', async (interaction) => {
 
         // L'auteur original essaie de cliquer
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Tu peux pas t'embrasser toi-même... 💀", ephemeral: true });
+            return interaction.reply({ content: "'Fin, c'est ton bisou, du coup...'", ephemeral: true });
         }
 
         // Quelqu'un d'autre que la cible essaie de cliquer
@@ -571,7 +571,7 @@ client.on('interactionCreate', async (interaction) => {
         const clickerId = interaction.user.id;
 
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Tu peux pas te câliner toi-même... 💀", ephemeral: true });
+            return interaction.reply({ content: "C'est... C'est ton câlin, du coup.", ephemeral: true });
         }
 
         if (clickerId !== targetId) {
