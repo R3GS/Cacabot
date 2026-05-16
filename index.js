@@ -812,7 +812,7 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!cible) {
-            return message.reply("Euuh... Tu veux embrasser qui du coup ?").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+            return message.reply("Euuh... Tu veux embrasser qui du coup ?").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
 
         const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
@@ -854,7 +854,7 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!cible) {
-            return message.reply("Euuh... Tu veux c\u00e2liner qui du coup ?").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+            return message.reply("Euuh... Tu veux c\u00e2liner qui du coup ?").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
 
         const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
@@ -934,11 +934,11 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!cible) {
-            return message.reply("Mentionne quelqu'un pour l'insulter !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+            return message.reply("Mentionne quelqu'un pour l'insulter !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
 
         if (cible.id === message.author.id) {
-            return message.reply("Tu ne peux pas t'insulter toi-m\u00eame... Mentionne quelqu'un plut\u00f4t !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+            return message.reply("Tu ne peux pas t'insulter toi-m\u00eame... Mentionne quelqu'un plut\u00f4t !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
 
         if (cible.id === client.user.id) {
@@ -987,11 +987,11 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!cible) {
-            return message.reply("Choisis quelqu'un que tu veux rizz !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+            return message.reply("Choisis quelqu'un que tu veux rizz !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
 
         if (cible.id === message.author.id) {
-            return message.reply("Tu ne peux pas te rizz toi-m\u00eame !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+            return message.reply("Tu ne peux pas te rizz toi-m\u00eame !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
 
         if (cible.id === client.user.id) {
@@ -1030,11 +1030,11 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!cible) {
-            return message.reply("Mentionne la personne sur qui tu veux tirer !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+            return message.reply("Mentionne la personne sur qui tu veux tirer !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
 
         if (cible.id === message.author.id) {
-            return message.reply("\u00c9vite de te tirer dessus :(").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+            return message.reply("\u00c9vite de te tirer dessus :(").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
 
         if (cible.id === client.user.id) {
@@ -1072,11 +1072,11 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!cible) {
-            return message.reply("Mentionne quelqu'un que tu veux frapper !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+            return message.reply("Mentionne quelqu'un que tu veux frapper !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
 
         if (cible.id === message.author.id) {
-            return message.reply("Tu ne peux pas te frapper toi-m\u00eame ! 'Fin si mais... Ne le fais pas.").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+            return message.reply("Tu ne peux pas te frapper toi-m\u00eame ! 'Fin si mais... Ne le fais pas.").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
 
         if (cible.id === client.user.id) {
@@ -1102,11 +1102,11 @@ client.on('messageCreate', async (message) => {
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (cible && cible.id === client.user.id) {
-            return message.reply("Tu veux \"me mourir\" ? Non merci.").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+            return message.reply("Tu veux \"me mourir\" ? Non merci.").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
 
         if (cible && cible.id !== message.author.id) {
-            return message.reply(`Tu ne peux pas \"mourir quelqu'un\" ce n'est pas possible, **${auteurNom}**`).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+            return message.reply(`Tu ne peux pas \"mourir quelqu'un\" ce n'est pas possible, **${auteurNom}**`).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
 
         const embed = buildDieEmbed(`\u2620\ufe0f **${auteurNom}** meurt...`);
@@ -1126,11 +1126,11 @@ client.on('messageCreate', async (message) => {
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (cible && cible.id === client.user.id) {
-            return message.reply("Tu veux \u00abme mourir\u00bb ? Non merci.").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+            return message.reply("Tu veux \u00abme mourir\u00bb ? Non merci.").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
 
         if (cible && cible.id !== message.author.id) {
-            return message.reply(`Tu ne peux pas \u00abmourir quelqu'un\u00bb ce n'est pas possible, **${auteurNom}**`).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000));
+            return message.reply(`Tu ne peux pas \u00abmourir quelqu'un\u00bb ce n'est pas possible, **${auteurNom}**`).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
 
         const embed = buildDieEmbed(`\u2620\ufe0f **${auteurNom}** meurt...`);
