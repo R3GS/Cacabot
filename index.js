@@ -1318,6 +1318,7 @@ client.on('messageCreate', async (message) => {
 // =========================
 
 client.on('interactionCreate', async (interaction) => {
+    try {
 
     // =========================
     // BOUTON KISS BACK
@@ -1849,6 +1850,13 @@ client.on('interactionCreate', async (interaction) => {
             );
         const row = new ActionRowBuilder().addComponents(menu);
         return interaction.update({ embeds: [embed], components: [row] });
+    }
+    } catch (err) {
+        if (err.code === 10062 || err.message?.includes('Unknown interaction') || err.message?.includes('expired')) {
+            if (interaction.isButton()) {
+                interaction.reply({ content: "Ce bouton n'est plus disponible !", ephemeral: true }).catch(() => {});
+            }
+        }
     }
 });
 
