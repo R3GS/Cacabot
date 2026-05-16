@@ -182,6 +182,22 @@ function getResponse(raw) {
         return { needsPunch: true };
     }
 
+    // =========================
+    //         !DIE
+    // =========================
+
+    if (command === "!die") {
+        return { needsDie: true };
+    }
+
+    // =========================
+    //         !DIE
+    // =========================
+
+    if (command === "!die") {
+        return { needsDie: true };
+    }
+
 
     // =========================
     //         !DESTIN
@@ -666,6 +682,64 @@ function buildPunchEmbed(description) {
 }
 
 // =========================
+//     LOGIQUE !DIE
+// =========================
+
+const dieGifs = [
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200444522102854/gmod-ragdoll.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200445004578976/jet-bean-killer-bean.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200445411295432/memes-meme.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200445839245393/furina-sad.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200446334304366/sylvain-lyve-vilbrequin.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200453086871612/star-wars-r2d2.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200453569351770/death-undertale.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200454026657882/tyler1-dead.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200454752276580/tyler1-loltyler1.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200455192674334/mrbruh.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200455637008384/mario-super-mario.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200455964168273/dies-cat.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200456597635232/connor-falling-misson-acomplished-mission-accomplished.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200457101086731/teletubbies-dying.gif"
+];
+
+function buildDieEmbed(description) {
+    const gif = dieGifs[Math.floor(Math.random() * dieGifs.length)];
+    return new EmbedBuilder()
+        .setColor(0x700000)
+        .setDescription(description)
+        .setImage(gif);
+}
+
+// =========================
+//     LOGIQUE !DIE
+// =========================
+
+const dieGifs = [
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200444522102854/gmod-ragdoll.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200445004578976/jet-bean-killer-bean.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200445411295432/memes-meme.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200445839245393/furina-sad.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200446334304366/sylvain-lyve-vilbrequin.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200453086871612/star-wars-r2d2.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200453569351770/death-undertale.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200454026657882/tyler1-dead.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200454752276580/tyler1-loltyler1.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200455192674334/mrbruh.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200455637008384/mario-super-mario.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200455964168273/dies-cat.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200456597635232/connor-falling-misson-acomplished-mission-accomplished.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505200457101086731/teletubbies-dying.gif"
+];
+
+function buildDieEmbed(description) {
+    const gif = dieGifs[Math.floor(Math.random() * dieGifs.length)];
+    return new EmbedBuilder()
+        .setColor(0x700000)
+        .setDescription(description)
+        .setImage(gif);
+}
+
+// =========================
 //     LISTENER MESSAGES
 // =========================
 
@@ -899,13 +973,61 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [embed], components: [row] });
     }
 
+    // !die
+    if (response?.needsDie) {
+        const cible = message.mentions.users.first();
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (cible && cible.id === client.user.id) {
+            return message.reply("Tu veux \"me mourir\" ? Non merci.");
+        }
+
+        if (cible) {
+            return message.reply(`Tu ne peux pas \"mourir quelqu'un\" ce n'est pas possible, **${auteurNom}**`);
+        }
+
+        const embed = buildDieEmbed(`\u2620\ufe0f **${auteurNom}** meurt...`);
+
+        const dieButton = new ButtonBuilder()
+            .setCustomId(`die_with_${message.author.id}_${auteurNom}`)
+            .setLabel("\u2620\ufe0f Mourir avec")
+            .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(dieButton);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
+    // !die
+    if (response?.needsDie) {
+        const cible = message.mentions.users.first();
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (cible && cible.id === client.user.id) {
+            return message.reply("Tu veux \u00abme mourir\u00bb ? Non merci.");
+        }
+
+        if (cible) {
+            return message.reply(`Tu ne peux pas \u00abmourir quelqu'un\u00bb ce n'est pas possible, **${auteurNom}**`);
+        }
+
+        const embed = buildDieEmbed(`\u2620\ufe0f **${auteurNom}** meurt...`);
+
+        const dieButton = new ButtonBuilder()
+            .setCustomId(`die_with_${message.author.id}_${auteurNom}`)
+            .setLabel("\u2620\ufe0f Mourir avec")
+            .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(dieButton);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
     // !help
     if (response?.data) {
         const menu = new StringSelectMenuBuilder()
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, punch, bang, rizz, rire', value: 'fun' },
+                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire', value: 'fun' },
                 { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos', value: 'util' },
             );
 
@@ -1111,6 +1233,46 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // =========================
+    // BOUTON DIE WITH
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith("die_with_")) {
+        const parts = interaction.customId.split("_");
+        // format: die_with_{originalAuthorId}_{originalAuthorNom}
+        const originalAuthorId = parts[2];
+        const originalAuthorNom = parts.slice(3).join("_");
+        const clickerId = interaction.user.id;
+
+        if (clickerId === originalAuthorId) {
+            return interaction.reply({ content: "Tu est d\u00e9j\u00e0 mort(e)...", ephemeral: true });
+        }
+
+        const reurNom = interaction.member?.displayName ?? interaction.user.username;
+        const embed = buildDieEmbed(`\u2620\ufe0f **${reurNom}** meurt avec **${originalAuthorNom}**...`);
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
+    // BOUTON DIE WITH
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith("die_with_")) {
+        const parts = interaction.customId.split("_");
+        // format: die_with_{originalAuthorId}_{originalAuthorNom}
+        const originalAuthorId = parts[2];
+        const originalAuthorNom = parts.slice(3).join("_");
+        const clickerId = interaction.user.id;
+
+        if (clickerId === originalAuthorId) {
+            return interaction.reply({ content: "Tu est d\u00e9j\u00e0 mort(e)...", ephemeral: true });
+        }
+
+        const mourrantNom = interaction.member?.displayName ?? interaction.user.username;
+        const embed = buildDieEmbed(`\u2620\ufe0f **${mourrantNom}** meurt avec **${originalAuthorNom}**...`);
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
     // MENU SELECT
     // =========================
 
@@ -1133,6 +1295,8 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!hug", value: "Faites un c\u00e2lin \u00e0 quelqu'un sur le serveur !" },
                     { name: "!danse", value: "Dansez avec quelqu'un sur le serveur !" },
                     { name: "!insulte", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
+                    { name: "!die", value: "Mourez dramatiquement !" },
+                    { name: "!die", value: "Mourez en direct sur le serveur !" },
                     { name: "!punch", value: "Frappez quelqu'un sur le serveur !" },
                     { name: "!bang", value: "Tirez sur quelqu'un sur le serveur !" },
                     { name: "!rizz", value: "Rizzez quelqu'un sur le serveur !" },
@@ -1179,7 +1343,7 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, punch, bang, rizz, rire', value: 'fun' },
+                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire', value: 'fun' },
                 { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos', value: 'util' }
             );
         const row = new ActionRowBuilder().addComponents(menu);
