@@ -358,6 +358,10 @@ const kissGifs = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505016958847025324/littlebigwhale-gomart.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505016958154969261/arcane-arcane-season-2.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505016957789802586/catradora-catra.gif"
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505022253199265822/cat.gif"
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505022253623152671/mwah-mwah-girls-kissing.gif"
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505022904386064548/ezgif-336d393cc8b2e34b.gif"
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505022903991664640/animash-boys-love.gif"
 ];
  
 function buildKissEmbed(auteurNom, cibleNom) {
