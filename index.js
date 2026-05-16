@@ -143,6 +143,14 @@ function getResponse(raw) {
     }
 
     // =========================
+    //         !INSULT
+    // =========================
+
+    if (command === "!insult") {
+        return { needsInsult: true };
+    }
+
+    // =========================
     //         !DESTIN
     // =========================
 
@@ -425,11 +433,10 @@ function buildHugEmbed(auteurNom, cibleNom) {
 
 const danceGifsSolo = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042079074619402/dancing-groovy.gif",
-    "https://cdn.discordapp.com/attachments/1128032964924670053/1505053484339433513/jdg-joueur-du-grenier.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042079376478209/shreck.gif",
-    "https://cdn.discordapp.com/attachments/1128032964924670053/1505054866823970867/srpelo.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042079795904583/silvagunner-siivagunner.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080232247377/fnaf-fredbear-dancing-to-happy.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080567918734/luigi-twerk.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080932696295/mario-dancer-break-dance.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042081318441161/dance-nsjdnsnd.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042081826078802/caine.gif",
@@ -475,6 +482,38 @@ function buildDanceEmbed(description, solo) {
     const gif = gifs[Math.floor(Math.random() * gifs.length)];
     return new EmbedBuilder()
         .setColor(0xba2222)
+        .setDescription(description)
+        .setImage(gif);
+}
+
+// =========================
+//     LOGIQUE !INSULT
+// =========================
+
+const insultGifs = [
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505057050491879594/springtrap-middle.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505057050965708810/zooble-amazing-digital-circus.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505057051502706838/fuck-off-fuck-you.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505057052093841618/birdie.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505057052597424178/dog-middle-finger.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505057053834608750/bubble-the-amazing-digital-circus.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505057054987911230/pomni-swears.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505057055621382164/nique-ta-mere-power-up.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505057058628833280/jdg-doigt-dhonneur.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505057059031220305/fnaf-springbonnie.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505057069517242509/jday-misterjday.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505057069907181649/vilebrequin-sylvain.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505057485818695802/jinx-jinx-arcane.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505057486338658447/vi-vi-arcane.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505058170471583815/jdg-ta-gueule.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505058170857455666/jdg-joueur-du-grenier.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505058171272695938/ferme-ta-gueule.gif"
+];
+
+function buildInsultEmbed(description) {
+    const gif = insultGifs[Math.floor(Math.random() * insultGifs.length)];
+    return new EmbedBuilder()
+        .setColor(0x21fca8)
         .setDescription(description)
         .setImage(gif);
 }
@@ -597,14 +636,47 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [embed], components: [row] });
     }
 
+    // !insult — nécessite l'objet message pour les mentions
+    if (response?.needsInsult) {
+        const cible = message.mentions.users.first();
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            return message.reply("Mentionne quelqu'un pour l'insulter !");
+        }
+
+        // Cas : self-insult
+        if (cible.id === message.author.id) {
+            return message.reply("Tu ne peux pas t'insulter toi-même... Mentionne quelqu'un plutôt !");
+        }
+
+        // Cas : insult sur Cacabot
+        if (cible.id === client.user.id) {
+            const embed = buildInsultEmbed(`🖕 **${auteurNom}** m'insulte ! J'ai fait quoi ?!`);
+            return message.reply({ embeds: [embed] });
+        }
+
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        const embed = buildInsultEmbed(`🖕 **${auteurNom}** insulte **${cibleNom}** !`);
+
+        const insultBackButton = new ButtonBuilder()
+            .setCustomId(`insult_back_${message.author.id}_${cible.id}_${auteurNom}`)
+            .setLabel("🖕 Insulter en retour")
+            .setStyle(ButtonStyle.Danger);
+
+        const row = new ActionRowBuilder().addComponents(insultBackButton);
+
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
     // !help — embed + menu déroulant
     if (response?.data) {
         const menu = new StringSelectMenuBuilder()
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une catégorie')
             .addOptions(
-                { label: '🎉 Fun', description: 'animal, destin, epsys, choix, kiss, hug, dance', value: 'fun' },
-                { label: '🛠 Utilitaire', description: 'discord, aternos', value: 'util' },
+                { label: '🎉 Fun', description: '!animal, !destin, !epsys, !choix, !kiss, !hug, !dance, !insult', value: 'fun' },
+                { label: '🛠 Utilitaire', description: '!discord, !aternos', value: 'util' },
             );
 
         const row = new ActionRowBuilder().addComponents(menu);
@@ -710,6 +782,32 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // =========================
+    // BOUTON INSULT BACK
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith("insult_back_")) {
+        const parts = interaction.customId.split("_");
+        // format: insult_back_{originalAuthorId}_{targetId}_{originalAuthorNom}
+        const originalAuthorId = parts[2];
+        const targetId = parts[3];
+        const originalAuthorNom = parts.slice(4).join("_");
+
+        const clickerId = interaction.user.id;
+
+        if (clickerId === originalAuthorId) {
+            return interaction.reply({ content: "Tu peux pas t'insulter toi-même... 💀", ephemeral: true });
+        }
+
+        if (clickerId !== targetId) {
+            return interaction.reply({ content: "Reste en dehors de la bagarre, crois-moi...", ephemeral: true });
+        }
+
+        const retourNom = interaction.member?.displayName ?? interaction.user.username;
+        const embed = buildInsultEmbed(`🖕 **${retourNom}** insulte **${originalAuthorNom}** en retour !`);
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
     // MENU SELECT
     // =========================
 
@@ -724,13 +822,21 @@ client.on('interactionCreate', async (interaction) => {
                 .setColor(0xffcc00)
                 .setDescription("# 🎉 Fun")
                 .addFields(
-                    { name: "!animal", value: "Devine votre animal spirituel parmi près de 7000 combinaisons !" },
-                    { name: "!destin", value: "Prédit votre destin et fait part des évènements de votre futur." },
-                    { name: "!epsys", value: "Poste des GIFs aléatoires d'Epsys, parce que." },
-                    { name: "!choix", value: "Vous avez du mal à faire un choix ? Demandez à Cacabot." },
-                    { name: "!kiss", value: "Embrassez quelqu'un sur le serveur !" },
-                    { name: "!hug", value: "Faites un câlin à quelqu'un sur le serveur !" },
-                    { name: "!dance", value: "Dansez avec quelqu'un sur le serveur !" }
+                    { name: "──────────────", value: "**!animal**
+Devinez votre animal spirituel parmi près de 7000 combinaisons !" },
+                    { name: "──────────────", value: "**!destin**
+Prédit votre destin et fait part des évènements de votre futur." },
+                    { name: "──────────────", value: "**!epsys**
+Poste des GIFs aléatoires d'Epsys, parce que." },
+                    { name: "──────────────", value: "**!choix**
+Vous avez du mal à faire un choix ? Demandez à Cacabot." },
+                    { name: "──────────────", value: "**!kiss**
+Embrassez quelqu'un sur le serveur !" },
+                    { name: "──────────────", value: "**!hug**
+Faites un câlin à quelqu'un sur le serveur !" },
+                    { name: "──────────────", value: "**!dance**
+Dansez avec quelqu'un du serveur !" },
+                    { name: "!insult", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" }
                 );
         }
 
@@ -739,8 +845,10 @@ client.on('interactionCreate', async (interaction) => {
                 .setColor(0x3498db)
                 .setDescription("# 🛠 Utilitaire")
                 .addFields(
-                    { name: "!discord", value: "Obtenir le lien officiel d'invitation de Regaïa." },
-                    { name: "!aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Regaïa." }
+                    { name: "──────────────", value: "**!discord**
+Obtenir le lien officiel d'invitation de Regaïa." },
+                    { name: "──────────────", value: "**!aternos**
+Obtenir l'IP du serveur Aternos (Minecraft) de Regaïa." }
                 );
         }
 
@@ -778,8 +886,8 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une catégorie')
             .addOptions(
-                { label: '🎉 Fun', description: 'animal, destin, epsys, choix, kiss, hug, dance', value: 'fun' },
-                { label: '🛠 Utilitaire', description: 'discord, aternos', value: 'util' }
+                { label: '🎉 Fun', description: '!animal, !destin, !epsys, !choix, !kiss, !hug, !dance, !insult', value: 'fun' },
+                { label: '🛠 Utilitaire', description: '!discord, !aternos', value: 'util' }
             );
 
         const row = new ActionRowBuilder().addComponents(menu);
