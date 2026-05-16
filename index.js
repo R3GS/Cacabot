@@ -828,11 +828,16 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.isButton() && interaction.customId.startsWith("laugh_with_")) {
         const parts = interaction.customId.split("_");
-        // format: laugh_with_{originalAuthorId}_{originalAuthorNom}
+        const originalAuthorId = parts[2];        // ← ajouter cette ligne
         const originalAuthorNom = parts.slice(3).join("_");
 
+        // ← ajouter ce bloc
+        if (interaction.user.id === originalAuthorId) {
+            return interaction.reply({ content: "Tu vas rire avec toi-même...? Attends, tu te sens bien ?", ephemeral: true });
+        }
+
         const reurNom = interaction.member?.displayName ?? interaction.user.username;
-        const embed = buildLaughEmbed(`\ud83d\ude06 **${reurNom}** rit avec **${originalAuthorNom}** !`);
+        const embed = buildLaughEmbed(`😆 **${reurNom}** rit avec **${originalAuthorNom}** !`);
         return interaction.reply({ embeds: [embed] });
     }
 
