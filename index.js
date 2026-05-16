@@ -723,20 +723,13 @@ client.on('interactionCreate', async (interaction) => {
                 .setColor(0xffcc00)
                 .setDescription("# 🎉 Fun")
                 .addFields(
-                    { name: "──────────────", value: "**!animal**
-Devinez votre animal spirituel parmi près de 7000 combinaisons !" },
-                    { name: "──────────────", value: "**!destin**
-Prédit votre destin et fait part des évènements de votre futur." },
-                    { name: "──────────────", value: "**!epsys**
-Poste des GIFs aléatoires d'Epsys, parce que." },
-                    { name: "──────────────", value: "**!choix**
-Vous avez du mal à faire un choix ? Demandez à Cacabot." },
-                    { name: "──────────────", value: "**!kiss**
-Embrassez quelqu'un sur le serveur !" },
-                    { name: "──────────────", value: "**!hug**
-Faites un câlin à quelqu'un sur le serveur !" },
-                    { name: "──────────────", value: "**!dance**
-Dansez avec quelqu'un du serveur !" }
+                    { name: "!animal", value: "Devine votre animal spirituel parmi près de 7000 combinaisons !" },
+                    { name: "!destin", value: "Prédit votre destin et fait part des évènements de votre futur." },
+                    { name: "!epsys", value: "Poste des GIFs aléatoires d'Epsys, parce que." },
+                    { name: "!choix", value: "Vous avez du mal à faire un choix ? Demandez à Cacabot." },
+                    { name: "!kiss", value: "Embrassez quelqu'un sur le serveur !" },
+                    { name: "!hug", value: "Faites un câlin à quelqu'un sur le serveur !" },
+                    { name: "!dance", value: "Dansez avec quelqu'un du serveur !" }
                 );
         }
 
@@ -745,10 +738,8 @@ Dansez avec quelqu'un du serveur !" }
                 .setColor(0x3498db)
                 .setDescription("# 🛠 Utilitaire")
                 .addFields(
-                    { name: "──────────────", value: "**!discord**
-Obtenir le lien officiel d'invitation de Regaïa." },
-                    { name: "──────────────", value: "**!aternos**
-Obtenir l'IP du serveur Aternos (Minecraft) de Regaïa." }
+                    { name: "!discord", value: "Obtenir le lien officiel d'invitation de Regaïa." },
+                    { name: "!aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Regaïa." }
                 );
         }
 
