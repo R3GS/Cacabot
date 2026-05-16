@@ -132,8 +132,6 @@ client.on('messageCreate', async (message) => {
             ? `Hmmm, l'animal spirituel de ${cible} est...`
             : "Hmmm, ton animal spirituel est...";
 
-        const isFem = Math.random() < 0.5;
-
     const animauxMasc = [
         "Un rat de RER", "Un pigeon", "Un chat errant", "Un renard", "Un dauphin", "Un corbeau", "Un hamster", "Un chien", "Un crapaud", "Un panda",
         "Un hérisson", "Un taureau", "Un papillon", "Un putain de moustique", "Un axolotl", "Un raton laveur", "Un perroquet", "Un singe",
