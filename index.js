@@ -119,6 +119,14 @@ function getResponse(raw) {
     }
  
     // =========================
+    //         !KISS
+    // =========================
+ 
+    if (command === "!kiss") {
+        return { needsKiss: true };
+    }
+ 
+    // =========================
     //         !DESTIN
     // =========================
  
@@ -341,6 +349,26 @@ function getAnimalResponse(message) {
 }
  
 // =========================
+//     LOGIQUE !KISS
+// =========================
+ 
+const kissGifs = [
+    "https://tenor.com/view/adventure-time-princess-bubble-gum-marceline-kiss-kissing-gif-5320559",
+    "https://tenor.com/view/catradora-catra-adora-kiss-shera-gif-5780974298210838431",
+    "https://tenor.com/view/arcane-arcane-season-2-caitlyn-vi-kiss-gif-11850463142888252592",
+    "https://tenor.com/view/littlebigwhale-gomart-twitch-zevent-kiss-gif-23612046",
+    "https://media.tenor.com/UVieyAt1QSIAAAAj/two-men-kissing.gif"
+];
+ 
+function buildKissEmbed(auteurNom, cibleNom) {
+    const gif = kissGifs[Math.floor(Math.random() * kissGifs.length)];
+    return new EmbedBuilder()
+        .setColor(0xff69b4)
+        .setDescription(`💋 **${auteurNom}** embrasse **${cibleNom}** !`)
+        .setImage(gif);
+}
+ 
+// =========================
 //     LISTENER MESSAGES
 // =========================
  
@@ -354,6 +382,29 @@ client.on('messageCreate', async (message) => {
     // !animal — nécessite l'objet message pour les mentions
     if (response?.needsMention) {
         return message.reply(getAnimalResponse(message));
+    }
+ 
+    // !kiss — nécessite l'objet message pour les mentions
+    if (response?.needsKiss) {
+        const cible = message.mentions.users.first();
+ 
+        if (!cible) {
+            return message.reply("Euuh... Tu veux embrasser qui du coup ?");
+        }
+ 
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+ 
+        const embed = buildKissEmbed(auteurNom, cibleNom);
+ 
+        const kissBackButton = new ButtonBuilder()
+            .setCustomId(`kiss_back_${message.author.id}_${auteurNom}`)
+            .setLabel("💋 Embrasser en retour")
+            .setStyle(ButtonStyle.Primary);
+ 
+        const row = new ActionRowBuilder().addComponents(kissBackButton);
+ 
+        return message.reply({ embeds: [embed], components: [row] });
     }
  
     // !help — embed + menu déroulant
@@ -388,6 +439,27 @@ client.on('messageCreate', async (message) => {
 client.on('interactionCreate', async (interaction) => {
  
     // =========================
+    // BOUTON KISS BACK
+    // =========================
+ 
+    if (interaction.isButton() && interaction.customId.startsWith("kiss_back_")) {
+        const parts = interaction.customId.split("_");
+        // format: kiss_back_{originalAuthorId}_{originalAuthorNom}
+        const originalAuthorId = parts[2];
+        const originalAuthorNom = parts.slice(3).join("_");
+ 
+        // Seul la cible du kiss peut embrasser en retour
+        if (interaction.user.id !== originalAuthorId) {
+            const retourNom = interaction.member?.displayName ?? interaction.user.username;
+            const embed = buildKissEmbed(retourNom, originalAuthorNom);
+ 
+            return interaction.reply({ embeds: [embed] });
+        }
+ 
+        return interaction.reply({ content: "Tu peux pas t'embrasser toi-même... 💀", ephemeral: true });
+    }
+ 
+    // =========================
     // MENU SELECT
     // =========================
  
@@ -401,7 +473,7 @@ client.on('interactionCreate', async (interaction) => {
             embed = new EmbedBuilder()
                 .setColor(0xffcc00)
                 .setTitle("🎉 Fun")
-                .setDescription("**!animal** ➜ Devine votre animal spirituel parmi près de 7000 combinaisons !\n**!destin** ➜ Prédit votre destin et fait part des évènements de votre futur.\n**!epsys** ➜ Poste des GIFs aléatoires d'Epsys, parce que.\n**!choix** ➜ Vous avez du mal à faire un choix ? Demandez à Cacabot.");
+                .setDescription("**!animal** ➜ Devine votre animal spirituel parmi près de 7000 combinaisons !\n**!destin** ➜ Prédit votre destin et fait part des évènements de votre futur.\n**!epsys** ➜ Poste des GIFs aléatoires d'Epsys, parce que.\n**!choix** ➜ Vous avez du mal à faire un choix ? Demandez à Cacabot.\n**!kiss** ➜ Embrassez quelqu'un sur le serveur !");
         }
  
         if (value === 'util') {
@@ -435,9 +507,7 @@ client.on('interactionCreate', async (interaction) => {
     // BOUTON RETOUR
     // =========================
  
-    if (interaction.isButton()) {
-        if (interaction.customId !== 'help_back') return;
- 
+    if (interaction.isButton() && interaction.customId === 'help_back') {
         const embed = new EmbedBuilder()
             .setColor(0x00ffff)
             .setTitle("💩 AIDE À CACABOT")
