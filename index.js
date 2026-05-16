@@ -166,6 +166,14 @@ function getResponse(raw) {
         return { needsRizz: true };
     }
 
+    // =========================
+    //         !BANG
+    // =========================
+
+    if (command === "!bang") {
+        return { needsBang: true };
+    }
+
 
     // =========================
     //         !DESTIN
@@ -596,6 +604,36 @@ function buildRizzEmbed(description) {
 }
 
 // =========================
+//     LOGIQUE !BANG
+// =========================
+
+const bangGifs = [
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505182766667399298/hazbin-hotel-angel-dust.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505182767019855923/nichijou-misato.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505182767359721573/tadc-guns-jax.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505182767653060648/the-amazing-digital-circus-tadc_1.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505182767971962940/jdg-joueur-du-grenier.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505182775316054228/chishiya-chishiya-shuntaro.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505182775760785580/the-amazing-digital-circus-tadc.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505182776117432481/gangle-tommy-gun-gangle-shooting-jax-and-pomni.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505182776679338044/the-amazing-digital-circus-tadc_2.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505182777103093840/the-amazing-digital-circus-tadc3.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505182777434443837/supaidaman-spiderman.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505182777845219428/murder-drones-attack.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505182778214453390/sigewinne-gun.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505182778642137168/firing-a-gun-caitlyn-kiramman.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505182778990526625/shoot-gun.gif"
+];
+
+function buildBangEmbed(description) {
+    const gif = bangGifs[Math.floor(Math.random() * bangGifs.length)];
+    return new EmbedBuilder()
+        .setColor(0xc2461d)
+        .setDescription(description)
+        .setImage(gif);
+}
+
+// =========================
 //     LISTENER MESSAGES
 // =========================
 
@@ -769,13 +807,43 @@ client.on('messageCreate', async (message) => {
     }
 
 
+    // !bang
+    if (response?.needsBang) {
+        const cible = message.mentions.users.first();
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            return message.reply("Mentionne la personne sur qui tu veux tirer !");
+        }
+
+        if (cible.id === message.author.id) {
+            return message.reply("\u00c9vite de te tirer dessus :(");
+        }
+
+        if (cible.id === client.user.id) {
+            const embed = buildBangEmbed(`\ud83d\udca5 **${auteurNom}** me tire dessus ! H\u00c9 !`);
+            return message.reply({ embeds: [embed] });
+        }
+
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        const embed = buildBangEmbed(`\ud83d\udca5 **${auteurNom}** tire sur **${cibleNom}** !`);
+
+        const bangBackButton = new ButtonBuilder()
+            .setCustomId(`bang_back_${message.author.id}_${cible.id}_${auteurNom}`)
+            .setLabel("\ud83d\udca5 Riposter !")
+            .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(bangBackButton);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
     // !help
     if (response?.data) {
         const menu = new StringSelectMenuBuilder()
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, rizz, rire', value: 'fun' },
+                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, bang, rizz, rire', value: 'fun' },
                 { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos', value: 'util' },
             );
 
@@ -933,6 +1001,30 @@ client.on('interactionCreate', async (interaction) => {
 
 
     // =========================
+    // BOUTON BANG BACK
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith("bang_back_")) {
+        const parts = interaction.customId.split("_");
+        // format: bang_back_{originalAuthorId}_{targetId}_{originalAuthorNom}
+        const originalAuthorId = parts[2];
+        const targetId = parts[3];
+        const originalAuthorNom = parts.slice(4).join("_");
+        const clickerId = interaction.user.id;
+
+        if (clickerId === originalAuthorId) {
+            return interaction.reply({ content: "Te tirer dessus ? Non. Tu n'es pas Kurt Cobain.", ephemeral: true });
+        }
+        if (clickerId !== targetId) {
+            return interaction.reply({ content: "Reste \u00e0 couvert ! Ne t'embarque pas dans la fusillade !", ephemeral: true });
+        }
+
+        const retourNom = interaction.member?.displayName ?? interaction.user.username;
+        const embed = buildBangEmbed(`\ud83d\udca5 **${retourNom}** riposte sur **${originalAuthorNom}** !`);
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
     // MENU SELECT
     // =========================
 
@@ -955,6 +1047,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!hug", value: "Faites un c\u00e2lin \u00e0 quelqu'un sur le serveur !" },
                     { name: "!danse", value: "Dansez avec quelqu'un sur le serveur !" },
                     { name: "!insulte", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
+                    { name: "!bang", value: "Tirez sur quelqu'un sur le serveur !" },
                     { name: "!rizz", value: "Rizzez quelqu'un sur le serveur !" },
                     { name: "!rire", value: "Riez un bon coup !" }
                 );
@@ -999,7 +1092,7 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId('help_menu')
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, rizz, rire', value: 'fun' },
+                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, bang, rizz, rire', value: 'fun' },
                 { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos', value: 'util' }
             );
         const row = new ActionRowBuilder().addComponents(menu);
