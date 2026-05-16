@@ -40,25 +40,28 @@ function getResponse(content) {
         isUpper ? upper : normal;
 
     client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
+        if (message.author.bot) return;
 
-    const raw = message.content;
-    const command = raw.trim().split(" ")[0].toLowerCase();
+        const raw = message.content;
+        const command = raw.trim().split(" ")[0].toLowerCase();
 
-    // !help
-    if (command === "!help") {
-        return message.reply(...);
-    }
+        // !help
+        if (command === "!help") {
+            return message.reply({
+                embeds: [embed],
+                components: [row]
+            });
+        }
 
-    // !animal
-    if (command === "!animal") {
-        return message.reply(...);
-    }
+        // !animal
+        if (command === "!animal") {
+            return message.reply("ok animal");
+        }
 
-    const response = getResponse(message.content);
-    if (!response) return;
+        const response = getResponse(message.content);
+        if (!response) return;
 
-    return message.reply(response);
+        return message.reply(response);
 });
 
 // =========================
