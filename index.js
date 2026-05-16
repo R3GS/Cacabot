@@ -425,6 +425,7 @@ function buildHugEmbed(auteurNom, cibleNom) {
 
 const danceGifsSolo = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042079074619402/dancing-groovy.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505053484339433513/jdg-joueur-du-grenier.gif"
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042079376478209/shreck.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042079795904583/silvagunner-siivagunner.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505042080232247377/fnaf-fredbear-dancing-to-happy.gif",
