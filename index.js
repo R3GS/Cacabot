@@ -1001,7 +1001,31 @@ client.on('messageCreate', async (message) => {
 
     // !laugh
     if (response?.needsLaugh) {
+        let cible = message.mentions.users.first();
         const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
+                if (result.found) cible = result.found.user;
+            }
+        }
+
+        if (cible && cible.id !== message.author.id && cible.id !== client.user.id) {
+            const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+            const embed = buildLaughEmbed(`\ud83d\ude06 **${auteurNom}** se fout de la gueule de **${cibleNom}** !`);
+            const laughButton = new ButtonBuilder()
+                .setCustomId(`laugh_with_${message.author.id}_${auteurNom}`)
+                .setLabel("\ud83d\ude06 Rire avec")
+                .setStyle(ButtonStyle.Primary);
+            const row = new ActionRowBuilder().addComponents(laughButton);
+            return message.reply({ embeds: [embed], components: [row] });
+        }
 
         const embed = buildLaughEmbed(`\ud83d\ude06 **${auteurNom}** se tape une barre !`);
         const laughButton = new ButtonBuilder()
@@ -1665,7 +1689,13 @@ client.on('interactionCreate', async (interaction) => {
             .setTitle(cat.label)
             .setDescription(`\u2753 ${question}`);
 
-        return interaction.update({ embeds: [embed], components: [] });
+        const newQuestionButton = new ButtonBuilder()
+            .setCustomId(`question_new_${interaction.user.id}`)
+            .setLabel("\u2753 Nouvelle question")
+            .setStyle(ButtonStyle.Secondary);
+        const buttonRow = new ActionRowBuilder().addComponents(newQuestionButton);
+
+        return interaction.update({ embeds: [embed], components: [buttonRow] });
     }
 
     // =========================
@@ -1761,6 +1791,37 @@ client.on('interactionCreate', async (interaction) => {
         const funRow = new ActionRowBuilder().addComponents(funMenu);
         const funBackRow = new ActionRowBuilder().addComponents(funBackButton);
         return interaction.update({ embeds: [funEmbed], components: [funRow, funBackRow] });
+    }
+
+    // =========================
+    // BOUTON NOUVELLE QUESTION
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('question_new_')) {
+        const authorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(0x9b59b6)
+            .setTitle("\u2753 Question du soir")
+            .setDescription("Choisis une cat\u00e9gorie pour recevoir une question al\u00e9atoire !");
+
+        const menu = new StringSelectMenuBuilder()
+            .setCustomId('question_menu')
+            .setPlaceholder('Choisis une cat\u00e9gorie')
+            .addOptions(
+                { label: '\ud83d\udde3\ufe0f D\u00e9bats / Opinions', value: 'debats' },
+                { label: '\ud83e\udd2b Confession / Introspection', value: 'confession' },
+                { label: '\ud83e\udd14 Hypoth\u00e9tiques', value: 'hypothetiques' },
+                { label: '\ud83c\udfe0 Sp\u00e9ciales Rega\u00efa', value: 'serveur' },
+                { label: '\ud83e\udde0 Philosophie de comptoir', value: 'philosophie' },
+                { label: '\ud83c\udfb2 Al\u00e9atoires / Chaos', value: 'aleatoires' }
+            );
+
+        const row = new ActionRowBuilder().addComponents(menu);
+        return interaction.update({ embeds: [embed], components: [row] });
     }
 
     // =========================
