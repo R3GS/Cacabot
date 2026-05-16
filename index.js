@@ -49,8 +49,8 @@ function getResponse(raw) {
         return {
             data: new EmbedBuilder()
                 .setColor(0x00ffff)
-                .setTitle("💩 AIDE À CACABOT")
-                .setDescription("Hey ! Voici Cacabot, qui, malgré son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\n\nPour découvrir les différentes commandes disponibles de Cacabot, choisis l'une des catégories ci-dessous !")
+                .setTitle("\ud83d\udca9 AIDE \u00c0 CACABOT")
+                .setDescription("Hey ! Voici Cacabot, qui, malgr\u00e9 son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\n\nPour d\u00e9couvrir les diff\u00e9rentes commandes disponibles de Cacabot, choisis l'une des cat\u00e9gories ci-dessous !")
         };
     }
 
@@ -59,7 +59,7 @@ function getResponse(raw) {
     // =========================
 
     if (raw.toLowerCase().match(/!aternos\b/)) {
-        return "L'IP actuelle du serveur Minecraft de Regaïa est : **papierprout.aternos.me**";
+        return "L'IP actuelle du serveur Minecraft de Rega\u00efa est : **papierprout.aternos.me**";
     }
 
     if (raw.toLowerCase().match(/!discord\b/)) {
@@ -92,17 +92,17 @@ function getResponse(raw) {
         if (Math.random() < 0.1) {
             const texte = raw.replace(/^!choix\s*/i, "").trim();
             if (texte.length > 0) {
-                return `"${texte}" ☝️🤓\nNon tais-toi et oublie cette idée stp`;
+                return `"${texte}" \u261d\ufe0f\ud83e\udd13\nNon tais-toi et oublie cette id\u00e9e stp`;
             }
         }
 
         const reponses = [
-            "Oui, mais le monde n'est pas encore prêt.", "Non. Mauvaise idée de base.", "Oui, mais t'assumes.", "Franchement je sais pas mais ça sent la merde.",
-            "Oui mais ça va mal finir.", "Non mais tu vas quand même le faire donc bon.", "Non vas te faire enculer.", "J'ai demandé à ma maman... Elle a dit oui.",
-            "ABSOLUMENT!", "Euuuh... Non ?", "C'est quoi cette question de con encore ? Non.", "Oui, oui, oui et encore oui !", "Pitié oui.", "Pitié non.",
-            "Mange tes morts à la place de poser ce genre de questions.", "Totalement... Sauf que non, j'ai menti.", "Vous pensez ? Moi j'pense pas. C'est mon avis.",
-            "Affirmatif.", "Oui je pensent.", "Ouient.", "Oui (stiti).", "É-VI-DEM-MENT", "Bah oui t'es débile ou quoi?", "Well yes, but actually no.",
-            "Alors... Je savais la réponse, mais j'ai oublié...", "Tu crois jsuis Akinator fdp?", "Peut-êtreeeee.", "Fût un temps, on tuait des gens pour des questions moins connes que ça.",
+            "Oui, mais le monde n'est pas encore pr\u00eat.", "Non. Mauvaise id\u00e9e de base.", "Oui, mais t'assumes.", "Franchement je sais pas mais \u00e7a sent la merde.",
+            "Oui mais \u00e7a va mal finir.", "Non mais tu vas quand m\u00eame le faire donc bon.", "Non vas te faire enculer.", "J'ai demand\u00e9 \u00e0 ma maman... Elle a dit oui.",
+            "ABSOLUMENT!", "Euuuh... Non ?", "C'est quoi cette question de con encore ? Non.", "Oui, oui, oui et encore oui !", "Piti\u00e9 oui.", "Piti\u00e9 non.",
+            "Mange tes morts \u00e0 la place de poser ce genre de questions.", "Totalement... Sauf que non, j'ai menti.", "Vous pensez ? Moi j'pense pas. C'est mon avis.",
+            "Affirmatif.", "Oui je pensent.", "Ouient.", "Oui (stiti).", "\u00c9-VI-DEM-MENT", "Bah oui t'es d\u00e9bile ou quoi?", "Well yes, but actually no.",
+            "Alors... Je savais la r\u00e9ponse, mais j'ai oubli\u00e9...", "Tu crois jsuis Akinator fdp?", "Peut-\u00eatreeeee.", "F\u00fbt un temps, on tuait des gens pour des questions moins connes que \u00e7a.",
             "Non + pas lu + ratio + ntm", "nn", "oe", "https://tenor.com/view/ui-jday-mister-jd-gif-25079300", "https://tenor.com/view/mais-oui-seb-jdg-mais-oui-gif-19057953",
             "https://cdn.discordapp.com/attachments/1128032964924670053/1504924989781053581/vous-pensez-moi-je-pense-pas.gif"
         ];
@@ -151,79 +151,87 @@ function getResponse(raw) {
     }
 
     // =========================
+    //         !LAUGH
+    // =========================
+
+    if (command === "!laugh") {
+        return { needsLaugh: true };
+    }
+
+    // =========================
     //         !DESTIN
     // =========================
 
     if (command === "!destin") {
         const destin = [
             "Tu multiplieras ton nombre de neurones par 2 le vendredi 28 Juillet 2034.",
-            "Tu deviendras une légende locale dans un Intermarché paumé.",
+            "Tu deviendras une l\u00e9gende locale dans un Intermarchi\u00e9 paum\u00e9.",
             "ChatGPT remplacera ton avenir.",
-            "Tu refouleras ton homosexualité avant d'avoir des sentiments pour un twink entre 2028 et 2034.",
-            "Tu vas te péter la gueule sur un trottoir le mois prochain (fais gaffe).",
+            "Tu refouleras ton homosexualit\u00e9 avant d'avoir des sentiments pour un twink entre 2028 et 2034.",
+            "Tu vas te p\u00e9ter la gueule sur un trottoir le mois prochain (fais gaffe).",
             "Tu vas vouloir trop forcer un pet lundi prochain. Bon courage.",
-            "Tu croiseras ton sosie parfait dans un Lidl mardi prochain à 14h32.",
-            "Ta transidentité est tout sauf un fardeau. Sois fièr.e de ce que tu es chouchou.",
-            "Un homme que tu côtoies va malheureusement se couper accidentellement le zgeg avec une machette.",
-            "Y a un truc qui pue dans ton frigo, pense à le jeter avant de choper la coulante.",
-            "Un événement totalement nul mais humiliant va te définir socialement dans l'année qui va suivre.",
+            "Tu croiseras ton sosie parfait dans un Lidl mardi prochain \u00e0 14h32.",
+            "Ta transidentit\u00e9 est tout sauf un fardeau. Sois fi\u00e8r.e de ce que tu es chouchou.",
+            "Un homme que tu c\u00f4toies va malheureusement se couper accidentellement le zgeg avec une machette.",
+            "Y a un truc qui pue dans ton frigo, pense \u00e0 le jeter avant de choper la coulante.",
+            "Un \u00e9v\u00e9nement totalement nul mais humiliant va te d\u00e9finir socialement dans l'ann\u00e9e qui va suivre.",
             "Tu vas rire au mauvais moment, et tu vas t'en souvenir toute ta vie.",
-            "Un inconnu qui te croisera dans la rue va te juger personnellement très bientôt.",
-            "Tu vas perdre un débat politique contre un chat errant.",
-            "Un jour, tu comprendras un truc important… et tu l'oublieras 3 secondes après.",
-            "Quelqu'un va te répondre «ok» à un message important et ça va te marquer à vie.",
-            "Un jour, tu vas être témoin d'un truc bizarre mais personne te croira.",
-            "Tu vas devenir un souvenir flou dans la mémoire de quelqu'un que tu respectes.",
-            "Tu vas devenir riche… mais uniquement en pièces en chocolat.",
-            "Un jour, tu vas réussir un truc incroyable un jour. Personne saura lequel.",
+            "Un inconnu qui te croisera dans la rue va te juger personnellement tr\u00e8s bient\u00f4t.",
+            "Tu vas perdre un d\u00e9bat politique contre un chat errant.",
+            "Un jour, tu comprendras un truc important\u2026 et tu l'oublieras 3 secondes apr\u00e8s.",
+            "Quelqu'un va te r\u00e9pondre \u00abok\u00bb \u00e0 un message important et \u00e7a va te marquer \u00e0 vie.",
+            "Un jour, tu vas \u00eatre t\u00e9moin d'un truc bizarre mais personne te croira.",
+            "Tu vas devenir un souvenir flou dans la m\u00e9moire de quelqu'un que tu respectes.",
+            "Tu vas devenir riche\u2026 mais uniquement en pi\u00e8ces en chocolat.",
+            "Un jour, tu vas r\u00e9ussir un truc incroyable un jour. Personne saura lequel.",
             "Tu vas dire un truc intelligent par accident en 2031, tout le monde sera sur le cul.",
-            "Un jour, ton karma va dire «ok j'arrête les conneries» et ça va changer ta vie.",
-            "Un jour, tu vas survivre à une situation trop bizarre pour être expliquée sans alcool.",
-            "Bientôt, ton cerveau va bug au moins 3 fois par semaine mais tkt c'est pas grave.",
-            "Un jour, tu vas accidentellement défendre Bardella dans un débat politique alors que t'es de gauche, et tout le monde te détestera.",
-            "Un jour, tu vas éclater de rire dans un moment ultra sérieux et c'est ok.",
-            "Un jour, tu vas réussir un truc par pur hasard et faire genre c'était prévu.",
-            "Ton destin est écrit avec un stylo qui fuit mais ça donne du style.",
-            "Un jour, tu vas dire «on verra» et pour une fois ça va vraiment marcher.",
-            "Un jour, tu vas faire un choix ultra décisif, et ça va étonnamment bien se passer.",
-            "D'ici peu, tu vas être en retard à quelque chose d'important mais ça va rien changer au final.",
-            "Demain, sans prévenir, tu comprendras sur insta un truc fondamental sur la vie… et tu diras «ah ok» avant de retourner scroller.",
-            "Les anciens avaient prédit ton arrivée dans un texte gravé sur une caisse de supermarché Lidl en 2004.",
-            "Tu vas bientôt vivre un moment SUPER IMPORTANT de ta vie, mais genre entre deux merdes de chien.",
-            "Un inconnu va dire ton prénom dans une phrase très sérieuse sans savoir pourquoi, et ça va te hanter.",
-            "Les signes étaient là depuis le début : ticket de caisse froissé, pigeon qui te regarde, lumière bizarre au plafond... Méfie-toi...",
-            "Tu vas prendre une décision débile qui sera interprétée comme une prophétie par quelqu'un d'autre.",
-            "Ton futur dépend d'un truc que t'as oublié dans une poche de veste depuis 3 mois.",
-            "Un jour, tu vas survivre à un moment important sans réaliser que c'en était un.",
-            "Un jour tu vas réaliser que t'as survécu à 100% de tes jours difficiles, et c'est déjà très bien.",
+            "Un jour, ton karma va dire \u00abok j'arr\u00eate les conneries\u00bb et \u00e7a va changer ta vie.",
+            "Un jour, tu vas survivre \u00e0 une situation trop bizarre pour \u00eatre expliqu\u00e9e sans alcool.",
+            "Bient\u00f4t, ton cerveau va bug au moins 3 fois par semaine mais tkt c'est pas grave.",
+            "Un jour, tu vas accidentellement d\u00e9fendre Bardella dans un d\u00e9bat politique alors que t'es de gauche, et tout le monde te d\u00e9testera.",
+            "Un jour, tu vas \u00e9clater de rire dans un moment ultra s\u00e9rieux et c'est ok.",
+            "Un jour, tu vas r\u00e9ussir un truc par pur hasard et faire genre c'\u00e9tait pr\u00e9vu.",
+            "Ton destin est \u00e9crit avec un stylo qui fuit mais \u00e7a donne du style.",
+            "Un jour, tu vas dire \u00abOn verra\u00bb et pour une fois \u00e7a va vraiment marcher.",
+            "Un jour, tu vas faire un choix ultra d\u00e9cisif, et \u00e7a va \u00e9tonnamment bien se passer.",
+            "D'ici peu, tu vas \u00eatre en retard \u00e0 quelque chose d'important mais \u00e7a va rien changer au final.",
+            "Demain, sans pr\u00e9venir, tu comprendras sur insta un truc fondamental sur la vie\u2026 et tu diras \u00abah ok\u00bb avant de retourner scroller.",
+            "Les anciens avaient pr\u00e9dit ton arriv\u00e9e dans un texte grav\u00e9 sur une caisse de supermarch\u00e9 Lidl en 2004.",
+            "Tu vas bient\u00f4t vivre un moment SUPER IMPORTANT de ta vie, mais genre entre deux merdes de chien.",
+            "Un inconnu va dire ton pr\u00e9nom dans une phrase tr\u00e8s s\u00e9rieuse sans savoir pourquoi, et \u00e7a va te hanter.",
+            "Les signes \u00e9taient l\u00e0 depuis le d\u00e9but : ticket de caisse froiss\u00e9, pigeon qui te regarde, lumi\u00e8re bizarre au plafond... M\u00e9fie-toi...",
+            "Tu vas prendre une d\u00e9cision d\u00e9bile qui sera interpr\u00e9t\u00e9e comme une proph\u00e9tie par quelqu'un d'autre.",
+            "Ton futur d\u00e9pend d'un truc que t'as oubli\u00e9 dans une poche de veste depuis 3 mois.",
+            "Un jour, tu vas survivre \u00e0 un moment important sans r\u00e9aliser que c'en \u00e9tait un.",
+            "Un jour tu vas r\u00e9aliser que t'as surv\u00e9cu \u00e0 100% de tes jours difficiles, et c'est d\u00e9j\u00e0 tr\u00e8s bien.",
             "Tu vas progresser sans t'en rendre compte, il faut que tu tiennes bon, c'est juste temporaire.",
-            "Sans prévenir, un détail minuscule va te redonner l'envie de vivre.",
-            "Tu vas réussir un truc que t'avais enterré mentalement depuis longtemps, et ça va faire bizarre. Mais ça va faire du bien.",
-            "T'as déjà changé plus que tu ne le crois, mais ton cerveau ne veut pas te le dire. Alors c'est moi qui m'en charge : Tu as changé, et c'est beau.",
-            "Peu importe ce que les gens disent, ton identité n'a pas besoin d'autorisation pour exister.",
-            "Quelque part dans l'univers, une version de toi est heureuse d'être exactement ce qu'elle est.",
+            "Sans pr\u00e9venir, un d\u00e9tail minuscule va te redonner l'envie de vivre.",
+            "Tu vas r\u00e9ussir un truc que t'avais enterr\u00e9 mentalement depuis longtemps, et \u00e7a va faire bizarre. Mais \u00e7a va faire du bien.",
+            "T'as d\u00e9j\u00e0 chang\u00e9 plus que tu ne le crois, mais ton cerveau ne veut pas te le dire. Alors c'est moi qui m'en charge : Tu as chang\u00e9, et c'est beau.",
+            "Peu importe ce que les gens disent, ton identit\u00e9 n'a pas besoin d'autorisation pour exister.",
+            "Quelque part dans l'univers, une version de toi est heureuse d'\u00eatre exactement ce qu'elle est.",
             "Le monde est bizarre, mais ton existence dedans est valide.",
-            "Tu vas rencontrer des gens qui te comprendront sans que tu leur expliques ce que tu es, et ça va te surprendre.",
-            "Y a aucune version correcte de toi à atteindre, tu es déjà toi et c'est tout ce qui compte.",
-            "Dans un univers alternatif, quelqu'un te remercie d'exister, sans raison précise. Et c'est suffisant.",
-            "Ton destin est écrit sur une boîte de raviolis périmés depuis 2017.",
-            "Une porte automatique va te reconnaître et hésiter à s'ouvrir, volontairement.",
-            "Un événement totalement nul mais humiliant va te définir socialement pendant 3 mois minimum.",
-            "Un inconnu va te regarder avec trop de certitude et ça va te perturber pendant des années.",
-            "Tu vas perdre un débat contre quelqu'un qui avait même pas compris le sujet.",
-            "Tu vas acquérir le pouvoir d'être un putain de génie mais uniquement entre 3h12 et 3h14 du matin.",
-            "Ton futur dépend d'un objet que t'as jeté sans t'en rendre compte en 2022.",
-            "Un jour, tu vas réussir un truc incroyable et tu vas prétendre que c'était intentionnel alors que non.",
-            "Tu vas progresser sans t'en rendre compte et un jour tu vas réaliser que t'as survécu à 100% de tes pires jours. Beau travail, continue comme ça.",
-            "Sans prévenir, un détail ridicule va te redonner foi en la vie pendant 11 minutes, puis disparaître. Ça arrive à tout le monde, tkt pas.",
-            "Ton destin c'est un ticket de caisse Lidl froissé avec écrit dessus «bonne chance fdp» en tout petit.",
-            "Tu vas rater un moment clé de ta vie parce que t'étais en train de fixer un mur comme si c'était ton daron.",
-            "Demain, ton cerveau va bug en plein milieu d'une phrase et tu vas continuer à parler comme si c'était normal.",
+            "Tu vas rencontrer des gens qui te comprendront sans que tu leur expliques ce que tu es, et \u00e7a va te surprendre.",
+            "Y a aucune version correcte de toi \u00e0 atteindre, tu es d\u00e9j\u00e0 toi et c'est tout ce qui compte.",
+            "Dans un univers alternatif, quelqu'un te remercie d'exister, sans raison pr\u00e9cise. Et c'est suffisant.",
+            "Ton destin est \u00e9crit sur une bo\u00eete de raviolis p\u00e9rim\u00e9s depuis 2017.",
+            "Une porte automatique va te reconna\u00eetre et h\u00e9siter \u00e0 s'ouvrir, volontairement.",
+            "Un \u00e9v\u00e9nement totalement nul mais humiliant va te d\u00e9finir socialement pendant 3 mois minimum.",
+            "Un inconnu va te regarder avec trop de certitude et \u00e7a va te perturber pendant des ann\u00e9es.",
+            "Tu vas perdre un d\u00e9bat contre quelqu'un qui avait m\u00eame pas compris le sujet.",
+            "Tu vas acqu\u00e9rir le pouvoir d'\u00eatre un putain de g\u00e9nie mais uniquement entre 3h12 et 3h14 du matin.",
+            "Ton futur d\u00e9pend d'un objet que t'as jet\u00e9 sans t'en rendre compte en 2022.",
+            "Un jour, tu vas r\u00e9ussir un truc incroyable et tu vas pr\u00e9tendre que c'\u00e9tait intentionnel alors que non.",
+            "Tu vas progresser sans t'en rendre compte et un jour tu vas r\u00e9aliser que t'as surv\u00e9cu \u00e0 100% de tes pires jours. Beau travail, continue comme \u00e7a.",
+            "Sans pr\u00e9venir, un d\u00e9tail ridicule va te redonner foi en la vie pendant 11 minutes, puis dispara\u00eetre. \u00c7a arrive \u00e0 tout le monde, tkt pas.",
+            "Ton destin c'est un ticket de caisse Lidl froiss\u00e9 avec \u00e9crit dessus \u00abbonne chance fdp\u00bb en tout petit.",
+            "Tu vas rater un moment cl\u00e9 de ta vie parce que t'\u00e9tais en train de fixer un mur comme si c'\u00e9tait ton daron.",
+            "Demain, ton cerveau va bug en plein milieu d'une phrase et tu vas continuer \u00e0 parler comme si c'\u00e9tait normal.",
             "Un inconnu va te raconter sa vie comme si vous aviez une histoire ensemble alors que tu lui as juste ouvert une porte.",
-            "D'ici peu, tu vas faire un choix important complètement au hasard et bizarrement ça va marcher et ça va t'énerver.",
-            "Tu vas bientôt foirer un débat avec une personne que tu détestes, et sous la douche tu repenseras à tout ce que t'aurais dû lui dire.",
-            "Tu vas bientôt avoir une révélation existentielle au rayon surgelés du Leclerc de Roubaix à 16h37.",
-            "Ton destin c'est un truc écrit à l'encre qui bave et même lui il sait pas trop où il va.",
+            "D'ici peu, tu vas faire un choix important compl\u00e8tement au hasard et bizarrement \u00e7a va marcher et \u00e7a va t'\u00e9nerver.",
+            "Tu vas bient\u00f4t foirer un d\u00e9bat avec une personne que tu d\u00e9testes, et sous la douche tu repenseras \u00e0 tout ce que t'aurais d\u00fb lui dire.",
+            "Tu vas bient\u00f4t avoir une r\u00e9v\u00e9lation existentielle au rayon surgel\u00e9s du Leclerc de Roubaix \u00e0 16h37.",
+            "Ton destin c'est un truc \u00e9crit \u00e0 l'encre qui bave et m\u00eame lui il sait pas trop o\u00f9 il va.",
             "Tu meurs demain.",
             "https://cdn.discordapp.com/attachments/1128032964924670053/1504679674561953792/image.png",
             "https://i.pinimg.com/736x/23/55/f2/2355f2363ccca5871974b2289216e6a6.jpg",
@@ -257,8 +265,8 @@ function getResponse(raw) {
     if (cleaned.includes("pour quoi")) return reply("Pour feur");
     if (cleaned.includes("pour qui")) return reply("Pour quette");
     if (cleaned.includes("pourquoi")) return reply("Pourfeur");
-    if (cleaned.includes("c est a quoi")) return reply("C'est à feur");
-    if (cleaned.includes("c est a qui")) return reply("C'est à quette");
+    if (cleaned.includes("c est a quoi")) return reply("C'est \u00e0 feur");
+    if (cleaned.includes("c est a qui")) return reply("C'est \u00e0 quette");
     if (
         cleaned === "67" ||
         cleaned.includes(" 67 ") ||
@@ -327,41 +335,41 @@ function getAnimalResponse(message) {
 
     const animauxMasc = [
         "Un rat de RER", "Un pigeon", "Un chat errant", "Un renard", "Un dauphin", "Un corbeau", "Un hamster", "Un chien", "Un crapaud", "Un panda",
-        "Un hérisson", "Un taureau", "Un papillon", "Un putain de moustique", "Un axolotl", "Un raton laveur", "Un perroquet", "Un singe",
-        "Un poisson", "Un lièvre", "Un scarabée", "Un suricate", "Un éléphant", "Un rhinocéros", "Un toucan", "Un capybara", "Un cheval",
+        "Un h\u00e9risson", "Un taureau", "Un papillon", "Un putain de moustique", "Un axolotl", "Un raton laveur", "Un perroquet", "Un singe",
+        "Un poisson", "Un li\u00e8vre", "Un scarab\u00e9e", "Un suricate", "Un \u00e9l\u00e9phant", "Un rhinoc\u00e9ros", "Un toucan", "Un capybara", "Un cheval",
         "Un bousier", "Un pingouin", "Un Pikachu", "Un mulot", "Un cochon", "Un lion", "Un moucheron", "Un chevreuil", "Un castor", "Un chacal",
-        "Un aigle", "Un dromadaire", "Un gorille", "Un guépard", "Un hibou", "Un hippopotame", "Un jaguar", "Un kangourou", "Un koala",
-        "Un léopard", "Un lynx", "Un phoque", "Un serpent", "Un zèbre", "Un âne", "Un canard", "Un cerf", "Un chameau", "Un coq", "Un dindon",
+        "Un aigle", "Un dromadaire", "Un gorille", "Un gu\u00e9pard", "Un hibou", "Un hippopotame", "Un jaguar", "Un kangourou", "Un koala",
+        "Un l\u00e9opard", "Un lynx", "Un phoque", "Un serpent", "Un z\u00e8bre", "Un \u00e2ne", "Un canard", "Un cerf", "Un chameau", "Un coq", "Un dindon",
         "Un lapin", "Un loup", "Un mouton", "Un ours", "Un sanglier", "Un tigre", "Un accarien", "Un crocodile", "Un alligator", "Un cochon dinde",
         "Un furet", "Un alpaga", "Un mille-pattes", "Un ver de terre", "Un bandicoot", "Un blaireau", "Un bonobo", "Un morse"
     ];
 
     const animauxFem = [
-        "Une girafe", "Une loutre", "Une mouette", "Une hyène", "Une mouche", "Une fourmi", "Une horrible araignée", "Une mouche à merde", "Une chouette",
-        "Une baleine", "Une hirondelle", "Une lionne", "Une louve", "Une jument", "Une chèvre", "Une chauve-souris", "Une gazelle", "Une vache",
-        "Une grenouille", "Une biche", "Une guêpe", "Une brebis", "Une marmotte", "Une souris", "Une dinde", "Une oie", "Une poule", "Une taupe",
+        "Une girafe", "Une loutre", "Une mouette", "Une hy\u00e8ne", "Une mouche", "Une fourmi", "Une horrible araign\u00e9e", "Une mouche \u00e0 merde", "Une chouette",
+        "Une baleine", "Une hirondelle", "Une lionne", "Une louve", "Une jument", "Une ch\u00e8vre", "Une chauve-souris", "Une gazelle", "Une vache",
+        "Une grenouille", "Une biche", "Une gu\u00eape", "Une brebis", "Une marmotte", "Une souris", "Une dinde", "Une oie", "Une poule", "Une taupe",
         "Une musaraigne", "Une abeille", "Une chienne", "Une chatte", "Une truie", "Une larve", "Une tortue", "Une pieuvre", "Une crevette",
-        "Une autruche", "Une coccinelle", "Une belette", "Une sardine", "Une otarie", "Une panthère", "Une huître", "Une moule", "Une antilope"
+        "Une autruche", "Une coccinelle", "Une belette", "Une sardine", "Une otarie", "Une panth\u00e8re", "Une hu\u00eetre", "Une moule", "Une antilope"
     ];
 
     const etatsMasc = [
-        "recherché pour le meurtre de 6 enfants.", "vétéran de la Seconde Guerre Mondiale.", "dépressif.", "gay.", "complètement con.", "bourré.",
-        "perdu dans sa vie.", "plombier, mais aussi docteur, ingénieur, professeur, livreur de pizza, méchanicien, soldat, policier et astronaute.",
+        "recherch\u00e9 pour le meurtre de 6 enfants.", "v\u00e9t\u00e9ran de la Seconde Guerre Mondiale.", "d\u00e9pressif.", "gay.", "compl\u00e8tement con.", "bourr\u00e9.",
+        "perdu dans sa vie.", "plombier, mais aussi docteur, ing\u00e9nieur, professeur, livreur de pizza, m\u00e9chanicien, soldat, policier et astronaute.",
     ];
 
     const etatsFem = [
-        "recherchée pour le meurtre de 6 enfants.", "dépressive.", "lesbienne.", "complètement conne.", "bourrée.", "perdue dans sa vie."
+        "recherch\u00e9e pour le meurtre de 6 enfants.", "d\u00e9pressive.", "lesbienne.", "compl\u00e8tement conne.", "bourr\u00e9e.", "perdue dans sa vie."
     ];
 
     const etatsNeutres = [
-        "en burn-out.", "sous coke.", "qui a la diarrhée.", "alcoolique.", "casse-couilles.", "qui collectionne les bouchons de liège.", "qui fuit l'URSSAF.",
-        "asthmatique.", "qui pue du cul.", "de merde.", "transgenre 🏳️‍⚧️", "sataniste.", "fan de Feldup.", "rockstar.", "addict à TikTok.",
-        "avec un fort accent belge.", "qui vote RN.", "fan de Norman.", "avec 2 de QI.", "SDF.", "sous kétamine.", "qui s'est chié dessus.",
-        "addict à l'Oasis Tropical.", "DJ en Teknival.", "de la mafia italienne.", "adepte du fameux «je ne suis pas raciste, j'ai un ami noir».",
-        "coprophage.", "à la recherche du gros JDG.", "qui se lève à 4h du mat pour aller au taf.", "sous traitement hormonal.",
-        "en manifestation LGBT.", "qui pleure sur un exercice de maths devant son père qui lui gueule dessus.", "genderfluid.",
-        "en 4K Ultra HD IMAX Surround Dolby Digital.", "devant une série Netflix de merde.", "qui utilise la commande !destin.", "trisomique.",
-        "qui étale son caca sur les murs.", "nostalgique des années 2000.", "transphobe.", "raciste.", "qui a raté 6 fois son bac.", "qui adore McFly & Calito."
+        "en burn-out.", "sous coke.", "qui a la diarr\u00e9e.", "alcoolique.", "casse-couilles.", "qui collectionne les bouchons de li\u00e8ge.", "qui fuit l'URSSAF.",
+        "asthmatique.", "qui pue du cul.", "de merde.", "transgenre \ud83c\udff3\ufe0f\u200d\u26a7\ufe0f", "sataniste.", "fan de Feldup.", "rockstar.", "addict \u00e0 TikTok.",
+        "avec un fort accent belge.", "qui vote RN.", "fan de Norman.", "avec 2 de QI.", "SDF.", "sous k\u00e9tamine.", "qui s'est chi\u00e9 dessus.",
+        "addict \u00e0 l'Oasis Tropical.", "DJ en Teknival.", "de la mafia italienne.", "adepte du fameux \u00abje ne suis pas raciste, j'ai un ami noir\u00bb.",
+        "coprophage.", "\u00e0 la recherche du gros JDG.", "qui se l\u00e8ve \u00e0 4h du mat pour aller au taf.", "sous traitement hormonal.",
+        "en manifestation LGBT.", "qui pleure sur un exercice de maths devant son p\u00e8re qui lui gueule dessus.", "genderfluid.",
+        "en 4K Ultra HD IMAX Surround Dolby Digital.", "devant une s\u00e9rie Netflix de merde.", "qui utilise la commande !destin.", "trisomique.",
+        "qui \u00e9tale son caca sur les murs.", "nostalgique des ann\u00e9es 2000.", "transphobe.", "raciste.", "qui a rat\u00e9 6 fois son bac.", "qui adore McFly & Calito."
     ];
 
     const isFem = Math.random() < 0.5;
@@ -389,11 +397,12 @@ const kissGifs = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505022904386064548/ezgif-336d393cc8b2e34b.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505022903991664640/animash-boys-love.gif"
 ];
+
 function buildKissEmbed(auteurNom, cibleNom) {
     const gif = kissGifs[Math.floor(Math.random() * kissGifs.length)];
     return new EmbedBuilder()
         .setColor(0xff69b4)
-        .setDescription(`💋 **${auteurNom}** embrasse **${cibleNom}** !`)
+        .setDescription(`\ud83d\udc8b **${auteurNom}** embrasse **${cibleNom}** !`)
         .setImage(gif);
 }
 
@@ -423,7 +432,7 @@ function buildHugEmbed(auteurNom, cibleNom) {
     const gif = hugGifs[Math.floor(Math.random() * hugGifs.length)];
     return new EmbedBuilder()
         .setColor(0x69d2ff)
-        .setDescription(`🫂 **${auteurNom}** fait un câlin à **${cibleNom}** !`)
+        .setDescription(`\ud83e\udef2 **${auteurNom}** fait un c\u00e2lin \u00e0 **${cibleNom}** !`)
         .setImage(gif);
 }
 
@@ -519,6 +528,39 @@ function buildInsultEmbed(description) {
 }
 
 // =========================
+//     LOGIQUE !LAUGH
+// =========================
+
+const laughGifs = [
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505063705681854595/jdg-joueur-du-grenier.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505063706151882812/mr-jday-mdr.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505063706428571760/misterjday-mdr.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505065995864244334/laughing-emoji-laughing.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505065996531142737/stan-twitter-reaction-meme.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505065996963287171/el-risitas-juan-joya-borja.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505065997319540817/mario-smg4.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505065997898616873/homelander-homelander-laugh.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505065998288420864/homelander-laugh.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505065998598934650/charlie-morningstar-laughing.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505065998930415797/jax-laughing.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505065999475544144/caine-caine-tadc.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505065999865483424/jdg-joueur-du-grenier.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505066005339181096/laughing-hysterically-funny.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505066004928266382/lmfao.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505066005913796711/speed-trying-not-to-laugh.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505066006857519174/laughing-spider-man.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505066064000581802/laugh-lol.gif"
+];
+
+function buildLaughEmbed(description) {
+    const gif = laughGifs[Math.floor(Math.random() * laughGifs.length)];
+    return new EmbedBuilder()
+        .setColor(0xffd900)
+        .setDescription(description)
+        .setImage(gif);
+}
+
+// =========================
 //     LISTENER MESSAGES
 // =========================
 
@@ -529,12 +571,12 @@ client.on('messageCreate', async (message) => {
 
     if (response === null || response === undefined) return;
 
-    // !animal — nécessite l'objet message pour les mentions
+    // !animal
     if (response?.needsMention) {
         return message.reply(getAnimalResponse(message));
     }
 
-    // !kiss — nécessite l'objet message pour les mentions
+    // !kiss
     if (response?.needsKiss) {
         const cible = message.mentions.users.first();
 
@@ -545,98 +587,82 @@ client.on('messageCreate', async (message) => {
         const auteurNom = message.member?.displayName ?? message.author.username;
         const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
 
-        // Cas : self-kiss
         if (cible.id === message.author.id) {
-            const embedSelf = buildKissEmbed(auteurNom, auteurNom).setDescription(`💋 **${auteurNom}** s'embrasse ! Attends... Comment c'est possible ?`);
+            const embedSelf = buildKissEmbed(auteurNom, auteurNom).setDescription(`\ud83d\udc8b **${auteurNom}** s'embrasse ! Attends... Comment c'est possible ?`);
             return message.reply({ embeds: [embedSelf] });
         }
 
-        // Cas : kiss sur Cacabot lui-même
         if (cible.id === client.user.id) {
-            const embedBot = buildKissEmbed(auteurNom, "Cacabot").setDescription(`💋 **${auteurNom}** m'embrasse ! Awww merci <3`);
+            const embedBot = buildKissEmbed(auteurNom, "Cacabot").setDescription(`\ud83d\udc8b **${auteurNom}** m'embrasse ! Awww merci <3`);
             return message.reply({ embeds: [embedBot] });
         }
 
         const embed = buildKissEmbed(auteurNom, cibleNom);
-
         const kissBackButton = new ButtonBuilder()
             .setCustomId(`kiss_back_${message.author.id}_${cible.id}_${auteurNom}`)
-            .setLabel("💋 Embrasser en retour")
+            .setLabel("\ud83d\udc8b Embrasser en retour")
             .setStyle(ButtonStyle.Primary);
-
         const row = new ActionRowBuilder().addComponents(kissBackButton);
-
         return message.reply({ embeds: [embed], components: [row] });
     }
 
-    // !hug — nécessite l'objet message pour les mentions
+    // !hug
     if (response?.needsHug) {
         const cible = message.mentions.users.first();
 
         if (!cible) {
-            return message.reply("Euuh... Tu veux câliner qui du coup ?");
+            return message.reply("Euuh... Tu veux c\u00e2liner qui du coup ?");
         }
 
         const auteurNom = message.member?.displayName ?? message.author.username;
         const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
 
-        // Cas : self-hug
         if (cible.id === message.author.id) {
-            const embedSelf = buildHugEmbed(auteurNom, auteurNom).setDescription(`🫂 **${auteurNom}** se fait un câlin... Ça va aller...`);
+            const embedSelf = buildHugEmbed(auteurNom, auteurNom).setDescription(`\ud83e\udef2 **${auteurNom}** se fait un c\u00e2lin... \u00c7a va aller...`);
             return message.reply({ embeds: [embedSelf] });
         }
 
-        // Cas : hug sur Cacabot
         if (cible.id === client.user.id) {
-            const embedBot = buildHugEmbed(auteurNom, "Cacabot").setDescription(`🫂 **${auteurNom}** me fait un câlin !`);
+            const embedBot = buildHugEmbed(auteurNom, "Cacabot").setDescription(`\ud83e\udef2 **${auteurNom}** me fait un c\u00e2lin !`);
             return message.reply({ embeds: [embedBot] });
         }
 
         const embed = buildHugEmbed(auteurNom, cibleNom);
-
         const hugBackButton = new ButtonBuilder()
             .setCustomId(`hug_back_${message.author.id}_${cible.id}_${auteurNom}`)
-            .setLabel("🫂 Câliner en retour")
+            .setLabel("\ud83e\udef2 C\u00e2liner en retour")
             .setStyle(ButtonStyle.Primary);
-
         const row = new ActionRowBuilder().addComponents(hugBackButton);
-
         return message.reply({ embeds: [embed], components: [row] });
     }
 
-    // !dance — solo ou duo selon la mention
+    // !dance
     if (response?.needsDance) {
         const cible = message.mentions.users.first();
         const auteurNom = message.member?.displayName ?? message.author.username;
 
-        // Cas : danse solo (pas de mention)
         if (!cible) {
-            const embed = buildDanceEmbed(`🕺 **${auteurNom}** s'ambiance comme jamais !`, true);
+            const embed = buildDanceEmbed(`\ud83d\udd7a **${auteurNom}** s'ambiance comme jamais !`, true);
             return message.reply({ embeds: [embed] });
         }
 
         const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
 
-        // Cas : danse avec Cacabot
         if (cible.id === client.user.id) {
-            const embed = buildDanceEmbed(`🕺 **${auteurNom}** danse avec moi !`, false);
+            const embed = buildDanceEmbed(`\ud83d\udd7a **${auteurNom}** danse avec moi !`, false);
             return message.reply({ embeds: [embed] });
         }
 
-        // Cas : danse duo normale
-        const embed = buildDanceEmbed(`🕺 **${auteurNom}** danse avec **${cibleNom}** !`, false);
-
+        const embed = buildDanceEmbed(`\ud83d\udd7a **${auteurNom}** danse avec **${cibleNom}** !`, false);
         const danceBackButton = new ButtonBuilder()
             .setCustomId(`dance_back_${message.author.id}_${cible.id}_${auteurNom}`)
-            .setLabel("🕺 Rejoindre la danse")
+            .setLabel("\ud83d\udd7a Rejoindre la danse")
             .setStyle(ButtonStyle.Primary);
-
         const row = new ActionRowBuilder().addComponents(danceBackButton);
-
         return message.reply({ embeds: [embed], components: [row] });
     }
 
-    // !insult — nécessite l'objet message pour les mentions
+    // !insult
     if (response?.needsInsult) {
         const cible = message.mentions.users.first();
         const auteurNom = message.member?.displayName ?? message.author.username;
@@ -645,49 +671,53 @@ client.on('messageCreate', async (message) => {
             return message.reply("Mentionne quelqu'un pour l'insulter !");
         }
 
-        // Cas : self-insult
         if (cible.id === message.author.id) {
-            return message.reply("Tu ne peux pas t'insulter toi-même... Mentionne quelqu'un plutôt !");
+            return message.reply("Tu ne peux pas t'insulter toi-m\u00eame... Mentionne quelqu'un plut\u00f4t !");
         }
 
-        // Cas : insult sur Cacabot
         if (cible.id === client.user.id) {
-            const embed = buildInsultEmbed(`🖕 **${auteurNom}** m'insulte ! J'ai fait quoi ?!`);
+            const embed = buildInsultEmbed(`\ud83d\udd95 **${auteurNom}** m'insulte ! J'ai fait quoi ?!`);
             return message.reply({ embeds: [embed] });
         }
 
         const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
-        const embed = buildInsultEmbed(`🖕 **${auteurNom}** insulte **${cibleNom}** !`);
-
+        const embed = buildInsultEmbed(`\ud83d\udd95 **${auteurNom}** insulte **${cibleNom}** !`);
         const insultBackButton = new ButtonBuilder()
             .setCustomId(`insult_back_${message.author.id}_${cible.id}_${auteurNom}`)
-            .setLabel("🖕 Insulter en retour")
+            .setLabel("\ud83d\udd95 Insulter en retour")
             .setStyle(ButtonStyle.Primary);
-
         const row = new ActionRowBuilder().addComponents(insultBackButton);
-
         return message.reply({ embeds: [embed], components: [row] });
     }
 
-    // !help — embed + menu déroulant
+    // !laugh
+    if (response?.needsLaugh) {
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        const embed = buildLaughEmbed(`\ud83d\ude06 **${auteurNom}** se tape une barre !`);
+        const laughButton = new ButtonBuilder()
+            .setCustomId(`laugh_with_${message.author.id}_${auteurNom}`)
+            .setLabel("\ud83d\ude06 Rire avec")
+            .setStyle(ButtonStyle.Primary);
+        const row = new ActionRowBuilder().addComponents(laughButton);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
+    // !help
     if (response?.data) {
         const menu = new StringSelectMenuBuilder()
             .setCustomId('help_menu')
-            .setPlaceholder('Choisis une catégorie')
+            .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '🎉 Fun', description: 'animal, destin, epsys, choix, kiss, hug, dance, insult', value: 'fun' },
-                { label: '🛠 Utilitaire', description: 'discord, aternos', value: 'util' },
+                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, dance, insult, laugh', value: 'fun' },
+                { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos', value: 'util' },
             );
 
         const row = new ActionRowBuilder().addComponents(menu);
-
-        return message.reply({
-            embeds: [response.data],
-            components: [row]
-        });
+        return message.reply({ embeds: [response.data], components: [row] });
     }
 
-    // Réponse texte simple
+    // R\u00e9ponse texte simple
     if (typeof response === "string") {
         if (response.trim().length === 0) return;
         return message.reply({ content: response });
@@ -706,24 +736,18 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.isButton() && interaction.customId.startsWith("kiss_back_")) {
         const parts = interaction.customId.split("_");
-        // format: kiss_back_{originalAuthorId}_{targetId}_{originalAuthorNom}
         const originalAuthorId = parts[2];
         const targetId = parts[3];
         const originalAuthorNom = parts.slice(4).join("_");
-
         const clickerId = interaction.user.id;
 
-        // L'auteur original essaie de cliquer
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Tu peux pas t'embrasser toi-même... 💀", ephemeral: true });
+            return interaction.reply({ content: "Tu peux pas t'embrasser toi-m\u00eame... \ud83d\udc80", ephemeral: true });
         }
-
-        // Quelqu'un d'autre que la cible essaie de cliquer
         if (clickerId !== targetId) {
             return interaction.reply({ content: "Pas sympa de voler les bisous des autres :/", ephemeral: true });
         }
 
-        // C'est bien la cible qui clique
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
         const embed = buildKissEmbed(retourNom, originalAuthorNom);
         return interaction.reply({ embeds: [embed] });
@@ -735,19 +759,16 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.isButton() && interaction.customId.startsWith("hug_back_")) {
         const parts = interaction.customId.split("_");
-        // format: hug_back_{originalAuthorId}_{targetId}_{originalAuthorNom}
         const originalAuthorId = parts[2];
         const targetId = parts[3];
         const originalAuthorNom = parts.slice(4).join("_");
-
         const clickerId = interaction.user.id;
 
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Tu peux pas te câliner toi-même... 💀", ephemeral: true });
+            return interaction.reply({ content: "Tu peux pas te c\u00e2liner toi-m\u00eame... \ud83d\udc80", ephemeral: true });
         }
-
         if (clickerId !== targetId) {
-            return interaction.reply({ content: "Pas gentil de voler les câlins des autres :/", ephemeral: true });
+            return interaction.reply({ content: "Pas gentil de voler les c\u00e2lins des autres :/", ephemeral: true });
         }
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
@@ -761,23 +782,20 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.isButton() && interaction.customId.startsWith("dance_back_")) {
         const parts = interaction.customId.split("_");
-        // format: dance_back_{originalAuthorId}_{targetId}_{originalAuthorNom}
         const originalAuthorId = parts[2];
         const targetId = parts[3];
         const originalAuthorNom = parts.slice(4).join("_");
-
         const clickerId = interaction.user.id;
 
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Tu danses déjà ! 🕺", ephemeral: true });
+            return interaction.reply({ content: "Tu danses d\u00e9j\u00e0 ! \ud83d\udd7a", ephemeral: true });
         }
-
         if (clickerId !== targetId) {
-            return interaction.reply({ content: "Non, tu n'es pas invité.e sur le dancefloor cette fois !", ephemeral: true });
+            return interaction.reply({ content: "Non, tu n'es pas invit\u00e9.e sur le dancefloor cette fois !", ephemeral: true });
         }
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
-        const embed = buildDanceEmbed(`🕺 **${retourNom}** danse avec **${originalAuthorNom}** !`, false);
+        const embed = buildDanceEmbed(`\ud83d\udd7a **${retourNom}** danse avec **${originalAuthorNom}** !`, false);
         return interaction.reply({ embeds: [embed] });
     }
 
@@ -787,23 +805,34 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.isButton() && interaction.customId.startsWith("insult_back_")) {
         const parts = interaction.customId.split("_");
-        // format: insult_back_{originalAuthorId}_{targetId}_{originalAuthorNom}
         const originalAuthorId = parts[2];
         const targetId = parts[3];
         const originalAuthorNom = parts.slice(4).join("_");
-
         const clickerId = interaction.user.id;
 
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Tu peux pas t'insulter toi-même... 💀", ephemeral: true });
+            return interaction.reply({ content: "Tu peux pas t'insulter toi-m\u00eame... \ud83d\udc80", ephemeral: true });
         }
-
         if (clickerId !== targetId) {
             return interaction.reply({ content: "Reste en dehors de la bagarre, crois-moi...", ephemeral: true });
         }
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
-        const embed = buildInsultEmbed(`🖕 **${retourNom}** insulte **${originalAuthorNom}** en retour !`);
+        const embed = buildInsultEmbed(`\ud83d\udd95 **${retourNom}** insulte **${originalAuthorNom}** en retour !`);
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
+    // BOUTON LAUGH WITH
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith("laugh_with_")) {
+        const parts = interaction.customId.split("_");
+        // format: laugh_with_{originalAuthorId}_{originalAuthorNom}
+        const originalAuthorNom = parts.slice(3).join("_");
+
+        const reurNom = interaction.member?.displayName ?? interaction.user.username;
+        const embed = buildLaughEmbed(`\ud83d\ude06 **${reurNom}** rit avec **${originalAuthorNom}** !`);
         return interaction.reply({ embeds: [embed] });
     }
 
@@ -818,49 +847,45 @@ client.on('interactionCreate', async (interaction) => {
         let embed;
 
         if (value === 'fun') {
-    embed = new EmbedBuilder()
-        .setColor(0xffcc00)
-        .setDescription("# 🎉 Fun")
-        .addFields(
-            { name: "!animal", value: "Devine votre animal spirituel parmi près de 7000 combinaisons !" },
-            { name: "!destin", value: "Prédit votre destin et fait part des évènements de votre futur." },
-            { name: "!epsys", value: "Poste des GIFs aléatoires d'Epsys, parce que." },
-            { name: "!choix", value: "Vous avez du mal à faire un choix ? Demandez à Cacabot." },
-            { name: "!kiss", value: "Embrassez quelqu'un sur le serveur !" },
-            { name: "!hug", value: "Faites un câlin à quelqu'un sur le serveur !" },
-            { name: "!dance", value: "Dansez avec quelqu'un sur le serveur !" },
-            { name: "!insult", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" }
-        );
-}
+            embed = new EmbedBuilder()
+                .setColor(0xffcc00)
+                .setDescription("# \ud83c\udf89 Fun")
+                .addFields(
+                    { name: "!animal", value: "Devine votre animal spirituel parmi pr\u00e8s de 7000 combinaisons !" },
+                    { name: "!destin", value: "Pr\u00e9dit votre destin et fait part des \u00e9v\u00e8nements de votre futur." },
+                    { name: "!epsys", value: "Poste des GIFs al\u00e9atoires d'Epsys, parce que." },
+                    { name: "!choix", value: "Vous avez du mal \u00e0 faire un choix ? Demandez \u00e0 Cacabot." },
+                    { name: "!kiss", value: "Embrassez quelqu'un sur le serveur !" },
+                    { name: "!hug", value: "Faites un c\u00e2lin \u00e0 quelqu'un sur le serveur !" },
+                    { name: "!dance", value: "Dansez avec quelqu'un sur le serveur !" },
+                    { name: "!insult", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
+                    { name: "!laugh", value: "Riez un bon coup !" }
+                );
+        }
 
-if (value === 'util') {
-    embed = new EmbedBuilder()
-        .setColor(0x3498db)
-        .setDescription("# 🛠 Utilitaire")
-        .addFields(
-            { name: "!discord", value: "Obtenir le lien officiel d'invitation de Regaïa." },
-            { name: "!aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Regaïa." }
-        );
-}
+        if (value === 'util') {
+            embed = new EmbedBuilder()
+                .setColor(0x3498db)
+                .setDescription("# \ud83d\udee0 Utilitaire")
+                .addFields(
+                    { name: "!discord", value: "Obtenir le lien officiel d'invitation de Rega\u00efa." },
+                    { name: "!aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." }
+                );
+        }
 
         if (!embed) {
             embed = new EmbedBuilder()
                 .setColor(0xff0000)
                 .setTitle("Erreur")
-                .setDescription("Catégorie inconnue");
+                .setDescription("Cat\u00e9gorie inconnue");
         }
 
         const backButton = new ButtonBuilder()
             .setCustomId('help_back')
-            .setLabel('⬅ Retour')
+            .setLabel('\u2b05 Retour')
             .setStyle(ButtonStyle.Secondary);
-
         const row = new ActionRowBuilder().addComponents(backButton);
-
-        return interaction.update({
-            embeds: [embed],
-            components: [row]
-        });
+        return interaction.update({ embeds: [embed], components: [row] });
     }
 
     // =========================
@@ -870,23 +895,18 @@ if (value === 'util') {
     if (interaction.isButton() && interaction.customId === 'help_back') {
         const embed = new EmbedBuilder()
             .setColor(0x00ffff)
-            .setTitle("💩 AIDE À CACABOT")
-            .setDescription("Hey ! Voici Cacabot, qui, malgré son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\n\nPour découvrir les différentes commandes disponibles de Cacabot, choisis l'une des catégories ci-dessous !");
+            .setTitle("\ud83d\udca9 AIDE \u00c0 CACABOT")
+            .setDescription("Hey ! Voici Cacabot, qui, malgr\u00e9 son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\n\nPour d\u00e9couvrir les diff\u00e9rentes commandes disponibles de Cacabot, choisis l'une des cat\u00e9gories ci-dessous !");
 
         const menu = new StringSelectMenuBuilder()
             .setCustomId('help_menu')
-            .setPlaceholder('Choisis une catégorie')
+            .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '🎉 Fun', description: 'animal, destin, epsys, choix, kiss, hug, dance, insult', value: 'fun' },
-                { label: '🛠 Utilitaire', description: 'discord, aternos', value: 'util' }
+                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, dance, insult, laugh', value: 'fun' },
+                { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos', value: 'util' }
             );
-
         const row = new ActionRowBuilder().addComponents(menu);
-
-        return interaction.update({
-            embeds: [embed],
-            components: [row]
-        });
+        return interaction.update({ embeds: [embed], components: [row] });
     }
 });
 
@@ -895,7 +915,7 @@ if (value === 'util') {
 // =========================
 
 client.once('ready', () => {
-    console.log(`✅ ${client.user.tag} est connecté`);
+    console.log(`\u2705 ${client.user.tag} est connect\u00e9`);
 });
 
 client.login(process.env.TOKEN);
