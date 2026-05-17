@@ -1700,42 +1700,38 @@ client.on('messageCreate', async (message) => {
         }
 
         try {
-            // Appel CNRTL pour la definition
-            const defRes = await fetch(`https://api.cnrtl.fr/definition/${encodeURIComponent(mot)}`);
-            if (!defRes.ok) throw new Error('not found');
-            const defHtml = await defRes.text();
+            // Appel Wiktionnaire pour la definition
+            const wikiRes = await fetch(`https://fr.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(mot)}`);
+            if (!wikiRes.ok) throw new Error('not found');
+            const wikiData = await wikiRes.json();
 
-            // Extraire la premiere definition du HTML
-            const defMatch = defHtml.match(/class="tlf_cdefinition"[^>]*>([\s\S]*?)<\/span>/);
-            const definition = defMatch
-                ? defMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
-                : null;
+            // Recuperer la premiere langue francaise
+            const frEntries = wikiData.fr;
+            if (!frEntries || frEntries.length === 0) throw new Error('not found');
 
-            if (!definition) {
-                return message.reply(`Aucune d\u00e9finition trouv\u00e9e pour **${mot}** !`);
-            }
+            const entry = frEntries[0];
+            const nature = entry.partOfSpeech ?? '';
+            const definitions = entry.definitions ?? [];
+            if (definitions.length === 0) throw new Error('not found');
 
-            // Appel CNRTL pour les synonymes
-            let synonymes = 'Aucun';
-            try {
-                const synRes = await fetch(`https://api.cnrtl.fr/synonymie/${encodeURIComponent(mot)}`);
-                if (synRes.ok) {
-                    const synHtml = await synRes.text();
-                    const synMatches = [...synHtml.matchAll(/class="syn_[^"]*"[^>]*>([^<]+)<\/a>/g)];
-                    if (synMatches.length > 0) {
-                        synonymes = synMatches.slice(0, 5).map(m => m[1].trim()).join(', ');
-                    }
-                }
-            } catch {}
+            // Nettoyer le HTML de la definition
+            const rawDef = definitions[0].definition ?? '';
+            const definition = rawDef.replace(/<[^>]+>/g, '').trim();
+            if (!definition) throw new Error('not found');
+
+            // Synonymes depuis les exemples si dispo
+            const synonymes = definitions[0].parsedExamples
+                ? definitions[0].parsedExamples.slice(0, 3).map(e => e.example?.replace(/<[^>]+>/g, '').trim()).filter(Boolean).join(' / ') || 'Aucun'
+                : 'Aucun';
 
             const embed = new EmbedBuilder()
                 .setColor(0x3498db)
                 .setTitle('\ud83d\udcd6 D\u00e9finition')
+                .setThumbnail('https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/Books_icon.png/100px-Books_icon.png')
                 .addFields(
-                    { name: `**${mot}**`, value: definition, inline: false },
-                    { name: '__Synonymes__', value: synonymes, inline: false }
-                )
-                .setThumbnail('https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/Books_icon.png/100px-Books_icon.png');
+                    { name: `**${mot}**${nature ? ` *(${nature})*` : ''}`, value: definition.length > 1024 ? definition.slice(0, 1021) + '...' : definition, inline: false },
+                    { name: '__Exemples__', value: synonymes, inline: false }
+                );
 
             return message.reply({ embeds: [embed] });
         } catch (err) {
