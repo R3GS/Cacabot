@@ -283,10 +283,6 @@ function getResponse(raw) {
         return { needsFlip: true };
     }
 
-    if (command === "!def") {
-        return { needsDef: true };
-    }
-
     if (command === "!actif") {
         return { needsActif: true };
     }
@@ -1692,78 +1688,6 @@ client.on('messageCreate', async (message) => {
         return message.reply("Sous-commandes disponibles : `set JJ/MM`, `show`, `list`, `next`");
     }
 
-    // !def
-    if (response?.needsDef) {
-        const mot = message.content.trim().split(/\s+/).slice(1).join(" ");
-        if (!mot) {
-            return message.reply("Utilise `!def Mot` pour obtenir une d\u00e9finition !");
-        }
-
-        try {
-            // Appel CNRTL - parsing HTML
-            const cnrtlRes = await fetch(`https://www.cnrtl.fr/definition/${encodeURIComponent(mot)}/0`, {
-                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CacabotDiscord/1.0)' }
-            });
-            if (!cnrtlRes.ok) throw new Error('not found');
-            const html = await cnrtlRes.text();
-
-            // Extraire la nature grammaticale
-            const natureMatch = html.match(/class="tlf_ccode"[^>]*>([^<]+)<\/span>/);
-            const nature = natureMatch ? natureMatch[1].trim() : '';
-
-            // Extraire la premiere definition
-            const defPatterns = [
-                /class="tlf_cdefinition"[^>]*>([\s\S]*?)<\/span>/,
-                /id="vitemselected"[\s\S]*?class="tlf_cdefinition"[^>]*>([\s\S]*?)<\/span>/,
-                /<span[^>]*class="[^"]*tlf_c[^"]*"[^>]*>([\s\S]*?)<\/span>/
-            ];
-
-            let definition = null;
-            for (const pattern of defPatterns) {
-                const match = html.match(pattern);
-                if (match) {
-                    definition = match[1]
-                        .replace(/<[^>]+>/g, '')
-                        .replace(/&amp;/g, '&')
-                        .replace(/&lt;/g, '<')
-                        .replace(/&gt;/g, '>')
-                        .replace(/&nbsp;/g, ' ')
-                        .replace(/\s+/g, ' ')
-                        .trim();
-                    if (definition && definition.length > 10) break;
-                }
-            }
-
-            if (!definition) throw new Error('not found');
-
-            // Extraire les synonymes
-            let synonymes = 'Aucun';
-            const synRes = await fetch(`https://www.cnrtl.fr/synonymie/${encodeURIComponent(mot)}`, {
-                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CacabotDiscord/1.0)' }
-            });
-            if (synRes.ok) {
-                const synHtml = await synRes.text();
-                const synMatches = [...synHtml.matchAll(/href="\/synonymie\/[^"]*"[^>]*>([^<]{2,30})<\/a>/g)];
-                if (synMatches.length > 0) {
-                    synonymes = [...new Set(synMatches.slice(0, 5).map(m => m[1].trim()))].join(', ');
-                }
-            }
-
-            const embed = new EmbedBuilder()
-                .setColor(0x3498db)
-                .setTitle('\ud83d\udcd6 D\u00e9finition')
-                .setThumbnail('https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/Books_icon.png/100px-Books_icon.png')
-                .addFields(
-                    { name: `**${mot}**${nature ? ` *(${nature})*` : ''}`, value: definition.length > 1024 ? definition.slice(0, 1021) + '...' : definition, inline: false },
-                    { name: '__Synonymes__', value: synonymes, inline: false }
-                );
-
-            return message.reply({ embeds: [embed] });
-        } catch (err) {
-            return message.reply(`Aucune d\u00e9finition trouv\u00e9e pour **${mot}** !`);
-        }
-    }
-
     // !actif
     if (response?.needsActif) {
         cleanOldData();
@@ -2730,7 +2654,6 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." },
                     { name: "!serveur", value: "Afficher les informations du serveur." },
                     { name: "!actif", value: "Affiche les membres les plus actifs du jour et de la semaine." },
-                    { name: "!def", value: "Affiche la d\u00e9finition d'un mot en fran\u00e7ais." },
                     { name: "!profil", value: "Afficher le profil d'un membre." },
                     { name: "!avatar", value: "Afficher l'avatar d'un membre en grand." }
                 );
