@@ -969,10 +969,10 @@ async function doFlipSequence(channel, firstMessage, isPari, pileNom, faceNom, a
         await channel.send({ embeds: [lancerEmbed] });
         await new Promise(r => setTimeout(r, 3000));
     } else {
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise(r => setTimeout(r, 1000));
     }
 
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, 1000));
     const relancerButton = new ButtonBuilder()
         .setCustomId(`flip_start_${authorId ?? 'unknown'}`)
         .setLabel("\ud83e\ude99 Relancer la pi\u00e8ce")
@@ -993,7 +993,7 @@ async function doFlipSequence(channel, firstMessage, isPari, pileNom, faceNom, a
     }
 
     const embed = new EmbedBuilder()
-        .setColor(isFace ? 0xffd700 : 0xc0c0c0)
+        .setColor(0xffd700)
         .setDescription(description)
         .setThumbnail(resultatImg);
 
