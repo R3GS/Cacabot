@@ -123,10 +123,6 @@ function getResponse(raw) {
         return "L'IP actuelle du serveur Minecraft de Rega\u00efa est : **papierprout.aternos.me**";
     }
 
-    if (raw.toLowerCase().match(/!discord\b/)) {
-        return "Si vous souhaitez inviter vos ami.es, voici le lien d'invitation du serveur Discord :\n**https://discord.com/invite/maAbUYb**";
-    }
-
     // =========================
     //         !EPSYS
     // =========================
@@ -2325,6 +2321,9 @@ client.on('messageCreate', async (message) => {
                 { name: '\ud83d\udcab Boosts', value: `${guild.premiumSubscriptionCount}`, inline: true },
                 { name: '\ud83c\udd94 ID', value: guild.id, inline: true }
             )
+            .addFields(
+                { name: '\ud83d\udd17 Lien d\'invitation', value: '[Rejoindre le serveur](https://discord.com/invite/maAbUYb)', inline: false }
+            )
             .setFooter({ text: 'Regaia' });
 
         return message.reply({ embeds: [embed] });
@@ -3274,7 +3273,6 @@ client.on('interactionCreate', async (interaction) => {
                 .setColor(0xbdddf4)
                 .setDescription("# \ud83d\udcac Discord")
                 .addFields(
-                    { name: "<:discord_icon:1505454379669524532> !discord", value: "Obtenir le lien officiel d'invitation de Rega\u00efa." },
                     { name: "<:serveur_icon:1505456319946031144> !serveur", value: "Afficher les informations du serveur." },
                     { name: "\ud83d\udc64 !profil", value: "Afficher le profil d'un membre." },
                     { name: "\ud83d\uddbc\ufe0f !avatar", value: "Afficher l'avatar d'un membre en grand." },
@@ -3336,7 +3334,7 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId(`help_util_${helpAuthorId}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83d\udcac Discord', description: 'discord, serveur, profil, avatar, top, actif', value: 'discord' },
+                { label: '\ud83d\udcac Discord', description: 'serveur, profil, avatar, top, actif', value: 'discord' },
                 { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, info', value: 'autres' }
             );
 
@@ -3406,7 +3404,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setCustomId(`help_util_${helpAuthorId}`)
                 .setPlaceholder('Choisis une cat\u00e9gorie')
                 .addOptions(
-                    { label: '\ud83d\udcac Discord', description: 'discord, serveur, profil, avatar, top, actif', value: 'discord' },
+                    { label: '\ud83d\udcac Discord', description: 'serveur, profil, avatar, top, actif', value: 'discord' },
                     { label: '\u25b6\ufe0f YouTube', description: 'En construction...', value: 'youtube' },
                     { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, info', value: 'autres' }
                 );
