@@ -961,12 +961,14 @@ async function doFlipSequence(channel, firstMessage, isPari, pileNom, faceNom) {
     const resultatTexte = isFace ? "C'est **face** !" : "C'est **pile** !";
     const resultatImg = isFace ? FACE_IMG : PILE_IMG;
 
-    const lancerEmbed = new EmbedBuilder()
-        .setColor(0x808080)
-        .setDescription(firstMessage)
-        .setImage(gif);
-    await channel.send({ embeds: [lancerEmbed] });
-    await new Promise(r => setTimeout(r, 3000));
+    if (firstMessage) {
+        const lancerEmbed = new EmbedBuilder()
+            .setColor(0x808080)
+            .setDescription(firstMessage)
+            .setImage(gif);
+        await channel.send({ embeds: [lancerEmbed] });
+        await new Promise(r => setTimeout(r, 3000));
+    }
 
     const relancerButton = new ButtonBuilder()
         .setCustomId("flip_start")
@@ -2011,7 +2013,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (interaction.isButton() && interaction.customId === "flip_pari") {
-        await interaction.deferUpdate();
+        await interaction.message.delete().catch(() => {});
         const pariEmbed = new EmbedBuilder()
             .setColor(0xffd700)
             .setTitle("\ud83e\ude99 Pile ou face")
@@ -2087,15 +2089,17 @@ client.on('interactionCreate', async (interaction) => {
             await new Promise(r => setTimeout(r, 1000));
             await interaction.message.edit({ embeds: [countEmbed.setDescription("Lancer dans 1")] }).catch(() => {});
             await new Promise(r => setTimeout(r, 1000));
+            const flipGif = flipGifs[Math.floor(Math.random() * flipGifs.length)];
             const finalEmbed = new EmbedBuilder()
                 .setColor(0xffd700)
-                .setTitle("\ud83e\ude99 Pile ou face")
+                .setTitle("\ud83e\ude99 C'est parti !")
+                .setImage(flipGif)
                 .addFields(
                     { name: `${pileIcon} Pile`, value: pileVal, inline: true },
                     { name: `${faceIcon} Face`, value: faceVal, inline: true }
                 );
             await interaction.message.edit({ embeds: [finalEmbed], components: [] }).catch(() => {});
-            await doFlipSequence(interaction.channel, "C'est parti ! \ud83e\ude99", true, pari.pile, pari.face);
+            await doFlipSequence(interaction.channel, null, true, pari.pile, pari.face);
         } else {
             const updEmbed = new EmbedBuilder()
                 .setColor(0xffd700)
