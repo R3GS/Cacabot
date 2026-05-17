@@ -3011,7 +3011,7 @@ client.on('interactionCreate', async (interaction) => {
         const type = parts[2]; // contexte, ecrire, continuer
         const authorId = parts[3];
         const userText = interaction.fields.getTextInputValue('texte');
-        await interaction.deferUpdate();
+        await interaction.deferReply({ ephemeral: false });
 
         let prompt;
         let histoire = '';
@@ -3029,7 +3029,7 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         const suite = await callGemini(prompt);
-        if (!suite) return interaction.followUp({ content: "Gemini n'a pas pu générer la suite, réessaie !", ephemeral: true });
+        if (!suite) return interaction.editReply({ content: "Gemini n'a pas pu générer la suite, réessaie !" });
 
         const fullText = (histoire + suite).trim();
         const chars = fullText.length;
