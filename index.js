@@ -247,6 +247,14 @@ function getResponse(raw) {
     //         !DIE
     // =========================
 
+    if (command === "!ban") {
+        return { needsBan: true };
+    }
+
+    if (command === "!ban") {
+        return { needsBan: true };
+    }
+
     if (command === "!die") {
         return { needsDie: true };
     }
@@ -1619,6 +1627,93 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [embed], components: [row] });
     }
 
+    // !ban
+    if (response?.needsBan) {
+        const cible = message.mentions.users.first();
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            return message.reply("Choisis quelqu'un que tu veux bannir !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+        }
+
+        if (cible.id === message.author.id) {
+            return message.reply("Tu ne peux pas te bannir toi-m\u00eame ! Demande aux modos pour \u00e7a.").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+        }
+
+        const banGifs = [
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557423686029352/cat-screaming-cat-disappearing.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557409148567572/ahh-kid-turns-blue-and-vanishes.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424092741764/duck-disappears.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424491462856/tom-skot.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424805777428/atoms-cry.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425288380576/sr-pelo-screaming.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425690775683/cat-scream.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426043355278/meme-quarantine.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426433294437/flight-flights.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426881958020/nikocado-avocado-nikocado.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557427209109544/moist-moist-critical.gif"
+        ];
+        const gif = banGifs[Math.floor(Math.random() * banGifs.length)];
+
+        if (cible.id === client.user.id) {
+            const embed = new EmbedBuilder()
+                .setColor(0xcdc9dc)
+                .setDescription(`\ud83d\udd28 **${auteurNom}** me bannir... Pas cool.`)
+                .setImage(gif);
+            return message.reply({ embeds: [embed] });
+        }
+
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        const embed = new EmbedBuilder()
+            .setColor(0xcdc9dc)
+            .setDescription(`\ud83d\udd28 **${auteurNom}** bannit **${cibleNom}** !`)
+            .setImage(gif);
+        return message.reply({ embeds: [embed] });
+    }
+
+    // !ban
+    if (response?.needsBan) {
+        const banGifs = [
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557423686029352/cat-screaming-cat-disappearing.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557409148567572/ahh-kid-turns-blue-and-vanishes.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424092741764/duck-disappears.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424491462856/tom-skot.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424805777428/atoms-cry.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425288380576/sr-pelo-screaming.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425690775683/cat-scream.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426043355278/meme-quarantine.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426433294437/flight-flights.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426881958020/nikocado-avocado-nikocado.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557427209109544/moist-moist-critical.gif"
+        ];
+        const gif = banGifs[Math.floor(Math.random() * banGifs.length)];
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        const cible = message.mentions.users.first();
+
+        if (!cible) {
+            return message.reply("Choisis quelqu'un que tu veux bannir !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+        }
+
+        if (cible.id === message.author.id) {
+            return message.reply({ content: "Tu ne peux pas te bannir toi-m\u00eame ! Demande aux modos pour \u00e7a.", ephemeral: false }).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+        }
+
+        let titre;
+        if (cible.id === client.user.id) {
+            titre = `**${auteurNom}** me bannit... Pas cool.`;
+        } else {
+            const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+            titre = `\ud83d\udd28 **${auteurNom}** bannit **${cibleNom}** !`;
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(0xcdc9dc)
+            .setDescription(titre)
+            .setImage(gif);
+
+        return message.reply({ embeds: [embed] });
+    }
+
     // !die
     if (response?.needsDie) {
         let cible = message.mentions.users.first();
@@ -2765,6 +2860,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!danse", value: "Dansez avec quelqu'un sur le serveur !" },
                     { name: "!insult", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
                     { name: "!die", value: "Mourez en direct sur le serveur !" },
+                    { name: "!ban", value: "Bannir quelqu'un du serveur... symboliquement." },
                     { name: "!punch", value: "Frappez quelqu'un sur le serveur !" },
                     { name: "!bang", value: "Tirez sur quelqu'un sur le serveur !" },
                     { name: "!rizz", value: "Rizzez quelqu'un sur le serveur !" },
@@ -2843,7 +2939,7 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId(`help_fun_${helpAuthorId}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, punch, bang, rizz, rire, danse', value: 'interact' },
+                { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, punch, bang, rizz, rire, danse', value: 'interact' },
                 { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                 { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
                 { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague', value: 'random' }
@@ -3013,7 +3109,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setCustomId(`help_fun_${helpAuthorId}`)
                 .setPlaceholder('Choisis une cat\u00e9gorie')
                 .addOptions(
-                    { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, punch, bang, rizz, rire, danse', value: 'interact' },
+                    { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, punch, bang, rizz, rire, danse', value: 'interact' },
                     { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                     { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
                     { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague', value: 'random' }
