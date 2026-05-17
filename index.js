@@ -1701,7 +1701,7 @@ client.on('messageCreate', async (message) => {
 
         try {
             // Appel CNRTL - parsing HTML
-            const cnrtlRes = await fetch(`https://www.cnrtl.fr/definition/${encodeURIComponent(mot)}`, {
+            const cnrtlRes = await fetch(`https://www.cnrtl.fr/definition/${encodeURIComponent(mot)}/0`, {
                 headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CacabotDiscord/1.0)' }
             });
             if (!cnrtlRes.ok) throw new Error('not found');
