@@ -2274,8 +2274,8 @@ client.on('messageCreate', async (message) => {
 
         let uptime = '';
         if (months > 0) uptime += `${months} mois, `;
-        if (months > 0 || days > 0) uptime += `${days}j, `;
-        uptime += `${hours}h`;
+        if (months > 0 || days > 0) uptime += `${days} jour${days > 1 ? 's' : ''}, `;
+        uptime += `${hours} heure${hours > 1 ? 's' : ''}`;
 
         const nbMembres = Object.keys(topData.messages).length;
         const nbCommandes = 30;
@@ -2286,15 +2286,12 @@ client.on('messageCreate', async (message) => {
             .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
             .addFields(
                 { name: '\ud83d\udcbb Commandes', value: `${nbCommandes}`, inline: true },
-                { name: '\ud83d\udc65 Membres', value: `${nbMembres}`, inline: true },
-                { name: '\u200b', value: '\u200b', inline: true },
-                { name: '\ud83d\udd52 Uptime', value: uptime, inline: true },
-                { name: '\u200b', value: '\u200b', inline: true },
-                { name: '\ud83d\udcac Messages', value: `${topData.messages['1503495713097519355'] ?? 0}`, inline: true },
+                { name: '\ud83d\udcac Messages envoy\u00e9s', value: `${topData.messages['1503495713097519355'] ?? 0}`, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
                 { name: '\ud83d\udc51 Cr\u00e9atrice', value: 'Epsys', inline: true },
                 { name: '\ud83e\udd1d Collaboratrice', value: '[BDN](https://bdn-fr.xyz/)', inline: true },
-                { name: '\u200b', value: '\u200b', inline: true }
+                { name: '\u200b', value: '\u200b', inline: true },
+                { name: '\ud83d\udd52 En ligne depuis', value: uptime, inline: false }
             );
 
         return message.reply({ embeds: [embed] });
