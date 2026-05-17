@@ -2875,10 +2875,17 @@ client.on('interactionCreate', async (interaction) => {
                 );
         }
 
+        if (value === 'youtube') {
+            embed = new EmbedBuilder()
+                .setColor(0xff0000)
+                .setDescription("# <:youtube_icon:1505457903585198151> YouTube")
+                .setDescription("En construction... \ud83d\udd27");
+        }
+
         if (value === 'autres') {
             embed = new EmbedBuilder()
                 .setColor(0x95a5a6)
-                .setDescription("# \ud83c\udfae Autres")
+                .setDescription("# \ud83d\uddd2\ufe0f Autres")
                 .addFields(
                     { name: "<:aternos_icon:1505454393049485362> !aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." }
                 );
@@ -2913,7 +2920,7 @@ client.on('interactionCreate', async (interaction) => {
         const utilEmbed = new EmbedBuilder()
             .setColor(0x3498db)
             .setTitle("\ud83d\udee0 Utilitaire")
-            .setDescription("Choisis une cat\u00e9gorie !");
+            .setDescription("<:discord_icon:1505454379669524532> **Discord** \u2014 Commandes relatives au serveur\n<:youtube_icon:1505457903585198151> **YouTube** \u2014 En construction...\n\ud83d\uddd2\ufe0f **Autres** \u2014 Autres commandes non-r\u00e9pertori\u00e9es");
 
         const utilMenu = new StringSelectMenuBuilder()
             .setCustomId(`help_util_${helpAuthorId}`)
@@ -2983,14 +2990,15 @@ client.on('interactionCreate', async (interaction) => {
             const utilEmbed = new EmbedBuilder()
                 .setColor(0x3498db)
                 .setTitle("\ud83d\udee0 Utilitaire")
-                .setDescription("Choisis une cat\u00e9gorie !");
+                .setDescription("<:discord_icon:1505454379669524532> **Discord** \u2014 Commandes relatives au serveur\n<:youtube_icon:1505457903585198151> **YouTube** \u2014 En construction...\n\ud83d\uddd2\ufe0f **Autres** \u2014 Autres commandes non-r\u00e9pertori\u00e9es");
 
             const utilMenu = new StringSelectMenuBuilder()
                 .setCustomId(`help_util_${helpAuthorId}`)
                 .setPlaceholder('Choisis une cat\u00e9gorie')
                 .addOptions(
                     { label: '\ud83d\udcac Discord', description: 'discord, serveur, profil, avatar, top, actif', value: 'discord' },
-                    { label: '\ud83c\udfae Autres', description: 'aternos', value: 'autres' }
+                    { label: '<:youtube_icon:1505457903585198151> YouTube', description: 'En construction...', value: 'youtube' },
+                    { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos', value: 'autres' }
                 );
 
             const utilBackButton = new ButtonBuilder()
