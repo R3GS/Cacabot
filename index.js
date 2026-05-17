@@ -1688,7 +1688,31 @@ client.on('messageCreate', async (message) => {
         ];
         const gif = banGifs[Math.floor(Math.random() * banGifs.length)];
         const auteurNom = message.member?.displayName ?? message.author.username;
-        const cible = message.mentions.users.first();
+        let cible = message.mentions.users.first();
+
+        if (!cible) {
+            const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (query) {
+                if (client.user.username.toLowerCase().includes(query.toLowerCase()) || 'cacabot'.includes(query.toLowerCase())) {
+                    cible = client.user;
+                } else {
+                    const result = findMemberByName(message.guild, query);
+                    if (result.multiple) {
+                        askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const cibleNom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
+                            const gif = banGifs[Math.floor(Math.random() * banGifs.length)];
+                            const embed = new EmbedBuilder()
+                                .setColor(0xcdc9dc)
+                                .setDescription(`\ud83d\udd28 **${auteurNom}** bannit **${cibleNom}** !`)
+                                .setImage(gif);
+                            message.reply({ embeds: [embed] });
+                        });
+                        return;
+                    }
+                    if (result.found) cible = result.found.user;
+                }
+            }
+        }
 
         if (!cible) {
             return message.reply("Choisis quelqu'un que tu veux bannir !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
