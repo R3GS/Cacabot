@@ -2744,6 +2744,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!destin", value: "Pr\u00e9dit votre destin et fait part des \u00e9v\u00e8nements de votre futur." },
                     { name: "!animal", value: "Devine votre animal spirituel parmi pr\u00e8s de 7000 combinaisons !" },
                     { name: "!epsys", value: "Poste des GIFs al\u00e9atoires d'Epsys, parce que." },
+                    { name: "!blague", value: "Lance une blague al\u00e9atoire en 3 cat\u00e9gories !" },
                     { name: "!flip", value: "Pour d\u00e9cider \u00e0 pile ou face !" }
                 );
         }
