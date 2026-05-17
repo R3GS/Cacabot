@@ -1625,7 +1625,13 @@ client.on('messageCreate', async (message) => {
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (cible && cible.id === client.user.id) {
-            return message.reply("Tu veux \u00abme mourir\u00bb ? Non merci.");
+            const embed = buildDieEmbed(`\u2620\ufe0f **${auteurNom}** meurt \u00e0 cause de moi ! (cheh)`);
+            const dieButton = new ButtonBuilder()
+                .setCustomId(`die_with_${message.author.id}_${auteurNom}`)
+                .setLabel("\u2620\ufe0f Mourir avec")
+                .setStyle(ButtonStyle.Primary);
+            const row = new ActionRowBuilder().addComponents(dieButton);
+            return message.reply({ embeds: [embed], components: [row] });
         }
 
         let causeNom = null;
