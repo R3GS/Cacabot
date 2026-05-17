@@ -2294,8 +2294,8 @@ client.on('messageCreate', async (message) => {
 
     // hé petit
     if (response?.needsHePetit) {
-        await message.reply({ files: ['https://cdn.discordapp.com/attachments/1480756332373213275/1505660789837529120/monty-fnaf-montgomery-gator.gif'] });
-        await message.channel.send({ files: ['https://cdn.discordapp.com/attachments/1480756332373213275/1505660790189981896/he_petit.mp3'] });
+        await message.reply({ files: ['./monty.gif'] });
+        await message.channel.send({ files: ['./' + 'h\u00e9 petit.mp3'] });
         return;
     }
 
