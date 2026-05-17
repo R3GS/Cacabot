@@ -945,7 +945,7 @@ client.on('messageCreate', async (message) => {
     }
 
     // Comptage messages pour !top
-    if (message.guild) {
+    if (message.guild && message.guild.id === '720057528351850547') {
         const uid = message.author.id;
         if (!topData.messages[uid]) topData.messages[uid] = 0;
         topData.messages[uid]++;
