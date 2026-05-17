@@ -955,7 +955,7 @@ const flipGifs = [
 const PILE_IMG = "https://cdn.discordapp.com/attachments/1128032964924670053/1505389180132393163/pile.png";
 const FACE_IMG = "https://cdn.discordapp.com/attachments/1128032964924670053/1505389180640034837/face.png";
 
-async function doFlipSequence(channel, firstMessage, isPari, pileNom, faceNom) {
+async function doFlipSequence(channel, firstMessage, isPari, pileNom, faceNom, authorId) {
     const gif = flipGifs[Math.floor(Math.random() * flipGifs.length)];
     const isFace = Math.random() < 0.5;
     const resultatTexte = isFace ? "C'est **face** !" : "C'est **pile** !";
@@ -963,25 +963,34 @@ async function doFlipSequence(channel, firstMessage, isPari, pileNom, faceNom) {
 
     if (firstMessage) {
         const lancerEmbed = new EmbedBuilder()
-            .setColor(0x808080)
+            .setColor(0xffd700)
             .setDescription(firstMessage)
             .setImage(gif);
         await channel.send({ embeds: [lancerEmbed] });
         await new Promise(r => setTimeout(r, 3000));
+    } else {
+        await new Promise(r => setTimeout(r, 2000));
     }
 
+    await new Promise(r => setTimeout(r, 2000));
     const relancerButton = new ButtonBuilder()
-        .setCustomId("flip_start")
+        .setCustomId(`flip_start_${authorId ?? 'unknown'}`)
         .setLabel("\ud83e\ude99 Relancer la pi\u00e8ce")
         .setStyle(ButtonStyle.Secondary);
     const relancerRow = new ActionRowBuilder().addComponents(relancerButton);
 
-    let description = resultatTexte;
+    let description;
     if (isPari) {
         const gagnantNom = isFace ? faceNom : pileNom;
-        description = `${resultatTexte}\n**${gagnantNom}**, la chance est dans ton camp !`;
+        description = `${resultatTexte}\n**${gagnantNom}**, la chance est dans ton camp !\nOn recommence ?`;
+    } else if (pileNom) {
+        // Lancer simple avec camp choisi
+        const campChoisi = pileNom; // on reutilise pileNom pour stocker le camp
+        const aGagne = (isFace && campChoisi === 'face') || (!isFace && campChoisi === 'pile');
+        description = `${resultatTexte}\n${aGagne ? "C'est gagn\u00e9 ! \ud83c\udf89" : "C'est perdu... \ud83d\ude22"}\nOn recommence ?`;
+    } else {
+        description = `${resultatTexte}\nOn recommence ?`;
     }
-    description += "\nOn recommence ?";
 
     const embed = new EmbedBuilder()
         .setColor(isFace ? 0xffd700 : 0xc0c0c0)
@@ -991,13 +1000,14 @@ async function doFlipSequence(channel, firstMessage, isPari, pileNom, faceNom) {
     await channel.send({ embeds: [embed], components: [relancerRow] });
 }
 
-async function sendFlipChoix(channel, message) {
+async function sendFlipChoix(channel, message, authorId) {
+    const aid = authorId ?? 'unknown';
     const simpleBtn = new ButtonBuilder()
-        .setCustomId("flip_simple")
+        .setCustomId(`flip_simple_${aid}`)
         .setLabel("\ud83e\ude99 Lancer simple")
         .setStyle(ButtonStyle.Secondary);
     const pariBtn = new ButtonBuilder()
-        .setCustomId("flip_pari")
+        .setCustomId(`flip_pari_${aid}`)
         .setLabel("\u2694\ufe0f Pari")
         .setStyle(ButtonStyle.Secondary);
     const row = new ActionRowBuilder().addComponents(simpleBtn, pariBtn);
@@ -1483,7 +1493,7 @@ client.on('messageCreate', async (message) => {
 
     // !flip
     if (response?.needsFlip) {
-        await sendFlipChoix(message.channel, message);
+        await sendFlipChoix(message.channel, message, message.author.id);
         return;
     }
 
@@ -2000,19 +2010,57 @@ client.on('interactionCreate', async (interaction) => {
     // BOUTONS FLIP
     // =========================
 
-    if (interaction.isButton() && interaction.customId === "flip_start") {
+    if (interaction.isButton() && interaction.customId.startsWith("flip_start_")) {
+        const startAuthorId = interaction.customId.split("_")[2];
+        if (interaction.user.id !== startAuthorId) {
+            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
         await interaction.deferUpdate();
-        await sendFlipChoix(interaction.channel, null);
+        await sendFlipChoix(interaction.channel, null, startAuthorId);
         return;
     }
 
-    if (interaction.isButton() && interaction.customId === "flip_simple") {
-        await interaction.deferUpdate();
-        await doFlipSequence(interaction.channel, "Je lance la pi\u00e8ce ! \ud83e\ude99", false, null, null);
+    if (interaction.isButton() && interaction.customId.startsWith("flip_simple_")) {
+        const simpleAuthorId = interaction.customId.split("_")[2];
+        if (interaction.user.id !== simpleAuthorId) {
+            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
+        await interaction.message.delete().catch(() => {});
+        // Demander quel camp
+        const pileBtn = new ButtonBuilder()
+            .setCustomId(`flip_solo_pile_${simpleAuthorId}`)
+            .setLabel("Pile")
+            .setStyle(ButtonStyle.Secondary);
+        const faceBtn = new ButtonBuilder()
+            .setCustomId(`flip_solo_face_${simpleAuthorId}`)
+            .setLabel("Face")
+            .setStyle(ButtonStyle.Secondary);
+        const campRow = new ActionRowBuilder().addComponents(pileBtn, faceBtn);
+        const campEmbed = new EmbedBuilder()
+            .setColor(0xffd700)
+            .setTitle("\ud83e\ude99 Pile ou face")
+            .setDescription("Choisis ton camp !");
+        await interaction.channel.send({ embeds: [campEmbed], components: [campRow] });
         return;
     }
 
-    if (interaction.isButton() && interaction.customId === "flip_pari") {
+    if (interaction.isButton() && (interaction.customId.startsWith("flip_solo_pile_") || interaction.customId.startsWith("flip_solo_face_"))) {
+        const parts = interaction.customId.split("_");
+        const choix = parts[2]; // pile ou face
+        const soloAuthorId = parts[3];
+        if (interaction.user.id !== soloAuthorId) {
+            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
+        await interaction.message.delete().catch(() => {});
+        await doFlipSequence(interaction.channel, "Je lance la pi\u00e8ce ! \ud83e\ude99", false, choix, null, soloAuthorId);
+        return;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith("flip_pari_")) {
+        const pariAuthorId = interaction.customId.split("_")[2];
+        if (interaction.user.id !== pariAuthorId) {
+            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
         await interaction.message.delete().catch(() => {});
         const pariEmbed = new EmbedBuilder()
             .setColor(0xffd700)
@@ -2099,7 +2147,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: `${faceIcon} Face`, value: faceVal, inline: true }
                 );
             await interaction.message.edit({ embeds: [finalEmbed], components: [] }).catch(() => {});
-            await doFlipSequence(interaction.channel, null, true, pari.pile, pari.face);
+            await doFlipSequence(interaction.channel, null, true, pari.pile, pari.face, null);
         } else {
             const updEmbed = new EmbedBuilder()
                 .setColor(0xffd700)
