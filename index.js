@@ -3250,7 +3250,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!epsys", value: "Poste des GIFs al\u00e9atoires d'Epsys, parce que." },
                     { name: "!blague", value: "Lance une blague al\u00e9atoire en 3 cat\u00e9gories !" },
                     { name: "!flip", value: "Pour d\u00e9cider \u00e0 pile ou face !" },
-                    { name: "!horoscope", value: "Ton horoscope du jour pour les 13 signes !" }
+                    { name: "!horoscope", value: "L'horoscope du jour selon Cacabot." }
                 );
         }
 
