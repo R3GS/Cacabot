@@ -1500,8 +1500,9 @@ client.on('messageCreate', async (message) => {
     // !flip
     if (response?.needsFlip) {
         if (flipEnCours) {
-            message.reply({ content: "Un lancer est d\u00e9j\u00e0 en cours ! Attends ton tour.", ephemeral: true }).catch(() => {});
-            setTimeout(() => message.delete().catch(() => {}), 3000);
+            message.reply("Un lancer est d\u00e9j\u00e0 en cours ! Attends ton tour.").then(msg => {
+                setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000);
+            });
             return;
         }
         flipEnCours = true;
@@ -2074,7 +2075,8 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: "H\u00e9 oh, pique pas ma pi\u00e8ce !", ephemeral: true });
         }
         await interaction.message.delete().catch(() => {});
-        await doFlipSequence(interaction.channel, "Je lance la pi\u00e8ce ! \ud83e\ude99", false, choix, null, soloAuthorId);
+        const campTexte = choix === 'pile' ? 'Pile' : 'Face';
+        await doFlipSequence(interaction.channel, `**${campTexte}**, c'est \u00e7a ? Ok !\nJe lance la pi\u00e8ce ! \ud83e\ude99`, false, choix, null, soloAuthorId);
         return;
     }
 
