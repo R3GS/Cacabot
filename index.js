@@ -1012,7 +1012,11 @@ async function sendFlipChoix(channel, message, authorId, customMsg) {
         .setCustomId(`flip_pari_${aid}`)
         .setLabel("\u2694\ufe0f Pari")
         .setStyle(ButtonStyle.Secondary);
-    const row = new ActionRowBuilder().addComponents(simpleBtn, pariBtn);
+    const cancelBtn2 = new ButtonBuilder()
+        .setCustomId(`flip_cancel_${aid}`)
+        .setLabel("\u274c Annuler")
+        .setStyle(ButtonStyle.Secondary);
+    const row = new ActionRowBuilder().addComponents(simpleBtn, pariBtn, cancelBtn2);
 
     let texte;
     if (customMsg) {
