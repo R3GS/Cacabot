@@ -1500,7 +1500,9 @@ client.on('messageCreate', async (message) => {
     // !flip
     if (response?.needsFlip) {
         if (flipEnCours) {
-            return message.reply("Un lancer est d\u00e9j\u00e0 en cours ! Attends ton tour.");
+            message.reply({ content: "Un lancer est d\u00e9j\u00e0 en cours ! Attends ton tour.", ephemeral: true }).catch(() => {});
+            setTimeout(() => message.delete().catch(() => {}), 3000);
+            return;
         }
         flipEnCours = true;
         await sendFlipChoix(message.channel, message, message.author.id);
