@@ -243,6 +243,10 @@ function getResponse(raw) {
     //         !DIE
     // =========================
 
+    if (command === "!histoire") {
+        return { needsHistoire: true };
+    }
+
     if (command === "!explode") {
         return { needsExplode: true };
     }
@@ -1248,6 +1252,28 @@ async function sendBlague(interaction, cat, authorId) {
 }
 
 // =========================
+//     LOGIQUE !HISTOIRE
+// =========================
+
+async function callGemini(prompt) {
+    try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${process.env.GEMINI_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { maxOutputTokens: 200, temperature: 0.9 }
+            })
+        });
+        const data = await res.json();
+        return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
+    } catch (err) {
+        console.error('Erreur Gemini:', err);
+        return null;
+    }
+}
+
+// =========================
 //     LISTENER MESSAGES
 // =========================
 
@@ -1546,6 +1572,30 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [embed], components: [row] });
     }
 
+
+    // !histoire
+    if (response?.needsHistoire) {
+        const authorId = message.author.id;
+        const embed = new EmbedBuilder()
+            .setColor(0x9b59b6)
+            .setTitle('\ud83d\udcda Histoire')
+            .setDescription('Comment on commence ?');
+
+        const contexteBtn = new ButtonBuilder()
+            .setCustomId(`histoire_contexte_${authorId}`)
+            .setLabel('\u270d\ufe0f Donner un contexte')
+            .setStyle(ButtonStyle.Secondary);
+        const ecrireBtn = new ButtonBuilder()
+            .setCustomId(`histoire_ecrire_${authorId}`)
+            .setLabel('\ud83d\udcdd \u00c9crire le d\u00e9but')
+            .setStyle(ButtonStyle.Secondary);
+        const caacabotBtn = new ButtonBuilder()
+            .setCustomId(`histoire_cacabot_${authorId}`)
+            .setLabel('\ud83c\udfb2 Laisser Cacabot imaginer')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(contexteBtn, ecrireBtn, caacabotBtn);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
 
     // !explode
     if (response?.needsExplode) {
@@ -2870,6 +2920,135 @@ client.on('interactionCreate', async (interaction) => {
             .setImage(gif);
 
         return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
+    // BOUTONS HISTOIRE
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('histoire_contexte_')) {
+        const authorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+        const modal = {
+            title: "Contexte de l'histoire",
+            custom_id: `histoire_modal_contexte_${authorId}`,
+            components: [{
+                type: 1,
+                components: [{
+                    type: 4, custom_id: 'texte', label: 'Ton contexte', style: 2,
+                    placeholder: 'Ex: Une sorcière dans une forêt enchantée...', max_length: 300, required: true
+                }]
+            }]
+        };
+        return interaction.showModal(modal);
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('histoire_ecrire_')) {
+        const authorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+        const modal = {
+            title: "D\u00e9but de l'histoire",
+            custom_id: `histoire_modal_ecrire_${authorId}`,
+            components: [{
+                type: 1,
+                components: [{
+                    type: 4, custom_id: 'texte', label: "Ton d\u00e9but d'histoire", style: 2,
+                    placeholder: 'Il était une fois...', max_length: 500, required: true
+                }]
+            }]
+        };
+        return interaction.showModal(modal);
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('histoire_cacabot_')) {
+        const authorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+        await interaction.deferUpdate();
+        const prompt = "Commence une histoire originale et captivante en exactement 3 phrases en français. Sois créatif et surprenant.";
+        const texte = await callGemini(prompt);
+        if (!texte) return interaction.followUp({ content: "Gemini n'a pas pu générer l'histoire, réessaie !", ephemeral: true });
+        const chars = texte.length;
+        const continuerBtn = new ButtonBuilder()
+            .setCustomId(`histoire_continuer_${authorId}`)
+            .setLabel('\ud83d\udcd6 Continuer')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(continuerBtn);
+        const embed = new EmbedBuilder()
+            .setColor(0x9b59b6)
+            .setTitle('\ud83d\udcda Histoire')
+            .setDescription(texte)
+            .setFooter({ text: `${chars}/2000 caractères` });
+        return interaction.editReply({ embeds: [embed], components: [row] });
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('histoire_continuer_')) {
+        const authorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+        const currentText = interaction.message.embeds[0]?.description ?? '';
+        if (currentText.length >= 2000) {
+            return interaction.reply({ content: "L'histoire a atteint sa longueur maximale !", ephemeral: true });
+        }
+        const modal = {
+            title: "Continue l'histoire",
+            custom_id: `histoire_modal_continuer_${authorId}`,
+            components: [{
+                type: 1,
+                components: [{
+                    type: 4, custom_id: 'texte', label: 'Ta suite...', style: 2,
+                    placeholder: 'Et soudain...', max_length: 300, required: true
+                }]
+            }]
+        };
+        return interaction.showModal(modal);
+    }
+
+    // =========================
+    // MODALS HISTOIRE
+    // =========================
+
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('histoire_modal_')) {
+        const parts = interaction.customId.split('_');
+        const type = parts[2]; // contexte, ecrire, continuer
+        const authorId = parts[3];
+        const userText = interaction.fields.getTextInputValue('texte');
+        await interaction.deferUpdate();
+
+        let prompt;
+        let histoire = '';
+
+        if (type === 'contexte') {
+            prompt = `Voici un contexte pour une histoire : "${userText}". Génère exactement 3 phrases pour commencer cette histoire en français, de façon captivante. Ta réponse ne doit pas dépasser 400 caractères.`;
+        } else if (type === 'ecrire') {
+            histoire = userText + ' ';
+            prompt = `Voici le début d'une histoire : "${userText}". Continue avec exactement 3 phrases en français, de façon fluide et cohérente. Ta réponse ne doit pas dépasser 400 caractères.`;
+        } else if (type === 'continuer') {
+            const currentText = interaction.message.embeds[0]?.description ?? '';
+            histoire = currentText + ' ' + userText + ' ';
+            const restant = 2000 - histoire.length;
+            prompt = `Voici une histoire en cours : "${histoire}". Continue avec exactement 3 phrases en français, de façon fluide et cohérente. Ta réponse ne doit pas dépasser ${restant} caractères. Si tu manques de place, termine proprement ta dernière phrase avant la limite.`;
+        }
+
+        const suite = await callGemini(prompt);
+        if (!suite) return interaction.followUp({ content: "Gemini n'a pas pu générer la suite, réessaie !", ephemeral: true });
+
+        const fullText = (histoire + suite).trim();
+        const chars = fullText.length;
+        const truncated = fullText.slice(0, 2000);
+
+        const components = chars < 2000 ? [new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`histoire_continuer_${authorId}`)
+                .setLabel('\ud83d\udcd6 Continuer')
+                .setStyle(ButtonStyle.Secondary)
+        )] : [];
+
+        const embed = new EmbedBuilder()
+            .setColor(0x9b59b6)
+            .setTitle('\ud83d\udcda Histoire')
+            .setDescription(truncated)
+            .setFooter({ text: `${Math.min(chars, 2000)}/2000 caractères` });
+
+        return interaction.editReply({ embeds: [embed], components });
     }
 
     // =========================
