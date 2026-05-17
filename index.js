@@ -2023,7 +2023,7 @@ client.on('messageCreate', async (message) => {
             .setCustomId(`help_menu_${message.author.id}_${message.id}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: '👆 Interact , 💬 Discussion, 🎂 Anniversaire, 💥 Random', value: 'fun' },
+                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire, question', value: 'fun' },
                 { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos, serveur, profil, avatar', value: 'util' },
             );
 
@@ -2848,6 +2848,95 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // =========================
+    // MENU SELECT UTIL
+    // =========================
+
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_util_')) {
+        const helpAuthorId = interaction.customId.split('_')[2];
+        const helpMessageId = interaction.customId.split('_')[3] ?? null;
+        if (interaction.user.id !== helpAuthorId) {
+            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
+
+        const value = interaction.values[0];
+        let embed;
+
+        if (value === 'discord') {
+            embed = new EmbedBuilder()
+                .setColor(0x5865f2)
+                .setDescription("# \ud83d\udcac Discord")
+                .addFields(
+                    { name: "<:discord_icon:1505454379669524532> !discord", value: "Obtenir le lien officiel d'invitation de Rega\u00efa." },
+                    { name: "<:serveur_icon:1505456319946031144> !serveur", value: "Afficher les informations du serveur." },
+                    { name: "\ud83d\udc64 !profil", value: "Afficher le profil d'un membre." },
+                    { name: "\ud83d\uddbc\ufe0f !avatar", value: "Afficher l'avatar d'un membre en grand." },
+                    { name: "\ud83c\udfc5 !top", value: "Afficher le top 10 des membres les plus actifs." },
+                    { name: "\ud83d\udcac !actif", value: "Affiche les membres les plus actifs du jour et de la semaine." }
+                );
+        }
+
+        if (value === 'autres') {
+            embed = new EmbedBuilder()
+                .setColor(0x95a5a6)
+                .setDescription("# \ud83c\udfae Autres")
+                .addFields(
+                    { name: "<:aternos_icon:1505454393049485362> !aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." }
+                );
+        }
+
+        if (!embed) {
+            embed = new EmbedBuilder().setColor(0xff0000).setTitle("Erreur").setDescription("Cat\u00e9gorie inconnue");
+        }
+
+        const backButton = new ButtonBuilder()
+            .setCustomId(`help_back_util_${helpAuthorId}`)
+            .setLabel('\u2b05 Retour')
+            .setStyle(ButtonStyle.Secondary);
+        const deleteButton = new ButtonBuilder()
+            .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
+            .setLabel('\u274c Supprimer')
+            .setStyle(ButtonStyle.Secondary);
+        const backRow = new ActionRowBuilder().addComponents(backButton, deleteButton);
+        return interaction.update({ embeds: [embed], components: [backRow] });
+    }
+
+    // =========================
+    // BOUTON RETOUR UTIL
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('help_back_util_')) {
+        const helpAuthorId = interaction.customId.split('_')[3];
+        if (interaction.user.id !== helpAuthorId) {
+            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
+
+        const utilEmbed = new EmbedBuilder()
+            .setColor(0x3498db)
+            .setTitle("\ud83d\udee0 Utilitaire")
+            .setDescription("Choisis une cat\u00e9gorie !");
+
+        const utilMenu = new StringSelectMenuBuilder()
+            .setCustomId(`help_util_${helpAuthorId}`)
+            .setPlaceholder('Choisis une cat\u00e9gorie')
+            .addOptions(
+                { label: '\ud83d\udcac Discord', description: 'discord, serveur, profil, avatar, top, actif', value: 'discord' },
+                { label: '\ud83c\udfae Autres', description: 'aternos', value: 'autres' }
+            );
+
+        const utilBackButton = new ButtonBuilder()
+            .setCustomId(`help_back_${helpAuthorId}`)
+            .setLabel('\u2b05 Retour')
+            .setStyle(ButtonStyle.Secondary);
+        const utilDeleteButton = new ButtonBuilder()
+            .setCustomId(`help_delete_${helpAuthorId}_`)
+            .setLabel('\u274c Supprimer')
+            .setStyle(ButtonStyle.Secondary);
+        const utilRow = new ActionRowBuilder().addComponents(utilMenu);
+        const utilBackRow = new ActionRowBuilder().addComponents(utilBackButton, utilDeleteButton);
+        return interaction.update({ embeds: [utilEmbed], components: [utilRow, utilBackRow] });
+    }
+
+    // =========================
     // MENU SELECT
     // =========================
 
@@ -2891,17 +2980,30 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         if (value === 'util') {
-            embed = new EmbedBuilder()
+            const utilEmbed = new EmbedBuilder()
                 .setColor(0x3498db)
-                .setDescription("# \ud83d\udee0 Utilitaire")
-                .addFields(
-                    { name: "!discord", value: "Obtenir le lien officiel d'invitation de Rega\u00efa." },
-                    { name: "!aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." },
-                    { name: "!serveur", value: "Afficher les informations du serveur." },
-                    { name: "!actif", value: "Affiche les membres les plus actifs du jour et de la semaine." },
-                    { name: "!profil", value: "Afficher le profil d'un membre." },
-                    { name: "!avatar", value: "Afficher l'avatar d'un membre en grand." }
+                .setTitle("\ud83d\udee0 Utilitaire")
+                .setDescription("Choisis une cat\u00e9gorie !");
+
+            const utilMenu = new StringSelectMenuBuilder()
+                .setCustomId(`help_util_${helpAuthorId}`)
+                .setPlaceholder('Choisis une cat\u00e9gorie')
+                .addOptions(
+                    { label: '\ud83d\udcac Discord', description: 'discord, serveur, profil, avatar, top, actif', value: 'discord' },
+                    { label: '\ud83c\udfae Autres', description: 'aternos', value: 'autres' }
                 );
+
+            const utilBackButton = new ButtonBuilder()
+                .setCustomId(`help_back_${helpAuthorId}`)
+                .setLabel('\u2b05 Retour')
+                .setStyle(ButtonStyle.Secondary);
+            const utilDeleteButton = new ButtonBuilder()
+                .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
+                .setLabel('\u274c Supprimer')
+                .setStyle(ButtonStyle.Secondary);
+            const utilRow = new ActionRowBuilder().addComponents(utilMenu);
+            const utilBackRow = new ActionRowBuilder().addComponents(utilBackButton, utilDeleteButton);
+            return interaction.update({ embeds: [utilEmbed], components: [utilRow, utilBackRow] });
         }
 
         if (!embed) {
@@ -2964,7 +3066,7 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId(`help_menu_${helpAuthorId}_${helpMessageId ?? ''}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: '👆 Interact , 💬 Discussion, 🎂 Anniversaire, 💥 Random', value: 'fun' },
+                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire, question', value: 'fun' },
                 { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos, serveur, profil, avatar', value: 'util' }
             );
         const row = new ActionRowBuilder().addComponents(menu);
