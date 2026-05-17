@@ -1556,7 +1556,7 @@ client.on('messageCreate', async (message) => {
     // !help
     if (response?.data) {
         const menu = new StringSelectMenuBuilder()
-            .setCustomId(`help_menu_${message.author.id}`)
+            .setCustomId(`help_menu_${message.author.id}_${message.id}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
                 { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire, question', value: 'fun' },
@@ -2044,13 +2044,13 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         const backButton = new ButtonBuilder()
-            .setCustomId(`help_fun_back_${helpAuthorId}`)
+            .setCustomId(`help_fun_back_${helpAuthorId}_${helpMessageId ?? ''}`)
             .setLabel('\u2b05 Retour')
             .setStyle(ButtonStyle.Secondary);
         const deleteButton = new ButtonBuilder()
-            .setCustomId(`help_delete_${helpAuthorId}`)
+            .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
             .setLabel('\u274c Supprimer')
-            .setStyle(ButtonStyle.Danger);
+            .setStyle(ButtonStyle.Secondary);
         const backRow = new ActionRowBuilder().addComponents(backButton, deleteButton);
         return interaction.update({ embeds: [embed], components: [backRow] });
     }
@@ -2060,7 +2060,9 @@ client.on('interactionCreate', async (interaction) => {
     // =========================
 
     if (interaction.isButton() && interaction.customId.startsWith('help_fun_back_')) {
-        const helpAuthorId = interaction.customId.split('_')[3];
+        const funBackParts = interaction.customId.split('_');
+        const helpAuthorId = funBackParts[3];
+        const helpMessageId = funBackParts[4] ?? null;
         if (interaction.user.id !== helpAuthorId) {
             return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
         }
@@ -2080,11 +2082,15 @@ client.on('interactionCreate', async (interaction) => {
             );
 
         const funBackButton = new ButtonBuilder()
-            .setCustomId(`help_back_${helpAuthorId}`)
+            .setCustomId(`help_back_${helpAuthorId}_${helpMessageId ?? ''}`)
             .setLabel('\u2b05 Retour')
             .setStyle(ButtonStyle.Secondary);
+        const funDeleteButton = new ButtonBuilder()
+            .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
+            .setLabel('\u274c Supprimer')
+            .setStyle(ButtonStyle.Secondary);
         const funRow = new ActionRowBuilder().addComponents(funMenu);
-        const funBackRow = new ActionRowBuilder().addComponents(funBackButton);
+        const funBackRow = new ActionRowBuilder().addComponents(funBackButton, funDeleteButton);
         return interaction.update({ embeds: [funEmbed], components: [funRow, funBackRow] });
     }
 
@@ -2124,7 +2130,9 @@ client.on('interactionCreate', async (interaction) => {
     // =========================
 
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_menu_')) {
-        const helpAuthorId = interaction.customId.split('_')[2];
+        const parts = interaction.customId.split('_');
+        const helpAuthorId = parts[2];
+        const helpMessageId = parts[3] ?? null;
         if (interaction.user.id !== helpAuthorId) {
             return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
         }
@@ -2148,11 +2156,15 @@ client.on('interactionCreate', async (interaction) => {
                 );
 
             const funBackButton = new ButtonBuilder()
-                .setCustomId(`help_back_${helpAuthorId}`)
+                .setCustomId(`help_back_${helpAuthorId}_${helpMessageId ?? ''}`)
                 .setLabel('\u2b05 Retour')
                 .setStyle(ButtonStyle.Secondary);
+            const funDeleteButton = new ButtonBuilder()
+                .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
+                .setLabel('\u274c Supprimer')
+                .setStyle(ButtonStyle.Secondary);
             const funRow = new ActionRowBuilder().addComponents(funMenu);
-            const funBackRow = new ActionRowBuilder().addComponents(funBackButton);
+            const funBackRow = new ActionRowBuilder().addComponents(funBackButton, funDeleteButton);
             return interaction.update({ embeds: [funEmbed], components: [funRow, funBackRow] });
         }
 
@@ -2177,13 +2189,13 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         const backButton = new ButtonBuilder()
-            .setCustomId(`help_back_${helpAuthorId}`)
+            .setCustomId(`help_back_${helpAuthorId}_${helpMessageId ?? ''}`)
             .setLabel('\u2b05 Retour')
             .setStyle(ButtonStyle.Secondary);
         const deleteButton = new ButtonBuilder()
-            .setCustomId(`help_delete_${helpAuthorId}`)
+            .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
             .setLabel('\u274c Supprimer')
-            .setStyle(ButtonStyle.Danger);
+            .setStyle(ButtonStyle.Secondary);
         const row = new ActionRowBuilder().addComponents(backButton, deleteButton);
         return interaction.update({ embeds: [embed], components: [row] });
     }
@@ -2193,11 +2205,19 @@ client.on('interactionCreate', async (interaction) => {
     // =========================
 
     if (interaction.isButton() && interaction.customId.startsWith('help_delete_')) {
-        const helpAuthorId = interaction.customId.split('_')[2];
+        const delParts = interaction.customId.split('_');
+        const helpAuthorId = delParts[2];
+        const helpMessageId = delParts[3] ?? null;
         if (interaction.user.id !== helpAuthorId) {
             return interaction.reply({ content: "Tu ne peux pas supprimer ce message !", ephemeral: true });
         }
+        // Supprimer l'embed
         await interaction.message.delete().catch(() => {});
+        // Supprimer le message original de la commande
+        if (helpMessageId && helpMessageId !== '') {
+            const originalMsg = await interaction.channel.messages.fetch(helpMessageId).catch(() => null);
+            if (originalMsg) await originalMsg.delete().catch(() => {});
+        }
         return;
     }
 
@@ -2206,7 +2226,9 @@ client.on('interactionCreate', async (interaction) => {
     // =========================
 
     if (interaction.isButton() && interaction.customId.startsWith('help_back_')) {
-        const helpAuthorId = interaction.customId.split('_')[2];
+        const backParts = interaction.customId.split('_');
+        const helpAuthorId = backParts[2];
+        const helpMessageId = backParts[3] ?? null;
         if (interaction.user.id !== helpAuthorId) {
             return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
         }
@@ -2216,7 +2238,7 @@ client.on('interactionCreate', async (interaction) => {
             .setDescription("Hey ! Voici Cacabot, qui, malgr\u00e9 son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\n\nPour d\u00e9couvrir les diff\u00e9rentes commandes disponibles de Cacabot, choisis l'une des cat\u00e9gories ci-dessous !");
 
         const menu = new StringSelectMenuBuilder()
-            .setCustomId(`help_menu_${helpAuthorId}`)
+            .setCustomId(`help_menu_${helpAuthorId}_${helpMessageId ?? ''}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
                 { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire, question', value: 'fun' },
