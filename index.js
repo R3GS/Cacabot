@@ -2961,7 +2961,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!insult", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
                     { name: "!die", value: "Mourez en direct sur le serveur !" },
                     { name: "!ban", value: "Bannir quelqu'un du serveur... symboliquement." },
-                    { name: "!bait", value: "Ragebait quelqu'un, et attends sa vengeance !" },
+                    { name: "!bait", value: "Ragebait quelqu'un du serveur, gratuitement." },
                     { name: "!punch", value: "Frappez quelqu'un sur le serveur !" },
                     { name: "!bang", value: "Tirez sur quelqu'un sur le serveur !" },
                     { name: "!rizz", value: "Rizzez quelqu'un sur le serveur !" },
@@ -3040,7 +3040,7 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId(`help_fun_${helpAuthorId}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, punch, bang, rizz, rire, danse', value: 'interact' },
+                { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, punch, bang, rizz, rire, danse', value: 'interact' },
                 { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                 { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
                 { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague', value: 'random' }
@@ -3210,7 +3210,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setCustomId(`help_fun_${helpAuthorId}`)
                 .setPlaceholder('Choisis une cat\u00e9gorie')
                 .addOptions(
-                    { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, punch, bang, rizz, rire, danse', value: 'interact' },
+                    { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, punch, bang, rizz, rire, danse', value: 'interact' },
                     { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                     { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
                     { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague', value: 'random' }
