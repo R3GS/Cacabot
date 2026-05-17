@@ -2139,7 +2139,11 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId("flip_choose_face")
             .setLabel("Face")
             .setStyle(ButtonStyle.Secondary);
-        const chooseRow = new ActionRowBuilder().addComponents(pileBtn, faceBtn);
+        const cancelPariBtn = new ButtonBuilder()
+            .setCustomId(`flip_cancel_${pariAuthorId}`)
+            .setLabel("\u274c Annuler")
+            .setStyle(ButtonStyle.Secondary);
+        const chooseRow = new ActionRowBuilder().addComponents(pileBtn, faceBtn, cancelPariBtn);
 
         await interaction.update({ embeds: [pariEmbed], components: [chooseRow] });
         const pariMsg = interaction.message;
