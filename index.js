@@ -32,6 +32,53 @@ async function saveTop() {
 
 setInterval(() => saveTop(), 5 * 60 * 1000);
 
+const BIRTHDAY_BIN_ID = '6a0904bf250b1311c35f23a7';
+const BIRTHDAY_BIN_URL = `https://api.jsonbin.io/v3/b/${BIRTHDAY_BIN_ID}`;
+let birthdayData = { birthdays: {} };
+
+async function loadBirthdays() {
+    try {
+        const res = await fetch(BIRTHDAY_BIN_URL + '/latest', {
+            headers: { 'X-Master-Key': JSONBIN_KEY }
+        });
+        const json = await res.json();
+        birthdayData = json.record;
+        console.log('\u2705 Anniversaires charg\u00e9s depuis JSONBin');
+    } catch (err) {
+        console.error('Erreur chargement anniversaires:', err);
+    }
+}
+
+async function saveBirthdays() {
+    try {
+        await fetch(BIRTHDAY_BIN_URL, {
+            method: 'PUT',
+            headers: { 'X-Master-Key': JSONBIN_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify(birthdayData)
+        });
+    } catch (err) {
+        console.error('Erreur sauvegarde anniversaires:', err);
+    }
+}
+
+const BIRTHDAY_CHANNEL_ID = '720057528867618909';
+const BIRTHDAY_GIF = 'https://cdn.discordapp.com/attachments/1128032964924670053/1505358556851863583/jdg-joueur-du-grenier.gif';
+
+async function checkBirthdays() {
+    const now = new Date();
+    const today = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`;
+    for (const [userId, date] of Object.entries(birthdayData.birthdays)) {
+        if (date === today) {
+            for (const guild of client.guilds.cache.values()) {
+                const channel = guild.channels.cache.get(BIRTHDAY_CHANNEL_ID);
+                if (!channel) continue;
+                await channel.send(`<@${userId}> JOYEUX ANNIVERSAIRE !!! \ud83c\udf89\ud83c\udf89\ud83c\udf89`);
+                await channel.send(BIRTHDAY_GIF);
+            }
+        }
+    }
+}
+
 const {
     Client,
     GatewayIntentBits,
@@ -242,6 +289,10 @@ function getResponse(raw) {
     // =========================
     //         !TOP
     // =========================
+
+    if (command === "!anniversaire" || command === "!anniversairetest") {
+        return { needsAnniversaire: true };
+    }
 
     if (command === "!top") {
         return { needsTop: true };
@@ -1315,6 +1366,74 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [embed] });
     }
 
+    // !anniversaire
+    if (response?.needsAnniversaire) {
+        const isTest = message.content.trim().split(/\s+/)[0].toLowerCase() === '!anniversairetest';
+        const args = message.content.trim().split(/\s+/);
+        const sub = args[1]?.toLowerCase();
+
+        if (isTest) {
+            const channel = message.guild?.channels.cache.get(BIRTHDAY_CHANNEL_ID);
+            if (!channel) return message.reply("Salon introuvable !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            await channel.send(`<@${message.author.id}> JOYEUX ANNIVERSAIRE !!! \ud83c\udf89\ud83c\udf89\ud83c\udf89`);
+            await channel.send(BIRTHDAY_GIF);
+            return;
+        }
+
+        if (sub === 'set') {
+            const date = args[2];
+            if (!date || !/^\d{2}\/\d{2}$/.test(date)) {
+                return message.reply("Format invalide ! Utilise `!anniversaire set JJ/MM`").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            }
+            birthdayData.birthdays[message.author.id] = date;
+            await saveBirthdays();
+            return message.reply(`\ud83c\udf82 Ton anniversaire a \u00e9t\u00e9 enregistr\u00e9 le **${date}** !`);
+        }
+
+        if (sub === 'show') {
+            const date = birthdayData.birthdays[message.author.id];
+            if (!date) return message.reply("Tu n'as pas encore enregistr\u00e9 ton anniversaire ! Utilise `!anniversaire set JJ/MM`").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply(`\ud83c\udf82 Ton anniversaire est le **${date}** !`);
+        }
+
+        if (sub === 'list') {
+            const entries = Object.entries(birthdayData.birthdays);
+            if (entries.length === 0) return message.reply("Aucun anniversaire enregistr\u00e9 !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            const sorted = entries.sort((a, b) => {
+                const [da, ma] = a[1].split('/').map(Number);
+                const [db, mb] = b[1].split('/').map(Number);
+                return ma !== mb ? ma - mb : da - db;
+            });
+            const lines = sorted.map(([uid, date]) => {
+                const member = message.guild?.members.cache.get(uid);
+                const name = member?.displayName ?? uid;
+                return `\ud83c\udf82 **${name}** \u2014 ${date}`;
+            }).join('\n');
+            const embed = new EmbedBuilder()
+                .setColor(0xff69b4)
+                .setTitle('\ud83c\udf82 Anniversaires du serveur')
+                .setDescription(lines);
+            return message.reply({ embeds: [embed] });
+        }
+
+        if (sub === 'next') {
+            const entries = Object.entries(birthdayData.birthdays);
+            if (entries.length === 0) return message.reply("Aucun anniversaire enregistr\u00e9 !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            const now = new Date();
+            const toDate = (str) => {
+                const [d, m] = str.split('/').map(Number);
+                const year = (m < now.getMonth() + 1 || (m === now.getMonth() + 1 && d < now.getDate())) ? now.getFullYear() + 1 : now.getFullYear();
+                return new Date(year, m - 1, d);
+            };
+            const next = entries.sort((a, b) => toDate(a[1]) - toDate(b[1]))[0];
+            const member = message.guild?.members.cache.get(next[0]);
+            const name = member?.displayName ?? `<@${next[0]}>`;
+            return message.reply(`\ud83c\udf82 Le prochain anniversaire est celui de **${name}** le **${next[1]}** !`);
+        }
+
+        return message.reply("Sous-commandes disponibles : `set JJ/MM`, `show`, `list`, `next`").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+    }
+
     // !top
     if (response?.needsTop) {
         const sorted = Object.entries(topData.messages)
@@ -1848,6 +1967,18 @@ client.on('interactionCreate', async (interaction) => {
                 );
         }
 
+        if (value === 'anniversaire') {
+            embed = new EmbedBuilder()
+                .setColor(0xff69b4)
+                .setDescription("# \ud83c\udf82 Anniversaire")
+                .addFields(
+                    { name: "!anniversaire set JJ/MM", value: "Enregistre ton anniversaire." },
+                    { name: "!anniversaire show", value: "Affiche ton anniversaire enregistr\u00e9." },
+                    { name: "!anniversaire list", value: "Liste tous les anniversaires du serveur." },
+                    { name: "!anniversaire next", value: "Affiche le prochain anniversaire du serveur." }
+                );
+        }
+
         if (!embed) {
             embed = new EmbedBuilder().setColor(0xff0000).setTitle("Erreur").setDescription("Cat\u00e9gorie inconnue");
         }
@@ -1880,7 +2011,8 @@ client.on('interactionCreate', async (interaction) => {
             .addOptions(
                 { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insulte, die, punch, bang, rizz, rire, danse', value: 'interact' },
                 { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
-                { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys', value: 'random' }
+                { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys', value: 'random' },
+                { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' }
             );
 
         const funBackButton = new ButtonBuilder()
@@ -2027,10 +2159,22 @@ client.on('interactionCreate', async (interaction) => {
 client.once('ready', async () => {
     console.log(`\u2705 ${client.user.tag} est connect\u00e9`);
     await loadTop();
+    await loadBirthdays();
     for (const guild of client.guilds.cache.values()) {
         await guild.members.fetch().catch(() => {});
     }
     console.log(`\u2705 Membres fetch\u00e9s`);
+
+    const msUntilMidnight = () => {
+        const now = new Date();
+        const midnight = new Date(now);
+        midnight.setHours(24, 0, 0, 0);
+        return midnight - now;
+    };
+    setTimeout(function scheduleCheck() {
+        checkBirthdays();
+        setInterval(checkBirthdays, 24 * 60 * 60 * 1000);
+    }, msUntilMidnight());
 });
 
 client.login(process.env.TOKEN);
