@@ -3618,10 +3618,72 @@ client.once('ready', async () => {
     };
     setTimeout(function scheduleCheck() {
         checkBirthdays();
+scheduleHoroscopeQuotidien();
         setInterval(checkBirthdays, 24 * 60 * 60 * 1000);
     }, msUntilMidnight());
 });
 
+
+
+// =========================
+//   HOROSCOPE AUTOMATIQUE
+// =========================
+
+function scheduleHoroscopeQuotidien() {
+    const now = new Date();
+    const next8h = new Date();
+    next8h.setHours(8, 0, 0, 0);
+    if (next8h <= now) next8h.setDate(next8h.getDate() + 1);
+    const delay = next8h - now;
+
+    setTimeout(async () => {
+        try {
+            const channel = await client.channels.fetch('720057528867618909');
+            if (!channel) return;
+
+            const now2 = new Date();
+            const dateKey = now2.getFullYear() * 10000 + (now2.getMonth() + 1) * 100 + now2.getDate();
+            const dateStr = now2.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+            const signes = [
+                { nom: 'B\u00e9lier', emoji: '\u2648' },
+                { nom: 'Taureau', emoji: '\u2649' },
+                { nom: 'G\u00e9meaux', emoji: '\u264a' },
+                { nom: 'Cancer', emoji: '\u264b' },
+                { nom: 'Lion', emoji: '\u264c' },
+                { nom: 'Vierge', emoji: '\u264d' },
+                { nom: 'Balance', emoji: '\u264e' },
+                { nom: 'Scorpion', emoji: '\u264f' },
+                { nom: 'Sagittaire', emoji: '\u2650' },
+                { nom: 'Capricorne', emoji: '\u2651' },
+                { nom: 'Verseau', emoji: '\u2652' },
+                { nom: 'Poissons', emoji: '\u2653' },
+                { nom: 'Loutre', emoji: '\ud83e\udda6' },
+            ];
+
+            const description = signes.map((s, i) => {
+                const horoscope = getHoroscopeForSign(i, dateKey);
+                return `${s.emoji} **${s.nom}**\n${horoscope}`;
+            }).join('\n\n');
+
+            const embed = new EmbedBuilder()
+                .setColor(0x2c2f33)
+                .setTitle('\ud83d\udd2e Horoscope du jour')
+                .setDescription(description)
+                .setThumbnail('https://cdn.discordapp.com/attachments/1128032964924670053/1505637234596905080/color-replaced.png')
+                .setFooter({ text: `\ud83d\udcc5 ${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}` });
+
+            await channel.send({ embeds: [embed] });
+        } catch (err) {
+            console.error('Erreur horoscope automatique:', err);
+        }
+        scheduleHoroscopeQuotidien();
+    }, delay);
+
+    const h = Math.floor(delay / 3600000);
+    const m = Math.floor((delay % 3600000) / 60000);
+    console.log(`\u23f0 Prochain horoscope automatique dans ${h}h${m}m`);
+}
 
 // =========================
 //     LISTENER REACTIONS
