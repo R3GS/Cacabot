@@ -2087,6 +2087,14 @@ client.on('interactionCreate', async (interaction) => {
             await new Promise(r => setTimeout(r, 1000));
             await interaction.message.edit({ embeds: [countEmbed.setDescription("Lancer dans 1")] }).catch(() => {});
             await new Promise(r => setTimeout(r, 1000));
+            const finalEmbed = new EmbedBuilder()
+                .setColor(0xffd700)
+                .setTitle("\ud83e\ude99 Pile ou face")
+                .addFields(
+                    { name: `${pileIcon} Pile`, value: pileVal, inline: true },
+                    { name: `${faceIcon} Face`, value: faceVal, inline: true }
+                );
+            await interaction.message.edit({ embeds: [finalEmbed], components: [] }).catch(() => {});
             await doFlipSequence(interaction.channel, "C'est parti ! \ud83e\ude99", true, pari.pile, pari.face);
         } else {
             const updEmbed = new EmbedBuilder()
