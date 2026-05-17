@@ -2018,7 +2018,8 @@ client.on('interactionCreate', async (interaction) => {
         const startAuthorId = interaction.user.id;
         const startType = interaction.customId.split("_")[3]; // simple ou pari
         const startNom = interaction.member?.displayName ?? interaction.user.username;
-        await interaction.deferUpdate();
+        await interaction.message.edit({ components: [] }).catch(() => {});
+        await interaction.deferUpdate().catch(() => {});
         let relancerMsg;
         if (startType === "simple") {
             relancerMsg = `**${startNom}**, cette fois, c'est aussi pour un lancer simple, ou alors pour parier avec quelqu'un ?`;
