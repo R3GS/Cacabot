@@ -1599,7 +1599,7 @@ client.on('messageCreate', async (message) => {
 
         let titre;
         if (cible.id === client.user.id) {
-            titre = `**${auteurNom}** me ragebait ! Gngngngn...`;
+            titre = `\ud83d\ude1b **${auteurNom}** me ragebait ! Gngngngn...`;
             const embed = new EmbedBuilder()
                 .setColor(0xffb14a)
                 .setDescription(titre)
@@ -1613,7 +1613,7 @@ client.on('messageCreate', async (message) => {
         const vengBtn = new ButtonBuilder()
             .setCustomId(`bait_venge_${cible.id}_${message.author.id}_${auteurNom}`)
             .setLabel("\ud83d\udca2 SE VENGER !")
-            .setStyle(ButtonStyle.Danger);
+            .setStyle(ButtonStyle.Secondary);
         const row = new ActionRowBuilder().addComponents(vengBtn);
 
         const embed = new EmbedBuilder()
