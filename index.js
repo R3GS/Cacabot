@@ -2023,8 +2023,8 @@ client.on('messageCreate', async (message) => {
             .setCustomId(`help_menu_${message.author.id}_${message.id}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire, question', value: 'fun' },
-                { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos, serveur, profil, avatar', value: 'util' },
+                { label: '\ud83c\udf89 Fun', description: '\ud83d\udc46 Interact, \ud83d\udcac Discussion, \ud83c\udf82 Anniversaire, \ud83d\udca5 Random', value: 'fun' },
+                { label: '\ud83d\udee0 Utilitaire', description: '\ud83d\udcac Discord, \u25b6\ufe0f YouTube, \ud83d\uddd2\ufe0f Autres', value: 'util' },
             );
 
         const row = new ActionRowBuilder().addComponents(menu);
@@ -2997,7 +2997,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setPlaceholder('Choisis une cat\u00e9gorie')
                 .addOptions(
                     { label: '\ud83d\udcac Discord', description: 'discord, serveur, profil, avatar, top, actif', value: 'discord' },
-                    { label: '<:youtube_icon:1505457903585198151> YouTube', description: 'En construction...', value: 'youtube' },
+                    { label: '\u25b6\ufe0f YouTube', description: 'En construction...', value: 'youtube' },
                     { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos', value: 'autres' }
                 );
 
@@ -3074,8 +3074,8 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId(`help_menu_${helpAuthorId}_${helpMessageId ?? ''}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire, question', value: 'fun' },
-                { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos, serveur, profil, avatar', value: 'util' }
+                { label: '\ud83c\udf89 Fun', description: '\ud83d\udc46 Interact, \ud83d\udcac Discussion, \ud83c\udf82 Anniversaire, \ud83d\udca5 Random', value: 'fun' },
+                { label: '\ud83d\udee0 Utilitaire', description: '\ud83d\udcac Discord, \u25b6\ufe0f YouTube, \ud83d\uddd2\ufe0f Autres', value: 'util' }
             );
         const row = new ActionRowBuilder().addComponents(menu);
         return interaction.update({ embeds: [embed], components: [row] });
