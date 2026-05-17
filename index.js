@@ -1451,6 +1451,47 @@ client.on('messageCreate', async (message) => {
             return message.reply(`\ud83c\udf82 Ton anniversaire a \u00e9t\u00e9 enregistr\u00e9 le **${date}** !`);
         }
 
+        if (sub === 'remove') {
+            const query = args.slice(2).join(" ");
+
+            // Sans argument = supprimer le sien
+            if (!query) {
+                if (!birthdayData.birthdays[message.author.id]) {
+                    return message.reply("Tu n'as pas d'anniversaire enregistr\u00e9 !");
+                }
+                delete birthdayData.birthdays[message.author.id];
+                await saveBirthdays();
+                return message.reply("\ud83d\uddd1\ufe0f Ton anniversaire a \u00e9t\u00e9 supprim\u00e9 !");
+            }
+
+            // Avec argument = supprimer celui de quelqu'un
+            const result = findMemberByName(message.guild, query);
+            if (result.multiple) {
+                askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                    if (!birthdayData.birthdays[user.id]) {
+                        message.reply("Ce membre n'a pas d'anniversaire enregistr\u00e9 !");
+                        return;
+                    }
+                    delete birthdayData.birthdays[user.id];
+                    await saveBirthdays();
+                    const nom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
+                    message.reply(`\ud83d\uddd1\ufe0f L'anniversaire de **${nom}** a \u00e9t\u00e9 supprim\u00e9 !`);
+                });
+                return;
+            }
+            if (!result.found) {
+                return message.reply("Membre introuvable !");
+            }
+            const targetUser = result.found.user;
+            if (!birthdayData.birthdays[targetUser.id]) {
+                return message.reply("Ce membre n'a pas d'anniversaire enregistr\u00e9 !");
+            }
+            const nom = message.guild?.members.cache.get(targetUser.id)?.displayName ?? targetUser.username;
+            delete birthdayData.birthdays[targetUser.id];
+            await saveBirthdays();
+            return message.reply(`\ud83d\uddd1\ufe0f L'anniversaire de **${nom}** a \u00e9t\u00e9 supprim\u00e9 !`);
+        }
+
         if (sub === 'show') {
             const date = birthdayData.birthdays[message.author.id];
             if (!date) return message.reply("Tu n'as pas encore enregistr\u00e9 ton anniversaire ! Utilise `!anniversaire set JJ/MM`");
