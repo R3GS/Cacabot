@@ -973,8 +973,9 @@ async function doFlipSequence(channel, firstMessage, isPari, pileNom, faceNom, a
     }
 
     await new Promise(r => setTimeout(r, 1000));
+    const flipType = isPari ? "pari" : "simple";
     const relancerButton = new ButtonBuilder()
-        .setCustomId("flip_start_open")
+        .setCustomId(`flip_start_open_${flipType}`)
         .setLabel("\ud83e\ude99 Relancer la pi\u00e8ce")
         .setStyle(ButtonStyle.Secondary);
     const relancerRow = new ActionRowBuilder().addComponents(relancerButton);
@@ -1000,7 +1001,7 @@ async function doFlipSequence(channel, firstMessage, isPari, pileNom, faceNom, a
     await channel.send({ embeds: [embed], components: [relancerRow] });
 }
 
-async function sendFlipChoix(channel, message, authorId) {
+async function sendFlipChoix(channel, message, authorId, customMsg) {
     const aid = authorId ?? 'unknown';
     const simpleBtn = new ButtonBuilder()
         .setCustomId(`flip_simple_${aid}`)
@@ -1011,7 +1012,9 @@ async function sendFlipChoix(channel, message, authorId) {
         .setLabel("\u2694\ufe0f Pari")
         .setStyle(ButtonStyle.Secondary);
     const row = new ActionRowBuilder().addComponents(simpleBtn, pariBtn);
-    if (message) {
+    if (customMsg) {
+        await channel.send({ content: customMsg, components: [row] });
+    } else if (message) {
         const nom = message.member?.displayName ?? message.author.username;
         await message.reply({ content: `**${nom}**, c'est pour un lancer simple, ou alors pour parier avec quelqu'un ?`, components: [row] });
     } else {
@@ -2013,8 +2016,18 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.isButton() && interaction.customId.startsWith("flip_start_")) {
         const startAuthorId = interaction.user.id;
+        const startType = interaction.customId.split("_")[3]; // simple ou pari
+        const startNom = interaction.member?.displayName ?? interaction.user.username;
         await interaction.deferUpdate();
-        await sendFlipChoix(interaction.channel, null, startAuthorId);
+        let relancerMsg;
+        if (startType === "simple") {
+            relancerMsg = `**${startNom}**, cette fois, c'est aussi pour un lancer simple, ou alors pour parier avec quelqu'un ?`;
+        } else if (startType === "pari") {
+            relancerMsg = `**${startNom}**, cette fois, c'est pour un lancer simple, ou encore pour parier avec quelqu'un ?`;
+        } else {
+            relancerMsg = `**${startNom}**, c'est pour un lancer simple, ou alors pour parier avec quelqu'un ?`;
+        }
+        await sendFlipChoix(interaction.channel, null, startAuthorId, relancerMsg);
         return;
     }
 
