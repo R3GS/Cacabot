@@ -1266,6 +1266,7 @@ async function callGemini(prompt) {
             })
         });
         const data = await res.json();
+        console.log('Gemini response:', JSON.stringify(data).slice(0, 300));
         return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? null;
     } catch (err) {
         console.error('Erreur Gemini:', err);
