@@ -4,62 +4,39 @@ const JSONBIN_KEY = '$2a$10$4aNH8UsrNWZXAfraECrYp.yAWPzFvnOY7EAc8oifTNLrpfN3dnRu
 const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_ID}`;
 
 let topData = { messages: {} };
+let birthdayData = { birthdays: {} };
 
-async function loadTop() {
+async function loadAll() {
     try {
         const res = await fetch(JSONBIN_URL + '/latest', {
             headers: { 'X-Master-Key': JSONBIN_KEY }
         });
         const json = await res.json();
-        topData = json.record;
-        console.log('\u2705 topData charg\u00e9 depuis JSONBin');
+        topData = { messages: json.record.messages ?? {} };
+        birthdayData = { birthdays: json.record.birthdays ?? {} };
+        console.log('\u2705 Donn\u00e9es charg\u00e9es depuis JSONBin');
     } catch (err) {
         console.error('Erreur chargement JSONBin:', err);
     }
 }
 
-async function saveTop() {
+async function saveAll() {
     try {
         await fetch(JSONBIN_URL, {
             method: 'PUT',
             headers: { 'X-Master-Key': JSONBIN_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify(topData)
+            body: JSON.stringify({ messages: topData.messages, birthdays: birthdayData.birthdays })
         });
     } catch (err) {
         console.error('Erreur sauvegarde JSONBin:', err);
     }
 }
 
-setInterval(() => saveTop(), 5 * 60 * 1000);
+setInterval(() => saveAll(), 30 * 60 * 1000);
 
-const BIRTHDAY_BIN_ID = '6a0904bf250b1311c35f23a7';
-const BIRTHDAY_BIN_URL = `https://api.jsonbin.io/v3/b/${BIRTHDAY_BIN_ID}`;
-let birthdayData = { birthdays: {} };
-
-async function loadBirthdays() {
-    try {
-        const res = await fetch(BIRTHDAY_BIN_URL + '/latest', {
-            headers: { 'X-Master-Key': JSONBIN_KEY }
-        });
-        const json = await res.json();
-        birthdayData = json.record;
-        console.log('\u2705 Anniversaires charg\u00e9s depuis JSONBin');
-    } catch (err) {
-        console.error('Erreur chargement anniversaires:', err);
-    }
-}
-
-async function saveBirthdays() {
-    try {
-        await fetch(BIRTHDAY_BIN_URL, {
-            method: 'PUT',
-            headers: { 'X-Master-Key': JSONBIN_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify(birthdayData)
-        });
-    } catch (err) {
-        console.error('Erreur sauvegarde anniversaires:', err);
-    }
-}
+// Aliases pour compatibilite
+const saveTop = saveAll;
+const saveBirthdays = saveAll;
 
 const BIRTHDAY_CHANNEL_ID = '720057528867618909';
 const BIRTHDAY_GIF = 'https://cdn.discordapp.com/attachments/1128032964924670053/1505358556851863583/jdg-joueur-du-grenier.gif';
@@ -2672,8 +2649,7 @@ client.on('interactionCreate', async (interaction) => {
 
 client.once('ready', async () => {
     console.log(`\u2705 ${client.user.tag} est connect\u00e9`);
-    await loadTop();
-    await loadBirthdays();
+    await loadAll();
     for (const guild of client.guilds.cache.values()) {
         await guild.members.fetch().catch(() => {});
     }
