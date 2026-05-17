@@ -1238,7 +1238,7 @@ client.on('messageCreate', async (message) => {
 
     // Cheh
     const cleanedCheh = message.content.toLowerCase().trim();
-    if (pendingCheh.has(message.channel.id) && (cleaned.includes("absolute cacabot")) || (cleanedCheh === 'tg')) {
+    if (pendingCheh.has(message.channel.id) && (cleanedCheh === 'ntm' || cleanedCheh === 'tg')) {
         pendingCheh.delete(message.channel.id);
         return message.reply(CHEH_GIF);
     }
