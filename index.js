@@ -247,6 +247,10 @@ function getResponse(raw) {
     //         !DIE
     // =========================
 
+    if (command === "!bait") {
+        return { needsBait: true };
+    }
+
     if (command === "!ban") {
         return { needsBan: true };
     }
@@ -1539,6 +1543,92 @@ client.on('messageCreate', async (message) => {
     }
 
 
+    // !bait
+    if (response?.needsBait) {
+        const baitGifs = [
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564402697375794/cat-cats.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564403230183599/cat-explosion_1.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564403653804153/floop-flop.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564404031426661/cat-explodes.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564404400521267/cat-funny.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564404882870292/spideyvivi.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564405281194064/cat-explode-cat-meme.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564405847298150/explosion-missile.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564406224781373/exploding-cat-cat-blowing-up.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564406799532052/cat-gato.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564412172570664/boomshakalaka.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564412763836466/elgatitolover-cat.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564413376335962/cat-explosion-ellie-cat-explosion.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564413795635311/exploding-car-explode.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564414147825774/cat-explosion.gif"
+        ];
+        const gif = baitGifs[Math.floor(Math.random() * baitGifs.length)];
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        let cible = message.mentions.users.first();
+
+        if (!cible) {
+            const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (query) {
+                if (client.user.username.toLowerCase().includes(query.toLowerCase()) || 'cacabot'.includes(query.toLowerCase())) {
+                    cible = client.user;
+                } else {
+                    const result = findMemberByName(message.guild, query);
+                    if (result.multiple) {
+                        askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const cibleNom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
+                            const vengBtn = new ButtonBuilder()
+                                .setCustomId(`bait_venge_${user.id}_${message.author.id}_${auteurNom}`)
+                                .setLabel("\ud83d\udca2 SE VENGER !")
+                                .setStyle(ButtonStyle.Danger);
+                            const row = new ActionRowBuilder().addComponents(vengBtn);
+                            const embed = new EmbedBuilder()
+                                .setColor(0xffb14a)
+                                .setDescription(`\ud83d\ude1b **${auteurNom}** ragebait **${cibleNom}** !`)
+                                .setImage(gif);
+                            message.reply({ embeds: [embed], components: [row] });
+                        });
+                        return;
+                    }
+                    if (result.found) cible = result.found.user;
+                }
+            }
+        }
+
+        if (!cible) {
+            return message.reply("Choisis quelqu'un que tu veux ragebait !");
+        }
+
+        if (cible.id === message.author.id) {
+            return message.reply({ content: "Tu ne peux pas te ragebait toi-m\u00eame !" }).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+        }
+
+        let titre;
+        if (cible.id === client.user.id) {
+            titre = `**${auteurNom}** me ragebait ! Gngngngn...`;
+            const embed = new EmbedBuilder()
+                .setColor(0xffb14a)
+                .setDescription(titre)
+                .setImage(gif);
+            return message.reply({ embeds: [embed] });
+        }
+
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        titre = `\ud83d\ude1b **${auteurNom}** ragebait **${cibleNom}** !`;
+
+        const vengBtn = new ButtonBuilder()
+            .setCustomId(`bait_venge_${cible.id}_${message.author.id}_${auteurNom}`)
+            .setLabel("\ud83d\udca2 SE VENGER !")
+            .setStyle(ButtonStyle.Danger);
+        const row = new ActionRowBuilder().addComponents(vengBtn);
+
+        const embed = new EmbedBuilder()
+            .setColor(0xffb14a)
+            .setDescription(titre)
+            .setImage(gif);
+
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
     // !bang
     if (response?.needsBang) {
         let cible = message.mentions.users.first();
@@ -1671,7 +1761,7 @@ client.on('messageCreate', async (message) => {
         }
 
         if (cible.id === message.author.id) {
-            return message.reply({ content: "Tu ne peux pas te bannir toi-m\u00eame ! Demande aux modos pour \u00e7a." }).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply({ content: "Tu ne peux pas te bannir toi-m\u00eame ! Demande aux modos pour \u00e7a." });
         }
 
         const banGifs = [
@@ -2626,6 +2716,30 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // =========================
+    // BOUTON BAIT VENGEANCE
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('bait_venge_')) {
+        const parts = interaction.customId.split('_');
+        const targetId = parts[2];
+        const originalAuthorId = parts[3];
+        const originalAuthorNom = parts.slice(4).join('_');
+        const clickerId = interaction.user.id;
+
+        if (clickerId === originalAuthorId) {
+            return interaction.reply({ content: "Tu peux pas te venger de ton propre ragebait.", ephemeral: true });
+        }
+        if (clickerId !== targetId) {
+            return interaction.reply({ content: "Ce ragebait ne t'était pas adressé...", ephemeral: true });
+        }
+
+        const vengeNom = interaction.member?.displayName ?? interaction.user.username;
+        const embed = buildPunchEmbed(`\ud83d\udca2 **${vengeNom}** se venge de **${originalAuthorNom}** !`);
+        await interaction.message.edit({ components: [] }).catch(() => {});
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
     // MENU SELECT BLAGUE
     // =========================
 
@@ -2852,6 +2966,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!insult", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
                     { name: "!die", value: "Mourez en direct sur le serveur !" },
                     { name: "!ban", value: "Bannir quelqu'un du serveur... symboliquement." },
+                    { name: "!bait", value: "Ragebait quelqu'un, et attends sa vengeance !" },
                     { name: "!punch", value: "Frappez quelqu'un sur le serveur !" },
                     { name: "!bang", value: "Tirez sur quelqu'un sur le serveur !" },
                     { name: "!rizz", value: "Rizzez quelqu'un sur le serveur !" },
