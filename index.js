@@ -2047,7 +2047,11 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId(`help_fun_back_${helpAuthorId}`)
             .setLabel('\u2b05 Retour')
             .setStyle(ButtonStyle.Secondary);
-        const backRow = new ActionRowBuilder().addComponents(backButton);
+        const deleteButton = new ButtonBuilder()
+            .setCustomId(`help_delete_${helpAuthorId}`)
+            .setLabel('\u274c Supprimer')
+            .setStyle(ButtonStyle.Danger);
+        const backRow = new ActionRowBuilder().addComponents(backButton, deleteButton);
         return interaction.update({ embeds: [embed], components: [backRow] });
     }
 
@@ -2063,7 +2067,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const funEmbed = new EmbedBuilder()
             .setColor(0xffcc00)
-            .setDescription("# \ud83c\udf89 Fun\n*Toutes les commandes pour animer le serveur et faire des trucs inutiles mais dr\u00f4les.*\n\n\ud83d\udc46 **Interact** \u2014 Interagis avec les membres du serveur\n\ud83d\udcac **Discussion** \u2014 Lance des d\u00e9bats ou laisse le hasard d\u00e9cider\n\ud83c\udf82 **Anniversaire** \u2014 Pour les anniversaires des membres du serveur !\n\ud83d\udca5 **Random** \u2014 Commandes al\u00e9atoires et surprises");
+            .setDescription("# \ud83c\udf89 Fun\n*Toutes les commandes pour animer le serveur et faire des trucs inutiles mais dr\u00f4les.*\n\n\ud83d\udc46 **Interact** \u2014 Interagis avec les membres du serveur\n\ud83d\udcac **Discussion** \u2014 Lance des d\u00e9bats ou laisse le hasard d\u00e9cider\n\ud83c\udf82 **Anniversaire** \u2014 Les commandes pour les anniversaires des membres du serveur !\n\ud83d\udca5 **Random** \u2014 Commandes al\u00e9atoires et surprises");
 
         const funMenu = new StringSelectMenuBuilder()
             .setCustomId(`help_fun_${helpAuthorId}`)
@@ -2131,7 +2135,7 @@ client.on('interactionCreate', async (interaction) => {
         if (value === 'fun') {
             const funEmbed = new EmbedBuilder()
                 .setColor(0xffcc00)
-                .setDescription("# \ud83c\udf89 Fun\n*Toutes les commandes pour animer le serveur et faire des trucs inutiles mais dr\u00f4les.*\n\n\ud83d\udc46 **Interact** \u2014 Interagis avec les membres du serveur\n\ud83d\udcac **Discussion** \u2014 Lance des d\u00e9bats ou laisse le hasard d\u00e9cider\n\ud83c\udf82 **Anniversaire** \u2014 Pour les anniversaires des membres du serveur !\n\ud83d\udca5 **Random** \u2014 Commandes al\u00e9atoires et surprises");
+                .setDescription("# \ud83c\udf89 Fun\n*Toutes les commandes pour animer le serveur et faire des trucs inutiles mais dr\u00f4les.*\n\n\ud83d\udc46 **Interact** \u2014 Interagis avec les membres du serveur\n\ud83d\udcac **Discussion** \u2014 Lance des d\u00e9bats ou laisse le hasard d\u00e9cider\n\ud83c\udf82 **Anniversaire** \u2014 Les commandes pour les anniversaires des membres du serveur !\n\ud83d\udca5 **Random** \u2014 Commandes al\u00e9atoires et surprises");
 
             const funMenu = new StringSelectMenuBuilder()
                 .setCustomId(`help_fun_${helpAuthorId}`)
@@ -2176,8 +2180,25 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId(`help_back_${helpAuthorId}`)
             .setLabel('\u2b05 Retour')
             .setStyle(ButtonStyle.Secondary);
-        const row = new ActionRowBuilder().addComponents(backButton);
+        const deleteButton = new ButtonBuilder()
+            .setCustomId(`help_delete_${helpAuthorId}`)
+            .setLabel('\u274c Supprimer')
+            .setStyle(ButtonStyle.Danger);
+        const row = new ActionRowBuilder().addComponents(backButton, deleteButton);
         return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // =========================
+    // BOUTON SUPPRIMER
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('help_delete_')) {
+        const helpAuthorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== helpAuthorId) {
+            return interaction.reply({ content: "Tu ne peux pas supprimer ce message !", ephemeral: true });
+        }
+        await interaction.message.delete().catch(() => {});
+        return;
     }
 
     // =========================
