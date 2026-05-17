@@ -8,6 +8,10 @@ let birthdayData = { birthdays: {} };
 let dailyData = {};
 let weeklyData = {};
 
+fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GEMINI_KEY}`)
+  .then(r => r.json())
+  .then(d => console.log(d.models?.map(m => m.name)));
+
 async function loadAll() {
     try {
         const res = await fetch(JSONBIN_URL + '/latest', {
