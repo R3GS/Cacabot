@@ -425,7 +425,7 @@ function getResponse(raw) {
     if (cleaned.endsWith("oui")) return reply("Stiti");
     if (cleaned.includes("bac blanc")) {
         const bacBlanc = [
-            "https://cdn.discordapp.com/attachments/720057528867618909/1504075425985466481/1778669924015-18e38746e64899fb.png",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505380065435717712/yard_stare.jpg",
             "https://cdn.discordapp.com/attachments/1128032964924670053/1505378497533579415/ghost.gif",
             "https://cdn.discordapp.com/attachments/1128032964924670053/1505378497894551623/wwii.jpg",
             "https://cdn.discordapp.com/attachments/1128032964924670053/1505378498271772794/stare.gif",
