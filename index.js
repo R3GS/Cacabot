@@ -2987,7 +2987,7 @@ client.on('interactionCreate', async (interaction) => {
 
         if (value === 'util') {
             const utilEmbed = new EmbedBuilder()
-                .setColor(0x3498db)
+                .setColor(0x8899a6)
                 .setTitle("\ud83d\udee0 Utilitaire")
                 .setDescription("<:discord_icon:1505454379669524532> **Discord** \u2014 Commandes relatives au serveur\n<:youtube_icon:1505457903585198151> **YouTube** \u2014 En construction...\n\ud83d\uddd2\ufe0f **Autres** \u2014 Autres commandes non-r\u00e9pertori\u00e9es");
 
