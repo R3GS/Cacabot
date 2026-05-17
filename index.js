@@ -2090,6 +2090,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
         const embed = buildKissEmbed(retourNom, originalAuthorNom);
+        await interaction.message.edit({ components: [] }).catch(() => {});
         return interaction.reply({ embeds: [embed] });
     }
 
@@ -2113,6 +2114,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
         const embed = buildHugEmbed(retourNom, originalAuthorNom);
+        await interaction.message.edit({ components: [] }).catch(() => {});
         return interaction.reply({ embeds: [embed] });
     }
 
@@ -2239,6 +2241,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
         const embed = buildRizzEmbed(`\ud83d\uddff **${retourNom}** rizz **${originalAuthorNom}** en retour !`);
+        await interaction.message.edit({ components: [] }).catch(() => {});
         return interaction.reply({ embeds: [embed] });
     }
 
@@ -2264,6 +2267,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
         const embed = buildBangEmbed(`\ud83d\udca5 **${retourNom}** riposte sur **${originalAuthorNom}** !`);
+        await interaction.message.edit({ components: [] }).catch(() => {});
         return interaction.reply({ embeds: [embed] });
     }
 
@@ -2288,6 +2292,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
         const embed = buildPunchEmbed(`\ud83e\udd1c **${retourNom}** frappe **${originalAuthorNom}** en retour !`);
+        await interaction.message.edit({ components: [] }).catch(() => {});
         return interaction.reply({ embeds: [embed] });
     }
 
