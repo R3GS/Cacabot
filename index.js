@@ -2322,9 +2322,8 @@ client.on('messageCreate', async (message) => {
                 { name: '\ud83c\udd94 ID', value: guild.id, inline: true }
             )
             .addFields(
-                { name: '\ud83d\udd17 Lien d\'invitation', value: '[Rejoindre le serveur](https://discord.com/invite/maAbUYb)', inline: false }
-            )
-            .setFooter({ text: 'Regaia' });
+                { name: '[\ud83d\udd17 Lien d\'invitation du serveur](https://discord.com/invite/maAbUYb)', value: '\u200b', inline: false }
+            );
 
         return message.reply({ embeds: [embed] });
     }
