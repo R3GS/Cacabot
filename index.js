@@ -251,10 +251,6 @@ function getResponse(raw) {
         return { needsBan: true };
     }
 
-    if (command === "!ban") {
-        return { needsBan: true };
-    }
-
     if (command === "!die") {
         return { needsDie: true };
     }
@@ -1628,65 +1624,8 @@ client.on('messageCreate', async (message) => {
     }
 
     // !ban
+        // !ban
     if (response?.needsBan) {
-        const cible = message.mentions.users.first();
-        const auteurNom = message.member?.displayName ?? message.author.username;
-
-        if (!cible) {
-            return message.reply("Choisis quelqu'un que tu veux bannir !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
-        }
-
-        if (cible.id === message.author.id) {
-            return message.reply("Tu ne peux pas te bannir toi-m\u00eame ! Demande aux modos pour \u00e7a.").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
-        }
-
-        const banGifs = [
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557423686029352/cat-screaming-cat-disappearing.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557409148567572/ahh-kid-turns-blue-and-vanishes.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424092741764/duck-disappears.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424491462856/tom-skot.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424805777428/atoms-cry.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425288380576/sr-pelo-screaming.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425690775683/cat-scream.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426043355278/meme-quarantine.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426433294437/flight-flights.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426881958020/nikocado-avocado-nikocado.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557427209109544/moist-moist-critical.gif"
-        ];
-        const gif = banGifs[Math.floor(Math.random() * banGifs.length)];
-
-        if (cible.id === client.user.id) {
-            const embed = new EmbedBuilder()
-                .setColor(0xcdc9dc)
-                .setDescription(`\ud83d\udd28 **${auteurNom}** me bannir... Pas cool.`)
-                .setImage(gif);
-            return message.reply({ embeds: [embed] });
-        }
-
-        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
-        const embed = new EmbedBuilder()
-            .setColor(0xcdc9dc)
-            .setDescription(`\ud83d\udd28 **${auteurNom}** bannit **${cibleNom}** !`)
-            .setImage(gif);
-        return message.reply({ embeds: [embed] });
-    }
-
-    // !ban
-    if (response?.needsBan) {
-        const banGifs = [
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557423686029352/cat-screaming-cat-disappearing.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557409148567572/ahh-kid-turns-blue-and-vanishes.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424092741764/duck-disappears.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424491462856/tom-skot.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424805777428/atoms-cry.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425288380576/sr-pelo-screaming.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425690775683/cat-scream.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426043355278/meme-quarantine.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426433294437/flight-flights.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426881958020/nikocado-avocado-nikocado.gif",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557427209109544/moist-moist-critical.gif"
-        ];
-        const gif = banGifs[Math.floor(Math.random() * banGifs.length)];
         const auteurNom = message.member?.displayName ?? message.author.username;
         let cible = message.mentions.users.first();
 
@@ -1698,9 +1637,22 @@ client.on('messageCreate', async (message) => {
                 } else {
                     const result = findMemberByName(message.guild, query);
                     if (result.multiple) {
+                        const banGifsDisamb = [
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557423686029352/cat-screaming-cat-disappearing.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557409148567572/ahh-kid-turns-blue-and-vanishes.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424092741764/duck-disappears.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424491462856/tom-skot.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424805777428/atoms-cry.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425288380576/sr-pelo-screaming.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425690775683/cat-scream.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426043355278/meme-quarantine.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426433294437/flight-flights.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426881958020/nikocado-avocado-nikocado.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557427209109544/moist-moist-critical.gif"
+                        ];
                         askDisambiguation(message, message.guild, result.candidates, async (user) => {
                             const cibleNom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
-                            const gif = banGifs[Math.floor(Math.random() * banGifs.length)];
+                            const gif = banGifsDisamb[Math.floor(Math.random() * banGifsDisamb.length)];
                             const embed = new EmbedBuilder()
                                 .setColor(0xcdc9dc)
                                 .setDescription(`\ud83d\udd28 **${auteurNom}** bannit **${cibleNom}** !`)
@@ -1715,12 +1667,27 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!cible) {
-            return message.reply("Choisis quelqu'un que tu veux bannir !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply("Choisis quelqu'un que tu veux bannir !");
         }
 
         if (cible.id === message.author.id) {
-            return message.reply({ content: "Tu ne peux pas te bannir toi-m\u00eame ! Demande aux modos pour \u00e7a.", ephemeral: false }).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply({ content: "Tu ne peux pas te bannir toi-m\u00eame ! Demande aux modos pour \u00e7a." }).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
+
+        const banGifs = [
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557423686029352/cat-screaming-cat-disappearing.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557409148567572/ahh-kid-turns-blue-and-vanishes.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424092741764/duck-disappears.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424491462856/tom-skot.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424805777428/atoms-cry.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425288380576/sr-pelo-screaming.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425690775683/cat-scream.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426043355278/meme-quarantine.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426433294437/flight-flights.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426881958020/nikocado-avocado-nikocado.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557427209109544/moist-moist-critical.gif"
+        ];
+        const gif = banGifs[Math.floor(Math.random() * banGifs.length)];
 
         let titre;
         if (cible.id === client.user.id) {
