@@ -283,6 +283,10 @@ function getResponse(raw) {
         return { needsFlip: true };
     }
 
+    if (command === "!def") {
+        return { needsDef: true };
+    }
+
     if (command === "!actif") {
         return { needsActif: true };
     }
@@ -1688,6 +1692,57 @@ client.on('messageCreate', async (message) => {
         return message.reply("Sous-commandes disponibles : `set JJ/MM`, `show`, `list`, `next`");
     }
 
+    // !def
+    if (response?.needsDef) {
+        const mot = message.content.trim().split(/\s+/).slice(1).join(" ");
+        if (!mot) {
+            return message.reply("Utilise `!def Mot` pour obtenir une d\u00e9finition !");
+        }
+
+        try {
+            // Appel CNRTL pour la definition
+            const defRes = await fetch(`https://api.cnrtl.fr/definition/${encodeURIComponent(mot)}`);
+            if (!defRes.ok) throw new Error('not found');
+            const defHtml = await defRes.text();
+
+            // Extraire la premiere definition du HTML
+            const defMatch = defHtml.match(/class="tlf_cdefinition"[^>]*>([\s\S]*?)<\/span>/);
+            const definition = defMatch
+                ? defMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim()
+                : null;
+
+            if (!definition) {
+                return message.reply(`Aucune d\u00e9finition trouv\u00e9e pour **${mot}** !`);
+            }
+
+            // Appel CNRTL pour les synonymes
+            let synonymes = 'Aucun';
+            try {
+                const synRes = await fetch(`https://api.cnrtl.fr/synonymie/${encodeURIComponent(mot)}`);
+                if (synRes.ok) {
+                    const synHtml = await synRes.text();
+                    const synMatches = [...synHtml.matchAll(/class="syn_[^"]*"[^>]*>([^<]+)<\/a>/g)];
+                    if (synMatches.length > 0) {
+                        synonymes = synMatches.slice(0, 5).map(m => m[1].trim()).join(', ');
+                    }
+                }
+            } catch {}
+
+            const embed = new EmbedBuilder()
+                .setColor(0x3498db)
+                .setTitle('\ud83d\udcd6 D\u00e9finition')
+                .addFields(
+                    { name: `**${mot}**`, value: definition, inline: false },
+                    { name: '__Synonymes__', value: synonymes, inline: false }
+                )
+                .setThumbnail('https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/Books_icon.png/100px-Books_icon.png');
+
+            return message.reply({ embeds: [embed] });
+        } catch (err) {
+            return message.reply(`Aucune d\u00e9finition trouv\u00e9e pour **${mot}** !`);
+        }
+    }
+
     // !actif
     if (response?.needsActif) {
         cleanOldData();
@@ -2654,6 +2709,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." },
                     { name: "!serveur", value: "Afficher les informations du serveur." },
                     { name: "!actif", value: "Affiche les membres les plus actifs du jour et de la semaine." },
+                    { name: "!def", value: "Affiche la d\u00e9finition d'un mot en fran\u00e7ais." },
                     { name: "!profil", value: "Afficher le profil d'un membre." },
                     { name: "!avatar", value: "Afficher l'avatar d'un membre en grand." }
                 );
