@@ -2023,8 +2023,8 @@ client.on('messageCreate', async (message) => {
             .setCustomId(`help_menu_${message.author.id}_${message.id}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: '\ud83d\udc46 Interact, \ud83d\udcac Discussion, \ud83c\udf82 Anniversaire, \ud83d\udca5 Random', value: 'fun' },
-                { label: '\ud83d\udee0 Utilitaire', description: '\ud83d\udcac Discord, \u25b6\ufe0f YouTube, \ud83d\uddd2\ufe0f Autres', value: 'util' },
+                { label: '\ud83c\udf89 Fun', description: 'Interact, Discussion, Anniversaire, Random', value: 'fun' },
+                { label: '\ud83d\udee0 Utilitaire', description: 'Discord, YouTube, Autres', value: 'util' },
             );
 
         const row = new ActionRowBuilder().addComponents(menu);
@@ -2710,7 +2710,7 @@ client.on('interactionCreate', async (interaction) => {
 
         if (value === 'interact') {
             embed = new EmbedBuilder()
-                .setColor(0xff6b6b)
+                .setColor(0xffdc5d)
                 .setDescription("# \ud83d\udc46 Interact")
                 .addFields(
                     { name: "!kiss", value: "Embrassez quelqu'un sur le serveur !" },
@@ -2738,7 +2738,7 @@ client.on('interactionCreate', async (interaction) => {
 
         if (value === 'random') {
             embed = new EmbedBuilder()
-                .setColor(0xa855f7)
+                .setColor(0xf5f8fa)
                 .setDescription("# \ud83d\udca5 Random")
                 .addFields(
                     { name: "!destin", value: "Pr\u00e9dit votre destin et fait part des \u00e9v\u00e8nements de votre futur." },
@@ -2863,7 +2863,7 @@ client.on('interactionCreate', async (interaction) => {
 
         if (value === 'discord') {
             embed = new EmbedBuilder()
-                .setColor(0x5865f2)
+                .setColor(0xbdddf4)
                 .setDescription("# \ud83d\udcac Discord")
                 .addFields(
                     { name: "<:discord_icon:1505454379669524532> !discord", value: "Obtenir le lien officiel d'invitation de Rega\u00efa." },
@@ -2927,7 +2927,7 @@ client.on('interactionCreate', async (interaction) => {
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
                 { label: '\ud83d\udcac Discord', description: 'discord, serveur, profil, avatar, top, actif', value: 'discord' },
-                { label: '\ud83c\udfae Autres', description: 'aternos', value: 'autres' }
+                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos', value: 'autres' }
             );
 
         const utilBackButton = new ButtonBuilder()
@@ -3074,8 +3074,8 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId(`help_menu_${helpAuthorId}_${helpMessageId ?? ''}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: '\ud83d\udc46 Interact, \ud83d\udcac Discussion, \ud83c\udf82 Anniversaire, \ud83d\udca5 Random', value: 'fun' },
-                { label: '\ud83d\udee0 Utilitaire', description: '\ud83d\udcac Discord, \u25b6\ufe0f YouTube, \ud83d\uddd2\ufe0f Autres', value: 'util' }
+                { label: '\ud83c\udf89 Fun', description: 'Interact, Discussion, Anniversaire, Random', value: 'fun' },
+                { label: '\ud83d\udee0 Utilitaire', description: 'Discord, YouTube, Autres', value: 'util' }
             );
         const row = new ActionRowBuilder().addComponents(menu);
         return interaction.update({ embeds: [embed], components: [row] });
