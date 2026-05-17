@@ -1700,37 +1700,32 @@ client.on('messageCreate', async (message) => {
         }
 
         try {
-            // Appel Wiktionnaire pour la definition
-            const wikiRes = await fetch(`https://fr.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(mot)}`);
+            // Appel Wiktionnaire via l'API MediaWiki
+            const wikiUrl = `https://fr.wiktionary.org/w/api.php?action=query&titles=${encodeURIComponent(mot)}&prop=extracts&exintro=true&format=json&origin=*`;
+            const wikiRes = await fetch(wikiUrl, { headers: { 'User-Agent': 'CacabotDiscord/1.0' } });
             if (!wikiRes.ok) throw new Error('not found');
             const wikiData = await wikiRes.json();
 
-            // Recuperer la premiere langue francaise
-            const frEntries = wikiData.fr;
-            if (!frEntries || frEntries.length === 0) throw new Error('not found');
+            const pages = wikiData.query?.pages ?? {};
+            const page = Object.values(pages)[0];
+            if (!page || page.missing !== undefined || !page.extract) throw new Error('not found');
 
-            const entry = frEntries[0];
-            const nature = entry.partOfSpeech ?? '';
-            const definitions = entry.definitions ?? [];
-            if (definitions.length === 0) throw new Error('not found');
+            // Nettoyer le HTML et garder les 2 premieres phrases
+            const cleaned = page.extract
+                .replace(/<[^>]+>/g, '')
+                .replace(/\n+/g, ' ')
+                .trim();
 
-            // Nettoyer le HTML de la definition
-            const rawDef = definitions[0].definition ?? '';
-            const definition = rawDef.replace(/<[^>]+>/g, '').trim();
-            if (!definition) throw new Error('not found');
+            if (!cleaned || cleaned.length < 10) throw new Error('not found');
 
-            // Synonymes depuis les exemples si dispo
-            const synonymes = definitions[0].parsedExamples
-                ? definitions[0].parsedExamples.slice(0, 3).map(e => e.example?.replace(/<[^>]+>/g, '').trim()).filter(Boolean).join(' / ') || 'Aucun'
-                : 'Aucun';
+            const definition = cleaned.length > 1024 ? cleaned.slice(0, 1021) + '...' : cleaned;
 
             const embed = new EmbedBuilder()
                 .setColor(0x3498db)
                 .setTitle('\ud83d\udcd6 D\u00e9finition')
                 .setThumbnail('https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/Books_icon.png/100px-Books_icon.png')
                 .addFields(
-                    { name: `**${mot}**${nature ? ` *(${nature})*` : ''}`, value: definition.length > 1024 ? definition.slice(0, 1021) + '...' : definition, inline: false },
-                    { name: '__Exemples__', value: synonymes, inline: false }
+                    { name: `**${mot}**`, value: definition, inline: false }
                 );
 
             return message.reply({ embeds: [embed] });
