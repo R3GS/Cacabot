@@ -974,7 +974,7 @@ async function doFlipSequence(channel, firstMessage, isPari, pileNom, faceNom, a
 
     await new Promise(r => setTimeout(r, 1000));
     const relancerButton = new ButtonBuilder()
-        .setCustomId(`flip_start_${authorId ?? 'unknown'}`)
+        .setCustomId("flip_start_open")
         .setLabel("\ud83e\ude99 Relancer la pi\u00e8ce")
         .setStyle(ButtonStyle.Secondary);
     const relancerRow = new ActionRowBuilder().addComponents(relancerButton);
@@ -2011,10 +2011,7 @@ client.on('interactionCreate', async (interaction) => {
     // =========================
 
     if (interaction.isButton() && interaction.customId.startsWith("flip_start_")) {
-        const startAuthorId = interaction.customId.split("_")[2];
-        if (interaction.user.id !== startAuthorId) {
-            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
-        }
+        const startAuthorId = interaction.user.id;
         await interaction.deferUpdate();
         await sendFlipChoix(interaction.channel, null, startAuthorId);
         return;
@@ -2036,10 +2033,11 @@ client.on('interactionCreate', async (interaction) => {
             .setLabel("Face")
             .setStyle(ButtonStyle.Secondary);
         const campRow = new ActionRowBuilder().addComponents(pileBtn, faceBtn);
+        const clickerNom = interaction.member?.displayName ?? interaction.user.username;
         const campEmbed = new EmbedBuilder()
             .setColor(0xffd700)
             .setTitle("\ud83e\ude99 Pile ou face")
-            .setDescription("Choisis ton camp !");
+            .setDescription(`**${clickerNom}**, choisis ton camp !`);
         await interaction.channel.send({ embeds: [campEmbed], components: [campRow] });
         return;
     }
@@ -2049,7 +2047,7 @@ client.on('interactionCreate', async (interaction) => {
         const choix = parts[2]; // pile ou face
         const soloAuthorId = parts[3];
         if (interaction.user.id !== soloAuthorId) {
-            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+            return interaction.reply({ content: "H\u00e9 oh, pique pas ma pi\u00e8ce !", ephemeral: true });
         }
         await interaction.message.delete().catch(() => {});
         await doFlipSequence(interaction.channel, "Je lance la pi\u00e8ce ! \ud83e\ude99", false, choix, null, soloAuthorId);
@@ -2105,9 +2103,9 @@ client.on('interactionCreate', async (interaction) => {
         const pari = flipParis.get(msgId);
 
         if (!pari) return interaction.reply({ content: "Ce pari n'existe plus !", ephemeral: true });
-        if (pari[choix]) return interaction.reply({ content: `Le camp ${choix} est d\u00e9j\u00e0 pris !`, ephemeral: true });
+        if (pari[choix]) return interaction.reply({ content: "Ce camp est d\u00e9j\u00e0 pris !", ephemeral: true });
         if (pari[autreChoix] === interaction.member?.displayName ?? interaction.user.username) {
-            return interaction.reply({ content: "Tu es d\u00e9j\u00e0 dans l'autre camp !", ephemeral: true });
+            return interaction.reply({ content: "H\u00e9 oh, pique pas ma pi\u00e8ce !", ephemeral: true });
         }
 
         const nom = interaction.member?.displayName ?? interaction.user.username;
