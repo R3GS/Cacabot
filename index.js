@@ -2063,7 +2063,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const funEmbed = new EmbedBuilder()
             .setColor(0xffcc00)
-            .setDescription("# \ud83c\udf89 Fun\n*Toutes les commandes pour animer le serveur et faire des trucs inutiles mais dr\u00f4les.*\n\n\ud83d\udc46 **Interact** \u2014 Interagis avec les membres du serveur\n\ud83d\udcac **Discussion** \u2014 Lance des d\u00e9bats ou laisse le hasard d\u00e9cider\n\ud83c\udf82 **Anniversaire** \u2014 Les commandes pour les anniversaires des membres du serveur !\n\ud83d\udca5 **Random** \u2014 Commandes al\u00e9atoires et surprises");
+            .setDescription("# \ud83c\udf89 Fun\n*Toutes les commandes pour animer le serveur et faire des trucs inutiles mais dr\u00f4les.*\n\n\ud83d\udc46 **Interact** \u2014 Interagis avec les membres du serveur\n\ud83d\udcac **Discussion** \u2014 Lance des d\u00e9bats ou laisse le hasard d\u00e9cider\n\ud83c\udf82 **Anniversaire** \u2014 Pour les anniversaires des membres du serveur !\n\ud83d\udca5 **Random** \u2014 Commandes al\u00e9atoires et surprises");
 
         const funMenu = new StringSelectMenuBuilder()
             .setCustomId(`help_fun_${helpAuthorId}`)
