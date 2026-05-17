@@ -464,7 +464,13 @@ function getResponse(raw) {
     if (cleaned.includes("de quoi")) return reply("De feur");
     if (cleaned.includes("de qui")) return reply("De quette");
     if (cleaned.endsWith("quoi")) return reply("Feur");
-    if (cleaned.includes(" feur ") || cleaned === "feur" || cleaned.startsWith("feur ") || cleaned.endsWith(" feur")) return "\"Feur\" ? Tu veux me voler mon job ?";
+    const voleurMots = ['feur', 'quette', 'stiti', 'pfeur', 'stitient', 'feurent', 'bril'];
+    for (const mot of voleurMots) {
+        if (cleaned.includes(' ' + mot + ' ') || cleaned === mot || cleaned.startsWith(mot + ' ') || cleaned.endsWith(' ' + mot)) {
+            const motFormate = mot.charAt(0).toUpperCase() + mot.slice(1);
+            return `"${motFormate}" ? Tu veux me voler mon job ?`;
+        }
+    }
 
     // =========================
     // MESSAGES EXACTS UNIQUEMENT
@@ -1300,7 +1306,7 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!cible) {
-            return message.reply("Euuh... Tu veux embrasser qui du coup ?");
+            return message.reply("Euuh... Tu veux embrasser qui ? J'ai pas compris.");
         }
 
         const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
