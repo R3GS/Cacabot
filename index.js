@@ -1700,31 +1700,54 @@ client.on('messageCreate', async (message) => {
         }
 
         try {
-            // Appel en.wiktionary.org qui supporte /definition/ et inclut le francais
-            const wikiRes = await fetch(`https://en.wiktionary.org/api/rest_v1/page/definition/${encodeURIComponent(mot)}`, {
-                headers: { 'User-Agent': 'CacabotDiscord/1.0' }
+            // Appel CNRTL - parsing HTML
+            const cnrtlRes = await fetch(`https://www.cnrtl.fr/definition/${encodeURIComponent(mot)}`, {
+                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CacabotDiscord/1.0)' }
             });
-            if (!wikiRes.ok) throw new Error('not found');
-            const wikiData = await wikiRes.json();
+            if (!cnrtlRes.ok) throw new Error('not found');
+            const html = await cnrtlRes.text();
 
-            // Chercher les entrees francaises
-            const frEntries = wikiData.fr;
-            if (!frEntries || frEntries.length === 0) throw new Error('not found');
+            // Extraire la nature grammaticale
+            const natureMatch = html.match(/class="tlf_ccode"[^>]*>([^<]+)<\/span>/);
+            const nature = natureMatch ? natureMatch[1].trim() : '';
 
-            const entry = frEntries[0];
-            const nature = entry.partOfSpeech ?? '';
-            const definitions = entry.definitions ?? [];
-            if (definitions.length === 0) throw new Error('not found');
+            // Extraire la premiere definition
+            const defPatterns = [
+                /class="tlf_cdefinition"[^>]*>([\s\S]*?)<\/span>/,
+                /id="vitemselected"[\s\S]*?class="tlf_cdefinition"[^>]*>([\s\S]*?)<\/span>/,
+                /<span[^>]*class="[^"]*tlf_c[^"]*"[^>]*>([\s\S]*?)<\/span>/
+            ];
 
-            const rawDef = definitions[0].definition ?? '';
-            const definition = rawDef.replace(/<[^>]+>/g, '').trim();
+            let definition = null;
+            for (const pattern of defPatterns) {
+                const match = html.match(pattern);
+                if (match) {
+                    definition = match[1]
+                        .replace(/<[^>]+>/g, '')
+                        .replace(/&amp;/g, '&')
+                        .replace(/&lt;/g, '<')
+                        .replace(/&gt;/g, '>')
+                        .replace(/&nbsp;/g, ' ')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                    if (definition && definition.length > 10) break;
+                }
+            }
+
             if (!definition) throw new Error('not found');
 
-            // Exemples
-            const exemples = definitions[0].parsedExamples ?? [];
-            const exemplesText = exemples.length > 0
-                ? exemples.slice(0, 2).map(e => (e.example ?? '').replace(/<[^>]+>/g, '').trim()).filter(Boolean).join('\n') || 'Aucun'
-                : 'Aucun';
+            // Extraire les synonymes
+            let synonymes = 'Aucun';
+            const synRes = await fetch(`https://www.cnrtl.fr/synonymie/${encodeURIComponent(mot)}`, {
+                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; CacabotDiscord/1.0)' }
+            });
+            if (synRes.ok) {
+                const synHtml = await synRes.text();
+                const synMatches = [...synHtml.matchAll(/href="\/synonymie\/[^"]*"[^>]*>([^<]{2,30})<\/a>/g)];
+                if (synMatches.length > 0) {
+                    synonymes = [...new Set(synMatches.slice(0, 5).map(m => m[1].trim()))].join(', ');
+                }
+            }
 
             const embed = new EmbedBuilder()
                 .setColor(0x3498db)
@@ -1732,7 +1755,7 @@ client.on('messageCreate', async (message) => {
                 .setThumbnail('https://upload.wikimedia.org/wikipedia/commons/thumb/f/f7/Books_icon.png/100px-Books_icon.png')
                 .addFields(
                     { name: `**${mot}**${nature ? ` *(${nature})*` : ''}`, value: definition.length > 1024 ? definition.slice(0, 1021) + '...' : definition, inline: false },
-                    { name: '__Exemples__', value: exemplesText, inline: false }
+                    { name: '__Synonymes__', value: synonymes, inline: false }
                 );
 
             return message.reply({ embeds: [embed] });
