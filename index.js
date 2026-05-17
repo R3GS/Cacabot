@@ -1013,13 +1013,26 @@ async function sendFlipChoix(channel, message, authorId, customMsg) {
         .setLabel("\u2694\ufe0f Pari")
         .setStyle(ButtonStyle.Secondary);
     const row = new ActionRowBuilder().addComponents(simpleBtn, pariBtn);
+
+    let texte;
     if (customMsg) {
-        await channel.send({ content: customMsg, components: [row] });
+        texte = customMsg;
     } else if (message) {
         const nom = message.member?.displayName ?? message.author.username;
-        await message.reply({ content: `**${nom}**, c'est pour un lancer simple, ou alors pour parier avec quelqu'un ?`, components: [row] });
+        texte = `**${nom}**, c'est pour un lancer simple, ou alors pour parier avec quelqu'un ?`;
     } else {
-        await channel.send({ content: "C'est pour un lancer simple, ou alors pour parier avec quelqu'un ?", components: [row] });
+        texte = "C'est pour un lancer simple, ou alors pour parier avec quelqu'un ?";
+    }
+
+    const embed = new EmbedBuilder()
+        .setColor(0xffd700)
+        .setTitle("\ud83e\ude99 Pile ou face")
+        .setDescription(texte);
+
+    if (message) {
+        return message.reply({ embeds: [embed], components: [row] });
+    } else {
+        return channel.send({ embeds: [embed], components: [row] });
     }
 }
 
@@ -2027,9 +2040,8 @@ client.on('interactionCreate', async (interaction) => {
         const startAuthorId = interaction.user.id;
         const startType = interaction.customId.split("_")[3]; // simple ou pari
         const startNom = interaction.member?.displayName ?? interaction.user.username;
-        await interaction.message.edit({ components: [] }).catch(() => {});
-        await interaction.deferUpdate().catch(() => {});
         flipEnCours = true;
+        await interaction.deferUpdate().catch(() => {});
         let relancerMsg;
         if (startType === "simple") {
             relancerMsg = `**${startNom}**, cette fois, c'est aussi pour un lancer simple, ou alors pour parier avec quelqu'un ?`;
@@ -2078,6 +2090,7 @@ client.on('interactionCreate', async (interaction) => {
         const gif = flipGifs[Math.floor(Math.random() * flipGifs.length)];
         const lancerEmbed = new EmbedBuilder()
             .setColor(0xffd700)
+            .setTitle("\ud83e\ude99 Pile ou face")
             .setDescription(`**${campTexte}**, c'est \u00e7a ? Ok !\nJe lance la pi\u00e8ce ! \ud83e\ude99`)
             .setImage(gif);
         await interaction.update({ embeds: [lancerEmbed], components: [] });
@@ -2091,7 +2104,6 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.user.id !== pariAuthorId) {
             return interaction.reply({ content: "C'est pas \u00e0 toi que je m'adresse, on jouera ensemble apr\u00e8s son tour si tu veux.", ephemeral: true });
         }
-        await interaction.message.delete().catch(() => {});
         const pariEmbed = new EmbedBuilder()
             .setColor(0xffd700)
             .setTitle("\ud83e\ude99 Pile ou face")
@@ -2111,7 +2123,8 @@ client.on('interactionCreate', async (interaction) => {
             .setStyle(ButtonStyle.Secondary);
         const chooseRow = new ActionRowBuilder().addComponents(pileBtn, faceBtn);
 
-        const pariMsg = await interaction.channel.send({ embeds: [pariEmbed], components: [chooseRow] });
+        await interaction.update({ embeds: [pariEmbed], components: [chooseRow] });
+        const pariMsg = interaction.message;
 
         // Stocker l'etat du pari
         flipParis.set(pariMsg.id, { pile: null, face: null, messageId: pariMsg.id, channel: interaction.channel });
