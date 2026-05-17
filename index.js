@@ -2069,13 +2069,27 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId(`flip_solo_face_${simpleAuthorId}`)
             .setLabel("Face")
             .setStyle(ButtonStyle.Secondary);
-        const campRow = new ActionRowBuilder().addComponents(pileBtn, faceBtn);
+        const cancelBtn = new ButtonBuilder()
+            .setCustomId(`flip_cancel_${simpleAuthorId}`)
+            .setLabel("\u274c Annuler")
+            .setStyle(ButtonStyle.Secondary);
+        const campRow = new ActionRowBuilder().addComponents(pileBtn, faceBtn, cancelBtn);
         const clickerNom = interaction.member?.displayName ?? interaction.user.username;
         const campEmbed = new EmbedBuilder()
             .setColor(0xffd700)
             .setTitle("\ud83e\ude99 Pile ou face")
             .setDescription(`**${clickerNom}**, choisis ton camp !`);
         await interaction.channel.send({ embeds: [campEmbed], components: [campRow] });
+        return;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith("flip_cancel_")) {
+        const cancelAuthorId = interaction.customId.split("_")[2];
+        if (interaction.user.id !== cancelAuthorId) {
+            return interaction.reply({ content: "H\u00e9 oh, pique pas ma pi\u00e8ce !", ephemeral: true });
+        }
+        flipEnCours = false;
+        await interaction.message.delete().catch(() => {});
         return;
     }
 
