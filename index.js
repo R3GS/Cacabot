@@ -999,6 +999,7 @@ async function doFlipSequence(channel, firstMessage, isPari, pileNom, faceNom, a
         .setThumbnail(resultatImg);
 
     await channel.send({ embeds: [embed], components: [relancerRow] });
+    flipEnCours = false;
 }
 
 async function sendFlipChoix(channel, message, authorId, customMsg) {
@@ -1023,6 +1024,7 @@ async function sendFlipChoix(channel, message, authorId, customMsg) {
 }
 
 const flipParis = new Map();
+let flipEnCours = false;
 
 // =========================
 //     LISTENER MESSAGES
@@ -1497,6 +1499,10 @@ client.on('messageCreate', async (message) => {
 
     // !flip
     if (response?.needsFlip) {
+        if (flipEnCours) {
+            return message.reply("Un lancer est d\u00e9j\u00e0 en cours ! Attends ton tour.");
+        }
+        flipEnCours = true;
         await sendFlipChoix(message.channel, message, message.author.id);
         return;
     }
@@ -2020,6 +2026,7 @@ client.on('interactionCreate', async (interaction) => {
         const startNom = interaction.member?.displayName ?? interaction.user.username;
         await interaction.message.edit({ components: [] }).catch(() => {});
         await interaction.deferUpdate().catch(() => {});
+        flipEnCours = true;
         let relancerMsg;
         if (startType === "simple") {
             relancerMsg = `**${startNom}**, cette fois, c'est aussi pour un lancer simple, ou alors pour parier avec quelqu'un ?`;
@@ -2106,6 +2113,7 @@ client.on('interactionCreate', async (interaction) => {
             flipParis.delete(pariMsg.id);
             const vide = (!pari.pile && !pari.face) ? "les deux camps sont vides !" : "l'un des camps est vide !";
             await pariMsg.delete().catch(() => {});
+            flipEnCours = false;
             await interaction.channel.send(`\u274c Le pari est annul\u00e9, ${vide}`);
         }, 30000);
         return;
