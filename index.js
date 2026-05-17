@@ -2731,7 +2731,6 @@ client.on('interactionCreate', async (interaction) => {
                 .setDescription("# \ud83d\udcac Discussion")
                 .addFields(
                     { name: "!question", value: "Lance une question al\u00e9atoire parmi 6 cat\u00e9gories !" },
-                    { name: "!blague", value: "Lance une blague al\u00e9atoire en 3 cat\u00e9gories !" },
                     { name: "!choix", value: "Vous avez du mal \u00e0 faire un choix ? Demandez \u00e0 Cacabot." }
                 );
         }
@@ -2918,7 +2917,7 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         const utilEmbed = new EmbedBuilder()
-            .setColor(0x3498db)
+            .setColor(0x8899a6)
             .setTitle("\ud83d\udee0 Utilitaire")
             .setDescription("<:discord_icon:1505454379669524532> **Discord** \u2014 Commandes relatives au serveur\n<:youtube_icon:1505457903585198151> **YouTube** \u2014 En construction...\n\ud83d\uddd2\ufe0f **Autres** \u2014 Autres commandes non-r\u00e9pertori\u00e9es");
 
