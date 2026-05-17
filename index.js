@@ -5,6 +5,8 @@ const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_ID}`;
 
 let topData = { messages: {} };
 let birthdayData = { birthdays: {} };
+let dailyData = {};
+let weeklyData = {};
 
 async function loadAll() {
     try {
@@ -14,6 +16,8 @@ async function loadAll() {
         const json = await res.json();
         topData = { messages: json.record.messages ?? {} };
         birthdayData = { birthdays: json.record.birthdays ?? {} };
+        dailyData = json.record.daily ?? {};
+        weeklyData = json.record.weekly ?? {};
         console.log('\u2705 Donn\u00e9es charg\u00e9es depuis JSONBin');
     } catch (err) {
         console.error('Erreur chargement JSONBin:', err);
@@ -25,7 +29,7 @@ async function saveAll() {
         await fetch(JSONBIN_URL, {
             method: 'PUT',
             headers: { 'X-Master-Key': JSONBIN_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages: topData.messages, birthdays: birthdayData.birthdays })
+            body: JSON.stringify({ messages: topData.messages, birthdays: birthdayData.birthdays, daily: dailyData, weekly: weeklyData })
         });
     } catch (err) {
         console.error('Erreur sauvegarde JSONBin:', err);
@@ -277,6 +281,10 @@ function getResponse(raw) {
 
     if (command === "!flip") {
         return { needsFlip: true };
+    }
+
+    if (command === "!actif") {
+        return { needsActif: true };
     }
 
     if (command === "!top") {
@@ -1020,6 +1028,36 @@ async function sendFlipChoix(channel, message, authorId, customMsg) {
 const flipParis = new Map();
 let flipEnCours = false;
 
+
+function getTodayKey() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function getWeekKey() {
+    const d = new Date();
+    const startOfYear = new Date(d.getFullYear(), 0, 1);
+    const week = Math.ceil(((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
+    return `${d.getFullYear()}-W${String(week).padStart(2,'0')}`;
+}
+
+function cleanOldData() {
+    const now = new Date();
+    // Garder seulement les 7 derniers jours
+    Object.keys(dailyData).forEach(key => {
+        const d = new Date(key);
+        if ((now - d) / 86400000 > 7) delete dailyData[key];
+    });
+    // Garder seulement les 4 dernières semaines
+    const currentWeek = getWeekKey();
+    const [cy, cw] = currentWeek.split('-W').map(Number);
+    Object.keys(weeklyData).forEach(key => {
+        const [wy, ww] = key.split('-W').map(Number);
+        const diff = (cy - wy) * 52 + (cw - ww);
+        if (diff > 4) delete weeklyData[key];
+    });
+}
+
 // =========================
 //     LISTENER MESSAGES
 // =========================
@@ -1039,6 +1077,16 @@ client.on('messageCreate', async (message) => {
         const uid = message.author.id;
         if (!topData.messages[uid]) topData.messages[uid] = 0;
         topData.messages[uid]++;
+
+        const todayKey = getTodayKey();
+        if (!dailyData[todayKey]) dailyData[todayKey] = {};
+        if (!dailyData[todayKey][uid]) dailyData[todayKey][uid] = 0;
+        dailyData[todayKey][uid]++;
+
+        const weekKey = getWeekKey();
+        if (!weeklyData[weekKey]) weeklyData[weekKey] = {};
+        if (!weeklyData[weekKey][uid]) weeklyData[weekKey][uid] = 0;
+        weeklyData[weekKey][uid]++;
     }
 
     const response = getResponse(message.content);
@@ -1638,6 +1686,43 @@ client.on('messageCreate', async (message) => {
         }
 
         return message.reply("Sous-commandes disponibles : `set JJ/MM`, `show`, `list`, `next`");
+    }
+
+    // !actif
+    if (response?.needsActif) {
+        cleanOldData();
+        const todayKey = getTodayKey();
+        const weekKey = getWeekKey();
+
+        const todayCounts = dailyData[todayKey] ?? {};
+        const weekCounts = weeklyData[weekKey] ?? {};
+
+        const sortedDay = Object.entries(todayCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const sortedWeek = Object.entries(weekCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+        const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
+
+        const buildFields = (sorted) => sorted.map(([uid, count], i) => {
+            const member = message.guild.members.cache.get(uid);
+            const name = member?.displayName ?? 'Membre inconnu';
+            const medal = medals[i] ?? `**${i + 1}.**`;
+            return { name: `${medal} ${name}`, value: `${count} messages`, inline: false };
+        });
+
+        const dayFields = sortedDay.length > 0 ? buildFields(sortedDay) : [{ name: 'Aucune donn\u00e9e', value: "Pas encore de messages aujourd'hui !", inline: false }];
+        const weekFields = sortedWeek.length > 0 ? buildFields(sortedWeek) : [{ name: 'Aucune donn\u00e9e', value: 'Pas encore de messages cette semaine !', inline: false }];
+
+        const embedDay = new EmbedBuilder()
+            .setColor(0xffd700)
+            .setTitle("\ud83d\udcc5 Membres les plus actifs aujourd'hui")
+            .addFields(dayFields);
+
+        const embedWeek = new EmbedBuilder()
+            .setColor(0xffd700)
+            .setTitle('\ud83d\udcc6 Membres les plus actifs cette semaine')
+            .addFields(weekFields);
+
+        return message.reply({ embeds: [embedDay, embedWeek] });
     }
 
     // !top
@@ -2568,6 +2653,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!discord", value: "Obtenir le lien officiel d'invitation de Rega\u00efa." },
                     { name: "!aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." },
                     { name: "!serveur", value: "Afficher les informations du serveur." },
+                    { name: "!actif", value: "Affiche les membres les plus actifs du jour et de la semaine." },
                     { name: "!profil", value: "Afficher le profil d'un membre." },
                     { name: "!avatar", value: "Afficher l'avatar d'un membre en grand." }
                 );
@@ -2655,6 +2741,7 @@ client.on('interactionCreate', async (interaction) => {
 client.once('ready', async () => {
     console.log(`\u2705 ${client.user.tag} est connect\u00e9`);
     await loadAll();
+    cleanOldData();
     for (const guild of client.guilds.cache.values()) {
         await guild.members.fetch().catch(() => {});
     }
