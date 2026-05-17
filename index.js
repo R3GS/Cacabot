@@ -961,9 +961,12 @@ async function doFlipSequence(channel, firstMessage, isPari, pileNom, faceNom) {
     const resultatTexte = isFace ? "C'est **face** !" : "C'est **pile** !";
     const resultatImg = isFace ? FACE_IMG : PILE_IMG;
 
-    await channel.send(firstMessage);
-    await channel.send(gif);
-    await new Promise(r => setTimeout(r, 2000));
+    const lancerEmbed = new EmbedBuilder()
+        .setColor(0x808080)
+        .setDescription(firstMessage)
+        .setImage(gif);
+    await channel.send({ embeds: [lancerEmbed] });
+    await new Promise(r => setTimeout(r, 3000));
     await channel.send("...");
     await new Promise(r => setTimeout(r, 2000));
 
@@ -983,12 +986,12 @@ async function doFlipSequence(channel, firstMessage, isPari, pileNom, faceNom) {
     const embed = new EmbedBuilder()
         .setColor(isFace ? 0xffd700 : 0xc0c0c0)
         .setDescription(description)
-        .setImage(resultatImg);
+        .setThumbnail(resultatImg);
 
     await channel.send({ embeds: [embed], components: [relancerRow] });
 }
 
-async function sendFlipChoix(channel) {
+async function sendFlipChoix(channel, message) {
     const simpleBtn = new ButtonBuilder()
         .setCustomId("flip_simple")
         .setLabel("1\ufe0f\u20e3 Lancer simple")
@@ -998,7 +1001,11 @@ async function sendFlipChoix(channel) {
         .setLabel("2\ufe0f\u20e3 Pari")
         .setStyle(ButtonStyle.Secondary);
     const row = new ActionRowBuilder().addComponents(simpleBtn, pariBtn);
-    await channel.send({ content: "Est-ce que c'est pour un lancer simple, ou alors pour parier avec quelqu'un ?", components: [row] });
+    if (message) {
+        await message.reply({ content: "Est-ce que c'est pour un lancer simple, ou alors pour parier avec quelqu'un ?", components: [row] });
+    } else {
+        await channel.send({ content: "Est-ce que c'est pour un lancer simple, ou alors pour parier avec quelqu'un ?", components: [row] });
+    }
 }
 
 const flipParis = new Map();
@@ -1476,7 +1483,7 @@ client.on('messageCreate', async (message) => {
 
     // !flip
     if (response?.needsFlip) {
-        await sendFlipChoix(message.channel);
+        await sendFlipChoix(message.channel, message);
         return;
     }
 
@@ -1995,7 +2002,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (interaction.isButton() && interaction.customId === "flip_start") {
         await interaction.deferUpdate();
-        await sendFlipChoix(interaction.channel);
+        await sendFlipChoix(interaction.channel, null);
         return;
     }
 
@@ -2082,7 +2089,6 @@ client.on('interactionCreate', async (interaction) => {
             await new Promise(r => setTimeout(r, 1000));
             await interaction.message.edit({ embeds: [countEmbed.setDescription("Lancer dans 1")] }).catch(() => {});
             await new Promise(r => setTimeout(r, 1000));
-            await interaction.message.delete().catch(() => {});
             await doFlipSequence(interaction.channel, "C'est parti ! \ud83e\ude99", true, pari.pile, pari.face);
         } else {
             const updEmbed = new EmbedBuilder()
