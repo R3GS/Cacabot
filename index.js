@@ -2063,8 +2063,7 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.user.id !== simpleAuthorId) {
             return interaction.reply({ content: "C'est pas \u00e0 toi que je m'adresse, on jouera ensemble apr\u00e8s son tour si tu veux.", ephemeral: true });
         }
-        await interaction.message.delete().catch(() => {});
-        // Demander quel camp
+        // Modifier l'embed pour le choix de camp
         const pileBtn = new ButtonBuilder()
             .setCustomId(`flip_solo_pile_${simpleAuthorId}`)
             .setLabel("Pile")
@@ -2083,7 +2082,7 @@ client.on('interactionCreate', async (interaction) => {
             .setColor(0xffd700)
             .setTitle("\ud83e\ude99 Pile ou face")
             .setDescription(`**${clickerNom}**, choisis ton camp !`);
-        await interaction.channel.send({ embeds: [campEmbed], components: [campRow] });
+        await interaction.update({ embeds: [campEmbed], components: [campRow] });
         return;
     }
 
