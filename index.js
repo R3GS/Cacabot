@@ -2074,9 +2074,15 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.user.id !== soloAuthorId) {
             return interaction.reply({ content: "H\u00e9 oh, pique pas ma pi\u00e8ce !", ephemeral: true });
         }
-        await interaction.message.delete().catch(() => {});
         const campTexte = choix === 'pile' ? 'Pile' : 'Face';
-        await doFlipSequence(interaction.channel, `**${campTexte}**, c'est \u00e7a ? Ok !\nJe lance la pi\u00e8ce ! \ud83e\ude99`, false, choix, null, soloAuthorId);
+        const gif = flipGifs[Math.floor(Math.random() * flipGifs.length)];
+        const lancerEmbed = new EmbedBuilder()
+            .setColor(0xffd700)
+            .setDescription(`**${campTexte}**, c'est \u00e7a ? Ok !\nJe lance la pi\u00e8ce ! \ud83e\ude99`)
+            .setImage(gif);
+        await interaction.update({ embeds: [lancerEmbed], components: [] });
+        await new Promise(r => setTimeout(r, 1000));
+        await doFlipSequence(interaction.channel, null, false, choix, null, soloAuthorId);
         return;
     }
 
