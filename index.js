@@ -2069,6 +2069,8 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: "H\u00e9 oh, pique pas ma pi\u00e8ce !", ephemeral: true });
         }
         flipEnCours = false;
+        // Supprimer le pari du Map pour éviter le message de timeout
+        flipParis.delete(interaction.message.id);
         await interaction.message.delete().catch(() => {});
         // Chercher et supprimer le dernier message !flip du lanceur
         const messages = await interaction.channel.messages.fetch({ limit: 20 }).catch(() => null);
@@ -2138,10 +2140,13 @@ client.on('interactionCreate', async (interaction) => {
             const pari = flipParis.get(pariMsg.id);
             if (!pari) return;
             flipParis.delete(pariMsg.id);
-            const vide = (!pari.pile && !pari.face) ? "les deux camps sont vides !" : "l'un des camps est vide !";
-            await pariMsg.delete().catch(() => {});
             flipEnCours = false;
-            await interaction.channel.send(`\u274c Le pari est annul\u00e9, ${vide}`);
+            const vide = (!pari.pile && !pari.face) ? "les deux camps sont vides !" : "l'un des camps est vide !";
+            const expiredEmbed = new EmbedBuilder()
+                .setColor(0xffd700)
+                .setTitle("\ud83e\ude99 Pile ou face")
+                .setDescription(`\u274c Le pari est annul\u00e9, ${vide}`);
+            await pariMsg.edit({ embeds: [expiredEmbed], components: [] }).catch(() => {});
         }, 30000);
         return;
     }
