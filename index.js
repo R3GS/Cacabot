@@ -2290,6 +2290,7 @@ client.on('messageCreate', async (message) => {
                 { name: '\u200b', value: '\u200b', inline: true },
                 { name: '\ud83d\udd52 En ligne depuis', value: uptime, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
+                { name: '\ud83d\udcac Messages envoy\u00e9s', value: `${topData.messages['1503495713097519355'] ?? 0}`, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
                 { name: '\ud83d\udc51 Cr\u00e9atrice', value: 'Epsys', inline: true },
                 { name: '\ud83e\udd1d Collaboratrice', value: '[BDN](https://bdn-fr.xyz/)', inline: true },
