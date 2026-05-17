@@ -315,6 +315,10 @@ function getResponse(raw) {
     //         !SERVEUR
     // =========================
 
+    if (command === "!ping") {
+        return { needsPing: true };
+    }
+
     if (command === "!info") {
         return { needsInfo: true };
     }
@@ -2254,6 +2258,21 @@ client.on('messageCreate', async (message) => {
         return message.reply(`\u2705 **${nom}** : ${count} messages enregistr\u00e9s !`);
     }
 
+    // !ping
+    if (response?.needsPing) {
+        const sent = await message.reply('\ud83c\udfd3 Pong !');
+        const latence = sent.createdTimestamp - message.createdTimestamp;
+        const wsLatence = client.ws.ping;
+        const embed = new EmbedBuilder()
+            .setColor(latence < 100 ? 0x2ecc71 : latence < 250 ? 0xf39c12 : 0xe74c3c)
+            .setTitle('\ud83c\udfd3 Pong !')
+            .addFields(
+                { name: '\ud83d\udce8 Latence', value: `${latence}ms`, inline: true },
+                { name: '\ud83d\udd0c WebSocket', value: `${wsLatence}ms`, inline: true }
+            );
+        return sent.edit({ content: null, embeds: [embed] });
+    }
+
     // !info
     if (response?.needsInfo) {
         const startDate = new Date('2026-05-14T00:00:00');
@@ -3278,7 +3297,8 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "\ud83d\uddbc\ufe0f !avatar", value: "Afficher l'avatar d'un membre en grand." },
                     { name: "\ud83c\udfc5 !top", value: "Afficher le top 10 des membres les plus actifs." },
                     { name: "\ud83d\udcac !actif", value: "Affiche les membres les plus actifs du jour et de la semaine." },
-                    { name: "\ud83e\udd16 !info", value: "Affiche les informations de Cacabot." }
+                    { name: "\ud83e\udd16 !info", value: "Affiche les informations de Cacabot." },
+                    { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." }
                 );
         }
 
@@ -3295,7 +3315,8 @@ client.on('interactionCreate', async (interaction) => {
                 .setDescription("# \ud83d\uddd2\ufe0f Autres")
                 .addFields(
                     { name: "<:aternos_icon:1505454393049485362> !aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." },
-                    { name: "\ud83e\udd16 !info", value: "Affiche les informations de Cacabot." }
+                    { name: "\ud83e\udd16 !info", value: "Affiche les informations de Cacabot." },
+                    { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." }
                 );
         }
 
@@ -3335,7 +3356,7 @@ client.on('interactionCreate', async (interaction) => {
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
                 { label: '\ud83d\udcac Discord', description: 'serveur, profil, avatar, top, actif', value: 'discord' },
-                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, info', value: 'autres' }
+                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, info, ping', value: 'autres' }
             );
 
         const utilBackButton = new ButtonBuilder()
@@ -3406,7 +3427,7 @@ client.on('interactionCreate', async (interaction) => {
                 .addOptions(
                     { label: '\ud83d\udcac Discord', description: 'serveur, profil, avatar, top, actif', value: 'discord' },
                     { label: '\u25b6\ufe0f YouTube', description: 'En construction...', value: 'youtube' },
-                    { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, info', value: 'autres' }
+                    { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, info, ping', value: 'autres' }
                 );
 
             const utilBackButton = new ButtonBuilder()
