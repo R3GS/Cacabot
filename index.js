@@ -1238,7 +1238,7 @@ client.on('messageCreate', async (message) => {
 
     // Cheh
     const cleanedCheh = message.content.toLowerCase().trim();
-    if (pendingCheh.has(message.channel.id) && (cleanedCheh === 'ntm' || cleanedCheh === 'tg')) {
+    if (pendingCheh.has(message.channel.id) && (cleanedCheh.includes('ntm') || cleanedCheh.includes('tg'))) {
         pendingCheh.delete(message.channel.id);
         return message.reply(CHEH_GIF);
     }
@@ -2987,7 +2987,7 @@ client.on('interactionCreate', async (interaction) => {
 
         if (value === 'util') {
             const utilEmbed = new EmbedBuilder()
-                .setColor(0x8899a6)
+                .setColor(0x3498db)
                 .setTitle("\ud83d\udee0 Utilitaire")
                 .setDescription("<:discord_icon:1505454379669524532> **Discord** \u2014 Commandes relatives au serveur\n<:youtube_icon:1505457903585198151> **YouTube** \u2014 En construction...\n\ud83d\uddd2\ufe0f **Autres** \u2014 Autres commandes non-r\u00e9pertori\u00e9es");
 
