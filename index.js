@@ -432,7 +432,7 @@ function getResponse(raw) {
     // PHRASES CONTENANT LES MOTS
     // =========================
 
-    if (/h[eéèê]+[y]?[,\s]+p[e]+t[i]+[t!]+/i.test(cleaned)) return { files: ["https://cdn.discordapp.com/attachments/1480756332373213275/1505660789837529120/monty-fnaf-montgomery-gator.gif", "https://cdn.discordapp.com/attachments/1480756332373213275/1505660790189981896/he_petit.mp3"] };
+    if (/\bh?e+h?y?\s+p[e]+t[i]+t|\beh\s+p[e]+t[i]+t/i.test(cleaned)) return { files: ["https://cdn.discordapp.com/attachments/1480756332373213275/1505660789837529120/monty-fnaf-montgomery-gator.gif", "https://cdn.discordapp.com/attachments/1480756332373213275/1505660790189981896/he_petit.mp3"] };
     if (cleaned.includes("j ai menti") || cleaned.includes("jai menti")) return { files: ["https://cdn.discordapp.com/attachments/1480756332373213275/1505656212199309543/jai_menti.mp3"] };
     if (cleaned.includes("absolute cacabot")) return "https://media.discordapp.net/attachments/1504056056169369722/1505371569986474175/image.png";
     if (cleaned.includes("henry tran") || cleaned.includes("singapour")) {
