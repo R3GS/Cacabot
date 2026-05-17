@@ -2800,7 +2800,7 @@ client.on('interactionCreate', async (interaction) => {
                 { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, punch, bang, rizz, rire, danse', value: 'interact' },
                 { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                 { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
-                { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip', value: 'random' }
+                { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague', value: 'random' }
             );
 
         const funBackButton = new ButtonBuilder()
@@ -2874,7 +2874,7 @@ client.on('interactionCreate', async (interaction) => {
                     { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, punch, bang, rizz, rire, danse', value: 'interact' },
                     { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                     { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
-                    { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip', value: 'random' }
+                    { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague', value: 'random' }
                 );
 
             const funBackButton = new ButtonBuilder()
