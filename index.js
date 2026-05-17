@@ -1981,7 +1981,9 @@ client.on('interactionCreate', async (interaction) => {
     // =========================
 
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_fun_')) {
-        const helpAuthorId = interaction.customId.split('_')[2];
+        const funParts = interaction.customId.split('_');
+        const helpAuthorId = funParts[2];
+        const helpMessageId = funParts[3] ?? null;
         if (interaction.user.id !== helpAuthorId) {
             return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
         }
