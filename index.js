@@ -1524,6 +1524,7 @@ client.on('messageCreate', async (message) => {
         }
         flipEnCours = true;
         await sendFlipChoix(message.channel, message, message.author.id);
+        message.delete().catch(() => {});
         return;
     }
 
