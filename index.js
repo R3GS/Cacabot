@@ -987,7 +987,7 @@ async function doFlipSequence(channel, firstMessage, isPari, pileNom, faceNom, a
         // Lancer simple avec camp choisi
         const campChoisi = pileNom; // on reutilise pileNom pour stocker le camp
         const aGagne = (isFace && campChoisi === 'face') || (!isFace && campChoisi === 'pile');
-        description = `${resultatTexte}\n${aGagne ? "C'est gagn\u00e9 ! \ud83c\udf89" : "C'est perdu... \ud83d\ude22"}\nOn recommence ?`;
+        description = `${resultatTexte}\n${aGagne ? "Gagn\u00e9 !" : "Perdu..."}\nOn recommence ?`;
     } else {
         description = `${resultatTexte}\nOn recommence ?`;
     }
