@@ -32,7 +32,7 @@ async function saveAll() {
     }
 }
 
-setInterval(() => saveAll(), 30 * 60 * 1000);
+setInterval(() => saveAll(), 60 * 60 * 1000);
 
 // Aliases pour compatibilite
 const saveTop = saveAll;
