@@ -1238,7 +1238,7 @@ client.on('messageCreate', async (message) => {
 
     // Cheh
     const cleanedCheh = message.content.toLowerCase().trim();
-    if (pendingCheh.has(message.channel.id) && (cleanedCheh.includes('ntm') || cleanedCheh.includes('tg'))) {
+    if (pendingCheh.has(message.channel.id) && (cleanedCheh.includes('ntm') || cleanedCheh.includes('tg') || cleanedCheh.includes('nique ta') || cleanedCheh.includes('ta gueule') || cleanedCheh.includes('mange'))) {
         pendingCheh.delete(message.channel.id);
         return message.reply(CHEH_GIF);
     }
@@ -1624,6 +1624,21 @@ client.on('messageCreate', async (message) => {
 
         if (cible && cible.id !== message.author.id) {
             return message.reply(`Tu ne peux pas \u00abmourir quelqu'un\u00bb ce n'est pas possible, **${auteurNom}**`);
+        }
+
+        // Cas reply : mort à cause de la personne citée
+        if (message.reference) {
+            const repliedMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+            if (repliedMsg && repliedMsg.author.id !== message.author.id && repliedMsg.author.id !== client.user.id) {
+                const causeNom = message.guild?.members.cache.get(repliedMsg.author.id)?.displayName ?? repliedMsg.author.username;
+                const embed = buildDieEmbed(`\u2620\ufe0f **${auteurNom}** meurt à cause de **${causeNom}**`);
+                const dieButton = new ButtonBuilder()
+                    .setCustomId(`die_with_${message.author.id}_${auteurNom}`)
+                    .setLabel("\u2620\ufe0f Mourir avec")
+                    .setStyle(ButtonStyle.Primary);
+                const row = new ActionRowBuilder().addComponents(dieButton);
+                return message.reply({ embeds: [embed], components: [row] });
+            }
         }
 
         const embed = buildDieEmbed(`\u2620\ufe0f **${auteurNom}** meurt...`);
