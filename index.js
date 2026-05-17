@@ -294,6 +294,14 @@ function getResponse(raw) {
         return { needsAnniversaire: true };
     }
 
+    // =========================
+    //         !FLIP
+    // =========================
+
+    if (command === "!flip") {
+        return { needsFlip: true };
+    }
+
     if (command === "!top") {
         return { needsTop: true };
     }
@@ -930,6 +938,26 @@ async function askDisambiguation(message, guild, candidates, callback) {
     });
 }
 
+
+// =========================
+//     LOGIQUE !FLIP
+// =========================
+
+async function doFlip(channel, firstMessage) {
+    const resultat = Math.random() < 0.5 ? "C'est **pile** !" : "C'est **face** !";
+    await channel.send(firstMessage);
+    await channel.send("https://cdn.discordapp.com/attachments/1128032964924670053/1505384734392324236/giphy.gif");
+    await new Promise(r => setTimeout(r, 2000));
+    await channel.send("...");
+    await new Promise(r => setTimeout(r, 2000));
+    const flipButton = new ButtonBuilder()
+        .setCustomId("flip_relancer")
+        .setLabel("\ud83e\ude99 Relancer la pi\u00e8ce")
+        .setStyle(ButtonStyle.Secondary);
+    const flipRow = new ActionRowBuilder().addComponents(flipButton);
+    await channel.send({ content: `${resultat}\nOn recommence ?`, components: [flipRow] });
+}
+
 // =========================
 //     LISTENER MESSAGES
 // =========================
@@ -1399,6 +1427,12 @@ client.on('messageCreate', async (message) => {
             .setImage(cible.displayAvatarURL({ dynamic: true, size: 1024 }));
 
         return message.reply({ embeds: [embed] });
+    }
+
+    // !flip
+    if (response?.needsFlip) {
+        await doFlip(message.channel, "Je lance la pi\u00e8ce ! \ud83e\ude99");
+        return;
     }
 
     // !anniversaire
@@ -1911,6 +1945,16 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // =========================
+    // BOUTON FLIP RELANCER
+    // =========================
+
+    if (interaction.isButton() && interaction.customId === "flip_relancer") {
+        await interaction.deferUpdate();
+        await doFlip(interaction.channel, "Okay ! Alors on relance la pi\u00e8ce ! \ud83e\ude99");
+        return;
+    }
+
+    // =========================
     // MENU SELECT QUESTION
     // =========================
 
@@ -2109,7 +2153,8 @@ client.on('interactionCreate', async (interaction) => {
                 .addFields(
                     { name: "!destin", value: "Pr\u00e9dit votre destin et fait part des \u00e9v\u00e8nements de votre futur." },
                     { name: "!animal", value: "Devine votre animal spirituel parmi pr\u00e8s de 7000 combinaisons !" },
-                    { name: "!epsys", value: "Poste des GIFs al\u00e9atoires d'Epsys, parce que." }
+                    { name: "!epsys", value: "Poste des GIFs al\u00e9atoires d'Epsys, parce que." },
+                    { name: "!flip", value: "Lance une pi\u00e8ce en l'air et attends le r\u00e9sultat..." }
                 );
         }
 
@@ -2164,7 +2209,7 @@ client.on('interactionCreate', async (interaction) => {
                 { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, punch, bang, rizz, rire, danse', value: 'interact' },
                 { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                 { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
-                { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys', value: 'random' }
+                { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip', value: 'random' }
             );
 
         const funBackButton = new ButtonBuilder()
@@ -2238,7 +2283,7 @@ client.on('interactionCreate', async (interaction) => {
                     { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, punch, bang, rizz, rire, danse', value: 'interact' },
                     { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                     { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
-                    { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys', value: 'random' }
+                    { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip', value: 'random' }
                 );
 
             const funBackButton = new ButtonBuilder()
