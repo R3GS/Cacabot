@@ -1012,9 +1012,10 @@ async function sendFlipChoix(channel, message, authorId) {
         .setStyle(ButtonStyle.Secondary);
     const row = new ActionRowBuilder().addComponents(simpleBtn, pariBtn);
     if (message) {
-        await message.reply({ content: "Est-ce que c'est pour un lancer simple, ou alors pour parier avec quelqu'un ?", components: [row] });
+        const nom = message.member?.displayName ?? message.author.username;
+        await message.reply({ content: `**${nom}**, c'est pour un lancer simple, ou alors pour parier avec quelqu'un ?`, components: [row] });
     } else {
-        await channel.send({ content: "Est-ce que c'est pour un lancer simple, ou alors pour parier avec quelqu'un ?", components: [row] });
+        await channel.send({ content: "C'est pour un lancer simple, ou alors pour parier avec quelqu'un ?", components: [row] });
     }
 }
 
@@ -2020,7 +2021,7 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isButton() && interaction.customId.startsWith("flip_simple_")) {
         const simpleAuthorId = interaction.customId.split("_")[2];
         if (interaction.user.id !== simpleAuthorId) {
-            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+            return interaction.reply({ content: "C'est pas \u00e0 toi que je m'adresse, on jouera ensemble apr\u00e8s son tour si tu veux.", ephemeral: true });
         }
         await interaction.message.delete().catch(() => {});
         // Demander quel camp
@@ -2057,7 +2058,7 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.isButton() && interaction.customId.startsWith("flip_pari_")) {
         const pariAuthorId = interaction.customId.split("_")[2];
         if (interaction.user.id !== pariAuthorId) {
-            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+            return interaction.reply({ content: "C'est pas \u00e0 toi que je m'adresse, on jouera ensemble apr\u00e8s son tour si tu veux.", ephemeral: true });
         }
         await interaction.message.delete().catch(() => {});
         const pariEmbed = new EmbedBuilder()
