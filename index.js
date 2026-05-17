@@ -2274,8 +2274,8 @@ client.on('messageCreate', async (message) => {
 
         let uptime = '';
         if (months > 0) uptime += `${months} mois, `;
-        if (months > 0 || days > 0) uptime += `${days} jour${days > 1 ? 's' : ''}, `;
-        uptime += `${hours} heure${hours > 1 ? 's' : ''}`;
+        if (months > 0 || days > 0) uptime += `${days}j, `;
+        uptime += `${hours}h`;
 
         const nbMembres = Object.keys(topData.messages).length;
         const nbCommandes = 30;
