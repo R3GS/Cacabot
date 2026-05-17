@@ -1621,8 +1621,23 @@ client.on('messageCreate', async (message) => {
 
     // !die
     if (response?.needsDie) {
-        const cible = message.mentions.users.first();
+        let cible = message.mentions.users.first();
         const auteurNom = message.member?.displayName ?? message.author.username;
+
+        // Recherche partielle si pas de ping
+        if (!cible) {
+            const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (query) {
+                const lq = query.toLowerCase();
+                // Vérifier si c'est le bot
+                if (client.user.username.toLowerCase().includes(lq) || 'cacabot'.includes(lq)) {
+                    cible = client.user;
+                } else {
+                    const result = findMemberByName(message.guild, query);
+                    if (result.found) cible = result.found.user;
+                }
+            }
+        }
 
         if (cible && cible.id === client.user.id) {
             const embed = buildDieEmbed(`\u2620\ufe0f **${auteurNom}** meurt \u00e0 cause de moi ! (cheh)`);
