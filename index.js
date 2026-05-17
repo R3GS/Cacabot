@@ -3296,7 +3296,8 @@ client.on('interactionCreate', async (interaction) => {
                 .setColor(0x95a5a6)
                 .setDescription("# \ud83d\uddd2\ufe0f Autres")
                 .addFields(
-                    { name: "<:aternos_icon:1505454393049485362> !aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." }
+                    { name: "<:aternos_icon:1505454393049485362> !aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." },
+                    { name: "\ud83e\udd16 !info", value: "Affiche les informations de Cacabot." }
                 );
         }
 
@@ -3335,8 +3336,8 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId(`help_util_${helpAuthorId}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83d\udcac Discord', description: 'discord, serveur, profil, avatar, top, actif, info', value: 'discord' },
-                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos', value: 'autres' }
+                { label: '\ud83d\udcac Discord', description: 'discord, serveur, profil, avatar, top, actif', value: 'discord' },
+                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, info', value: 'autres' }
             );
 
         const utilBackButton = new ButtonBuilder()
@@ -3405,9 +3406,9 @@ client.on('interactionCreate', async (interaction) => {
                 .setCustomId(`help_util_${helpAuthorId}`)
                 .setPlaceholder('Choisis une cat\u00e9gorie')
                 .addOptions(
-                    { label: '\ud83d\udcac Discord', description: 'discord, serveur, profil, avatar, top, actif, info', value: 'discord' },
+                    { label: '\ud83d\udcac Discord', description: 'discord, serveur, profil, avatar, top, actif', value: 'discord' },
                     { label: '\u25b6\ufe0f YouTube', description: 'En construction...', value: 'youtube' },
-                    { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos', value: 'autres' }
+                    { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, info', value: 'autres' }
                 );
 
             const utilBackButton = new ButtonBuilder()
