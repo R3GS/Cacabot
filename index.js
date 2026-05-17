@@ -75,7 +75,8 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildMessageReactions
     ]
 });
 
@@ -2173,7 +2174,18 @@ client.on('messageCreate', async (message) => {
             return message.reply(`\ud83c\udf82 Le prochain anniversaire est celui de **${name}** le **${next[1]}** !`);
         }
 
-        return message.reply("Sous-commandes disponibles : `set JJ/MM`, `show`, `list`, `next`");
+        const anniversaireEmbed = new EmbedBuilder()
+            .setColor(0xff69b4)
+            .setTitle('\ud83c\udf82 Anniversaire')
+            .addFields(
+                { name: '!anniversaire set JJ/MM', value: 'Enregistre ton anniversaire.', inline: false },
+                { name: '!anniversaire set Pseudo JJ/MM', value: "Enregistre l'anniversaire de quelqu'un.", inline: false },
+                { name: '!anniversaire show', value: 'Affiche ton anniversaire enregistr\u00e9.', inline: false },
+                { name: '!anniversaire list', value: 'Liste tous les anniversaires du serveur.', inline: false },
+                { name: '!anniversaire next', value: 'Affiche le prochain anniversaire du serveur.', inline: false },
+                { name: '!anniversaire remove', value: 'Supprime ton anniversaire enregistr\u00e9.', inline: false }
+            );
+        return message.reply({ embeds: [anniversaireEmbed] });
     }
 
     // !blague
@@ -3228,7 +3240,8 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!animal", value: "Devine votre animal spirituel parmi pr\u00e8s de 7000 combinaisons !" },
                     { name: "!epsys", value: "Poste des GIFs al\u00e9atoires d'Epsys, parce que." },
                     { name: "!blague", value: "Lance une blague al\u00e9atoire en 3 cat\u00e9gories !" },
-                    { name: "!flip", value: "Pour d\u00e9cider \u00e0 pile ou face !" }
+                    { name: "!flip", value: "Pour d\u00e9cider \u00e0 pile ou face !" },
+                    { name: "!horoscope", value: "Ton horoscope du jour pour les 13 signes !" }
                 );
         }
 
@@ -3283,7 +3296,7 @@ client.on('interactionCreate', async (interaction) => {
                 { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, punch, bang, rizz, rire, danse', value: 'interact' },
                 { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                 { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
-                { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague', value: 'random' }
+                { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague, horoscope', value: 'random' }
             );
 
         const funBackButton = new ButtonBuilder()
@@ -3456,7 +3469,7 @@ client.on('interactionCreate', async (interaction) => {
                     { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, punch, bang, rizz, rire, danse', value: 'interact' },
                     { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                     { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
-                    { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague', value: 'random' }
+                    { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague, horoscope', value: 'random' }
                 );
 
             const funBackButton = new ButtonBuilder()
@@ -3598,6 +3611,28 @@ client.once('ready', async () => {
         checkBirthdays();
         setInterval(checkBirthdays, 24 * 60 * 60 * 1000);
     }, msUntilMidnight());
+});
+
+
+// =========================
+//     LISTENER REACTIONS
+// =========================
+
+client.on('messageReactionAdd', async (reaction, user) => {
+    if (user.bot) return;
+    if (reaction.emoji.name !== '\uD83D\uDD95' && reaction.emoji.name !== 'middle_finger') return;
+
+    const msg = reaction.message;
+    if (msg.author.id !== client.user.id) return;
+
+    // Vérifier que c'est la première réaction de ce type
+    const emojiReaction = msg.reactions.cache.find(r =>
+        r.emoji.name === '\uD83D\uDD95' || r.emoji.name === 'middle_finger'
+    );
+    if (emojiReaction && emojiReaction.count > 1) return;
+
+    const memberNom = msg.guild?.members.cache.get(user.id)?.displayName ?? user.username;
+    await msg.channel.send(`Bah alors, **${memberNom}**, on m'envoie un doigt d'honneur ?`);
 });
 
 client.login(process.env.TOKEN);
