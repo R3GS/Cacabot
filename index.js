@@ -423,7 +423,20 @@ function getResponse(raw) {
     }
     if (cleaned.includes("avec quoi")) return reply("Avec feur");
     if (cleaned.endsWith("oui")) return reply("Stiti");
-    if (cleaned.includes("bac blanc")) return "https://cdn.discordapp.com/attachments/720057528867618909/1504075425985466481/1778669924015-18e38746e64899fb.png";
+    if (cleaned.includes("bac blanc")) {
+        const bacBlanc = [
+            "https://cdn.discordapp.com/attachments/720057528867618909/1504075425985466481/1778669924015-18e38746e64899fb.png",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505378497533579415/ghost.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505378497894551623/wwii.jpg",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505378498271772794/stare.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505378498695663738/catstare.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505378499404501112/homelander.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505378499744104468/chaise.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505378500075585696/gustavo.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505378501266510026/vietnam_cat.gif"
+        ];
+        return bacBlanc[Math.floor(Math.random() * bacBlanc.length)];
+    }
     if (cleaned.includes("lexys")) return "https://cdn.discordapp.com/attachments/720057528867618909/1498102442200404120/bac_blanc.gif";
     if (cleaned.includes("avec qui")) return reply("Avec quette");
     if (cleaned.includes("pour quoi faire")) return reply("Pour faire feur");
@@ -461,6 +474,8 @@ function getResponse(raw) {
 
     if (cleaned === "hein") return reply("Deux");
     if (cleaned === "de") return reply("Trois");
+    if (cleaned === "ouient") return reply("Stitient");
+    if (cleaned === "pq" || cleaned === "pk") return reply("Pfeur");
     if (cleaned === "a" || cleaned === "ha" || cleaned === "ah") return "B";
     if (cleaned === "ntm jax") return "https://cdn.discordapp.com/attachments/1206232717444775956/1504653708770672741/Capture_decran_2026-05-15_031617.png";
 
