@@ -2023,7 +2023,7 @@ client.on('messageCreate', async (message) => {
             .setCustomId(`help_menu_${message.author.id}_${message.id}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'animal, destin, epsys, choix, kiss, hug, danse, insulte, die, punch, bang, rizz, rire, question', value: 'fun' },
+                { label: '\ud83c\udf89 Fun', description: '👆 Interact , 💬 Discussion, 🎂 Anniversaire, 💥 Random', value: 'fun' },
                 { label: '\ud83d\udee0 Utilitaire', description: 'discord, aternos, serveur, profil, avatar', value: 'util' },
             );
 
