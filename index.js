@@ -137,8 +137,8 @@ function getResponse(raw) {
             "https://cdn.discordapp.com/attachments/1480734932933542049/1504168424136245368/Caramell_Dansen.gif",
             "https://cdn.discordapp.com/attachments/720057528867618909/1486636493417222216/2a088883-36e7-4eb4-ab2c-0d4942e21bfb.gif",
             "https://cdn.discordapp.com/attachments/1128032964924670053/1478476705642319985/ezgif-403e246b59051aa3.gif",
-            "https://tenor.com/view/r3gs_-capuche-love-hearts-gif-22642553",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1478480836683759636/ezgif-4910f713e8f8f838.gif"
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1478480836683759636/ezgif-4910f713e8f8f838.gif",
+            "https://cdn.discordapp.com/attachments/720079691041472572/1505409860970217574/epsys-dance.gif"
         ];
 
         return gifs[Math.floor(Math.random() * gifs.length)];
@@ -281,6 +281,10 @@ function getResponse(raw) {
 
     if (command === "!flip") {
         return { needsFlip: true };
+    }
+
+    if (command === "!blague") {
+        return { needsBlague: true };
     }
 
     if (command === "!actif") {
@@ -1059,6 +1063,173 @@ function cleanOldData() {
 }
 
 // =========================
+//     LOGIQUE !BLAGUE
+// =========================
+
+async function sendBlague(interaction, cat, authorId) {
+        const blaguesSoft = [
+            `Qu'est-ce que se disent deux chiens qui se rencontrent à Tokyo ? Ils se jappent au nez.`,
+            `Pourquoi un chat aime bien se faire photographier ? Parce qu'on lui dit "souris" !`,
+            `Quel est le gâteau le plus rapide ? L'éclair !`,
+            `Comment appelle-t-on un chien qui n'a pas de pattes ? On ne l'appelle pas car il ne peut pas venir !`,
+            `Qu'est-ce qu'il ne faut jamais faire devant un poisson scie ? La planche.`,
+            `Pourquoi les cahiers de mathématiques sont-ils tristes ? Parce qu'ils ont trop de problèmes.`,
+            `Quelles sont les villes de France qui, une fois réunies, donnent 21 ? Troyes, Foix, Sète. (7x3 = 21)`,
+            `Qu'est-ce qui a deux bosses et qu'on trouve au pôle Nord ? Un chameau qui est vraiment perdu.`,
+            `Qu'est-ce qui tombe sans tomber ? La nuit.`,
+            `Qu'est-ce qui est vert et qui saute d'arbre en arbre ? Un écureuil en survêtement.`,
+            `Comment peut-on réduire le niveau de pollution dans les écoles ? En utilisant des crayons sans plomb.`,
+            `Pourquoi un athlète court-il autour de son lit ? Pour rattraper le temps perdu !`,
+            `Quel est l'animal le plus léger au monde ? La palourde (pas lourde).`,
+            `Quelle est la différence entre une étoile et ma belle-mère ? L'étoile est un astre et ma belle-mère est un désastre.`,
+            `Quelle est la différence entre un thermomètre et un maître d'école ? Aucune. On tremble quand ils affichent zéro.`,
+            `Qu'est-ce que ça donne un pou qui tombe sur une cloche ? Un pou-ding.`,
+            `Quel est l'animal le plus âgé ? Le mouton, parce qu'il est lainé.`,
+            `Quelle est la différence entre un homme intelligent et un extra-terrestre ? Il n'y en a pas. On en a tous entendu parler, mais on n'en a jamais vu !`,
+            `Quelle est la différence entre un avion et un chewing-gum ? Le chewing-gum ça colle et un avion ça décolle.`,
+            `À quelle question ne peut-on jamais répondre ? Dors-tu ?`,
+            `Il y a un coq qui pond un œuf sur le toit. De quel côté l'œuf va-t-il tomber ? Nulle part, un coq ne pond pas !`,
+            `Qu'est-ce qui est petit, rond, vert et qui monte et qui descend ? Un petit pois dans un ascenseur !`,
+            `Deux tomates traversent la rue, l'une se fait écraser, l'autre lui dit : Tu viens Ketchup !`,
+            `Deux escargots rencontrent une limace. L'un d'eux dit : Tiens ! Une nudiste !`,
+            `Combien font trois et trois ? demande l'instituteur. — Match nul, Monsieur !`,
+            `Deux pommes de terre traversent la rue. Une se fait écraser et l'autre dit : Oh Purée.`,
+            `La maîtresse demande à Toto : Quel est le futur de « Je bâille » ? — Je dors, Madame.`,
+            `La maîtresse demande à Toto : Cite-moi un mammifère qui n'a pas de dents. — Ma grand-mère ?`,
+            `Un enfant voit pour la première fois des vaches : Elles sont belles vos vaches. Mais elles doivent vous coûter drôlement cher en chewing-gum !`,
+            `Un avion dit à une hélice : « Arrête de tourner comme ça ! Tu me donnes le vertige ! »`,
+            `Deux grains de sable se promènent dans le désert. Au bout d'un moment, l'un dit à l'autre : Tu crois qu'on est suivi ?`,
+        ];
+
+        const blaquesClassique = [
+            `C'est l'histoire du ptit dej, tu la connais ? Pas de bol.`,
+            `C'est l'histoire d'une blague vaseuse. Mets tes bottes.`,
+            `C'est l'histoire d'un pingouin qui respire par les fesses. Un jour il s'assoit et il meurt.`,
+            `Comment appelle-t-on une chauve-souris avec une perruque ? Une souris.`,
+            `Que dit un escargot quand il croise une limace ? « Oh la belle décapotable ».`,
+            `Pourquoi les canards sont toujours à l'heure ? Parce qu'ils sont dans l'étang.`,
+            `Que fait un crocodile quand il rencontre une superbe femelle ? Il Lacoste.`,
+            `C'est quoi un petit pois avec une épée face à une carotte avec une épée ? Un bon duel.`,
+            `Avec quoi ramasse-t-on la papaye ? Avec une foufourche.`,
+            `Pourquoi les pêcheurs ne sont pas gros ? Parce qu'ils surveillent leur ligne.`,
+            `Tu connais la blague de la chaise ? Elle est tellement longue.`,
+            `C'est l'histoire d'un papier qui tombe à l'eau. Il crie : « Au secours ! J'ai pas pied ! »`,
+            `Pourquoi n'y a-t-il plus de mammouths sur terre ? Parce qu'il n'y a plus de pappouths.`,
+            `Que fait une fraise sur un cheval ? Tagada Tagada.`,
+            `C'est l'histoire de Paf le chien qui traverse la route. Et paf le chien !`,
+            `Qu'est ce qui n'est pas un steak ? Une pastèque.`,
+            `Qu'est-ce qui est vert avec une cape ? Un concombre qui imite Super Tomate.`,
+            `Comment appelle-t-on un chien qui n'a pas de pattes ? On ne l'appelle pas, on va le chercher.`,
+            `Deux œufs discutent : — Pourquoi t'es tout vert et aussi poilu ? — Parce que j'suis un kiwi, ducon.`,
+            `Comment appelle-t-on un bébé éléphant prématuré ? Un éléphant tôt.`,
+            `Qu'est-ce qu'un canif ? Un petit fien.`,
+            `Quel est le pays le plus cool du monde ? Le Yémen. Yeah, man.`,
+            `Un mec rentre dans un café. Et plouf.`,
+            `C'est l'histoire d'un aveugle qui rentre dans un bar. Et dans une table, et dans une chaise, et dans un mur...`,
+            `Qu'est-ce qui est vert, qui tourne très très vite et qui devient rouge ? Une grenouille dans un mixeur.`,
+            `C'est un mec qui entre dans un bar et qui dit « Salut c'est moi ! » Mais en fait c'était pas lui.`,
+            `Quelle est la différence entre l'intelligence et les parachutes ? Aucune, quand on n'en a pas, on s'écrase.`,
+            `Un homme demande à son médecin : « Docteur, il me reste combien de temps à vivre ? — 10. — 10 ans ? — 9, 8, 7... »`,
+            `Un gendarme arrête un conducteur en excès de vitesse : « Papiers ? — Ciseaux ? »`,
+            `Comment appelle-t-on une baguette qui ne trouve pas son chemin ? Un pain perdu.`,
+            `Tu connais la blague du diable ? Elle est d'enfer.`,
+            `Deux canards discutent : « Coin coin. — C'est dingue, j'allais dire la même chose ! »`,
+            `Deux puces sortent du cinéma. L'une dit à l'autre : « On rentre à pieds ou on prend un chien ? »`,
+            `Un jour, j'ai fait une blague sur Auchan. Mais elle a pas supermarché.`,
+            `Deux lions discutent : « T'as une belle crinière. — Arrête, tu vas me faire rugir. »`,
+            `Un chameau dit à un dromadaire : « Comment ça va ? — Bien, je bosse, et toi ? — Je bosse, je bosse. »`,
+            `Deux souris voient passer une chauve-souris : « Regarde, un ange ! »`,
+            `C'est deux fous qui marchent dans la rue. Le premier demande au second : « Je peux me mettre au milieu ? »`,
+            `Quel est le comble pour un serrurier ? Mettre la clé sous la porte.`,
+            `Comment appelle-t-on le pilote d'un corbillard ? Un pilote décès.`,
+            `Que se disent deux yaourts dans un ascenseur ? « On va à quel laitage ? »`,
+            `Quelle sensation ont les médicaments dans une boîte de pilule ? Ils se sentent comprimés.`,
+            `Comment reconnaît-on un politicien qui ment ? Ses lèvres bougent.`,
+            `Comment appelle-t-on un nain qui est facteur ? Un nain posteur.`,
+            `Un patient s'adresse à son médecin : « J'ai très mal à l'œil gauche quand je bois mon café. — Vous avez essayé d'enlever la cuillère de la tasse ? »`,
+            `Quelle est la meilleure chose de la Suisse ? Aucune idée, mais le drapeau est un gros plus.`,
+            `De quoi a besoin un astronaute claustrophobe ? D'un peu d'espace.`,
+            `Un homme entre dans un restaurant : « Garçon, que me recommandez-vous ? — Un autre restaurant ! »`,
+            `Pourquoi les girafes n'existent pas ? Parce que c'est un coup monté.`,
+            `Quel est le sport préféré des électriciens ? Le karaté, car ils connaissent toutes les prises.`,
+        ];
+
+        const blaquesNoir = [
+            `Comment est-ce qu'on appelle un boomerang qui ne revient pas ? Un chat mort.`,
+            `Que dit un aveugle lorsqu'on lui donne du papier de verre ? « C'est écrit tout petit. »`,
+            `Pourquoi la petite fille tombe-t-elle de la balançoire ? Parce qu'elle n'a pas de bras.`,
+            `Qu'est-ce qui est pire qu'un bébé dans une poubelle ? Un bébé dans deux poubelles.`,
+            `Quelle partie du légume ne passe pas dans le mixer ? La chaise roulante.`,
+            `Comment reconnaît-on une lettre envoyée par un lépreux ? La langue est collée au timbre.`,
+            `Qu'est-ce qui a deux pattes et qui saigne ? Un demi-chien.`,
+            `Peut-on prendre un bain quand on a la diarrhée ? Oui si vous en avez assez.`,
+            `J'ai demandé à mon grand-père où il voulait être enterré. Il m'a dit « Surprends-moi ». Du coup je l'ai mis dans le congélateur.`,
+            `Ma grand-mère est morte paisiblement dans son sommeil. Contrairement à ses passagers qui ont hurlé pendant tout l'accident de bus.`,
+            `Pourquoi les orphelins ne jouent jamais à cache-cache ? Parce que personne ne vient les chercher.`,
+            `C'est quoi la différence entre une pizza et un orphelin ? La pizza, on la partage avec toute la famille.`,
+            `J'ai tué mon père avec une pelle. Ma mère a dit que c'était un accident… alors j'ai recommencé avec une vraie pelle.`,
+            `Comment on console quelqu'un qui vient de perdre sa femme ? « Au moins t'as plus de disputes pour la télécommande. »`,
+            `C'est quoi le comble pour un cancéreux ? Mourir d'une crise cardiaque avant que le cancer termine son travail.`,
+            `Ma sœur est morte d'une overdose. Au moins elle est morte en faisant ce qu'elle aimait : décevoir mes parents.`,
+            `Pourquoi les cimetières sont toujours pleins ? Parce que les gens meurent d'y aller.`,
+            `J'ai fait un don d'organes. J'ai donné tous ceux de mon voisin, il en avait plus besoin.`,
+            `C'est quoi la différence entre un arbre et un orphelin ? L'arbre, on sait où il est planté.`,
+            `Ma grand-mère a Alzheimer. Le bon côté c'est que je peux lui raconter la même blague tous les jours, elle rit à chaque fois.`,
+            `Pourquoi les aveugles ne font jamais de ski ? Parce qu'ils voient pas la fin de la piste… ni l'arbre.`,
+            `Quelle est la pire combinaison de maladies ? Alzheimer et la diarrhée. Vous courez, mais vous ne savez plus où.`,
+            `Comment les enfants de Tchernobyl comptent-ils jusqu'à 33 ? Sur leurs doigts.`,
+            `C'est l'histoire d'un mec qui rentre dans un bar : « Je voudrais 2 bières. — Des pressions ? — Non, alcoolisme. »`,
+            `Une petite fille discute avec sa mère : « Maman, est-ce que je pourrais avoir un chien à Noël ? — Non, tu auras de la dinde comme tout le monde. »`,
+            `J'ai une blague sur Claude François… mais je crois que vous êtes au courant.`,
+            `J'ai une blague sur Véronique Courjault… mais j'ai peur qu'elle jette un froid.`,
+            `J'ai une blague sur le petit Grégory… mais elle va tomber à l'eau.`,
+            `Qu'est-ce qui a 5 bras, 3 jambes et 2 pieds ? La ligne d'arrivée au marathon de Boston.`,
+            `Maman, je ne veux plus dormir avec mon petit frère. — Tais-toi ! Je t'ai déjà dit qu'on n'avait pas assez d'argent pour l'enterrer.`,
+            `Pourquoi un enfant chinois ne croit jamais au Père Noël ? Parce que c'est lui qui fabrique les jouets.`,
+            `Comment sait-on quand un lépreux doit quitter une partie de poker ? Quand il perd la main.`,
+            `C'est quoi le dernier repas d'un condamné à mort qui a Alzheimer ? « Encore la même chose, s'il vous plaît. »`,
+            `Ma mère est morte en me mettant au monde. Depuis, chaque anniversaire c'est un peu awkward.`,
+            `C'est quoi la différence entre une Ferrari et un tas d'enfants morts ? J'ai pas de Ferrari dans mon garage.`,
+            `L'humour noir, c'est comme les enfants cancéreux… ça ne vieillit jamais.`,
+            `Pourquoi les retraités adorent les bains de boue ? Pour s'habituer au goût de la terre.`,
+            `Ma voisine est morte en dormant. Moi je suis encore vivant et je dors jamais. La vie est vraiment injuste.`,
+            `Mon oncle est mort d'un cancer de la gorge. Il a fumé jusqu'au dernier jour. Un vrai guerrier.`,
+            `Ma tante est morte en faisant du parapente. Au moins elle est partie en beauté… du 300 mètres.`,
+            `J'ai enterré mon chien hier. C'était un bon chien. Dommage qu'il ait mordu le facteur.`,
+            `Quel est le légume officiel de l'Allemagne ? Michael Schumacher.`,
+            `J'ai perdu tous mes cheveux à cause de la chimio. Au moins maintenant je gagne du temps le matin.`,
+            `Qu'est-ce qui est rouge et qui sent mauvais ? Un camion de pompiers qui brûle.`,
+            `Qu'est-ce qui est pire que de trouver un ver dans ta pomme ? En trouver la moitié.`,
+        ];
+
+        const categories = {
+            soft: { blagues: blaguesSoft, label: '\ud83d\ude0a Humour soft', color: 0x2ecc71 },
+            classique: { blagues: blaquesClassique, label: '\ud83d\ude04 Humour classique', color: 0x3498db },
+            noir: { blagues: blaquesNoir, label: '\ud83d\udda4 Humour noir', color: 0x2c2c2c }
+        };
+
+        const c = categories[cat];
+        const blague = c.blagues[Math.floor(Math.random() * c.blagues.length)];
+
+        const embed = new EmbedBuilder()
+            .setColor(c.color)
+            .setTitle(c.label)
+            .setDescription(blague);
+
+        const autreBtn = new ButtonBuilder()
+            .setCustomId(`blague_autre_${authorId}_${cat}`)
+            .setLabel('\ud83e\udd23 Une autre ?')
+            .setStyle(ButtonStyle.Secondary);
+        const menuBtn = new ButtonBuilder()
+            .setCustomId(`blague_menu_back_${authorId}`)
+            .setLabel('\ud83d\udd04 Autre type')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(autreBtn, menuBtn);
+
+        return interaction.update({ embeds: [embed], components: [row] });
+}
+
+// =========================
 //     LISTENER MESSAGES
 // =========================
 
@@ -1688,6 +1859,27 @@ client.on('messageCreate', async (message) => {
         return message.reply("Sous-commandes disponibles : `set JJ/MM`, `show`, `list`, `next`");
     }
 
+    // !blague
+    if (response?.needsBlague) {
+        const authorId = message.author.id;
+        const embed = new EmbedBuilder()
+            .setColor(0xe91e63)
+            .setTitle('\ud83e\udd23 Blagues')
+            .setDescription('Choisis une cat\u00e9gorie !');
+
+        const menu = new StringSelectMenuBuilder()
+            .setCustomId(`blague_menu_${authorId}`)
+            .setPlaceholder('Choisis une cat\u00e9gorie')
+            .addOptions(
+                { label: '\ud83d\ude0a Humour soft', value: 'soft' },
+                { label: '\ud83d\ude04 Humour classique', value: 'classique' },
+                { label: '\ud83d\udda4 Humour noir', value: 'noir' }
+            );
+
+        const row = new ActionRowBuilder().addComponents(menu);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
     // !actif
     if (response?.needsActif) {
         cleanOldData();
@@ -2301,6 +2493,57 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // =========================
+    // MENU SELECT BLAGUE
+    // =========================
+
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('blague_menu_')) {
+        const authorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
+
+        const value = interaction.values[0];
+        await sendBlague(interaction, value, authorId);
+        return;
+    }
+
+    // =========================
+    // BOUTON BLAGUE
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('blague_autre_')) {
+        const parts = interaction.customId.split('_');
+        const authorId = parts[2];
+        const cat = parts[3];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
+        await sendBlague(interaction, cat, authorId);
+        return;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('blague_menu_back_')) {
+        const authorId = interaction.customId.split('_')[3];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
+        const embed = new EmbedBuilder()
+            .setColor(0xe91e63)
+            .setTitle('\ud83e\udd23 Blagues')
+            .setDescription('Choisis une cat\u00e9gorie !');
+        const menu = new StringSelectMenuBuilder()
+            .setCustomId(`blague_menu_${authorId}`)
+            .setPlaceholder('Choisis une cat\u00e9gorie')
+            .addOptions(
+                { label: '\ud83d\ude0a Humour soft', value: 'soft' },
+                { label: '\ud83d\ude04 Humour classique', value: 'classique' },
+                { label: '\ud83d\udda4 Humour noir', value: 'noir' }
+            );
+        const row = new ActionRowBuilder().addComponents(menu);
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    // =========================
     // MENU SELECT QUESTION
     // =========================
 
@@ -2488,6 +2731,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setDescription("# \ud83d\udcac Discussion")
                 .addFields(
                     { name: "!question", value: "Lance une question al\u00e9atoire parmi 6 cat\u00e9gories !" },
+                    { name: "!blague", value: "Lance une blague al\u00e9atoire en 3 cat\u00e9gories !" },
                     { name: "!choix", value: "Vous avez du mal \u00e0 faire un choix ? Demandez \u00e0 Cacabot." }
                 );
         }
