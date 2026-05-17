@@ -414,6 +414,7 @@ function getResponse(raw) {
     // PHRASES CONTENANT LES MOTS
     // =========================
 
+    if (cleaned.includes("absolute cacabot")) return "https://media.discordapp.net/attachments/1504056056169369722/1505371569986474175/image.png";
     if (cleaned.includes("henry tran") || cleaned.includes("singapour")) {
         const videos = [
             "https://cdn.discordapp.com/attachments/1128032964924670053/1504609617638854817/SINGAPOUR_1.mp4",
