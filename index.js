@@ -2322,7 +2322,7 @@ client.on('messageCreate', async (message) => {
                 { name: '\ud83c\udd94 ID', value: guild.id, inline: true }
             )
             .addFields(
-                { name: '[\ud83d\udd17 Lien d\'invitation du serveur](https://discord.com/invite/maAbUYb)', value: '\u200b', inline: false }
+                { name: '\u200b', value: '[\ud83d\udd17 Lien d\'invitation du serveur](https://discord.com/invite/maAbUYb)', inline: false }
             );
 
         return message.reply({ embeds: [embed] });
