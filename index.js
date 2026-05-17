@@ -840,7 +840,7 @@ const punchGifs = [
 function buildPunchEmbed(description) {
     const gif = punchGifs[Math.floor(Math.random() * punchGifs.length)];
     return new EmbedBuilder()
-        .setColor(0x51c21d)
+        .setColor(0xbf0000)
         .setDescription(description)
         .setImage(gif);
 }
@@ -1594,7 +1594,7 @@ client.on('messageCreate', async (message) => {
         }
 
         if (cible.id === message.author.id) {
-            return message.reply({ content: "Tu ne peux pas te ragebait toi-m\u00eame !" }).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply({ content: "Tu ne peux pas te ragebait toi-m\u00eame..." }).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
         }
 
         let titre;
@@ -2722,7 +2722,7 @@ client.on('interactionCreate', async (interaction) => {
         const clickerId = interaction.user.id;
 
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Tu peux pas te venger de ton propre ragebait.", ephemeral: true });
+            return interaction.reply({ content: "Tu peux pas te venger de ton propre ragebait...", ephemeral: true });
         }
         if (clickerId !== targetId) {
             return interaction.reply({ content: "Ce ragebait ne t'était pas adressé...", ephemeral: true });
