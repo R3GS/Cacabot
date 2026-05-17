@@ -2011,8 +2011,8 @@ client.on('interactionCreate', async (interaction) => {
             .addOptions(
                 { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insulte, die, punch, bang, rizz, rire, danse', value: 'interact' },
                 { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
-                { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys', value: 'random' },
-                { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' }
+                { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
+                { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys', value: 'random' }
             );
 
         const funBackButton = new ButtonBuilder()
