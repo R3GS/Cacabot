@@ -319,6 +319,10 @@ function getResponse(raw) {
     //         !SERVEUR
     // =========================
 
+    if (command === "!info") {
+        return { needsInfo: true };
+    }
+
     if (command === "!serveur") {
         return { needsServeur: true };
     }
@@ -2253,6 +2257,48 @@ client.on('messageCreate', async (message) => {
         return message.reply(`\u2705 **${nom}** : ${count} messages enregistr\u00e9s !`);
     }
 
+    // !info
+    if (response?.needsInfo) {
+        const startDate = new Date('2026-05-14T00:00:00');
+        const now = new Date();
+        const diff = now - startDate;
+
+        const totalSeconds = Math.floor(diff / 1000);
+        const totalMinutes = Math.floor(totalSeconds / 60);
+        const totalHours = Math.floor(totalMinutes / 60);
+        const totalDays = Math.floor(totalHours / 24);
+
+        const months = Math.floor(totalDays / 30);
+        const days = totalDays % 30;
+        const hours = totalHours % 24;
+
+        let uptime = '';
+        if (months > 0) uptime += `${months} mois, `;
+        if (months > 0 || days > 0) uptime += `${days} jour${days > 1 ? 's' : ''}, `;
+        uptime += `${hours} heure${hours > 1 ? 's' : ''}`;
+
+        const nbMembres = Object.keys(topData.messages).length;
+        const nbCommandes = 30;
+
+        const embed = new EmbedBuilder()
+            .setColor(0x5865f2)
+            .setTitle('\ud83e\udd16 Infos de Cacabot')
+            .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
+            .addFields(
+                { name: '\ud83d\udcac Commandes disponibles', value: `${nbCommandes}`, inline: true },
+                { name: '\ud83d\udc65 Membres connus', value: `${nbMembres}`, inline: true },
+                { name: '\u200b', value: '\u200b', inline: true },
+                { name: '\ud83d\udd52 En ligne depuis', value: uptime, inline: true },
+                { name: '\u200b', value: '\u200b', inline: true },
+                { name: '\u200b', value: '\u200b', inline: true },
+                { name: '\ud83d\udc51 Cr\u00e9atrice', value: 'Epsys', inline: true },
+                { name: '\ud83e\udd1d Collaboratrice', value: '[BDN](https://bdn-fr.xyz/)', inline: true },
+                { name: '\u200b', value: '\u200b', inline: true }
+            );
+
+        return message.reply({ embeds: [embed] });
+    }
+
     // !serveur
     if (response?.needsServeur) {
         const guild = message.guild;
@@ -3235,7 +3281,8 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "\ud83d\udc64 !profil", value: "Afficher le profil d'un membre." },
                     { name: "\ud83d\uddbc\ufe0f !avatar", value: "Afficher l'avatar d'un membre en grand." },
                     { name: "\ud83c\udfc5 !top", value: "Afficher le top 10 des membres les plus actifs." },
-                    { name: "\ud83d\udcac !actif", value: "Affiche les membres les plus actifs du jour et de la semaine." }
+                    { name: "\ud83d\udcac !actif", value: "Affiche les membres les plus actifs du jour et de la semaine." },
+                    { name: "\ud83e\udd16 !info", value: "Affiche les informations de Cacabot." }
                 );
         }
 
@@ -3290,7 +3337,7 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId(`help_util_${helpAuthorId}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83d\udcac Discord', description: 'discord, serveur, profil, avatar, top, actif', value: 'discord' },
+                { label: '\ud83d\udcac Discord', description: 'discord, serveur, profil, avatar, top, actif, info', value: 'discord' },
                 { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos', value: 'autres' }
             );
 
@@ -3360,7 +3407,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setCustomId(`help_util_${helpAuthorId}`)
                 .setPlaceholder('Choisis une cat\u00e9gorie')
                 .addOptions(
-                    { label: '\ud83d\udcac Discord', description: 'discord, serveur, profil, avatar, top, actif', value: 'discord' },
+                    { label: '\ud83d\udcac Discord', description: 'discord, serveur, profil, avatar, top, actif, info', value: 'discord' },
                     { label: '\u25b6\ufe0f YouTube', description: 'En construction...', value: 'youtube' },
                     { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos', value: 'autres' }
                 );
