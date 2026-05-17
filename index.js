@@ -967,8 +967,6 @@ async function doFlipSequence(channel, firstMessage, isPari, pileNom, faceNom) {
         .setImage(gif);
     await channel.send({ embeds: [lancerEmbed] });
     await new Promise(r => setTimeout(r, 3000));
-    await channel.send("...");
-    await new Promise(r => setTimeout(r, 2000));
 
     const relancerButton = new ButtonBuilder()
         .setCustomId("flip_start")
@@ -994,11 +992,11 @@ async function doFlipSequence(channel, firstMessage, isPari, pileNom, faceNom) {
 async function sendFlipChoix(channel, message) {
     const simpleBtn = new ButtonBuilder()
         .setCustomId("flip_simple")
-        .setLabel("1\ufe0f\u20e3 Lancer simple")
+        .setLabel("\ud83e\ude99 Lancer simple")
         .setStyle(ButtonStyle.Secondary);
     const pariBtn = new ButtonBuilder()
         .setCustomId("flip_pari")
-        .setLabel("2\ufe0f\u20e3 Pari")
+        .setLabel("\u2694\ufe0f Pari")
         .setStyle(ButtonStyle.Secondary);
     const row = new ActionRowBuilder().addComponents(simpleBtn, pariBtn);
     if (message) {
