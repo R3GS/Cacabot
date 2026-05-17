@@ -2095,6 +2095,12 @@ client.on('interactionCreate', async (interaction) => {
         }
         flipEnCours = false;
         await interaction.message.delete().catch(() => {});
+        // Chercher et supprimer le dernier message !flip du lanceur
+        const messages = await interaction.channel.messages.fetch({ limit: 20 }).catch(() => null);
+        if (messages) {
+            const flipMsg = messages.find(m => m.author.id === cancelAuthorId && m.content.toLowerCase().startsWith('!flip'));
+            if (flipMsg) await flipMsg.delete().catch(() => {});
+        }
         return;
     }
 
