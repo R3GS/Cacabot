@@ -1622,26 +1622,26 @@ client.on('messageCreate', async (message) => {
             return message.reply("Tu veux \u00abme mourir\u00bb ? Non merci.");
         }
 
+        let causeNom = null;
+
+        // Cas !die @X
         if (cible && cible.id !== message.author.id) {
-            return message.reply(`Tu ne peux pas \u00abmourir quelqu'un\u00bb ce n'est pas possible, **${auteurNom}**`);
+            causeNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
         }
 
-        // Cas reply : mort à cause de la personne citée
+        // Cas reply (priorité sur le ping si les deux sont présents)
         if (message.reference) {
             const repliedMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
             if (repliedMsg && repliedMsg.author.id !== message.author.id && repliedMsg.author.id !== client.user.id) {
-                const causeNom = message.guild?.members.cache.get(repliedMsg.author.id)?.displayName ?? repliedMsg.author.username;
-                const embed = buildDieEmbed(`\u2620\ufe0f **${auteurNom}** meurt à cause de **${causeNom}**`);
-                const dieButton = new ButtonBuilder()
-                    .setCustomId(`die_with_${message.author.id}_${auteurNom}`)
-                    .setLabel("\u2620\ufe0f Mourir avec")
-                    .setStyle(ButtonStyle.Primary);
-                const row = new ActionRowBuilder().addComponents(dieButton);
-                return message.reply({ embeds: [embed], components: [row] });
+                causeNom = message.guild?.members.cache.get(repliedMsg.author.id)?.displayName ?? repliedMsg.author.username;
             }
         }
 
-        const embed = buildDieEmbed(`\u2620\ufe0f **${auteurNom}** meurt...`);
+        const titre = causeNom
+            ? `\u2620\ufe0f **${auteurNom}** meurt \u00e0 cause de **${causeNom}**`
+            : `\u2620\ufe0f **${auteurNom}** meurt...`;
+
+        const embed = buildDieEmbed(titre);
 
         const dieButton = new ButtonBuilder()
             .setCustomId(`die_with_${message.author.id}_${auteurNom}`)
