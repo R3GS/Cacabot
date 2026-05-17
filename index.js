@@ -1415,10 +1415,37 @@ client.on('messageCreate', async (message) => {
         }
 
         if (sub === 'set') {
-            const date = args[2];
-            if (!date || !/^\d{2}\/\d{2}$/.test(date)) {
-                return message.reply("Format invalide ! Utilise `!anniversaire set JJ/MM`");
+            const lastArg = args[args.length - 1];
+            const isDate = /^\d{2}\/\d{2}$/.test(lastArg);
+
+            if (!isDate) {
+                return message.reply("Format invalide ! Utilise `!anniversaire set JJ/MM` ou `!anniversaire set Pseudo JJ/MM`");
             }
+
+            const date = lastArg;
+
+            if (args.length > 3) {
+                const query = args.slice(2, args.length - 1).join(" ");
+                const result = findMemberByName(message.guild, query);
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                        birthdayData.birthdays[user.id] = date;
+                        await saveBirthdays();
+                        const nom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
+                        message.reply(`\ud83c\udf82 L'anniversaire de **${nom}** a \u00e9t\u00e9 enregistr\u00e9 le **${date}** !`);
+                    });
+                    return;
+                }
+                if (!result.found) {
+                    return message.reply("Membre introuvable !");
+                }
+                const targetUser = result.found.user;
+                const nom = message.guild?.members.cache.get(targetUser.id)?.displayName ?? targetUser.username;
+                birthdayData.birthdays[targetUser.id] = date;
+                await saveBirthdays();
+                return message.reply(`\ud83c\udf82 L'anniversaire de **${nom}** a \u00e9t\u00e9 enregistr\u00e9 le **${date}** !`);
+            }
+
             birthdayData.birthdays[message.author.id] = date;
             await saveBirthdays();
             return message.reply(`\ud83c\udf82 Ton anniversaire a \u00e9t\u00e9 enregistr\u00e9 le **${date}** !`);
