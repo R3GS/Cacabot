@@ -2285,12 +2285,12 @@ client.on('messageCreate', async (message) => {
             .setTitle('\ud83e\udd16 Infos de Cacabot')
             .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
             .addFields(
-                { name: '\ud83d\udcac Commandes disponibles', value: `${nbCommandes}`, inline: true },
-                { name: '\ud83d\udc65 Membres connus', value: `${nbMembres}`, inline: true },
+                { name: '\ud83d\udcbb Commandes', value: `${nbCommandes}`, inline: true },
+                { name: '\ud83d\udc65 Membres', value: `${nbMembres}`, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
-                { name: '\ud83d\udd52 En ligne depuis', value: uptime, inline: true },
+                { name: '\ud83d\udd52 Uptime', value: uptime, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
-                { name: '\ud83d\udcac Messages envoy\u00e9s', value: `${topData.messages['1503495713097519355'] ?? 0}`, inline: true },
+                { name: '\ud83d\udcac Messages', value: `${topData.messages['1503495713097519355'] ?? 0}`, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
                 { name: '\ud83d\udc51 Cr\u00e9atrice', value: 'Epsys', inline: true },
                 { name: '\ud83e\udd1d Collaboratrice', value: '[BDN](https://bdn-fr.xyz/)', inline: true },
