@@ -226,7 +226,7 @@ function getResponse(raw) {
     //         !INSULTE
     // =========================
 
-    if (command === "!insulte") {
+    if (command === "!insult") {
         return { needsInsult: true };
     }
 
@@ -486,6 +486,13 @@ function getResponse(raw) {
 
     return reply("Feur");
 }
+
+// =========================
+//     CHEH
+// =========================
+
+const pendingCheh = new Map();
+const CHEH_GIF = 'https://cdn.discordapp.com/attachments/1128032964924670053/1505363865137840180/cheh.gif';
 
 // =========================
 //     LOGIQUE !ANIMAL
@@ -914,6 +921,13 @@ async function askDisambiguation(message, guild, candidates, callback) {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
+    // Cheh
+    const cleanedCheh = message.content.toLowerCase().trim();
+    if (pendingCheh.has(message.channel.id) && (cleanedCheh === 'ntm' || cleanedCheh === 'tg')) {
+        pendingCheh.delete(message.channel.id);
+        return message.reply(CHEH_GIF);
+    }
+
     // Comptage messages pour !top
     if (message.guild) {
         const uid = message.author.id;
@@ -961,7 +975,7 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!cible) {
-            return message.reply("Euuh... Tu veux embrasser qui du coup ?").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply("Euuh... Tu veux embrasser qui du coup ?");
         }
 
         const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
@@ -1003,7 +1017,7 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!cible) {
-            return message.reply("Euuh... Tu veux c\u00e2liner qui du coup ?").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply("Euuh... Tu veux c\u00e2liner qui du coup ?");
         }
 
         const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
@@ -1046,7 +1060,12 @@ client.on('messageCreate', async (message) => {
 
         if (!cible) {
             const embed = buildDanceEmbed(`\ud83d\udd7a **${auteurNom}** s'ambiance comme jamais !`, true);
-            return message.reply({ embeds: [embed] });
+            const danceJoinButton = new ButtonBuilder()
+                .setCustomId(`dance_join_${message.author.id}_${auteurNom}`)
+                .setLabel("\ud83d\udc83 Rejoindre la danse")
+                .setStyle(ButtonStyle.Primary);
+            const row = new ActionRowBuilder().addComponents(danceJoinButton);
+            return message.reply({ embeds: [embed], components: [row] });
         }
 
         const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
@@ -1059,7 +1078,7 @@ client.on('messageCreate', async (message) => {
         const embed = buildDanceEmbed(`\ud83d\udd7a **${auteurNom}** danse avec **${cibleNom}** !`, false);
         const danceBackButton = new ButtonBuilder()
             .setCustomId(`dance_back_${message.author.id}_${cible.id}_${auteurNom}`)
-            .setLabel("\ud83d\udd7a Rejoindre la danse")
+            .setLabel("\ud83d\udc83 Rejoindre la danse")
             .setStyle(ButtonStyle.Primary);
         const row = new ActionRowBuilder().addComponents(danceBackButton);
         return message.reply({ embeds: [embed], components: [row] });
@@ -1083,11 +1102,11 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!cible) {
-            return message.reply("Mentionne quelqu'un pour l'insulter !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply("Mentionne quelqu'un pour l'insulter !");
         }
 
         if (cible.id === message.author.id) {
-            return message.reply("Tu ne peux pas t'insulter toi-m\u00eame... Mentionne quelqu'un plut\u00f4t !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply("Tu ne peux pas t'insulter toi-m\u00eame... Mentionne quelqu'un plut\u00f4t !");
         }
 
         if (cible.id === client.user.id) {
@@ -1160,11 +1179,11 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!cible) {
-            return message.reply("Choisis quelqu'un que tu veux rizz !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply("Choisis quelqu'un que tu veux rizz !");
         }
 
         if (cible.id === message.author.id) {
-            return message.reply("Tu ne peux pas te rizz toi-m\u00eame !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply("Tu ne peux pas te rizz toi-m\u00eame !");
         }
 
         if (cible.id === client.user.id) {
@@ -1203,11 +1222,11 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!cible) {
-            return message.reply("Mentionne la personne sur qui tu veux tirer !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply("Mentionne la personne sur qui tu veux tirer !");
         }
 
         if (cible.id === message.author.id) {
-            return message.reply("\u00c9vite de te tirer dessus :(").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply("\u00c9vite de te tirer dessus :(");
         }
 
         if (cible.id === client.user.id) {
@@ -1245,11 +1264,11 @@ client.on('messageCreate', async (message) => {
         }
 
         if (!cible) {
-            return message.reply("Mentionne quelqu'un que tu veux frapper !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply("Mentionne quelqu'un que tu veux frapper !");
         }
 
         if (cible.id === message.author.id) {
-            return message.reply("Tu ne peux pas te frapper toi-m\u00eame ! 'Fin si mais... Ne le fais pas.").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply("Tu ne peux pas te frapper toi-m\u00eame ! 'Fin si mais... Ne le fais pas.");
         }
 
         if (cible.id === client.user.id) {
@@ -1275,11 +1294,11 @@ client.on('messageCreate', async (message) => {
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (cible && cible.id === client.user.id) {
-            return message.reply("Tu veux \u00abme mourir\u00bb ? Non merci.").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply("Tu veux \u00abme mourir\u00bb ? Non merci.");
         }
 
         if (cible && cible.id !== message.author.id) {
-            return message.reply(`Tu ne peux pas \u00abmourir quelqu'un\u00bb ce n'est pas possible, **${auteurNom}**`).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply(`Tu ne peux pas \u00abmourir quelqu'un\u00bb ce n'est pas possible, **${auteurNom}**`);
         }
 
         const embed = buildDieEmbed(`\u2620\ufe0f **${auteurNom}** meurt...`);
@@ -1374,7 +1393,7 @@ client.on('messageCreate', async (message) => {
 
         if (isTest) {
             const channel = message.guild?.channels.cache.get(BIRTHDAY_CHANNEL_ID);
-            if (!channel) return message.reply("Salon introuvable !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            if (!channel) return message.reply("Salon introuvable !");
             await channel.send(`<@${message.author.id}> JOYEUX ANNIVERSAIRE !!! \ud83c\udf89\ud83c\udf89\ud83c\udf89`);
             await channel.send(BIRTHDAY_GIF);
             return;
@@ -1383,7 +1402,7 @@ client.on('messageCreate', async (message) => {
         if (sub === 'set') {
             const date = args[2];
             if (!date || !/^\d{2}\/\d{2}$/.test(date)) {
-                return message.reply("Format invalide ! Utilise `!anniversaire set JJ/MM`").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+                return message.reply("Format invalide ! Utilise `!anniversaire set JJ/MM`");
             }
             birthdayData.birthdays[message.author.id] = date;
             await saveBirthdays();
@@ -1392,13 +1411,13 @@ client.on('messageCreate', async (message) => {
 
         if (sub === 'show') {
             const date = birthdayData.birthdays[message.author.id];
-            if (!date) return message.reply("Tu n'as pas encore enregistr\u00e9 ton anniversaire ! Utilise `!anniversaire set JJ/MM`").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            if (!date) return message.reply("Tu n'as pas encore enregistr\u00e9 ton anniversaire ! Utilise `!anniversaire set JJ/MM`");
             return message.reply(`\ud83c\udf82 Ton anniversaire est le **${date}** !`);
         }
 
         if (sub === 'list') {
             const entries = Object.entries(birthdayData.birthdays);
-            if (entries.length === 0) return message.reply("Aucun anniversaire enregistr\u00e9 !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            if (entries.length === 0) return message.reply("Aucun anniversaire enregistr\u00e9 !");
             const sorted = entries.sort((a, b) => {
                 const [da, ma] = a[1].split('/').map(Number);
                 const [db, mb] = b[1].split('/').map(Number);
@@ -1418,7 +1437,7 @@ client.on('messageCreate', async (message) => {
 
         if (sub === 'next') {
             const entries = Object.entries(birthdayData.birthdays);
-            if (entries.length === 0) return message.reply("Aucun anniversaire enregistr\u00e9 !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            if (entries.length === 0) return message.reply("Aucun anniversaire enregistr\u00e9 !");
             const now = new Date();
             const toDate = (str) => {
                 const [d, m] = str.split('/').map(Number);
@@ -1431,7 +1450,7 @@ client.on('messageCreate', async (message) => {
             return message.reply(`\ud83c\udf82 Le prochain anniversaire est celui de **${name}** le **${next[1]}** !`);
         }
 
-        return message.reply("Sous-commandes disponibles : `set JJ/MM`, `show`, `list`, `next`").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+        return message.reply("Sous-commandes disponibles : `set JJ/MM`, `show`, `list`, `next`");
     }
 
     // !top
@@ -1441,7 +1460,7 @@ client.on('messageCreate', async (message) => {
             .slice(0, 10);
 
         if (sorted.length === 0) {
-            return message.reply("Pas encore de donn\u00e9es !").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply("Pas encore de donn\u00e9es !");
         }
 
         const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
@@ -1468,14 +1487,14 @@ client.on('messageCreate', async (message) => {
         const count = parseInt(args[args.length - 1]);
 
         if (!cible || isNaN(count)) {
-            return message.reply("Usage : `!setmessages @Membre NombreDeMessages`").then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+            return message.reply("Usage : `!setmessages @Membre NombreDeMessages`");
         }
 
         topData.messages[cible.id] = count;
         saveTop(topData);
 
         const nom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
-        return message.reply(`\u2705 **${nom}** : ${count} messages enregistr\u00e9s !`).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+        return message.reply(`\u2705 **${nom}** : ${count} messages enregistr\u00e9s !`);
     }
 
     // !serveur
@@ -1551,7 +1570,11 @@ client.on('messageCreate', async (message) => {
     // R\u00e9ponse texte simple
     if (typeof response === "string") {
         if (response.trim().length === 0) return;
-        return message.reply({ content: response });
+        const autoReplyMsg = await message.reply({ content: response });
+        if (pendingCheh.has(message.channel.id)) clearTimeout(pendingCheh.get(message.channel.id).timeout);
+        const chehTimeout = setTimeout(() => { pendingCheh.delete(message.channel.id); }, 10000);
+        pendingCheh.set(message.channel.id, { timeout: chehTimeout, replyMsg: autoReplyMsg });
+        return;
     }
 });
 
@@ -1605,6 +1628,43 @@ client.on('interactionCreate', async (interaction) => {
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
         const embed = buildHugEmbed(retourNom, originalAuthorNom);
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
+    // BOUTON DANCE JOIN (solo)
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith("dance_join_")) {
+        const parts = interaction.customId.split("_");
+        const originalAuthorId = parts[2];
+        const originalAuthorNom = parts.slice(3).join("_");
+        const clickerId = interaction.user.id;
+
+        if (clickerId === originalAuthorId) {
+            return interaction.reply({ content: "Tu danses d\u00e9j\u00e0 ! \ud83d\udd7a", ephemeral: true });
+        }
+
+        const joinNom = interaction.member?.displayName ?? interaction.user.username;
+        const embed = buildDanceEmbed(`\ud83d\udc83 **${joinNom}** rejoint **${originalAuthorNom}** sur le dancefloor !`, false);
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
+    // BOUTON DANCE JOIN (SOLO)
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith("dance_join_")) {
+        const parts = interaction.customId.split("_");
+        const originalAuthorId = parts[2];
+        const originalAuthorNom = parts.slice(3).join("_");
+
+        if (interaction.user.id === originalAuthorId) {
+            return interaction.reply({ content: "Tu danses d\u00e9j\u00e0 ! \ud83d\udd7a", ephemeral: true });
+        }
+
+        const rejointNom = interaction.member?.displayName ?? interaction.user.username;
+        const embed = buildDanceEmbed(`\ud83d\udd7a **${rejointNom}** rejoint **${originalAuthorNom}** sur le dancefloor !`, false);
         return interaction.reply({ embeds: [embed] });
     }
 
@@ -1937,7 +1997,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!kiss", value: "Embrassez quelqu'un sur le serveur !" },
                     { name: "!hug", value: "Faites un c\u00e2lin \u00e0 quelqu'un sur le serveur !" },
                     { name: "!danse", value: "Dansez avec quelqu'un sur le serveur !" },
-                    { name: "!insulte", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
+                    { name: "!insult", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
                     { name: "!die", value: "Mourez en direct sur le serveur !" },
                     { name: "!punch", value: "Frappez quelqu'un sur le serveur !" },
                     { name: "!bang", value: "Tirez sur quelqu'un sur le serveur !" },
@@ -2003,13 +2063,13 @@ client.on('interactionCreate', async (interaction) => {
 
         const funEmbed = new EmbedBuilder()
             .setColor(0xffcc00)
-            .setDescription("# \ud83c\udf89 Fun\n*Toutes les commandes pour animer le serveur et faire des trucs inutiles mais dr\u00f4les.*\n\n\ud83d\udc46 **Interact** \u2014 Interagis avec les membres du serveur\n\ud83d\udcac **Discussion** \u2014 Lance des d\u00e9bats ou laisse le hasard d\u00e9cider\n\ud83c\udf82 **Anniversaire** \u2014 Pour les anniversaires des membres du serveur !\n\ud83d\udca5 **Random** \u2014 Commandes al\u00e9atoires et surprises");
+            .setDescription("# \ud83c\udf89 Fun\n*Toutes les commandes pour animer le serveur et faire des trucs inutiles mais dr\u00f4les.*\n\n\ud83d\udc46 **Interact** \u2014 Interagis avec les membres du serveur\n\ud83d\udcac **Discussion** \u2014 Lance des d\u00e9bats ou laisse le hasard d\u00e9cider\n\ud83c\udf82 **Anniversaire** \u2014 Les commandes pour les anniversaires des membres du serveur !\n\ud83d\udca5 **Random** \u2014 Commandes al\u00e9atoires et surprises");
 
         const funMenu = new StringSelectMenuBuilder()
             .setCustomId(`help_fun_${helpAuthorId}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insulte, die, punch, bang, rizz, rire, danse', value: 'interact' },
+                { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, punch, bang, rizz, rire, danse', value: 'interact' },
                 { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                 { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
                 { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys', value: 'random' }
@@ -2077,7 +2137,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setCustomId(`help_fun_${helpAuthorId}`)
                 .setPlaceholder('Choisis une cat\u00e9gorie')
                 .addOptions(
-                    { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insulte, die, punch, bang, rizz, rire, danse', value: 'interact' },
+                    { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, punch, bang, rizz, rire, danse', value: 'interact' },
                     { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                     { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
                     { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys', value: 'random' }
