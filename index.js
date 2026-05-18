@@ -1404,13 +1404,16 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     // Pseudo : 20px sous le carré, 70px de hauteur
     ctx.fillStyle = '#1a0a00';
-    ctx.font = '70px CowboyMovie';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
+
+    // Tester quelle font est chargée
+    ctx.font = '70px "CowboyMovie"';
+    console.log('Font utilisée:', ctx.font);
     ctx.fillText(displayName.toUpperCase(), 977 / 2, 447 + 542 + 20);
 
     // Prime : 21px sous le pseudo
-    ctx.font = '40px CowboyMovie';
+    ctx.font = '40px "CowboyMovie"';
     const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
     ctx.fillText(primeClean, 977 / 2, 447 + 542 + 20 + 70 + 21);
 
