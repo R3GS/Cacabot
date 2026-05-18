@@ -1390,6 +1390,9 @@ async function getCommitCount() {
 
 
 async function generateWantedImage(avatarUrl, displayName, primeAmount) {
+    // Log temporaire pour voir les fonts dispo
+    const { execSync } = require('child_process');
+    try { console.log('Fonts:', execSync('fc-list').toString().slice(0, 500)); } catch(e) { console.log('fc-list error:', e.message); }
     const canvas = createCanvas(977, 1273);
     const ctx = canvas.getContext('2d');
 
