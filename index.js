@@ -1416,7 +1416,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     ctx.save();
     ctx.translate(centerX, pseudoY);
     ctx.scale(5, 5);
-    ctx.font = '14px "CowboyMovie"';
+    ctx.font = '18px "CowboyMovie"';
     ctx.fillText(displayName.toUpperCase(), 0, 0);
     ctx.restore();
 
@@ -1424,7 +1424,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     ctx.save();
     ctx.translate(centerX, primeY);
     ctx.scale(4, 4);
-    ctx.font = '10px "CowboyMovie"';
+    ctx.font = '14px "CowboyMovie"';
     const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
     ctx.fillText(primeClean, 0, 0);
     ctx.restore();
