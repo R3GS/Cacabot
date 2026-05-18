@@ -2227,9 +2227,51 @@ client.on('messageCreate', async (message) => {
         }
 
         if (sub === 'show') {
+            let cible = message.mentions.users.first();
+            if (!cible) {
+                const query = args.slice(1).join(' ');
+                if (query) {
+                    if (/^\d{17,19}$/.test(query)) {
+                        cible = { id: query };
+                    } else {
+                        const result = findMemberByName(message.guild, query);
+                        if (result.multiple) {
+                            askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                                const date = birthdayData.birthdays[user.id];
+                                const nom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
+                                if (!date) return message.reply(`\ud83c\udf82 **${nom}** n'a pas encore enregistr\u00e9 son anniversaire.`);
+                                const [d, m] = date.split('/').map(Number);
+                                const now = new Date(); const next = new Date(now.getFullYear(), m - 1, d);
+                                if (next < now) next.setFullYear(now.getFullYear() + 1);
+                                const diffDays = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
+                                const joursStr = diffDays === 0 ? "c'est aujourd'hui \ud83c\udf89 !" : diffDays === 1 ? "c'est demain \ud83c\udf89 !" : `dans **${diffDays} jours** !`;
+                                return message.reply(`\ud83c\udf82 L'anniversaire de **${nom}** est le **${date}** — ${joursStr}`);
+                            });
+                            return;
+                        }
+                        if (result.found) cible = result.found.user;
+                    }
+                }
+            }
+            if (cible && cible.id !== message.author.id) {
+                const date = birthdayData.birthdays[cible.id];
+                const nom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username ?? cible.id;
+                if (!date) return message.reply(`\ud83c\udf82 **${nom}** n'a pas encore enregistr\u00e9 son anniversaire.`);
+                const [d, m] = date.split('/').map(Number);
+                const now = new Date(); const next = new Date(now.getFullYear(), m - 1, d);
+                if (next < now) next.setFullYear(now.getFullYear() + 1);
+                const diffDays = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
+                const joursStr = diffDays === 0 ? "c'est aujourd'hui \ud83c\udf89 !" : diffDays === 1 ? "c'est demain \ud83c\udf89 !" : `dans **${diffDays} jours** !`;
+                return message.reply(`\ud83c\udf82 L'anniversaire de **${nom}** est le **${date}** — ${joursStr}`);
+            }
             const date = birthdayData.birthdays[message.author.id];
-            if (!date) return message.reply("Tu n'as pas encore enregistr\u00e9 ton anniversaire ! Utilise `!anniversaire set JJ/MM`");
-            return message.reply(`\ud83c\udf82 Ton anniversaire est le **${date}** !`);
+            if (!date) return message.reply("Tu n'as pas encore enregistr\u00e9 ton anniversaire ! Utilise `!anniversaire set JJ/MM`.");
+            const [d, m] = date.split('/').map(Number);
+            const now = new Date(); const next = new Date(now.getFullYear(), m - 1, d);
+            if (next < now) next.setFullYear(now.getFullYear() + 1);
+            const diffDays = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
+            const joursStr = diffDays === 0 ? "c'est aujourd'hui \ud83c\udf89 !" : diffDays === 1 ? "c'est demain \ud83c\udf89 !" : `dans **${diffDays} jours** !`;
+            return message.reply(`\ud83c\udf82 Ton anniversaire est le **${date}** — ${joursStr}`);
         }
 
         if (sub === 'list') {
@@ -2421,11 +2463,12 @@ client.on('messageCreate', async (message) => {
             const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
             const fields = slice.map(([uid, count], i) => {
                 const member = message.guild.members.cache.get(uid);
-                const name = member?.displayName ?? 'Membre inconnu';
+                const name = member ? member.displayName : null;
+                if (!name) return null;
                 const rank = start + i;
                 const medal = rank < 3 ? medals[rank] : `**${rank + 1}.**`;
                 return { name: `${medal} ${name}`, value: `${count} messages`, inline: false };
-            });
+            }).filter(Boolean);
             return new EmbedBuilder()
                 .setColor(0xffd700)
                 .setTitle('\ud83c\udfc6 Classement des membres')
@@ -2868,11 +2911,11 @@ client.on('interactionCreate', async (interaction) => {
         const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
         const fields = slice.map(([uid, count], i) => {
             const member = interaction.guild.members.cache.get(uid);
-            const name = member?.displayName ?? 'Membre inconnu';
+            if (!member) return null;
             const rank = start + i;
             const medal = rank < 3 ? medals[rank] : `**${rank + 1}.**`;
-            return { name: `${medal} ${name}`, value: `${count} messages`, inline: false };
-        });
+            return { name: `${medal} ${member.displayName}`, value: `${count} messages`, inline: false };
+        }).filter(Boolean);
 
         const embed = new EmbedBuilder()
             .setColor(0xffd700)
@@ -3436,8 +3479,7 @@ client.on('interactionCreate', async (interaction) => {
         const originalAuthorNom = parts.slice(3).join('_');
 
         if (interaction.user.id === originalAuthorId) {
-            await disableButtons(interaction);
-        return interaction.reply({ content: "Tu as d\u00e9j\u00e0 explos\u00e9 !", ephemeral: true });
+            return interaction.reply({ content: "Tu as d\u00e9j\u00e0 explos\u00e9 !", ephemeral: true });
         }
 
         const explodeGifs = [
@@ -3465,6 +3507,7 @@ client.on('interactionCreate', async (interaction) => {
             .setDescription(`\ud83d\udca5 **${clickerNom}** explose avec **${originalAuthorNom}** !`)
             .setImage(gif);
 
+        await disableButtons(interaction);
         return interaction.reply({ embeds: [embed] });
     }
 
