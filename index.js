@@ -1414,6 +1414,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     const primeY = pseudoY + 85;
 
     ctx.font = '75px "CowboyMovie"';
+    console.log('Font pseudo:', ctx.font, 'measureText:', ctx.measureText('TEST').width);
     ctx.fillText(displayName.toUpperCase(), centerX, pseudoY);
 
     // Prime
