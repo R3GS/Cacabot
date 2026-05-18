@@ -25,6 +25,7 @@ async function loadAll() {
 }
 
 let lastSaveTime = null;
+let messagesSinceLastSave = 0;
 
 async function saveAll() {
     try {
@@ -1346,6 +1347,13 @@ client.on('messageCreate', async (message) => {
         const uid = message.author.id;
         if (!topData.messages[uid]) topData.messages[uid] = 0;
         topData.messages[uid]++;
+
+        // Sauvegarde tous les 75 messages
+        messagesSinceLastSave++;
+        if (messagesSinceLastSave >= 75) {
+            messagesSinceLastSave = 0;
+            saveAll();
+        }
 
         const todayKey = getTodayKey();
         if (!dailyData[todayKey]) dailyData[todayKey] = {};
@@ -4044,6 +4052,19 @@ client.on('messageReactionAdd', async (reaction, user) => {
 
     const memberNom = msg.guild?.members.cache.get(user.id)?.displayName ?? user.username;
     await msg.channel.send(`Bah alors, **${memberNom}**, on m'envoie un doigt d'honneur ?`);
+});
+
+
+// =========================
+//   LISTENER MEMBER JOIN
+// =========================
+
+client.on('guildMemberAdd', async (member) => {
+    if (!topData.messages[member.id]) {
+        topData.messages[member.id] = 0;
+        saveAll();
+        console.log(`\u2705 Nouveau membre : ${member.displayName} ajouté au top`);
+    }
 });
 
 client.login(process.env.TOKEN);
