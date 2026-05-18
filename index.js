@@ -24,6 +24,8 @@ async function loadAll() {
     }
 }
 
+let lastSaveTime = null;
+
 async function saveAll() {
     try {
         await fetch(JSONBIN_URL, {
@@ -320,6 +322,10 @@ function getResponse(raw) {
         return { needsHoroscope: true };
     }
 
+    if (command === "!last") {
+        return { needsLast: true };
+    }
+
     if (command === "!say") {
         return { needsSay: true };
     }
@@ -453,6 +459,11 @@ function getResponse(raw) {
     if (cleaned.includes("ou quoi")) return reply("Ou feur");
     if (cleaned.includes("avec quoi")) return reply("Avec feur");
     if (cleaned.endsWith("oui")) return reply("Stiti");
+    if (
+        (cleaned.includes("cacabot") || cleaned.includes("caca bot")) &&
+        (cleaned.includes("jtm") || cleaned.includes("je t aime") || cleaned.includes("je taime") || cleaned.includes("jt aime"))
+    ) return { needsJtm: true };
+
     if (cleaned.includes("joyeux anniversaire") || cleaned.includes("bon anniversaire") || cleaned.includes("joyeux anniv") || cleaned.includes("bon anniv")) {
         return "https://cdn.discordapp.com/attachments/1128032964924670053/1505358556851863583/jdg-joueur-du-grenier.gif";
     }
@@ -2375,6 +2386,12 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
+    // jtm cacabot
+    if (response?.needsJtm) {
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        return message.reply(`Moi aussi jtm **${auteurNom}** \u2764\ufe0f`);
+    }
+
     // !horoscope
     if (response?.needsHoroscope) {
         const args = message.content.trim().split(/\s+/);
@@ -2434,6 +2451,17 @@ client.on('messageCreate', async (message) => {
             return message.react('✅');
         }
         return message.reply({ embeds: [embed] });
+    }
+
+    // !last
+    if (response?.needsLast) {
+        if (message.author.id !== '436218312574107658') return;
+        if (!lastSaveTime) return message.reply('Aucune sauvegarde effectu\u00e9e depuis le d\u00e9marrage.');
+        const diff = Date.now() - lastSaveTime;
+        const mins = Math.floor(diff / 60000);
+        const secs = Math.floor((diff % 60000) / 1000);
+        const dateStr = lastSaveTime.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
+        return message.reply(`\ud83d\udcbe Derni\u00e8re sauvegarde : **${dateStr}** (il y a ${mins}min ${secs}s)`);
     }
 
     // !say
