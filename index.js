@@ -7,6 +7,7 @@ let topData = { messages: {} };
 let birthdayData = { birthdays: {} };
 let dailyData = {};
 let weeklyData = {};
+let monthlyData = {};
 
 async function loadAll() {
     try {
@@ -32,7 +33,7 @@ async function saveAll() {
         await fetch(JSONBIN_URL, {
             method: 'PUT',
             headers: { 'X-Master-Key': JSONBIN_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages: topData.messages, birthdays: birthdayData.birthdays, daily: dailyData, weekly: weeklyData })
+            body: JSON.stringify({ messages: topData.messages, birthdays: birthdayData.birthdays, daily: dailyData, weekly: weeklyData, monthly: monthlyData })
         });
     } catch (err) {
         console.error('Erreur sauvegarde JSONBin:', err);
@@ -1104,6 +1105,11 @@ const flipParis = new Map();
 let flipEnCours = false;
 
 
+function getMonthKey() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
 function getTodayKey() {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -1368,6 +1374,11 @@ client.on('messageCreate', async (message) => {
         if (!weeklyData[weekKey]) weeklyData[weekKey] = {};
         if (!weeklyData[weekKey][uid]) weeklyData[weekKey][uid] = 0;
         weeklyData[weekKey][uid]++;
+
+        const monthKey = getMonthKey();
+        if (!monthlyData[monthKey]) monthlyData[monthKey] = {};
+        if (!monthlyData[monthKey][uid]) monthlyData[monthKey][uid] = 0;
+        monthlyData[monthKey][uid]++;
     }
 
     const response = getResponse(message.content);
@@ -2317,38 +2328,50 @@ client.on('messageCreate', async (message) => {
     // !actif
     if (response?.needsActif) {
         cleanOldData();
-        const todayKey = getTodayKey();
-        const weekKey = getWeekKey();
+        const authorId = message.author.id;
 
-        const todayCounts = dailyData[todayKey] ?? {};
-        const weekCounts = weeklyData[weekKey] ?? {};
+        const buildActifEmbed = (periode) => {
+            const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
+            let counts, titre;
+            if (periode === 'jour') {
+                counts = dailyData[getTodayKey()] ?? {};
+                titre = "\ud83d\udcc5 Membres les plus actifs aujourd'hui";
+            } else if (periode === 'semaine') {
+                counts = weeklyData[getWeekKey()] ?? {};
+                titre = '\ud83d\udcc6 Membres les plus actifs cette semaine';
+            } else {
+                counts = monthlyData[getMonthKey()] ?? {};
+                titre = '\ud83d\udcc6 Membres les plus actifs ce mois-ci';
+            }
+            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            const fields = sorted.length > 0
+                ? sorted.map(([uid, count], i) => {
+                    const member = message.guild.members.cache.get(uid);
+                    const name = member?.displayName ?? 'Membre inconnu';
+                    const medal = medals[i] ?? `**${i + 1}.**`;
+                    return { name: `${medal} ${name}`, value: `${count} messages`, inline: false };
+                })
+                : [{ name: 'Aucune donn\u00e9e', value: 'Pas encore de messages !', inline: false }];
+            return new EmbedBuilder().setColor(0xffd700).setTitle(titre).addFields(fields);
+        };
 
-        const sortedDay = Object.entries(todayCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
-        const sortedWeek = Object.entries(weekCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const buildActifRow = (periode) => {
+            const jourBtn = new ButtonBuilder()
+                .setCustomId(`actif_jour_${authorId}`)
+                .setLabel('\ud83d\udcc5 Jour')
+                .setStyle(periode === 'jour' ? ButtonStyle.Primary : ButtonStyle.Secondary);
+            const semaineBtn = new ButtonBuilder()
+                .setCustomId(`actif_semaine_${authorId}`)
+                .setLabel('\ud83d\uddd3\ufe0f Semaine')
+                .setStyle(periode === 'semaine' ? ButtonStyle.Primary : ButtonStyle.Secondary);
+            const moisBtn = new ButtonBuilder()
+                .setCustomId(`actif_mois_${authorId}`)
+                .setLabel('\ud83d\udcc6 Mois')
+                .setStyle(periode === 'mois' ? ButtonStyle.Primary : ButtonStyle.Secondary);
+            return new ActionRowBuilder().addComponents(jourBtn, semaineBtn, moisBtn);
+        };
 
-        const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
-
-        const buildFields = (sorted) => sorted.map(([uid, count], i) => {
-            const member = message.guild.members.cache.get(uid);
-            const name = member?.displayName ?? 'Membre inconnu';
-            const medal = medals[i] ?? `**${i + 1}.**`;
-            return { name: `${medal} ${name}`, value: `${count} messages`, inline: false };
-        });
-
-        const dayFields = sortedDay.length > 0 ? buildFields(sortedDay) : [{ name: 'Aucune donn\u00e9e', value: "Pas encore de messages aujourd'hui !", inline: false }];
-        const weekFields = sortedWeek.length > 0 ? buildFields(sortedWeek) : [{ name: 'Aucune donn\u00e9e', value: 'Pas encore de messages cette semaine !', inline: false }];
-
-        const embedDay = new EmbedBuilder()
-            .setColor(0xffd700)
-            .setTitle("\ud83d\udcc5 Membres les plus actifs aujourd'hui")
-            .addFields(dayFields);
-
-        const embedWeek = new EmbedBuilder()
-            .setColor(0xffd700)
-            .setTitle('\ud83d\udcc6 Membres les plus actifs cette semaine')
-            .addFields(weekFields);
-
-        return message.reply({ embeds: [embedDay, embedWeek] });
+        return message.reply({ embeds: [buildActifEmbed('jour')], components: [buildActifRow('jour')] });
     }
 
     // !top
@@ -2735,6 +2758,61 @@ client.on('messageCreate', async (message) => {
 
 client.on('interactionCreate', async (interaction) => {
     try {
+
+    // =========================
+    // BOUTONS ACTIF
+    // =========================
+
+    if (interaction.isButton() && (interaction.customId.startsWith('actif_jour_') || interaction.customId.startsWith('actif_semaine_') || interaction.customId.startsWith('actif_mois_'))) {
+        const parts = interaction.customId.split('_');
+        const periode = parts[1];
+        const authorId = parts[2];
+
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
+
+        const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
+        let counts, titre;
+        if (periode === 'jour') {
+            counts = dailyData[getTodayKey()] ?? {};
+            titre = "\ud83d\udcc5 Membres les plus actifs aujourd'hui";
+        } else if (periode === 'semaine') {
+            counts = weeklyData[getWeekKey()] ?? {};
+            titre = '\ud83d\uddd3\ufe0f Membres les plus actifs cette semaine';
+        } else {
+            counts = monthlyData[getMonthKey()] ?? {};
+            titre = '\ud83d\udcc6 Membres les plus actifs ce mois-ci';
+        }
+
+        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const fields = sorted.length > 0
+            ? sorted.map(([uid, count], i) => {
+                const member = interaction.guild.members.cache.get(uid);
+                const name = member?.displayName ?? 'Membre inconnu';
+                const medal = medals[i] ?? `**${i + 1}.**`;
+                return { name: `${medal} ${name}`, value: `${count} messages`, inline: false };
+            })
+            : [{ name: 'Aucune donn\u00e9e', value: 'Pas encore de messages !', inline: false }];
+
+        const embed = new EmbedBuilder().setColor(0xffd700).setTitle(titre).addFields(fields);
+
+        const jourBtn = new ButtonBuilder()
+            .setCustomId(`actif_jour_${authorId}`)
+            .setLabel('\ud83d\udcc5 Jour')
+            .setStyle(periode === 'jour' ? ButtonStyle.Primary : ButtonStyle.Secondary);
+        const semaineBtn = new ButtonBuilder()
+            .setCustomId(`actif_semaine_${authorId}`)
+            .setLabel('\ud83d\uddd3\ufe0f Semaine')
+            .setStyle(periode === 'semaine' ? ButtonStyle.Primary : ButtonStyle.Secondary);
+        const moisBtn = new ButtonBuilder()
+            .setCustomId(`actif_mois_${authorId}`)
+            .setLabel('\ud83d\udcc6 Mois')
+            .setStyle(periode === 'mois' ? ButtonStyle.Primary : ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(jourBtn, semaineBtn, moisBtn);
+
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
 
     // =========================
     // BOUTONS TOP
