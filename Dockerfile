@@ -1,9 +1,8 @@
 FROM node:25-alpine AS builder
 WORKDIR /app
+RUN apk add --no-cache python3 make g++ cairo-dev pango-dev jpeg-dev giflib-dev
 COPY package*.json .
-COPY pnpm-lock.yaml .
-RUN npm i -g pnpm
-RUN pnpm approve-builds canvas || true && pnpm i --no-frozen-lockfile
+RUN npm install
 COPY . .
 ENV NODE_ENV=production
-CMD [ "pnpm", "start" ]
+CMD [ "node", "index.js" ]
