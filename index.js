@@ -249,8 +249,16 @@ function getResponse(raw) {
     //         !DIE
     // =========================
 
+    if (command === "!cry") {
+        return { needsCry: true };
+    }
+
     if (command === "!palaref") {
         return { needsPalaref: true };
+    }
+
+    if (command === "!cry") {
+        return { needsCry: true };
     }
 
     if (command === "!palaref") {
@@ -1671,6 +1679,71 @@ client.on('messageCreate', async (message) => {
 
 
 
+    // !cry
+    if (response?.needsCry) {
+        const cryGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505906480916725791/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906486872768522/wwe.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487413964941/cry2.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487656972359/hamster.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487959093359/interstellar.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906869598814310/cry.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488625856622/powder.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488932176034/vi.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489271779449/gangle.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489657790466/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489947324589/fred.gif"];
+        const gif = cryGifs[Math.floor(Math.random() * cryGifs.length)];
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        let cible = message.mentions.users.first();
+
+        if (!cible) {
+            const query = message.content.trim().split(/\s+/).slice(1).join(' ');
+            if (query) {
+                if (client.user.username.toLowerCase().includes(query.toLowerCase()) || 'cacabot'.includes(query.toLowerCase())) {
+                    cible = client.user;
+                } else {
+                    const result = findMemberByName(message.guild, query);
+                    if (result.multiple) {
+                        askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const cibleNom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
+                            const btn = new ButtonBuilder()
+                                .setCustomId(`cry_with_${message.author.id}_${auteurNom}_${user.id}_${cibleNom}`)
+                                .setLabel('\ud83d\ude2d Pleurer avec')
+                                .setStyle(ButtonStyle.Secondary);
+                            const row = new ActionRowBuilder().addComponents(btn);
+                            const embed = new EmbedBuilder()
+                                .setColor(0x597eff)
+                                .setDescription(`\ud83d\ude2d **${auteurNom}** Pleure \u00e0 cause de **${cibleNom}**...`)
+                                .setImage(gif);
+                            message.reply({ embeds: [embed], components: [row] });
+                        });
+                        return;
+                    }
+                    if (result.found) cible = result.found.user;
+                }
+            }
+        }
+
+        let desc, targetId = null, cibleNom = null;
+
+        if (cible && cible.id === message.author.id) {
+            desc = `\ud83d\ude2d **${auteurNom}** Pleure...`;
+            const embed = new EmbedBuilder().setColor(0x597eff).setDescription(desc).setImage(gif);
+            return message.reply({ embeds: [embed] });
+        } else if (cible && cible.id === '1503495713097519355') {
+            desc = `**${auteurNom}** Pleure`;
+        } else if (cible) {
+            cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+            targetId = cible.id;
+            desc = `\ud83d\ude2d **${auteurNom}** Pleure \u00e0 cause de **${cibleNom}**...`;
+        } else {
+            desc = `\ud83d\ude2d **${auteurNom}** Pleure...`;
+        }
+
+        const embed = new EmbedBuilder().setColor(0x597eff).setDescription(desc).setImage(gif);
+
+        if (targetId) {
+            const btn = new ButtonBuilder()
+                .setCustomId(`cry_with_${message.author.id}_${auteurNom}_${targetId}_${cibleNom}`)
+                .setLabel('\ud83d\ude2d Pleurer avec')
+                .setStyle(ButtonStyle.Secondary);
+            const row = new ActionRowBuilder().addComponents(btn);
+            return message.reply({ embeds: [embed], components: [row] });
+        }
+
+        return message.reply({ embeds: [embed] });
+    }
+
     // !palaref
     if (response?.needsPalaref) {
         const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
@@ -2965,6 +3038,37 @@ client.on('interactionCreate', async (interaction) => {
     try {
 
     // =========================
+    // BOUTON CRY
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('cry_with_')) {
+        const parts = interaction.customId.split('_');
+        const originalAuthorId = parts[2];
+        const originalAuthorNom = parts[3];
+        const targetId = parts[4];
+        const targetNom = parts[5];
+
+        if (interaction.user.id === originalAuthorId) {
+            return interaction.reply({ content: "Tu as d\u00e9j\u00e0 pleur\u00e9...", ephemeral: true });
+        }
+        if (interaction.user.id === targetId) {
+            return interaction.reply({ content: `C'est toi qui a fait pleurer **${originalAuthorNom}** !`, ephemeral: true });
+        }
+
+        const cryGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505906480916725791/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906486872768522/wwe.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487413964941/cry2.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487656972359/hamster.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487959093359/interstellar.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906869598814310/cry.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488625856622/powder.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488932176034/vi.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489271779449/gangle.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489657790466/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489947324589/fred.gif"];
+        const gif = cryGifs[Math.floor(Math.random() * cryGifs.length)];
+        const clickerNom = interaction.member?.displayName ?? interaction.user.username;
+
+        const embed = new EmbedBuilder()
+            .setColor(0x597eff)
+            .setDescription(`\ud83d\ude2d **${clickerNom}** Pleure avec **${originalAuthorNom}**...`)
+            .setImage(gif);
+
+        await disableButtons(interaction);
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
     // BOUTON PALAREF
     // =========================
 
@@ -3631,6 +3735,37 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // =========================
+    // BOUTON CRY
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('cry_with_')) {
+        const parts = interaction.customId.split('_');
+        const originalAuthorId = parts[2];
+        const originalAuthorNom = parts[3];
+        const targetId = parts[4];
+        const targetNom = parts[5];
+
+        if (interaction.user.id === originalAuthorId) {
+            return interaction.reply({ content: "Tu as d\u00e9j\u00e0 pleur\u00e9...", ephemeral: true });
+        }
+        if (interaction.user.id === targetId) {
+            return interaction.reply({ content: `C'est toi qui a fait pleurer **${originalAuthorNom}** !`, ephemeral: true });
+        }
+
+        const cryGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505906480916725791/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906486872768522/wwe.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487413964941/cry2.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487656972359/hamster.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487959093359/interstellar.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906869598814310/cry.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488625856622/powder.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488932176034/vi.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489271779449/gangle.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489657790466/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489947324589/fred.gif"];
+        const gif = cryGifs[Math.floor(Math.random() * cryGifs.length)];
+        const clickerNom = interaction.member?.displayName ?? interaction.user.username;
+
+        const embed = new EmbedBuilder()
+            .setColor(0x597eff)
+            .setDescription(`\ud83d\ude2d **${clickerNom}** Pleure avec **${originalAuthorNom}**...`)
+            .setImage(gif);
+
+        await disableButtons(interaction);
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
     // BOUTON PALAREF
     // =========================
 
@@ -3957,6 +4092,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!bait", value: "Ragebait quelqu'un du serveur, gratuitement." },
                     { name: "!explode", value: "Explose." },
                     { name: "\ud83d\ude10 !palaref", value: "Ce moment g\u00eanant quand vous n'avez pas la ref..." },
+                    { name: "\ud83d\ude2d !cry", value: "Pleure." },
                     { name: "!punch", value: "Frappez quelqu'un sur le serveur !" },
                     { name: "!bang", value: "Tirez sur quelqu'un sur le serveur !" },
                     { name: "!rizz", value: "Rizzez quelqu'un sur le serveur !" },
