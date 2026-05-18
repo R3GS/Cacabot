@@ -19,6 +19,7 @@ async function loadAll() {
         birthdayData = { birthdays: json.record.birthdays ?? {} };
         dailyData = json.record.daily ?? {};
         weeklyData = json.record.weekly ?? {};
+        monthlyData = json.record.monthly ?? {};
         console.log('\u2705 Donn\u00e9es charg\u00e9es depuis JSONBin');
     } catch (err) {
         console.error('Erreur chargement JSONBin:', err);
