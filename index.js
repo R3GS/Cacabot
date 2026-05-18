@@ -1390,7 +1390,7 @@ async function getCommitCount() {
 }
 
 
-async function generateWantedImage(avatarUrl, displayName) {
+async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     const canvas = createCanvas(977, 1273);
     const ctx = canvas.getContext('2d');
 
@@ -1402,11 +1402,15 @@ async function generateWantedImage(avatarUrl, displayName) {
     const avatar = await loadImage(avatarUrl);
     ctx.drawImage(avatar, 217, 447, 542, 542);
 
-    // Écrire le pseudo en dessous
+    // Pseudo : 20px sous le carré, 70px de hauteur
     ctx.fillStyle = '#1a0a00';
-    ctx.font = 'bold 52px CowboyMovie';
+    ctx.font = 'bold 70px \'CowboyMovie\'';
     ctx.textAlign = 'center';
-    ctx.fillText(displayName, 977 / 2, 447 + 542 + 65);
+    ctx.fillText(displayName.toUpperCase(), 977 / 2, 447 + 542 + 20 + 70);
+
+    // Prime : 21px sous le pseudo
+    ctx.font = 'bold 40px \'CowboyMovie\'';
+    ctx.fillText(`PRIME : ${primeAmount}$`, 977 / 2, 447 + 542 + 20 + 70 + 21 + 40);
 
     return canvas.toBuffer('image/png');
 }
@@ -1770,9 +1774,13 @@ client.on('messageCreate', async (message) => {
             .setDescription(`**${criminel.displayName}** est le criminel du jour.\n\n**Crime :** ${crime}`)
             .setFooter({ text: `\ud83d\udcc5 ${dateStr} \u2022 Les preuves sont accablantes.` });
 
+        // Calculer la prime pour l'image
+        function seedRndImg(seed) { let x = Math.sin(seed + 1) * 10000; return x - Math.floor(x); }
+        const primeAmount = (Math.floor(seedRndImg(dateKey * 11) * 99994) + 5).toLocaleString('fr-FR');
+
         try {
             const avatarUrl = criminel.user.displayAvatarURL({ extension: 'png', size: 512 });
-            const imageBuffer = await generateWantedImage(avatarUrl, criminel.displayName);
+            const imageBuffer = await generateWantedImage(avatarUrl, criminel.displayName, primeAmount);
             const attachment = { attachment: imageBuffer, name: 'wanted.png' };
             embed.setImage('attachment://wanted.png');
             return message.reply({ embeds: [embed], files: [attachment], components: [row] });
@@ -2049,6 +2057,7 @@ client.on('messageCreate', async (message) => {
             "https://cdn.discordapp.com/attachments/1072299294519988345/1304467586746028193/brandbird_4.gif",
             "https://cdn.discordapp.com/attachments/1128032964924670053/1505570790706253864/tadc-bubble-tadc.gif",
             "https://cdn.discordapp.com/attachments/1128032964924670053/1505570791683522760/tadc-the-amazing-digital-circus.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570792279379988/tadc-caine-tadc.gif",
             "https://cdn.discordapp.com/attachments/1128032964924670053/1505570793021505736/flight-flightreacts.gif",
             "https://cdn.discordapp.com/attachments/1128032964924670053/1505570793718022226/superman-superman-flying.gif",
             "https://cdn.discordapp.com/attachments/1128032964924670053/1505570795160731728/f8957342b4d99638.gif",
@@ -4332,7 +4341,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!die", value: "Mourez en direct sur le serveur !" },
                     { name: "!ban", value: "Bannir quelqu'un du serveur... symboliquement." },
                     { name: "!bait", value: "Ragebait quelqu'un du serveur, gratuitement." },
-                    { name: "\uD83D\uDCA5 !explode", value: "Explose." },
+                    { name: "!explode", value: "Explose." },
                     { name: "\ud83d\ude10 !palaref", value: "Ce moment g\u00eanant quand vous n'avez pas la ref..." },
                     { name: "\ud83d\ude2d !cry", value: "Pleure." },
                     { name: "!punch", value: "Frappez quelqu'un sur le serveur !" },
