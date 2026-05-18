@@ -482,7 +482,7 @@ function getResponse(raw) {
     // =========================
 
     if (/\bh?e+h?y?\s+p[e]+t[i]+t|\beh\s+p[e]+t[i]+t/i.test(cleaned)) return { needsHePetit: true };
-    if (cleaned.includes("j ai menti") || cleaned.includes("jai menti")) return { files: ["https://cdn.discordapp.com/attachments/1480756332373213275/1505656212199309543/jai_menti.mp3"] };
+    if (cleaned.includes("j ai menti") || cleaned.includes("jai menti")) return { files: ["./j'ai menti.mp3"] };
     if (cleaned.includes("absolute cacabot")) return "https://media.discordapp.net/attachments/1504056056169369722/1505371569986474175/image.png";
     if (cleaned.includes("henry tran") || cleaned.includes("singapour")) {
         const videos = [
@@ -1728,6 +1728,16 @@ client.on('messageCreate', async (message) => {
 
         const dateStr = now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
+        const preuvesBtn = new ButtonBuilder()
+            .setCustomId(`criminel_preuves_${dateKey}`)
+            .setLabel('\ud83d\udd0d Voir les preuves')
+            .setStyle(ButtonStyle.Danger);
+        const avancementBtn = new ButtonBuilder()
+            .setCustomId(`criminel_avancement_${dateKey}`)
+            .setLabel('\ud83d\udccb Avancement de l\'affaire')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(preuvesBtn, avancementBtn);
+
         const embed = new EmbedBuilder()
             .setColor(0x8b0000)
             .setTitle('\ud83d\udea8 CRIMINEL DU JOUR')
@@ -1735,7 +1745,7 @@ client.on('messageCreate', async (message) => {
             .setDescription(`**${criminel.displayName}** est le criminel du jour.\n\n**Crime :** ${crime}`)
             .setFooter({ text: `\ud83d\udcc5 ${dateStr} \u2022 Les preuves sont accablantes.` });
 
-        return message.reply({ embeds: [embed] });
+        return message.reply({ embeds: [embed], components: [row] });
     }
 
     // !cry
@@ -3098,6 +3108,73 @@ client.on('interactionCreate', async (interaction) => {
     try {
 
     // =========================
+    // BOUTONS CRIMINEL
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('criminel_preuves_')) {
+        const dateKey = parseInt(interaction.customId.split('_')[2]);
+
+        const preuves = ["Des empreintes digitales retrouvées sur le frigo communautaire", "Un reçu de kebab trouvé sur les lieux", "Une chaussette orpheline abandonnée en évidence", "Un témoin affirme avoir entendu quelqu'un dire 'c'est pas moi'", "Des miettes de chips retrouvées sur le canapé", "Une notification Discord non lue datant de 3 semaines", "Un historique de recherche Google particulièrement suspect", "Un emoji 💀 envoyé exactement 2 minutes avant les faits", "Un message vocal de 8 minutes retrouvé sur les lieux", "Des traces de Nutella sur le clavier", "Un onglet YouTube en pause depuis 47 minutes", "Une commande Uber Eats passée à 3h47 du matin", "Des screenshots pris en mode incognito retrouvés par erreur", "Un like accidentel sur une photo de 2019 comme alibi", "Un fil de cheveux dans le chargeur partagé", "Une playlist Spotify intitulée 'pas suspect du tout'", "Un message 'je suis en chemin' envoyé depuis le canapé", "Des traces de Monster Energy sur la scène de crime", "Un post-it avec juste '??' écrit dessus", "Une photo floue prise à 2h du mat sans explication"];
+
+        function seedRnd(seed) { let x = Math.sin(seed + 1) * 10000; return x - Math.floor(x); }
+
+        const p1 = preuves[Math.floor(seedRnd(dateKey * 3) * preuves.length)];
+        const p2 = preuves[Math.floor(seedRnd(dateKey * 5) * preuves.length)];
+        const p3 = preuves[Math.floor(seedRnd(dateKey * 7) * preuves.length)];
+
+        const embed = new EmbedBuilder()
+            .setColor(0x8b0000)
+            .setTitle('\ud83d\udd0d Preuves accablantes')
+            .setDescription(`**Preuve n°1 :** ${p1}\n\n**Preuve n°2 :** ${p2}\n\n**Preuve n°3 :** ${p3}`)
+            .setFooter({ text: 'Ces preuves ont été validées par le tribunal de Regaïa.' });
+
+        return interaction.reply({ embeds: [embed], ephemeral: false });
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('criminel_avancement_')) {
+        const dateKey = parseInt(interaction.customId.split('_')[2]);
+
+        const lieux = ["le salon Discord", "la cuisine commune", "un Carrefour Market à 23h", "les toilettes du McDo", "un vocal Discord vide", "le salon Shitpost", "le parking d'un Lidl", "une salle d'attente", "un bus de nuit", "un kebab douteux", "la salle de bain à 3h du mat", "un fil Twitter supprimé", "les tréfonds d'un subreddit abandonné", "un groupe WhatsApp familial", "l'arrière d'un Monoprix"];
+        const statuts = ["🔴 En fuite", "🟠 Recherché activement", "🟡 Sous surveillance", "⚫ Dangereusement libre", "🔵 Nie tout en bloc", "🟣 A l'air innocent(e). Ne pas se fier aux apparences."];
+
+        function seedRnd2(seed) { let x = Math.sin(seed + 1) * 10000; return x - Math.floor(x); }
+
+        const prime = Math.floor(seedRnd2(dateKey * 11) * 99994) + 5;
+        const lieu = lieux[Math.floor(seedRnd2(dateKey * 13) * lieux.length)];
+        const statut = statuts[Math.floor(seedRnd2(dateKey * 17) * statuts.length)];
+
+        // Date du crime entre 2014 et aujourd'hui
+        const minDate = new Date('2014-01-01').getTime();
+        const maxDate = Date.now();
+        const crimeTimestamp = minDate + Math.floor(seedRnd2(dateKey * 19) * (maxDate - minDate));
+        const crimeDate = new Date(crimeTimestamp).toLocaleDateString('fr-FR');
+
+        // Témoin : membre aléatoire différent du criminel
+        const members = interaction.guild.members.cache.filter(m => !m.user.bot);
+        const membersArray = [...members.values()];
+        const criminelIdx = dateKey % membersArray.length;
+        let temoinIdx = Math.floor(seedRnd2(dateKey * 23) * membersArray.length);
+        if (temoinIdx === criminelIdx) temoinIdx = (temoinIdx + 1) % membersArray.length;
+        const temoin = membersArray[temoinIdx];
+
+        const embed = new EmbedBuilder()
+            .setColor(0x8b0000)
+            .setTitle('\ud83d\udccb Avancement de l\'affaire')
+            .addFields(
+                { name: '\ud83d\udcb0 Prime', value: `${prime.toLocaleString('fr-FR')}$`, inline: true },
+                { name: '\ud83d\udcc5 Crime commis le', value: crimeDate, inline: true },
+                { name: '\u200b', value: '\u200b', inline: true },
+                { name: '\ud83d\udccd Lieu du crime', value: lieu, inline: true },
+                { name: '\ud83d\udd34 Statut', value: statut, inline: true },
+                { name: '\u200b', value: '\u200b', inline: true },
+                { name: '\ud83d\udc41\ufe0f Témoin principal', value: temoin ? temoin.displayName : 'Anonyme', inline: false }
+            )
+            .setFooter({ text: 'Dossier classifié — Tribunal de Regaïa' });
+
+        return interaction.reply({ embeds: [embed], ephemeral: false });
+    }
+
+    // =========================
     // BOUTON CRY
     // =========================
 
@@ -3792,6 +3869,73 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.update({ embeds: [updEmbed], components: [interaction.message.components[0]] });
         }
         return;
+    }
+
+    // =========================
+    // BOUTONS CRIMINEL
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('criminel_preuves_')) {
+        const dateKey = parseInt(interaction.customId.split('_')[2]);
+
+        const preuves = ["Des empreintes digitales retrouvées sur le frigo communautaire", "Un reçu de kebab trouvé sur les lieux", "Une chaussette orpheline abandonnée en évidence", "Un témoin affirme avoir entendu quelqu'un dire 'c'est pas moi'", "Des miettes de chips retrouvées sur le canapé", "Une notification Discord non lue datant de 3 semaines", "Un historique de recherche Google particulièrement suspect", "Un emoji 💀 envoyé exactement 2 minutes avant les faits", "Un message vocal de 8 minutes retrouvé sur les lieux", "Des traces de Nutella sur le clavier", "Un onglet YouTube en pause depuis 47 minutes", "Une commande Uber Eats passée à 3h47 du matin", "Des screenshots pris en mode incognito retrouvés par erreur", "Un like accidentel sur une photo de 2019 comme alibi", "Un fil de cheveux dans le chargeur partagé", "Une playlist Spotify intitulée 'pas suspect du tout'", "Un message 'je suis en chemin' envoyé depuis le canapé", "Des traces de Monster Energy sur la scène de crime", "Un post-it avec juste '??' écrit dessus", "Une photo floue prise à 2h du mat sans explication"];
+
+        function seedRnd(seed) { let x = Math.sin(seed + 1) * 10000; return x - Math.floor(x); }
+
+        const p1 = preuves[Math.floor(seedRnd(dateKey * 3) * preuves.length)];
+        const p2 = preuves[Math.floor(seedRnd(dateKey * 5) * preuves.length)];
+        const p3 = preuves[Math.floor(seedRnd(dateKey * 7) * preuves.length)];
+
+        const embed = new EmbedBuilder()
+            .setColor(0x8b0000)
+            .setTitle('\ud83d\udd0d Preuves accablantes')
+            .setDescription(`**Preuve n°1 :** ${p1}\n\n**Preuve n°2 :** ${p2}\n\n**Preuve n°3 :** ${p3}`)
+            .setFooter({ text: 'Ces preuves ont été validées par le tribunal de Regaïa.' });
+
+        return interaction.reply({ embeds: [embed], ephemeral: false });
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('criminel_avancement_')) {
+        const dateKey = parseInt(interaction.customId.split('_')[2]);
+
+        const lieux = ["le salon Discord", "la cuisine commune", "un Carrefour Market à 23h", "les toilettes du McDo", "un vocal Discord vide", "le salon Shitpost", "le parking d'un Lidl", "une salle d'attente", "un bus de nuit", "un kebab douteux", "la salle de bain à 3h du mat", "un fil Twitter supprimé", "les tréfonds d'un subreddit abandonné", "un groupe WhatsApp familial", "l'arrière d'un Monoprix"];
+        const statuts = ["🔴 En fuite", "🟠 Recherché activement", "🟡 Sous surveillance", "⚫ Dangereusement libre", "🔵 Nie tout en bloc", "🟣 A l'air innocent(e). Ne pas se fier aux apparences."];
+
+        function seedRnd2(seed) { let x = Math.sin(seed + 1) * 10000; return x - Math.floor(x); }
+
+        const prime = Math.floor(seedRnd2(dateKey * 11) * 99994) + 5;
+        const lieu = lieux[Math.floor(seedRnd2(dateKey * 13) * lieux.length)];
+        const statut = statuts[Math.floor(seedRnd2(dateKey * 17) * statuts.length)];
+
+        // Date du crime entre 2014 et aujourd'hui
+        const minDate = new Date('2014-01-01').getTime();
+        const maxDate = Date.now();
+        const crimeTimestamp = minDate + Math.floor(seedRnd2(dateKey * 19) * (maxDate - minDate));
+        const crimeDate = new Date(crimeTimestamp).toLocaleDateString('fr-FR');
+
+        // Témoin : membre aléatoire différent du criminel
+        const members = interaction.guild.members.cache.filter(m => !m.user.bot);
+        const membersArray = [...members.values()];
+        const criminelIdx = dateKey % membersArray.length;
+        let temoinIdx = Math.floor(seedRnd2(dateKey * 23) * membersArray.length);
+        if (temoinIdx === criminelIdx) temoinIdx = (temoinIdx + 1) % membersArray.length;
+        const temoin = membersArray[temoinIdx];
+
+        const embed = new EmbedBuilder()
+            .setColor(0x8b0000)
+            .setTitle('\ud83d\udccb Avancement de l\'affaire')
+            .addFields(
+                { name: '\ud83d\udcb0 Prime', value: `${prime.toLocaleString('fr-FR')}$`, inline: true },
+                { name: '\ud83d\udcc5 Crime commis le', value: crimeDate, inline: true },
+                { name: '\u200b', value: '\u200b', inline: true },
+                { name: '\ud83d\udccd Lieu du crime', value: lieu, inline: true },
+                { name: '\ud83d\udd34 Statut', value: statut, inline: true },
+                { name: '\u200b', value: '\u200b', inline: true },
+                { name: '\ud83d\udc41\ufe0f Témoin principal', value: temoin ? temoin.displayName : 'Anonyme', inline: false }
+            )
+            .setFooter({ text: 'Dossier classifié — Tribunal de Regaïa' });
+
+        return interaction.reply({ embeds: [embed], ephemeral: false });
     }
 
     // =========================
