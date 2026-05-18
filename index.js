@@ -4166,16 +4166,6 @@ client.on('interactionCreate', async (interaction) => {
                 );
         }
 
-        if (value === 'cacabot') {
-            embed = new EmbedBuilder()
-                .setColor(0x5865f2)
-                .setDescription("# \ud83e\udd16 Cacabot")
-                .addFields(
-                    { name: "\ud83e\udd16 !botinfo", value: "Affiche les informations de Cacabot." },
-                    { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." }
-                );
-        }
-
         if (!embed) {
             embed = new EmbedBuilder().setColor(0xff0000).setTitle("Erreur").setDescription("Cat\u00e9gorie inconnue");
         }
@@ -4306,6 +4296,16 @@ client.on('interactionCreate', async (interaction) => {
                 .addFields(
                     { name: "<:aternos_icon:1505454393049485362> !aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." },
                     { name: "\u23f0 !rappel", value: "Se faire rappeler quelque chose dans X minutes/heures." }
+                );
+        }
+
+        if (value === 'cacabot') {
+            embed = new EmbedBuilder()
+                .setColor(0x5865f2)
+                .setDescription("# \ud83e\udd16 Cacabot")
+                .addFields(
+                    { name: "\ud83e\udd16 !botinfo", value: "Affiche les informations de Cacabot." },
+                    { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." }
                 );
         }
 
