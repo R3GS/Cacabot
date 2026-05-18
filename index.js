@@ -1413,23 +1413,25 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     ctx.textBaseline = 'middle';
 
     const centerX = 977 / 2;
-    const pseudoY = 447 + 542 + 55;
+    const pseudoY = 447 + 542 + 65;
     const primeY = pseudoY + 90;
 
     ctx.save();
     ctx.translate(centerX, pseudoY);
     ctx.scale(5, 5);
     ctx.textAlign = 'left';
-    ctx.font = '14px "CowboyMovie"';
-    const tw = ctx.measureText(displayName.toUpperCase()).width;
-    ctx.fillText(displayName.toUpperCase(), -(tw / 2), 0);
+    ctx.font = '17px "CowboyMovie"';
+    const cleanName = displayName.toUpperCase().replace(/[^A-Z0-9+\"\+\*\/\.,; ]/g, '').trim();
+    const tw = ctx.measureText(cleanName).width;
+    ctx.fillText(cleanName, -(tw / 2), 0);
     ctx.restore();
 
+    // Prime
     ctx.save();
     ctx.translate(centerX, primeY);
     ctx.scale(4, 4);
     ctx.textAlign = 'left';
-    ctx.font = '10px "CowboyMovie"';
+    ctx.font = '13px "CowboyMovie"';
     const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
     const pw = ctx.measureText(primeClean).width;
     ctx.fillText(primeClean, -(pw / 2), 0);
