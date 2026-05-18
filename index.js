@@ -482,7 +482,7 @@ function getResponse(raw) {
     // =========================
 
     if (/\bh?e+h?y?\s+p[e]+t[i]+t|\beh\s+p[e]+t[i]+t/i.test(cleaned)) return { needsHePetit: true };
-    if (cleaned.includes("j ai menti") || cleaned.includes("jai menti")) return { files: ["./j'ai menti.mp3"] };
+    if (cleaned.includes("j ai menti") || cleaned.includes("jai menti")) return { files: ["./jai_menti.mp3"] };
     if (cleaned.includes("absolute cacabot")) return "https://media.discordapp.net/attachments/1504056056169369722/1505371569986474175/image.png";
     if (cleaned.includes("henry tran") || cleaned.includes("singapour")) {
         const videos = [
