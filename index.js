@@ -1416,7 +1416,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     ctx.save();
     ctx.translate(centerX, pseudoY);
     ctx.scale(5, 5);
-    ctx.font = '18px "CowboyMovie"';
+    ctx.font = '30px "CowboyMovie"';
     ctx.fillText(displayName.toUpperCase(), 0, 0);
     ctx.restore();
 
