@@ -249,12 +249,20 @@ function getResponse(raw) {
     //         !DIE
     // =========================
 
+    if (command === "!criminel") {
+        return { needsCriminel: true };
+    }
+
     if (command === "!cry") {
         return { needsCry: true };
     }
 
     if (command === "!palaref") {
         return { needsPalaref: true };
+    }
+
+    if (command === "!criminel") {
+        return { needsCriminel: true };
     }
 
     if (command === "!cry") {
@@ -1703,6 +1711,32 @@ client.on('messageCreate', async (message) => {
     }
 
 
+
+    // !criminel
+    if (response?.needsCriminel) {
+        const crimes = ["A mangé la dernière part de pizza sans demander", "A spoilé la fin d'une série en mode 'ah t'as pas vu ?'", "A dit que One Piece c'était trop long", "A mis le volume à 100% dans les transports sans écouteurs", "A répondu OK à un message de 40 lignes", "A liké ses propres messages", "A fait semblant de pas voir les notifications", "A dit 'je suis en chemin' depuis son canapé", "A ouvert un paquet de chips en réunion", "A laissé 1% de batterie sans brancher le chargeur", "A snapchatté pendant un film au cinéma", "A mis des points à la fin de ses SMS", "A utilisé Internet Explorer en 2024", "A dit 'on se fait ça bientôt' sans jamais rappeler", "A mâché la bouche ouverte en public", "A demandé 't'es où ?' sans prévenir qu'il arrive", "A recyclé un mème de 2016 en le faisant passer pour nouveau", "A soufflé les bougies d'un gâteau pas pour lui", "A recalé un appel et envoyé '?', comme si c'était une réponse acceptable", "A menti sur sa localisation pendant 45 minutes", "A volé le chargeur commun sans demander", "A envoyé un fichier PDF scanné de travers", "A dit 'c'est bon j'ai compris' sans avoir compris", "A quitté un vocal Discord sans dire au revoir", "A laissé un message vocal de 7 minutes pour dire juste 't'es là ?'", "A tapé en minuscules dans un document officiel", "A mangé les céréales de quelqu'un d'autre et remis la boîte vide", "A mis la musique à fond à 8h du matin un dimanche", "A squatté le chargeur commun toute la nuit", "A dit que Kaamelott c'était 'pas pour lui'", "A spoilé FNAF à quelqu'un qui commençait", "A affirmé avoir la ref alors qu'il l'avait pas", "A laissé les lumières allumées en partant", "A utilisé 'lol' en réponse à un message sérieux", "A oublié de rappeler après avoir dit 'je te rappelle'", "A pris la dernière tranche de pain de mie et remis le sachet vide", "A chanté faux sur une chanson que personne avait lancée", "A mis les pieds sur le siège d'en face dans le train", "A installé une barre de recherche tierce sur l'ordi de quelqu'un", "A cliqué sur 'rappeler plus tard' 47 fois pour une mise à jour"]
+
+        // Seed basé sur la date pour avoir le même criminel toute la journée
+        const members = message.guild.members.cache.filter(m => !m.user.bot);
+        const membersArray = [...members.values()];
+        if (membersArray.length === 0) return message.reply('Aucun membre trouvé !');
+
+        const memberSeed = dateKey % membersArray.length;
+        const crimeSeed = dateKey % crimes.length;
+        const criminel = membersArray[memberSeed];
+        const crime = crimes[crimeSeed];
+
+        const dateStr = now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+        const embed = new EmbedBuilder()
+            .setColor(0x8b0000)
+            .setTitle('\ud83d\udea8 CRIMINEL DU JOUR')
+            .setThumbnail(criminel.user.displayAvatarURL({ dynamic: true, size: 256 }))
+            .setDescription(`**${criminel.displayName}** est le criminel du jour.\n\n**Crime :** ${crime}`)
+            .setFooter({ text: `\ud83d\udcc5 ${dateStr} \u2022 Les preuves sont accablantes.` });
+
+        return message.reply({ embeds: [embed] });
+    }
 
     // !cry
     if (response?.needsCry) {
@@ -4146,7 +4180,8 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!epsys", value: "Poste des GIFs al\u00e9atoires d'Epsys, parce que." },
                     { name: "!blague", value: "Lance une blague al\u00e9atoire en 3 cat\u00e9gories !" },
                     { name: "!flip", value: "Pour d\u00e9cider \u00e0 pile ou face !" },
-                    { name: "!horoscope", value: "L'horoscope du jour selon Cacabot." }
+                    { name: "!horoscope", value: "L'horoscope du jour selon Cacabot." },
+                    { name: "\ud83d\udea8 !criminel", value: "D\u00e9signe le criminel du jour parmi les membres." }
                 );
         }
 
