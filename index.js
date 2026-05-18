@@ -1416,51 +1416,26 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     const pseudoY = 447 + 542 + 65;
     const primeY = pseudoY + 90;
 
-    // Pseudo
-// Pseudo
-ctx.save();
-ctx.translate(centerX, pseudoY + 20);
-ctx.scale(5, 5);
-ctx.font = '17px "CowboyMovie"';
-ctx.fillStyle = '#1a0a00';
-const cleanName = displayName.toUpperCase().replace(/[^A-Z0-9+\"\+\*\/\.,; ]/g, '').trim();
-const tw = ctx.measureText(cleanName).width;
-ctx.scale(1.4, 1);
-ctx.fillText(cleanName, -(tw / 2) / 1.4, 0);
-ctx.restore();
+    ctx.save();
+    ctx.translate(centerX, pseudoY + 20);
+    ctx.scale(5, 5);
+    ctx.textAlign = 'left';
+    ctx.font = '17px "CowboyMovie"';
+    const cleanName = displayName.toUpperCase().replace(/[^A-Z0-9+\"\+\*\/\.,; ]/g, '').trim();
+    const tw = ctx.measureText(cleanName).width;
+    ctx.fillText(cleanName, -(tw / 2), 0);
+    ctx.restore();
 
-// Prime
-ctx.save();
-ctx.translate(centerX, primeY - 10);
-ctx.scale(4, 4);
-ctx.font = '13px "CowboyMovie"';
-ctx.fillStyle = '#1a0a00';
-const primeText = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
-const pw = ctx.measureText(primeText).width;
-ctx.scale(1.4, 1);
-ctx.fillText(primeText, -(pw / 2) / 1.4, 0);
-ctx.restore();
-
-// Prime
-ctx.save();
-ctx.translate(centerX, primeY - 10);
-ctx.scale(6, 6);
-ctx.font = '13px "CowboyMovie"';
-ctx.fillStyle = '#1a0a00';
-const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
-
-let totalWidthP = 0;
-for (const char of primeClean) {
-    totalWidthP += ctx.measureText(char).width;
-}
-totalWidthP += letterSpacing * (primeClean.length - 1);
-
-let xP = -(totalWidthP / 2);
-for (const char of primeClean) {
-    ctx.fillText(char, xP, 0);
-    xP += ctx.measureText(char).width + letterSpacing;
-}
-ctx.restore();
+    // Prime
+    ctx.save();
+    ctx.translate(centerX, primeY - 10);
+    ctx.scale(4, 4);
+    ctx.textAlign = 'left';
+    ctx.font = '13px "CowboyMovie"';
+    const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
+    const pw = ctx.measureText(primeClean).width;
+    ctx.fillText(primeClean, -(pw / 2), 0);
+    ctx.restore();
 
     return canvas.toBuffer('image/png');
 }
