@@ -253,6 +253,10 @@ function getResponse(raw) {
         return { needsPalaref: true };
     }
 
+    if (command === "!palaref") {
+        return { needsPalaref: true };
+    }
+
     if (command === "!explode") {
         return { needsExplode: true };
     }
@@ -1724,6 +1728,71 @@ client.on('messageCreate', async (message) => {
             .setDescription(description)
             .setImage(gif);
         return message.reply({ embeds: [embed], components: [row] });
+    }
+
+    // !palaref
+    if (response?.needsPalaref) {
+        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
+        const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        let cible = message.mentions.users.first();
+
+        if (!cible) {
+            const query = message.content.trim().split(/\s+/).slice(1).join(' ');
+            if (query) {
+                if (client.user.username.toLowerCase().includes(query.toLowerCase()) || 'cacabot'.includes(query.toLowerCase())) {
+                    cible = client.user;
+                } else {
+                    const result = findMemberByName(message.guild, query);
+                    if (result.multiple) {
+                        askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const cibleNom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
+                            const btn = new ButtonBuilder()
+                                .setCustomId(`palaref_with_${message.author.id}_${auteurNom}_${user.id}_${cibleNom}`)
+                                .setLabel('\ud83d\ude10 Pas la ref non plus')
+                                .setStyle(ButtonStyle.Secondary);
+                            const row = new ActionRowBuilder().addComponents(btn);
+                            const embed = new EmbedBuilder()
+                                .setColor(0x503649)
+                                .setDescription(`\ud83d\ude10 **${auteurNom}** n'a pas la ref de **${cibleNom}**...`)
+                                .setImage(gif);
+                            message.reply({ embeds: [embed], components: [row] });
+                        });
+                        return;
+                    }
+                    if (result.found) cible = result.found.user;
+                }
+            }
+        }
+
+        let desc, targetId = null, cibleNom = null;
+
+        if (cible && cible.id === message.author.id) {
+            desc = 'Tu n\'as pas ta propre ref ? ...Hein ?';
+            const embed = new EmbedBuilder().setColor(0x503649).setDescription(desc).setImage(gif);
+            return message.reply({ embeds: [embed] });
+        } else if (cible && cible.id === '1503495713097519355') {
+            desc = `\ud83d\ude10 **${auteurNom}** n'a pas ma ref...`;
+        } else if (cible) {
+            cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+            targetId = cible.id;
+            desc = `\ud83d\ude10 **${auteurNom}** n'a pas la ref de **${cibleNom}**...`;
+        } else {
+            desc = `\ud83d\ude10 **${auteurNom}** n'a pas la ref...`;
+        }
+
+        const embed = new EmbedBuilder().setColor(0x503649).setDescription(desc).setImage(gif);
+
+        if (targetId) {
+            const btn = new ButtonBuilder()
+                .setCustomId(`palaref_with_${message.author.id}_${auteurNom}_${targetId}_${cibleNom}`)
+                .setLabel('\ud83d\ude10 Pas la ref non plus')
+                .setStyle(ButtonStyle.Secondary);
+            const row = new ActionRowBuilder().addComponents(btn);
+            return message.reply({ embeds: [embed], components: [row] });
+        }
+
+        return message.reply({ embeds: [embed] });
     }
 
     // !explode
@@ -3562,6 +3631,36 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // =========================
+    // BOUTON PALAREF
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('palaref_with_')) {
+        const parts = interaction.customId.split('_');
+        const originalAuthorId = parts[2];
+        const originalAuthorNom = parts[3];
+        const targetId = parts[4];
+        const targetNom = parts[5];
+
+        if (interaction.user.id === originalAuthorId) {
+            return interaction.reply({ content: "On a compris que t'avais pas la ref :(", ephemeral: true });
+        }
+        if (interaction.user.id === targetId) {
+            return interaction.reply({ content: "Bah c'est ta ref", ephemeral: true });
+        }
+
+        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
+        const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
+        const clickerNom = interaction.member?.displayName ?? interaction.user.username;
+
+        const embed = new EmbedBuilder()
+            .setColor(0x503649)
+            .setDescription(`\ud83d\ude10 **${clickerNom}** n'a pas la ref non plus...`)
+            .setImage(gif);
+
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
     // BOUTON EXPLODE WITH
     // =========================
 
@@ -3857,6 +3956,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!ban", value: "Bannir quelqu'un du serveur... symboliquement." },
                     { name: "!bait", value: "Ragebait quelqu'un du serveur, gratuitement." },
                     { name: "!explode", value: "Explose." },
+                    { name: "\ud83d\ude10 !palaref", value: "Ce moment g\u00eanant quand vous n'avez pas la ref..." },
                     { name: "!punch", value: "Frappez quelqu'un sur le serveur !" },
                     { name: "!bang", value: "Tirez sur quelqu'un sur le serveur !" },
                     { name: "!rizz", value: "Rizzez quelqu'un sur le serveur !" },
