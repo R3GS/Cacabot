@@ -322,6 +322,10 @@ function getResponse(raw) {
         return { needsHoroscope: true };
     }
 
+    if (command === "!helpx") {
+        return { needsHelpx: true };
+    }
+
     if (command === "!last") {
         return { needsLast: true };
     }
@@ -2450,6 +2454,24 @@ client.on('messageCreate', async (message) => {
             await targetChannel.send({ embeds: [embed] });
             return message.react('✅');
         }
+        return message.reply({ embeds: [embed] });
+    }
+
+    // !helpx
+    if (response?.needsHelpx) {
+        if (message.author.id !== '436218312574107658') {
+            return message.reply("Tu n'es pas autoris\u00e9(e) \u00e0 faire cette commande.");
+        }
+        const embed = new EmbedBuilder()
+            .setColor(0x5865f2)
+            .setTitle('\ud83d\udc51 Commandes Epsys-Only')
+            .setDescription('Commandes exclusivement accessibles par <@436218312574107658>.')
+            .addFields(
+                { name: '\ud83d\udcdd !setmessages @Membre N', value: 'D\u00e9finir manuellement le nombre de messages d\'un membre.', inline: false },
+                { name: '\ud83d\udce3 !say [ID_salon] [message]', value: 'Envoyer un message dans un salon au nom de Cacabot.', inline: false },
+                { name: '\ud83d\udcbe !last', value: 'Afficher la date et l\'heure de la derni\u00e8re sauvegarde JSONBin.', inline: false },
+                { name: '\ud83d\udd2e !horoscope [ID_salon]', value: 'Forcer l\'envoi de l\'horoscope dans un salon sp\u00e9cifique.', inline: false }
+            );
         return message.reply({ embeds: [embed] });
     }
 
