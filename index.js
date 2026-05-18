@@ -1408,12 +1408,11 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     ctx.textBaseline = 'top';
 
     // Tester quelle font est chargée
-    ctx.font = '150px "CowboyMovie"';
-    console.log('Font utilisée:', ctx.font);
+    ctx.font = 'bold 70px serif';
     ctx.fillText(displayName.toUpperCase(), 977 / 2, 447 + 542 + 20);
 
     // Prime : 21px sous le pseudo
-    ctx.font = '80px "CowboyMovie"';
+    ctx.font = 'bold 40px serif';
     const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
     ctx.fillText(primeClean, 977 / 2, 447 + 542 + 20 + 70 + 21);
 
