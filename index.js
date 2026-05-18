@@ -2395,18 +2395,22 @@ client.on('messageCreate', async (message) => {
 
     // !setmessages
     if (response?.needsSetMessages) {
-        const cible = message.mentions.users.first();
         const args = message.content.trim().split(/\s+/);
         const count = parseInt(args[args.length - 1]);
 
-        if (!cible || isNaN(count)) {
-            return message.reply("Usage : `!setmessages @Membre NombreDeMessages`");
+        // Accepte soit un @mention soit un ID brut
+        const cible = message.mentions.users.first();
+        const targetId = cible ? cible.id : args[1];
+
+        if (!targetId || isNaN(count)) {
+            return message.reply("Usage : `!setmessages @Membre NombreDeMessages` ou `!setmessages ID NombreDeMessages`");
         }
 
-        topData.messages[cible.id] = count;
-        saveTop(topData);
+        topData.messages[targetId] = count;
+        saveAll();
 
-        const nom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        const member = message.guild?.members.cache.get(targetId);
+        const nom = member?.displayName ?? targetId;
         return message.reply(`\u2705 **${nom}** : ${count} messages enregistr\u00e9s !`);
     }
 
