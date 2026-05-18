@@ -2335,6 +2335,17 @@ client.on('messageCreate', async (message) => {
 
     // !horoscope
     if (response?.needsHoroscope) {
+        const args = message.content.trim().split(/\s+/);
+        const forcedChannelId = args[1] && message.author.id === '436218312574107658' ? args[1] : null;
+        let targetChannel = message.channel;
+        if (forcedChannelId) {
+            try {
+                targetChannel = await client.channels.fetch(forcedChannelId);
+                if (!targetChannel) return message.reply('Salon introuvable.');
+            } catch (e) {
+                return message.reply('Salon introuvable.');
+            }
+        }
         const now = new Date();
         const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
         const dateStr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -2367,6 +2378,10 @@ client.on('messageCreate', async (message) => {
             .setThumbnail('https://cdn.discordapp.com/attachments/1128032964924670053/1505637234596905080/color-replaced.png')
             .setFooter({ text: `\ud83d\udcc5 ${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}` });
 
+        if (forcedChannelId) {
+            await targetChannel.send({ embeds: [embed] });
+            return message.react('✅');
+        }
         return message.reply({ embeds: [embed] });
     }
 
@@ -3735,6 +3750,15 @@ function scheduleHoroscopeQuotidien() {
                 .setThumbnail('https://cdn.discordapp.com/attachments/1128032964924670053/1505637234596905080/color-replaced.png')
                 .setFooter({ text: `\ud83d\udcc5 ${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}` });
 
+            const titres = [
+                '# HOROSCOPE DU JOUR \ud83d\udd2e',
+                "# L'ORACLE A PARL\u00c9 \ud83d\udd2e",
+                '# LES ASTRES ONT PARL\u00c9 \ud83d\udd2e',
+                '# LES \u00c9TOILES ONT PARL\u00c9 \ud83d\udd2e',
+                "# L'UNIVERS NOUS ENVOIE SES SIGNES \ud83d\udd2e",
+            ];
+            const titre = titres[Math.floor(Math.random() * titres.length)];
+            await channel.send(titre);
             await channel.send({ embeds: [embed] });
         } catch (err) {
             console.error('Erreur horoscope automatique:', err);
