@@ -1274,6 +1274,22 @@ function getHoroscopeForSign(signIndex, dateKey) {
     return horoscopes[idx];
 }
 
+
+// Désactiver tous les boutons d'un message
+async function disableButtons(interaction) {
+    try {
+        const msg = interaction.message;
+        const newRows = msg.components.map(row => {
+            const newRow = new ActionRowBuilder();
+            newRow.addComponents(row.components.map(btn => {
+                return ButtonBuilder.from(btn).setDisabled(true);
+            }));
+            return newRow;
+        });
+        await msg.edit({ components: newRows });
+    } catch (e) {}
+}
+
 // =========================
 //     LISTENER MESSAGES
 // =========================
@@ -2545,6 +2561,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const joinNom = interaction.member?.displayName ?? interaction.user.username;
         const embed = buildDanceEmbed(`\ud83d\udc83 **${joinNom}** rejoint **${originalAuthorNom}** sur le dancefloor !`, false);
+        await disableButtons(interaction);
         return interaction.reply({ embeds: [embed] });
     }
 
@@ -2628,6 +2645,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const reurNom = interaction.member?.displayName ?? interaction.user.username;
         const embed = buildLaughEmbed(`\ud83d\ude06 **${reurNom}** rit avec **${originalAuthorNom}** !`);
+        await disableButtons(interaction);
         return interaction.reply({ embeds: [embed] });
     }
 
@@ -2724,6 +2742,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const mourrantNom = interaction.member?.displayName ?? interaction.user.username;
         const embed = buildDieEmbed(`\u2620\ufe0f **${mourrantNom}** meurt avec **${originalAuthorNom}**...`);
+        await disableButtons(interaction);
         return interaction.reply({ embeds: [embed] });
     }
 
@@ -2939,7 +2958,8 @@ client.on('interactionCreate', async (interaction) => {
         const originalAuthorNom = parts.slice(3).join('_');
 
         if (interaction.user.id === originalAuthorId) {
-            return interaction.reply({ content: "Tu as d\u00e9j\u00e0 explos\u00e9 !", ephemeral: true });
+            await disableButtons(interaction);
+        return interaction.reply({ content: "Tu as d\u00e9j\u00e0 explos\u00e9 !", ephemeral: true });
         }
 
         const explodeGifs = [
@@ -2991,6 +3011,7 @@ client.on('interactionCreate', async (interaction) => {
         const vengeNom = interaction.member?.displayName ?? interaction.user.username;
         const embed = buildPunchEmbed(`\ud83d\udca2 **${vengeNom}** se venge de **${originalAuthorNom}** !`);
         await interaction.message.edit({ components: [] }).catch(() => {});
+        await disableButtons(interaction);
         return interaction.reply({ embeds: [embed] });
     }
 
