@@ -2379,6 +2379,15 @@ client.on('messageCreate', async (message) => {
             .setFooter({ text: `\ud83d\udcc5 ${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}` });
 
         if (forcedChannelId) {
+            const titres = [
+                '# HOROSCOPE DU JOUR \ud83d\udd2e',
+                "# L'ORACLE A PARL\u00c9 \ud83d\udd2e",
+                '# LES ASTRES ONT PARL\u00c9 \ud83d\udd2e',
+                '# LES \u00c9TOILES ONT PARL\u00c9 \ud83d\udd2e',
+                "# L'UNIVERS NOUS ENVOIE SES SIGNES \ud83d\udd2e",
+            ];
+            const titre = titres[Math.floor(Math.random() * titres.length)];
+            await targetChannel.send(titre);
             await targetChannel.send({ embeds: [embed] });
             return message.react('✅');
         }
