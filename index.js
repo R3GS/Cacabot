@@ -3090,6 +3090,10 @@ client.on('messageCreate', async (message) => {
     }
 
     // R\u00e9ponse texte simple
+    if (response && typeof response === "object" && response.files) {
+        return message.reply({ files: response.files });
+    }
+
     if (typeof response === "string") {
         if (response.trim().length === 0) return;
         const autoReplyMsg = await message.reply({ content: response });
