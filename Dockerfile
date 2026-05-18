@@ -3,7 +3,7 @@ WORKDIR /app
 COPY package*.json .
 COPY pnpm-lock.yaml .
 RUN npm i -g pnpm
-RUN pnpm i
+RUN pnpm approve-builds canvas || true && pnpm i --no-frozen-lockfile
 COPY . .
 ENV NODE_ENV=production
 CMD [ "pnpm", "start" ]
