@@ -1419,19 +1419,20 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     ctx.save();
     ctx.translate(centerX, pseudoY);
     ctx.scale(5, 5);
-    ctx.textAlign = 'center';
+    ctx.textAlign = 'left';
     ctx.font = '14px "CowboyMovie"';
-    ctx.fillText(displayName.toUpperCase(), 0, 0);
+    const tw = ctx.measureText(displayName.toUpperCase()).width;
+    ctx.fillText(displayName.toUpperCase(), -(tw / 2), 0);
     ctx.restore();
 
-    // Prime
     ctx.save();
     ctx.translate(centerX, primeY);
     ctx.scale(4, 4);
-    ctx.textAlign = 'center';
+    ctx.textAlign = 'left';
     ctx.font = '10px "CowboyMovie"';
     const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
-    ctx.fillText(primeClean, 0, 0);
+    const pw = ctx.measureText(primeClean).width;
+    ctx.fillText(primeClean, -(pw / 2), 0);
     ctx.restore();
 
     return canvas.toBuffer('image/png');
