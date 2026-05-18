@@ -74,7 +74,8 @@ const {
     ButtonBuilder,
     ButtonStyle
 } = require('discord.js');
-const { createCanvas, loadImage } = require('canvas');
+const { createCanvas, loadImage, registerFont } = require('canvas');
+try { registerFont('./Cowboy Movie.ttf', { family: 'CowboyMovie' }); } catch(e) { console.error('Font non trouvée:', e.message); }
 
 const client = new Client({
     intents: [
@@ -1390,9 +1391,7 @@ async function getCommitCount() {
 
 
 async function generateWantedImage(avatarUrl, displayName, primeAmount) {
-    // Log temporaire pour voir les fonts dispo
-    const { execSync } = require('child_process');
-    try { console.log('Fonts:', execSync('fc-list').toString().slice(0, 500)); } catch(e) { console.log('fc-list error:', e.message); }
+
     const canvas = createCanvas(977, 1273);
     const ctx = canvas.getContext('2d');
 
@@ -1410,11 +1409,11 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     ctx.textBaseline = 'top';
 
     // Tester quelle font est chargée
-    ctx.font = 'bold 70px serif';
+    ctx.font = '70px CowboyMovie';
     ctx.fillText(displayName.toUpperCase(), 977 / 2, 447 + 542 + 20);
 
     // Prime : 21px sous le pseudo
-    ctx.font = 'bold 40px serif';
+    ctx.font = '40px CowboyMovie';
     const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
     ctx.fillText(primeClean, 977 / 2, 447 + 542 + 20 + 70 + 21);
 
