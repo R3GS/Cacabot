@@ -249,6 +249,10 @@ function getResponse(raw) {
     //         !DIE
     // =========================
 
+    if (command === "!palaref") {
+        return { needsPalaref: true };
+    }
+
     if (command === "!explode") {
         return { needsExplode: true };
     }
@@ -1663,6 +1667,65 @@ client.on('messageCreate', async (message) => {
 
 
 
+    // !palaref
+    if (response?.needsPalaref) {
+        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
+        const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        let cible = message.mentions.users.first();
+
+        if (!cible) {
+            const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (query) {
+                if (client.user.username.toLowerCase().includes(query.toLowerCase()) || 'cacabot'.includes(query.toLowerCase())) {
+                    cible = client.user;
+                } else {
+                    const result = findMemberByName(message.guild, query);
+                    if (result.multiple) {
+                        askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const cibleNom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
+                            const btn = new ButtonBuilder()
+                                .setCustomId(`palaref_aussi_${message.author.id}_${auteurNom}_${user.id}`)
+                                .setLabel('\ud83d\ude10 Pas la ref non plus')
+                                .setStyle(ButtonStyle.Secondary);
+                            const row = new ActionRowBuilder().addComponents(btn);
+                            const embed = new EmbedBuilder()
+                                .setColor(0x503649)
+                                .setDescription(`\ud83d\ude10 **${auteurNom}** n'a pas la ref de **${cibleNom}**...`)
+                                .setImage(gif);
+                            message.reply({ embeds: [embed], components: [row] });
+                        });
+                        return;
+                    }
+                    if (result.found) cible = result.found.user;
+                }
+            }
+        }
+
+        let description;
+        if (!cible) {
+            description = `\ud83d\ude10 **${auteurNom}** n'a pas la ref...`;
+        } else if (cible.id === message.author.id) {
+            return message.reply({ content: "Tu n'as pas ta propre ref ? ...Hein ?", ephemeral: true });
+        } else if (cible.id === client.user.id) {
+            description = `\ud83d\ude10 **${auteurNom}** n'a pas ma ref...`;
+        } else {
+            const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+            description = `\ud83d\ude10 **${auteurNom}** n'a pas la ref de **${cibleNom}**...`;
+        }
+
+        const btn = new ButtonBuilder()
+            .setCustomId(`palaref_aussi_${message.author.id}_${auteurNom}_${cible?.id ?? 'none'}`)
+            .setLabel('\ud83d\ude10 Pas la ref non plus')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(btn);
+        const embed = new EmbedBuilder()
+            .setColor(0x503649)
+            .setDescription(description)
+            .setImage(gif);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
     // !explode
     if (response?.needsExplode) {
         const explodeGifs = [
@@ -2833,6 +2896,35 @@ client.on('interactionCreate', async (interaction) => {
     try {
 
     // =========================
+    // BOUTON PALAREF
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('palaref_aussi_')) {
+        const parts = interaction.customId.split('_');
+        const originalAuthorId = parts[2];
+        const originalAuthorNom = parts[3];
+        const cibleId = parts[4];
+
+        if (interaction.user.id === originalAuthorId) {
+            return interaction.reply({ content: "On a compris que t'avais pas la ref :(", ephemeral: true });
+        }
+        if (interaction.user.id === cibleId) {
+            return interaction.reply({ content: "\u274c", ephemeral: true });
+        }
+
+        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
+        const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
+        const clickerNom = interaction.member?.displayName ?? interaction.user.username;
+
+        const embed = new EmbedBuilder()
+            .setColor(0x503649)
+            .setDescription(`\ud83d\ude10 **${clickerNom}** n'a pas la ref non plus...`)
+            .setImage(gif);
+
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
     // BOUTONS ACTIF
     // =========================
 
@@ -3844,7 +3936,7 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId(`help_fun_${helpAuthorId}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, punch, bang, rizz, rire, danse', value: 'interact' },
+                { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, palaref, punch, bang, rizz, rire, danse', value: 'interact' },
                 { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                 { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
                 { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague, horoscope', value: 'random' }
@@ -4019,7 +4111,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setCustomId(`help_fun_${helpAuthorId}`)
                 .setPlaceholder('Choisis une cat\u00e9gorie')
                 .addOptions(
-                    { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, punch, bang, rizz, rire, danse', value: 'interact' },
+                    { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, palaref, punch, bang, rizz, rire, danse', value: 'interact' },
                     { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                     { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
                     { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague, horoscope', value: 'random' }
