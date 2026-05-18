@@ -3688,10 +3688,15 @@ scheduleHoroscopeQuotidien();
 
 function scheduleHoroscopeQuotidien() {
     const now = new Date();
-    const next8h = new Date();
+    // Calculer le prochain 8h heure de Paris
+    const parisFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: 'numeric', minute: 'numeric' });
+    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const next8h = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
     next8h.setHours(8, 0, 0, 0);
-    if (next8h <= now) next8h.setDate(next8h.getDate() + 1);
-    const delay = next8h - now;
+    if (next8h <= parisNow) next8h.setDate(next8h.getDate() + 1);
+    // Convertir en UTC
+    const parisOffset = now - parisNow;
+    const delay = next8h - parisNow + parisOffset;
 
     setTimeout(async () => {
         try {
