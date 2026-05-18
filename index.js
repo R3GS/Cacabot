@@ -74,6 +74,8 @@ const {
     ButtonBuilder,
     ButtonStyle
 } = require('discord.js');
+const { createCanvas, loadImage, registerFont } = require('canvas');
+try { registerFont('./Cowboy Movie.ttf', { family: 'CowboyMovie' }); } catch(e) { console.error('Font non trouvée:', e.message); }
 
 const client = new Client({
     intents: [
@@ -1387,6 +1389,28 @@ async function getCommitCount() {
     }
 }
 
+
+async function generateWantedImage(avatarUrl, displayName) {
+    const canvas = createCanvas(977, 1273);
+    const ctx = canvas.getContext('2d');
+
+    // Charger le template
+    const template = await loadImage('./wanted.png');
+    ctx.drawImage(template, 0, 0, 977, 1273);
+
+    // Charger et coller la photo de profil
+    const avatar = await loadImage(avatarUrl);
+    ctx.drawImage(avatar, 217, 447, 542, 542);
+
+    // Écrire le pseudo en dessous
+    ctx.fillStyle = '#1a0a00';
+    ctx.font = 'bold 52px CowboyMovie';
+    ctx.textAlign = 'center';
+    ctx.fillText(displayName, 977 / 2, 447 + 542 + 65);
+
+    return canvas.toBuffer('image/png');
+}
+
 // =========================
 //     LISTENER MESSAGES
 // =========================
@@ -1741,11 +1765,20 @@ client.on('messageCreate', async (message) => {
         const embed = new EmbedBuilder()
             .setColor(0x8b0000)
             .setTitle('\ud83d\udea8 CRIMINEL DU JOUR')
-            .setThumbnail(criminel.user.displayAvatarURL({ dynamic: true, size: 256 }))
             .setDescription(`**${criminel.displayName}** est le criminel du jour.\n\n**Crime :** ${crime}`)
             .setFooter({ text: `\ud83d\udcc5 ${dateStr} \u2022 Les preuves sont accablantes.` });
 
-        return message.reply({ embeds: [embed], components: [row] });
+        try {
+            const avatarUrl = criminel.user.displayAvatarURL({ extension: 'png', size: 512 });
+            const imageBuffer = await generateWantedImage(avatarUrl, criminel.displayName);
+            const attachment = { attachment: imageBuffer, name: 'wanted.png' };
+            embed.setImage('attachment://wanted.png');
+            return message.reply({ embeds: [embed], files: [attachment], components: [row] });
+        } catch (e) {
+            console.error('Erreur Canvas:', e);
+            embed.setThumbnail(criminel.user.displayAvatarURL({ dynamic: true, size: 256 }));
+            return message.reply({ embeds: [embed], components: [row] });
+        }
     }
 
     // !cry
