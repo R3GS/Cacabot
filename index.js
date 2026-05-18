@@ -1412,7 +1412,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    const centerX = 400;
+    const centerX = 4;
     const pseudoY = 447 + 542 + 55;
     const primeY = pseudoY + 90;
 
