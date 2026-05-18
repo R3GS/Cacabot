@@ -285,7 +285,7 @@ function getResponse(raw) {
     //         !PROFIL
     // =========================
 
-    if (command === "!profil") {
+    if (command === "!info") {
         return { needsProfil: true };
     }
 
@@ -365,7 +365,7 @@ function getResponse(raw) {
         return { needsPing: true };
     }
 
-    if (command === "!info") {
+    if (command === "!botinfo") {
         return { needsInfo: true };
     }
 
@@ -4166,6 +4166,16 @@ client.on('interactionCreate', async (interaction) => {
                 );
         }
 
+        if (value === 'cacabot') {
+            embed = new EmbedBuilder()
+                .setColor(0x5865f2)
+                .setDescription("# \ud83e\udd16 Cacabot")
+                .addFields(
+                    { name: "\ud83e\udd16 !botinfo", value: "Affiche les informations de Cacabot." },
+                    { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." }
+                );
+        }
+
         if (!embed) {
             embed = new EmbedBuilder().setColor(0xff0000).setTitle("Erreur").setDescription("Cat\u00e9gorie inconnue");
         }
@@ -4276,7 +4286,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "\ud83d\uddbc\ufe0f !avatar", value: "Afficher l'avatar d'un membre en grand." },
                     { name: "\ud83c\udfc5 !top", value: "Afficher le top 10 des membres les plus actifs." },
                     { name: "\ud83d\udcac !actif", value: "Affiche les membres les plus actifs du jour et de la semaine." },
-                    { name: "\ud83e\udd16 !info", value: "Affiche les informations de Cacabot." },
+                    { name: "\ud83e\udd16 !botinfo", value: "Affiche les informations de Cacabot." },
                     { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." },
                     { name: "\u23f0 !rappel", value: "Se faire rappeler quelque chose dans X minutes/heures." }
                 );
@@ -4295,8 +4305,6 @@ client.on('interactionCreate', async (interaction) => {
                 .setDescription("# \ud83d\uddd2\ufe0f Autres")
                 .addFields(
                     { name: "<:aternos_icon:1505454393049485362> !aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." },
-                    { name: "\ud83e\udd16 !info", value: "Affiche les informations de Cacabot." },
-                    { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." },
                     { name: "\u23f0 !rappel", value: "Se faire rappeler quelque chose dans X minutes/heures." }
                 );
         }
@@ -4336,8 +4344,9 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId(`help_util_${helpAuthorId}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83d\udcac Discord', description: 'serveur, profil, avatar, top, actif', value: 'discord' },
-                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, info, ping, rappel', value: 'autres' }
+                { label: '\ud83d\udcac Discord', description: 'serveur, info, avatar, top, actif', value: 'discord' },
+                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel', value: 'autres' },
+                { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping', value: 'cacabot' }
             );
 
         const utilBackButton = new ButtonBuilder()
@@ -4406,9 +4415,10 @@ client.on('interactionCreate', async (interaction) => {
                 .setCustomId(`help_util_${helpAuthorId}`)
                 .setPlaceholder('Choisis une cat\u00e9gorie')
                 .addOptions(
-                    { label: '\ud83d\udcac Discord', description: 'serveur, profil, avatar, top, actif', value: 'discord' },
+                    { label: '\ud83d\udcac Discord', description: 'serveur, info, avatar, top, actif', value: 'discord' },
                     { label: '\u25b6\ufe0f YouTube', description: 'En construction...', value: 'youtube' },
-                    { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, info, ping, rappel', value: 'autres' }
+                    { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel', value: 'autres' },
+                { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping', value: 'cacabot' }
                 );
 
             const utilBackButton = new ButtonBuilder()
