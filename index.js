@@ -1404,29 +1404,22 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     const avatar = await loadImage(avatarUrl);
     ctx.drawImage(avatar, 217, 447, 542, 542);
 
-    // Pseudo en gros
+    // Pseudo
     ctx.fillStyle = '#1a0a00';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
 
-    const pseudoY = 447 + 542 + 20;
-    const primeY = pseudoY + 90 + 21;
+    const centerX = 977 / 2;
+    const pseudoY = 447 + 542 + 35;
+    const primeY = pseudoY + 85;
 
-    // Scale pour agrandir le texte
-    ctx.save();
-    ctx.translate(977 / 2, pseudoY);
-    ctx.scale(5, 5);
-    ctx.font = '14px "CowboyMovie"';
-    ctx.fillText(displayName.toUpperCase(), 0, 0);
-    ctx.restore();
+    ctx.font = '75px "CowboyMovie"';
+    ctx.fillText(displayName.toUpperCase(), centerX, pseudoY);
 
-    ctx.save();
-    ctx.translate(977 / 2, primeY);
-    ctx.scale(4, 4);
-    ctx.font = '10px "CowboyMovie"';
+    // Prime
+    ctx.font = '45px "CowboyMovie"';
     const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
-    ctx.fillText(primeClean, 0, 0);
-    ctx.restore();
+    ctx.fillText(primeClean, centerX, primeY);
 
     return canvas.toBuffer('image/png');
 }
