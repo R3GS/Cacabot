@@ -1415,15 +1415,15 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     ctx.save();
     ctx.translate(centerX, pseudoY);
-    ctx.scale(5, 5);
-    ctx.font = '30px "CowboyMovie"';
+    ctx.scale(8, 5);
+    ctx.font = '18px "CowboyMovie"';
     ctx.fillText(displayName.toUpperCase(), 0, 0);
     ctx.restore();
 
     // Prime
     ctx.save();
     ctx.translate(centerX, primeY);
-    ctx.scale(4, 4);
+    ctx.scale(7, 4);
     ctx.font = '14px "CowboyMovie"';
     const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
     ctx.fillText(primeClean, 0, 0);
