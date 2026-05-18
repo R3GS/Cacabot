@@ -1417,26 +1417,28 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     const primeY = pseudoY + 90;
 
     // Pseudo
+// Pseudo
 ctx.save();
 ctx.translate(centerX, pseudoY + 20);
-ctx.scale(7, 7);
+ctx.scale(5, 5);
 ctx.font = '17px "CowboyMovie"';
 ctx.fillStyle = '#1a0a00';
 const cleanName = displayName.toUpperCase().replace(/[^A-Z0-9+\"\+\*\/\.,; ]/g, '').trim();
-const letterSpacing = 2;
+const tw = ctx.measureText(cleanName).width;
+ctx.scale(1.4, 1);
+ctx.fillText(cleanName, -(tw / 2) / 1.4, 0);
+ctx.restore();
 
-// Calcul de la largeur totale avec espacement
-let totalWidth = 0;
-for (const char of cleanName) {
-    totalWidth += ctx.measureText(char).width;
-}
-totalWidth += letterSpacing * (cleanName.length - 1);
-
-let x = -(totalWidth / 2);
-for (const char of cleanName) {
-    ctx.fillText(char, x, 0);
-    x += ctx.measureText(char).width + letterSpacing;
-}
+// Prime
+ctx.save();
+ctx.translate(centerX, primeY - 10);
+ctx.scale(4, 4);
+ctx.font = '13px "CowboyMovie"';
+ctx.fillStyle = '#1a0a00';
+const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
+const pw = ctx.measureText(primeClean).width;
+ctx.scale(1.4, 1);
+ctx.fillText(primeClean, -(pw / 2) / 1.4, 0);
 ctx.restore();
 
 // Prime
