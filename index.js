@@ -3695,7 +3695,7 @@ function scheduleHoroscopeQuotidien() {
 
     setTimeout(async () => {
         try {
-            const channel = await client.channels.fetch('720057528867618909');
+            const channel = await client.channels.fetch('1505820995028516874');
             if (!channel) return;
 
             const now2 = new Date();
