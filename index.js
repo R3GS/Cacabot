@@ -1346,6 +1346,17 @@ async function disableButtons(interaction) {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
+    // Réaction 👋 si le message cite "cacabot" (texte uniquement, pas le ping)
+    if (message.content.toLowerCase().includes('cacabot')) {
+        message.react('👋').catch(() => {});
+    }
+
+    // Ping Cacabot seul -> "Quoi ? (Feur)"
+    const strippedMsg = message.content.replace(/<@!?1503495713097519355>/g, '').trim();
+    if (message.content.includes('1503495713097519355') && strippedMsg.length === 0) {
+        return message.reply('Quoi ? (Feur)');
+    }
+
     // Cheh
     const cleanedCheh = message.content.toLowerCase().trim();
     if (pendingCheh.has(message.channel.id) && (cleanedCheh.includes('ntm') || cleanedCheh.includes('tg') || cleanedCheh.includes('nique ta') || cleanedCheh.includes('ta gueule') || cleanedCheh.includes('mange'))) {
@@ -2344,7 +2355,7 @@ client.on('messageCreate', async (message) => {
                 counts = monthlyData[getMonthKey()] ?? {};
                 titre = '\ud83d\udcc6 Membres les plus actifs ce mois-ci';
             }
-            const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            const sorted = Object.entries(counts).filter(([uid]) => uid !== '1503495713097519355').sort((a, b) => b[1] - a[1]).slice(0, 10);
             const fields = sorted.length > 0
                 ? sorted.map(([uid, count], i) => {
                     const member = message.guild.members.cache.get(uid);
@@ -2786,7 +2797,7 @@ client.on('interactionCreate', async (interaction) => {
             titre = '\ud83d\udcc6 Membres les plus actifs ce mois-ci';
         }
 
-        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+        const sorted = Object.entries(counts).filter(([uid]) => uid !== '1503495713097519355').sort((a, b) => b[1] - a[1]).slice(0, 10);
         const fields = sorted.length > 0
             ? sorted.map(([uid, count], i) => {
                 const member = interaction.guild.members.cache.get(uid);
