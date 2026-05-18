@@ -74,8 +74,7 @@ const {
     ButtonBuilder,
     ButtonStyle
 } = require('discord.js');
-const { createCanvas, loadImage, registerFont } = require('canvas');
-try { registerFont('./Cowboy Movie.ttf', { family: 'CowboyMovie' }); } catch(e) { console.error('Font non trouvée:', e.message); }
+const { createCanvas, loadImage } = require('canvas');
 
 const client = new Client({
     intents: [
