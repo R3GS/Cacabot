@@ -915,7 +915,7 @@ const punchGifs = [
 function buildPunchEmbed(description) {
     const gif = punchGifs[Math.floor(Math.random() * punchGifs.length)];
     return new EmbedBuilder()
-        .setColor(0x51c21d)
+        .setColor(0x8b0000)
         .setDescription(description)
         .setImage(gif);
 }
