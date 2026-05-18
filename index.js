@@ -2262,7 +2262,7 @@ client.on('messageCreate', async (message) => {
             const buildAnnivEmbed = (sorted, page, ordre) => {
                 const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
                 const slice = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-                const lines = slice.map(([uid, date]) => `**<@${uid}>**\n\`${date}\``).join('\n\n');
+                const lines = slice.map(([uid, date]) => `**<@${uid}>** \u2014 ${date}`).join('\n');
                 return new EmbedBuilder()
                     .setColor(0xff69b4)
                     .setTitle('\ud83c\udf82 Anniversaires du serveur')
@@ -2284,19 +2284,21 @@ client.on('messageCreate', async (message) => {
                     .setDisabled(page >= totalPages - 1);
                 const chronoBtn = new ButtonBuilder()
                     .setCustomId(`anniv_list_chrono_${authorId}_${page}_switch`)
-                    .setLabel('\ud83d\udd52 Chrono')
+                    .setLabel('\ud83d\udd52 Ordre chronologique')
                     .setStyle(ordre === 'chrono' ? ButtonStyle.Primary : ButtonStyle.Secondary);
                 const classiqueBtn = new ButtonBuilder()
                     .setCustomId(`anniv_list_classique_${authorId}_${page}_switch`)
-                    .setLabel('\ud83d\udcc5 Classique')
+                    .setLabel('\ud83d\udcc5 Ordre classique')
                     .setStyle(ordre === 'classique' ? ButtonStyle.Primary : ButtonStyle.Secondary);
-                return new ActionRowBuilder().addComponents(prev, next, chronoBtn, classiqueBtn);
+                const row1 = new ActionRowBuilder().addComponents(prev, next);
+                const row2 = new ActionRowBuilder().addComponents(chronoBtn, classiqueBtn);
+                return [row1, row2];
             };
 
             const sorted = sortEntries('classique');
             const embed = buildAnnivEmbed(sorted, 0, 'classique');
-            const row = buildAnnivRow(sorted, 0, 'classique');
-            return message.reply({ embeds: [embed], components: sorted.length > 0 ? [row] : [] });
+            const rows = buildAnnivRow(sorted, 0, 'classique');
+            return message.reply({ embeds: [embed], components: sorted.length > 0 ? rows : [] });
         }
 
         if (sub === 'next') {
@@ -2839,7 +2841,7 @@ client.on('interactionCreate', async (interaction) => {
             .setStyle(periode === 'mois' ? ButtonStyle.Primary : ButtonStyle.Secondary);
         const row = new ActionRowBuilder().addComponents(jourBtn, semaineBtn, moisBtn);
 
-        return interaction.update({ embeds: [embed], components: [row] });
+        return interaction.update({ embeds: [embed], components: [row1, row2] });
     }
 
     // =========================
@@ -2941,7 +2943,7 @@ client.on('interactionCreate', async (interaction) => {
         const sorted = sortEntries(newOrdre);
         const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
         const slice = sorted.slice(newPage * PAGE_SIZE, (newPage + 1) * PAGE_SIZE);
-        const lines = slice.map(([uid, date]) => `**<@${uid}>**\n\`${date}\``).join('\n\n');
+        const lines = slice.map(([uid, date]) => `**<@${uid}>** \u2014 ${date}`).join('\n');
 
         const prev = new ButtonBuilder()
             .setCustomId(`anniv_list_${newOrdre}_${authorId}_${newPage}_prev`)
@@ -2955,13 +2957,14 @@ client.on('interactionCreate', async (interaction) => {
             .setDisabled(newPage >= totalPages - 1);
         const chronoBtn = new ButtonBuilder()
             .setCustomId(`anniv_list_chrono_${authorId}_${newPage}_switch`)
-            .setLabel('\ud83d\udd52 Chrono')
+            .setLabel('\ud83d\udd52 Ordre chronologique')
             .setStyle(newOrdre === 'chrono' ? ButtonStyle.Primary : ButtonStyle.Secondary);
         const classiqueBtn = new ButtonBuilder()
             .setCustomId(`anniv_list_classique_${authorId}_${newPage}_switch`)
-            .setLabel('\ud83d\udcc5 Classique')
+            .setLabel('\ud83d\udcc5 Ordre classique')
             .setStyle(newOrdre === 'classique' ? ButtonStyle.Primary : ButtonStyle.Secondary);
-        const row = new ActionRowBuilder().addComponents(prev, next, chronoBtn, classiqueBtn);
+        const row1 = new ActionRowBuilder().addComponents(prev, next);
+        const row2 = new ActionRowBuilder().addComponents(chronoBtn, classiqueBtn);
 
         const embed = new EmbedBuilder()
             .setColor(0xff69b4)
