@@ -2899,7 +2899,7 @@ client.on('interactionCreate', async (interaction) => {
     // BOUTONS ANNIVERSAIRE LIST
     // =========================
 
-    if (interaction.isButton() && (interaction.customId.startsWith('anniv_list_chrono_') || interaction.customId.startsWith('anniv_list_classique_'))) {
+    if (interaction.isButton() && interaction.customId.startsWith('anniv_list_')) {
         const parts = interaction.customId.split('_');
         const ordre = parts[2];
         const authorId = parts[3];
