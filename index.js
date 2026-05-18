@@ -1355,6 +1355,30 @@ async function disableButtons(interaction) {
     } catch (e) {}
 }
 
+
+async function getCommitCount() {
+    try {
+        let page = 1;
+        let total = 0;
+        while (true) {
+            const res = await fetch(`https://api.github.com/repos/R3GS/Cacabot/commits?path=index.js&per_page=100&page=${page}`, {
+                headers: {
+                    'Authorization': `token ${process.env.GITHUB_TOKEN}`,
+                    'Accept': 'application/vnd.github.v3+json'
+                }
+            });
+            const data = await res.json();
+            if (!Array.isArray(data) || data.length === 0) break;
+            total += data.length;
+            if (data.length < 100) break;
+            page++;
+        }
+        return total;
+    } catch (e) {
+        return null;
+    }
+}
+
 // =========================
 //     LISTENER MESSAGES
 // =========================
@@ -2931,10 +2955,14 @@ client.on('messageCreate', async (message) => {
         const nbMembres = Object.keys(topData.messages).length;
         const nbCommandes = 30;
 
+        const commitCount = await getCommitCount();
+        const versionStr = commitCount ? `Version 1.${commitCount}` : 'Version inconnue';
+
         const embed = new EmbedBuilder()
             .setColor(0x5865f2)
             .setTitle('\ud83e\udd16 Infos de Cacabot')
             .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
+            .setFooter({ text: versionStr })
             .addFields(
                 { name: '\ud83d\udcbb Commandes', value: `${nbCommandes}`, inline: true },
                 { name: '\ud83d\udcac Messages envoy\u00e9s', value: `${topData.messages['1503495713097519355'] ?? 0}`, inline: true },
