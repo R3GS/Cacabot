@@ -460,7 +460,7 @@ function getResponse(raw) {
     if (cleaned.includes("avec quoi")) return reply("Avec feur");
     if (cleaned.endsWith("oui")) return reply("Stiti");
     if (
-        (cleaned.includes("cacabot") || cleaned.includes("caca bot")) &&
+        (cleaned.includes("cacabot") || cleaned.includes("caca bot") || raw.includes("1503495713097519355")) &&
         (cleaned.includes("jtm") || cleaned.includes("je t aime") || cleaned.includes("je taime") || cleaned.includes("jt aime"))
     ) return { needsJtm: true };
 
