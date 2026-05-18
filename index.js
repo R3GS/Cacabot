@@ -2341,29 +2341,48 @@ client.on('messageCreate', async (message) => {
 
     // !top
     if (response?.needsTop) {
-        const sorted = Object.entries(topData.messages)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 10);
+        const allSorted = Object.entries(topData.messages)
+            .sort((a, b) => b[1] - a[1]);
 
-        if (sorted.length === 0) {
-            return message.reply("Pas encore de donn\u00e9es !");
-        }
+        if (allSorted.length === 0) return message.reply("Pas encore de donn\u00e9es !");
 
-        const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
-        const fields = await Promise.all(sorted.map(async ([uid, count], i) => {
-            const member = message.guild.members.cache.get(uid);
-            const name = member?.displayName ?? `Membre inconnu`;
-            const medal = medals[i] ?? `**${i + 1}.**`;
-            return { name: `${medal} ${name}`, value: `${count} messages`, inline: false };
-        }));
+        const PAGE_SIZE = 10;
+        const totalPages = Math.ceil(allSorted.length / PAGE_SIZE);
+        const authorId = message.author.id;
 
-        const embed = new EmbedBuilder()
-            .setColor(0xffd700)
-            .setTitle('\ud83c\udfc6 Top 10 des membres les plus actifs')
-            .addFields(fields)
-            .setFooter({ text: "Compt\u00e9 depuis l'initialisation du bot" });
+        const buildTopEmbed = (page) => {
+            const start = page * PAGE_SIZE;
+            const slice = allSorted.slice(start, start + PAGE_SIZE);
+            const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
+            const fields = slice.map(([uid, count], i) => {
+                const member = message.guild.members.cache.get(uid);
+                const name = member?.displayName ?? 'Membre inconnu';
+                const rank = start + i;
+                const medal = rank < 3 ? medals[rank] : `**${rank + 1}.**`;
+                return { name: `${medal} ${name}`, value: `${count} messages`, inline: false };
+            });
+            return new EmbedBuilder()
+                .setColor(0xffd700)
+                .setTitle('\ud83c\udfc6 Classement des membres')
+                .addFields(fields)
+                .setFooter({ text: `Page ${page + 1}/${totalPages} \u2022 Compt\u00e9 depuis l'initialisation du bot` });
+        };
 
-        return message.reply({ embeds: [embed] });
+        const buildTopRow = (page) => {
+            const prev = new ButtonBuilder()
+                .setCustomId(`top_prev_${authorId}_${page}`)
+                .setLabel('\u2b05\ufe0f Arrière')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(page === 0);
+            const next = new ButtonBuilder()
+                .setCustomId(`top_next_${authorId}_${page}`)
+                .setLabel('Suivant \u27a1\ufe0f')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(page >= totalPages - 1);
+            return new ActionRowBuilder().addComponents(prev, next);
+        };
+
+        return message.reply({ embeds: [buildTopEmbed(0)], components: totalPages > 1 ? [buildTopRow(0)] : [] });
     }
 
     // !setmessages
@@ -2671,6 +2690,57 @@ client.on('messageCreate', async (message) => {
 
 client.on('interactionCreate', async (interaction) => {
     try {
+
+    // =========================
+    // BOUTONS TOP
+    // =========================
+
+    if (interaction.isButton() && (interaction.customId.startsWith('top_prev_') || interaction.customId.startsWith('top_next_'))) {
+        const parts = interaction.customId.split('_');
+        const direction = parts[1]; // prev ou next
+        const authorId = parts[2];
+        const currentPage = parseInt(parts[3]);
+
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
+
+        const newPage = direction === 'next' ? currentPage + 1 : currentPage - 1;
+        const PAGE_SIZE = 10;
+        const allSorted = Object.entries(topData.messages).sort((a, b) => b[1] - a[1]);
+        const totalPages = Math.ceil(allSorted.length / PAGE_SIZE);
+
+        const start = newPage * PAGE_SIZE;
+        const slice = allSorted.slice(start, start + PAGE_SIZE);
+        const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
+        const fields = slice.map(([uid, count], i) => {
+            const member = interaction.guild.members.cache.get(uid);
+            const name = member?.displayName ?? 'Membre inconnu';
+            const rank = start + i;
+            const medal = rank < 3 ? medals[rank] : `**${rank + 1}.**`;
+            return { name: `${medal} ${name}`, value: `${count} messages`, inline: false };
+        });
+
+        const embed = new EmbedBuilder()
+            .setColor(0xffd700)
+            .setTitle('\ud83c\udfc6 Classement des membres')
+            .addFields(fields)
+            .setFooter({ text: `Page ${newPage + 1}/${totalPages} \u2022 Compt\u00e9 depuis l'initialisation du bot` });
+
+        const prev = new ButtonBuilder()
+            .setCustomId(`top_prev_${authorId}_${newPage}`)
+            .setLabel('\u2b05\ufe0f Arrière')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(newPage === 0);
+        const next = new ButtonBuilder()
+            .setCustomId(`top_next_${authorId}_${newPage}`)
+            .setLabel('Suivant \u27a1\ufe0f')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(newPage >= totalPages - 1);
+        const row = new ActionRowBuilder().addComponents(prev, next);
+
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
 
     // =========================
     // BOUTONS ANNIVERSAIRE LIST
