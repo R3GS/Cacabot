@@ -1757,16 +1757,12 @@ client.on('messageCreate', async (message) => {
 
         const embed = new EmbedBuilder().setColor(0x597eff).setDescription(desc).setImage(gif);
 
-        if (targetId) {
-            const btn = new ButtonBuilder()
-                .setCustomId(`cry_with_${message.author.id}_${auteurNom}_${targetId}_${cibleNom}`)
-                .setLabel('\ud83d\ude2d Pleurer avec')
-                .setStyle(ButtonStyle.Secondary);
-            const row = new ActionRowBuilder().addComponents(btn);
-            return message.reply({ embeds: [embed], components: [row] });
-        }
-
-        return message.reply({ embeds: [embed] });
+        const btn = new ButtonBuilder()
+            .setCustomId(`cry_with_${message.author.id}_${auteurNom}_${targetId ?? 'none'}_${cibleNom ?? 'none'}`)
+            .setLabel('\ud83d\ude2d Pleurer avec')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(btn);
+        return message.reply({ embeds: [embed], components: [row] });
     }
 
     // !palaref
@@ -3081,7 +3077,7 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.user.id === originalAuthorId) {
             return interaction.reply({ content: "Tu as d\u00e9j\u00e0 pleur\u00e9...", ephemeral: true });
         }
-        if (interaction.user.id === targetId) {
+        if (targetId !== 'none' && interaction.user.id === targetId) {
             return interaction.reply({ content: `C'est toi qui a fait pleurer **${originalAuthorNom}** !`, ephemeral: true });
         }
 
@@ -3778,7 +3774,7 @@ client.on('interactionCreate', async (interaction) => {
         if (interaction.user.id === originalAuthorId) {
             return interaction.reply({ content: "Tu as d\u00e9j\u00e0 pleur\u00e9...", ephemeral: true });
         }
-        if (interaction.user.id === targetId) {
+        if (targetId !== 'none' && interaction.user.id === targetId) {
             return interaction.reply({ content: `C'est toi qui a fait pleurer **${originalAuthorNom}** !`, ephemeral: true });
         }
 
