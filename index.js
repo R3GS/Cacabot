@@ -1362,8 +1362,9 @@ async function disableButtons(interaction) {
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
-    // Réaction 👋 si le message cite "cacabot" (texte uniquement, pas le ping)
-    if (message.content.toLowerCase().includes('cacabot')) {
+    // Réaction 👋 si le message cite "cacabot" mais pas si c'est une commande
+    const lowerContent = message.content.toLowerCase().trim();
+    if (lowerContent.includes('cacabot') && !lowerContent.startsWith('!')) {
         message.react('👋').catch(() => {});
     }
 
@@ -1721,7 +1722,7 @@ client.on('messageCreate', async (message) => {
             const embed = new EmbedBuilder().setColor(0x597eff).setDescription(desc).setImage(gif);
             return message.reply({ embeds: [embed] });
         } else if (cible && cible.id === '1503495713097519355') {
-            desc = `**${auteurNom}** Pleure`;
+            desc = `\ud83d\ude2d **${auteurNom}** pleure \u00e0 cause de moi...`;
         } else if (cible) {
             cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
             targetId = cible.id;
