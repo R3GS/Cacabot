@@ -28,6 +28,7 @@ async function loadAll() {
 
 let lastSaveTime = null;
 let messagesSinceLastSave = 0;
+let criminelResetOffset = 0;
 
 async function saveAll() {
     try {
@@ -253,6 +254,7 @@ function getResponse(raw) {
     // =========================
 
     if (command === "!criminel") {
+        if (args[1] === "reset") return { needsCriminelReset: true };
         return { needsCriminel: true };
     }
 
@@ -265,6 +267,7 @@ function getResponse(raw) {
     }
 
     if (command === "!criminel") {
+        if (args[1] === "reset") return { needsCriminelReset: true };
         return { needsCriminel: true };
     }
 
@@ -1410,14 +1413,13 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     ctx.textBaseline = 'middle';
 
     const centerX = 977 / 2;
-    const pseudoY = 447 + 542 + 80;
+    const pseudoY = 447 + 542 + 55;
     const primeY = pseudoY + 90;
 
     ctx.save();
     ctx.translate(centerX, pseudoY);
     ctx.scale(5, 5);
-    ctx.textAlign = 'center';
-    ctx.font = '18px "CowboyMovie"';
+    ctx.font = '14px "CowboyMovie"';
     ctx.fillText(displayName.toUpperCase(), 0, 0);
     ctx.restore();
 
@@ -1425,8 +1427,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     ctx.save();
     ctx.translate(centerX, primeY);
     ctx.scale(4, 4);
-    ctx.textAlign = 'center';
-    ctx.font = '14px "CowboyMovie"';
+    ctx.font = '10px "CowboyMovie"';
     const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
     ctx.fillText(primeClean, 0, 0);
     ctx.restore();
@@ -1770,8 +1771,8 @@ client.on('messageCreate', async (message) => {
         const membersArray = [...members.values()];
         if (membersArray.length === 0) return message.reply('Aucun membre trouvé !');
 
-        const memberSeed = dateKey % membersArray.length;
-        const crimeSeed = dateKey % crimes.length;
+        const memberSeed = (dateKey + criminelResetOffset) % membersArray.length;
+        const crimeSeed = (dateKey + criminelResetOffset) % crimes.length;
         const criminel = membersArray[memberSeed];
         const crime = crimes[crimeSeed];
 
@@ -1808,6 +1809,13 @@ client.on('messageCreate', async (message) => {
             embed.setThumbnail(criminel.user.displayAvatarURL({ dynamic: true, size: 256 }));
             return message.reply({ embeds: [embed], components: [row] });
         }
+    }
+
+    // !criminel reset
+    if (response?.needsCriminelReset) {
+        if (message.author.id !== '436218312574107658') return message.reply("Tu n'es pas autoris\u00e9(e) \u00e0 faire cette commande.");
+        criminelResetOffset += Math.floor(Math.random() * 1000) + 1;
+        return message.reply('\ud83d\udd04 Nouveau criminel du jour g\u00e9n\u00e9r\u00e9 ! Fais `!criminel` pour voir.');
     }
 
     // !cry
