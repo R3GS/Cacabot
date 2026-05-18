@@ -446,6 +446,7 @@ function getResponse(raw) {
         ];
         return Math.random() < 0.5 ? videos[0] : videos[1];
     }
+    if (cleaned.includes("ou quoi")) return reply("Ou feur");
     if (cleaned.includes("avec quoi")) return reply("Avec feur");
     if (cleaned.endsWith("oui")) return reply("Stiti");
     if (cleaned.includes("bac blanc")) {
