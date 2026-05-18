@@ -324,6 +324,10 @@ function getResponse(raw) {
         return { needsSay: true };
     }
 
+    if (command === "!rappel") {
+        return { needsRappel: true };
+    }
+
     if (command === "!ping") {
         return { needsPing: true };
     }
@@ -449,6 +453,10 @@ function getResponse(raw) {
     if (cleaned.includes("ou quoi")) return reply("Ou feur");
     if (cleaned.includes("avec quoi")) return reply("Avec feur");
     if (cleaned.endsWith("oui")) return reply("Stiti");
+    if (cleaned.includes("joyeux anniversaire") || cleaned.includes("bon anniversaire") || cleaned.includes("joyeux anniv") || cleaned.includes("bon anniv")) {
+        return "https://cdn.discordapp.com/attachments/1128032964924670053/1505358556851863583/jdg-joueur-du-grenier.gif";
+    }
+
     if (cleaned.includes("bac blanc")) {
         const bacBlanc = [
             "https://cdn.discordapp.com/attachments/1128032964924670053/1505380065435717712/yard_stare.jpg",
@@ -2018,19 +2026,22 @@ client.on('messageCreate', async (message) => {
             .slice(0, 5)
             .join(' ') || 'Aucun';
 
+        const nbMessages = topData.messages[cible.id] ?? 0;
+
         const embed = new EmbedBuilder()
             .setColor(0x5865f2)
             .setTitle(member?.displayName ?? cible.username)
             .setThumbnail(cible.displayAvatarURL({ dynamic: true, size: 256 }))
             .addFields(
                 { name: '\ud83d\udc64 Pseudo', value: `@${cible.username}`, inline: true },
-                { name: '\ud83c\udd94 ID', value: cible.id, inline: true },
+                { name: '\ud83d\udcac Messages envoy\u00e9s', value: `${nbMessages}`, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
                 { name: '\ud83d\udcc5 Arriv\u00e9e sur le serveur', value: joinedAt, inline: true },
                 { name: '\ud83c\udf82 Compte cr\u00e9\u00e9 le', value: createdAt, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
                 { name: '\ud83c\udff7\ufe0f R\u00f4les', value: roles, inline: false }
-            );
+            )
+            .setFooter({ text: `ID : ${cible.id}` });
 
         return message.reply({ embeds: [embed] });
     }
@@ -2174,21 +2185,52 @@ client.on('messageCreate', async (message) => {
         if (sub === 'list') {
             const entries = Object.entries(birthdayData.birthdays);
             if (entries.length === 0) return message.reply("Aucun anniversaire enregistr\u00e9 !");
-            const sorted = entries.sort((a, b) => {
-                const [da, ma] = a[1].split('/').map(Number);
-                const [db, mb] = b[1].split('/').map(Number);
-                return ma !== mb ? ma - mb : da - db;
-            });
-            const lines = sorted.map(([uid, date]) => {
-                const member = message.guild?.members.cache.get(uid);
-                const name = member?.displayName ?? uid;
-                return `\ud83c\udf82 **${name}** \u2014 ${date}`;
-            }).join('\n');
-            const embed = new EmbedBuilder()
-                .setColor(0xff69b4)
-                .setTitle('\ud83c\udf82 Anniversaires du serveur')
-                .setDescription(lines);
-            return message.reply({ embeds: [embed] });
+            const authorId = message.author.id;
+
+            const buildListEmbed = (ordre) => {
+                let sorted;
+                if (ordre === 'chrono') {
+                    const now = new Date();
+                    sorted = [...entries].sort((a, b) => {
+                        const [da, ma] = a[1].split('/').map(Number);
+                        const [db, mb] = b[1].split('/').map(Number);
+                        const dateA = new Date(now.getFullYear(), ma - 1, da);
+                        const dateB = new Date(now.getFullYear(), mb - 1, db);
+                        if (dateA < now) dateA.setFullYear(now.getFullYear() + 1);
+                        if (dateB < now) dateB.setFullYear(now.getFullYear() + 1);
+                        return dateA - dateB;
+                    });
+                } else {
+                    sorted = [...entries].sort((a, b) => {
+                        const [da, ma] = a[1].split('/').map(Number);
+                        const [db, mb] = b[1].split('/').map(Number);
+                        return ma !== mb ? ma - mb : da - db;
+                    });
+                }
+                const lines = sorted.map(([uid, date]) => {
+                    const member = message.guild?.members.cache.get(uid);
+                    const name = member?.displayName ?? uid;
+                    return `<@${uid}> \u2014 ${date}`;
+                }).join('\n');
+                return new EmbedBuilder()
+                    .setColor(0xff69b4)
+                    .setTitle('\ud83c\udf82 Anniversaires du serveur')
+                    .setDescription(lines)
+                    .setFooter({ text: ordre === 'chrono' ? '\ud83d\udd52 Ordre chronologique' : '\ud83d\udcc5 Ordre classique' });
+            };
+
+            const chronoBtn = new ButtonBuilder()
+                .setCustomId(`anniv_list_chrono_${authorId}`)
+                .setLabel('\ud83d\udd52 Ordre chronologique')
+                .setStyle(ButtonStyle.Secondary);
+            const classiqueBtn = new ButtonBuilder()
+                .setCustomId(`anniv_list_classique_${authorId}`)
+                .setLabel('\ud83d\udcc5 Ordre classique')
+                .setStyle(ButtonStyle.Primary);
+            const row = new ActionRowBuilder().addComponents(chronoBtn, classiqueBtn);
+
+            const embed = buildListEmbed('classique');
+            return message.reply({ embeds: [embed], components: [row] });
         }
 
         if (sub === 'next') {
@@ -2412,6 +2454,29 @@ client.on('messageCreate', async (message) => {
         return;
     }
 
+    // !rappel
+    if (response?.needsRappel) {
+        const args = message.content.trim().split(/\s+/);
+        if (args.length < 3) return message.reply('Usage : `!rappel Xmin message` ou `!rappel Xh message`');
+        const timeStr = args[1].toLowerCase();
+        const texte = args.slice(2).join(' ');
+        let ms = 0;
+        if (timeStr.endsWith('min')) ms = parseInt(timeStr) * 60 * 1000;
+        else if (timeStr.endsWith('h')) ms = parseInt(timeStr) * 60 * 60 * 1000;
+        else if (timeStr.endsWith('s')) ms = parseInt(timeStr) * 1000;
+        else return message.reply('Format invalide ! Utilise `Xmin`, `Xh` ou `Xs`. Ex: `!rappel 10min acheter du pain`');
+        if (isNaN(ms) || ms <= 0) return message.reply('Durée invalide !');
+        if (ms > 24 * 60 * 60 * 1000) return message.reply('Maximum 24h !');
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        await message.reply(`\u23f0 Rappel enregistr\u00e9 ! Je te ping dans **${args[1]}**.`);
+        setTimeout(async () => {
+            try {
+                await message.channel.send(`\ud83d\udd14 <@${message.author.id}> Rappel : **${texte}**`);
+            } catch (e) {}
+        }, ms);
+        return;
+    }
+
     // !ping
     if (response?.needsPing) {
         const sent = await message.reply('\ud83c\udfd3 Pong !');
@@ -2556,6 +2621,64 @@ client.on('messageCreate', async (message) => {
 
 client.on('interactionCreate', async (interaction) => {
     try {
+
+    // =========================
+    // BOUTONS ANNIVERSAIRE LIST
+    // =========================
+
+    if (interaction.isButton() && (interaction.customId.startsWith('anniv_list_chrono_') || interaction.customId.startsWith('anniv_list_classique_'))) {
+        const parts = interaction.customId.split('_');
+        const ordre = parts[2]; // chrono ou classique
+        const authorId = parts[3];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
+        }
+
+        const entries = Object.entries(birthdayData.birthdays);
+        let sorted;
+        if (ordre === 'chrono') {
+            const now = new Date();
+            sorted = [...entries].sort((a, b) => {
+                const [da, ma] = a[1].split('/').map(Number);
+                const [db, mb] = b[1].split('/').map(Number);
+                const dateA = new Date(now.getFullYear(), ma - 1, da);
+                const dateB = new Date(now.getFullYear(), mb - 1, db);
+                if (dateA < now) dateA.setFullYear(now.getFullYear() + 1);
+                if (dateB < now) dateB.setFullYear(now.getFullYear() + 1);
+                return dateA - dateB;
+            });
+        } else {
+            sorted = [...entries].sort((a, b) => {
+                const [da, ma] = a[1].split('/').map(Number);
+                const [db, mb] = b[1].split('/').map(Number);
+                return ma !== mb ? ma - mb : da - db;
+            });
+        }
+
+        const lines = sorted.map(([uid, date]) => {
+            const member = interaction.guild?.members.cache.get(uid);
+            const name = member?.displayName ?? uid;
+            return `<@${uid}> \u2014 ${date}`;
+        }).join('\n');
+
+        const chronoBtn = new ButtonBuilder()
+            .setCustomId(`anniv_list_chrono_${authorId}`)
+            .setLabel('\ud83d\udd52 Ordre chronologique')
+            .setStyle(ordre === 'chrono' ? ButtonStyle.Primary : ButtonStyle.Secondary);
+        const classiqueBtn = new ButtonBuilder()
+            .setCustomId(`anniv_list_classique_${authorId}`)
+            .setLabel('\ud83d\udcc5 Ordre classique')
+            .setStyle(ordre === 'classique' ? ButtonStyle.Primary : ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(chronoBtn, classiqueBtn);
+
+        const embed = new EmbedBuilder()
+            .setColor(0xff69b4)
+            .setTitle('\ud83c\udf82 Anniversaires du serveur')
+            .setDescription(lines)
+            .setFooter({ text: ordre === 'chrono' ? '\ud83d\udd52 Ordre chronologique' : '\ud83d\udcc5 Ordre classique' });
+
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
 
     // =========================
     // BOUTON KISS BACK
@@ -3458,7 +3581,8 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "\ud83c\udfc5 !top", value: "Afficher le top 10 des membres les plus actifs." },
                     { name: "\ud83d\udcac !actif", value: "Affiche les membres les plus actifs du jour et de la semaine." },
                     { name: "\ud83e\udd16 !info", value: "Affiche les informations de Cacabot." },
-                    { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." }
+                    { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." },
+                    { name: "\u23f0 !rappel", value: "Se faire rappeler quelque chose dans X minutes/heures." }
                 );
         }
 
@@ -3476,7 +3600,8 @@ client.on('interactionCreate', async (interaction) => {
                 .addFields(
                     { name: "<:aternos_icon:1505454393049485362> !aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." },
                     { name: "\ud83e\udd16 !info", value: "Affiche les informations de Cacabot." },
-                    { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." }
+                    { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." },
+                    { name: "\u23f0 !rappel", value: "Se faire rappeler quelque chose dans X minutes/heures." }
                 );
         }
 
@@ -3516,7 +3641,7 @@ client.on('interactionCreate', async (interaction) => {
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
                 { label: '\ud83d\udcac Discord', description: 'serveur, profil, avatar, top, actif', value: 'discord' },
-                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, info, ping', value: 'autres' }
+                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, info, ping, rappel', value: 'autres' }
             );
 
         const utilBackButton = new ButtonBuilder()
@@ -3587,7 +3712,7 @@ client.on('interactionCreate', async (interaction) => {
                 .addOptions(
                     { label: '\ud83d\udcac Discord', description: 'serveur, profil, avatar, top, actif', value: 'discord' },
                     { label: '\u25b6\ufe0f YouTube', description: 'En construction...', value: 'youtube' },
-                    { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, info, ping', value: 'autres' }
+                    { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, info, ping, rappel', value: 'autres' }
                 );
 
             const utilBackButton = new ButtonBuilder()
