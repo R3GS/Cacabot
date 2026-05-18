@@ -2210,7 +2210,7 @@ client.on('messageCreate', async (message) => {
                 const lines = sorted.map(([uid, date]) => {
                     const member = message.guild?.members.cache.get(uid);
                     const name = member?.displayName ?? uid;
-                    return `<@${uid}> \u2014 \`${date}\``;
+                    return `<@${uid}> \u2014 **${date}**`;
                 }).join('\n');
                 return new EmbedBuilder()
                     .setColor(0xff69b4)
@@ -2658,7 +2658,7 @@ client.on('interactionCreate', async (interaction) => {
         const lines = sorted.map(([uid, date]) => {
             const member = interaction.guild?.members.cache.get(uid);
             const name = member?.displayName ?? uid;
-            return `<@${uid}> \u2014 \`${date}\``;
+            return `<@${uid}> \u2014 **${date}**`;
         }).join('\n');
 
         const chronoBtn = new ButtonBuilder()
