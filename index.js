@@ -75,6 +75,7 @@ const {
     ButtonStyle
 } = require('discord.js');
 const { createCanvas, loadImage, registerFont } = require('canvas');
+process.env.PANGOCAIRO_BACKEND = 'fontconfig';
 try { registerFont('./Cowboy Movie.ttf', { family: 'CowboyMovie' }); } catch(e) { console.error('Font non trouvée:', e.message); }
 
 const client = new Client({
@@ -1415,14 +1416,14 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     ctx.save();
     ctx.translate(977 / 2, pseudoY);
     ctx.scale(5, 5);
-    ctx.font = '14px CowboyMovie';
+    ctx._setFont('normal', 'normal', 14, 'px', 'CowboyMovie');
     ctx.fillText(displayName.toUpperCase(), 0, 0);
     ctx.restore();
 
     ctx.save();
     ctx.translate(977 / 2, primeY);
     ctx.scale(4, 4);
-    ctx.font = '10px CowboyMovie';
+    ctx._setFont('normal', 'normal', 10, 'px', 'CowboyMovie');
     const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
     ctx.fillText(primeClean, 0, 0);
     ctx.restore();
