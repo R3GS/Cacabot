@@ -320,6 +320,10 @@ function getResponse(raw) {
         return { needsHoroscope: true };
     }
 
+    if (command === "!say") {
+        return { needsSay: true };
+    }
+
     if (command === "!ping") {
         return { needsPing: true };
     }
@@ -2350,6 +2354,24 @@ client.on('messageCreate', async (message) => {
             .setFooter({ text: `\ud83d\udcc5 ${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}` });
 
         return message.reply({ embeds: [embed] });
+    }
+
+    // !say
+    if (response?.needsSay) {
+        if (message.author.id !== '436218312574107658') return;
+        const args = message.content.trim().split(/\s+/);
+        if (args.length < 3) return message.reply({ content: "Usage : `!say [ID_salon] [message]`", ephemeral: true });
+        const channelId = args[1];
+        const texte = args.slice(2).join(' ');
+        try {
+            const target = await client.channels.fetch(channelId);
+            if (!target) return message.reply('Salon introuvable.');
+            await target.send(texte);
+            await message.delete().catch(() => {});
+        } catch (e) {
+            return message.reply('Erreur : salon introuvable ou permissions insuffisantes.');
+        }
+        return;
     }
 
     // !ping
