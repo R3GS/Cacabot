@@ -254,7 +254,7 @@ function getResponse(raw) {
     // =========================
 
     if (command === "!criminel") {
-        if (args[1] === "reset") return { needsCriminelReset: true };
+        if (raw.trim().split(/\s+/)[1] === "reset") return { needsCriminelReset: true };
         return { needsCriminel: true };
     }
 
@@ -267,7 +267,7 @@ function getResponse(raw) {
     }
 
     if (command === "!criminel") {
-        if (args[1] === "reset") return { needsCriminelReset: true };
+        if (raw.trim().split(/\s+/)[1] === "reset") return { needsCriminelReset: true };
         return { needsCriminel: true };
     }
 
