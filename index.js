@@ -323,6 +323,10 @@ function getResponse(raw) {
         return { needsHoroscope: true };
     }
 
+    if (command === "!save") {
+        return { needsSave: true };
+    }
+
     if (command === "!helpx") {
         return { needsHelpx: true };
     }
@@ -2488,6 +2492,13 @@ client.on('messageCreate', async (message) => {
         return message.reply({ embeds: [embed] });
     }
 
+    // !save
+    if (response?.needsSave) {
+        if (message.author.id !== '436218312574107658') return;
+        await saveAll();
+        return message.reply('\ud83d\udcbe Sauvegarde forc\u00e9e effectu\u00e9e !');
+    }
+
     // !helpx
     if (response?.needsHelpx) {
         if (message.author.id !== '436218312574107658') {
@@ -2538,21 +2549,43 @@ client.on('messageCreate', async (message) => {
     // !rappel
     if (response?.needsRappel) {
         const args = message.content.trim().split(/\s+/);
-        if (args.length < 3) return message.reply('Usage : `!rappel Xmin message` ou `!rappel Xh message`');
-        const timeStr = args[1].toLowerCase();
-        const texte = args.slice(2).join(' ');
+        const isEpsys = message.author.id === '436218312574107658';
+
+        // Détecter si c'est !rappel [ID] Xmin/h [message] (Epsys only)
+        const looksLikeId = args[1] && /^\d{17,19}$/.test(args[1]);
+
+        if (looksLikeId && !isEpsys) {
+            return message.reply("Tu n'es pas autoris\u00e9(e) \u00e0 utiliser cette variante de la commande.");
+        }
+
+        let targetId, timeStr, texte;
+
+        if (looksLikeId && isEpsys) {
+            // !rappel [ID] Xmin [message]
+            if (args.length < 4) return message.reply('Usage : `!rappel [ID] Xmin/h [message]`');
+            targetId = args[1];
+            timeStr = args[2].toLowerCase();
+            texte = args.slice(3).join(' ');
+        } else {
+            // !rappel Xmin [message]
+            if (args.length < 3) return message.reply('Usage : `!rappel Xmin message` ou `!rappel Xh message`');
+            targetId = message.author.id;
+            timeStr = args[1].toLowerCase();
+            texte = args.slice(2).join(' ');
+        }
+
         let ms = 0;
         if (timeStr.endsWith('min')) ms = parseInt(timeStr) * 60 * 1000;
         else if (timeStr.endsWith('h')) ms = parseInt(timeStr) * 60 * 60 * 1000;
         else if (timeStr.endsWith('s')) ms = parseInt(timeStr) * 1000;
         else return message.reply('Format invalide ! Utilise `Xmin`, `Xh` ou `Xs`. Ex: `!rappel 10min acheter du pain`');
-        if (isNaN(ms) || ms <= 0) return message.reply('Durée invalide !');
+        if (isNaN(ms) || ms <= 0) return message.reply('Dur\u00e9e invalide !');
         if (ms > 24 * 60 * 60 * 1000) return message.reply('Maximum 24h !');
-        const auteurNom = message.member?.displayName ?? message.author.username;
-        await message.reply(`\u23f0 Rappel enregistr\u00e9 ! Je te ping dans **${args[1]}**.`);
+
+        await message.reply(`\u23f0 Rappel enregistr\u00e9 ! Je ping <@${targetId}> dans **${timeStr}**.`);
         setTimeout(async () => {
             try {
-                await message.channel.send(`\ud83d\udd14 <@${message.author.id}> Rappel : **${texte}**`);
+                await message.channel.send(`\ud83d\udd14 <@${targetId}> Rappel : **${texte}**`);
             } catch (e) {}
         }, ms);
         return;
