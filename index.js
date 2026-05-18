@@ -2262,11 +2262,15 @@ client.on('messageCreate', async (message) => {
             const buildAnnivEmbed = (sorted, page, ordre) => {
                 const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
                 const slice = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-                const lines = slice.map(([uid, date]) => `<@${uid}>\n**${date}**`).join('\n\n');
+                const fields = slice.map(([uid, date]) => ({
+                    name: `<@${uid}>`,
+                    value: `**${date}**`,
+                    inline: true
+                }));
                 return new EmbedBuilder()
                     .setColor(0xff69b4)
                     .setTitle('\ud83c\udf82 Anniversaires du serveur')
-                    .setDescription(lines)
+                    .addFields(fields)
                     .setFooter({ text: `Page ${page + 1}/${totalPages} \u2022 ${ordre === 'chrono' ? '\ud83d\udd52 Ordre chronologique' : '\ud83d\udcc5 Ordre classique'}` });
             };
 
@@ -2943,7 +2947,11 @@ client.on('interactionCreate', async (interaction) => {
         const sorted = sortEntries(newOrdre);
         const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
         const slice = sorted.slice(newPage * PAGE_SIZE, (newPage + 1) * PAGE_SIZE);
-        const lines = slice.map(([uid, date]) => `<@${uid}>\n**${date}**`).join('\n\n');
+        const fields = slice.map(([uid, date]) => ({
+            name: `<@${uid}>`,
+            value: `**${date}**`,
+            inline: true
+        }));
 
         const prev = new ButtonBuilder()
             .setCustomId(`anniv_list_${newOrdre}_${authorId}_${newPage}_prev`)
@@ -2969,7 +2977,7 @@ client.on('interactionCreate', async (interaction) => {
         const embed = new EmbedBuilder()
             .setColor(0xff69b4)
             .setTitle('\ud83c\udf82 Anniversaires du serveur')
-            .setDescription(lines)
+            .addFields(fields)
             .setFooter({ text: `Page ${newPage + 1}/${totalPages} \u2022 ${newOrdre === 'chrono' ? '\ud83d\udd52 Ordre chronologique' : '\ud83d\udcc5 Ordre classique'}` });
 
         return interaction.update({ embeds: [embed], components: [row] });
