@@ -4345,8 +4345,8 @@ client.on('interactionCreate', async (interaction) => {
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
                 { label: '\ud83d\udcac Discord', description: 'serveur, info, avatar, top, actif', value: 'discord' },
-                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel', value: 'autres' },
-                { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping', value: 'cacabot' }
+                { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping', value: 'cacabot' },
+                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel', value: 'autres' }
             );
 
         const utilBackButton = new ButtonBuilder()
@@ -4417,8 +4417,8 @@ client.on('interactionCreate', async (interaction) => {
                 .addOptions(
                     { label: '\ud83d\udcac Discord', description: 'serveur, info, avatar, top, actif', value: 'discord' },
                     { label: '\u25b6\ufe0f YouTube', description: 'En construction...', value: 'youtube' },
-                    { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel', value: 'autres' },
-                { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping', value: 'cacabot' }
+                    { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping', value: 'cacabot' },
+                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel', value: 'autres' }
                 );
 
             const utilBackButton = new ButtonBuilder()
