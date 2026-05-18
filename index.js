@@ -539,6 +539,15 @@ function getResponse(raw) {
 // =========================
 
 const pendingCheh = new Map();
+const cooldowns = new Map();
+
+function checkCooldown(userId, cmd, seconds = 3) {
+    const key = `${userId}_${cmd}`;
+    const now = Date.now();
+    if (cooldowns.has(key) && now - cooldowns.get(key) < seconds * 1000) return false;
+    cooldowns.set(key, now);
+    return true;
+}
 const CHEH_GIF = 'https://cdn.discordapp.com/attachments/1128032964924670053/1505363865137840180/cheh.gif';
 
 // =========================
@@ -2194,7 +2203,11 @@ client.on('messageCreate', async (message) => {
             const next = entries.sort((a, b) => toDate(a[1]) - toDate(b[1]))[0];
             const member = message.guild?.members.cache.get(next[0]);
             const name = member?.displayName ?? `<@${next[0]}>`;
-            return message.reply(`\ud83c\udf82 Le prochain anniversaire est celui de **${name}** le **${next[1]}** !`);
+            const nextDate = toDate(next[1]);
+            const diffMs = nextDate - now;
+            const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+            const joursStr = diffDays === 0 ? "c'est aujourd'hui \ud83c\udf89" : diffDays === 1 ? "demain \ud83c\udf89" : `dans **${diffDays} jours**`;
+            return message.reply(`\ud83c\udf82 Le prochain anniversaire est celui de **${name}** le **${next[1]}** — ${joursStr} !`);
         }
 
         const anniversaireEmbed = new EmbedBuilder()
