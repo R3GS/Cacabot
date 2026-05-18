@@ -1404,13 +1404,15 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     // Pseudo : 20px sous le carré, 70px de hauteur
     ctx.fillStyle = '#1a0a00';
-    ctx.font = 'bold 70px \'CowboyMovie\'';
+    ctx.font = '70px CowboyMovie';
     ctx.textAlign = 'center';
-    ctx.fillText(displayName.toUpperCase(), 977 / 2, 447 + 542 + 20 + 70);
+    ctx.textBaseline = 'top';
+    ctx.fillText(displayName.toUpperCase(), 977 / 2, 447 + 542 + 20);
 
     // Prime : 21px sous le pseudo
-    ctx.font = 'bold 40px \'CowboyMovie\'';
-    ctx.fillText(`PRIME : ${primeAmount}$`, 977 / 2, 447 + 542 + 20 + 70 + 21 + 40);
+    ctx.font = '40px CowboyMovie';
+    const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
+    ctx.fillText(primeClean, 977 / 2, 447 + 542 + 20 + 70 + 21);
 
     return canvas.toBuffer('image/png');
 }
@@ -1776,7 +1778,7 @@ client.on('messageCreate', async (message) => {
 
         // Calculer la prime pour l'image
         function seedRndImg(seed) { let x = Math.sin(seed + 1) * 10000; return x - Math.floor(x); }
-        const primeAmount = (Math.floor(seedRndImg(dateKey * 11) * 99994) + 5).toLocaleString('fr-FR');
+        const primeAmount = Math.floor(seedRndImg(dateKey * 11) * 99994) + 5;
 
         try {
             const avatarUrl = criminel.user.displayAvatarURL({ extension: 'png', size: 512 });
