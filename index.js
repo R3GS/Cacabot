@@ -3042,7 +3042,7 @@ client.on('messageCreate', async (message) => {
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
                 { label: '\ud83c\udf89 Fun', description: 'Interact, Discussion, Anniversaire, Random', value: 'fun' },
-                { label: '\ud83d\udee0 Utilitaire', description: 'Discord, YouTube, Autres', value: 'util' },
+                { label: '\ud83d\udee0 Utilitaire', description: 'Discord, YouTube, Cacabot, Autres', value: 'util' },
             );
 
         const row = new ActionRowBuilder().addComponents(menu);
@@ -4495,7 +4495,7 @@ client.on('interactionCreate', async (interaction) => {
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
                 { label: '\ud83c\udf89 Fun', description: 'Interact, Discussion, Anniversaire, Random', value: 'fun' },
-                { label: '\ud83d\udee0 Utilitaire', description: 'Discord, YouTube, Autres', value: 'util' }
+                { label: '\ud83d\udee0 Utilitaire', description: 'Discord, YouTube, Cacabot, Autres', value: 'util' }
             );
         const row = new ActionRowBuilder().addComponents(menu);
         return interaction.update({ embeds: [embed], components: [row] });
