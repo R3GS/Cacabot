@@ -1435,10 +1435,10 @@ ctx.translate(centerX, primeY - 10);
 ctx.scale(4, 4);
 ctx.font = '13px "CowboyMovie"';
 ctx.fillStyle = '#1a0a00';
-const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
-const pw = ctx.measureText(primeClean).width;
+const primeText = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
+const pw = ctx.measureText(primeText).width;
 ctx.scale(1.4, 1);
-ctx.fillText(primeClean, -(pw / 2) / 1.4, 0);
+ctx.fillText(primeText, -(pw / 2) / 1.4, 0);
 ctx.restore();
 
 // Prime
