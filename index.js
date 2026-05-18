@@ -1403,19 +1403,29 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     const avatar = await loadImage(avatarUrl);
     ctx.drawImage(avatar, 217, 447, 542, 542);
 
-    // Pseudo : 20px sous le carré, 70px de hauteur
+    // Pseudo en gros
     ctx.fillStyle = '#1a0a00';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
 
-    // Tester quelle font est chargée
-    ctx.font = '70px CowboyMovie';
-    ctx.fillText(displayName.toUpperCase(), 977 / 2, 447 + 542 + 20);
+    const pseudoY = 447 + 542 + 20;
+    const primeY = pseudoY + 90 + 21;
 
-    // Prime : 21px sous le pseudo
-    ctx.font = '40px CowboyMovie';
+    // Scale pour agrandir le texte
+    ctx.save();
+    ctx.translate(977 / 2, pseudoY);
+    ctx.scale(5, 5);
+    ctx.font = '14px CowboyMovie';
+    ctx.fillText(displayName.toUpperCase(), 0, 0);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(977 / 2, primeY);
+    ctx.scale(4, 4);
+    ctx.font = '10px CowboyMovie';
     const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
-    ctx.fillText(primeClean, 977 / 2, 447 + 542 + 20 + 70 + 21);
+    ctx.fillText(primeClean, 0, 0);
+    ctx.restore();
 
     return canvas.toBuffer('image/png');
 }
