@@ -1428,8 +1428,8 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     // Prime
     ctx.save();
-    ctx.translate(centerX, primeY - 10);
-    ctx.scale(6, 6);
+    ctx.translate(centerX, primeY - 20);
+    ctx.scale(5, 5);
     ctx.textAlign = 'left';
     ctx.font = '13px "CowboyMovie"';
     const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
