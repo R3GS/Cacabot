@@ -368,7 +368,7 @@ async function sendDailyWanted(guild) {
     const channel = guild.channels.cache.get('720079691041472572');
     if (!channel) return;
     const wantedID = getWantedOfTheDay(dateKey, guild);
-    if (!wantedId) return;
+    if (!wantedID) return;
     await channel.send({ content: '# 🚨 AVIS DE RECHERCHE DU JOUR' });
     await sendWantedMessage(channel, guild, dateKey, wantedID, 'daily', false);
 }
@@ -2108,7 +2108,7 @@ if (response?.needsWanted) {
     const now = new Date();
     const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
     const wantedID = getWantedOfTheDay(dateKey, message.guild);
-    if (!wantedId) return message.reply('Aucun membre éligible trouvé !');
+    if (!wantedID) return message.reply('Aucun membre éligible trouvé !');
     return sendWantedMessage(message, message.guild, dateKey, wantedID, message.author.id, true);
 }
 
