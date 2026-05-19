@@ -1414,7 +1414,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     const centerX = 977 / 2;
     const pseudoY = 447 + 542 + 65;
-    const primeY = pseudoY + 90;
+    const primeY = pseudoY + 110;
 
     ctx.save();
     ctx.translate(centerX, pseudoY + 20);
@@ -1428,7 +1428,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     // Prime
     ctx.save();
-    ctx.translate(centerX, primeY - 50);
+    ctx.translate(centerX, primeY - 20);
     ctx.scale(5, 5);
     ctx.textAlign = 'left';
     ctx.font = '13px "CowboyMovie"';
