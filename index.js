@@ -31,11 +31,14 @@ let messagesSinceLastSave = 0;
 
 async function saveAll() {
     try {
-        await fetch(JSONBIN_URL, {
+        const res = await fetch(JSONBIN_URL, {
             method: 'PUT',
             headers: { 'X-Master-Key': JSONBIN_KEY, 'Content-Type': 'application/json' },
             body: JSON.stringify({ messages: topData.messages, birthdays: birthdayData.birthdays, daily: dailyData, weekly: weeklyData, monthly: monthlyData })
         });
+        const json = await res.json();
+        console.log('💾 Sauvegarde JSONBin:', res.status, json);
+        lastSaveTime = new Date();
     } catch (err) {
         console.error('Erreur sauvegarde JSONBin:', err);
     }
