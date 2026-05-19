@@ -1414,11 +1414,11 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     const centerX = 977 / 2;
     const pseudoY = 447 + 542 + 65;
-    const primeY = pseudoY + 110;
+    const primeY = pseudoY + 100;
 
     ctx.save();
     ctx.translate(centerX, pseudoY + 20);
-    ctx.scale(7, 7);
+    ctx.scale(8, 8);
     ctx.textAlign = 'left';
     ctx.font = '17px "CowboyMovie"';
     const cleanName = displayName.toUpperCase().replace(/[^A-Z0-9+\"\+\*\/\.,; ]/g, '').trim();
