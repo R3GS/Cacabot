@@ -346,7 +346,7 @@ function buildWantedRow(activeTab, authorId) {
 
 async function sendWantedMessage(target, guild, dateKey, wantedID, authorId, isReply = false) {
     const { embed } = getWantedEmbedData(guild, dateKey, wantedID);
-    const prime = const prime = Math.floor(seedRndWanted(dateKey * 19) * 95) + 5
+    const prime = const prime = Math.floor(seedRndWanted(dateKey * 19) * 95) + 5;
     const nom = guild.members.cache.get(wantedID)?.displayName ?? wantedID;
     try {
         const avatarUrl = guild.members.cache.get(wantedID)?.user.displayAvatarURL({ extension: 'png', size: 512 });
@@ -3498,7 +3498,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (tab === 'avis') {
         const { embed } = getWantedEmbedData(interaction.guild, dateKey, wantedID);
-        const prime = const prime = Math.floor(seedRndWanted(dateKey * 19) * 95) + 5
+        const prime = const prime = Math.floor(seedRndWanted(dateKey * 19) * 95) + 5;
         const nom = interaction.guild.members.cache.get(wantedID)?.displayName ?? wantedID;
         try {
             const avatarUrl = interaction.guild.members.cache.get(wantedID)?.user.displayAvatarURL({ extension: 'png', size: 512 });
@@ -4232,7 +4232,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (tab === 'avis') {
         const { embed } = getWantedEmbedData(interaction.guild, dateKey, wantedID);
-        const prime = Math.floor(seedRndWanted(dateKey * 19) * 95) + 5
+        const prime = Math.floor(seedRndWanted(dateKey * 19) * 95) + 5;
         const nom = interaction.guild.members.cache.get(wantedID)?.displayName ?? wantedID;
         try {
             const avatarUrl = interaction.guild.members.cache.get(wantedID)?.user.displayAvatarURL({ extension: 'png', size: 512 });
