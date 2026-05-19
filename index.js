@@ -1428,7 +1428,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     // Prime
     ctx.save();
-    ctx.translate(centerX, primeY - 20);
+    ctx.translate(centerX, primeY - 50);
     ctx.scale(5, 5);
     ctx.textAlign = 'left';
     ctx.font = '13px "CowboyMovie"';
