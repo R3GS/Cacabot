@@ -28,15 +28,17 @@ async function loadAll() {
 
 let lastSaveTime = null;
 let messagesSinceLastSave = 0;
-let criminelResetOffset = 0;
 
 async function saveAll() {
     try {
-        await fetch(JSONBIN_URL, {
+        const res = await fetch(JSONBIN_URL, {
             method: 'PUT',
             headers: { 'X-Master-Key': JSONBIN_KEY, 'Content-Type': 'application/json' },
             body: JSON.stringify({ messages: topData.messages, birthdays: birthdayData.birthdays, daily: dailyData, weekly: weeklyData, monthly: monthlyData })
         });
+        const json = await res.json();
+        console.log('💾 Sauvegarde JSONBin:', res.status, json);
+        lastSaveTime = new Date();
     } catch (err) {
         console.error('Erreur sauvegarde JSONBin:', err);
     }
@@ -88,6 +90,305 @@ const client = new Client({
         GatewayIntentBits.GuildMessageReactions
     ]
 });
+
+// =========================
+//     DONNÉES WANTED
+// =========================
+
+const WANTED_EXCLUDED = ['159985870458322944', '1503495713097519355', '577856714347511828'];
+let wantedOverride = null;
+
+function seedRndWanted(seed) { let x = Math.sin(seed + 1) * 10000; return x - Math.floor(x); }
+
+function getWantedOfTheDay(dateKey, guild) {
+    if (wantedOverride && wantedOverride.dateKey === dateKey) return wantedOverride.userId;
+    const top30 = Object.entries(topData.messages)
+        .filter(([uid]) => !WANTED_EXCLUDED.includes(uid))
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 30)
+        .map(([uid]) => uid)
+        .filter(uid => { const m = guild?.members.cache.get(uid); return m && !m.user.bot; });
+    if (top30.length === 0) return null;
+    return top30[Math.floor(seedRndWanted(dateKey * 7) * top30.length)];
+}
+
+const WANTED_CRIMES = [
+    "A volé le dernier McDo de la file à 23h47 en regardant les gens dans les yeux",
+    "A spoilé la fin d'une série que personne regardait vraiment mais quand même",
+    "A répondu OK à un message de 40 lignes envoyé avec les tripes",
+    "A mangé des chips en réunion vocale sans couper son micro",
+    "A laissé 1% de batterie sans brancher le chargeur. Volontairement.",
+    "A mis du lait AVANT les céréales et l'assume encore",
+    "A dit que Kaamelott c'était 'trop long'",
+    "A liké ses propres messages Discord depuis un compte secondaire",
+    "A soufflé les bougies du gâteau de quelqu'un d'autre",
+    "A recalé un appel et répondu '?' comme si c'était une réponse acceptable",
+    "A laissé un message vocal de 9 minutes pour demander 't'es là ?'",
+    "A regardé une série entière en avance x2 et dit que c'était 'mieux'",
+    "A tapé en minuscules dans un formulaire officiel",
+    "A fait semblant de pas voir quelqu'un dans la rue pendant 400 mètres",
+    "A écrit 'cordialement' à quelqu'un qu'iel déteste",
+    "A squatté le chargeur commun toute une nuit sans remords",
+    "A chanté faux pendant 3h dans un casque sans le savoir",
+    "A installé une toolbar tierce sur l'ordi de quelqu'un pendant une aide 'rapide'",
+    "A recyclé un mème de 2016 en le faisant passer pour nouveau",
+    "A mangé la dernière part de pizza en mode 'je savais pas que c'était la dernière'",
+    "A quitté un vocal Discord sans dire au revoir, à 4 reprises le même jour",
+    "A dit 'je suis en chemin' depuis son canapé. Le trajet était de 40 minutes.",
+    "A ouvert un paquet de chips dans un cinéma. Le film avait commencé depuis 3 minutes.",
+    "A mis ses pieds sur le siège du train d'en face",
+    "A pris la dernière tranche de pain de mie et remis le sachet vide dans le placard",
+    "A répondu 'nn' à une question à laquelle la réponse était clairement 'oui'",
+    "A utilisé Internet Explorer en 2025. Volontairement.",
+    "A acheté une place de concert juste pour être dans la fosse et rester immobile",
+    "A prétendu ne pas avoir reçu un message alors que la double coche bleue était visible",
+    "A mangé quelque chose dans le frigo commun puis replacé le tupperware vide",
+    "A joué de la musique dans un transport en commun sans écouteurs à 8h du matin",
+    "A envoyé un 'lol' en réponse à l'annonce d'une mauvaise nouvelle",
+    "A fait un spoil en disant 'attends c'est la partie où—' juste avant ladite partie",
+    "A tapé très fort au clavier à 3h du mat en colocation",
+    "A suivi quelqu'un sur Instagram, attendu qu'iel suive en retour, puis s'est désabonné",
+    "A accepté les cookies tiers sur l'ordinateur de quelqu'un d'autre",
+    "A chanté l'anniversaire à quelqu'un qui avait demandé à ne pas fêter son anniversaire",
+    "A prétendu ne pas avoir de données mobiles pour éviter d'appeler",
+    "A décrit un film sur 20 minutes à quelqu'un qui venait de le voir",
+    "A fait de l'overscrolling sur le profil de quelqu'un et liké une photo de 2013",
+    "A répondu à un message de groupe 4 jours plus tard comme si la conversation continuait",
+    "A terminé le shampooing de quelqu'un et mis la bouteille vide sous la douche",
+    "A envoyé un vocal de 4 minutes à 2h du mat sur un sujet qui pouvait attendre",
+    "A prétendu connaître un artiste après en avoir écouté UNE chanson",
+    "A tenté de faire passer un test MBTI comme une preuve scientifique",
+    "A préparé un PowerPoint de 47 slides pour expliquer pourquoi ses vacances étaient mieux",
+    "A voulu corriger la prononciation de quelqu'un devant toute une table",
+    "A dit 'c'est pas si grave' à quelqu'un qui pleurait",
+    "A décidé de réarranger toute la cuisine de quelqu'un d'autre 'pour l'optimiser'",
+    "A raconté une blague en ajoutant 'et là normalement vous devez rire'",
+    "A mis fin à une discussion en envoyant juste 'ok' et n'a plus jamais répondu",
+    "A prétendu que ses 4h de sommeil c'était 'suffisant pour lui'",
+    "A commandé une pizza sans demander les préférences des autres présents",
+    "A répondu 'ouais c'est intéressant' à une passion que l'autre évoquait depuis 10 minutes",
+    "A supprimé volontairement un projet musical de <@390539577833684994> pendant une session de travail",
+    "A spoilé à <@738191002187202630> la fin d'une série qu'elle avait mis 3 mois à regarder",
+    "A volé les cartes One Piece de <@1070742213635625050> pendant une soirée et dit 'j'ai rien pris'",
+    "A insulté la mère de <@375746968737021962> dans un débat politique qui avait commencé sur la meilleure pasta",
+    "A envoyé à <@511929490964742144> un shitpost qu'iel avait lui-même envoyé 2 jours avant",
+    "A réveillé <@738191002187202630> à 4h du mat pour lui demander si elle dormait",
+    "A prétendu que <@731078752708067403> avait tort sur un sujet politique alors qu'iel avait parfaitement raison",
+    "A utilisé le compte Discord de <@744217896581857281> pour envoyer des messages cringe dans des serveurs de science",
+    "A crashé la session de dev de <@436218312574107658> en pushant du code non testé directement en prod",
+    "A dit à <@1263920891264499733> que les femboys c'était 'une phase'",
+    "A donné à <@899733709173948487> des spoils sur TADC season 3 alors que personne l'avait vue",
+    "A vendu les cartes One Piece de <@1070742213635625050> pour 3€ sur Vinted",
+    "A prétendu avoir écouté le projet musical de <@975959908702888046> alors que c'était clairement un mensonge",
+    "A convaincu <@375746968737021962> que son analyse politique était fausse avec un argument de mauvaise foi",
+    "A détruit la théorie de <@744217896581857281> sur un tableau blanc devant tout le serveur",
+    "A envoyé à <@390539577833684994> une demande de collab musicale en sachant pertinemment ne rien savoir faire",
+    "A fait croire à <@738191002187202630> que le BPD était 'un truc inventé par TikTok'",
+    "A tenté de débattre de politique avec <@731078752708067403> à 3h du mat et a perdu",
+    "A dit à <@899733709173948487> que FNAF c'était 'pour les enfants'",
+    "A volé les croissants de <@436218312574107658> qui étaient clairement étiquetés",
+    "A revendu la collection de cartes de <@1070742213635625050> pièce par pièce sur un serveur concurrent",
+    "A convaincu tout le serveur que <@390539577833684994> et Feldup étaient la même personne",
+    "A piqué le dernier Monster Energy du frigo commun alors qu'il y avait le prénom de <@436218312574107658> dessus",
+    "A prétendu être <@744217896581857281> dans un autre serveur pour donner de mauvais conseils scientifiques",
+    "A dit à <@1263920891264499733> qu'être gay c'est 'juste une tendance du moment'",
+    "A fait croire à <@899733709173948487> que le nouveau DLC FNAF était sorti alors que non",
+    "A demandé à <@975959908702888046> de faire de la musique 'dans le style de Feldup' exprès pour énerver",
+    "A mis fin à un débat de <@731078752708067403> en envoyant juste 'ok' et n'a plus jamais répondu",
+    "A prétendu que <@390539577833684994> et Feldup étaient en couple pour créer le drama",
+    "A volontairement ignoré le passing de <@390539577833684994> pour la comparer à Feldup pendant 20 minutes",
+    "A demandé à <@375746968737021962> une analyse politique complète à 3h du mat puis a dit 'ok merci' et s'est déco",
+];
+
+const WANTED_PREUVES = [
+    "Des traces de doigts gras retrouvées sur un écran de téléphone non réclamé",
+    "Un reçu de kebab daté de la nuit du crime avec une commande 'sans oignons' suspecte",
+    "Un message vocal de 7 minutes retrouvé supprimé, partiellement récupéré",
+    "Un historique de recherche Google contenant 'comment effacer ses traces' à 3h14",
+    "Un emoji 💀 envoyé exactement 2 minutes avant les faits dans un groupe Discord",
+    "Des traces de Nutella sur un clavier qui n'appartient pas au suspect",
+    "Une commande Uber Eats passée depuis une adresse inconnue à 4h23 du matin",
+    "Des screenshots pris en mode incognito retrouvés par synchronisation automatique",
+    "Un like accidentel sur une photo de 2018 juste avant le crime",
+    "Un post-it avec juste 'fait' écrit dessus et une date correspondante",
+    "Une playlist Spotify intitulée 'ambiance neutre rien à voir' créée le jour J",
+    "Un message 'je suis en chemin' envoyé depuis les coordonnées GPS du domicile",
+    "Des traces de Monster Energy sur la scène, marque non consommée habituellement",
+    "Un ticket de caisse Lidl avec un article 'câble HDMI' acheté sans raison apparente",
+    "Un changement de statut Discord à 'Ne pas déranger' 3 minutes avant les faits",
+    "Une photo floue prise accidentellement et sauvegardée automatiquement dans le cloud",
+    "Un appel entrant ignoré de quelqu'un qui 'ne savait rien'",
+    "Une chaussette orpheline retrouvée sur les lieux sans explication plausible",
+    "Un vocal Discord mal coupé dans lequel on entend 'ch'uis sûr.e que personne a vu'",
+    "Un fichier renommé '(version finale) (vraiment finale) (ne pas ouvrir)' daté du jour J",
+    "Un 'vu' affiché à 2h17 suivi d'aucune réponse pendant 36 heures",
+    "Un boîtier de carte One Piece retrouvé vide derrière le canapé",
+    "<@390539577833684994> a confirmé avoir entendu quelque chose d'inhabituel ce soir-là",
+    "<@744217896581857281> a retrouvé un schéma connexe dans ses notes sur un post-it illisible",
+    "<@511929490964742144> a posté un shitpost cryptique exactement 4 minutes après les faits",
+    "<@375746968737021962> a analysé le contexte politique de l'événement. Ses conclusions sont troublantes.",
+    "<@738191002187202630> a été aperçu.e en train de sourire au moment des faits sans raison apparente",
+    "<@899733709173948487> a trouvé des similarités avec un pattern connu de la base de données FNAF",
+    "<@436218312574107658> a retrouvé dans ses archives un fichier portant un nom incriminant",
+    "<@731078752708067403> a lancé un débat politique exactement une heure avant, possible diversion",
+    "<@1070742213635625050> a envoyé un message depuis la Corée avec un décalage horaire suspect",
+    "<@975959908702888046> a validé la scène d'un regard sans faire de commentaire",
+    "<@1263920891264499733> a simplement regardé et dit 'gg' au moment des faits",
+    "<@436218312574107658> a trouvé un bug dans le système de surveillance pile ce soir-là",
+    "Une boîte de cartes One Piece retrouvée ouverte et partiellement vidée chez le suspect",
+    "Un historique d'écoute Spotify révélant une obsession pour la playlist de <@390539577833684994>",
+];
+
+const WANTED_LIEUX = [
+    "Le salon vocal 'général 1' de Regaïa un lundi soir",
+    "Un Carrefour Market à 19h52 un mercredi",
+    "Les toilettes d'un McDo",
+    "Un bus de nuit ligne 38, dernière rame",
+    "Le salon shitpost de Regaïa à 2h du matin",
+    "Le parking d'un Lidl sous la pluie",
+    "Une salle d'attente de médecin avec une télé qui diffuse BFMTV",
+    "Un kebab de quartier à 20 minutes de la fermeture",
+    "Les tréfonds d'un subreddit abandonné en 2019",
+    "Un groupe WhatsApp familial créé pour Noël et jamais quitté",
+    "L'arrière d'un Monoprix à l'heure de la réduction des invendus",
+    "Un vocal Discord vide censé être 'pour bosser ensemble'",
+    "Une file d'attente pour un concert sold-out",
+    "La section commentaires d'une vidéo YouTube de 2011",
+    "Un Disneyland Paris en pleine canicule",
+    "Un Ikea un samedi après-midi",
+    "Un aéroport low-cost à 5h du matin",
+    "Le rayon surgelés d'un Leclerc à 16h37",
+    "Une file d'attente de la CAF",
+    "Un festival en pleine boue",
+    "Le salon des Modos de Regaïa",
+    "Un escape game avec des inconnus",
+    "Un cinéma UGC lors d'une avant-première",
+    "Chez <@436218312574107658>",
+    "Une foire aux cartes à collectionner dans un gymnase de banlieue",
+    "Les DM d'un serveur Discord de fans de TCG One Piece",
+    "Un festival de musique indé sous un ciel menaçant",
+    "Le salon général de Regaïa à une heure où tout le monde dormait sauf deux personnes",
+];
+
+const WANTED_STATUTS = [
+    "🔴 En fuite active",
+    "🟠 Recherché.e activement",
+    "🟡 Sous surveillance rapprochée",
+    "⚫ Dangereusement en liberté",
+    "🔵 Nie tout en bloc avec conviction",
+    "🟣 A l'air innocent.e. Ne pas se fier aux apparences.",
+    "🟤 A tenté de corrompre un témoin",
+    "🔴 Récidiviste connu.e du tribunal de Regaïa",
+    "🟠 A fui au dernier moment connu vers le Wokistan",
+    "🟡 Coopère partiellement avec les enquêteurs",
+];
+
+function getWantedEmbedData(guild, dateKey, wantedID) {
+    // Exclure les crimes qui mentionnent le criminel lui-même
+    const pool = WANTED_CRIMES.filter(c => !c.includes(`<@${wantedID}>`));
+    const crime = pool[Math.floor(seedRndWanted(dateKey * 3) * pool.length)];
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+    const embed = new EmbedBuilder()
+        .setColor(0x8b0000)
+        .setTitle('🚨 CRIMINEL(LE) DU JOUR')
+        .setDescription(`<@${wantedID}> est activement recherché.e pour la raison suivante :\n\n**Crime :** ${crime}`)
+        .setFooter({ text: dateStr });
+    return { embed, crime };
+}
+
+function getPreuvesEmbed(guild, dateKey, wantedID) {
+    const pool = WANTED_PREUVES.filter(p => !p.includes(`<@${wantedID}>`));
+    const idxs = [];
+    while (idxs.length < 3) {
+        const i = Math.floor(seedRndWanted((dateKey * (idxs.length + 11))) * pool.length);
+        if (!idxs.includes(i)) idxs.push(i);
+    }
+    return new EmbedBuilder()
+        .setColor(0x8b0000)
+        .setTitle('🔍 Preuves accablantes')
+        .setDescription(`**Preuve n°1 :** ${pool[idxs[0]]}\n\n**Preuve n°2 :** ${pool[idxs[1]]}\n\n**Preuve n°3 :** ${pool[idxs[2]]}`)
+        .setFooter({ text: 'Ces preuves ont été validées par le tribunal de Regaïa.' });
+}
+
+function getAffaireEmbed(guild, dateKey, wantedID) {
+    const top30 = Object.entries(topData.messages)
+        .filter(([uid]) => !WANTED_EXCLUDED.includes(uid) && uid !== wantedID)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 30)
+        .map(([uid]) => uid)
+        .filter(uid => { const m = guild?.members.cache.get(uid); return m && !m.user.bot; });
+    const prime = Math.floor(seedRndWanted(dateKey * 19) * 95) + 5;
+    const lieu = WANTED_LIEUX[Math.floor(seedRndWanted(dateKey * 23) * WANTED_LIEUX.length)];
+    const statut = WANTED_STATUTS[Math.floor(seedRndWanted(dateKey * 29) * WANTED_STATUTS.length)];
+    const minDate = new Date('2014-01-01').getTime();
+    const crimeDate = new Date(minDate + Math.floor(seedRndWanted(dateKey * 31) * (Date.now() - minDate))).toLocaleDateString('fr-FR');
+    const temoinId = top30.length > 0 ? top30[Math.floor(seedRndWanted(dateKey * 37) * top30.length)] : null;
+    return new EmbedBuilder()
+        .setColor(0x8b0000)
+        .setTitle('📋 Avancement de l\'affaire')
+        .addFields(
+            { name: '💰 Prime', value: `${prime.toLocaleString('fr-FR')}$`, inline: true },
+            { name: '📅 Crime commis le', value: crimeDate, inline: true },
+            { name: '\u200b', value: '\u200b', inline: true },
+            { name: '📍 Lieu du crime', value: lieu, inline: true },
+            { name: 'Statut', value: statut, inline: true },
+            { name: '\u200b', value: '\u200b', inline: true },
+            { name: '👁️ Témoin principal', value: temoinId ? `<@${temoinId}>` : 'Anonyme', inline: false }
+        )
+        .setFooter({ text: 'Dossier classifié — Tribunal de Regaïa' });
+}
+
+function buildWantedRow(activeTab, authorId) {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`wanted_tab_avis_${authorId}`).setLabel('📢 Avis de recherche').setStyle(activeTab === 'avis' ? ButtonStyle.Danger : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`wanted_tab_preuves_${authorId}`).setLabel('🔍 Preuves').setStyle(activeTab === 'preuves' ? ButtonStyle.Danger : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`wanted_tab_affaire_${authorId}`).setLabel('📋 Affaire').setStyle(activeTab === 'affaire' ? ButtonStyle.Danger : ButtonStyle.Secondary)
+    );
+}
+
+async function sendWantedMessage(target, guild, dateKey, wantedID, authorId, isReply = false) {
+    const { embed } = getWantedEmbedData(guild, dateKey, wantedID);
+    const prime = Math.floor(seedRndWanted(dateKey * 19) * 95) + 5;
+    const nom = guild.members.cache.get(wantedID)?.displayName ?? wantedID;
+    try {
+        const avatarUrl = guild.members.cache.get(wantedID)?.user.displayAvatarURL({ extension: 'png', size: 512 });
+        const imageBuffer = await generateWantedImage(avatarUrl, nom, prime);
+        embed.setImage('attachment://wanted.png');
+        const payload = { embeds: [embed], files: [{ attachment: imageBuffer, name: 'wanted.png' }], components: [buildWantedRow('avis', authorId)] };
+        return isReply ? target.reply(payload) : target.send(payload);
+    } catch (e) {
+        embed.setThumbnail(guild.members.cache.get(wantedID)?.user.displayAvatarURL({ dynamic: true }));
+        const payload = { embeds: [embed], components: [buildWantedRow('avis', authorId)] };
+        return isReply ? target.reply(payload) : target.send(payload);
+    }
+}
+
+async function sendDailyWanted(guild) {
+    const now = new Date();
+    const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+    if (wantedOverride && wantedOverride.dateKey !== dateKey) wantedOverride = null;
+    const channel = guild.channels.cache.get('720079691041472572');
+    if (!channel) return;
+    const wantedID = getWantedOfTheDay(dateKey, guild);
+    if (!wantedID) return;
+    await channel.send({ content: '# 🚨 AVIS DE RECHERCHE DU JOUR' });
+    await sendWantedMessage(channel, guild, dateKey, wantedID, 'daily', false);
+}
+
+function scheduleWanted(guild) {
+    const now = new Date();
+    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const next10h = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    next10h.setHours(10, 0, 0, 0);
+    if (next10h <= parisNow) next10h.setDate(next10h.getDate() + 1);
+    const delay = (next10h - parisNow) + (now - parisNow);
+    setTimeout(async () => {
+        await sendDailyWanted(guild);
+        setInterval(() => sendDailyWanted(guild), 24 * 60 * 60 * 1000);
+    }, delay);
+    console.log(`⏰ Prochain wanted dans ${Math.floor(delay/3600000)}h${Math.floor((delay%3600000)/60000)}m`);
+}
 
 // =========================
 //     FONCTION PRINCIPALE
@@ -253,23 +554,11 @@ function getResponse(raw) {
     //         !DIE
     // =========================
 
-    if (command === "!criminel") {
-        if (raw.trim().split(/\s+/)[1] === "reset") return { needsCriminelReset: true };
-        return { needsCriminel: true };
-    }
-
-    if (command === "!cry") {
-        return { needsCry: true };
-    }
-
-    if (command === "!palaref") {
-        return { needsPalaref: true };
-    }
-
-    if (command === "!criminel") {
-        if (raw.trim().split(/\s+/)[1] === "reset") return { needsCriminelReset: true };
-        return { needsCriminel: true };
-    }
+    if (command === "!wanted") {
+    const args = raw.trim().split(/\s+/);
+    if (args[1]?.toLowerCase() === 'set') return { needsWantedSet: true };
+    return { needsWanted: true };
+}
 
     if (command === "!cry") {
         return { needsCry: true };
@@ -1407,6 +1696,11 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     const avatar = await loadImage(avatarUrl);
     ctx.drawImage(avatar, 217, 447, 542, 542);
 
+    // Après ctx.drawImage(avatar, 217, 447, 542, 542);
+
+    const frame = await loadImage('./wanted-cadre.png'); // ton image de cadre
+    ctx.drawImage(frame, 0, 0, 977, 1273);
+
     // Pseudo
     ctx.fillStyle = '#1a0a00';
     ctx.textAlign = 'center';
@@ -1414,14 +1708,13 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     const centerX = 977 / 2;
     const pseudoY = 447 + 542 + 65;
-    const primeY = pseudoY + 90;
+    const primeY = pseudoY + 100;
 
     ctx.save();
-    ctx.translate(centerX, pseudoY);
-    ctx.scale(5, 5);
+    ctx.translate(centerX, pseudoY + 20);
+    ctx.scale(8, 8);
     ctx.textAlign = 'left';
     ctx.font = '17px "CowboyMovie"';
-    ctx.letterSpacing = '3px';
     const cleanName = displayName.toUpperCase().replace(/[^A-Z0-9+\"\+\*\/\.,; ]/g, '').trim();
     const tw = ctx.measureText(cleanName).width;
     ctx.fillText(cleanName, -(tw / 2), 0);
@@ -1429,11 +1722,10 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     // Prime
     ctx.save();
-    ctx.translate(centerX, primeY);
-    ctx.scale(4, 4);
+    ctx.translate(centerX, primeY - 20);
+    ctx.scale(5, 5);
     ctx.textAlign = 'left';
     ctx.font = '13px "CowboyMovie"';
-    ctx.letterSpacing = '3px';
     const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
     const pw = ctx.measureText(primeClean).width;
     ctx.fillText(primeClean, -(pw / 2), 0);
@@ -1767,63 +2059,47 @@ client.on('messageCreate', async (message) => {
 
 
 
-    // !criminel
-    if (response?.needsCriminel) {
-        const crimes = ["A mangé la dernière part de pizza sans demander", "A spoilé la fin d'une série en mode 'ah t'as pas vu ?'", "A dit que One Piece c'était trop long", "A mis le volume à 100% dans les transports sans écouteurs", "A répondu OK à un message de 40 lignes", "A liké ses propres messages", "A fait semblant de pas voir les notifications", "A dit 'je suis en chemin' depuis son canapé", "A ouvert un paquet de chips en réunion", "A laissé 1% de batterie sans brancher le chargeur", "A snapchatté pendant un film au cinéma", "A mis des points à la fin de ses SMS", "A utilisé Internet Explorer en 2024", "A dit 'on se fait ça bientôt' sans jamais rappeler", "A mâché la bouche ouverte en public", "A demandé 't'es où ?' sans prévenir qu'il arrive", "A recyclé un mème de 2016 en le faisant passer pour nouveau", "A soufflé les bougies d'un gâteau pas pour lui", "A recalé un appel et envoyé '?', comme si c'était une réponse acceptable", "A menti sur sa localisation pendant 45 minutes", "A volé le chargeur commun sans demander", "A envoyé un fichier PDF scanné de travers", "A dit 'c'est bon j'ai compris' sans avoir compris", "A quitté un vocal Discord sans dire au revoir", "A laissé un message vocal de 7 minutes pour dire juste 't'es là ?'", "A tapé en minuscules dans un document officiel", "A mangé les céréales de quelqu'un d'autre et remis la boîte vide", "A mis la musique à fond à 8h du matin un dimanche", "A squatté le chargeur commun toute la nuit", "A dit que Kaamelott c'était 'pas pour lui'", "A spoilé FNAF à quelqu'un qui commençait", "A affirmé avoir la ref alors qu'il l'avait pas", "A laissé les lumières allumées en partant", "A utilisé 'lol' en réponse à un message sérieux", "A oublié de rappeler après avoir dit 'je te rappelle'", "A pris la dernière tranche de pain de mie et remis le sachet vide", "A chanté faux sur une chanson que personne avait lancée", "A mis les pieds sur le siège d'en face dans le train", "A installé une barre de recherche tierce sur l'ordi de quelqu'un", "A cliqué sur 'rappeler plus tard' 47 fois pour une mise à jour"]
-
-        // Seed basé sur la date pour avoir le même criminel toute la journée
-        const now = new Date();
-        const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-        const members = message.guild.members.cache.filter(m => !m.user.bot);
-        const membersArray = [...members.values()];
-        if (membersArray.length === 0) return message.reply('Aucun membre trouvé !');
-
-        const memberSeed = (dateKey + criminelResetOffset) % membersArray.length;
-        const crimeSeed = (dateKey + criminelResetOffset) % crimes.length;
-        const criminel = membersArray[memberSeed];
-        const crime = crimes[crimeSeed];
-
-        const dateStr = now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-
-        const preuvesBtn = new ButtonBuilder()
-            .setCustomId(`criminel_preuves_${dateKey}`)
-            .setLabel('\ud83d\udd0d Voir les preuves')
-            .setStyle(ButtonStyle.Danger);
-        const avancementBtn = new ButtonBuilder()
-            .setCustomId(`criminel_avancement_${dateKey}`)
-            .setLabel('\ud83d\udccb Avancement de l\'affaire')
-            .setStyle(ButtonStyle.Secondary);
-        const row = new ActionRowBuilder().addComponents(preuvesBtn, avancementBtn);
-
-        const embed = new EmbedBuilder()
-            .setColor(0x8b0000)
-            .setTitle('\ud83d\udea8 CRIMINEL DU JOUR')
-            .setDescription(`**${criminel.displayName}** est le criminel du jour.\n\n**Crime :** ${crime}`)
-            .setFooter({ text: `\ud83d\udcc5 ${dateStr} \u2022 Les preuves sont accablantes.` });
-
-        // Calculer la prime pour l'image
-        function seedRndImg(seed) { let x = Math.sin(seed + 1) * 10000; return x - Math.floor(x); }
-        const primeAmount = Math.floor(seedRndImg(dateKey * 11) * 99994) + 5;
-
-        try {
-            const avatarUrl = criminel.user.displayAvatarURL({ extension: 'png', size: 512 });
-            const imageBuffer = await generateWantedImage(avatarUrl, criminel.displayName, primeAmount);
-            const attachment = { attachment: imageBuffer, name: 'wanted.png' };
-            embed.setImage('attachment://wanted.png');
-            return message.reply({ embeds: [embed], files: [attachment], components: [row] });
-        } catch (e) {
-            console.error('Erreur Canvas:', e);
-            embed.setThumbnail(criminel.user.displayAvatarURL({ dynamic: true, size: 256 }));
-            return message.reply({ embeds: [embed], components: [row] });
+    // !wanted
+    if (response?.needsWantedSet) {
+    if (message.author.id !== '436218312574107658') return message.reply("Tu n'es pas autorisé.e à faire cette commande.");
+    const now = new Date();
+    const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+    let targetId = null;
+    const mentionned = message.mentions.users.first();
+    if (mentionned) {
+        targetId = mentionned.id;
+    } else {
+        const query = message.content.trim().split(/\s+/).slice(2).join(' ');
+        if (query) {
+            if (/^\d{17,19}$/.test(query)) {
+                targetId = query;
+            } else {
+                const result = findMemberByName(message.guild, query);
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                        if (WANTED_EXCLUDED.includes(user.id)) return message.reply('Ce membre ne peut pas être désigné.');
+                        wantedOverride = { userId: user.id, dateKey };
+                        message.reply(`🚨 Criminel.le du jour forcé.e : **${message.guild.members.cache.get(user.id)?.displayName ?? user.username}** !`);
+                    });
+                    return;
+                }
+                if (result.found) targetId = result.found.user.id;
+            }
         }
     }
+    if (!targetId) return message.reply('Membre introuvable !');
+    if (WANTED_EXCLUDED.includes(targetId)) return message.reply('Ce membre ne peut pas être désigné.');
+    wantedOverride = { userId: targetId, dateKey };
+    return message.reply(`🚨 Criminel.le du jour forcé.e : **${message.guild.members.cache.get(targetId)?.displayName ?? targetId}** !`);
+}
 
-    // !criminel reset
-    if (response?.needsCriminelReset) {
-        if (message.author.id !== '436218312574107658') return message.reply("Tu n'es pas autoris\u00e9(e) \u00e0 faire cette commande.");
-        criminelResetOffset += Math.floor(Math.random() * 1000) + 1;
-        return message.reply('\ud83d\udd04 Nouveau criminel du jour g\u00e9n\u00e9r\u00e9 ! Fais `!criminel` pour voir.');
-    }
+if (response?.needsWanted) {
+    const now = new Date();
+    const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+    const wantedID = getWantedOfTheDay(dateKey, message.guild);
+    if (!wantedID) return message.reply('Aucun membre éligible trouvé !');
+    return sendWantedMessage(message, message.guild, dateKey, wantedID, message.author.id, true);
+}
 
     // !cry
     if (response?.needsCry) {
@@ -2957,8 +3233,9 @@ client.on('messageCreate', async (message) => {
                 { name: '\ud83d\udcbe !last', value: 'Afficher la date et l\'heure de la derni\u00e8re sauvegarde JSONBin.', inline: false },
                 { name: '\ud83d\udd2e !horoscope [ID_salon]', value: 'Forcer l\'envoi de l\'horoscope dans un salon sp\u00e9cifique.', inline: false },
                 { name: '\ud83d\udcbe !save', value: 'Forcer une sauvegarde imm\u00e9diate sur JSONBin.', inline: false },
-                { name: '\ud83d\udd04 !criminel reset', value: 'G\u00e9n\u00e9rer un nouveau criminel du jour.', inline: false },
-                { name: '\u23f0 !rappel [ID] Xmin/h [message]', value: 'Envoyer un rappel \u00e0 un membre sp\u00e9cifique par son ID.', inline: false }
+                { name: '\ud83d\udd04 !wanted reset', value: 'G\u00e9n\u00e9rer un nouveau criminel du jour.', inline: false },
+                { name: '\u23f0 !rappel [ID] Xmin/h [message]', value: 'Envoyer un rappel \u00e0 un membre sp\u00e9cifique par son ID.', inline: false },
+                { name: '🚨 !wanted set @Membre/pseudo/ID', value: 'Forcer le.a criminel.le du jour.', inline: false }
             );
         return message.reply({ embeds: [embed] });
     }
@@ -3195,68 +3472,38 @@ client.on('interactionCreate', async (interaction) => {
     // BOUTONS CRIMINEL
     // =========================
 
-    if (interaction.isButton() && interaction.customId.startsWith('criminel_preuves_')) {
-        const dateKey = parseInt(interaction.customId.split('_')[2]);
+    if (interaction.isButton() && interaction.customId.startsWith('wanted_tab_')) {
+    const parts = interaction.customId.split('_');
+    const tab = parts[2];
+    const authorId = parts[3];
 
-        const preuves = ["Des empreintes digitales retrouvées sur le frigo communautaire", "Un reçu de kebab trouvé sur les lieux", "Une chaussette orpheline abandonnée en évidence", "Un témoin affirme avoir entendu quelqu'un dire 'c'est pas moi'", "Des miettes de chips retrouvées sur le canapé", "Une notification Discord non lue datant de 3 semaines", "Un historique de recherche Google particulièrement suspect", "Un emoji 💀 envoyé exactement 2 minutes avant les faits", "Un message vocal de 8 minutes retrouvé sur les lieux", "Des traces de Nutella sur le clavier", "Un onglet YouTube en pause depuis 47 minutes", "Une commande Uber Eats passée à 3h47 du matin", "Des screenshots pris en mode incognito retrouvés par erreur", "Un like accidentel sur une photo de 2019 comme alibi", "Un fil de cheveux dans le chargeur partagé", "Une playlist Spotify intitulée 'pas suspect du tout'", "Un message 'je suis en chemin' envoyé depuis le canapé", "Des traces de Monster Energy sur la scène de crime", "Un post-it avec juste '??' écrit dessus", "Une photo floue prise à 2h du mat sans explication"];
-
-        function seedRnd(seed) { let x = Math.sin(seed + 1) * 10000; return x - Math.floor(x); }
-
-        const p1 = preuves[Math.floor(seedRnd(dateKey * 3) * preuves.length)];
-        const p2 = preuves[Math.floor(seedRnd(dateKey * 5) * preuves.length)];
-        const p3 = preuves[Math.floor(seedRnd(dateKey * 7) * preuves.length)];
-
-        const embed = new EmbedBuilder()
-            .setColor(0x8b0000)
-            .setTitle('\ud83d\udd0d Preuves accablantes')
-            .setDescription(`**Preuve n°1 :** ${p1}\n\n**Preuve n°2 :** ${p2}\n\n**Preuve n°3 :** ${p3}`)
-            .setFooter({ text: 'Ces preuves ont été validées par le tribunal de Regaïa.' });
-
-        return interaction.reply({ embeds: [embed], ephemeral: false });
+    if (authorId !== 'daily' && interaction.user.id !== authorId) {
+        return interaction.reply({ content: 'Pour consulter les menus de l\'avis de recherche, utilise `!wanted` !', ephemeral: true });
     }
 
-    if (interaction.isButton() && interaction.customId.startsWith('criminel_avancement_')) {
-        const dateKey = parseInt(interaction.customId.split('_')[2]);
+    const now = new Date();
+    const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+    const wantedID = getWantedOfTheDay(dateKey, interaction.guild);
 
-        const lieux = ["le salon Discord", "la cuisine commune", "un Carrefour Market à 23h", "les toilettes du McDo", "un vocal Discord vide", "le salon Shitpost", "le parking d'un Lidl", "une salle d'attente", "un bus de nuit", "un kebab douteux", "la salle de bain à 3h du mat", "un fil Twitter supprimé", "les tréfonds d'un subreddit abandonné", "un groupe WhatsApp familial", "l'arrière d'un Monoprix"];
-        const statuts = ["🔴 En fuite", "🟠 Recherché activement", "🟡 Sous surveillance", "⚫ Dangereusement libre", "🔵 Nie tout en bloc", "🟣 A l'air innocent(e). Ne pas se fier aux apparences."];
-
-        function seedRnd2(seed) { let x = Math.sin(seed + 1) * 10000; return x - Math.floor(x); }
-
-        const prime = Math.floor(seedRnd2(dateKey * 11) * 99994) + 5;
-        const lieu = lieux[Math.floor(seedRnd2(dateKey * 13) * lieux.length)];
-        const statut = statuts[Math.floor(seedRnd2(dateKey * 17) * statuts.length)];
-
-        // Date du crime entre 2014 et aujourd'hui
-        const minDate = new Date('2014-01-01').getTime();
-        const maxDate = Date.now();
-        const crimeTimestamp = minDate + Math.floor(seedRnd2(dateKey * 19) * (maxDate - minDate));
-        const crimeDate = new Date(crimeTimestamp).toLocaleDateString('fr-FR');
-
-        // Témoin : membre aléatoire différent du criminel
-        const members = interaction.guild.members.cache.filter(m => !m.user.bot);
-        const membersArray = [...members.values()];
-        const criminelIdx = dateKey % membersArray.length;
-        let temoinIdx = Math.floor(seedRnd2(dateKey * 23) * membersArray.length);
-        if (temoinIdx === criminelIdx) temoinIdx = (temoinIdx + 1) % membersArray.length;
-        const temoin = membersArray[temoinIdx];
-
-        const embed = new EmbedBuilder()
-            .setColor(0x8b0000)
-            .setTitle('\ud83d\udccb Avancement de l\'affaire')
-            .addFields(
-                { name: '\ud83d\udcb0 Prime', value: `${prime.toLocaleString('fr-FR')}$`, inline: true },
-                { name: '\ud83d\udcc5 Crime commis le', value: crimeDate, inline: true },
-                { name: '\u200b', value: '\u200b', inline: true },
-                { name: '\ud83d\udccd Lieu du crime', value: lieu, inline: true },
-                { name: '\ud83d\udd34 Statut', value: statut, inline: true },
-                { name: '\u200b', value: '\u200b', inline: true },
-                { name: '\ud83d\udc41\ufe0f Témoin principal', value: temoin ? temoin.displayName : 'Anonyme', inline: false }
-            )
-            .setFooter({ text: 'Dossier classifié — Tribunal de Regaïa' });
-
-        return interaction.reply({ embeds: [embed], ephemeral: false });
+    if (tab === 'avis') {
+        const { embed } = getWantedEmbedData(interaction.guild, dateKey, wantedID);
+        const prime = Math.floor(seedRndWanted(dateKey * 19) * 95) + 5;
+        const nom = interaction.guild.members.cache.get(wantedID)?.displayName ?? wantedID;
+        try {
+            const avatarUrl = interaction.guild.members.cache.get(wantedID)?.user.displayAvatarURL({ extension: 'png', size: 512 });
+            const imageBuffer = await generateWantedImage(avatarUrl, nom, prime);
+            embed.setImage('attachment://wanted.png');
+            return interaction.update({ embeds: [embed], files: [{ attachment: imageBuffer, name: 'wanted.png' }], components: [buildWantedRow('avis', authorId)] });
+        } catch (e) {
+            embed.setThumbnail(interaction.guild.members.cache.get(wantedID)?.user.displayAvatarURL({ dynamic: true }));
+            return interaction.update({ embeds: [embed], components: [buildWantedRow('avis', authorId)] });
+        }
+    } else if (tab === 'preuves') {
+        return interaction.update({ embeds: [getPreuvesEmbed(interaction.guild, dateKey, wantedID)], components: [buildWantedRow('preuves', authorId)] });
+    } else if (tab === 'affaire') {
+        return interaction.update({ embeds: [getAffaireEmbed(interaction.guild, dateKey, wantedID)], components: [buildWantedRow('affaire', authorId)] });
     }
+}
 
     // =========================
     // BOUTON CRY
@@ -3959,68 +4206,38 @@ client.on('interactionCreate', async (interaction) => {
     // BOUTONS CRIMINEL
     // =========================
 
-    if (interaction.isButton() && interaction.customId.startsWith('criminel_preuves_')) {
-        const dateKey = parseInt(interaction.customId.split('_')[2]);
+    if (interaction.isButton() && interaction.customId.startsWith('wanted_tab_')) {
+    const parts = interaction.customId.split('_');
+    const tab = parts[2];
+    const authorId = parts[3];
 
-        const preuves = ["Des empreintes digitales retrouvées sur le frigo communautaire", "Un reçu de kebab trouvé sur les lieux", "Une chaussette orpheline abandonnée en évidence", "Un témoin affirme avoir entendu quelqu'un dire 'c'est pas moi'", "Des miettes de chips retrouvées sur le canapé", "Une notification Discord non lue datant de 3 semaines", "Un historique de recherche Google particulièrement suspect", "Un emoji 💀 envoyé exactement 2 minutes avant les faits", "Un message vocal de 8 minutes retrouvé sur les lieux", "Des traces de Nutella sur le clavier", "Un onglet YouTube en pause depuis 47 minutes", "Une commande Uber Eats passée à 3h47 du matin", "Des screenshots pris en mode incognito retrouvés par erreur", "Un like accidentel sur une photo de 2019 comme alibi", "Un fil de cheveux dans le chargeur partagé", "Une playlist Spotify intitulée 'pas suspect du tout'", "Un message 'je suis en chemin' envoyé depuis le canapé", "Des traces de Monster Energy sur la scène de crime", "Un post-it avec juste '??' écrit dessus", "Une photo floue prise à 2h du mat sans explication"];
-
-        function seedRnd(seed) { let x = Math.sin(seed + 1) * 10000; return x - Math.floor(x); }
-
-        const p1 = preuves[Math.floor(seedRnd(dateKey * 3) * preuves.length)];
-        const p2 = preuves[Math.floor(seedRnd(dateKey * 5) * preuves.length)];
-        const p3 = preuves[Math.floor(seedRnd(dateKey * 7) * preuves.length)];
-
-        const embed = new EmbedBuilder()
-            .setColor(0x8b0000)
-            .setTitle('\ud83d\udd0d Preuves accablantes')
-            .setDescription(`**Preuve n°1 :** ${p1}\n\n**Preuve n°2 :** ${p2}\n\n**Preuve n°3 :** ${p3}`)
-            .setFooter({ text: 'Ces preuves ont été validées par le tribunal de Regaïa.' });
-
-        return interaction.reply({ embeds: [embed], ephemeral: false });
+    if (authorId !== 'daily' && interaction.user.id !== authorId) {
+        return interaction.reply({ content: 'Pour consulter les menus de l\'avis de recherche, utilise `!wanted` !', ephemeral: true });
     }
 
-    if (interaction.isButton() && interaction.customId.startsWith('criminel_avancement_')) {
-        const dateKey = parseInt(interaction.customId.split('_')[2]);
+    const now = new Date();
+    const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+    const wantedID = getWantedOfTheDay(dateKey, interaction.guild);
 
-        const lieux = ["le salon Discord", "la cuisine commune", "un Carrefour Market à 23h", "les toilettes du McDo", "un vocal Discord vide", "le salon Shitpost", "le parking d'un Lidl", "une salle d'attente", "un bus de nuit", "un kebab douteux", "la salle de bain à 3h du mat", "un fil Twitter supprimé", "les tréfonds d'un subreddit abandonné", "un groupe WhatsApp familial", "l'arrière d'un Monoprix"];
-        const statuts = ["🔴 En fuite", "🟠 Recherché activement", "🟡 Sous surveillance", "⚫ Dangereusement libre", "🔵 Nie tout en bloc", "🟣 A l'air innocent(e). Ne pas se fier aux apparences."];
-
-        function seedRnd2(seed) { let x = Math.sin(seed + 1) * 10000; return x - Math.floor(x); }
-
-        const prime = Math.floor(seedRnd2(dateKey * 11) * 99994) + 5;
-        const lieu = lieux[Math.floor(seedRnd2(dateKey * 13) * lieux.length)];
-        const statut = statuts[Math.floor(seedRnd2(dateKey * 17) * statuts.length)];
-
-        // Date du crime entre 2014 et aujourd'hui
-        const minDate = new Date('2014-01-01').getTime();
-        const maxDate = Date.now();
-        const crimeTimestamp = minDate + Math.floor(seedRnd2(dateKey * 19) * (maxDate - minDate));
-        const crimeDate = new Date(crimeTimestamp).toLocaleDateString('fr-FR');
-
-        // Témoin : membre aléatoire différent du criminel
-        const members = interaction.guild.members.cache.filter(m => !m.user.bot);
-        const membersArray = [...members.values()];
-        const criminelIdx = dateKey % membersArray.length;
-        let temoinIdx = Math.floor(seedRnd2(dateKey * 23) * membersArray.length);
-        if (temoinIdx === criminelIdx) temoinIdx = (temoinIdx + 1) % membersArray.length;
-        const temoin = membersArray[temoinIdx];
-
-        const embed = new EmbedBuilder()
-            .setColor(0x8b0000)
-            .setTitle('\ud83d\udccb Avancement de l\'affaire')
-            .addFields(
-                { name: '\ud83d\udcb0 Prime', value: `${prime.toLocaleString('fr-FR')}$`, inline: true },
-                { name: '\ud83d\udcc5 Crime commis le', value: crimeDate, inline: true },
-                { name: '\u200b', value: '\u200b', inline: true },
-                { name: '\ud83d\udccd Lieu du crime', value: lieu, inline: true },
-                { name: '\ud83d\udd34 Statut', value: statut, inline: true },
-                { name: '\u200b', value: '\u200b', inline: true },
-                { name: '\ud83d\udc41\ufe0f Témoin principal', value: temoin ? temoin.displayName : 'Anonyme', inline: false }
-            )
-            .setFooter({ text: 'Dossier classifié — Tribunal de Regaïa' });
-
-        return interaction.reply({ embeds: [embed], ephemeral: false });
+    if (tab === 'avis') {
+        const { embed } = getWantedEmbedData(interaction.guild, dateKey, wantedID);
+        const prime = Math.floor(seedRndWanted(dateKey * 19) * 95) + 5;
+        const nom = interaction.guild.members.cache.get(wantedID)?.displayName ?? wantedID;
+        try {
+            const avatarUrl = interaction.guild.members.cache.get(wantedID)?.user.displayAvatarURL({ extension: 'png', size: 512 });
+            const imageBuffer = await generateWantedImage(avatarUrl, nom, prime);
+            embed.setImage('attachment://wanted.png');
+            return interaction.update({ embeds: [embed], files: [{ attachment: imageBuffer, name: 'wanted.png' }], components: [buildWantedRow('avis', authorId)] });
+        } catch (e) {
+            embed.setThumbnail(interaction.guild.members.cache.get(wantedID)?.user.displayAvatarURL({ dynamic: true }));
+            return interaction.update({ embeds: [embed], components: [buildWantedRow('avis', authorId)] });
+        }
+    } else if (tab === 'preuves') {
+        return interaction.update({ embeds: [getPreuvesEmbed(interaction.guild, dateKey, wantedID)], components: [buildWantedRow('preuves', authorId)] });
+    } else if (tab === 'affaire') {
+        return interaction.update({ embeds: [getAffaireEmbed(interaction.guild, dateKey, wantedID)], components: [buildWantedRow('affaire', authorId)] });
     }
+}
 
     // =========================
     // BOUTON CRY
@@ -4409,7 +4626,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!blague", value: "Lance une blague al\u00e9atoire en 3 cat\u00e9gories !" },
                     { name: "!flip", value: "Pour d\u00e9cider \u00e0 pile ou face !" },
                     { name: "!horoscope", value: "L'horoscope du jour selon Cacabot." },
-                    { name: "\ud83d\udea8 !criminel", value: "D\u00e9signe le criminel du jour parmi les membres." }
+                    { name: "\ud83d\udea8 !wanted", value: "D\u00e9signe le criminel du jour parmi les membres." }
                 );
         }
 
@@ -4648,7 +4865,7 @@ client.on('interactionCreate', async (interaction) => {
                     { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, palaref, punch, bang, rizz, rire, danse', value: 'interact' },
                     { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                     { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
-                    { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague, horoscope', value: 'random' }
+                    { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague, horoscope, wanted', value: 'random' }
                 );
 
             const funBackButton = new ButtonBuilder()
@@ -4773,13 +4990,14 @@ client.on('interactionCreate', async (interaction) => {
 // =========================
 
 client.once('ready', async () => {
-    console.log(`\u2705 ${client.user.tag} est connect\u00e9`);
+    console.log(`✅ ${client.user.tag} est connecté`);
     await loadAll();
     cleanOldData();
     for (const guild of client.guilds.cache.values()) {
         await guild.members.fetch().catch(() => {});
     }
-    console.log(`\u2705 Membres fetch\u00e9s`);
+    for (const guild of client.guilds.cache.values()) { scheduleWanted(guild); }
+    console.log(`✅ Membres fetchés`);
     scheduleHoroscopeQuotidien();
 
     const msUntilMidnight = () => {
