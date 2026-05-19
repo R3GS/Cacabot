@@ -1410,7 +1410,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     // Après ctx.drawImage(avatar, 217, 447, 542, 542);
 
     const frame = await loadImage('./wanted-cadre.png'); // ton image de cadre
-    ctx.drawImage(frame, 217, 447, 542, 542); // mêmes coordonnées que la pp
+    ctx.drawImage(frame, 0, 0, 977, 1273);
 
     // Pseudo
     ctx.fillStyle = '#1a0a00';
