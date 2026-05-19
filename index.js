@@ -280,22 +280,22 @@ const WANTED_STATUTS = [
     "🟡 Coopère partiellement avec les enquêteurs",
 ];
 
-function getWantedEmbedData(guild, dateKey, criminelId) {
+function getWantedEmbedData(guild, dateKey, wantedID) {
     // Exclure les crimes qui mentionnent le criminel lui-même
-    const pool = WANTED_CRIMES.filter(c => !c.includes(`<@${criminelId}>`));
+    const pool = WANTED_CRIMES.filter(c => !c.includes(`<@${wantedID}>`));
     const crime = pool[Math.floor(seedRndWanted(dateKey * 3) * pool.length)];
     const now = new Date();
     const dateStr = now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
     const embed = new EmbedBuilder()
         .setColor(0x8b0000)
         .setTitle('🚨 CRIMINEL(LE) DU JOUR')
-        .setDescription(`<@${criminelId}> est activement recherché.e pour la raison suivante :\n\n**Crime :** ${crime}`)
+        .setDescription(`<@${wantedID}> est activement recherché.e pour la raison suivante :\n\n**Crime :** ${crime}`)
         .setFooter({ text: dateStr });
     return { embed, crime };
 }
 
-function getPreuvesEmbed(guild, dateKey, criminelId) {
-    const pool = WANTED_PREUVES.filter(p => !p.includes(`<@${criminelId}>`));
+function getPreuvesEmbed(guild, dateKey, wantedID) {
+    const pool = WANTED_PREUVES.filter(p => !p.includes(`<@${wantedID}>`));
     const idxs = [];
     while (idxs.length < 3) {
         const i = Math.floor(seedRndWanted((dateKey * (idxs.length + 11))) * pool.length);
@@ -308,9 +308,9 @@ function getPreuvesEmbed(guild, dateKey, criminelId) {
         .setFooter({ text: 'Ces preuves ont été validées par le tribunal de Regaïa.' });
 }
 
-function getAffaireEmbed(guild, dateKey, criminelId) {
+function getAffaireEmbed(guild, dateKey, wantedID) {
     const top30 = Object.entries(topData.messages)
-        .filter(([uid]) => !WANTED_EXCLUDED.includes(uid) && uid !== criminelId)
+        .filter(([uid]) => !WANTED_EXCLUDED.includes(uid) && uid !== wantedID)
         .sort((a, b) => b[1] - a[1])
         .slice(0, 30)
         .map(([uid]) => uid)
@@ -344,18 +344,18 @@ function buildWantedRow(activeTab, authorId) {
     );
 }
 
-async function sendWantedMessage(target, guild, dateKey, criminelId, authorId, isReply = false) {
-    const { embed } = getWantedEmbedData(guild, dateKey, criminelId);
+async function sendWantedMessage(target, guild, dateKey, wantedID, authorId, isReply = false) {
+    const { embed } = getWantedEmbedData(guild, dateKey, wantedID);
     const prime = Math.floor(seedRndWanted(dateKey * 19) * 99994) + 5;
-    const nom = guild.members.cache.get(criminelId)?.displayName ?? criminelId;
+    const nom = guild.members.cache.get(wantedID)?.displayName ?? wantedID;
     try {
-        const avatarUrl = guild.members.cache.get(criminelId)?.user.displayAvatarURL({ extension: 'png', size: 512 });
+        const avatarUrl = guild.members.cache.get(wantedID)?.user.displayAvatarURL({ extension: 'png', size: 512 });
         const imageBuffer = await generateWantedImage(avatarUrl, nom, prime);
         embed.setImage('attachment://wanted.png');
         const payload = { embeds: [embed], files: [{ attachment: imageBuffer, name: 'wanted.png' }], components: [buildWantedRow('avis', authorId)] };
         return isReply ? target.reply(payload) : target.send(payload);
     } catch (e) {
-        embed.setThumbnail(guild.members.cache.get(criminelId)?.user.displayAvatarURL({ dynamic: true }));
+        embed.setThumbnail(guild.members.cache.get(wantedID)?.user.displayAvatarURL({ dynamic: true }));
         const payload = { embeds: [embed], components: [buildWantedRow('avis', authorId)] };
         return isReply ? target.reply(payload) : target.send(payload);
     }
@@ -367,10 +367,10 @@ async function sendDailyWanted(guild) {
     if (wantedOverride && wantedOverride.dateKey !== dateKey) wantedOverride = null;
     const channel = guild.channels.cache.get('720079691041472572');
     if (!channel) return;
-    const criminelId = getWantedOfTheDay(dateKey, guild);
+    const wantedID = getWantedOfTheDay(dateKey, guild);
     if (!wantedId) return;
     await channel.send({ content: '# 🚨 AVIS DE RECHERCHE DU JOUR' });
-    await sendWantedMessage(channel, guild, dateKey, criminelId, 'daily', false);
+    await sendWantedMessage(channel, guild, dateKey, wantedID, 'daily', false);
 }
 
 function scheduleWanted(guild) {
@@ -2107,9 +2107,9 @@ client.on('messageCreate', async (message) => {
 if (response?.needsWanted) {
     const now = new Date();
     const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-    const criminelId = getWantedOfTheDay(dateKey, message.guild);
+    const wantedID = getWantedOfTheDay(dateKey, message.guild);
     if (!wantedId) return message.reply('Aucun membre éligible trouvé !');
-    return sendWantedMessage(message, message.guild, dateKey, criminelId, message.author.id, true);
+    return sendWantedMessage(message, message.guild, dateKey, wantedID, message.author.id, true);
 }
 
     // !cry
@@ -3494,25 +3494,25 @@ client.on('interactionCreate', async (interaction) => {
 
     const now = new Date();
     const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-    const criminelId = getWantedOfTheDay(dateKey, interaction.guild);
+    const wantedID = getWantedOfTheDay(dateKey, interaction.guild);
 
     if (tab === 'avis') {
-        const { embed } = getWantedEmbedData(interaction.guild, dateKey, criminelId);
+        const { embed } = getWantedEmbedData(interaction.guild, dateKey, wantedID);
         const prime = Math.floor(seedRndWanted(dateKey * 19) * 99994) + 5;
-        const nom = interaction.guild.members.cache.get(criminelId)?.displayName ?? criminelId;
+        const nom = interaction.guild.members.cache.get(wantedID)?.displayName ?? wantedID;
         try {
-            const avatarUrl = interaction.guild.members.cache.get(criminelId)?.user.displayAvatarURL({ extension: 'png', size: 512 });
+            const avatarUrl = interaction.guild.members.cache.get(wantedID)?.user.displayAvatarURL({ extension: 'png', size: 512 });
             const imageBuffer = await generateWantedImage(avatarUrl, nom, prime);
             embed.setImage('attachment://wanted.png');
             return interaction.update({ embeds: [embed], files: [{ attachment: imageBuffer, name: 'wanted.png' }], components: [buildWantedRow('avis', authorId)] });
         } catch (e) {
-            embed.setThumbnail(interaction.guild.members.cache.get(criminelId)?.user.displayAvatarURL({ dynamic: true }));
+            embed.setThumbnail(interaction.guild.members.cache.get(wantedID)?.user.displayAvatarURL({ dynamic: true }));
             return interaction.update({ embeds: [embed], components: [buildWantedRow('avis', authorId)] });
         }
     } else if (tab === 'preuves') {
-        return interaction.update({ embeds: [getPreuvesEmbed(interaction.guild, dateKey, criminelId)], components: [buildWantedRow('preuves', authorId)] });
+        return interaction.update({ embeds: [getPreuvesEmbed(interaction.guild, dateKey, wantedID)], components: [buildWantedRow('preuves', authorId)] });
     } else if (tab === 'affaire') {
-        return interaction.update({ embeds: [getAffaireEmbed(interaction.guild, dateKey, criminelId)], components: [buildWantedRow('affaire', authorId)] });
+        return interaction.update({ embeds: [getAffaireEmbed(interaction.guild, dateKey, wantedID)], components: [buildWantedRow('affaire', authorId)] });
     }
 }
 
@@ -4228,25 +4228,25 @@ client.on('interactionCreate', async (interaction) => {
 
     const now = new Date();
     const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-    const criminelId = getWantedOfTheDay(dateKey, interaction.guild);
+    const wantedID = getWantedOfTheDay(dateKey, interaction.guild);
 
     if (tab === 'avis') {
-        const { embed } = getWantedEmbedData(interaction.guild, dateKey, criminelId);
+        const { embed } = getWantedEmbedData(interaction.guild, dateKey, wantedID);
         const prime = Math.floor(seedRndWanted(dateKey * 19) * 99994) + 5;
-        const nom = interaction.guild.members.cache.get(criminelId)?.displayName ?? criminelId;
+        const nom = interaction.guild.members.cache.get(wantedID)?.displayName ?? wantedID;
         try {
-            const avatarUrl = interaction.guild.members.cache.get(criminelId)?.user.displayAvatarURL({ extension: 'png', size: 512 });
+            const avatarUrl = interaction.guild.members.cache.get(wantedID)?.user.displayAvatarURL({ extension: 'png', size: 512 });
             const imageBuffer = await generateWantedImage(avatarUrl, nom, prime);
             embed.setImage('attachment://wanted.png');
             return interaction.update({ embeds: [embed], files: [{ attachment: imageBuffer, name: 'wanted.png' }], components: [buildWantedRow('avis', authorId)] });
         } catch (e) {
-            embed.setThumbnail(interaction.guild.members.cache.get(criminelId)?.user.displayAvatarURL({ dynamic: true }));
+            embed.setThumbnail(interaction.guild.members.cache.get(wantedID)?.user.displayAvatarURL({ dynamic: true }));
             return interaction.update({ embeds: [embed], components: [buildWantedRow('avis', authorId)] });
         }
     } else if (tab === 'preuves') {
-        return interaction.update({ embeds: [getPreuvesEmbed(interaction.guild, dateKey, criminelId)], components: [buildWantedRow('preuves', authorId)] });
+        return interaction.update({ embeds: [getPreuvesEmbed(interaction.guild, dateKey, wantedID)], components: [buildWantedRow('preuves', authorId)] });
     } else if (tab === 'affaire') {
-        return interaction.update({ embeds: [getAffaireEmbed(interaction.guild, dateKey, criminelId)], components: [buildWantedRow('affaire', authorId)] });
+        return interaction.update({ embeds: [getAffaireEmbed(interaction.guild, dateKey, wantedID)], components: [buildWantedRow('affaire', authorId)] });
     }
 }
 
