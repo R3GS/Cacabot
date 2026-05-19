@@ -3607,7 +3607,7 @@ client.on('interactionCreate', async (interaction) => {
             return interaction.reply({ content: "Tu es déjà en fuite !", ephemeral: true });
         }
         if (cibleId && interaction.user.id === cibleId) {
-            return interaction.reply({ content: "❌", ephemeral: true });
+            return interaction.reply({ content: "C'est toi qu'on fuit !", ephemeral: true });
         }
 
         const joinNom = interaction.member?.displayName ?? interaction.user.username;
