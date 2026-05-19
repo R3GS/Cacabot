@@ -4698,21 +4698,21 @@ client.on('interactionCreate', async (interaction) => {
                 .setColor(0xffdc5d)
                 .setDescription("# \ud83d\udc46 Interact")
                 .addFields(
-                    { name: "!kiss", value: "Embrassez quelqu'un sur le serveur !" },
-                    { name: "!hug", value: "Faites un c\u00e2lin \u00e0 quelqu'un sur le serveur !" },
-                    { name: "!danse", value: "Dansez avec quelqu'un sur le serveur !" },
-                    { name: "!insult", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
-                    { name: "!die", value: "Mourez en direct sur le serveur !" },
-                    { name: "!ban", value: "Bannir quelqu'un du serveur... symboliquement." },
-                    { name: "!bait", value: "Ragebait quelqu'un du serveur, gratuitement." },
-                    { name: "!explode", value: "Explose." },
+                    { name: "💋!kiss", value: "Embrassez quelqu'un sur le serveur !" },
+                    { name: "🫂!hug", value: "Faites un c\u00e2lin \u00e0 quelqu'un sur le serveur !" },
+                    { name: "💃!danse", value: "Dansez avec quelqu'un sur le serveur !" },
+                    { name: "🗯️!insult", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
+                    { name: "☠️!die", value: "Mourez en direct sur le serveur !" },
+                    { name: "🔨!ban", value: "Bannir quelqu'un du serveur... symboliquement." },
+                    { name: "😛!bait", value: "Ragebait quelqu'un du serveur, gratuitement." },
+                    { name: "💥!explode", value: "Explose." },
                     { name: "\ud83d\ude10 !palaref", value: "Ce moment g\u00eanant quand vous n'avez pas la ref..." },
                     { name: "\ud83d\ude2d !cry", value: "Pleure." },
-                    { name: "!punch", value: "Frappez quelqu'un sur le serveur !" },
-                    { name: "!bang", value: "Tirez sur quelqu'un sur le serveur !" },
-                    { name: "!rizz", value: "Rizzez quelqu'un sur le serveur !" },
+                    { name: "👊!punch", value: "Frappez quelqu'un sur le serveur !" },
+                    { name: "🔫!bang", value: "Tirez sur quelqu'un sur le serveur !" },
+                    { name: "🗿!rizz", value: "Rizzez quelqu'un sur le serveur !" },
                     { name: "🏃 !run", value: "Fuis quelqu'un sur le serveur !" },
-                    { name: "!rire", value: "Riez un bon coup !" }
+                    { name: "😆!rire", value: "Riez un bon coup !" }
                 );
         }
 
@@ -4721,8 +4721,8 @@ client.on('interactionCreate', async (interaction) => {
                 .setColor(0x6bb5ff)
                 .setDescription("# \ud83d\udcac Discussion")
                 .addFields(
-                    { name: "!question", value: "Lance une question al\u00e9atoire parmi 6 cat\u00e9gories !" },
-                    { name: "!choix", value: "Vous avez du mal \u00e0 faire un choix ? Demandez \u00e0 Cacabot." }
+                    { name: "❓!question", value: "Lance une question al\u00e9atoire parmi 6 cat\u00e9gories !" },
+                    { name: "⚖️!choix", value: "Vous avez du mal \u00e0 faire un choix ? Demandez \u00e0 Cacabot." }
                 );
         }
 
@@ -4731,12 +4731,12 @@ client.on('interactionCreate', async (interaction) => {
                 .setColor(0xf5f8fa)
                 .setDescription("# \ud83d\udca5 Random")
                 .addFields(
-                    { name: "!destin", value: "Pr\u00e9dit votre destin et fait part des \u00e9v\u00e8nements de votre futur." },
-                    { name: "!animal", value: "Devine votre animal spirituel parmi pr\u00e8s de 7000 combinaisons !" },
-                    { name: "!epsys", value: "Poste des GIFs al\u00e9atoires d'Epsys, parce que." },
-                    { name: "!blague", value: "Lance une blague al\u00e9atoire en 3 cat\u00e9gories !" },
-                    { name: "!flip", value: "Pour d\u00e9cider \u00e0 pile ou face !" },
-                    { name: "!horoscope", value: "L'horoscope du jour selon Cacabot." },
+                    { name: "🧠!destin", value: "Pr\u00e9dit votre destin et fait part des \u00e9v\u00e8nements de votre futur." },
+                    { name: "🐕!animal", value: "Devine votre animal spirituel parmi pr\u00e8s de 7000 combinaisons !" },
+                    { name: "👔!epsys", value: "Poste des GIFs al\u00e9atoires d'Epsys, parce que." },
+                    { name: "🤣!blague", value: "Lance une blague al\u00e9atoire en 3 cat\u00e9gories !" },
+                    { name: "🪙!flip", value: "Pour d\u00e9cider \u00e0 pile ou face !" },
+                    { name: "🔮!horoscope", value: "L'horoscope du jour selon Cacabot." },
                     { name: "\ud83d\udea8 !wanted", value: "D\u00e9signe le criminel du jour parmi les membres." }
                 );
         }
