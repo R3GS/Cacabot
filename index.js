@@ -3449,7 +3449,7 @@ if (response?.needsWanted) {
             .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
             .addFields(
                 { name: '\ud83d\udcbb Commandes', value: `${nbCommandes}`, inline: true },
-                { name: '\ud83d\udcac Messages envoy\u00e9s', value: `${topData.messages['1503495713097519355'] ?? 0}`, inline: true },
+                { name: '\ud83d\udcac Messages envoy\u00e9s', value: `${topData.messages['1503495713097519355']}`, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
                 { name: '\ud83d\udc51 Cr\u00e9atrice', value: 'Epsys', inline: true },
                 { name: '\ud83e\udd1d Collaboratrice', value: '[La daronne à BDN](https://bdn-fr.xyz/)', inline: true },
