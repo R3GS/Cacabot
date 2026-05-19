@@ -1414,7 +1414,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     const centerX = 977 / 2;
     const pseudoY = 447 + 542 + 65;
-    const primeY = pseudoY + 90;
+    const primeY = pseudoY + 70;
 
     ctx.save();
     ctx.translate(centerX, pseudoY + 20);
