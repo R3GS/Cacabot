@@ -293,7 +293,7 @@ function getWantedEmbedData(guild, dateKey, wantedID) {
         .setColor(0x8b0000)
         .setTitle('🚨 CRIMINEL(LE) DU JOUR')
         .setDescription(`<@${wantedID}> est activement recherché.e pour la raison suivante :\n\n**Crime :** ${crime}`)
-        .setFooter({ text: dateStr });
+        .setFooter({ text: `📅 ${dateStr} • !wanted pour consulter l'avis du jour` });
     return { embed, crime };
 }
 
