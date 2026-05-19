@@ -1753,13 +1753,14 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 // =========================
 
 client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
-
-    // Réaction 👋 si le message cite "cacabot" mais pas si c'est une commande
     const lowerContent = message.content.toLowerCase().trim();
     if (lowerContent.includes('cacabot') && !lowerContent.startsWith('!')) {
         message.react('👋').catch(() => {});
     }
+
+    // plus de "if (message.author.bot) return;" ici
+
+    const strippedMsg = message.content.replace(/<@!?1503495713097519355>/g, '').trim();
 
     // Ping Cacabot seul -> "Quoi ? (Feur)"
     const strippedMsg = message.content.replace(/<@!?1503495713097519355>/g, '').trim();
