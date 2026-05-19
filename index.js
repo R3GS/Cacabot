@@ -495,6 +495,14 @@ function getResponse(raw) {
     }
 
     // =========================
+    //         !KISS
+    // =========================
+
+    if (command === "!run") {
+        return { needsRun: true };
+    }
+
+    // =========================
     //         !HUG
     // =========================
 
@@ -1016,6 +1024,33 @@ function buildHugEmbed(auteurNom, cibleNom) {
     return new EmbedBuilder()
         .setColor(0x69d2ff)
         .setDescription(`\ud83e\udef2 **${auteurNom}** fait un c\u00e2lin \u00e0 **${cibleNom}** !`)
+        .setImage(gif);
+}
+
+// =========================
+//     LOGIQUE !DANCE
+// =========================
+
+const runGifs = [
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1506301175832514701/zooble.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1506301176164122905/pomni.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1506301187396341973/miles.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1506301187765436499/rocket.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1506301188260233317/viktor.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1506301188864217339/cest_normal_au_japon.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1506301189262934068/baby.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1506301189677908120/why_are_you_running.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1506301190101663986/dog.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1506301190491869214/flee.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1506301190990729389/joker.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1506301191397834882/foxy.gif"
+];
+
+function buildRunEmbed(description) {
+    const gif = runGifs[Math.floor(Math.random() * runGifs.length)];
+    return new EmbedBuilder()
+        .setColor(0x66668a)
+        .setDescription(description)
         .setImage(gif);
 }
 
@@ -1852,6 +1887,59 @@ client.on('messageCreate', async (message) => {
         const row = new ActionRowBuilder().addComponents(kissBackButton);
         return message.reply({ embeds: [embed], components: [row] });
     }
+
+    // !run
+
+    if (response?.needsRun) {
+    let cible = message.mentions.users.first();
+    const auteurNom = message.member?.displayName ?? message.author.username;
+
+    if (!cible) {
+        const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+        if (args.length > 0) {
+            const result = findMemberByName(message.guild, args);
+            if (result.multiple) {
+                askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                return;
+            }
+            if (result.found) cible = result.found.user;
+        }
+    }
+
+    if (!cible) {
+        const embed = buildRunEmbed(`🏃 **${auteurNom}** fuit !`);
+        const runJoinButton = new ButtonBuilder()
+            .setCustomId(`run_join_${message.author.id}_${auteurNom}`)
+            .setLabel("🏃 Accompagner")
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(runJoinButton);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
+    if (cible.id === message.author.id) {
+        const embed = buildRunEmbed(`🏃 **${auteurNom}** fuit !`);
+        const runJoinButton = new ButtonBuilder()
+            .setCustomId(`run_join_${message.author.id}_${auteurNom}`)
+            .setLabel("🏃 Accompagner")
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(runJoinButton);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
+    if (cible.id === client.user.id) {
+        const embed = buildRunEmbed(`🏃 **${auteurNom}** me fuit ! Reviens-là !`);
+        return message.reply({ embeds: [embed] });
+    }
+
+    const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+    const embed = buildRunEmbed(`🏃 **${auteurNom}** fuit de **${cibleNom}** !`);
+    const runJoinButton = new ButtonBuilder()
+        .setCustomId(`run_join_${message.author.id}_${auteurNom}_${cible.id}`)
+        .setLabel("🏃 Accompagner")
+        .setStyle(ButtonStyle.Secondary);
+    const row = new ActionRowBuilder().addComponents(runJoinButton);
+    return message.reply({ embeds: [embed], components: [row] });
+}
 
     // !hug
     if (response?.needsHug) {
@@ -3506,6 +3594,28 @@ client.on('interactionCreate', async (interaction) => {
 }
 
     // =========================
+    // BOUTON RUN
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith("run_join_")) {
+        const parts = interaction.customId.split("_");
+        const originalAuthorId = parts[2];
+        const originalAuthorNom = parts[3];
+        const cibleId = parts[4] ?? null;
+
+        if (interaction.user.id === originalAuthorId) {
+            return interaction.reply({ content: "Tu es déjà en fuite !", ephemeral: true });
+        }
+        if (cibleId && interaction.user.id === cibleId) {
+            return interaction.reply({ content: "❌", ephemeral: true });
+        }
+
+        const joinNom = interaction.member?.displayName ?? interaction.user.username;
+        const embed = buildRunEmbed(`🏃 **${joinNom}** accompagne **${originalAuthorNom}** !`);
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
     // BOUTON CRY
     // =========================
 
@@ -4601,6 +4711,7 @@ client.on('interactionCreate', async (interaction) => {
                     { name: "!punch", value: "Frappez quelqu'un sur le serveur !" },
                     { name: "!bang", value: "Tirez sur quelqu'un sur le serveur !" },
                     { name: "!rizz", value: "Rizzez quelqu'un sur le serveur !" },
+                    { name: "🏃 !run", value: "Fuis quelqu'un sur le serveur !" },
                     { name: "!rire", value: "Riez un bon coup !" }
                 );
         }
@@ -4678,10 +4789,10 @@ client.on('interactionCreate', async (interaction) => {
             .setCustomId(`help_fun_${helpAuthorId}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, palaref, punch, bang, rizz, rire, danse', value: 'interact' },
+                { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, palaref, punch, bang, rizz, rire, danse, run', value: 'interact' },
                 { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                 { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
-                { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague, horoscope', value: 'random' }
+                { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague, horoscope, wanted', value: 'random' }
             );
 
         const funBackButton = new ButtonBuilder()
@@ -4862,7 +4973,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setCustomId(`help_fun_${helpAuthorId}`)
                 .setPlaceholder('Choisis une cat\u00e9gorie')
                 .addOptions(
-                    { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, palaref, punch, bang, rizz, rire, danse', value: 'interact' },
+                    { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, palaref, punch, bang, rizz, rire, danse, run', value: 'interact' },
                     { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                     { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
                     { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague, horoscope, wanted', value: 'random' }
