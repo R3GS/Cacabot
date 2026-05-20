@@ -61,7 +61,24 @@ async function checkBirthdays() {
             for (const guild of client.guilds.cache.values()) {
                 const channel = guild.channels.cache.get(BIRTHDAY_CHANNEL_ID);
                 if (!channel) continue;
-                await channel.send(`<@${userId}> JOYEUX ANNIVERSAIRE !!! \ud83c\udf89\ud83c\udf89\ud83c\udf89`);
+
+                // Anniversaire de Cacabot lui-même
+                if (userId === client.user.id) {
+                    await channel.send('JOYEUX ANNIVERSAIRE À MOI !! 🎉🎉🎉');
+                    await channel.send('https://cdn.discordapp.com/attachments/1480756332373213275/1506635925126512790/dance.gif');
+                    continue;
+                }
+
+                // Vérifier si c'est un bot
+                const member = guild.members.cache.get(userId);
+                if (member?.user.bot) {
+                    await channel.send(`JOYEUX ANNIVERSAIRE, COLLÈGUE <@${userId}> ! 🎉\nTu fais partie des bots qui rendent ce serveur encore meilleur, alors que ta vie reste longue et belle <3`);
+                    await channel.send('https://cdn.discordapp.com/attachments/1480756332373213275/1506636764771778660/cyclops-ryu.gif');
+                    continue;
+                }
+
+                // Membre normal
+                await channel.send(`<@${userId}> JOYEUX ANNIVERSAIRE !!! 🎉🎉🎉`);
                 await channel.send(BIRTHDAY_GIF);
             }
         }
@@ -2790,6 +2807,14 @@ if (response?.needsWanted) {
 
         const nbMessages = topData.messages[cible.id] ?? 0;
 
+        const birthdayRaw = birthdayData.birthdays[cible.id];
+        const moisNoms = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+        let birthdayStr = 'Inconnu';
+        if (birthdayRaw) {
+            const [j, m] = birthdayRaw.split('/').map(Number);
+            birthdayStr = `${j} ${moisNoms[m - 1]}`;
+}
+
         const embed = new EmbedBuilder()
             .setColor(0x5865f2)
             .setTitle(member?.displayName ?? cible.username)
@@ -2802,6 +2827,7 @@ if (response?.needsWanted) {
                 { name: '\ud83c\udf82 Compte cr\u00e9\u00e9 le', value: createdAt, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
                 { name: '\ud83c\udff7\ufe0f R\u00f4les', value: roles, inline: false }
+                { name: '🎂 Anniversaire', value: birthdayStr, inline: false }
             )
             .setFooter({ text: `ID : ${cible.id}` });
 
