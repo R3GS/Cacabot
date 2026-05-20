@@ -1746,6 +1746,9 @@ async function getCommitCount() {
 }
 
 async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
+    const oldBackend = process.env.PANGOCAIRO_BACKEND;
+    delete process.env.PANGOCAIRO_BACKEND;
+    
     const canvas = createCanvas(500, 160);
     const ctx = canvas.getContext('2d');
 
@@ -1783,7 +1786,9 @@ async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
     ctx.textBaseline = 'middle';
     ctx.fillText(`${percent}%`, 250, 80);
 
-    return canvas.toBuffer('image/png');
+    const buffer = canvas.toBuffer('image/png');
+    process.env.PANGOCAIRO_BACKEND = oldBackend;
+    return buffer;
 }
 
 async function generateWantedImage(avatarUrl, displayName, primeAmount) {
