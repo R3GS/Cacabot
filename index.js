@@ -821,6 +821,7 @@ function getResponse(raw) {
         return bacBlanc[Math.floor(Math.random() * bacBlanc.length)];
     }
     if (cleaned.includes("lexys")) return "https://cdn.discordapp.com/attachments/720057528867618909/1498102442200404120/bac_blanc.gif";
+    if (cleaned.includes("pas le prouver")) return "https://tenor.com/rkdM8FYGZO4.gif";
     if (cleaned.includes("avec qui")) return reply("Avec quette");
     if (cleaned.includes("pour quoi faire")) return reply("Pour faire feur");
     if (cleaned.includes("pour quoi")) return reply("Pour feur");
