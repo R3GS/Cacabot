@@ -1749,6 +1749,10 @@ async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
     const canvas = createCanvas(500, 160);
     const ctx = canvas.getContext('2d');
 
+    // Fond blanc pour forcer le contexte opaque
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 500, 160);
+
     // Layer 1 : background
     const bg = await loadImage('./lovecalcbg.png');
     ctx.drawImage(bg, 0, 0, 500, 160);
@@ -1759,9 +1763,8 @@ async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
     const heartHeight = heartBottom - heartTop;
     const fillHeight = Math.round((percent / 100) * heartHeight);
     const fillY = heartBottom - fillHeight;
-    ctx.fillStyle = 'rgb(255, 0, 0)';
+    ctx.fillStyle = '#ff0000';
     ctx.fillRect(209, fillY, 82, fillHeight);
-    
 
     // Layer 3 : photos de profil
     const av1 = await loadImage(avatar1Url);
