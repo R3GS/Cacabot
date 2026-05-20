@@ -2826,7 +2826,7 @@ if (response?.needsWanted) {
                 { name: '\ud83d\udcc5 Arriv\u00e9e sur le serveur', value: joinedAt, inline: true },
                 { name: '\ud83c\udf82 Compte cr\u00e9\u00e9 le', value: createdAt, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
-                { name: '\ud83c\udff7\ufe0f R\u00f4les', value: roles, inline: false }
+                { name: '\ud83c\udff7\ufe0f R\u00f4les', value: roles, inline: false },
                 { name: '🎂 Anniversaire', value: birthdayStr, inline: false }
             )
             .setFooter({ text: `ID : ${cible.id}` });
