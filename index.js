@@ -94,9 +94,11 @@ const {
     ButtonBuilder,
     ButtonStyle
 } = require('discord.js');
+
 const { createCanvas, loadImage, registerFont } = require('canvas');
 process.env.PANGOCAIRO_BACKEND = 'fontconfig';
 try { registerFont('./Cowboy Movie.ttf', { family: 'CowboyMovie' }); } catch(e) { console.error('Font non trouvée:', e.message); }
+try { registerFont('./LEMONMILK-Bold.otf', { family: 'LemonMilk' }); } catch(e) { console.error('Font LemonMilk non trouvée:', e.message); }
 
 const client = new Client({
     intents: [
@@ -1757,7 +1759,7 @@ async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
     const heartHeight = heartBottom - heartTop;
     const fillHeight = Math.round((percent / 100) * heartHeight);
     const fillY = heartBottom - fillHeight;
-    ctx.fillStyle = '#ff0000';
+    ctx.fillStyle = 'rgb(255, 0, 0)';
     ctx.fillRect(209, fillY, 82, fillHeight);
 
     // Layer 3 : photos de profil
@@ -1772,7 +1774,7 @@ async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
 
     // Texte % au centre
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 15px sans-serif';
+    ctx.font = 'bold 15px "LemonMilk"';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(`${percent}%`, 250, 80);
