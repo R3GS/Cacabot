@@ -5129,74 +5129,83 @@ client.once('ready', async () => {
 //   HOROSCOPE AUTOMATIQUE
 // =========================
 
+let horoscopeScheduled = false;
+
 function scheduleHoroscopeQuotidien() {
-    const now = new Date();
-    // Calculer le prochain 8h heure de Paris
-    const parisFmt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: 'numeric', minute: 'numeric' });
-    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-    const next8h = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-    next8h.setHours(8, 0, 0, 0);
-    if (next8h <= parisNow) next8h.setDate(next8h.getDate() + 1);
-    // Convertir en UTC
-    const parisOffset = now - parisNow;
-    const delay = next8h - parisNow + parisOffset;
+    if (horoscopeScheduled) return;
+    horoscopeScheduled = true;
 
-    setTimeout(async () => {
-        try {
-            const channel = await client.channels.fetch('1505820995028516874');
-            if (!channel) return;
+    function planifierProchain() {
+        const now = new Date();
+        // Prochain 8h heure Paris en UTC
+        const paris = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+        const next8h = new Date(paris);
+        next8h.setHours(8, 0, 0, 0);
+        if (next8h <= paris) next8h.setDate(next8h.getDate() + 1);
 
-            const now2 = new Date();
-            const dateKey = now2.getFullYear() * 10000 + (now2.getMonth() + 1) * 100 + now2.getDate();
-            const dateStr = now2.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        // Convertir next8h (heure Paris) en timestamp UTC réel
+        const offsetMs = now.getTime() - paris.getTime();
+        const delay = next8h.getTime() - paris.getTime() + offsetMs;
 
-            const signes = [
-                { nom: 'B\u00e9lier', emoji: '\u2648' },
-                { nom: 'Taureau', emoji: '\u2649' },
-                { nom: 'G\u00e9meaux', emoji: '\u264a' },
-                { nom: 'Cancer', emoji: '\u264b' },
-                { nom: 'Lion', emoji: '\u264c' },
-                { nom: 'Vierge', emoji: '\u264d' },
-                { nom: 'Balance', emoji: '\u264e' },
-                { nom: 'Scorpion', emoji: '\u264f' },
-                { nom: 'Sagittaire', emoji: '\u2650' },
-                { nom: 'Capricorne', emoji: '\u2651' },
-                { nom: 'Verseau', emoji: '\u2652' },
-                { nom: 'Poissons', emoji: '\u2653' },
-                { nom: 'Loutre', emoji: '\ud83e\udda6' },
-            ];
+        const h = Math.floor(delay / 3600000);
+        const m = Math.floor((delay % 3600000) / 60000);
+        console.log(`⏰ Prochain horoscope automatique dans ${h}h${m}m`);
 
-            const description = signes.map((s, i) => {
-                const horoscope = getHoroscopeForSign(i, dateKey);
-                return `${s.emoji} **${s.nom}**\n${horoscope}`;
-            }).join('\n\n');
+        setTimeout(async () => {
+            try {
+                const channel = await client.channels.fetch('1505820995028516874');
+                if (!channel) return;
 
-            const embed = new EmbedBuilder()
-                .setColor(0x2c2f33)
-                .setTitle('\ud83d\udd2e Horoscope du jour')
-                .setDescription(description)
-                .setThumbnail('https://cdn.discordapp.com/attachments/1128032964924670053/1505637234596905080/color-replaced.png')
-                .setFooter({ text: `\ud83d\udcc5 ${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}` });
+                const now2 = new Date();
+                const dateKey = now2.getFullYear() * 10000 + (now2.getMonth() + 1) * 100 + now2.getDate();
+                const dateStr = now2.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-            const titres = [
-                '# HOROSCOPE DU JOUR \ud83d\udd2e',
-                "# L'ORACLE A PARL\u00c9 \ud83d\udd2e",
-                '# LES ASTRES ONT PARL\u00c9 \ud83d\udd2e',
-                '# LES \u00c9TOILES ONT PARL\u00c9 \ud83d\udd2e',
-                "# L'UNIVERS NOUS ENVOIE SES SIGNES \ud83d\udd2e",
-            ];
-            const titre = titres[Math.floor(Math.random() * titres.length)];
-            await channel.send(titre);
-            await channel.send({ embeds: [embed] });
-        } catch (err) {
-            console.error('Erreur horoscope automatique:', err);
-        }
-        scheduleHoroscopeQuotidien();
-    }, delay);
+                const signes = [
+                    { nom: 'Bélier', emoji: '♈' },
+                    { nom: 'Taureau', emoji: '♉' },
+                    { nom: 'Gémeaux', emoji: '♊' },
+                    { nom: 'Cancer', emoji: '♋' },
+                    { nom: 'Lion', emoji: '♌' },
+                    { nom: 'Vierge', emoji: '♍' },
+                    { nom: 'Balance', emoji: '♎' },
+                    { nom: 'Scorpion', emoji: '♏' },
+                    { nom: 'Sagittaire', emoji: '♐' },
+                    { nom: 'Capricorne', emoji: '♑' },
+                    { nom: 'Verseau', emoji: '♒' },
+                    { nom: 'Poissons', emoji: '♓' },
+                    { nom: 'Loutre', emoji: '🦦' },
+                ];
 
-    const h = Math.floor(delay / 3600000);
-    const m = Math.floor((delay % 3600000) / 60000);
-    console.log(`\u23f0 Prochain horoscope automatique dans ${h}h${m}m`);
+                const description = signes.map((s, i) => {
+                    const horoscope = getHoroscopeForSign(i, dateKey);
+                    return `${s.emoji} **${s.nom}**\n${horoscope}`;
+                }).join('\n\n');
+
+                const embed = new EmbedBuilder()
+                    .setColor(0x2c2f33)
+                    .setTitle('🔮 Horoscope du jour')
+                    .setDescription(description)
+                    .setThumbnail('https://cdn.discordapp.com/attachments/1128032964924670053/1505637234596905080/color-replaced.png')
+                    .setFooter({ text: `📅 ${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}` });
+
+                const titres = [
+                    '# HOROSCOPE DU JOUR 🔮',
+                    "# L'ORACLE A PARLÉ 🔮",
+                    '# LES ASTRES ONT PARLÉ 🔮',
+                    '# LES ÉTOILES ONT PARLÉ 🔮',
+                    "# L'UNIVERS NOUS ENVOIE SES SIGNES 🔮",
+                ];
+                const titre = titres[Math.floor(Math.random() * titres.length)];
+                await channel.send(titre);
+                await channel.send({ embeds: [embed] });
+            } catch (err) {
+                console.error('Erreur horoscope automatique:', err);
+            }
+            planifierProchain();
+        }, delay);
+    }
+
+    planifierProchain();
 }
 
 // =========================
