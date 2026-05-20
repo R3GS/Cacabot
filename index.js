@@ -1747,81 +1747,37 @@ async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
     const canvas = createCanvas(500, 160);
     const ctx = canvas.getContext('2d');
 
-    // Fond rose
-    ctx.fillStyle = '#fce4ec';
-    ctx.beginPath();
-    ctx.roundRect(0, 0, 500, 160, 20);
-    ctx.fill();
+    // Layer 1 : carré rouge qui monte de bas en haut selon le %
+    // Zone du coeur : de y=42 (haut) à y=118 (bas), soit 76px de hauteur
+    // Le carré rouge fait 82px de large, centré : x = (500-82)/2 = 209
+    const heartTop = 42;
+    const heartBottom = 118;
+    const heartHeight = heartBottom - heartTop; // 76px
+    const fillHeight = Math.round((percent / 100) * heartHeight); // 0 à 76px
+    const fillY = heartBottom - fillHeight;
+    ctx.fillStyle = '#ff0000';
+    ctx.fillRect(209, fillY, 82, fillHeight);
 
-    // Bordure rose
-    ctx.strokeStyle = '#f48fb1';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.roundRect(2, 2, 496, 156, 18);
-    ctx.stroke();
+    // Layer 2 : background
+    const bg = await loadImage('./lovecalcbg.png');
+    ctx.drawImage(bg, 0, 0, 500, 160);
 
-    const avatarSize = 110;
-    const avatarY = 25;
-
-    // Avatar gauche (cercle)
+    // Layer 3 : photos de profil (ne pas toucher)
     const av1 = await loadImage(avatar1Url);
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(80, 80, avatarSize / 2, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(av1, 25, avatarY, avatarSize, avatarSize);
-    ctx.restore();
-
-    // Bordure avatar gauche
-    ctx.strokeStyle = '#ffffff';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(80, 80, avatarSize / 2 + 2, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // Avatar droit (cercle)
     const av2 = await loadImage(avatar2Url);
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(420, 80, avatarSize / 2, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(av2, 365, avatarY, avatarSize, avatarSize);
-    ctx.restore();
+    ctx.drawImage(av1, 0, 0, 500, 160);  // les images de pdp sont déjà dimensionnées par les fichiers du repo
+    ctx.drawImage(av2, 0, 0, 500, 160);
 
-    // Bordure avatar droit
-    ctx.beginPath();
-    ctx.arc(420, 80, avatarSize / 2 + 2, 0, Math.PI * 2);
-    ctx.stroke();
+    // Layer 4 : cadres
+    const cadres = await loadImage('./lovecalccadres.png');
+    ctx.drawImage(cadres, 0, 0, 500, 160);
 
-    // Coeur central
-    const heartSize = 90;
-    const hx = 250, hy = 80;
-
-    // Dégradé coeur
-    const grad = ctx.createLinearGradient(hx - heartSize/2, hy - heartSize/2, hx + heartSize/2, hy + heartSize/2);
-    grad.addColorStop(0, '#f48fb1');
-    grad.addColorStop(1, '#e91e63');
-
-    ctx.save();
-    ctx.translate(hx, hy);
-    const s = heartSize / 30;
-    ctx.scale(s, s);
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.moveTo(0, -5);
-    ctx.bezierCurveTo(0, -15, -15, -15, -15, -5);
-    ctx.bezierCurveTo(-15, 5, 0, 15, 0, 20);
-    ctx.bezierCurveTo(0, 15, 15, 5, 15, -5);
-    ctx.bezierCurveTo(15, -15, 0, -15, 0, -5);
-    ctx.fill();
-    ctx.restore();
-
-    // Pourcentage dans le coeur
+    // Texte % au centre
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 22px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`${percent}%`, hx, hy + 3);
+    ctx.fillText(`${percent}%`, 250, 80);
 
     return canvas.toBuffer('image/png');
 }
