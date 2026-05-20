@@ -3805,7 +3805,7 @@ client.on('interactionCreate', async (interaction) => {
             .setDisabled(newPage >= totalPages - 1);
         const row = new ActionRowBuilder().addComponents(prev, next);
 
-        return interaction.update({ embeds: [embed], components: [row] });
+        return interaction.update({ embeds: [embed], components: [row1, row2] });
     }
 
     // =========================
