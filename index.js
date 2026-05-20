@@ -3805,7 +3805,7 @@ client.on('interactionCreate', async (interaction) => {
             .setDisabled(newPage >= totalPages - 1);
         const row = new ActionRowBuilder().addComponents(prev, next);
 
-        return interaction.update({ embeds: [embed], components: [row1, row2] });
+        return interaction.update({ embeds: [embed], components: [row] });
     }
 
     // =========================
@@ -3885,7 +3885,7 @@ client.on('interactionCreate', async (interaction) => {
             .setDescription(lines)
             .setFooter({ text: `Page ${newPage + 1}/${totalPages} \u2022 ${newOrdre === 'chrono' ? '\ud83d\udd52 Ordre chronologique' : '\ud83d\udcc5 Ordre classique'}` });
 
-        return interaction.update({ embeds: [embed], components: [row] });
+        return interaction.update({ embeds: [embed], components: [row1, row2] });
     }
 
     // =========================
