@@ -1751,7 +1751,7 @@ async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
     const bg = await loadImage('./lovecalcbg.png');
     ctx.drawImage(bg, 0, 0, 500, 160);
 
-    // Layer 2 : carré rouge qui monte
+    // Layer 2 : carré rouge qui monte de bas en haut
     const heartTop = 42;
     const heartBottom = 118;
     const heartHeight = heartBottom - heartTop;
@@ -1763,8 +1763,8 @@ async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
     // Layer 3 : photos de profil
     const av1 = await loadImage(avatar1Url);
     const av2 = await loadImage(avatar2Url);
-    ctx.drawImage(av1, 25, 25, 110, 110);        // gauche : x=25, y=25 depuis le haut (160-110-25=25)
-    ctx.drawImage(av2, 365, 25, 110, 110);       // droite : x=500-110-25=365, y=25
+    ctx.drawImage(av1, 25, 25, 110, 110);
+    ctx.drawImage(av2, 365, 25, 110, 110);
 
     // Layer 4 : cadres
     const cadres = await loadImage('./lovecalccadres.png');
