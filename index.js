@@ -1761,6 +1761,7 @@ async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
     const fillY = heartBottom - fillHeight;
     ctx.fillStyle = 'rgb(255, 0, 0)';
     ctx.fillRect(209, fillY, 82, fillHeight);
+    
 
     // Layer 3 : photos de profil
     const av1 = await loadImage(avatar1Url);
