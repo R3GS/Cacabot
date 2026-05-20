@@ -504,6 +504,14 @@ function getResponse(raw) {
     }
 
     // =========================
+    //        !LOVECALC
+    // =========================
+
+    if (command === "!lovecalc") {
+        return { needsLovecalc: true };
+    }
+
+    // =========================
     //         !KISS
     // =========================
 
@@ -1735,6 +1743,88 @@ async function getCommitCount() {
     }
 }
 
+async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
+    const canvas = createCanvas(500, 160);
+    const ctx = canvas.getContext('2d');
+
+    // Fond rose
+    ctx.fillStyle = '#fce4ec';
+    ctx.beginPath();
+    ctx.roundRect(0, 0, 500, 160, 20);
+    ctx.fill();
+
+    // Bordure rose
+    ctx.strokeStyle = '#f48fb1';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(2, 2, 496, 156, 18);
+    ctx.stroke();
+
+    const avatarSize = 110;
+    const avatarY = 25;
+
+    // Avatar gauche (cercle)
+    const av1 = await loadImage(avatar1Url);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(80, 80, avatarSize / 2, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(av1, 25, avatarY, avatarSize, avatarSize);
+    ctx.restore();
+
+    // Bordure avatar gauche
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(80, 80, avatarSize / 2 + 2, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Avatar droit (cercle)
+    const av2 = await loadImage(avatar2Url);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(420, 80, avatarSize / 2, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(av2, 365, avatarY, avatarSize, avatarSize);
+    ctx.restore();
+
+    // Bordure avatar droit
+    ctx.beginPath();
+    ctx.arc(420, 80, avatarSize / 2 + 2, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Coeur central
+    const heartSize = 90;
+    const hx = 250, hy = 80;
+
+    // Dégradé coeur
+    const grad = ctx.createLinearGradient(hx - heartSize/2, hy - heartSize/2, hx + heartSize/2, hy + heartSize/2);
+    grad.addColorStop(0, '#f48fb1');
+    grad.addColorStop(1, '#e91e63');
+
+    ctx.save();
+    ctx.translate(hx, hy);
+    const s = heartSize / 30;
+    ctx.scale(s, s);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(0, -5);
+    ctx.bezierCurveTo(0, -15, -15, -15, -15, -5);
+    ctx.bezierCurveTo(-15, 5, 0, 15, 0, 20);
+    ctx.bezierCurveTo(0, 15, 15, 5, 15, -5);
+    ctx.bezierCurveTo(15, -15, 0, -15, 0, -5);
+    ctx.fill();
+    ctx.restore();
+
+    // Pourcentage dans le coeur
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 22px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${percent}%`, hx, hy + 3);
+
+    return canvas.toBuffer('image/png');
+}
 
 async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
@@ -1863,6 +1953,51 @@ client.on('messageCreate', async (message) => {
         }
         return message.reply(getAnimalResponse(message));
     }
+
+    // !lovecalc
+    if (response?.needsLovecalc) {
+    const args = message.content.trim().split(/\s+/);
+    let user1 = message.mentions.users.first();
+    let user2 = message.mentions.users.size >= 2 ? [...message.mentions.users.values()][1] : null;
+
+    // Recherche par pseudo si pas de mention
+    if (!user1 && args[1]) {
+        const r = findMemberByName(message.guild, args[1]);
+        if (r.found) user1 = r.found.user;
+    }
+    if (!user2 && args[2]) {
+        const r = findMemberByName(message.guild, args[2]);
+        if (r.found) user2 = r.found.user;
+    }
+
+    if (!user1 || !user2) {
+        return message.reply('Usage : `!lovecalc @User1 @User2` ou `!lovecalc pseudo1 pseudo2`');
+    }
+
+    // Seed déterministe basé sur les deux IDs (même résultat peu importe l'ordre)
+    const ids = [user1.id, user2.id].sort();
+    const seed = parseInt(ids[0].slice(-4)) + parseInt(ids[1].slice(-4));
+    const percent = (seed * 7 + 13) % 101;
+
+    const nom1 = message.guild?.members.cache.get(user1.id)?.displayName ?? user1.username;
+    const nom2 = message.guild?.members.cache.get(user2.id)?.displayName ?? user2.username;
+
+    try {
+        const av1 = user1.displayAvatarURL({ extension: 'png', size: 256 });
+        const av2 = user2.displayAvatarURL({ extension: 'png', size: 256 });
+        const buffer = await generateLovecalcImage(av1, av2, percent);
+
+        const embed = new EmbedBuilder()
+            .setColor(0xe91e63)
+            .setDescription(`💕 **${nom1}** et **${nom2}** sont compatibles à **${percent}%** !`)
+            .setImage('attachment://lovecalc.png');
+
+        return message.reply({ embeds: [embed], files: [{ attachment: buffer, name: 'lovecalc.png' }] });
+    } catch (e) {
+        console.error('Erreur lovecalc:', e);
+        return message.reply(`💕 **${nom1}** et **${nom2}** sont compatibles à **${percent}%** !`);
+    }
+}
 
     // !kiss
     if (response?.needsKiss) {
