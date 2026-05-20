@@ -1747,20 +1747,18 @@ async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
     const canvas = createCanvas(500, 160);
     const ctx = canvas.getContext('2d');
 
-    // Layer 1 : carré rouge qui monte de bas en haut selon le %
-    // Zone du coeur : de y=42 (haut) à y=118 (bas), soit 76px de hauteur
-    // Le carré rouge fait 82px de large, centré : x = (500-82)/2 = 209
+    // Layer 1 : background
+    const bg = await loadImage('./lovecalcbg.png');
+    ctx.drawImage(bg, 0, 0, 500, 160);
+
+    // Layer 2 : carré rouge qui monte
     const heartTop = 42;
     const heartBottom = 118;
-    const heartHeight = heartBottom - heartTop; // 76px
-    const fillHeight = Math.round((percent / 100) * heartHeight); // 0 à 76px
+    const heartHeight = heartBottom - heartTop;
+    const fillHeight = Math.round((percent / 100) * heartHeight);
     const fillY = heartBottom - fillHeight;
     ctx.fillStyle = '#ff0000';
     ctx.fillRect(209, fillY, 82, fillHeight);
-
-    // Layer 2 : background
-    const bg = await loadImage('./lovecalcbg.png');
-    ctx.drawImage(bg, 0, 0, 500, 160);
 
     // Layer 3 : photos de profil
     const av1 = await loadImage(avatar1Url);
@@ -1774,7 +1772,7 @@ async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
 
     // Texte % au centre
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 22px sans-serif';
+    ctx.font = 'bold 15px sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(`${percent}%`, 250, 80);
