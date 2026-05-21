@@ -5260,7 +5260,7 @@ let horoscopeScheduled = false;
 
 function scheduleHoroscopeQuotidien() {
     if (horoscopeScheduled) return;
-    horoscopeScheduled = true;
+    horoscopeScheduled = false;
 
     function planifierProchain() {
         const now = new Date();
