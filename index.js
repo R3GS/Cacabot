@@ -5249,48 +5249,6 @@ client.once('ready', async () => {
                                                                     }, msUntilMidnight());
                                                                     });
 
-
-
-// =========================
-//   HOROSCOPE AUTOMATIQUE
-// =========================
-
-if (response?.needsHoroscope) {
-        const now = new Date();
-            const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-                const dateStr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-
-                    const signes = [
-                            { nom: 'Bélier', emoji: '♈' },
-                                    { nom: 'Taureau', emoji: '♉' },
-                                            { nom: 'Gémeaux', emoji: '♊' },
-                                                    { nom: 'Cancer', emoji: '♋' },
-                                                            { nom: 'Lion', emoji: '♌' },
-                                                                    { nom: 'Vierge', emoji: '♍' },
-                                                                            { nom: 'Balance', emoji: '♎' },
-                                                                                    { nom: 'Scorpion', emoji: '♏' },
-                                                                                            { nom: 'Sagittaire', emoji: '♐' },
-                                                                                                    { nom: 'Capricorne', emoji: '♑' },
-                                                                                                            { nom: 'Verseau', emoji: '♒' },
-                                                                                                                    { nom: 'Poissons', emoji: '♓' },
-                                                                                                                            { nom: 'Loutre', emoji: '🦦' },
-                                                                                                                                ];
-
-                                                                                                                                    const description = signes.map((s, i) => {
-                                                                                                                                            const horoscope = getHoroscopeForSign(i, dateKey);
-                                                                                                                                                    return `${s.emoji} **${s.nom}**\n${horoscope}`;
-                                                                                                                                                        }).join('\n\n');
-
-                                                                                                                                                            const embed = new EmbedBuilder()
-                                                                                                                                                                    .setColor(0x2c2f33)
-                                                                                                                                                                            .setTitle('🔮 Horoscope du jour')
-                                                                                                                                                                                    .setDescription(description)
-                                                                                                                                                                                            .setThumbnail('https://cdn.discordapp.com/attachments/1128032964924670053/1505637234596905080/color-replaced.png')
-                                                                                                                                                                                                    .setFooter({ text: `📅 ${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}` });
-
-                                                                                                                                                                                                        return message.reply({ embeds: [embed] });
-                                                                                                                                                                                                        }
-
 // =========================
 //     LISTENER REACTIONS
 // =========================
