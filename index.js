@@ -5238,13 +5238,16 @@ client.once('ready', async () => {
     console.log(`✅ Membres fetchés`)
 
     const msUntilMidnight = () => {
-        const now = new Date();
-        const midnight = new Date(now);
-        midnight.setHours(24, 0, 0, 0);
-        return midnight - now;
-    };
-    setTimeout(function scheduleCheck
-});
+                const now = new Date();
+                        const midnight = new Date(now);
+                                midnight.setHours(24, 0, 0, 0);
+                                        return midnight - now;
+                                            };
+                                                setTimeout(function scheduleCheck() {
+                                                        checkBirthdays();
+                                                                setInterval(checkBirthdays, 24 * 60 * 60 * 1000);
+                                                                    }, msUntilMidnight());
+                                                                    });
 
 
 
