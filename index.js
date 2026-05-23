@@ -829,10 +829,6 @@ function getResponse(raw) {
         (cleaned.includes("jtm") || cleaned.includes("je t aime") || cleaned.includes("je taime") || cleaned.includes("jt aime"))
     ) return { needsJtm: true };
 
-    if (cleaned.includes("joyeux anniversaire") || cleaned.includes("bon anniversaire") || cleaned.includes("joyeux anniv") || cleaned.includes("bon anniv")) {
-        return "https://cdn.discordapp.com/attachments/1128032964924670053/1505358556851863583/jdg-joueur-du-grenier.gif";
-    }
-
     if (cleaned.includes("bac blanc")) {
         const bacBlanc = [
             "https://cdn.discordapp.com/attachments/1128032964924670053/1505380065435717712/yard_stare.jpg",
