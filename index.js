@@ -467,7 +467,8 @@ function getResponse(raw) {
             "https://cdn.discordapp.com/attachments/720079691041472572/1505409860970217574/epsys-dance.gif",
             "https://cdn.discordapp.com/attachments/720079691041472572/1513686805130510396/toupsys.gif",
             "https://cdn.discordapp.com/attachments/1128032964924670053/1513684027821920396/facepalm.gif",
-            "https://cdn.discordapp.com/attachments/720079691041472572/1513683934490132611/spin2_1.gif"
+            "https://cdn.discordapp.com/attachments/720079691041472572/1513683934490132611/spin2_1.gif",
+            "https://cdn.discordapp.com/attachments/720057528867618910/1486127551771447486/eps.gif"
         ];
 
         return gifs[Math.floor(Math.random() * gifs.length)];
