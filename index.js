@@ -865,7 +865,6 @@ function getResponse(raw) {
         cleaned.startsWith("monster ") ||
         cleaned.endsWith("monster")
     ) return "https://cdn.discordapp.com/attachments/1480756332373213275/1504649546045718758/pape_monster.png";
-    if (cleaned.includes("markiplier") || cleaned.includes("thumbs up")) return "https://tenor.com/view/markiplier-mark-thumbs-up-nice-job-good-job-gif-25373350";
     if (cleaned.endsWith("non")) return reply("Bril");
     if (cleaned.endsWith("bite")) return reply("Quoicoubite");
     if (cleaned.includes("c est qui") || cleaned.includes("cest qui")) return reply("C'est quette");
