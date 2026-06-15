@@ -3538,7 +3538,7 @@ if (response?.needsWanted) {
             const remainingMs = endTime - Date.now();
             if (remainingMs <= 0) { clearInterval(updateInterval); return; }
             await sentMsg.edit({ embeds: [buildEmbed(remainingMs)] }).catch(() => {});
-        }, 30000);
+        }, 1000);
 
         const nextPhase = () => {
             clearInterval(updateInterval);
