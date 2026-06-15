@@ -3469,7 +3469,6 @@ if (response?.needsWanted) {
         clearInterval(session.updateInterval);
         if (session?.message) await session.message.delete().catch(() => {});
         pomodoroSessions.delete(message.channel.id);
-    return message.reply("🍅 Pomodoro arrêté !");
 }
 
     if (pomodoroSessions.has(message.channel.id)) {
@@ -3859,7 +3858,6 @@ client.on('interactionCreate', async (interaction) => {
         clearTimeout(session.timeout);
         clearInterval(session.updateInterval);
         session.skip();
-        return interaction.reply({ content: "⏭️ Phase skippée !", ephemeral: true });
     }
 }
 
