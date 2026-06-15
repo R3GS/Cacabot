@@ -1798,6 +1798,81 @@ async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
     return buffer;
 }
 
+async function startPomodoro(channel, participantsMention, workMin, breakMin, cycle, phase) {
+    const isWork = phase === 'work';
+    const longBreak = cycle % 4 === 0 && !isWork;
+    const breakDuration = longBreak ? 15 : breakMin;
+    const totalMs = (isWork ? workMin : breakDuration) * 60 * 1000;
+    const endTime = Date.now() + totalMs;
+
+    const buildEmbed = (remainingMs) => {
+        const mins = Math.floor(remainingMs / 60000);
+        const secs = Math.floor((remainingMs % 60000) / 1000);
+        const totalDuration = isWork ? workMin : breakDuration;
+        const elapsed = totalDuration - Math.ceil(remainingMs / 60000);
+        const barLength = 20;
+        const filled = Math.round((Math.max(0, elapsed) / totalDuration) * barLength);
+        const bar = '█'.repeat(Math.max(0, filled)) + '░'.repeat(Math.max(0, barLength - filled));
+
+        return new EmbedBuilder()
+            .setColor(isWork ? 0xe74c3c : 0x2ecc71)
+            .setTitle(isWork ? '🍅 Session de travail' : (longBreak ? '☕ Grande pause !' : '⏸️ Pause'))
+            .setDescription(participantsMention)
+            .addFields(
+                { name: 'Cycle', value: `${cycle}`, inline: true },
+                { name: 'Phase', value: isWork ? `Travail (${workMin} min)` : `Pause (${breakDuration} min)`, inline: true },
+                { name: 'Temps restant', value: `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`, inline: true },
+                { name: 'Progression', value: `\`${bar}\``, inline: false }
+            )
+            .setFooter({ text: '!pomodoro stop pour arrêter' });
+    };
+
+    const sentMsg = await channel.send({
+        content: isWork
+            ? `${participantsMention} 🍅 C'est parti pour ${workMin} minutes de travail !`
+            : `${participantsMention} ${longBreak ? '☕ Grande pause de 15 minutes !' : `⏸️ Pause de ${breakDuration} minutes !`}`,
+        embeds: [buildEmbed(totalMs)],
+        components: [new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`pomo_skip_${channel.id}`)
+                .setLabel('⏭️ Skip')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId(`pomo_stop_${channel.id}`)
+                .setLabel('⏹️ Stop')
+                .setStyle(ButtonStyle.Danger)
+        )]
+    });
+
+    const updateInterval = setInterval(async () => {
+        const remainingMs = endTime - Date.now();
+        if (remainingMs <= 0) { clearInterval(updateInterval); return; }
+        await sentMsg.edit({ embeds: [buildEmbed(remainingMs)] }).catch(() => {});
+    }, 5000);
+
+    const nextPhase = () => {
+        clearInterval(updateInterval);
+        pomodoroSessions.delete(channel.id);
+        sentMsg.delete().catch(() => {});
+        if (isWork) {
+            startPomodoro(channel, participantsMention, workMin, breakMin, cycle, 'break');
+        } else {
+            startPomodoro(channel, participantsMention, workMin, breakMin, cycle + 1, 'work');
+        }
+    };
+
+    const timeout = setTimeout(nextPhase, totalMs);
+
+    pomodoroSessions.set(channel.id, {
+        timeout,
+        updateInterval,
+        skip: nextPhase,
+        message: sentMsg,
+        cycle,
+        phase
+    });
+}
+
 async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     const canvas = createCanvas(977, 1273);
@@ -3464,109 +3539,45 @@ if (response?.needsWanted) {
         if (!pomodoroSessions.has(message.channel.id)) {
             return message.reply("Aucun pomodoro en cours dans ce salon !");
         }
-        const session = pomodoroSessions.get(message.channel.id);
-        clearTimeout(session.timeout);
-        clearInterval(session.updateInterval);
-        if (session?.message) await session.message.delete().catch(() => {});
+        const stopSession = pomodoroSessions.get(message.channel.id);
+        clearTimeout(stopSession.timeout);
+        clearInterval(stopSession.updateInterval);
+        if (stopSession?.message) await stopSession.message.delete().catch(() => {});
         pomodoroSessions.delete(message.channel.id);
-}
+        return message.reply("🍅 Pomodoro arrêté !");
+    }
 
     if (pomodoroSessions.has(message.channel.id)) {
         return message.reply("Un pomodoro est déjà en cours dans ce salon ! Utilise `!pomodoro stop` pour l'arrêter.");
     }
 
-    const workMin = parseInt(args[1]) || 25;
-    const breakMin = parseInt(args[2]) || 5;
-    const mentions = message.mentions.users;
+    const workMenu = new StringSelectMenuBuilder()
+        .setCustomId(`pomo_setup_work_${message.author.id}_${message.channel.id}`)
+        .setPlaceholder('Durée de travail...')
+        .addOptions([5,10,15,20,25,30,35,40,45,50,55,60].map(n => ({
+            label: `${n} minutes`, value: `${n}`
+        })));
 
-    if (workMin <= 0 || workMin > 120 || breakMin <= 0 || breakMin > 60) {
-        return message.reply("Durées invalides ! Max 120min de travail, 60min de pause.");
-    }
+    const breakMenu = new StringSelectMenuBuilder()
+        .setCustomId(`pomo_setup_break_${message.author.id}_${message.channel.id}`)
+        .setPlaceholder('Durée de pause...')
+        .addOptions([5,10,15,20,25,30].map(n => ({
+            label: `${n} minutes`, value: `${n}`
+        })));
 
-    const participants = mentions.size > 0
-        ? [...mentions.values(), message.author]
-        : [message.author];
-    const participantsMention = [...new Set(participants.map(u => `<@${u.id}>`))].join(' ');
+    const embed = new EmbedBuilder()
+        .setColor(0xe74c3c)
+        .setTitle('🍅 Configurer le Pomodoro')
+        .setDescription('Choisis la durée de travail et la durée de pause !')
+        .addFields(
+            { name: '⏱️ Travail', value: 'Non défini', inline: true },
+            { name: '⏸️ Pause', value: 'Non défini', inline: true }
+        );
 
-    const startPomodoro = async (cycle, phase, remaining) => {
-        const isWork = phase === 'work';
-        const totalMs = remaining * 60 * 1000;
-        const endTime = Date.now() + totalMs;
-        const longBreak = cycle % 4 === 0 && !isWork;
-        const breakDuration = longBreak ? 15 : breakMin;
-
-        const buildEmbed = (remainingMs) => {
-            const mins = Math.floor(remainingMs / 60000);
-            const secs = Math.floor((remainingMs % 60000) / 1000);
-            const totalDuration = isWork ? workMin : breakDuration;
-            const elapsed = totalDuration - Math.ceil(remainingMs / 60000);
-            const barLength = 20;
-            const filled = Math.round((elapsed / totalDuration) * barLength);
-            const bar = '█'.repeat(Math.max(0, filled)) + '░'.repeat(Math.max(0, barLength - filled));
-
-            return new EmbedBuilder()
-                .setColor(isWork ? 0xe74c3c : 0x2ecc71)
-                .setTitle(isWork ? '🍅 Session de travail' : (longBreak ? '☕ Grande pause !' : '⏸️ Pause'))
-                .setDescription(participantsMention)
-                .addFields(
-                    { name: 'Cycle', value: `${cycle}`, inline: true },
-                    { name: 'Phase', value: isWork ? `Travail (${workMin} min)` : `Pause (${breakDuration} min)`, inline: true },
-                    { name: 'Temps restant', value: `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`, inline: true },
-                    { name: 'Progression', value: `\`${bar}\``, inline: false }
-                )
-                .setFooter({ text: '!pomodoro stop pour arrêter' });
-        };
-
-        const sentMsg = await message.channel.send({
-            content: isWork
-                ? `${participantsMention} 🍅 C'est parti pour ${workMin} minutes de travail !`
-                : `${participantsMention} ${longBreak ? '☕ Grande pause de 15 minutes !' : `⏸️ Pause de ${breakDuration} minutes !`}`,
-            embeds: [buildEmbed(totalMs)],
-            components: [new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`pomo_skip_${message.channel.id}`)
-                    .setLabel('⏭️ Skip')
-                    .setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder()
-                    .setCustomId(`pomo_stop_${message.channel.id}`)
-                    .setLabel('⏹️ Stop')
-                    .setStyle(ButtonStyle.Danger)
-            )]
-        });
-
-        // Update embed toutes les 30 secondes
-        const updateInterval = setInterval(async () => {
-            const remainingMs = endTime - Date.now();
-            if (remainingMs <= 0) { clearInterval(updateInterval); return; }
-            await sentMsg.edit({ embeds: [buildEmbed(remainingMs)] }).catch(() => {});
-        }, 1000);
-
-        const nextPhase = () => {
-            clearInterval(updateInterval);
-            pomodoroSessions.delete(message.channel.id);
-            sentMsg.delete().catch(() => {});
-            if (isWork) {
-                startPomodoro(cycle, 'break', breakDuration);
-            } else {
-                startPomodoro(cycle + 1, 'work', workMin);
-            }
-        };
-
-        const timeout = setTimeout(nextPhase, totalMs);
-
-        pomodoroSessions.set(message.channel.id, {
-            timeout,
-            updateInterval,
-            skip: nextPhase,
-            message: sentMsg,
-            cycle,
-            phase
-        });
-    };
-
-    await message.reply(`🍅 Pomodoro lancé ! ${workMin} min de travail / ${breakMin} min de pause.`);
-    startPomodoro(1, 'work', workMin);
-    return;
+    return message.reply({ embeds: [embed], components: [
+        new ActionRowBuilder().addComponents(workMenu),
+        new ActionRowBuilder().addComponents(breakMenu)
+    ]});
 }
 
     // !last
@@ -3838,11 +3849,146 @@ client.on('interactionCreate', async (interaction) => {
     //     BOUTON POMODORO
     // =========================
 
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('pomo_setup_')) {
+    const parts = interaction.customId.split('_');
+    const type = parts[2];
+    const authorId = parts[3];
+    const channelId = parts[4];
+
+    if (interaction.user.id !== authorId) {
+        return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
+    }
+
+    const value = interaction.values[0];
+    const fields = interaction.message.embeds[0].fields;
+    const workVal = type === 'work' ? `${value} min` : fields[0].value;
+    const breakVal = type === 'break' ? `${value} min` : fields[1].value;
+    const ready = workVal !== 'Non défini' && breakVal !== 'Non défini';
+
+    const embed = new EmbedBuilder()
+        .setColor(0xe74c3c)
+        .setTitle('🍅 Configurer le Pomodoro')
+        .setDescription(ready ? 'Prêt à lancer !' : 'Choisis la durée de travail et la durée de pause !')
+        .addFields(
+            { name: '⏱️ Travail', value: workVal, inline: true },
+            { name: '⏸️ Pause', value: breakVal, inline: true }
+        );
+
+    const rows = [
+        new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(`pomo_setup_work_${authorId}_${channelId}`)
+                .setPlaceholder('Durée de travail...')
+                .addOptions([5,10,15,20,25,30,35,40,45,50,55,60].map(n => ({
+                    label: `${n} minutes`, value: `${n}`
+                })))
+        ),
+        new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(`pomo_setup_break_${authorId}_${channelId}`)
+                .setPlaceholder('Durée de pause...')
+                .addOptions([5,10,15,20,25,30].map(n => ({
+                    label: `${n} minutes`, value: `${n}`
+                })))
+        )
+    ];
+
+    if (ready) {
+        rows.push(new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`pomo_start_${authorId}_${channelId}_${parseInt(workVal)}_${parseInt(breakVal)}`)
+                .setLabel('🍅 Lancer !')
+                .setStyle(ButtonStyle.Danger)
+        ));
+    }
+
+    return interaction.update({ embeds: [embed], components: rows });
+}
+
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('pomo_setup_')) {
+    const parts = interaction.customId.split('_');
+    const type = parts[2];
+    const authorId = parts[3];
+    const channelId = parts[4];
+
+    if (interaction.user.id !== authorId) {
+        return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
+    }
+
+    const value = interaction.values[0];
+    const fields = interaction.message.embeds[0].fields;
+    const workVal = type === 'work' ? `${value} min` : fields[0].value;
+    const breakVal = type === 'break' ? `${value} min` : fields[1].value;
+    const ready = workVal !== 'Non défini' && breakVal !== 'Non défini';
+
+    const embed = new EmbedBuilder()
+        .setColor(0xe74c3c)
+        .setTitle('🍅 Configurer le Pomodoro')
+        .setDescription(ready ? 'Prêt à lancer !' : 'Choisis la durée de travail et la durée de pause !')
+        .addFields(
+            { name: '⏱️ Travail', value: workVal, inline: true },
+            { name: '⏸️ Pause', value: breakVal, inline: true }
+        );
+
+    const rows = [
+        new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(`pomo_setup_work_${authorId}_${channelId}`)
+                .setPlaceholder('Durée de travail...')
+                .addOptions([5,10,15,20,25,30,35,40,45,50,55,60].map(n => ({
+                    label: `${n} minutes`, value: `${n}`
+                })))
+        ),
+        new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(`pomo_setup_break_${authorId}_${channelId}`)
+                .setPlaceholder('Durée de pause...')
+                .addOptions([5,10,15,20,25,30].map(n => ({
+                    label: `${n} minutes`, value: `${n}`
+                })))
+        )
+    ];
+
+    if (ready) {
+        rows.push(new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`pomo_start_${authorId}_${channelId}_${parseInt(workVal)}_${parseInt(breakVal)}`)
+                .setLabel('🍅 Lancer !')
+                .setStyle(ButtonStyle.Danger)
+        ));
+    }
+
+    return interaction.update({ embeds: [embed], components: rows });
+}
+
     if (interaction.isButton() && interaction.customId.startsWith('pomo_')) {
     const parts = interaction.customId.split('_');
     const action = parts[1];
-    const channelId = parts[2];
 
+    if (action === 'start') {
+        const authorId = parts[2];
+        const channelId = parts[3];
+        const workMin = parseInt(parts[4]);
+        const breakMin = parseInt(parts[5]);
+
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "C'est pas ton pomodoro !", ephemeral: true });
+        }
+
+        if (pomodoroSessions.has(channelId)) {
+            return interaction.reply({ content: "Un pomodoro est déjà en cours dans ce salon !", ephemeral: true });
+        }
+
+        const participantsMention = `<@${authorId}>`;
+        await interaction.message.delete().catch(() => {});
+        const channel = interaction.guild.channels.cache.get(channelId);
+        if (!channel) return;
+
+        await startPomodoro(channel, participantsMention, workMin, breakMin, 1, 'work');
+        return;
+    }
+
+    const channelId = parts[2];
     const session = pomodoroSessions.get(channelId);
     if (!session) return interaction.reply({ content: "Ce pomodoro n'existe plus !", ephemeral: true });
 
@@ -3851,12 +3997,14 @@ client.on('interactionCreate', async (interaction) => {
         clearInterval(session.updateInterval);
         pomodoroSessions.delete(channelId);
         await session.message.delete().catch(() => {});
+        return interaction.reply("⏹️ Pomodoro arrêté !");
     }
 
     if (action === 'skip') {
         clearTimeout(session.timeout);
         clearInterval(session.updateInterval);
         session.skip();
+        return interaction.reply({ content: "⏭️ Phase skippée !", ephemeral: true });
     }
 }
 
