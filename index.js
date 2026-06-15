@@ -5292,21 +5292,19 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         '1515768324892655720'
     ];
 
-    // Pas le bon serveur
-    if (newState.guild.id !== GUILD_ID) return;
+    console.log('voiceStateUpdate reçu — guild:', newState.guild.id, '| newChannel:', newState.channelId);
 
-    // Pas une connexion à un voc surveillé
-    if (!newState.channelId || !VOCAL_IDS.includes(newState.channelId)) return;
+    if (newState.guild.id !== GUILD_ID) { console.log('mauvais serveur'); return; }
+    if (!newState.channelId || !VOCAL_IDS.includes(newState.channelId)) { console.log('salon non surveillé'); return; }
+    if (oldState.channelId === newState.channelId) { console.log('même salon'); return; }
 
-    // La personne était déjà dans ce même canal (ex: mute/unmute)
-    if (oldState.channelId === newState.channelId) return;
-
-    // Le salon n'était pas vide avant qu'elle arrive (on exclut elle-même donc on vérifie < 2)
     const channel = newState.channel;
-    if (!channel || channel.members.size >= 2) return;
+    console.log('membres dans le salon:', channel?.members.size);
+    if (!channel || channel.members.size >= 2) { console.log('salon pas vide'); return; }
 
     const memberNom = newState.member?.displayName ?? newState.member?.user.username ?? 'Quelqu\'un';
     const textChannel = newState.guild.channels.cache.get(TEXT_CHANNEL_ID);
+    console.log('textChannel trouvé:', !!textChannel);
     if (!textChannel) return;
 
     await textChannel.send(`**${memberNom}** a rejoint **${channel.name}** ! On se fait un ptit voc ? 👀`);
