@@ -705,6 +705,10 @@ function getResponse(raw) {
         return { needsRappel: true };
     }
 
+    if (command === "!pomodoro") {
+        return { needsPomodoro: true };
+    }
+
     if (command === "!ping") {
         return { needsPing: true };
     }
@@ -926,6 +930,7 @@ function getResponse(raw) {
 
 const pendingCheh = new Map();
 const cooldowns = new Map();
+const pomodoroSessions = new Map();
 
 function checkCooldown(userId, cmd, seconds = 3) {
     const key = `${userId}_${cmd}`;
@@ -3451,6 +3456,118 @@ if (response?.needsWanted) {
         return message.reply({ embeds: [embed] });
     }
 
+    // !pomodoro
+    if (response?.needsPomodoro) {
+    const args = message.content.trim().split(/\s+/);
+
+    if (args[1]?.toLowerCase() === 'stop') {
+        if (!pomodoroSessions.has(message.channel.id)) {
+            return message.reply("Aucun pomodoro en cours dans ce salon !");
+        }
+        const session = pomodoroSessions.get(message.channel.id);
+        clearTimeout(session.timeout);
+        pomodoroSessions.delete(message.channel.id);
+        return message.reply("🍅 Pomodoro arrêté !");
+    }
+
+    if (pomodoroSessions.has(message.channel.id)) {
+        return message.reply("Un pomodoro est déjà en cours dans ce salon ! Utilise `!pomodoro stop` pour l'arrêter.");
+    }
+
+    const workMin = parseInt(args[1]) || 25;
+    const breakMin = parseInt(args[2]) || 5;
+    const mentions = message.mentions.users;
+
+    if (workMin <= 0 || workMin > 120 || breakMin <= 0 || breakMin > 60) {
+        return message.reply("Durées invalides ! Max 120min de travail, 60min de pause.");
+    }
+
+    const participants = mentions.size > 0
+        ? [...mentions.values(), message.author]
+        : [message.author];
+    const participantsMention = [...new Set(participants.map(u => `<@${u.id}>`))].join(' ');
+
+    const startPomodoro = async (cycle, phase, remaining) => {
+        const isWork = phase === 'work';
+        const totalMs = remaining * 60 * 1000;
+        const endTime = Date.now() + totalMs;
+        const longBreak = cycle % 4 === 0 && !isWork;
+        const breakDuration = longBreak ? 15 : breakMin;
+
+        const buildEmbed = (remainingMs) => {
+            const mins = Math.floor(remainingMs / 60000);
+            const secs = Math.floor((remainingMs % 60000) / 1000);
+            const totalDuration = isWork ? workMin : breakDuration;
+            const elapsed = totalDuration - Math.ceil(remainingMs / 60000);
+            const barLength = 20;
+            const filled = Math.round((elapsed / totalDuration) * barLength);
+            const bar = '█'.repeat(Math.max(0, filled)) + '░'.repeat(Math.max(0, barLength - filled));
+
+            return new EmbedBuilder()
+                .setColor(isWork ? 0xe74c3c : 0x2ecc71)
+                .setTitle(isWork ? '🍅 Session de travail' : (longBreak ? '☕ Grande pause !' : '⏸️ Pause'))
+                .setDescription(participantsMention)
+                .addFields(
+                    { name: 'Cycle', value: `${cycle}`, inline: true },
+                    { name: 'Phase', value: isWork ? `Travail (${workMin} min)` : `Pause (${breakDuration} min)`, inline: true },
+                    { name: 'Temps restant', value: `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`, inline: true },
+                    { name: 'Progression', value: `\`${bar}\``, inline: false }
+                )
+                .setFooter({ text: '!pomodoro stop pour arrêter' });
+        };
+
+        const sentMsg = await message.channel.send({
+            content: isWork
+                ? `${participantsMention} 🍅 C'est parti pour ${workMin} minutes de travail !`
+                : `${participantsMention} ${longBreak ? '☕ Grande pause de 15 minutes !' : `⏸️ Pause de ${breakDuration} minutes !`}`,
+            embeds: [buildEmbed(totalMs)],
+            components: [new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`pomo_skip_${message.channel.id}`)
+                    .setLabel('⏭️ Skip')
+                    .setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder()
+                    .setCustomId(`pomo_stop_${message.channel.id}`)
+                    .setLabel('⏹️ Stop')
+                    .setStyle(ButtonStyle.Danger)
+            )]
+        });
+
+        // Update embed toutes les 30 secondes
+        const updateInterval = setInterval(async () => {
+            const remainingMs = endTime - Date.now();
+            if (remainingMs <= 0) { clearInterval(updateInterval); return; }
+            await sentMsg.edit({ embeds: [buildEmbed(remainingMs)] }).catch(() => {});
+        }, 30000);
+
+        const nextPhase = () => {
+            clearInterval(updateInterval);
+            pomodoroSessions.delete(message.channel.id);
+            sentMsg.edit({ components: [] }).catch(() => {});
+            if (isWork) {
+                startPomodoro(cycle, 'break', breakDuration);
+            } else {
+                startPomodoro(cycle + 1, 'work', workMin);
+            }
+        };
+
+        const timeout = setTimeout(nextPhase, totalMs);
+
+        pomodoroSessions.set(message.channel.id, {
+            timeout,
+            updateInterval,
+            skip: nextPhase,
+            message: sentMsg,
+            cycle,
+            phase
+        });
+    };
+
+    await message.reply(`🍅 Pomodoro lancé ! ${workMin} min de travail / ${breakMin} min de pause.`);
+    startPomodoro(1, 'work', workMin);
+    return;
+}
+
     // !last
     if (response?.needsLast) {
         if (message.author.id !== '436218312574107658') return;
@@ -3680,7 +3797,7 @@ client.on('interactionCreate', async (interaction) => {
     try {
 
     // =========================
-    // BOUTONS CRIMINEL
+    //     BOUTONS WANTED
     // =========================
 
     if (interaction.isButton() && interaction.customId.startsWith('wanted_tab_')) {
@@ -3717,7 +3834,35 @@ client.on('interactionCreate', async (interaction) => {
 }
 
     // =========================
-    // BOUTON RUN
+    //     BOUTON POMODORO
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('pomo_')) {
+    const parts = interaction.customId.split('_');
+    const action = parts[1];
+    const channelId = parts[2];
+
+    const session = pomodoroSessions.get(channelId);
+    if (!session) return interaction.reply({ content: "Ce pomodoro n'existe plus !", ephemeral: true });
+
+    if (action === 'stop') {
+        clearTimeout(session.timeout);
+        clearInterval(session.updateInterval);
+        pomodoroSessions.delete(channelId);
+        await session.message.edit({ components: [] }).catch(() => {});
+        return interaction.reply("⏹️ Pomodoro arrêté !");
+    }
+
+    if (action === 'skip') {
+        clearTimeout(session.timeout);
+        clearInterval(session.updateInterval);
+        session.skip();
+        return interaction.reply({ content: "⏭️ Phase skippée !", ephemeral: true });
+    }
+}
+
+    // =========================
+    //       BOUTON RUN
     // =========================
 
     if (interaction.isButton() && interaction.customId.startsWith("run_join_")) {
@@ -5005,7 +5150,8 @@ client.on('interactionCreate', async (interaction) => {
                 .setDescription("# \ud83d\uddd2\ufe0f Autres")
                 .addFields(
                     { name: "<:aternos_icon:1505454393049485362> !aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." },
-                    { name: "\u23f0 !rappel", value: "Se faire rappeler quelque chose dans X minutes/heures." }
+                    { name: "\u23f0 !rappel", value: "Se faire rappeler quelque chose dans X minutes/heures." },
+                    { name: "🍅 !pomodoro", value: "Démarrer une séance de pomodoro." }
                 );
         }
 
@@ -5128,7 +5274,7 @@ client.on('interactionCreate', async (interaction) => {
                     { label: '\ud83d\udcac Discord', description: 'serveur, info, avatar, top, actif', value: 'discord' },
                     { label: '\u25b6\ufe0f YouTube', description: 'En construction...', value: 'youtube' },
                     { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping', value: 'cacabot' },
-                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel', value: 'autres' }
+                    { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel, pomodoro', value: 'autres' },
                 );
 
             const utilBackButton = new ButtonBuilder()
