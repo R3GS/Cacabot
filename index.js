@@ -1109,6 +1109,7 @@ const danceGifsSolo = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505045016324739084/jdg-dance.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505045505678512268/cat.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505046876494237746/je-suis-jeune-misterjday.gif",
+    "https://tenor.com/view/granny-dance-gif-11638418557026172594",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505047149082316932/misterjday-jday.gif"
 ];
 
