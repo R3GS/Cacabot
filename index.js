@@ -3466,11 +3466,11 @@ if (response?.needsWanted) {
         }
         const session = pomodoroSessions.get(message.channel.id);
         clearTimeout(session.timeout);
-        const session = pomodoroSessions.get(message.channel.id);
+        clearInterval(session.updateInterval);
         if (session?.message) await session.message.delete().catch(() => {});
         pomodoroSessions.delete(message.channel.id);
-        return message.reply("🍅 Pomodoro arrêté !");
-    }
+    return message.reply("🍅 Pomodoro arrêté !");
+}
 
     if (pomodoroSessions.has(message.channel.id)) {
         return message.reply("Un pomodoro est déjà en cours dans ce salon ! Utilise `!pomodoro stop` pour l'arrêter.");
