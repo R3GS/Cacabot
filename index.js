@@ -5202,7 +5202,7 @@ client.on('interactionCreate', async (interaction) => {
             .addOptions(
                 { label: '\ud83d\udcac Discord', description: 'serveur, info, avatar, top, actif', value: 'discord' },
                 { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping', value: 'cacabot' },
-                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel', value: 'autres' }
+                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel, pomodoro', value: 'autres' }
             );
 
         const utilBackButton = new ButtonBuilder()
