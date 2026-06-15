@@ -3905,62 +3905,6 @@ client.on('interactionCreate', async (interaction) => {
     return interaction.update({ embeds: [embed], components: rows });
 }
 
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('pomo_setup_')) {
-    const parts = interaction.customId.split('_');
-    const type = parts[2];
-    const authorId = parts[3];
-    const channelId = parts[4];
-
-    if (interaction.user.id !== authorId) {
-        return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
-    }
-
-    const value = interaction.values[0];
-    const fields = interaction.message.embeds[0].fields;
-    const workVal = type === 'work' ? `${value} min` : fields[0].value;
-    const breakVal = type === 'break' ? `${value} min` : fields[1].value;
-    const ready = workVal !== 'Non défini' && breakVal !== 'Non défini';
-
-    const embed = new EmbedBuilder()
-        .setColor(0xe74c3c)
-        .setTitle('🍅 Configurer le Pomodoro')
-        .setDescription(ready ? 'Prêt à lancer !' : 'Choisis la durée de travail et la durée de pause !')
-        .addFields(
-            { name: '⏱️ Travail', value: workVal, inline: true },
-            { name: '⏸️ Pause', value: breakVal, inline: true }
-        );
-
-    const rows = [
-        new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder()
-                .setCustomId(`pomo_setup_work_${authorId}_${channelId}`)
-                .setPlaceholder('Durée de travail...')
-                .addOptions([5,10,15,20,25,30,35,40,45,50,55,60].map(n => ({
-                    label: `${n} minutes`, value: `${n}`
-                })))
-        ),
-        new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder()
-                .setCustomId(`pomo_setup_break_${authorId}_${channelId}`)
-                .setPlaceholder('Durée de pause...')
-                .addOptions([5,10,15,20,25,30].map(n => ({
-                    label: `${n} minutes`, value: `${n}`
-                })))
-        )
-    ];
-
-    if (ready) {
-        rows.push(new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`pomo_start_${authorId}_${channelId}_${parseInt(workVal)}_${parseInt(breakVal)}`)
-                .setLabel('🍅 Lancer !')
-                .setStyle(ButtonStyle.Danger)
-        ));
-    }
-
-    return interaction.update({ embeds: [embed], components: rows });
-}
-
     if (interaction.isButton() && interaction.customId.startsWith('pomo_')) {
     const parts = interaction.customId.split('_');
     const action = parts[1];
