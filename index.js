@@ -117,6 +117,7 @@ const client = new Client({
 
 const WANTED_EXCLUDED = ['159985870458322944', '1503495713097519355', '577856714347511828'];
 let wantedOverride = null;
+const FEUR_IMMUNE = ['1070742213635625050'];
 
 function seedRndWanted(seed) { let x = Math.sin(seed + 1) * 10000; return x - Math.floor(x); }
 
@@ -1892,7 +1893,7 @@ client.on('messageCreate', async (message) => {
         monthlyData[monthKey][uid]++;
     }
 
-    const response = getResponse(message.content);
+    const response = FEUR_IMMUNE.includes(message.author.id) ? null : getResponse(message.content);
 
     if (response === null || response === undefined) return;
 
