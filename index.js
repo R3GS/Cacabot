@@ -3851,7 +3851,6 @@ client.on('interactionCreate', async (interaction) => {
         clearInterval(session.updateInterval);
         pomodoroSessions.delete(channelId);
         await session.message.delete().catch(() => {});
-        return interaction.reply("⏹️ Pomodoro arrêté !");
     }
 
     if (action === 'skip') {
