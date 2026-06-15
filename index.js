@@ -5283,4 +5283,33 @@ client.on('guildMemberAdd', async (member) => {
     }
 });
 
+client.on('voiceStateUpdate', async (oldState, newState) => {
+    const GUILD_ID = '1515767395036172469';
+    const TEXT_CHANNEL_ID = '1515767396407705762';
+    const VOCAL_IDS = [
+        '1515767396407705763',
+        '1515768236443173105',
+        '1515768324892655720'
+    ];
+
+    // Pas le bon serveur
+    if (newState.guild.id !== GUILD_ID) return;
+
+    // Pas une connexion à un voc surveillé
+    if (!newState.channelId || !VOCAL_IDS.includes(newState.channelId)) return;
+
+    // La personne était déjà dans ce même canal (ex: mute/unmute)
+    if (oldState.channelId === newState.channelId) return;
+
+    // Le salon n'était pas vide avant qu'elle arrive (on exclut elle-même donc on vérifie < 2)
+    const channel = newState.channel;
+    if (!channel || channel.members.size >= 2) return;
+
+    const memberNom = newState.member?.displayName ?? newState.member?.user.username ?? 'Quelqu\'un';
+    const textChannel = newState.guild.channels.cache.get(TEXT_CHANNEL_ID);
+    if (!textChannel) return;
+
+    await textChannel.send(`**${memberNom}** a rejoint **${channel.name}** ! On se fait un ptit voc ? 👀`);
+});
+
 client.login(process.env.TOKEN);
