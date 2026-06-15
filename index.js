@@ -3466,6 +3466,8 @@ if (response?.needsWanted) {
         }
         const session = pomodoroSessions.get(message.channel.id);
         clearTimeout(session.timeout);
+        const session = pomodoroSessions.get(message.channel.id);
+        if (session?.message) await session.message.delete().catch(() => {});
         pomodoroSessions.delete(message.channel.id);
         return message.reply("🍅 Pomodoro arrêté !");
     }
@@ -3543,7 +3545,7 @@ if (response?.needsWanted) {
         const nextPhase = () => {
             clearInterval(updateInterval);
             pomodoroSessions.delete(message.channel.id);
-            sentMsg.edit({ components: [] }).catch(() => {});
+            sentMsg.delete().catch(() => {});
             if (isWork) {
                 startPomodoro(cycle, 'break', breakDuration);
             } else {
@@ -3849,7 +3851,7 @@ client.on('interactionCreate', async (interaction) => {
         clearTimeout(session.timeout);
         clearInterval(session.updateInterval);
         pomodoroSessions.delete(channelId);
-        await session.message.edit({ components: [] }).catch(() => {});
+        await session.message.delete().catch(() => {});
         return interaction.reply("⏹️ Pomodoro arrêté !");
     }
 
