@@ -504,6 +504,14 @@ function getResponse(raw) {
     }
 
     // =========================
+    //         !PRUNE
+    // =========================
+
+    if (command === "!prune") {
+        return { needsPrune: true };
+    }
+
+    // =========================
     //         !ANIMAL
     // =========================
 
@@ -3531,6 +3539,53 @@ if (response?.needsWanted) {
         return message.reply({ embeds: [embed] });
     }
 
+    /// !prune
+
+    if (response?.needsPrune) {
+    const member = message.guild.members.cache.get(message.author.id);
+    const canKick = member?.permissions.has('KickMembers');
+    if (!canKick) return message.reply("Tu n'as pas les permissions nécessaires pour faire ça !");
+
+    const args = message.content.trim().split(/\s+/);
+    const count = parseInt(args[1]);
+
+    if (!count || count <= 0) return message.reply("Usage : `!prune X` — supprime les X derniers messages.");
+
+    if (count > 100) {
+        const embed = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('⚠️ Limite dépassée')
+            .setDescription(`Discord ne permet pas de supprimer plus de **100 messages** à la fois.\n\nTu veux supprimer **${count} messages** — il faudra donc **${Math.ceil(count / 100)} suppressions** successives.\n\n**Je gère** : Cacabot enchaîne les suppressions automatiquement.\n**Je gère moi-même** : Cacabot s'arrête là, tu refais \`!prune 100\` autant de fois que nécessaire.`);
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`prune_auto_${message.author.id}_${count}_${message.channel.id}`)
+                .setLabel('🤖 Laisser Cacabot gérer')
+                .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+                .setCustomId(`prune_manual_${message.author.id}`)
+                .setLabel('✋ Je gère')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
+    try {
+        const messages = await message.channel.messages.fetch({ limit: count + 1 });
+        const toDelete = messages.filter(m => {
+            const age = Date.now() - m.createdTimestamp;
+            return age < 14 * 24 * 60 * 60 * 1000;
+        });
+        await message.channel.bulkDelete(toDelete, true);
+        const reply = await message.channel.send(`🗑️ **${toDelete.size - 1}** messages supprimés !`);
+        setTimeout(() => reply.delete().catch(() => {}), 3000);
+    } catch (e) {
+        return message.channel.send("Erreur lors de la suppression. Les messages de plus de 14 jours ne peuvent pas être supprimés en bulk.");
+    }
+    return;
+}
+
     // !pomodoro
     if (response?.needsPomodoro) {
     const args = message.content.trim().split(/\s+/);
@@ -3807,6 +3862,65 @@ if (response?.needsWanted) {
 
 client.on('interactionCreate', async (interaction) => {
     try {
+
+    // =========================
+    //      BOUTONS PRUNE
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('prune_')) {
+    const parts = interaction.customId.split('_');
+    const action = parts[1];
+    const authorId = parts[2];
+
+    if (interaction.user.id !== authorId) {
+        return interaction.reply({ content: "C'est pas ta commande !", ephemeral: true });
+    }
+
+    const member = interaction.guild.members.cache.get(authorId);
+    if (!member?.permissions.has('KickMembers')) {
+        return interaction.reply({ content: "Tu n'as plus les permissions nécessaires !", ephemeral: true });
+    }
+
+    if (action === 'manual') {
+        await interaction.message.delete().catch(() => {});
+        return interaction.reply({ content: "OK ! Utilise `!prune 100` autant de fois que nécessaire.", ephemeral: true });
+    }
+
+    if (action === 'auto') {
+        const total = parseInt(parts[3]);
+        const channelId = parts[4];
+        const channel = interaction.guild.channels.cache.get(channelId);
+        if (!channel) return interaction.reply({ content: "Salon introuvable !", ephemeral: true });
+
+        await interaction.message.delete().catch(() => {});
+        const progressMsg = await interaction.reply({ content: `🗑️ Suppression en cours...`, fetchReply: true });
+
+        let remaining = total;
+        let totalDeleted = 0;
+
+        while (remaining > 0) {
+            const limit = Math.min(remaining, 100);
+            try {
+                const messages = await channel.messages.fetch({ limit: limit + 1 });
+                const toDelete = messages.filter(m => {
+                    const age = Date.now() - m.createdTimestamp;
+                    return age < 14 * 24 * 60 * 60 * 1000 && m.id !== progressMsg.id;
+                });
+                if (toDelete.size === 0) break;
+                await channel.bulkDelete(toDelete, true);
+                totalDeleted += toDelete.size;
+                remaining -= limit;
+                if (remaining > 0) await new Promise(r => setTimeout(r, 1500));
+            } catch (e) {
+                break;
+            }
+        }
+
+        const done = await channel.send(`🗑️ **${totalDeleted}** messages supprimés !`);
+        setTimeout(() => done.delete().catch(() => {}), 3000);
+        return;
+    }
+}
 
     // =========================
     //     BOUTONS WANTED
