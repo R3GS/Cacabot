@@ -2021,6 +2021,7 @@ client.on('messageCreate', async (message) => {
     try {
         const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=5&key=${process.env.YOUTUBE_API_KEY}`);
         const searchData = await searchRes.json();
+        console.log('YouTube API response:', JSON.stringify(searchData));
 
         if (!searchData.items || searchData.items.length === 0) {
             return message.reply("Aucun résultat trouvé !");
