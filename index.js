@@ -507,6 +507,14 @@ function getResponse(raw) {
     //         !PRUNE
     // =========================
 
+    if (command === "!youtube") {
+        return { needsYoutube: true };
+    }
+
+    // =========================
+    //        !YOUTUBE
+    // =========================
+
     if (command === "!prune") {
         return { needsPrune: true };
     }
@@ -932,13 +940,14 @@ function getResponse(raw) {
     return reply("Feur");
 }
 
-// =========================
-//     CHEH
-// =========================
-
 const pendingCheh = new Map();
 const cooldowns = new Map();
 const pomodoroSessions = new Map();
+const youtubeSearches = new Map();
+
+// =========================
+//           CHEH
+// =========================
 
 function checkCooldown(userId, cmd, seconds = 3) {
     const key = `${userId}_${cmd}`;
@@ -2002,6 +2011,100 @@ client.on('messageCreate', async (message) => {
         }
         return message.reply(getAnimalResponse(message));
     }
+
+    // !youtube
+
+    if (response?.needsYoutube) {
+    const query = message.content.trim().split(/\s+/).slice(1).join(' ');
+    if (!query) return message.reply("Usage : `!youtube [recherche]`");
+
+    try {
+        const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=5&key=${process.env.YOUTUBE_API_KEY}`);
+        const searchData = await searchRes.json();
+
+        if (!searchData.items || searchData.items.length === 0) {
+            return message.reply("Aucun résultat trouvé !");
+        }
+
+        const videoIds = searchData.items.map(i => i.id.videoId).join(',');
+        const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoIds}&key=${process.env.YOUTUBE_API_KEY}`);
+        const detailData = await detailRes.json();
+
+        const videos = detailData.items;
+
+        const buildYoutubeEmbed = (index) => {
+            const video = videos[index];
+            const snippet = video.snippet;
+            const stats = video.statistics;
+
+            const duration = video.contentDetails.duration
+                .replace('PT', '')
+                .replace('H', 'h ')
+                .replace('M', 'min ')
+                .replace('S', 's');
+
+            const views = parseInt(stats.viewCount).toLocaleString('fr-FR');
+            const date = new Date(snippet.publishedAt).toLocaleDateString('fr-FR', {
+                day: 'numeric', month: 'long', year: 'numeric'
+            });
+
+            return new EmbedBuilder()
+                .setColor(0xff0000)
+                .setTitle(snippet.title)
+                .setURL(`https://www.youtube.com/watch?v=${video.id}`)
+                .setThumbnail(snippet.thumbnails.high.url)
+                .addFields(
+                    { name: '📺 Chaîne', value: snippet.channelTitle, inline: true },
+                    { name: '⏱️ Durée', value: duration, inline: true },
+                    { name: '👁️ Vues', value: views, inline: true },
+                    { name: '📅 Publié le', value: date, inline: true }
+                )
+                .setFooter({ text: `Résultat ${index + 1}/${videos.length}` });
+        };
+
+        const buildYoutubeRow = (index, authorId, videoUrl) => {
+            return new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`yt_prev_${authorId}_${index}`)
+                    .setLabel('⏮️ Précédent')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(index === 0),
+                new ButtonBuilder()
+                    .setCustomId(`yt_next_${authorId}_${index}`)
+                    .setLabel('⏭️ Suivant')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(index >= videos.length - 1),
+                new ButtonBuilder()
+                    .setLabel('🔗 Ouvrir')
+                    .setStyle(ButtonStyle.Link)
+                    .setURL(videoUrl),
+                new ButtonBuilder()
+                    .setCustomId(`yt_close_${authorId}`)
+                    .setLabel('❌ Fermer')
+                    .setStyle(ButtonStyle.Danger)
+            );
+        };
+
+        const firstVideo = videos[0];
+        const firstUrl = `https://www.youtube.com/watch?v=${firstVideo.id}`;
+
+        const sent = await message.reply({
+            embeds: [buildYoutubeEmbed(0)],
+            components: [buildYoutubeRow(0, message.author.id, firstUrl)]
+        });
+
+        // Stocker les vidéos pour les boutons
+        youtubeSearches.set(sent.id, { videos, authorId: message.author.id });
+
+        // Supprimer après 5 minutes
+        setTimeout(() => youtubeSearches.delete(sent.id), 5 * 60 * 1000);
+
+    } catch (e) {
+        console.error('Erreur YouTube:', e);
+        return message.reply("Erreur lors de la recherche YouTube.");
+    }
+    return;
+}
 
     // !lovecalc
     if (response?.needsLovecalc) {
@@ -3861,6 +3964,93 @@ if (response?.needsWanted) {
 
 client.on('interactionCreate', async (interaction) => {
     try {
+
+    // =========================
+    //     BOUTONS YOUTUBE
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('yt_')) {
+    const parts = interaction.customId.split('_');
+    const action = parts[1];
+    const authorId = parts[2];
+
+    if (interaction.user.id !== authorId) {
+        return interaction.reply({ content: "C'est pas ta recherche !", ephemeral: true });
+    }
+
+    if (action === 'close') {
+        youtubeSearches.delete(interaction.message.id);
+        await interaction.message.delete().catch(() => {});
+        return;
+    }
+
+    const search = youtubeSearches.get(interaction.message.id);
+    if (!search) return interaction.reply({ content: "Cette recherche a expiré !", ephemeral: true });
+
+    const currentIndex = parseInt(parts[3]);
+    const newIndex = action === 'next' ? currentIndex + 1 : currentIndex - 1;
+    const { videos } = search;
+    const video = videos[newIndex];
+    const videoUrl = `https://www.youtube.com/watch?v=${video.id}`;
+
+    const buildYoutubeEmbed = (index) => {
+        const v = videos[index];
+        const snippet = v.snippet;
+        const stats = v.statistics;
+
+        const duration = v.contentDetails.duration
+            .replace('PT', '')
+            .replace('H', 'h ')
+            .replace('M', 'min ')
+            .replace('S', 's');
+
+        const views = parseInt(stats.viewCount).toLocaleString('fr-FR');
+        const date = new Date(snippet.publishedAt).toLocaleDateString('fr-FR', {
+            day: 'numeric', month: 'long', year: 'numeric'
+        });
+
+        return new EmbedBuilder()
+            .setColor(0xff0000)
+            .setTitle(snippet.title)
+            .setURL(`https://www.youtube.com/watch?v=${v.id}`)
+            .setThumbnail(snippet.thumbnails.high.url)
+            .addFields(
+                { name: '📺 Chaîne', value: snippet.channelTitle, inline: true },
+                { name: '⏱️ Durée', value: duration, inline: true },
+                { name: '👁️ Vues', value: views, inline: true },
+                { name: '📅 Publié le', value: date, inline: true }
+            )
+            .setFooter({ text: `Résultat ${index + 1}/${videos.length}` });
+    };
+
+    const buildYoutubeRow = (index) => {
+        return new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`yt_prev_${authorId}_${index}`)
+                .setLabel('⏮️ Précédent')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(index === 0),
+            new ButtonBuilder()
+                .setCustomId(`yt_next_${authorId}_${index}`)
+                .setLabel('⏭️ Suivant')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(index >= videos.length - 1),
+            new ButtonBuilder()
+                .setLabel('🔗 Ouvrir')
+                .setStyle(ButtonStyle.Link)
+                .setURL(videoUrl),
+            new ButtonBuilder()
+                .setCustomId(`yt_close_${authorId}`)
+                .setLabel('❌ Fermer')
+                .setStyle(ButtonStyle.Danger)
+        );
+    };
+
+    return interaction.update({
+        embeds: [buildYoutubeEmbed(newIndex)],
+        components: [buildYoutubeRow(newIndex)]
+    });
+}
 
     // =========================
     //      BOUTONS PRUNE
