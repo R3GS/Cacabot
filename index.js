@@ -3578,8 +3578,7 @@ if (response?.needsWanted) {
             return age < 14 * 24 * 60 * 60 * 1000;
         });
         await message.channel.bulkDelete(toDelete, true);
-        const reply = await message.channel.send(`🗑️ **${toDelete.size - 1}** messages supprimés !`);
-        setTimeout(() => reply.delete().catch(() => {}), 3000);
+        await message.delete().catch(() => {});
     } catch (e) {
         return message.channel.send("Erreur lors de la suppression. Les messages de plus de 14 jours ne peuvent pas être supprimés en bulk.");
     }
@@ -3893,7 +3892,7 @@ client.on('interactionCreate', async (interaction) => {
         if (!channel) return interaction.reply({ content: "Salon introuvable !", ephemeral: true });
 
         await interaction.message.delete().catch(() => {});
-        const progressMsg = await interaction.reply({ content: `🗑️ Suppression en cours...`, fetchReply: true });
+        await interaction.reply({ content: `🗑️ Suppression en cours...`, ephemeral: true });
 
         let remaining = total;
         let totalDeleted = 0;
@@ -3915,9 +3914,6 @@ client.on('interactionCreate', async (interaction) => {
                 break;
             }
         }
-
-        const done = await channel.send(`🗑️ **${totalDeleted}** messages supprimés !`);
-        setTimeout(() => done.delete().catch(() => {}), 3000);
         return;
     }
 }
