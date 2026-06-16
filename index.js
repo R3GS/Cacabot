@@ -5622,7 +5622,25 @@ client.on('guildMemberAdd', async (member) => {
     if (!topData.messages[member.id]) {
         topData.messages[member.id] = 0;
         saveAll();
-        console.log(`\u2705 Nouveau membre : ${member.displayName} ajouté au top`);
+        console.log(`✅ Nouveau membre : ${member.displayName} ajouté au top`);
+    }
+
+    if (member.guild.id === '720057528351850547') {
+        const accountAge = Date.now() - member.user.createdTimestamp;
+        const oneMonth = 30 * 24 * 60 * 60 * 1000;
+        if (accountAge < oneMonth) {
+            const modChannel = member.guild.channels.cache.get('720082701192921231');
+            if (!modChannel) return;
+            const jours = Math.floor(accountAge / (24 * 60 * 60 * 1000));
+            const embed = new EmbedBuilder()
+                .setColor(0xff9900)
+                .setTitle('⚠️ Compte récent détecté')
+                .setDescription(`<@${member.id}> vient de rejoindre le serveur, mais son compte n'a été créé qu'il y a **${jours} jour${jours > 1 ? 's' : ''}**.\n\nC'est peut-être un bot ou un compte secondaire. Ceci peut être une fausse alerte, mais restez vigilants !`)
+                .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
+                .setFooter({ text: `ID : ${member.id}` })
+                .setTimestamp();
+            await modChannel.send({ embeds: [embed] });
+        }
     }
 });
 
