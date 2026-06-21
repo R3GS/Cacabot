@@ -1905,7 +1905,8 @@ async function startPomodoro(channel, participantsMention, workMin, breakMin, cy
 }
 
 async function checkYoutubeChannels() {
-    for (const [channelId, watch] of Object.entries(youtubeWatchData)) {
+    for (const [key, watch] of Object.entries(youtubeWatchData)) {
+        const channelId = watch.channelId ?? key.split('_')[0];
         try {
             const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&maxResults=1&type=video&key=${process.env.YOUTUBE_API_KEY}`);
             const data = await res.json();
@@ -2056,9 +2057,9 @@ client.on('messageCreate', async (message) => {
     const sub = args[1]?.toLowerCase();
 
     if (sub === 'list') {
-        const entries = Object.entries(youtubeWatchData).filter(w => w[1].discordChannelId === message.channel.id);
-        if (entries.length === 0) return message.reply("Aucune chaîne suivie dans ce salon !");
-        const lines = entries.map(([id, w]) => `• **${w.channelTitle}**`).join('\n');
+        const entries = Object.entries(youtubeWatchData).filter(([, w]) => w.discordChannelId === message.channel.id);
+    if (entries.length === 0) return message.reply("Aucune chaîne suivie dans ce salon !");
+    const lines = entries.map(([, w]) => `• **${w.channelTitle}**`).join('\n');
         return message.reply(`📺 Chaînes suivies dans ce salon :\n${lines}`);
     }
 
@@ -2105,21 +2106,20 @@ client.on('messageCreate', async (message) => {
             if (!channelId) return message.reply("Chaîne YouTube introuvable !");
 
             if (sub === 'disable') {
-                if (!youtubeWatchData[channelId] || youtubeWatchData[channelId].discordChannelId !== targetChannelId) {
+                const key = `${channelId}_${targetChannelId}`;
+                if (!youtubeWatchData[key]) {
                     return message.reply("Cette chaîne n'est pas suivie dans ce salon !");
                 }
-                const removedTitle = youtubeWatchData[channelId].channelTitle;
-                delete youtubeWatchData[channelId];
+                const removedTitle = youtubeWatchData[key].channelTitle;
+                delete youtubeWatchData[key];
                 await saveAll();
                 return message.reply(`✅ **${removedTitle}** ne sera plus suivie dans <#${targetChannelId}> !`);
             }
 
             // sub === 'able'
-            if (youtubeWatchData[channelId]) {
-                if (youtubeWatchData[channelId].discordChannelId === targetChannelId) {
-                    return message.reply(`**${youtubeWatchData[channelId].channelTitle}** est déjà suivie dans <#${targetChannelId}> !`);
-                }
-                return message.reply(`**${youtubeWatchData[channelId].channelTitle}** est déjà suivie, mais dans un autre salon. Désactive d'abord avec \`!abo disable\`.`);
+            const key = `${channelId}_${targetChannelId}`;
+            if (youtubeWatchData[key]) {
+                return message.reply(`**${youtubeWatchData[key].channelTitle}** est déjà suivie dans <#${targetChannelId}> !`);
             }
 
             const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${channelId}&key=${process.env.YOUTUBE_API_KEY}`);
@@ -2132,8 +2132,9 @@ client.on('messageCreate', async (message) => {
             const latestData = await latestRes.json();
             const lastVideoId = latestData.items?.[0]?.id?.videoId ?? null;
 
-            youtubeWatchData[channelId] = {
+            youtubeWatchData[key] = {
                 channelTitle,
+                channelId,
                 discordChannelId: targetChannelId,
                 lastVideoId
             };
