@@ -5730,6 +5730,7 @@ client.on('interactionCreate', async (interaction) => {
                 .setDescription("# <:youtube_icon:1505457903585198151> YouTube")
                 .addFields(
                     { name: "🔎 !youtube", value: "Rechercher une vidéo sur YouTube." },
+                    { name: "❗ !last", value: "Afficher la dernière vidéo d'une chaîne." },
                     { name: "📈 !stats", value: "Regarder les stats d'une chaîne YouTube." }
                     );
         }
@@ -5784,14 +5785,14 @@ client.on('interactionCreate', async (interaction) => {
         const utilEmbed = new EmbedBuilder()
             .setColor(0x8899a6)
             .setTitle("\ud83d\udee0 Utilitaire")
-            .setDescription("<:discord_icon:1505454379669524532> **Discord** \u2014 Commandes relatives au serveur\n<:youtube_icon:1505457903585198151> **YouTube** \u2014 Pour explorer YouTube\n\ud83e\udd16 **Cacabot** \u2014 Commandes relatives \u00e0 Cacabot\n\ud83d\uddd2\ufe0f **Autres** \u2014 Autres commandes non-r\u00e9pertori\u00e9es");
+            .setDescription("<:discord_icon:1505454379669524532> **Discord** \u2014 Commandes relatives au serveur\n<:youtube_icon:1505457903585198151> **YouTube** \u2014 Pour explorer le meilleur site de tous les temps\n\ud83e\udd16 **Cacabot** \u2014 Commandes relatives \u00e0 Cacabot\n\ud83d\uddd2\ufe0f **Autres** \u2014 Autres commandes non-r\u00e9pertori\u00e9es");
 
         const utilMenu = new StringSelectMenuBuilder()
             .setCustomId(`help_util_${helpAuthorId}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
                 { label: '\ud83d\udcac Discord', description: 'serveur, info, avatar, top, actif', value: 'discord' },
-                { label: '▶️ YouTube', description: 'youtube, stats', value: 'youtube' },
+                { label: '▶️ YouTube', description: 'youtube, stats, last', value: 'youtube' },
                 { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping', value: 'cacabot' },
                 { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel, pomodoro', value: 'autres' }
             );
@@ -5856,14 +5857,14 @@ client.on('interactionCreate', async (interaction) => {
             const utilEmbed = new EmbedBuilder()
                 .setColor(0x3498db)
                 .setTitle("\ud83d\udee0 Utilitaire")
-                .setDescription("<:discord_icon:1505454379669524532> **Discord** \u2014 Commandes relatives au serveur\n<:youtube_icon:1505457903585198151> **YouTube** \u2014 Pour explorer\n\ud83e\udd16 **Cacabot** \u2014 Commandes relatives \u00e0 Cacabot\n\ud83d\uddd2\ufe0f **Autres** \u2014 Autres commandes non-r\u00e9pertori\u00e9es");
+                .setDescription("<:discord_icon:1505454379669524532> **Discord** \u2014 Commandes relatives au serveur\n<:youtube_icon:1505457903585198151> **YouTube** \u2014 Pour explorer le meilleur site de tous les temps\n\ud83e\udd16 **Cacabot** \u2014 Commandes relatives \u00e0 Cacabot\n\ud83d\uddd2\ufe0f **Autres** \u2014 Autres commandes non-r\u00e9pertori\u00e9es");
 
             const utilMenu = new StringSelectMenuBuilder()
                 .setCustomId(`help_util_${helpAuthorId}`)
                 .setPlaceholder('Choisis une cat\u00e9gorie')
                 .addOptions(
                     { label: '\ud83d\udcac Discord', description: 'serveur, info, avatar, top, actif', value: 'discord' },
-                    { label: '\u25b6\ufe0f YouTube', description: 'youtube, stats', value: 'youtube' },
+                    { label: '\u25b6\ufe0f YouTube', description: 'youtube, stats, last', value: 'youtube' },
                     { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping', value: 'cacabot' },
                     { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel, pomodoro', value: 'autres' }
                 );
