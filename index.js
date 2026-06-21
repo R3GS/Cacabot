@@ -26,8 +26,8 @@ async function loadAll() {
     }
 }
 
-let lastSaveTime = null;
-let messagesSinceLastSave = 0;
+let lastsaveSaveTime = null;
+let messagesSinceLastsaveSave = 0;
 
 async function saveAll() {
     try {
@@ -38,7 +38,7 @@ async function saveAll() {
         });
         const json = await res.json();
         console.log('💾 Sauvegarde JSONBin:', res.status, json);
-        lastSaveTime = new Date();
+        lastsaveSaveTime = new Date();
     } catch (err) {
         console.error('Erreur sauvegarde JSONBin:', err);
     }
@@ -710,7 +710,7 @@ function getResponse(raw) {
     }
 
     if (command === "!lastsave") {
-        return { needsLast: true };
+        return { needsLastsave: true };
     }
 
     if (command === "!say") {
@@ -1972,9 +1972,9 @@ client.on('messageCreate', async (message) => {
         topData.messages[uid]++;
 
         // Sauvegarde tous les 75 messages
-        messagesSinceLastSave++;
-        if (messagesSinceLastSave >= 75) {
-            messagesSinceLastSave = 0;
+        messagesSinceLastsaveSave++;
+        if (messagesSinceLastsaveSave >= 75) {
+            messagesSinceLastsaveSave = 0;
             saveAll();
         }
 
@@ -3818,13 +3818,13 @@ if (response?.needsWanted) {
 }
 
     // !lastsave
-    if (response?.needsLast) {
+    if (response?.needsLastsave) {
         if (message.author.id !== '436218312574107658') return;
         if (!lastsaveSaveTime) return message.reply('Aucune sauvegarde effectu\u00e9e depuis le d\u00e9marrage.');
-        const diff = Date.now() - lastSaveTime;
+        const diff = Date.now() - lastsaveSaveTime;
         const mins = Math.floor(diff / 60000);
         const secs = Math.floor((diff % 60000) / 1000);
-        const dateStr = lastSaveTime.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
+        const dateStr = lastsaveSaveTime.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
         return message.reply(`\ud83d\udcbe Derni\u00e8re sauvegarde : **${dateStr}** (il y a ${mins}min ${secs}s)`);
     }
 
