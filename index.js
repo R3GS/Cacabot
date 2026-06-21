@@ -3960,8 +3960,8 @@ if (response?.needsWanted) {
                 { name: '\ud83d\udd2e !horoscope [ID_salon]', value: 'Forcer l\'envoi de l\'horoscope dans un salon sp\u00e9cifique.', inline: false },
                 { name: '\u23f0 !rappel [ID] Xmin/h [message]', value: 'Envoyer un rappel \u00e0 un membre sp\u00e9cifique par son ID.', inline: false },
                 { name: '✅ !abo able/disable [ID_SALON] [ID_CHAINE]', value: 'Abonner Cacabot à une chaîne pour avoir une notification à chaque sortie.', inline: false },
-                { name: '🚨 !wanted set @Membre/pseudo/ID', value: 'Forcer le.a criminel.le du jour.', inline: false }
-                { name: '\ud83d\udd04 !wanted reset', value: 'G\u00e9n\u00e9rer un nouveau criminel du jour.', inline: false },
+                { name: '🚨 !wanted set @Membre/pseudo/ID', value: 'Forcer le.a criminel.le du jour.', inline: false },
+                { name: '\ud83d\udd04 !wanted reset', value: 'G\u00e9n\u00e9rer un nouveau criminel du jour.', inline: false }
             );
         return message.reply({ embeds: [embed] });
     }
