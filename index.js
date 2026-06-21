@@ -5851,7 +5851,7 @@ client.once('ready', async () => {
     for (const guild of client.guilds.cache.values()) {
         await guild.members.fetch().catch(() => {});
     }
-    for (const guild of client.guilds.cache.values()) { scheduleWanted(guild); }
+    // for (const guild of client.guilds.cache.values()) { scheduleWanted(guild); }
     console.log(`✅ Membres fetchés`)
 
     const msUntilMidnight = () => {
