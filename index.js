@@ -3953,15 +3953,15 @@ if (response?.needsWanted) {
             .setTitle('\ud83d\udc51 Commandes Epsys-Only')
             .setDescription('Commandes exclusivement accessibles par <@436218312574107658>.')
             .addFields(
-                { name: '\ud83d\udcdd !setmessages @Membre N', value: 'D\u00e9finir manuellement le nombre de messages d\'un membre.', inline: false },
+                { name: '\ud83d\udcdd !setmessages @Membre', value: 'D\u00e9finir manuellement le nombre de messages d\'un membre.', inline: false },
                 { name: '\ud83d\udce3 !say [ID_salon] [message]', value: 'Envoyer un message dans un salon au nom de Cacabot.', inline: false },
-                { name: '\ud83d\udcbe !lastsave', value: 'Afficher la date et l\'heure de la derni\u00e8re sauvegarde JSONBin.', inline: false },
                 { name: '\ud83d\udcbe !save', value: 'Forcer une sauvegarde imm\u00e9diate sur JSONBin.', inline: false },
+                { name: '\ud83d\udcbe !lastsave', value: 'Afficher la date et l\'heure de la derni\u00e8re sauvegarde JSONBin.', inline: false },
                 { name: '\ud83d\udd2e !horoscope [ID_salon]', value: 'Forcer l\'envoi de l\'horoscope dans un salon sp\u00e9cifique.', inline: false },
-                { name: '\ud83d\udd04 !wanted reset', value: 'G\u00e9n\u00e9rer un nouveau criminel du jour.', inline: false },
                 { name: '\u23f0 !rappel [ID] Xmin/h [message]', value: 'Envoyer un rappel \u00e0 un membre sp\u00e9cifique par son ID.', inline: false },
-                { name: '✅ !abo', value: 'Abonner Cacabot à une chaîne pour avoir une notification à chaque sortie.', inline: false },
+                { name: '✅ !abo able/disable [ID_SALON] [ID_CHAINE]', value: 'Abonner Cacabot à une chaîne pour avoir une notification à chaque sortie.', inline: false },
                 { name: '🚨 !wanted set @Membre/pseudo/ID', value: 'Forcer le.a criminel.le du jour.', inline: false }
+                { name: '\ud83d\udd04 !wanted reset', value: 'G\u00e9n\u00e9rer un nouveau criminel du jour.', inline: false },
             );
         return message.reply({ embeds: [embed] });
     }
