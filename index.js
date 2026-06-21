@@ -709,7 +709,7 @@ function getResponse(raw) {
         return { needsHelpx: true };
     }
 
-    if (command === "!last") {
+    if (command === "!lastsave") {
         return { needsLast: true };
     }
 
@@ -3712,7 +3712,7 @@ if (response?.needsWanted) {
             .addFields(
                 { name: '\ud83d\udcdd !setmessages @Membre N', value: 'D\u00e9finir manuellement le nombre de messages d\'un membre.', inline: false },
                 { name: '\ud83d\udce3 !say [ID_salon] [message]', value: 'Envoyer un message dans un salon au nom de Cacabot.', inline: false },
-                { name: '\ud83d\udcbe !last', value: 'Afficher la date et l\'heure de la derni\u00e8re sauvegarde JSONBin.', inline: false },
+                { name: '\ud83d\udcbe !lastsave', value: 'Afficher la date et l\'heure de la derni\u00e8re sauvegarde JSONBin.', inline: false },
                 { name: '\ud83d\udd2e !horoscope [ID_salon]', value: 'Forcer l\'envoi de l\'horoscope dans un salon sp\u00e9cifique.', inline: false },
                 { name: '\ud83d\udcbe !save', value: 'Forcer une sauvegarde imm\u00e9diate sur JSONBin.', inline: false },
                 { name: '\ud83d\udd04 !wanted reset', value: 'G\u00e9n\u00e9rer un nouveau criminel du jour.', inline: false },
@@ -3817,10 +3817,10 @@ if (response?.needsWanted) {
     ]});
 }
 
-    // !last
+    // !lastsave
     if (response?.needsLast) {
         if (message.author.id !== '436218312574107658') return;
-        if (!lastSaveTime) return message.reply('Aucune sauvegarde effectu\u00e9e depuis le d\u00e9marrage.');
+        if (!lastsaveSaveTime) return message.reply('Aucune sauvegarde effectu\u00e9e depuis le d\u00e9marrage.');
         const diff = Date.now() - lastSaveTime;
         const mins = Math.floor(diff / 60000);
         const secs = Math.floor((diff % 60000) / 1000);
