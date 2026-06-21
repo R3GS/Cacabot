@@ -5612,7 +5612,7 @@ client.on('interactionCreate', async (interaction) => {
             embed = new EmbedBuilder()
                 .setColor(0xff0000)
                 .setDescription("# <:youtube_icon:1505457903585198151> YouTube")
-                .setDescription("youtube, stats \ud83d\udd27");
+                .setDescription("youtube, stats \ud83d\udd27")
                 .addFields(
                     { name: "🔎 !youtube", value: "Rechercher une vidéo sur YouTube." },
                     { name: "📈 !stats", value: "Regarder les stats d'une chaîne YouTube." },
