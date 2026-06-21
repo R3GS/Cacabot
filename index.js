@@ -8,6 +8,7 @@ let birthdayData = { birthdays: {} };
 let dailyData = {};
 let weeklyData = {};
 let monthlyData = {};
+let youtubeWatchData = {};
 
 async function loadAll() {
     try {
@@ -20,6 +21,7 @@ async function loadAll() {
         dailyData = json.record.daily ?? {};
         weeklyData = json.record.weekly ?? {};
         monthlyData = json.record.monthly ?? {};
+        youtubeWatchData = json.record.youtubeWatch ?? {};
         console.log('\u2705 Donn\u00e9es charg\u00e9es depuis JSONBin');
     } catch (err) {
         console.error('Erreur chargement JSONBin:', err);
@@ -34,7 +36,7 @@ async function saveAll() {
         const res = await fetch(JSONBIN_URL, {
             method: 'PUT',
             headers: { 'X-Master-Key': JSONBIN_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages: topData.messages, birthdays: birthdayData.birthdays, daily: dailyData, weekly: weeklyData, monthly: monthlyData })
+            body: JSON.stringify({ messages: topData.messages, birthdays: birthdayData.birthdays, daily: dailyData, weekly: weeklyData, monthly: monthlyData, youtubeWatch: youtubeWatchData })
         });
         const json = await res.json();
         console.log('💾 Sauvegarde JSONBin:', res.status, json);
@@ -1902,6 +1904,47 @@ async function startPomodoro(channel, participantsMention, workMin, breakMin, cy
     });
 }
 
+async function checkYoutubeChannels() {
+    for (const [channelId, watch] of Object.entries(youtubeWatchData)) {
+        try {
+            const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&maxResults=1&type=video&key=${process.env.YOUTUBE_API_KEY}`);
+            const data = await res.json();
+            if (!data.items || data.items.length === 0) continue;
+
+            const latest = data.items[0];
+            const videoId = latest.id.videoId;
+
+            if (watch.lastVideoId === videoId) continue;
+
+            watch.lastVideoId = videoId;
+            saveAll();
+
+            const channel = client.channels.cache.get(watch.discordChannelId);
+            if (!channel) continue;
+
+            const embed = new EmbedBuilder()
+                .setColor(0xff0000)
+                .setTitle(latest.snippet.title)
+                .setURL(`https://www.youtube.com/watch?v=${videoId}`)
+                .setThumbnail(latest.snippet.thumbnails.high?.url ?? latest.snippet.thumbnails.default.url)
+                .setDescription(`**${latest.snippet.channelTitle}** vient de publier une nouvelle vidéo !`)
+                .setFooter({ text: 'Nouvelle vidéo' })
+                .setTimestamp(new Date(latest.snippet.publishedAt));
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setLabel('🔗 Ouvrir')
+                    .setStyle(ButtonStyle.Link)
+                    .setURL(`https://www.youtube.com/watch?v=${videoId}`)
+            );
+
+            await channel.send({ content: `📺 Nouvelle vidéo de **${latest.snippet.channelTitle}** !`, embeds: [embed], components: [row] });
+        } catch (e) {
+            console.error(`Erreur checkYoutubeChannels pour ${channelId}:`, e);
+        }
+    }
+}
+
 async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     const canvas = createCanvas(977, 1273);
@@ -2019,75 +2062,92 @@ client.on('messageCreate', async (message) => {
         return message.reply(`📺 Chaînes suivies dans ce salon :\n${lines}`);
     }
 
-    if (sub === 'remove') {
-        const query = args.slice(2).join(' ');
-        if (!query) return message.reply("Usage : `!abo remove [nom de la chaîne]`");
+    if (sub === 'able' || sub === 'disable') {
+        const targetChannelId = args[2];
+        const channelQuery = args.slice(3).join(' ');
 
-        const found = Object.entries(youtubeWatchData).find(([id, w]) =>
-            w.channelTitle.toLowerCase().includes(query.toLowerCase()) && w.discordChannelId === message.channel.id
-        );
-        if (!found) return message.reply("Chaîne non trouvée dans les abonnements de ce salon !");
+        if (!targetChannelId || !channelQuery) {
+            return message.reply(`Usage : \`!abo ${sub} [ID_SALON] [URL ou nom de la chaîne]\``);
+        }
 
-        delete youtubeWatchData[found[0]];
-        await saveAll();
-        return message.reply(`✅ **${found[1].channelTitle}** retirée des abonnements !`);
-    }
+        if (!/^\d{17,19}$/.test(targetChannelId)) {
+            return message.reply("L'ID du salon est invalide !");
+        }
 
-    const query = args.slice(1).join(' ');
-    if (!query) return message.reply("Usage : `!abo [nom ou URL de la chaîne]` ou `!abo list` / `!abo remove [chaîne]`");
+        const discordTargetChannel = message.guild.channels.cache.get(targetChannelId);
+        if (!discordTargetChannel) {
+            return message.reply("Salon Discord introuvable avec cet ID !");
+        }
 
-    try {
-        let channelId = null;
-        const urlMatch = query.match(/(?:youtube\.com\/(?:channel\/|c\/|@)|@)([a-zA-Z0-9_-]+)/);
-        const handle = urlMatch ? urlMatch[1] : null;
+        try {
+            let channelId = null;
+            const urlMatch = channelQuery.match(/(?:youtube\.com\/(?:channel\/|c\/|@)|@)([a-zA-Z0-9_-]+)/);
+            const handle = urlMatch ? urlMatch[1] : null;
 
-        if (query.includes('youtube.com/channel/')) {
-            channelId = query.split('channel/')[1].split(/[/?]/)[0];
-        } else {
-            const searchTerm = handle ?? query;
-            const forHandleRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(searchTerm.replace('@', ''))}&key=${process.env.YOUTUBE_API_KEY}`);
-            const forHandleData = await forHandleRes.json();
-
-            if (forHandleData.items && forHandleData.items.length > 0) {
-                channelId = forHandleData.items[0].id;
+            if (channelQuery.includes('youtube.com/channel/')) {
+                channelId = channelQuery.split('channel/')[1].split(/[/?]/)[0];
             } else {
-                const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchTerm)}&type=channel&maxResults=1&key=${process.env.YOUTUBE_API_KEY}`);
-                const searchData = await searchRes.json();
-                if (searchData.items && searchData.items.length > 0) {
-                    channelId = searchData.items[0].snippet.channelId;
+                const searchTerm = handle ?? channelQuery;
+                const forHandleRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(searchTerm.replace('@', ''))}&key=${process.env.YOUTUBE_API_KEY}`);
+                const forHandleData = await forHandleRes.json();
+
+                if (forHandleData.items && forHandleData.items.length > 0) {
+                    channelId = forHandleData.items[0].id;
+                } else {
+                    const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchTerm)}&type=channel&maxResults=1&key=${process.env.YOUTUBE_API_KEY}`);
+                    const searchData = await searchRes.json();
+                    if (searchData.items && searchData.items.length > 0) {
+                        channelId = searchData.items[0].snippet.channelId;
+                    }
                 }
             }
+
+            if (!channelId) return message.reply("Chaîne YouTube introuvable !");
+
+            if (sub === 'disable') {
+                if (!youtubeWatchData[channelId] || youtubeWatchData[channelId].discordChannelId !== targetChannelId) {
+                    return message.reply("Cette chaîne n'est pas suivie dans ce salon !");
+                }
+                const removedTitle = youtubeWatchData[channelId].channelTitle;
+                delete youtubeWatchData[channelId];
+                await saveAll();
+                return message.reply(`✅ **${removedTitle}** ne sera plus suivie dans <#${targetChannelId}> !`);
+            }
+
+            // sub === 'able'
+            if (youtubeWatchData[channelId]) {
+                if (youtubeWatchData[channelId].discordChannelId === targetChannelId) {
+                    return message.reply(`**${youtubeWatchData[channelId].channelTitle}** est déjà suivie dans <#${targetChannelId}> !`);
+                }
+                return message.reply(`**${youtubeWatchData[channelId].channelTitle}** est déjà suivie, mais dans un autre salon. Désactive d'abord avec \`!abo disable\`.`);
+            }
+
+            const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${channelId}&key=${process.env.YOUTUBE_API_KEY}`);
+            const detailData = await detailRes.json();
+            if (!detailData.items || detailData.items.length === 0) return message.reply("Chaîne introuvable !");
+
+            const channelTitle = detailData.items[0].snippet.title;
+
+            const latestRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&maxResults=1&type=video&key=${process.env.YOUTUBE_API_KEY}`);
+            const latestData = await latestRes.json();
+            const lastVideoId = latestData.items?.[0]?.id?.videoId ?? null;
+
+            youtubeWatchData[channelId] = {
+                channelTitle,
+                discordChannelId: targetChannelId,
+                lastVideoId
+            };
+            await saveAll();
+
+            return message.reply(`✅ **${channelTitle}** est maintenant suivie ! Les nouvelles vidéos seront annoncées dans <#${targetChannelId}> (vérification toutes les heures).`);
+
+        } catch (e) {
+            console.error('Erreur !abo:', e);
+            return message.reply("Erreur lors du traitement de la commande.");
         }
-
-        if (!channelId) return message.reply("Chaîne introuvable !");
-
-        if (youtubeWatchData[channelId]) {
-            return message.reply(`**${youtubeWatchData[channelId].channelTitle}** est déjà suivie !`);
-        }
-
-        const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${channelId}&key=${process.env.YOUTUBE_API_KEY}`);
-        const detailData = await detailRes.json();
-        if (!detailData.items || detailData.items.length === 0) return message.reply("Chaîne introuvable !");
-
-        const channelTitle = detailData.items[0].snippet.title;
-
-        const latestRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&maxResults=1&type=video&key=${process.env.YOUTUBE_API_KEY}`);
-        const latestData = await latestRes.json();
-        const lastVideoId = latestData.items?.[0]?.id?.videoId ?? null;
-
-        youtubeWatchData[channelId] = {
-            channelTitle,
-            discordChannelId: message.channel.id,
-            lastVideoId
-        };
-        await saveAll();
-
-        return message.reply(`✅ **${channelTitle}** est maintenant suivie ! Tu seras notifié.e des nouvelles vidéos dans ce salon (vérification toutes les heures).`);
-
-    } catch (e) {
-        console.error('Erreur !abo:', e);
-        return message.reply("Erreur lors de l'abonnement.");
     }
+
+    return message.reply("Usage : `!abo able [ID_SALON] [URL/nom chaîne]`, `!abo disable [ID_SALON] [URL/nom chaîne]` ou `!abo list`");
 }
 
 if (response?.needsLastVideo) {
@@ -4345,7 +4405,7 @@ client.on('interactionCreate', async (interaction) => {
                 const messages = await channel.messages.fetch({ limit: limit + 1 });
                 const toDelete = messages.filter(m => {
                     const age = Date.now() - m.createdTimestamp;
-                    return age < 14 * 24 * 60 * 60 * 1000 && m.id !== progressMsg.id;
+                    return age < 14 * 24 * 60 * 60 * 1000;
                 });
                 if (toDelete.size === 0) break;
                 await channel.bulkDelete(toDelete, true);
@@ -4527,66 +4587,6 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // =========================
-    // BOUTON CRY
-    // =========================
-
-    if (interaction.isButton() && interaction.customId.startsWith('cry_with_')) {
-        const parts = interaction.customId.split('_');
-        const originalAuthorId = parts[2];
-        const originalAuthorNom = parts[3];
-        const targetId = parts[4];
-        const targetNom = parts[5];
-
-        if (interaction.user.id === originalAuthorId) {
-            return interaction.reply({ content: "Tu as d\u00e9j\u00e0 pleur\u00e9...", ephemeral: true });
-        }
-        if (targetId !== 'none' && interaction.user.id === targetId) {
-            return interaction.reply({ content: `C'est toi qui a fait pleurer **${originalAuthorNom}** !`, ephemeral: true });
-        }
-
-        const cryGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505906480916725791/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906486872768522/wwe.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487413964941/cry2.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487656972359/hamster.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487959093359/interstellar.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906869598814310/cry.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488625856622/powder.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488932176034/vi.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489271779449/gangle.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489657790466/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489947324589/fred.gif"];
-        const gif = cryGifs[Math.floor(Math.random() * cryGifs.length)];
-        const clickerNom = interaction.member?.displayName ?? interaction.user.username;
-
-        const embed = new EmbedBuilder()
-            .setColor(0x597eff)
-            .setDescription(`\ud83d\ude2d **${clickerNom}** Pleure avec **${originalAuthorNom}**...`)
-            .setImage(gif);
-
-        await disableButtons(interaction);
-        return interaction.reply({ embeds: [embed] });
-    }
-
-    // =========================
-    // BOUTON PALAREF
-    // =========================
-
-    if (interaction.isButton() && interaction.customId.startsWith('palaref_aussi_')) {
-        const parts = interaction.customId.split('_');
-        const originalAuthorId = parts[2];
-        const originalAuthorNom = parts[3];
-        const cibleId = parts[4];
-
-        if (interaction.user.id === originalAuthorId) {
-            return interaction.reply({ content: "On a compris que t'avais pas la ref :(", ephemeral: true });
-        }
-        if (interaction.user.id === cibleId) {
-            return interaction.reply({ content: "\u274c", ephemeral: true });
-        }
-
-        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
-        const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
-        const clickerNom = interaction.member?.displayName ?? interaction.user.username;
-
-        const embed = new EmbedBuilder()
-            .setColor(0x503649)
-            .setDescription(`\ud83d\ude10 **${clickerNom}** n'a pas la ref non plus...`)
-            .setImage(gif);
-
-        return interaction.reply({ embeds: [embed] });
-    }
-
-    // =========================
     // BOUTONS ACTIF
     // =========================
 
@@ -4638,7 +4638,7 @@ client.on('interactionCreate', async (interaction) => {
             .setStyle(periode === 'mois' ? ButtonStyle.Primary : ButtonStyle.Secondary);
         const row = new ActionRowBuilder().addComponents(jourBtn, semaineBtn, moisBtn);
 
-        return interaction.update({ embeds: [embed], components: [row1, row2] });
+        return interaction.update({ embeds: [embed], components: [row] });
     }
 
     // =========================
@@ -4769,7 +4769,7 @@ client.on('interactionCreate', async (interaction) => {
             .setDescription(lines)
             .setFooter({ text: `Page ${newPage + 1}/${totalPages} \u2022 ${newOrdre === 'chrono' ? '\ud83d\udd52 Ordre chronologique' : '\ud83d\udcc5 Ordre classique'}` });
 
-        return interaction.update({ embeds: [embed], components: [row1, row2] });
+        return interaction.update({ embeds: [embed], components: [row] });
     }
 
     // =========================
@@ -4817,26 +4817,6 @@ client.on('interactionCreate', async (interaction) => {
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
         const embed = buildHugEmbed(retourNom, originalAuthorNom);
         await interaction.message.edit({ components: [] }).catch(() => {});
-        return interaction.reply({ embeds: [embed] });
-    }
-
-    // =========================
-    // BOUTON DANCE JOIN (solo)
-    // =========================
-
-    if (interaction.isButton() && interaction.customId.startsWith("dance_join_")) {
-        const parts = interaction.customId.split("_");
-        const originalAuthorId = parts[2];
-        const originalAuthorNom = parts.slice(3).join("_");
-        const clickerId = interaction.user.id;
-
-        if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Tu danses d\u00e9j\u00e0 ! \ud83d\udd7a", ephemeral: true });
-        }
-
-        const joinNom = interaction.member?.displayName ?? interaction.user.username;
-        const embed = buildDanceEmbed(`\ud83d\udc83 **${joinNom}** rejoint **${originalAuthorNom}** sur le dancefloor !`, false);
-        await disableButtons(interaction);
         return interaction.reply({ embeds: [embed] });
     }
 
@@ -5222,43 +5202,6 @@ client.on('interactionCreate', async (interaction) => {
         }
         return;
     }
-
-    // =========================
-    // BOUTONS CRIMINEL
-    // =========================
-
-    if (interaction.isButton() && interaction.customId.startsWith('wanted_tab_')) {
-    const parts = interaction.customId.split('_');
-    const tab = parts[2];
-    const authorId = parts[3];
-
-    if (authorId !== 'daily' && interaction.user.id !== authorId) {
-        return interaction.reply({ content: 'Pour consulter les menus de l\'avis de recherche, utilise `!wanted` !', ephemeral: true });
-    }
-
-    const now = new Date();
-    const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-    const wantedID = getWantedOfTheDay(dateKey, interaction.guild);
-
-    if (tab === 'avis') {
-        const { embed } = getWantedEmbedData(interaction.guild, dateKey, wantedID);
-        const prime = Math.floor(seedRndWanted(dateKey * 19) * 95) + 5;
-        const nom = interaction.guild.members.cache.get(wantedID)?.displayName ?? wantedID;
-        try {
-            const avatarUrl = interaction.guild.members.cache.get(wantedID)?.user.displayAvatarURL({ extension: 'png', size: 512 });
-            const imageBuffer = await generateWantedImage(avatarUrl, nom, prime);
-            embed.setImage('attachment://wanted.png');
-            return interaction.update({ embeds: [embed], files: [{ attachment: imageBuffer, name: 'wanted.png' }], components: [buildWantedRow('avis', authorId)] });
-        } catch (e) {
-            embed.setThumbnail(interaction.guild.members.cache.get(wantedID)?.user.displayAvatarURL({ dynamic: true }));
-            return interaction.update({ embeds: [embed], components: [buildWantedRow('avis', authorId)] });
-        }
-    } else if (tab === 'preuves') {
-        return interaction.update({ embeds: [getPreuvesEmbed(interaction.guild, dateKey, wantedID)], components: [buildWantedRow('preuves', authorId)] });
-    } else if (tab === 'affaire') {
-        return interaction.update({ embeds: [getAffaireEmbed(interaction.guild, dateKey, wantedID)], components: [buildWantedRow('affaire', authorId)] });
-    }
-}
 
     // =========================
     // BOUTON CRY
@@ -6026,6 +5969,7 @@ client.once('ready', async () => {
     }
     // for (const guild of client.guilds.cache.values()) { scheduleWanted(guild); }
     console.log(`✅ Membres fetchés`)
+    setInterval(checkYoutubeChannels, 60 * 60 * 1000);
 
     const msUntilMidnight = () => {
                 const now = new Date();
