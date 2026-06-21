@@ -741,6 +741,14 @@ function getResponse(raw) {
         return { needsStats: true };
     }
 
+    if (command === "!abo") {
+        return { needsAbo: true };
+    }
+
+    if (command === "!last") {
+        return { needsLastVideo: true };
+    }
+
     // =========================
     //         !QUESTION
     // =========================
@@ -1997,6 +2005,159 @@ client.on('messageCreate', async (message) => {
     const response = FEUR_IMMUNE.includes(message.author.id) ? null : getResponse(message.content);
 
     if (response === null || response === undefined) return;
+
+    // !last & !abo
+
+    if (response?.needsAbo) {
+    const args = message.content.trim().split(/\s+/);
+    const sub = args[1]?.toLowerCase();
+
+    if (sub === 'list') {
+        const entries = Object.entries(youtubeWatchData).filter(w => w[1].discordChannelId === message.channel.id);
+        if (entries.length === 0) return message.reply("Aucune chaîne suivie dans ce salon !");
+        const lines = entries.map(([id, w]) => `• **${w.channelTitle}**`).join('\n');
+        return message.reply(`📺 Chaînes suivies dans ce salon :\n${lines}`);
+    }
+
+    if (sub === 'remove') {
+        const query = args.slice(2).join(' ');
+        if (!query) return message.reply("Usage : `!abo remove [nom de la chaîne]`");
+
+        const found = Object.entries(youtubeWatchData).find(([id, w]) =>
+            w.channelTitle.toLowerCase().includes(query.toLowerCase()) && w.discordChannelId === message.channel.id
+        );
+        if (!found) return message.reply("Chaîne non trouvée dans les abonnements de ce salon !");
+
+        delete youtubeWatchData[found[0]];
+        await saveAll();
+        return message.reply(`✅ **${found[1].channelTitle}** retirée des abonnements !`);
+    }
+
+    const query = args.slice(1).join(' ');
+    if (!query) return message.reply("Usage : `!abo [nom ou URL de la chaîne]` ou `!abo list` / `!abo remove [chaîne]`");
+
+    try {
+        let channelId = null;
+        const urlMatch = query.match(/(?:youtube\.com\/(?:channel\/|c\/|@)|@)([a-zA-Z0-9_-]+)/);
+        const handle = urlMatch ? urlMatch[1] : null;
+
+        if (query.includes('youtube.com/channel/')) {
+            channelId = query.split('channel/')[1].split(/[/?]/)[0];
+        } else {
+            const searchTerm = handle ?? query;
+            const forHandleRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(searchTerm.replace('@', ''))}&key=${process.env.YOUTUBE_API_KEY}`);
+            const forHandleData = await forHandleRes.json();
+
+            if (forHandleData.items && forHandleData.items.length > 0) {
+                channelId = forHandleData.items[0].id;
+            } else {
+                const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchTerm)}&type=channel&maxResults=1&key=${process.env.YOUTUBE_API_KEY}`);
+                const searchData = await searchRes.json();
+                if (searchData.items && searchData.items.length > 0) {
+                    channelId = searchData.items[0].snippet.channelId;
+                }
+            }
+        }
+
+        if (!channelId) return message.reply("Chaîne introuvable !");
+
+        if (youtubeWatchData[channelId]) {
+            return message.reply(`**${youtubeWatchData[channelId].channelTitle}** est déjà suivie !`);
+        }
+
+        const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${channelId}&key=${process.env.YOUTUBE_API_KEY}`);
+        const detailData = await detailRes.json();
+        if (!detailData.items || detailData.items.length === 0) return message.reply("Chaîne introuvable !");
+
+        const channelTitle = detailData.items[0].snippet.title;
+
+        const latestRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&maxResults=1&type=video&key=${process.env.YOUTUBE_API_KEY}`);
+        const latestData = await latestRes.json();
+        const lastVideoId = latestData.items?.[0]?.id?.videoId ?? null;
+
+        youtubeWatchData[channelId] = {
+            channelTitle,
+            discordChannelId: message.channel.id,
+            lastVideoId
+        };
+        await saveAll();
+
+        return message.reply(`✅ **${channelTitle}** est maintenant suivie ! Tu seras notifié.e des nouvelles vidéos dans ce salon (vérification toutes les heures).`);
+
+    } catch (e) {
+        console.error('Erreur !abo:', e);
+        return message.reply("Erreur lors de l'abonnement.");
+    }
+}
+
+if (response?.needsLastVideo) {
+    const query = message.content.trim().split(/\s+/).slice(1).join(' ');
+    if (!query) return message.reply("Usage : `!last [nom ou URL de la chaîne]`");
+
+    try {
+        let channelId = null;
+        const urlMatch = query.match(/(?:youtube\.com\/(?:channel\/|c\/|@)|@)([a-zA-Z0-9_-]+)/);
+        const handle = urlMatch ? urlMatch[1] : null;
+
+        if (query.includes('youtube.com/channel/')) {
+            channelId = query.split('channel/')[1].split(/[/?]/)[0];
+        } else {
+            const searchTerm = handle ?? query;
+            const forHandleRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(searchTerm.replace('@', ''))}&key=${process.env.YOUTUBE_API_KEY}`);
+            const forHandleData = await forHandleRes.json();
+
+            if (forHandleData.items && forHandleData.items.length > 0) {
+                channelId = forHandleData.items[0].id;
+            } else {
+                const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchTerm)}&type=channel&maxResults=1&key=${process.env.YOUTUBE_API_KEY}`);
+                const searchData = await searchRes.json();
+                if (searchData.items && searchData.items.length > 0) {
+                    channelId = searchData.items[0].snippet.channelId;
+                }
+            }
+        }
+
+        if (!channelId) return message.reply("Chaîne introuvable !");
+
+        const latestRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&maxResults=1&type=video&key=${process.env.YOUTUBE_API_KEY}`);
+        const latestData = await latestRes.json();
+
+        if (!latestData.items || latestData.items.length === 0) return message.reply("Aucune vidéo trouvée pour cette chaîne !");
+
+        const video = latestData.items[0];
+        const videoId = video.id.videoId;
+
+        const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoId}&key=${process.env.YOUTUBE_API_KEY}`);
+        const detailData = await detailRes.json();
+        const fullVideo = detailData.items[0];
+
+        const duration = fullVideo.contentDetails.duration
+            .replace('PT', '').replace('H', 'h ').replace('M', 'min ').replace('S', 's');
+        const views = parseInt(fullVideo.statistics.viewCount).toLocaleString('fr-FR');
+        const date = new Date(video.snippet.publishedAt).toLocaleDateString('fr-FR', {
+            day: 'numeric', month: 'long', year: 'numeric'
+        });
+
+        const embed = new EmbedBuilder()
+            .setColor(0xff0000)
+            .setTitle(video.snippet.title)
+            .setURL(`https://www.youtube.com/watch?v=${videoId}`)
+            .setThumbnail(video.snippet.thumbnails.high.url)
+            .addFields(
+                { name: '📺 Chaîne', value: video.snippet.channelTitle, inline: true },
+                { name: '⏱️ Durée', value: duration, inline: true },
+                { name: '👁️ Vues', value: views, inline: true },
+                { name: '📅 Publié le', value: date, inline: true }
+            )
+            .setFooter({ text: 'Dernière vidéo publiée' });
+
+        return message.reply({ embeds: [embed] });
+
+    } catch (e) {
+        console.error('Erreur !last:', e);
+        return message.reply("Erreur lors de la récupération.");
+    }
+}
 
     // !animal
     if (response?.needsMention) {
