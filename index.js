@@ -5660,7 +5660,7 @@ client.on('interactionCreate', async (interaction) => {
     // =========================
 
     if (interaction.isButton() && interaction.customId.startsWith('help_back_util_')) {
-        const helpAuthorId = interaction.customId.split('_')[3];
+        const helpAuthorId = interaction.customId.replace('help_back_util_', '');
         if (interaction.user.id !== helpAuthorId) {
             return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
         }
@@ -5740,7 +5740,7 @@ client.on('interactionCreate', async (interaction) => {
             const utilEmbed = new EmbedBuilder()
                 .setColor(0x3498db)
                 .setTitle("\ud83d\udee0 Utilitaire")
-                .setDescription("<:discord_icon:1505454379669524532> **Discord** \u2014 Commandes relatives au serveur\n<:youtube_icon:1505457903585198151> **YouTube** \u2014 En construction...\n\ud83e\udd16 **Cacabot** \u2014 Commandes relatives \u00e0 Cacabot\n\ud83d\uddd2\ufe0f **Autres** \u2014 Autres commandes non-r\u00e9pertori\u00e9es");
+                .setDescription("<:discord_icon:1505454379669524532> **Discord** \u2014 Commandes relatives au serveur\n<:youtube_icon:1505457903585198151> **YouTube** \u2014 Pour explorer\n\ud83e\udd16 **Cacabot** \u2014 Commandes relatives \u00e0 Cacabot\n\ud83d\uddd2\ufe0f **Autres** \u2014 Autres commandes non-r\u00e9pertori\u00e9es");
 
             const utilMenu = new StringSelectMenuBuilder()
                 .setCustomId(`help_util_${helpAuthorId}`)
