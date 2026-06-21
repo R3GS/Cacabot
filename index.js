@@ -2157,18 +2157,6 @@ if (response?.needsLastVideo) {
         console.error('Erreur !last:', e);
         return message.reply("Erreur lors de la récupération.");
     }
-    const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-        .setLabel('🔗 Ouvrir')
-        .setStyle(ButtonStyle.Link)
-        .setURL(`https://www.youtube.com/watch?v=${videoId}`),
-    new ButtonBuilder()
-        .setCustomId(`yt_close_${message.author.id}`)
-        .setLabel('❌ Fermer')
-        .setStyle(ButtonStyle.Danger)
-);
-
-return message.reply({ embeds: [embed], components: [row] });
 }
 
     // !animal
@@ -2257,7 +2245,18 @@ return message.reply({ embeds: [embed], components: [row] });
             )
             .setFooter({ text: `ID : ${channelId}` });
 
-        return message.reply({ embeds: [embed] });
+        const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+        .setLabel('🔗 Ouvrir')
+        .setStyle(ButtonStyle.Link)
+        .setURL(`https://www.youtube.com/watch?v=${videoId}`),
+    new ButtonBuilder()
+        .setCustomId(`yt_close_${message.author.id}`)
+        .setLabel('❌ Fermer')
+        .setStyle(ButtonStyle.Danger)
+);
+
+return message.reply({ embeds: [embed], components: [row] });
 
     } catch (e) {
         console.error('Erreur stats YouTube:', e);
