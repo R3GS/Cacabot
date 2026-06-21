@@ -737,6 +737,10 @@ function getResponse(raw) {
         return { needsServeur: true };
     }
 
+    if (command === "!stats") {
+        return { needsStats: true };
+    }
+
     // =========================
     //         !QUESTION
     // =========================
@@ -2012,8 +2016,83 @@ client.on('messageCreate', async (message) => {
         return message.reply(getAnimalResponse(message));
     }
 
-    // !youtube
+    // !stats
+    if (response?.needsStats) {
+    const query = message.content.trim().split(/\s+/).slice(1).join(' ');
+    if (!query) return message.reply("Usage : `!stats [nom ou URL de la chaîne]`");
 
+    const formatNumber = (num) => {
+        const n = parseInt(num);
+        if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1).replace('.0', '') + ' Md';
+        if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.0', '') + ' M';
+        if (n >= 1_000) return (n / 1_000).toFixed(1).replace('.0', '') + ' k';
+        return n.toLocaleString('fr-FR');
+    };
+
+    try {
+        let channelId = null;
+
+        // Détection d'une URL/handle YouTube
+        const urlMatch = query.match(/(?:youtube\.com\/(?:channel\/|c\/|@)|@)([a-zA-Z0-9_-]+)/);
+        const handle = urlMatch ? urlMatch[1] : null;
+
+        if (query.includes('youtube.com/channel/')) {
+            channelId = query.split('channel/')[1].split(/[/?]/)[0];
+        } else {
+            // Recherche par handle ou nom approximatif
+            const searchTerm = handle ?? query;
+            const forHandleRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(searchTerm.replace('@', ''))}&key=${process.env.YOUTUBE_API_KEY}`);
+            const forHandleData = await forHandleRes.json();
+
+            if (forHandleData.items && forHandleData.items.length > 0) {
+                channelId = forHandleData.items[0].id;
+            } else {
+                const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchTerm)}&type=channel&maxResults=1&key=${process.env.YOUTUBE_API_KEY}`);
+                const searchData = await searchRes.json();
+                if (searchData.items && searchData.items.length > 0) {
+                    channelId = searchData.items[0].snippet.channelId;
+                }
+            }
+        }
+
+        if (!channelId) return message.reply("Chaîne introuvable !");
+
+        const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${channelId}&key=${process.env.YOUTUBE_API_KEY}`);
+        const detailData = await detailRes.json();
+
+        if (!detailData.items || detailData.items.length === 0) return message.reply("Chaîne introuvable !");
+
+        const channel = detailData.items[0];
+        const snippet = channel.snippet;
+        const stats = channel.statistics;
+
+        const createdDate = new Date(snippet.publishedAt).toLocaleDateString('fr-FR', {
+            day: 'numeric', month: 'long', year: 'numeric'
+        });
+
+        const embed = new EmbedBuilder()
+            .setColor(0xff0000)
+            .setTitle(snippet.title)
+            .setURL(`https://www.youtube.com/channel/${channelId}`)
+            .setThumbnail(snippet.thumbnails.high?.url ?? snippet.thumbnails.default.url)
+            .setDescription(snippet.description ? snippet.description.slice(0, 200) + (snippet.description.length > 200 ? '...' : '') : '*Aucune description*')
+            .addFields(
+                { name: '👥 Abonnés', value: stats.hiddenSubscriberCount ? 'Caché' : formatNumber(stats.subscriberCount), inline: true },
+                { name: '👁️ Vues totales', value: formatNumber(stats.viewCount), inline: true },
+                { name: '🎬 Vidéos', value: formatNumber(stats.videoCount), inline: true },
+                { name: '📅 Création', value: createdDate, inline: true }
+            )
+            .setFooter({ text: `ID : ${channelId}` });
+
+        return message.reply({ embeds: [embed] });
+
+    } catch (e) {
+        console.error('Erreur stats YouTube:', e);
+        return message.reply("Erreur lors de la récupération des stats.");
+    }
+}
+
+    // !youtube
     if (response?.needsYoutube) {
     const query = message.content.trim().split(/\s+/).slice(1).join(' ');
     if (!query) return message.reply("Usage : `!youtube [recherche]`");
@@ -5533,7 +5612,10 @@ client.on('interactionCreate', async (interaction) => {
             embed = new EmbedBuilder()
                 .setColor(0xff0000)
                 .setDescription("# <:youtube_icon:1505457903585198151> YouTube")
-                .setDescription("En construction... \ud83d\udd27");
+                .setDescription("youtube, stats \ud83d\udd27");
+                .addFields(
+                    { name: "🔎 !youtube", value: "Rechercher une vidéo sur YouTube." },
+                    { name: "📈 !stats", value: "Regarder les stats d'une chaîne YouTube." },
         }
 
         if (value === 'autres') {
