@@ -5616,6 +5616,7 @@ client.on('interactionCreate', async (interaction) => {
                 .addFields(
                     { name: "🔎 !youtube", value: "Rechercher une vidéo sur YouTube." },
                     { name: "📈 !stats", value: "Regarder les stats d'une chaîne YouTube." },
+                    );
         }
 
         if (value === 'autres') {
