@@ -2139,7 +2139,7 @@ client.on('messageCreate', async (message) => {
             };
             await saveAll();
 
-            return message.reply(`✅ **${channelTitle}** est maintenant suivie ! Les nouvelles vidéos seront annoncées dans <#${targetChannelId}> (vérification toutes les heures).`);
+            return message.reply(`✅ La chaîne de **${channelTitle}** est maintenant suivie ! Les nouvelles vidéos seront annoncées dans <#${targetChannelId}> (vérification toutes les heures).`);
 
         } catch (e) {
             console.error('Erreur !abo:', e);
