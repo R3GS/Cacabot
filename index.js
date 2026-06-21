@@ -1525,6 +1525,17 @@ async function sendFlipChoix(channel, message, authorId, customMsg) {
 const flipParis = new Map();
 let flipEnCours = false;
 
+function decodeHtmlEntities(text) {
+    if (!text) return text;
+    return text
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&apos;/g, "'")
+        .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(code));
+}
 
 function getMonthKey() {
     const now = new Date();
@@ -2201,7 +2212,7 @@ if (response?.needsLastVideo) {
 
         const embed = new EmbedBuilder()
             .setColor(0xff0000)
-            .setTitle(video.snippet.title)
+            .setTitle(decodeHtmlEntities(video.snippet.title))
             .setURL(`https://www.youtube.com/watch?v=${videoId}`)
             .setThumbnail(video.snippet.thumbnails.high.url)
             .addFields(
@@ -2210,7 +2221,6 @@ if (response?.needsLastVideo) {
                 { name: '👁️ Vues', value: views, inline: true },
                 { name: '📅 Publié le', value: date, inline: true }
             )
-            .setFooter({ text: 'Dernière vidéo publiée' });
 
         const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
