@@ -5832,12 +5832,13 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.update({ embeds: [embed], components: [row] });
     }
     } catch (err) {
-        if (err.code === 10062 || err.message?.includes('Unknown interaction') || err.message?.includes('expired')) {
-            if (interaction.isButton()) {
-                interaction.reply({ content: "Ce bouton n'est plus disponible !", ephemeral: true }).catch(() => {});
-            }
+    console.error('Erreur interactionCreate:', err);
+    if (err.code === 10062 || err.message?.includes('Unknown interaction') || err.message?.includes('expired')) {
+        if (interaction.isButton()) {
+            interaction.reply({ content: "Ce bouton n'est plus disponible !", ephemeral: true }).catch(() => {});
         }
     }
+}
 });
 
 // =========================
