@@ -74,7 +74,7 @@ async function checkBirthdays() {
                 // Vérifier si c'est un bot
                 const member = guild.members.cache.get(userId);
                 if (member?.user.bot) {
-                    await channel.send(`JOYEUX ANNIVERSAIRE, COLLÈGUE <@${userId}> ! 🎉\nTu fais partie des bots qui rendent ce serveur encore meilleur, alors que ta vie reste longue et belle <3`);
+                    await channel.send(`JOYEUX ANNIVERSAIRE, COLLÈGUE <@${userId}> ! 🎉\nTu fais partie des bots qui rendent ce serveur encore meilleur, alors, que ta vie reste longue et belle <3`);
                     await channel.send('https://cdn.discordapp.com/attachments/1480756332373213275/1506636764771778660/cyclops-ryu.gif');
                     continue;
                 }
@@ -853,7 +853,7 @@ function getResponse(raw) {
 
     if (/\bh?e+h?y?\s+p[e]+t[i]+t|\beh\s+p[e]+t[i]+t/i.test(cleaned)) return { needsHePetit: true };
     if (cleaned.includes("j ai menti") || cleaned.includes("jai menti")) return { files: ["./jai_menti.mp3"] };
-    if (cleaned.includes("absolute cacabot")) return "https://media.discordapp.net/attachments/1504056056169369722/1505371569986474175/image.png";
+    if (cleaned.includes("absolute cacabot")) return "https://cdn.discordapp.com/attachments/1128032964924670053/1514231086153207998/ABSOLUTE_CACABOT.gif";
     if (cleaned.includes("henry tran") || cleaned.includes("singapour")) {
         const videos = [
             "https://cdn.discordapp.com/attachments/1128032964924670053/1504609617638854817/SINGAPOUR_1.mp4",
