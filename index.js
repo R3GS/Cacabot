@@ -2028,6 +2028,17 @@ client.on('messageCreate', async (message) => {
         return message.reply(CHEH_GIF);
     }
 
+    // Remplacement liens Instagram Reels
+    const instaRegex = /https?:\/\/(?:www\.)?instagram\.com\/reel\/[^\s]+/gi;
+    const instaMatches = message.content.match(instaRegex);
+    if (instaMatches) {
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        const nouveauContenu = message.content.replace(instaRegex, url => url.replace('instagram.com', 'kkinstagram.com'));
+        await message.delete().catch(() => {});
+        await message.channel.send(`**${auteurNom}** a posté ce reel Instagram ! *(je change juste le lien pour que tout le monde y ait accès)*\n${nouveauContenu}`);
+        return;
+    }
+
     // Comptage messages pour !top
     if (message.guild && message.guild.id === '720057528351850547') {
         const uid = message.author.id;
@@ -4267,7 +4278,7 @@ if (response?.needsWanted) {
         return message.reply({ embeds: [response.data], components: [row] });
     }
 
-    // R\u00e9ponse texte simple
+    // Réponse texte simple
     if (response && typeof response === "object" && response.files) {
         return message.reply({ files: response.files });
     }
