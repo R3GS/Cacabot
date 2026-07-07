@@ -482,12 +482,20 @@ function getResponse(raw) {
     //         !CHOIX
     // =========================
 
-    if (command === "!choix") {
+    Bonne idée, ça évite d'avoir des réponses du genre "Tu préfères manger du caca, tous les jours". On ajoute un nettoyage au tout début, avec une regex qui gère les variantes (avec/sans accent, avec/sans "s") :
+javascript// =========================
+//         !CHOIX
+// =========================
+
+if (command === "!choix") {
 
     // Enlève la ponctuation de fin (?, !, ., etc.)
-    const texteBrut = raw.replace(/^!choix\s*/i, "").trim().replace(/[?!.\s]+$/, "").trim();
+    let texteBrut = raw.replace(/^!choix\s*/i, "").trim().replace(/[?!.\s]+$/, "").trim();
 
-    // Met une majuscule à la première lettre (gère les accents)
+    // Enlève "tu préfères" / "tu prefere" / "tu préfère" / "tu preferes" en début de phrase
+    texteBrut = texteBrut.replace(/^tu\s+pr[ée]f[èe]res?\s+/i, "").trim();
+
+    // Met une majuscule à la première lettre (gère aussi les accents)
     const capitalizeFirst = (str) => {
         if (!str) return str;
         return str.replace(/^\p{L}/u, (c) => c.toUpperCase());
