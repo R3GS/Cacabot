@@ -482,11 +482,6 @@ function getResponse(raw) {
     //         !CHOIX
     // =========================
 
-    Bonne idée, ça évite d'avoir des réponses du genre "Tu préfères manger du caca, tous les jours". On ajoute un nettoyage au tout début, avec une regex qui gère les variantes (avec/sans accent, avec/sans "s") :
-javascript// =========================
-//         !CHOIX
-// =========================
-
 if (command === "!choix") {
 
     // Enlève la ponctuation de fin (?, !, ., etc.)
