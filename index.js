@@ -4521,7 +4521,7 @@ client.on('interactionCreate', async (interaction) => {
         .setDescription(ready ? 'Prêt à lancer !' : 'Choisis la durée de travail et la durée de pause !')
         .addFields(
             { name: '⏱️ Travail', value: workVal, inline: true },
-            { name: '⏸️ Pause', value: breakVal, inline: true }
+            { name: '⏸️ Pause', value: breakVal, inline: true },
             { name: '🎯 Raison', value: reasonVal, inline: true }
         );
 
