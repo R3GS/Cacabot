@@ -4526,24 +4526,22 @@ client.on('interactionCreate', async (interaction) => {
         );
 
     const rows = [
-        new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder()
-                .setCustomId(`pomo_setup_work_${authorId}_${channelId}`)
-                .setPlaceholder('Durée de travail...')
-                .addOptions([5,10,15,20,25,30,35,40,45,50,55,60].map(n => ({
-                    label: `${n} minutes`, value: `${n}`
-                })))
-        ),
-        new ActionRowBuilder().addComponents(
-            new StringSelectMenuBuilder()
-                .setCustomId(`pomo_setup_break_${authorId}_${channelId}`)
-                .setPlaceholder('Durée de pause...')
-                .addOptions([5,10,15,20,25,30].map(n => ({
-                    label: `${n} minutes`, value: `${n}`
-                })))
-        )
-    ];
-
+    new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId(`pomo_setup_work_${authorId}_${channelId}`)
+            .setPlaceholder('Durée de travail...')
+            .addOptions([5,10,15,20,25,30,35,40,45,50,55,60].map(n => ({
+                label: `${n} minutes`, value: `${n}`
+            })))
+    ),
+    new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId(`pomo_setup_break_${authorId}_${channelId}`)
+            .setPlaceholder('Durée de pause...')
+            .addOptions([5,10,15,20,25,30].map(n => ({
+                label: `${n} minutes`, value: `${n}`
+            })))
+    ),
     new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
             .setCustomId(`pomo_setup_reason_${authorId}_${channelId}`)
@@ -4555,16 +4553,16 @@ client.on('interactionCreate', async (interaction) => {
                 { label: 'Écriture', value: 'Écriture', emoji: '✍️' },
                 { label: 'Code', value: 'Code', emoji: '💻' },
             ])
-    ),
+    )
+];
 
-    if (ready) {
-        rows.push(new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`pomo_start_${authorId}_${channelId}_${parseInt(workVal)}_${parseInt(breakVal)}_${encodeURIComponent(reasonVal)}`)
-                .setLabel('🍅 Lancer !')
-                .setStyle(ButtonStyle.Danger)
-        ));
-    }
+if (ready) {
+    rows.push(new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`pomo_start_${authorId}_${channelId}_${parseInt(workVal)}_${parseInt(breakVal)}_${encodeURIComponent(reasonVal)}`)
+            .setLabel('🍅 Lancer !')
+            .setStyle(ButtonStyle.Danger)
+    ));
 
     return interaction.update({ embeds: [embed], components: rows });
 }
