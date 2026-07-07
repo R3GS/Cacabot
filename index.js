@@ -1841,7 +1841,7 @@ async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
     return buffer;
 }
 
-async function startPomodoro(channel, participantsMention, workMin, breakMin, cycle, phase) {
+async function startPomodoro(channel, participantsMention, workMin, breakMin, cycle, phase, reason = 'Session de travail') {
     const isWork = phase === 'work';
     const longBreak = cycle % 4 === 0 && !isWork;
     const breakDuration = longBreak ? 15 : breakMin;
@@ -1859,7 +1859,7 @@ async function startPomodoro(channel, participantsMention, workMin, breakMin, cy
 
         return new EmbedBuilder()
             .setColor(isWork ? 0xe74c3c : 0x2ecc71)
-            .setTitle(isWork ? '🍅 Session de travail' : (longBreak ? '☕ Grande pause !' : '⏸️ Pause'))
+            .setTitle(isWork ? `🍅 ${reason}` : (longBreak ? '☕ Grande pause !' : '⏸️ Pause'))
             .setDescription(participantsMention)
             .addFields(
                 { name: 'Cycle', value: `${cycle}`, inline: true },
@@ -4058,6 +4058,17 @@ if (response?.needsWanted) {
             label: `${n} minutes`, value: `${n}`
         })));
 
+        const reasonMenu = new StringSelectMenuBuilder()
+        .setCustomId(`pomo_setup_reason_${message.author.id}_${message.channel.id}`)
+        .setPlaceholder('Raison du pomodoro...')
+        .addOptions([
+            { label: 'Devoirs', value: 'Devoirs', emoji: '📚' },
+            { label: 'Montage', value: 'Montage', emoji: '🎬' },
+            { label: 'Composition', value: 'Composition', emoji: '🎵' },
+            { label: 'Écriture', value: 'Écriture', emoji: '✍️' },
+            { label: 'Code', value: 'Code', emoji: '💻' },
+        ]);
+
     const embed = new EmbedBuilder()
         .setColor(0xe74c3c)
         .setTitle('🍅 Configurer le Pomodoro')
@@ -4065,11 +4076,13 @@ if (response?.needsWanted) {
         .addFields(
             { name: '⏱️ Travail', value: 'Non défini', inline: true },
             { name: '⏸️ Pause', value: 'Non défini', inline: true }
+            { name: '🎯 Raison', value: 'Non défini', inline: true }
         );
 
     return message.reply({ embeds: [embed], components: [
         new ActionRowBuilder().addComponents(workMenu),
         new ActionRowBuilder().addComponents(breakMenu)
+        new ActionRowBuilder().addComponents(reasonMenu)
     ]});
 }
 
@@ -4499,7 +4512,8 @@ client.on('interactionCreate', async (interaction) => {
     const fields = interaction.message.embeds[0].fields;
     const workVal = type === 'work' ? `${value} min` : fields[0].value;
     const breakVal = type === 'break' ? `${value} min` : fields[1].value;
-    const ready = workVal !== 'Non défini' && breakVal !== 'Non défini';
+    const reasonVal = type === 'reason' ? value : (fields[2]?.value ?? 'Non défini');
+    const ready = workVal !== 'Non défini' && breakVal !== 'Non défini' && reasonVal !== 'Non défini';
 
     const embed = new EmbedBuilder()
         .setColor(0xe74c3c)
@@ -4508,6 +4522,7 @@ client.on('interactionCreate', async (interaction) => {
         .addFields(
             { name: '⏱️ Travail', value: workVal, inline: true },
             { name: '⏸️ Pause', value: breakVal, inline: true }
+            { name: '🎯 Raison', value: reasonVal, inline: true }
         );
 
     const rows = [
@@ -4529,10 +4544,23 @@ client.on('interactionCreate', async (interaction) => {
         )
     ];
 
+    new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId(`pomo_setup_reason_${authorId}_${channelId}`)
+            .setPlaceholder('Raison du pomodoro...')
+            .addOptions([
+                { label: 'Devoirs', value: 'Devoirs', emoji: '📚' },
+                { label: 'Montage', value: 'Montage', emoji: '🎬' },
+                { label: 'Composition', value: 'Composition', emoji: '🎵' },
+                { label: 'Écriture', value: 'Écriture', emoji: '✍️' },
+                { label: 'Code', value: 'Code', emoji: '💻' },
+            ])
+    ),
+
     if (ready) {
         rows.push(new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId(`pomo_start_${authorId}_${channelId}_${parseInt(workVal)}_${parseInt(breakVal)}`)
+                .setCustomId(`pomo_start_${authorId}_${channelId}_${parseInt(workVal)}_${parseInt(breakVal)}_${encodeURIComponent(reasonVal)}`)
                 .setLabel('🍅 Lancer !')
                 .setStyle(ButtonStyle.Danger)
         ));
@@ -4550,6 +4578,7 @@ client.on('interactionCreate', async (interaction) => {
         const channelId = parts[3];
         const workMin = parseInt(parts[4]);
         const breakMin = parseInt(parts[5]);
+        const reason = decodeURIComponent(parts[6] ?? 'Session de travail');
 
         if (interaction.user.id !== authorId) {
             return interaction.reply({ content: "C'est pas ton pomodoro !", ephemeral: true });
@@ -4564,7 +4593,7 @@ client.on('interactionCreate', async (interaction) => {
         const channel = interaction.guild.channels.cache.get(channelId);
         if (!channel) return;
 
-        await startPomodoro(channel, participantsMention, workMin, breakMin, 1, 'work');
+        await startPomodoro(channel, participantsMention, workMin, breakMin, 1, 'work', reason);
         return;
     }
 
