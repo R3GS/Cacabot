@@ -4563,8 +4563,9 @@ if (ready) {
             .setLabel('🍅 Lancer !')
             .setStyle(ButtonStyle.Danger)
     ));
+}
 
-    return interaction.update({ embeds: [embed], components: rows });
+return interaction.update({ embeds: [embed], components: rows });
 }
 
     if (interaction.isButton() && interaction.customId.startsWith('pomo_')) {
