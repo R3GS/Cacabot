@@ -4081,7 +4081,7 @@ if (response?.needsWanted) {
 
     return message.reply({ embeds: [embed], components: [
         new ActionRowBuilder().addComponents(workMenu),
-        new ActionRowBuilder().addComponents(breakMenu)
+        new ActionRowBuilder().addComponents(breakMenu),
         new ActionRowBuilder().addComponents(reasonMenu)
     ]});
 }
