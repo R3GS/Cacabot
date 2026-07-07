@@ -4493,7 +4493,7 @@ client.on('interactionCreate', async (interaction) => {
         return interaction.update({ embeds: [getAffaireEmbed(interaction.guild, dateKey, wantedID)], components: [buildWantedRow('affaire', authorId)] });
     }
 }
-}
+
 
     // =========================
     //     BOUTON POMODORO
