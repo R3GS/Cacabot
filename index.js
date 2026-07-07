@@ -487,18 +487,6 @@ function getResponse(raw) {
     // Enlève la ponctuation de fin (?, !, ., etc.)
     const texteBrut = raw.replace(/^!choix\s*/i, "").trim().replace(/[?!.\s]+$/, "").trim();
 
-    // Met une majuscule à la première lettre (gère aussi les accents)
-    const capitalizeFirst = (str) => {
-        if (!str) return str;
-        return str.replace(/^\p{L}/u, (c) => c.toUpperCase());
-    };
-
-    // Découpe sur les "ou" (ex: "manger du caca ou boire du pipi")
-    if (command === "!choix") {
-
-    // Enlève la ponctuation de fin (?, !, ., etc.)
-    const texteBrut = raw.replace(/^!choix\s*/i, "").trim().replace(/[?!.\s]+$/, "").trim();
-
     // Met une majuscule à la première lettre (gère les accents)
     const capitalizeFirst = (str) => {
         if (!str) return str;
