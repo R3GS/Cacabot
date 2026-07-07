@@ -958,6 +958,7 @@ const pendingCheh = new Map();
 const cooldowns = new Map();
 const pomodoroSessions = new Map();
 const youtubeSearches = new Map();
+const vocalMessages = new Map();
 
 // =========================
 //           CHEH
@@ -6059,6 +6060,8 @@ client.on('guildMemberAdd', async (member) => {
     }
 });
 
+const vocalMessages = new Map(); // guild -> { message, memberId, channelName, timeouts }
+
 client.on('voiceStateUpdate', async (oldState, newState) => {
     const GUILD_ID = '1515767395036172469';
     const TEXT_CHANNEL_ID = '1515767396407705762';
@@ -6068,22 +6071,69 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         '1515768324892655720'
     ];
 
-    console.log('voiceStateUpdate reçu — guild:', newState.guild.id, '| newChannel:', newState.channelId);
+    if (newState.guild.id !== GUILD_ID) return;
 
-    if (newState.guild.id !== GUILD_ID) { console.log('mauvais serveur'); return; }
-    if (!newState.channelId || !VOCAL_IDS.includes(newState.channelId)) { console.log('salon non surveillé'); return; }
-    if (oldState.channelId === newState.channelId) { console.log('même salon'); return; }
-
-    const channel = newState.channel;
-    console.log('membres dans le salon:', channel?.members.size);
-    if (!channel || channel.members.size >= 2) { console.log('salon pas vide'); return; }
-
-    const memberNom = newState.member?.displayName ?? newState.member?.user.username ?? 'Quelqu\'un';
     const textChannel = newState.guild.channels.cache.get(TEXT_CHANNEL_ID);
-    console.log('textChannel trouvé:', !!textChannel);
     if (!textChannel) return;
 
-    await textChannel.send(`**${memberNom}** a rejoint **${channel.name}** ! On se fait un ptit voc ? 👀`);
+    // Supprimer l'ancien message + annuler ses timers quoi qu'il arrive
+    const supprimerAncien = async () => {
+        const ancien = vocalMessages.get(GUILD_ID);
+        if (!ancien) return;
+        ancien.timeouts.forEach(t => clearTimeout(t));
+        await ancien.message.delete().catch(() => {});
+        vocalMessages.delete(GUILD_ID);
+    };
+
+    // Quelqu'un quitte un vocal surveillé sans rejoindre un autre vocal surveillé
+    if (
+        oldState.channelId && VOCAL_IDS.includes(oldState.channelId) &&
+        (!newState.channelId || !VOCAL_IDS.includes(newState.channelId))
+    ) {
+        const ancien = vocalMessages.get(GUILD_ID);
+        if (ancien?.memberId === newState.member?.id) {
+            await supprimerAncien();
+        }
+        return;
+    }
+
+    // Quelqu'un rejoint un vocal surveillé
+    if (!newState.channelId || !VOCAL_IDS.includes(newState.channelId)) return;
+    if (oldState.channelId === newState.channelId) return;
+
+    const channel = newState.channel;
+    if (!channel || channel.members.size >= 2) return;
+
+    const memberNom = newState.member?.displayName ?? newState.member?.user.username ?? 'Quelqu\'un';
+    const memberId = newState.member?.id;
+    const channelName = channel.name;
+
+    // Supprimer l'ancien message avant d'envoyer le nouveau
+    await supprimerAncien();
+
+    const msg = await textChannel.send(`**${memberNom}** a rejoint **${channelName}** ! On se fait un ptit voc ? 👀`);
+
+    const t1 = setTimeout(async () => {
+        // Vérifier que la personne est toujours dans le vocal
+        await newState.guild.members.fetch(memberId).catch(() => {});
+        const member = newState.guild.members.cache.get(memberId);
+        if (!member?.voice.channelId || !VOCAL_IDS.includes(member.voice.channelId)) return;
+        await msg.edit(`**${memberNom}** attend depuis **30 minutes** en vocal... Quelqu'un ? 👀`).catch(() => {});
+    }, 30 * 60 * 1000);
+
+    const t2 = setTimeout(async () => {
+        const member = newState.guild.members.cache.get(memberId);
+        if (!member?.voice.channelId || !VOCAL_IDS.includes(member.voice.channelId)) return;
+        await msg.edit(`**${memberNom}** attend depuis **1 heure** en vocal... C'est long quand même. 👀`).catch(() => {});
+    }, 60 * 60 * 1000);
+
+    const t3 = setTimeout(async () => {
+        const member = newState.guild.members.cache.get(memberId);
+        if (!member?.voice.channelId || !VOCAL_IDS.includes(member.voice.channelId)) return;
+        await msg.edit(`**${memberNom}** attend depuis **2 heures** en vocal. À ce stade c'est du dévouement. 👀`).catch(() => {});
+    }, 120 * 60 * 1000);
+
+    vocalMessages.set(GUILD_ID, { message: msg, memberId, channelName, timeouts: [t1, t2, t3] });
 });
 
 client.login(process.env.TOKEN);
