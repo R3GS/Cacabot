@@ -494,28 +494,46 @@ function getResponse(raw) {
     };
 
     // Découpe sur les "ou" (ex: "manger du caca ou boire du pipi")
+    if (command === "!choix") {
+
+    // Enlève la ponctuation de fin (?, !, ., etc.)
+    const texteBrut = raw.replace(/^!choix\s*/i, "").trim().replace(/[?!.\s]+$/, "").trim();
+
+    // Met une majuscule à la première lettre (gère les accents)
+    const capitalizeFirst = (str) => {
+        if (!str) return str;
+        return str.replace(/^\p{L}/u, (c) => c.toUpperCase());
+    };
+
+    // Découpe sur les "ou" (ex: "manger du caca ou boire du pipi")
     if (texteBrut.length > 0) {
         const propositions = texteBrut
             .split(/\s+ou\s+/i)
             .map(p => p.trim().replace(/[?!.\s]+$/, "").trim())
-            .filter(p => p.length > 0)
-            .map(p => capitalizeFirst(p));
-
-        console.log('DEBUG !choix propositions:', propositions); // à retirer une fois que ça marche
+            .filter(p => p.length > 0);
 
         if (propositions.length >= 2) {
             const choisi = propositions[Math.floor(Math.random() * propositions.length)];
-            const intros = [
-                `En vrai... **${choisi}**`,
-                `**${choisi}**, tous les jours`,
-                `**${choisi}** je pense`,
-                `Après mûre réflexion... **${choisi}**`,
-                `**${choisi}**, et je changerai pas d'avis`,
-                `Franchement, **${choisi}**`,
-                `**${choisi}**. Zéro débat.`,
-                `Bah, **${choisi}** ? Genre, c'est évident ?`
+
+            // Intros où le choix est EN DÉBUT de phrase -> majuscule forcée
+            const introsDebut = [
+                (c) => `**${capitalizeFirst(c)}**, tous les jours`,
+                (c) => `**${capitalizeFirst(c)}** je pense`,
+                (c) => `**${capitalizeFirst(c)}**, et je changerai pas d'avis`,
+                (c) => `**${capitalizeFirst(c)}**. Zéro débat.`
             ];
-            return intros[Math.floor(Math.random() * intros.length)];
+
+            // Intros où le choix n'est PAS en début de phrase -> casse d'origine gardée
+            const introsMilieu = [
+                (c) => `En vrai... **${c}**`,
+                (c) => `Après mûre réflexion... **${c}**`,
+                (c) => `Franchement, **${c}**`,
+                (c) => `Bah, **${c}** ? Genre, c'est évident ?`
+            ];
+
+            const toutesIntros = [...introsDebut, ...introsMilieu];
+            const introChoisie = toutesIntros[Math.floor(Math.random() * toutesIntros.length)];
+            return introChoisie(choisi);
         }
     }
 
