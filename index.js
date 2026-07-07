@@ -484,13 +484,13 @@ function getResponse(raw) {
 
     if (command === "!choix") {
 
-    // On enlève la ponctuation de fin (?, !, ., etc.) avant de traiter le texte
+    // Enlève la ponctuation de fin (?, !, ., etc.)
     const texteBrut = raw.replace(/^!choix\s*/i, "").trim().replace(/[?!.\s]+$/, "").trim();
 
-    // Met une majuscule à la première lettre de chaque proposition
+    // Met une majuscule à la première lettre (gère aussi les accents)
     const capitalizeFirst = (str) => {
         if (!str) return str;
-        return str.charAt(0).toUpperCase() + str.slice(1);
+        return str.replace(/^\p{L}/u, (c) => c.toUpperCase());
     };
 
     // Découpe sur les "ou" (ex: "manger du caca ou boire du pipi")
@@ -498,7 +498,10 @@ function getResponse(raw) {
         const propositions = texteBrut
             .split(/\s+ou\s+/i)
             .map(p => p.trim().replace(/[?!.\s]+$/, "").trim())
-            .filter(p => p.length > 0);
+            .filter(p => p.length > 0)
+            .map(p => capitalizeFirst(p));
+
+        console.log('DEBUG !choix propositions:', propositions); // à retirer une fois que ça marche
 
         if (propositions.length >= 2) {
             const choisi = propositions[Math.floor(Math.random() * propositions.length)];
