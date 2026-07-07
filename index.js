@@ -6060,8 +6060,6 @@ client.on('guildMemberAdd', async (member) => {
     }
 });
 
-const vocalMessages = new Map(); // guild -> { message, memberId, channelName, timeouts }
-
 client.on('voiceStateUpdate', async (oldState, newState) => {
     const GUILD_ID = '1515767395036172469';
     const TEXT_CHANNEL_ID = '1515767396407705762';
