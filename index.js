@@ -5998,7 +5998,7 @@ if (ready) {
         const row = new ActionRowBuilder().addComponents(menu);
         return interaction.update({ embeds: [embed], components: [row] });
     }
-    } catch (err) {
+} catch (err) {
     console.error('Erreur interactionCreate:', err);
     if (err.code === 10062 || err.message?.includes('Unknown interaction') || err.message?.includes('expired')) {
         if (interaction.isButton()) {
