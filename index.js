@@ -484,26 +484,50 @@ function getResponse(raw) {
 
     if (command === "!choix") {
 
-        if (Math.random() < 0.1) {
-            const texte = raw.replace(/^!choix\s*/i, "").trim();
-            if (texte.length > 0) {
-                return `"${texte}" \u261d\ufe0f\ud83e\udd13\nNon tais-toi et oublie cette id\u00e9e stp`;
-            }
+    const texteBrut = raw.replace(/^!choix\s*/i, "").trim();
+
+    // Découpe sur les "ou" (ex: "manger du caca ou boire du pipi")
+    if (texteBrut.length > 0) {
+        const propositions = texteBrut
+            .split(/\s+ou\s+/i)
+            .map(p => p.trim())
+            .filter(p => p.length > 0);
+
+        if (propositions.length >= 2) {
+            const choisi = propositions[Math.floor(Math.random() * propositions.length)];
+            const intros = [
+                `En vrai... **${choisi}**`,
+                `**${choisi}**, tous les jours`,
+                `**${choisi}** je pense`,
+                `Après mûre réflexion... **${choisi}**`,
+                `**${choisi}**, et je changerai pas d'avis`,
+                `Franchement ? **${choisi}**`,
+                `**${choisi}**. Zéro débat.`,
+                `Bah, **${choisi}** ? Genre, c'est évident ?`
+            ];
+            return intros[Math.floor(Math.random() * intros.length)];
         }
-
-        const reponses = [
-            "Oui, mais le monde n'est pas encore pr\u00eat.", "Non. Mauvaise id\u00e9e de base.", "Oui, mais t'assumes.", "Franchement je sais pas mais \u00e7a sent la merde.",
-            "Oui mais \u00e7a va mal finir.", "Non mais tu vas quand m\u00eame le faire donc bon.", "Non.", "J'ai demand\u00e9 \u00e0 ma maman... Elle a dit oui.",
-            "ABSOLUMENT!", "Euuuh... Non ?", "C'est quoi cette question encore ? Non.", "Oui, oui, oui et encore oui !", "Piti\u00e9 oui.", "Piti\u00e9 non.",
-            "Mange tes morts \u00e0 la place de poser ce genre de questions.", "Totalement... Sauf que non, j'ai menti.", "Vous pensez ? Moi j'pense pas. C'est mon avis.",
-            "Affirmatif.", "Oui je pensent.", "Ouient.", "Oui (stiti).", "\u00c9-VI-DEM-MENT", "Bah oui t'es d\u00e9bile ou quoi?", "Well yes, but actually no.",
-            "Alors... Je savais la r\u00e9ponse, mais j'ai oubli\u00e9...", "Tu crois jsuis Akinator fdp?", "Peut-\u00eatreeeee.", "F\u00fbt un temps, on tuait des gens pour des questions moins connes que \u00e7a.",
-            "Non + pas lu + ratio + ntm", "nn", "oe", "https://tenor.com/view/ui-jday-mister-jd-gif-25079300", "https://tenor.com/view/mais-oui-seb-jdg-mais-oui-gif-19057953",
-            "https://cdn.discordapp.com/attachments/1128032964924670053/1504924989781053581/vous-pensez-moi-je-pense-pas.gif"
-        ];
-
-        return reponses[Math.floor(Math.random() * reponses.length)];
     }
+
+    if (Math.random() < 0.1) {
+        if (texteBrut.length > 0) {
+            return `"${texteBrut}" \u261d\ufe0f\ud83e\udd13\nNon tais-toi et oublie cette id\u00e9e stp`;
+        }
+    }
+
+    const reponses = [
+        "Oui, mais le monde n'est pas encore pr\u00eat.", "Non. Mauvaise id\u00e9e de base.", "Oui, mais t'assumes.", "Franchement je sais pas mais \u00e7a sent la merde.",
+        "Oui mais \u00e7a va mal finir.", "Non mais tu vas quand m\u00eame le faire donc bon.", "Non.", "J'ai demand\u00e9 \u00e0 ma maman... Elle a dit oui.",
+        "ABSOLUMENT!", "Euuuh... Non ?", "C'est quoi cette question encore ? Non.", "Oui, oui, oui et encore oui !", "Piti\u00e9 oui.", "Piti\u00e9 non.",
+        "Mange tes morts \u00e0 la place de poser ce genre de questions.", "Totalement... Sauf que non, j'ai menti.", "Vous pensez ? Moi j'pense pas. C'est mon avis.",
+        "Affirmatif.", "Oui je pensent.", "Ouient.", "Oui (stiti).", "\u00c9-VI-DEM-MENT", "Bah oui t'es d\u00e9bile ou quoi?", "Well yes, but actually no.",
+        "Alors... Je savais la r\u00e9ponse, mais j'ai oubli\u00e9...", "Tu crois jsuis Akinator fdp?", "Peut-\u00eatreeeee.", "F\u00fbt un temps, on tuait des gens pour des questions moins connes que \u00e7a.",
+        "Non + pas lu + ratio + ntm", "nn", "oe", "https://tenor.com/view/ui-jday-mister-jd-gif-25079300", "https://tenor.com/view/mais-oui-seb-jdg-mais-oui-gif-19057953",
+        "https://cdn.discordapp.com/attachments/1128032964924670053/1504924989781053581/vous-pensez-moi-je-pense-pas.gif"
+    ];
+
+    return reponses[Math.floor(Math.random() * reponses.length)];
+}
 
     // =========================
     //         !PRUNE
