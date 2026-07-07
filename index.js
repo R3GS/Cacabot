@@ -487,14 +487,10 @@ function getResponse(raw) {
     // On enlève la ponctuation de fin (?, !, ., etc.) avant de traiter le texte
     const texteBrut = raw.replace(/^!choix\s*/i, "").trim().replace(/[?!.\s]+$/, "").trim();
 
-    // Minuscule la première lettre d'un texte, sauf si le premier mot est un acronyme (tout en majuscules)
-    const decapitalizeFirst = (str) => {
+    // Met une majuscule à la première lettre de chaque proposition
+    const capitalizeFirst = (str) => {
         if (!str) return str;
-        const firstWordMatch = str.match(/^\S+/);
-        if (firstWordMatch && firstWordMatch[0].length > 1 && firstWordMatch[0] === firstWordMatch[0].toUpperCase()) {
-            return str; // probablement un acronyme, on touche pas
-        }
-        return str.charAt(0).toLowerCase() + str.slice(1);
+        return str.charAt(0).toUpperCase() + str.slice(1);
     };
 
     // Découpe sur les "ou" (ex: "manger du caca ou boire du pipi")
@@ -512,7 +508,7 @@ function getResponse(raw) {
                 `**${choisi}** je pense`,
                 `Après mûre réflexion... **${choisi}**`,
                 `**${choisi}**, et je changerai pas d'avis`,
-                `Franchement ? **${choisi}**`,
+                `Franchement, **${choisi}**`,
                 `**${choisi}**. Zéro débat.`,
                 `Bah, **${choisi}** ? Genre, c'est évident ?`
             ];
