@@ -4075,7 +4075,7 @@ if (response?.needsWanted) {
         .setDescription('Choisis la durée de travail et la durée de pause !')
         .addFields(
             { name: '⏱️ Travail', value: 'Non défini', inline: true },
-            { name: '⏸️ Pause', value: 'Non défini', inline: true }
+            { name: '⏸️ Pause', value: 'Non défini', inline: true },
             { name: '🎯 Raison', value: 'Non défini', inline: true }
         );
 
