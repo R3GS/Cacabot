@@ -6020,7 +6020,7 @@ client.once('ready', async () => {
     const anciennesDonnees = birthdayData.birthdays;
     const estAncienFormat = Object.values(anciennesDonnees).some(v => typeof v === 'string');
     if (estAncienFormat) {
-        birthdayData.birthdays = { 'TON_GUILD_ID_ICI': anciennesDonnees };
+        birthdayData.birthdays = { '720057528351850547': anciennesDonnees };
         await saveAll();
         console.log('✅ Migration des anniversaires effectuée');
     }
