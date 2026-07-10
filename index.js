@@ -2073,7 +2073,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     // Cheh
     const cleanedCheh = message.content.toLowerCase().trim();
-    if (pendingCheh.has(message.channel.id) && (cleanedCheh.includes('ntm') || cleanedCheh.includes('tg') || cleanedCheh.includes('nique ta') || cleanedCheh.includes('ta gueule') || cleanedCheh.includes('mange'))) {
+    if (pendingCheh.has(message.channel.id) && (cleanedCheh.includes('ntm') || cleanedCheh.includes('tg') || cleanedCheh.includes('nique ta') || cleanedCheh.includes('ta gueule') || cleanedCheh.includes('jte bz') || cleanedCheh.includes('bztmr') || cleanedCheh.includes('va te faire enculer') || cleanedCheh.includes('la ferme') || cleanedCheh.includes('tais-toi') || cleanedCheh.includes('mange tes'))) {
         pendingCheh.delete(message.channel.id);
         return message.reply(CHEH_GIF);
     }
