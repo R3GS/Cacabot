@@ -6187,4 +6187,6 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     vocalMessages.set(GUILD_ID, { message: msg, memberId, channelName, timeouts: [t1, t2, t3] });
 });
 
+});
+
 client.login(process.env.TOKEN)
