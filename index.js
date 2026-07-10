@@ -2056,8 +2056,23 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 //     LISTENER MESSAGES
 // =========================
 
-client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
+    // Ping Notifs Shorts quand Gappy sort un nouveau TikTok
+    client.on('messageCreate', async (message) => {
+        if (message.author.bot) return;
+
+        client.on('messageCreate', async (message) => {
+        if (message.author.bot) return;
+
+        // Ping automatique du rôle quand un utilisateur spécifique poste dans un salon spécifique
+        if (message.channel.id === '1460051840015269908' && message.author.id === '1525026449768321098') {
+            await message.channel.send(`<@&1504492103194120273>`);
+    }
+
+    // Ping Cacabot seul -> "Quoi ? (Feur)"
+    const strippedMsg = message.content.replace(/<@!?1503495713097519355>/g, '').trim();
+    if (message.content.includes('1503495713097519355') && strippedMsg.length === 0) {
+        return message.reply('Quoi ? (Feur)');
+    }
 
     // Ping Cacabot seul -> "Quoi ? (Feur)"
     const strippedMsg = message.content.replace(/<@!?1503495713097519355>/g, '').trim();
