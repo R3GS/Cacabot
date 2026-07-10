@@ -2060,9 +2060,6 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     client.on('messageCreate', async (message) => {
         if (message.author.bot) return;
 
-        client.on('messageCreate', async (message) => {
-        if (message.author.bot) return;
-
         // Ping automatique du rôle quand un utilisateur spécifique poste dans un salon spécifique
         if (message.channel.id === '1460051840015269908' && message.author.id === '1525026449768321098') {
             await message.channel.send(`<@&1504492103194120273>`);
