@@ -928,13 +928,13 @@ if (command === "!choix") {
     }
     if (cleaned.includes("lexys")) return "https://cdn.discordapp.com/attachments/720057528867618909/1498102442200404120/bac_blanc.gif";
     if (cleaned.includes("pas le prouver")) return "https://tenor.com/rkdM8FYGZO4.gif";
-    if (cleaned.includes("avec qui")) return reply("Avec quette");
+    if (/\bavec qui\b/.test(cleaned)) return reply("Avec quette");
     if (cleaned.includes("pour quoi faire")) return reply("Pour faire feur");
     if (cleaned.includes("pour quoi")) return reply("Pour feur");
-    if (cleaned.includes("pour qui")) return reply("Pour quette");
+    if (/\bpour qui\b/.test(cleaned)) return reply("Pour quette");
     if (cleaned.includes("pourquoi")) return reply("Pourfeur");
     if (cleaned.includes("c est a quoi")) return reply("C'est \u00e0 feur");
-    if (cleaned.includes("c est a qui")) return reply("C'est \u00e0 quette");
+    if (/\bc est a qui\b/.test(cleaned)) return reply("C'est \u00e0 quette");
     if (
         cleaned === "67" ||
         cleaned.includes(" 67 ") ||
