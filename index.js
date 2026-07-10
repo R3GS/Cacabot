@@ -2073,7 +2073,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     if (message.content.includes('1503495713097519355') && strippedMsg.length === 0) {
         return message.reply('Quoi ? (Feur)');
     }
-    
+
     // Cheh
     const cleanedCheh = message.content.toLowerCase().trim();
     if (pendingCheh.has(message.channel.id) && (cleanedCheh.includes('ntm') || cleanedCheh.includes('tg') || cleanedCheh.includes('nique ta') || cleanedCheh.includes('ta gueule') || cleanedCheh.includes('mange'))) {
@@ -6215,4 +6215,4 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     vocalMessages.set(GUILD_ID, { message: msg, memberId, channelName, timeouts: [t1, t2, t3] });
 });
 
-client.login(process.env.TOKEN);
+client.login(process.env.TOKEN)
