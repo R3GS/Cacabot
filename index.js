@@ -4799,80 +4799,80 @@ return interaction.update({ embeds: [embed], components: rows });
     // =========================
 
     if (interaction.isButton() && interaction.customId.startsWith('anniv_list_')) {
-        const parts = interaction.customId.split('_');
-        const ordre = parts[2];
-        const authorId = parts[3];
-        const currentPage = parseInt(parts[4]) || 0;
-        const action = parts[5]; // prev, next, ou switch
+    const parts = interaction.customId.split('_');
+    const ordre = parts[2];
+    const authorId = parts[3];
+    const currentPage = parseInt(parts[4]) || 0;
+    const action = parts[5]; // prev, next, ou switch
 
-        if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
-        }
-
-        const entries = Object.entries(birthdayData.birthdays);
-        const PAGE_SIZE = 10;
-
-        const sortEntries = (o) => {
-            if (o === 'chrono') {
-                const now = new Date();
-                return [...entries].sort((a, b) => {
-                    const [da, ma] = a[1].split('/').map(Number);
-                    const [db, mb] = b[1].split('/').map(Number);
-                    const dateA = new Date(now.getFullYear(), ma - 1, da);
-                    const dateB = new Date(now.getFullYear(), mb - 1, db);
-                    if (dateA < now) dateA.setFullYear(now.getFullYear() + 1);
-                    if (dateB < now) dateB.setFullYear(now.getFullYear() + 1);
-                    return dateA - dateB;
-                });
-            } else {
-                return [...entries].sort((a, b) => {
-                    const [da, ma] = a[1].split('/').map(Number);
-                    const [db, mb] = b[1].split('/').map(Number);
-                    return ma !== mb ? ma - mb : da - db;
-                });
-            }
-        };
-
-        let newOrdre = ordre;
-        let newPage = currentPage;
-        if (action === 'prev') newPage = currentPage - 1;
-        else if (action === 'next') newPage = currentPage + 1;
-        else if (action === 'switch') { newOrdre = ordre === 'chrono' ? 'classique' : 'chrono'; newPage = 0; }
-
-        const sorted = sortEntries(newOrdre);
-        const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
-        const slice = sorted.slice(newPage * PAGE_SIZE, (newPage + 1) * PAGE_SIZE);
-        const lines = slice.map(([uid, date]) => `<@${uid}> \u2014 **${date}**`).join('\n');
-
-        const prev = new ButtonBuilder()
-            .setCustomId(`anniv_list_${newOrdre}_${authorId}_${newPage}_prev`)
-            .setLabel('\u2b05\ufe0f Arri\u00e8re')
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(newPage === 0);
-        const next = new ButtonBuilder()
-            .setCustomId(`anniv_list_${newOrdre}_${authorId}_${newPage}_next`)
-            .setLabel('Suivant \u27a1\ufe0f')
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(newPage >= totalPages - 1);
-        const chronoBtn = new ButtonBuilder()
-            .setCustomId(`anniv_list_chrono_${authorId}_${newPage}_switch`)
-            .setLabel('\ud83d\udd52 Ordre chronologique')
-            .setStyle(newOrdre === 'chrono' ? ButtonStyle.Primary : ButtonStyle.Secondary);
-        const classiqueBtn = new ButtonBuilder()
-            .setCustomId(`anniv_list_classique_${authorId}_${newPage}_switch`)
-            .setLabel('\ud83d\udcc5 Ordre classique')
-            .setStyle(newOrdre === 'classique' ? ButtonStyle.Primary : ButtonStyle.Secondary);
-        const row1 = new ActionRowBuilder().addComponents(prev, next);
-        const row2 = new ActionRowBuilder().addComponents(chronoBtn, classiqueBtn);
-
-        const embed = new EmbedBuilder()
-            .setColor(0xff69b4)
-            .setTitle('\ud83c\udf82 Anniversaires du serveur')
-            .setDescription(lines)
-            .setFooter({ text: `Page ${newPage + 1}/${totalPages} \u2022 ${newOrdre === 'chrono' ? '\ud83d\udd52 Ordre chronologique' : '\ud83d\udcc5 Ordre classique'}` });
-
-        return interaction.update({ embeds: [embed], components: [row] });
+    if (interaction.user.id !== authorId) {
+        return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
     }
+
+    const entries = Object.entries(birthdayData.birthdays);
+    const PAGE_SIZE = 10;
+
+    const sortEntries = (o) => {
+        if (o === 'chrono') {
+            const now = new Date();
+            return [...entries].sort((a, b) => {
+                const [da, ma] = a[1].split('/').map(Number);
+                const [db, mb] = b[1].split('/').map(Number);
+                const dateA = new Date(now.getFullYear(), ma - 1, da);
+                const dateB = new Date(now.getFullYear(), mb - 1, db);
+                if (dateA < now) dateA.setFullYear(now.getFullYear() + 1);
+                if (dateB < now) dateB.setFullYear(now.getFullYear() + 1);
+                return dateA - dateB;
+            });
+        } else {
+            return [...entries].sort((a, b) => {
+                const [da, ma] = a[1].split('/').map(Number);
+                const [db, mb] = b[1].split('/').map(Number);
+                return ma !== mb ? ma - mb : da - db;
+            });
+        }
+    };
+
+    let newOrdre = ordre;
+    let newPage = currentPage;
+    if (action === 'prev') newPage = currentPage - 1;
+    else if (action === 'next') newPage = currentPage + 1;
+    else if (action === 'switch') { newOrdre = ordre === 'chrono' ? 'classique' : 'chrono'; newPage = 0; }
+
+    const sorted = sortEntries(newOrdre);
+    const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
+    const slice = sorted.slice(newPage * PAGE_SIZE, (newPage + 1) * PAGE_SIZE);
+    const lines = slice.map(([uid, date]) => `<@${uid}> \u2014 **${date}**`).join('\n');
+
+    const prev = new ButtonBuilder()
+        .setCustomId(`anniv_list_${newOrdre}_${authorId}_${newPage}_prev`)
+        .setLabel('\u2b05\ufe0f Arri\u00e8re')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(newPage === 0);
+    const next = new ButtonBuilder()
+        .setCustomId(`anniv_list_${newOrdre}_${authorId}_${newPage}_next`)
+        .setLabel('Suivant \u27a1\ufe0f')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(newPage >= totalPages - 1);
+    const chronoBtn = new ButtonBuilder()
+        .setCustomId(`anniv_list_chrono_${authorId}_${newPage}_switch`)
+        .setLabel('\ud83d\udd52 Ordre chronologique')
+        .setStyle(newOrdre === 'chrono' ? ButtonStyle.Primary : ButtonStyle.Secondary);
+    const classiqueBtn = new ButtonBuilder()
+        .setCustomId(`anniv_list_classique_${authorId}_${newPage}_switch`)
+        .setLabel('\ud83d\udcc5 Ordre classique')
+        .setStyle(newOrdre === 'classique' ? ButtonStyle.Primary : ButtonStyle.Secondary);
+    const row1 = new ActionRowBuilder().addComponents(prev, next);
+    const row2 = new ActionRowBuilder().addComponents(chronoBtn, classiqueBtn);
+
+    const embed = new EmbedBuilder()
+        .setColor(0xff69b4)
+        .setTitle('\ud83c\udf82 Anniversaires du serveur')
+        .setDescription(lines)
+        .setFooter({ text: `Page ${newPage + 1}/${totalPages} \u2022 ${newOrdre === 'chrono' ? '\ud83d\udd52 Ordre chronologique' : '\ud83d\udcc5 Ordre classique'}` });
+
+    return interaction.update({ embeds: [embed], components: [row1, row2] });
+}
 
     // =========================
     // BOUTON KISS BACK
@@ -6089,6 +6089,7 @@ client.once('ready', async () => {
             scheduleBirthdayCheck();
         }, delay);
     }
+    scheduleBirthdayCheck();
 });
 
 // =========================
