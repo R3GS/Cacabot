@@ -5,6 +5,10 @@ const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_ID}`;
 
 let topData = { messages: {} };
 let birthdayData = { birthdays: {} };
+    function getGuildBirthdays(guildId) {
+        if (!birthdayData.birthdays[guildId]) birthdayData.birthdays[guildId] = {};
+        return birthdayData.birthdays[guildId];
+    }
 let dailyData = {};
 let weeklyData = {};
 let monthlyData = {};
@@ -58,31 +62,33 @@ const BIRTHDAY_GIF = 'https://cdn.discordapp.com/attachments/1128032964924670053
 async function checkBirthdays() {
     const now = new Date();
     const today = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`;
-    for (const [userId, date] of Object.entries(birthdayData.birthdays)) {
-        if (date === today) {
-            for (const guild of client.guilds.cache.values()) {
-                const channel = guild.channels.cache.get(BIRTHDAY_CHANNEL_ID);
-                if (!channel) continue;
 
-                // Anniversaire de Cacabot lui-même
-                if (userId === client.user.id) {
-                    await channel.send('JOYEUX ANNIVERSAIRE À MOI !! 🎉🎉🎉');
-                    await channel.send('https://cdn.discordapp.com/attachments/1480756332373213275/1506635925126512790/dance.gif');
-                    continue;
-                }
+    for (const guild of client.guilds.cache.values()) {
+        const guildBirthdays = birthdayData.birthdays[guild.id] ?? {};
+        for (const [userId, date] of Object.entries(guildBirthdays)) {
+            if (date !== today) continue;
 
-                // Vérifier si c'est un bot
-                const member = guild.members.cache.get(userId);
-                if (member?.user.bot) {
-                    await channel.send(`JOYEUX ANNIVERSAIRE, COLLÈGUE <@${userId}> ! 🎉\nTu fais partie des bots qui rendent ce serveur encore meilleur, alors, que ta vie reste longue et belle <3`);
-                    await channel.send('https://cdn.discordapp.com/attachments/1480756332373213275/1506636764771778660/cyclops-ryu.gif');
-                    continue;
-                }
+            const channel = guild.channels.cache.get(BIRTHDAY_CHANNEL_ID);
+            if (!channel) continue;
 
-                // Membre normal
-                await channel.send(`<@${userId}> JOYEUX ANNIVERSAIRE !!! 🎉🎉🎉`);
-                await channel.send(BIRTHDAY_GIF);
+            // Anniversaire de Cacabot lui-même
+            if (userId === client.user.id) {
+                await channel.send('JOYEUX ANNIVERSAIRE À MOI !! 🎉🎉🎉');
+                await channel.send('https://cdn.discordapp.com/attachments/1480756332373213275/1506635925126512790/dance.gif');
+                continue;
             }
+
+            // Vérifier si c'est un bot
+            const member = guild.members.cache.get(userId);
+            if (member?.user.bot) {
+                await channel.send(`JOYEUX ANNIVERSAIRE, COLLÈGUE <@${userId}> ! 🎉\nTu fais partie des bots qui rendent ce serveur encore meilleur, alors, que ta vie reste longue et belle <3`);
+                await channel.send('https://cdn.discordapp.com/attachments/1480756332373213275/1506636764771778660/cyclops-ryu.gif');
+                continue;
+            }
+
+            // Membre normal
+            await channel.send(`<@${userId}> JOYEUX ANNIVERSAIRE !!! 🎉🎉🎉`);
+            await channel.send(BIRTHDAY_GIF);
         }
     }
 }
@@ -2998,71 +3004,6 @@ if (response?.needsWanted) {
         return message.reply({ embeds: [embed], components: [row] });
     }
 
-    // !palaref
-    if (response?.needsPalaref) {
-        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
-        const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
-        const auteurNom = message.member?.displayName ?? message.author.username;
-        let cible = message.mentions.users.first();
-
-        if (!cible) {
-            const query = message.content.trim().split(/\s+/).slice(1).join(' ');
-            if (query) {
-                if (client.user.username.toLowerCase().includes(query.toLowerCase()) || 'cacabot'.includes(query.toLowerCase())) {
-                    cible = client.user;
-                } else {
-                    const result = findMemberByName(message.guild, query);
-                    if (result.multiple) {
-                        askDisambiguation(message, message.guild, result.candidates, async (user) => {
-                            const cibleNom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
-                            const btn = new ButtonBuilder()
-                                .setCustomId(`palaref_with_${message.author.id}_${auteurNom}_${user.id}_${cibleNom}`)
-                                .setLabel('\ud83d\ude10 Pas la ref non plus')
-                                .setStyle(ButtonStyle.Secondary);
-                            const row = new ActionRowBuilder().addComponents(btn);
-                            const embed = new EmbedBuilder()
-                                .setColor(0x503649)
-                                .setDescription(`\ud83d\ude10 **${auteurNom}** n'a pas la ref de **${cibleNom}**...`)
-                                .setImage(gif);
-                            message.reply({ embeds: [embed], components: [row] });
-                        });
-                        return;
-                    }
-                    if (result.found) cible = result.found.user;
-                }
-            }
-        }
-
-        let desc, targetId = null, cibleNom = null;
-
-        if (cible && cible.id === message.author.id) {
-            desc = 'Tu n\'as pas ta propre ref ? ...Hein ?';
-            const embed = new EmbedBuilder().setColor(0x503649).setDescription(desc).setImage(gif);
-            return message.reply({ embeds: [embed] });
-        } else if (cible && cible.id === '1503495713097519355') {
-            desc = `\ud83d\ude10 **${auteurNom}** n'a pas ma ref...`;
-        } else if (cible) {
-            cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
-            targetId = cible.id;
-            desc = `\ud83d\ude10 **${auteurNom}** n'a pas la ref de **${cibleNom}**...`;
-        } else {
-            desc = `\ud83d\ude10 **${auteurNom}** n'a pas la ref...`;
-        }
-
-        const embed = new EmbedBuilder().setColor(0x503649).setDescription(desc).setImage(gif);
-
-        if (targetId) {
-            const btn = new ButtonBuilder()
-                .setCustomId(`palaref_with_${message.author.id}_${auteurNom}_${targetId}_${cibleNom}`)
-                .setLabel('\ud83d\ude10 Pas la ref non plus')
-                .setStyle(ButtonStyle.Secondary);
-            const row = new ActionRowBuilder().addComponents(btn);
-            return message.reply({ embeds: [embed], components: [row] });
-        }
-
-        return message.reply({ embeds: [embed] });
-    }
-
     // !explode
     if (response?.needsExplode) {
         const explodeGifs = [
@@ -3478,7 +3419,7 @@ if (response?.needsWanted) {
 
         const nbMessages = topData.messages[cible.id] ?? 0;
 
-        const birthdayRaw = birthdayData.birthdays[cible.id];
+        const birthdayRaw = getGuildBirthdays(message.guild.id)[cible.id];
         const moisNoms = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
         let birthdayStr = 'Inconnu';
         if (birthdayRaw) {
@@ -3572,7 +3513,7 @@ if (response?.needsWanted) {
                 const result = findMemberByName(message.guild, query);
                 if (result.multiple) {
                     askDisambiguation(message, message.guild, result.candidates, async (user) => {
-                        birthdayData.birthdays[user.id] = date;
+                        getGuildBirthdays(message.guild.id)[user.id] = date;
                         await saveBirthdays();
                         const nom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
                         message.reply(`\ud83c\udf82 L'anniversaire de **${nom}** a \u00e9t\u00e9 enregistr\u00e9 le **${date}** !`);
@@ -3584,25 +3525,26 @@ if (response?.needsWanted) {
                 }
                 const targetUser = result.found.user;
                 const nom = message.guild?.members.cache.get(targetUser.id)?.displayName ?? targetUser.username;
-                birthdayData.birthdays[targetUser.id] = date;
+                getGuildBirthdays(message.guild.id)[targetUser.id] = date;
                 await saveBirthdays();
                 return message.reply(`\ud83c\udf82 L'anniversaire de **${nom}** a \u00e9t\u00e9 enregistr\u00e9 le **${date}** !`);
             }
 
-            birthdayData.birthdays[message.author.id] = date;
+            getGuildBirthdays(message.guild.id)[message.author.id] = date;
             await saveBirthdays();
             return message.reply(`\ud83c\udf82 Ton anniversaire a \u00e9t\u00e9 enregistr\u00e9 le **${date}** !`);
         }
 
         if (sub === 'remove') {
             const query = args.slice(2).join(" ");
+            const guildBirthdays = getGuildBirthdays(message.guild.id);
 
             // Sans argument = supprimer le sien
             if (!query) {
-                if (!birthdayData.birthdays[message.author.id]) {
+                if (!guildBirthdays[message.author.id]) {
                     return message.reply("Tu n'as pas d'anniversaire enregistr\u00e9 !");
                 }
-                delete birthdayData.birthdays[message.author.id];
+                delete guildBirthdays[message.author.id];
                 await saveBirthdays();
                 return message.reply("\ud83d\uddd1\ufe0f Ton anniversaire a \u00e9t\u00e9 supprim\u00e9 !");
             }
@@ -3611,11 +3553,11 @@ if (response?.needsWanted) {
             const result = findMemberByName(message.guild, query);
             if (result.multiple) {
                 askDisambiguation(message, message.guild, result.candidates, async (user) => {
-                    if (!birthdayData.birthdays[user.id]) {
+                    if (!guildBirthdays[user.id]) {
                         message.reply("Ce membre n'a pas d'anniversaire enregistr\u00e9 !");
                         return;
                     }
-                    delete birthdayData.birthdays[user.id];
+                    delete guildBirthdays[user.id];
                     await saveBirthdays();
                     const nom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
                     message.reply(`\ud83d\uddd1\ufe0f L'anniversaire de **${nom}** a \u00e9t\u00e9 supprim\u00e9 !`);
@@ -3626,11 +3568,11 @@ if (response?.needsWanted) {
                 return message.reply("Membre introuvable !");
             }
             const targetUser = result.found.user;
-            if (!birthdayData.birthdays[targetUser.id]) {
+            if (!guildBirthdays[targetUser.id]) {
                 return message.reply("Ce membre n'a pas d'anniversaire enregistr\u00e9 !");
             }
             const nom = message.guild?.members.cache.get(targetUser.id)?.displayName ?? targetUser.username;
-            delete birthdayData.birthdays[targetUser.id];
+            delete guildBirthdays[targetUser.id];
             await saveBirthdays();
             return message.reply(`\ud83d\uddd1\ufe0f L'anniversaire de **${nom}** a \u00e9t\u00e9 supprim\u00e9 !`);
         }
@@ -3646,7 +3588,7 @@ if (response?.needsWanted) {
                         const result = findMemberByName(message.guild, query);
                         if (result.multiple) {
                             askDisambiguation(message, message.guild, result.candidates, async (user) => {
-                                const date = birthdayData.birthdays[user.id];
+                                const date = getGuildBirthdays(message.guild.id)[user.id];
                                 const nom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
                                 if (!date) return message.reply(`\ud83c\udf82 **${nom}** n'a pas encore enregistr\u00e9 son anniversaire.`);
                                 const [d, m] = date.split('/').map(Number);
@@ -3663,7 +3605,7 @@ if (response?.needsWanted) {
                 }
             }
             if (cible && cible.id !== message.author.id) {
-                const date = birthdayData.birthdays[cible.id];
+                const date = getGuildBirthdays(message.guild.id)[cible.id];
                 const nom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username ?? cible.id;
                 if (!date) return message.reply(`\ud83c\udf82 **${nom}** n'a pas encore enregistr\u00e9 son anniversaire.`);
                 const [d, m] = date.split('/').map(Number);
@@ -3673,7 +3615,7 @@ if (response?.needsWanted) {
                 const joursStr = diffDays === 0 ? "c'est aujourd'hui \ud83c\udf89 !" : diffDays === 1 ? "c'est demain \ud83c\udf89 !" : `dans **${diffDays} jours** !`;
                 return message.reply(`\ud83c\udf82 L'anniversaire de **${nom}** est le **${date}** — ${joursStr}`);
             }
-            const date = birthdayData.birthdays[message.author.id];
+            const date = getGuildBirthdays(message.guild.id)[message.author.id];
             if (!date) return message.reply("Tu n'as pas encore enregistr\u00e9 ton anniversaire ! Utilise `!anniversaire set JJ/MM`.");
             const [d, m] = date.split('/').map(Number);
             const now = new Date(); const next = new Date(now.getFullYear(), m - 1, d);
@@ -3684,7 +3626,7 @@ if (response?.needsWanted) {
         }
 
         if (sub === 'list') {
-            const entries = Object.entries(birthdayData.birthdays);
+            const entries = Object.entries(getGuildBirthdays(message.guild.id));
             if (entries.length === 0) return message.reply("Aucun anniversaire enregistr\u00e9 !");
             const authorId = message.author.id;
             const PAGE_SIZE = 10;
@@ -3753,7 +3695,7 @@ if (response?.needsWanted) {
         }
 
         if (sub === 'next') {
-            const entries = Object.entries(birthdayData.birthdays);
+            const entries = Object.entries(getGuildBirthdays(message.guild.id));
             if (entries.length === 0) return message.reply("Aucun anniversaire enregistr\u00e9 !");
             const now = new Date();
             const toDate = (str) => {
@@ -4809,7 +4751,7 @@ return interaction.update({ embeds: [embed], components: rows });
         return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
     }
 
-    const entries = Object.entries(birthdayData.birthdays);
+    const entries = Object.entries(getGuildBirthdays(interaction.guild.id));
     const PAGE_SIZE = 10;
 
     const sortEntries = (o) => {
@@ -6073,6 +6015,15 @@ client.once('ready', async () => {
     // for (const guild of client.guilds.cache.values()) { scheduleWanted(guild); }
     console.log(`✅ Membres fetchés`)
     setInterval(checkYoutubeChannels, 60 * 60 * 1000);
+
+    // Migration unique - à retirer après le premier démarrage
+    const anciennesDonnees = birthdayData.birthdays;
+    const estAncienFormat = Object.values(anciennesDonnees).some(v => typeof v === 'string');
+    if (estAncienFormat) {
+        birthdayData.birthdays = { 'TON_GUILD_ID_ICI': anciennesDonnees };
+        await saveAll();
+        console.log('✅ Migration des anniversaires effectuée');
+    }
 
     const msUntilMidnightParis = () => {
         const now = new Date();
