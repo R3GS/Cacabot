@@ -4323,7 +4323,7 @@ if (response?.needsWanted) {
         pendingCheh.set(message.channel.id, { timeout: chehTimeout, replyMsg: autoReplyMsg });
         return;
     }
-});
+};
 
 // =========================
 //     LISTENER INTERACTIONS
