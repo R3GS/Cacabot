@@ -6074,17 +6074,22 @@ client.once('ready', async () => {
     console.log(`✅ Membres fetchés`)
     setInterval(checkYoutubeChannels, 60 * 60 * 1000);
 
-    const msUntilMidnight = () => {
-                const now = new Date();
-                        const midnight = new Date(now);
-                                midnight.setHours(24, 0, 0, 0);
-                                        return midnight - now;
-                                            };
-                                                setTimeout(function scheduleCheck() {
-                                                        checkBirthdays();
-                                                                setInterval(checkBirthdays, 24 * 60 * 60 * 1000);
-                                                                    }, msUntilMidnight());
-                                                                    });
+    const msUntilMidnightParis = () => {
+        const now = new Date();
+        const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+        const parisMidnight = new Date(parisNow);
+        parisMidnight.setHours(24, 0, 0, 0);
+        return parisMidnight - parisNow;
+    };
+
+    function scheduleBirthdayCheck() {
+        const delay = msUntilMidnightParis();
+        setTimeout(async () => {
+            await checkBirthdays();
+            scheduleBirthdayCheck();
+        }, delay);
+    }
+});
 
 // =========================
 //     LISTENER REACTIONS
