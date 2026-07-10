@@ -4,10 +4,14 @@ const JSONBIN_KEY = '$2a$10$4aNH8UsrNWZXAfraECrYp.yAWPzFvnOY7EAc8oifTNLrpfN3dnRu
 const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_ID}`;
 
 let topData = { messages: {} };
-let birthdayData = { birthdays: {} };
+let birthdayData = { birthdays: {}, channels: {} };
     function getGuildBirthdays(guildId) {
         if (!birthdayData.birthdays[guildId]) birthdayData.birthdays[guildId] = {};
         return birthdayData.birthdays[guildId];
+    }
+
+    function getBirthdayChannelId(guildId) {
+        return birthdayData.channels[guildId] ?? BIRTHDAY_CHANNEL_ID;
     }
 let dailyData = {};
 let weeklyData = {};
@@ -21,7 +25,7 @@ async function loadAll() {
         });
         const json = await res.json();
         topData = { messages: json.record.messages ?? {} };
-        birthdayData = { birthdays: json.record.birthdays ?? {} };
+        birthdayData = { birthdays: json.record.birthdays ?? {}, channels: json.record.birthdayChannels ?? {} };
         dailyData = json.record.daily ?? {};
         weeklyData = json.record.weekly ?? {};
         monthlyData = json.record.monthly ?? {};
@@ -40,7 +44,7 @@ async function saveAll() {
         const res = await fetch(JSONBIN_URL, {
             method: 'PUT',
             headers: { 'X-Master-Key': JSONBIN_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages: topData.messages, birthdays: birthdayData.birthdays, daily: dailyData, weekly: weeklyData, monthly: monthlyData, youtubeWatch: youtubeWatchData })
+            body: JSON.stringify({ messages: topData.messages, birthdays: birthdayData.birthdays, birthdayChannels: birthdayData.channels, daily: dailyData, weekly: weeklyData, monthly: monthlyData, youtubeWatch: youtubeWatchData })
         });
         const json = await res.json();
         console.log('💾 Sauvegarde JSONBin:', res.status, json);
@@ -68,7 +72,7 @@ async function checkBirthdays() {
         for (const [userId, date] of Object.entries(guildBirthdays)) {
             if (date !== today) continue;
 
-            const channel = guild.channels.cache.get(BIRTHDAY_CHANNEL_ID);
+            const channel = guild.channels.cache.get(getBirthdayChannelId(guild.id));
             if (!channel) continue;
 
             // Anniversaire de Cacabot lui-même
@@ -3491,12 +3495,31 @@ if (response?.needsWanted) {
         const sub = args[1]?.toLowerCase();
 
         if (isTest) {
-            const channel = message.guild?.channels.cache.get(BIRTHDAY_CHANNEL_ID);
+            const channel = message.guild?.channels.cache.get(getBirthdayChannelId(message.guild.id));
             if (!channel) return message.reply("Salon introuvable !");
             await channel.send(`<@${message.author.id}> JOYEUX ANNIVERSAIRE !!! \ud83c\udf89\ud83c\udf89\ud83c\udf89`);
             await channel.send(BIRTHDAY_GIF);
             return;
         }
+
+        if (sub === 'room') {
+            if (message.author.id !== '436218312574107658') {
+                return message.reply("Tu n'es pas autoris\u00e9(e) \u00e0 faire cette commande.");
+            }
+            const channelId = args[2];
+            if (!channelId || !/^\d{17,19}$/.test(channelId)) {
+                return message.reply("Usage : `!anniversaire room [ID_SALON]`");
+            }
+            const targetChannel = message.guild.channels.cache.get(channelId);
+            if (!targetChannel) {
+                return message.reply("Salon introuvable sur ce serveur !");
+            }
+            birthdayData.channels[message.guild.id] = channelId;
+            await saveBirthdays();
+            return message.reply(`\ud83c\udf82 Les messages d'anniversaire de ce serveur seront d\u00e9sormais envoy\u00e9s dans <#${channelId}> !`);
+        }
+
+        if (sub === 'set') {
 
         if (sub === 'set') {
             const lastArg = args[args.length - 1];
@@ -3713,17 +3736,21 @@ if (response?.needsWanted) {
             return message.reply(`\ud83c\udf82 Le prochain anniversaire est celui de **${name}** le **${next[1]}** — ${joursStr} !`);
         }
 
+        const anniversaireFields = [
+            { name: '!anniversaire set JJ/MM', value: 'Enregistre ton anniversaire.', inline: false },
+            { name: '!anniversaire set Pseudo JJ/MM', value: "Enregistre l'anniversaire de quelqu'un.", inline: false },
+            { name: '!anniversaire show', value: 'Affiche ton anniversaire enregistr\u00e9.', inline: false },
+            { name: '!anniversaire list', value: 'Liste tous les anniversaires du serveur.', inline: false },
+            { name: '!anniversaire next', value: 'Affiche le prochain anniversaire du serveur.', inline: false },
+            { name: '!anniversaire remove', value: 'Supprime ton anniversaire enregistr\u00e9.', inline: false }
+        ];
+        if (message.author.id === '436218312574107658') {
+            anniversaireFields.push({ name: '!anniversaire room [ID_SALON]', value: 'D\u00e9finit le salon d\'annonce des anniversaires pour ce serveur. (Toi uniquement)', inline: false });
+        }
         const anniversaireEmbed = new EmbedBuilder()
             .setColor(0xff69b4)
             .setTitle('\ud83c\udf82 Anniversaire')
-            .addFields(
-                { name: '!anniversaire set JJ/MM', value: 'Enregistre ton anniversaire.', inline: false },
-                { name: '!anniversaire set Pseudo JJ/MM', value: "Enregistre l'anniversaire de quelqu'un.", inline: false },
-                { name: '!anniversaire show', value: 'Affiche ton anniversaire enregistr\u00e9.', inline: false },
-                { name: '!anniversaire list', value: 'Liste tous les anniversaires du serveur.', inline: false },
-                { name: '!anniversaire next', value: 'Affiche le prochain anniversaire du serveur.', inline: false },
-                { name: '!anniversaire remove', value: 'Supprime ton anniversaire enregistr\u00e9.', inline: false }
-            );
+            .addFields(...anniversaireFields);
         return message.reply({ embeds: [anniversaireEmbed] });
     }
 
@@ -6015,15 +6042,6 @@ client.once('ready', async () => {
     // for (const guild of client.guilds.cache.values()) { scheduleWanted(guild); }
     console.log(`✅ Membres fetchés`)
     setInterval(checkYoutubeChannels, 60 * 60 * 1000);
-
-    // Migration unique - à retirer après le premier démarrage
-    const anciennesDonnees = birthdayData.birthdays;
-    const estAncienFormat = Object.values(anciennesDonnees).some(v => typeof v === 'string');
-    if (estAncienFormat) {
-        birthdayData.birthdays = { '720057528351850547': anciennesDonnees };
-        await saveAll();
-        console.log('✅ Migration des anniversaires effectuée');
-    }
 
     const msUntilMidnightParis = () => {
         const now = new Date();
