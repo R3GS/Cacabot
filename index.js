@@ -3520,8 +3520,6 @@ if (response?.needsWanted) {
         }
 
         if (sub === 'set') {
-
-        if (sub === 'set') {
             const lastArg = args[args.length - 1];
             const isDate = /^\d{2}\/\d{2}$/.test(lastArg);
 
