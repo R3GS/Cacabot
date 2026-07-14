@@ -6030,7 +6030,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     const t3 = setTimeout(async () => {
         const member = newState.guild.members.cache.get(memberId);
         if (!member?.voice.channelId || !VOCAL_IDS.includes(member.voice.channelId)) return;
-        await msg.edit(`**${memberNom}** attend depuis **2 heures** en vocal. À ce stade c'est du dévouement. 👀`).catch(() => {});
+        await msg.edit(`**${memberNom}** attend depuis **2 heures** en vocal. Y a vraiment personne là ? 👀`).catch(() => {});
     }, 120 * 60 * 1000);
 
     vocalMessages.set(GUILD_ID, { message: msg, memberId, channelName, timeouts: [t1, t2, t3] });
