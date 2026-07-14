@@ -796,10 +796,6 @@ if (command === "!choix") {
         return { needsStats: true };
     }
 
-    if (command === "!abo") {
-        return { needsAbo: true };
-    }
-
     if (command === "!last") {
         return { needsLastVideo: true };
     }
@@ -2131,107 +2127,6 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     const response = FEUR_IMMUNE.includes(message.author.id) ? null : getResponse(message.content);
 
     if (response === null || response === undefined) return;
-
-    // !last & !abo
-
-    if (response?.needsAbo) {
-    const args = message.content.trim().split(/\s+/);
-    const sub = args[1]?.toLowerCase();
-
-    if (sub === 'list') {
-        const entries = Object.entries(youtubeWatchData).filter(([, w]) => w.discordChannelId === message.channel.id);
-    if (entries.length === 0) return message.reply("Aucune chaîne suivie dans ce salon !");
-    const lines = entries.map(([, w]) => `• **${w.channelTitle}**`).join('\n');
-        return message.reply(`📺 Chaînes suivies dans ce salon :\n${lines}`);
-    }
-
-    if (sub === 'able' || sub === 'disable') {
-        const targetChannelId = args[2];
-        const channelQuery = args.slice(3).join(' ');
-
-        if (!targetChannelId || !channelQuery) {
-            return message.reply(`Usage : \`!abo ${sub} [ID_SALON] [URL ou nom de la chaîne]\``);
-        }
-
-        if (!/^\d{17,19}$/.test(targetChannelId)) {
-            return message.reply("L'ID du salon est invalide !");
-        }
-
-        const discordTargetChannel = message.guild.channels.cache.get(targetChannelId);
-        if (!discordTargetChannel) {
-            return message.reply("Salon Discord introuvable avec cet ID !");
-        }
-
-        try {
-            let channelId = null;
-            const urlMatch = channelQuery.match(/(?:youtube\.com\/(?:channel\/|c\/|@)|@)([a-zA-Z0-9_-]+)/);
-            const handle = urlMatch ? urlMatch[1] : null;
-
-            if (channelQuery.includes('youtube.com/channel/')) {
-                channelId = channelQuery.split('channel/')[1].split(/[/?]/)[0];
-            } else {
-                const searchTerm = handle ?? channelQuery;
-                const forHandleRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(searchTerm.replace('@', ''))}&key=${process.env.YOUTUBE_API_KEY}`);
-                const forHandleData = await forHandleRes.json();
-
-                if (forHandleData.items && forHandleData.items.length > 0) {
-                    channelId = forHandleData.items[0].id;
-                } else {
-                    const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchTerm)}&type=channel&maxResults=1&key=${process.env.YOUTUBE_API_KEY}`);
-                    const searchData = await searchRes.json();
-                    if (searchData.items && searchData.items.length > 0) {
-                        channelId = searchData.items[0].snippet.channelId;
-                    }
-                }
-            }
-
-            if (!channelId) return message.reply("Chaîne YouTube introuvable !");
-
-            if (sub === 'disable') {
-                const key = `${channelId}_${targetChannelId}`;
-                if (!youtubeWatchData[key]) {
-                    return message.reply("Cette chaîne n'est pas suivie dans ce salon !");
-                }
-                const removedTitle = youtubeWatchData[key].channelTitle;
-                delete youtubeWatchData[key];
-                await saveAll();
-                return message.reply(`✅ **${removedTitle}** ne sera plus suivie dans <#${targetChannelId}> !`);
-            }
-
-            // sub === 'able'
-            const key = `${channelId}_${targetChannelId}`;
-            if (youtubeWatchData[key]) {
-                return message.reply(`**${youtubeWatchData[key].channelTitle}** est déjà suivie dans <#${targetChannelId}> !`);
-            }
-
-            const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${channelId}&key=${process.env.YOUTUBE_API_KEY}`);
-            const detailData = await detailRes.json();
-            if (!detailData.items || detailData.items.length === 0) return message.reply("Chaîne introuvable !");
-
-            const channelTitle = detailData.items[0].snippet.title;
-
-            const latestRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&maxResults=1&type=video&key=${process.env.YOUTUBE_API_KEY}`);
-            const latestData = await latestRes.json();
-            const lastVideoId = latestData.items?.[0]?.id?.videoId ?? null;
-
-            youtubeWatchData[key] = {
-                channelTitle,
-                channelId,
-                discordChannelId: targetChannelId,
-                lastVideoId
-            };
-            await saveAll();
-
-            return message.reply(`✅ La chaîne de **${channelTitle}** est maintenant suivie ! Les nouvelles vidéos seront annoncées dans <#${targetChannelId}> (vérification toutes les heures).`);
-
-        } catch (e) {
-            console.error('Erreur !abo:', e);
-            return message.reply("Erreur lors du traitement de la commande.");
-        }
-    }
-
-    return message.reply("Usage : `!abo able [ID_SALON] [URL/nom chaîne]`, `!abo disable [ID_SALON] [URL/nom chaîne]` ou `!abo list`");
-}
 
 if (response?.needsLastVideo) {
     const query = message.content.trim().split(/\s+/).slice(1).join(' ');
@@ -3987,7 +3882,6 @@ if (response?.needsWanted) {
                 { name: '\ud83d\udcbe !lastsave', value: 'Afficher la date et l\'heure de la derni\u00e8re sauvegarde JSONBin.', inline: false },
                 { name: '\ud83d\udd2e !horoscope [ID_salon]', value: 'Forcer l\'envoi de l\'horoscope dans un salon sp\u00e9cifique.', inline: false },
                 { name: '\u23f0 !rappel [ID] Xmin/h [message]', value: 'Envoyer un rappel \u00e0 un membre sp\u00e9cifique par son ID.', inline: false },
-                { name: '✅ !abo able/disable [ID_SALON] [ID_CHAINE]', value: 'Abonner Cacabot à une chaîne pour avoir une notification à chaque sortie.', inline: false },
                 { name: '🚨 !wanted set @Membre/pseudo/ID', value: 'Forcer le.a criminel.le du jour.', inline: false },
                 { name: '\ud83d\udd04 !wanted reset', value: 'G\u00e9n\u00e9rer un nouveau criminel du jour.', inline: false }
             );
