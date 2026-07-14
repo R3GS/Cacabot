@@ -1965,48 +1965,6 @@ async function startPomodoro(channel, participantsMention, workMin, breakMin, cy
     });
 }
 
-async function checkYoutubeChannels() {
-    for (const [key, watch] of Object.entries(youtubeWatchData)) {
-        const channelId = watch.channelId ?? key.split('_')[0];
-        try {
-            const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&maxResults=1&type=video&key=${process.env.YOUTUBE_API_KEY}`);
-            const data = await res.json();
-            if (!data.items || data.items.length === 0) continue;
-
-            const latest = data.items[0];
-            const videoId = latest.id.videoId;
-
-            if (watch.lastVideoId === videoId) continue;
-
-            watch.lastVideoId = videoId;
-            saveAll();
-
-            const channel = client.channels.cache.get(watch.discordChannelId);
-            if (!channel) continue;
-
-            const embed = new EmbedBuilder()
-                .setColor(0xff0000)
-                .setTitle(latest.snippet.title)
-                .setURL(`https://www.youtube.com/watch?v=${videoId}`)
-                .setThumbnail(latest.snippet.thumbnails.high?.url ?? latest.snippet.thumbnails.default.url)
-                .setDescription(`**${latest.snippet.channelTitle}** vient de publier une nouvelle vidéo !`)
-                .setFooter({ text: 'Nouvelle vidéo' })
-                .setTimestamp(new Date(latest.snippet.publishedAt));
-
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setLabel('🔗 Ouvrir')
-                    .setStyle(ButtonStyle.Link)
-                    .setURL(`https://www.youtube.com/watch?v=${videoId}`)
-            );
-
-            await channel.send({ content: `📺 Nouvelle vidéo de **${latest.snippet.channelTitle}** !`, embeds: [embed], components: [row] });
-        } catch (e) {
-            console.error(`Erreur checkYoutubeChannels pour ${channelId}:`, e);
-        }
-    }
-}
-
 async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     const canvas = createCanvas(977, 1273);
@@ -5933,7 +5891,6 @@ client.once('ready', async () => {
     }
     // for (const guild of client.guilds.cache.values()) { scheduleWanted(guild); }
     console.log(`✅ Membres fetchés`)
-    setInterval(checkYoutubeChannels, 60 * 60 * 1000);
 
     const msUntilMidnightParis = () => {
         const now = new Date();
