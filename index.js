@@ -2072,7 +2072,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
         });
         const liensConvertis = tiktokMatches.map(convertUrl);
         await message.delete().catch(() => {});
-        await message.channel.send(`**${auteurNom}** a posté ce TikTok !\n-# *(je change juste le lien pour que tout le monde y ait accès)*`);
+        await message.channel.send(`**${auteurNom}** a reposté ce TikTok !\n-# *(je change juste le lien pour que tout le monde y ait accès)*`);
         setTimeout(() => {
             message.channel.send(liensConvertis.join('\n')).catch(() => {});
         }, 300);
