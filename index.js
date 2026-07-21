@@ -756,6 +756,10 @@ if (command === "!choix") {
         return { needsHoroscope: true };
     }
 
+    if (command === "!meteo" || command === "!météo") {
+        return { needsMeteo: true };
+    }
+
     if (command === "!save") {
         return { needsSave: true };
     }
@@ -4044,6 +4048,56 @@ if (response?.needsWanted) {
         return sent.edit({ content: null, embeds: [embed] });
     }
 
+    // !météo
+    if (response?.needsMeteo) {
+        const args = message.content.trim().split(/\s+/);
+        const ville = args.slice(1).join(' ');
+        if (!ville) return message.reply('Usage : `!météo [ville]`\nEx : `!météo Paris`');
+
+        try {
+            const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(ville)}&count=1&language=fr&format=json`);
+            const geoData = await geoRes.json();
+
+            if (!geoData.results || geoData.results.length === 0) {
+                return message.reply(`Ville introuvable : **${ville}**`);
+            }
+
+            const { latitude, longitude, name, country } = geoData.results[0];
+
+            const meteoRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`);
+            const meteoData = await meteoRes.json();
+            const current = meteoData.current;
+
+            const weatherDesc = {
+                0: '☀️ Ciel dégagé', 1: '🌤️ Plutôt dégagé', 2: '⛅ Partiellement nuageux', 3: '☁️ Couvert',
+                45: '🌫️ Brouillard', 48: '🌫️ Brouillard givrant',
+                51: '🌦️ Bruine légère', 53: '🌦️ Bruine', 55: '🌦️ Bruine forte',
+                61: '🌧️ Pluie légère', 63: '🌧️ Pluie', 65: '🌧️ Pluie forte',
+                71: '🌨️ Neige légère', 73: '🌨️ Neige', 75: '🌨️ Neige forte',
+                80: '🌦️ Averses', 81: '🌦️ Averses fortes', 82: '⛈️ Averses violentes',
+                95: '⛈️ Orage', 96: '⛈️ Orage avec grêle', 99: '⛈️ Orage violent avec grêle'
+            };
+            const description = weatherDesc[current.weather_code] || 'Conditions inconnues';
+
+            const embed = new EmbedBuilder()
+                .setColor(0x3498db)
+                .setTitle(`🌍 Météo à ${name}${country ? ', ' + country : ''}`)
+                .setDescription(description)
+                .addFields(
+                    { name: '🌡️ Température', value: `${current.temperature_2m}°C (ressenti ${current.apparent_temperature}°C)`, inline: true },
+                    { name: '💧 Humidité', value: `${current.relative_humidity_2m}%`, inline: true },
+                    { name: '💨 Vent', value: `${current.wind_speed_10m} km/h`, inline: true }
+                )
+                .setFooter({ text: 'Données via Open-Meteo' })
+                .setTimestamp();
+
+            return message.reply({ embeds: [embed] });
+        } catch (e) {
+            console.error('Erreur !meteo :', e);
+            return message.reply("Erreur lors de la récupération de la météo. Réessaie plus tard.");
+        }
+    }
+
     // !info
     if (response?.needsInfo) {
         const startDate = new Date('2026-05-14T00:00:00');
@@ -5641,7 +5695,6 @@ return interaction.update({ embeds: [embed], components: rows });
                     { name: "\ud83d\udcac !actif", value: "Affiche les membres les plus actifs du jour et de la semaine." },
                     { name: "\ud83e\udd16 !botinfo", value: "Affiche les informations de Cacabot." },
                     { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." },
-                    { name: "\u23f0 !rappel", value: "Se faire rappeler quelque chose dans X minutes/heures." }
                 );
         }
 
@@ -5663,6 +5716,7 @@ return interaction.update({ embeds: [embed], components: rows });
                 .addFields(
                     { name: "<:aternos_icon:1505454393049485362> !aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." },
                     { name: "\u23f0 !rappel", value: "Se faire rappeler quelque chose dans X minutes/heures." },
+                    { name: "\u26c5 !météo", value: "Affiche la météo d'une ville." },
                     { name: "🍅 !pomodoro", value: "Démarrer une séance de pomodoro." }
                 );
         }
