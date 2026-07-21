@@ -5769,7 +5769,7 @@ return interaction.update({ embeds: [embed], components: rows });
                 { label: '\ud83d\udcac Discord', description: 'serveur, info, avatar, top, actif', value: 'discord' },
                 { label: '▶️ YouTube', description: 'youtube, stats, last', value: 'youtube' },
                 { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping', value: 'cacabot' },
-                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel, pomodoro', value: 'autres' }
+                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel, météo, pomodoro', value: 'autres' }
             );
 
         const utilBackButton = new ButtonBuilder()
@@ -5841,7 +5841,7 @@ return interaction.update({ embeds: [embed], components: rows });
                     { label: '\ud83d\udcac Discord', description: 'serveur, info, avatar, top, actif', value: 'discord' },
                     { label: '\u25b6\ufe0f YouTube', description: 'youtube, stats, last', value: 'youtube' },
                     { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping', value: 'cacabot' },
-                    { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel, pomodoro', value: 'autres' }
+                    { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel, météo, pomodoro', value: 'autres' }
                 );
 
             const utilBackButton = new ButtonBuilder()
