@@ -2047,14 +2047,17 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
         return message.reply(CHEH_GIF);
     }
 
-    // Remplacement liens Instagram Reels
-    const instaRegex = /https?:\/\/(?:www\.)?instagram\.com\/reel\/[^\s]+/gi;
+    // Remplacement liens Instagram (Reels + Posts)
+    const instaRegex = /https?:\/\/(?:www\.)?instagram\.com\/(?:reel|p)\/[^\s]+/gi;
     const instaMatches = message.content.match(instaRegex);
     if (instaMatches) {
         const auteurNom = message.member?.displayName ?? message.author.username;
-        const nouveauContenu = message.content.replace(instaRegex, url => url.replace('instagram.com', 'kkinstagram.com'));
+        const liensConvertis = instaMatches.map(url => url.replace('instagram.com', 'kkinstagram.com'));
         await message.delete().catch(() => {});
-        await message.channel.send(`**${auteurNom}** a reposté ce reel Instagram !\n-# *(je change juste le lien pour que tout le monde y ait accès)*\n\n**${nouveauContenu}**`);
+        await message.channel.send(`**${auteurNom}** a reposté ce reel Instagram !\n-# *(je change juste le lien pour que tout le monde y ait accès)*`);
+        setTimeout(() => {
+            message.channel.send(liensConvertis.join('\n')).catch(() => {});
+        }, 300);
         return;
     }
 
