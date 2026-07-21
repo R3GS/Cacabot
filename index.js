@@ -2054,7 +2054,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
         const auteurNom = message.member?.displayName ?? message.author.username;
         const nouveauContenu = message.content.replace(instaRegex, url => url.replace('instagram.com', 'kkinstagram.com'));
         await message.delete().catch(() => {});
-        await message.channel.send(`**${auteurNom}** a posté ce reel Instagram ! *(je change juste le lien pour que tout le monde y ait accès)*\n${nouveauContenu}`);
+        await message.channel.send(`**${auteurNom}** a posté ce reel Instagram !\n-# *(je change juste le lien pour que tout le monde y ait accès)*\n\n **${nouveauContenu}**`);
         return;
     }
 
