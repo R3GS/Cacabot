@@ -2063,15 +2063,19 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     const tiktokMatches = message.content.match(tiktokRegex);
     if (tiktokMatches) {
         const auteurNom = message.member?.displayName ?? message.author.username;
-        const nouveauContenu = message.content.replace(tiktokRegex, url => url.replace(/(?:vm\.|vt\.|www\.|m\.)?tiktok\.com/i, (match) => {
+        const convertUrl = (url) => url.replace(/(?:vm\.|vt\.|www\.|m\.)?tiktok\.com/i, (match) => {
             if (/^vm\./i.test(match)) return 'vm.kktiktok.com';
             if (/^vt\./i.test(match)) return 'vt.kktiktok.com';
             if (/^m\./i.test(match)) return 'm.kktiktok.com';
             if (/^www\./i.test(match)) return 'www.kktiktok.com';
-            return 'kkclip.com';
-        }));
+            return 'kktiktok.com';
+        });
+        const liensConvertis = tiktokMatches.map(convertUrl);
         await message.delete().catch(() => {});
-        await message.channel.send(`**${auteurNom}** a reposté ce TikTok !\n-# *(je change juste le lien pour que tout le monde y ait accès)*\n\n**${nouveauContenu}**`);
+        await message.channel.send(`**${auteurNom}** a posté ce TikTok !\n-# *(je change juste le lien pour que tout le monde y ait accès)*`);
+        setTimeout(() => {
+            message.channel.send(liensConvertis.join('\n')).catch(() => {});
+        }, 300);
         return;
     }
 
