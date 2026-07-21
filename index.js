@@ -129,7 +129,7 @@ const client = new Client({
 
 const WANTED_EXCLUDED = ['159985870458322944', '1503495713097519355', '577856714347511828'];
 let wantedOverride = null;
-const FEUR_IMMUNE = ['1070742213635625050'];
+const FEUR_IMMUNE = ['1503495713097519355'];
 
 function seedRndWanted(seed) { let x = Math.sin(seed + 1) * 10000; return x - Math.floor(x); }
 
