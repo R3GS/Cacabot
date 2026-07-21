@@ -2054,7 +2054,24 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
         const auteurNom = message.member?.displayName ?? message.author.username;
         const nouveauContenu = message.content.replace(instaRegex, url => url.replace('instagram.com', 'kkinstagram.com'));
         await message.delete().catch(() => {});
-        await message.channel.send(`**${auteurNom}** a posté ce reel Instagram !\n-# *(je change juste le lien pour que tout le monde y ait accès)*\n\n **${nouveauContenu}**`);
+        await message.channel.send(`**${auteurNom}** a reposté ce reel Instagram !\n-# *(je change juste le lien pour que tout le monde y ait accès)*\n\n**${nouveauContenu}**`);
+        return;
+    }
+
+    // Remplacement liens TikTok
+    const tiktokRegex = /https?:\/\/(?:vm\.|vt\.|www\.|m\.)?tiktok\.com\/[^\s]+/gi;
+    const tiktokMatches = message.content.match(tiktokRegex);
+    if (tiktokMatches) {
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        const nouveauContenu = message.content.replace(tiktokRegex, url => url.replace(/(?:vm\.|vt\.|www\.|m\.)?tiktok\.com/i, (match) => {
+            if (/^vm\./i.test(match)) return 'vm.kktiktok.com';
+            if (/^vt\./i.test(match)) return 'vt.kktiktok.com';
+            if (/^m\./i.test(match)) return 'm.kktiktok.com';
+            if (/^www\./i.test(match)) return 'www.kktiktok.com';
+            return 'kktiktok.com';
+        }));
+        await message.delete().catch(() => {});
+        await message.channel.send(`**${auteurNom}** a reposté ce TikTok !\n-# *(je change juste le lien pour que tout le monde y ait accès)*\n\n**${nouveauContenu}**`);
         return;
     }
 
