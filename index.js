@@ -2068,7 +2068,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
             if (/^vt\./i.test(match)) return 'vt.kktiktok.com';
             if (/^m\./i.test(match)) return 'm.kktiktok.com';
             if (/^www\./i.test(match)) return 'www.kktiktok.com';
-            return 'kktiktok.com';
+            return 'kkclip.com';
         }));
         await message.delete().catch(() => {});
         await message.channel.send(`**${auteurNom}** a reposté ce TikTok !\n-# *(je change juste le lien pour que tout le monde y ait accès)*\n\n**${nouveauContenu}**`);
