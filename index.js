@@ -979,7 +979,7 @@ if (command === "!choix") {
     // =========================
 
     if (cleaned === "hein") return reply("Deux");
-    if (cleaned === "Allo") || (cleaned === "Allô") return reply("À l'huile");
+    if (cleaned === "allo" || cleaned === "allô") return reply("À l'huile");
     if (cleaned === "de") return reply("Trois");
     if (cleaned === "ouient") return reply("Stitient");
     if (cleaned === "pq" || cleaned === "pk") return reply("Pfeur");
