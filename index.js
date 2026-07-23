@@ -917,7 +917,7 @@ if (command === "!choix") {
     if (cleaned.includes("ou quoi")) return reply("Ou feur");
     if (cleaned.includes("avec quoi")) return reply("Avec feur");
     if (cleaned.endsWith("oui")) return reply("Stiti");
-    if (cleaned.endsWith("Allo")) || cleaned.endsWith("Allô") return reply("À l'huile");
+    if (cleaned.endsWith("Allo") || cleaned.endsWith("Allô") return reply("À l'huile"));
     if (
         (cleaned.includes("cacabot") || cleaned.includes("caca bot") || raw.includes("1503495713097519355")) &&
         (cleaned.includes("jtm") || cleaned.includes("je t aime") || cleaned.includes("je taime") || cleaned.includes("jt aime"))
