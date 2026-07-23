@@ -984,6 +984,7 @@ if (command === "!choix") {
     if (cleaned === "ouient") return reply("Stitient");
     if (cleaned === "pq" || cleaned === "pk") return reply("Pfeur");
     if (cleaned === "a" || cleaned === "ha" || cleaned === "ah") return "B";
+    if (cleaned === "c") return "Non on arrête la vanne ici";
     if (cleaned === "ntm jax") return "https://cdn.discordapp.com/attachments/1206232717444775956/1504653708770672741/Capture_decran_2026-05-15_031617.png";
 
     // =========================
