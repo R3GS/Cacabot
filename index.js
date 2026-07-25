@@ -952,7 +952,7 @@ if (command === "!choix") {
         cleaned.endsWith(" 67")
     ) return "https://media.discordapp.net/attachments/1480734932933542049/1504170153317761085/67.gif";
     if (cleaned.includes("six seven")) return "https://media.discordapp.net/attachments/1480734932933542049/1504170153317761085/67.gif";
-    if (cleaned.includes("tasty crousty")) return "https://cdn.discordapp.com/attachments/1480756332373213275/1528444984930467961/ezgif-83397d855d997e32.gif";
+    if (cleaned.includes("tasty crousty")) return "https://cdn.discordapp.com/attachments/1480756332373213275/1530598009874812928/ezgif-83397d855d997e32.gif";
     if (
         cleaned === "monster" ||
         cleaned.includes(" monster ") ||
