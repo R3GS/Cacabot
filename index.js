@@ -2037,17 +2037,66 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
             await message.channel.send(`<@&1504492103194120273>`);
     }
 
+    if (message.author.bot) return;
+
+    // !chut / !unchut
+    const CHUT_AUTHORIZED = ['738191002187202630', '436218312574107658', '1070742213635625050', '899733709173948487', '375746968737021962', '116682911314345993'];
+    const chutCommand = message.content.trim().split(/\s+/)[0]?.toLowerCase();
+
+    if (chutCommand === '!chut') {
+        if (!CHUT_AUTHORIZED.includes(message.author.id)) {
+            return message.reply("Tu n'es pas autorisé.e à faire cette commande.");
+        }
+        const args = message.content.trim().split(/\s+/);
+        const timeStr = args[1]?.toLowerCase();
+        let ms = 0;
+        if (timeStr?.endsWith('min')) ms = parseInt(timeStr) * 60 * 1000;
+        else if (timeStr?.endsWith('h')) ms = parseInt(timeStr) * 60 * 60 * 1000;
+        else return message.reply('Format invalide ! Utilise `!chut Xmin` ou `!chut Xh`. Ex : `!chut 10min`');
+        if (isNaN(ms) || ms <= 0) return message.reply('Durée invalide !');
+        if (ms > 24 * 60 * 60 * 1000) return message.reply('Maximum 24h !');
+
+        const ancien = mutedChannels.get(message.channel.id);
+        if (ancien) clearTimeout(ancien.timeout);
+
+        const until = Date.now() + ms;
+        const timeout = setTimeout(() => mutedChannels.delete(message.channel.id), ms);
+        mutedChannels.set(message.channel.id, { until, timeout });
+
+        return message.reply(`Ok... Je me tais pendant **${timeStr}** alors...`);
+    }
+
+    if (chutCommand === '!unchut') {
+        if (!CHUT_AUTHORIZED.includes(message.author.id)) {
+            return message.reply("Tu n'es pas autorisé.e à faire cette commande.");
+        }
+        const ancien = mutedChannels.get(message.channel.id);
+        if (ancien) clearTimeout(ancien.timeout);
+        mutedChannels.delete(message.channel.id);
+        return message.reply('Merci :)');
+    }
+
     // Ping Cacabot seul -> "Quoi ? (Feur)"
     const strippedMsg = message.content.replace(/<@!?1503495713097519355>/g, '').trim();
-    if (message.content.includes('1503495713097519355') && strippedMsg.length === 0) {
+    if (!isChannelMuted(message.channel.id) && message.content.includes('1503495713097519355') && strippedMsg.length === 0) {
         return message.reply('Quoi ? (Feur)');
     }
 
     // Cheh
     const cleanedCheh = message.content.toLowerCase().trim();
-    if (pendingCheh.has(message.channel.id) && (cleanedCheh.includes('ntm') || cleanedCheh.includes('tg') || cleanedCheh.includes('nique ta') || cleanedCheh.includes('ta gueule') || cleanedCheh.includes('jte bz') || cleanedCheh.includes('bztmr') || cleanedCheh.includes('va te faire enculer') || cleanedCheh.includes('la ferme') || cleanedCheh.includes('tais-toi') || cleanedCheh.includes('mange tes'))) {
+    if (!isChannelMuted(message.channel.id) && pendingCheh.has(message.channel.id) && (cleanedCheh.includes('ntm') || cleanedCheh.includes('tg') || cleanedCheh.includes('nique ta') || cleanedCheh.includes('ta gueule') || cleanedCheh.includes('jte bz') || cleanedCheh.includes('bztmr') || cleanedCheh.includes('va te faire enculer') || cleanedCheh.includes('la ferme') || cleanedCheh.includes('tais-toi') || cleanedCheh.includes('mange tes'))) {
         pendingCheh.delete(message.channel.id);
         return message.reply(CHEH_GIF);
+    }
+
+    // Chut
+    const mutedChannels = new Map();
+
+    function isChannelMuted(channelId) {
+        const entry = mutedChannels.get(channelId);
+        if (!entry) return false;
+        if (Date.now() >= entry.until) { mutedChannels.delete(channelId); return false; }
+        return true;
     }
 
     // Remplacement liens Instagram (Reels + Posts)
@@ -2115,6 +2164,11 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     }
 
     const response = FEUR_IMMUNE.includes(message.author.id) ? null : getResponse(message.content);
+
+    const isExplicitCommand = message.content.trim().startsWith('!');
+    if (isChannelMuted(message.channel.id) && !isExplicitCommand) {
+        return;
+    }
 
     if (response === null || response === undefined) return;
 
@@ -4262,6 +4316,8 @@ if (response?.needsWanted) {
         return;
     }
 });
+
+
 
 // =========================
 //     LISTENER INTERACTIONS
