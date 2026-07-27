@@ -6046,6 +6046,7 @@ client.on('guildMemberAdd', async (member) => {
 client.on('voiceStateUpdate', async (oldState, newState) => {
     const GUILD_ID = '1515767395036172469';
     const TEXT_CHANNEL_ID = '1515767396407705762';
+    const CROSS_GUILD_CHANNEL_ID = '720080025130369115'; // salon sur le serveur 720057528351850547
     const VOCAL_IDS = [
         '1515767396407705763',
         '1515768236443173105',
@@ -6057,12 +6058,15 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     const textChannel = newState.guild.channels.cache.get(TEXT_CHANNEL_ID);
     if (!textChannel) return;
 
-    // Supprimer l'ancien message + annuler ses timers quoi qu'il arrive
+    const crossChannel = await client.channels.fetch(CROSS_GUILD_CHANNEL_ID).catch(() => null);
+
+    // Supprimer l'ancien message (+ son équivalent cross-serveur) et annuler ses timers quoi qu'il arrive
     const supprimerAncien = async () => {
         const ancien = vocalMessages.get(GUILD_ID);
         if (!ancien) return;
         ancien.timeouts.forEach(t => clearTimeout(t));
         await ancien.message.delete().catch(() => {});
+        if (ancien.message2) await ancien.message2.delete().catch(() => {});
         vocalMessages.delete(GUILD_ID);
     };
 
@@ -6093,6 +6097,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     await supprimerAncien();
 
     const msg = await textChannel.send(`**${memberNom}** a rejoint **${channelName}** ! On se fait un ptit voc ? 👀`);
+    const msg2 = crossChannel ? await crossChannel.send(`**${memberNom}** a rejoint **${channelName}** ! On se fait un ptit voc ? 👀`).catch(() => null) : null;
 
     const t1 = setTimeout(async () => {
         // Vérifier que la personne est toujours dans le vocal
@@ -6100,21 +6105,24 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         const member = newState.guild.members.cache.get(memberId);
         if (!member?.voice.channelId || !VOCAL_IDS.includes(member.voice.channelId)) return;
         await msg.edit(`**${memberNom}** attend depuis **30 minutes** en vocal... Quelqu'un ? 👀`).catch(() => {});
+        if (msg2) await msg2.edit(`**${memberNom}** attend depuis **30 minutes** en vocal... Quelqu'un ? 👀`).catch(() => {});
     }, 30 * 60 * 1000);
 
     const t2 = setTimeout(async () => {
         const member = newState.guild.members.cache.get(memberId);
         if (!member?.voice.channelId || !VOCAL_IDS.includes(member.voice.channelId)) return;
         await msg.edit(`**${memberNom}** attend depuis **1 heure** en vocal... C'est long quand même. 👀`).catch(() => {});
+        if (msg2) await msg2.edit(`**${memberNom}** attend depuis **1 heure** en vocal... C'est long quand même. 👀`).catch(() => {});
     }, 60 * 60 * 1000);
 
     const t3 = setTimeout(async () => {
         const member = newState.guild.members.cache.get(memberId);
         if (!member?.voice.channelId || !VOCAL_IDS.includes(member.voice.channelId)) return;
         await msg.edit(`**${memberNom}** attend depuis **2 heures** en vocal. Y a vraiment personne là ? 👀`).catch(() => {});
+        if (msg2) await msg2.edit(`**${memberNom}** attend depuis **2 heures** en vocal. Y a vraiment personne là ? 👀`).catch(() => {});
     }, 120 * 60 * 1000);
 
-    vocalMessages.set(GUILD_ID, { message: msg, memberId, channelName, timeouts: [t1, t2, t3] });
+    vocalMessages.set(GUILD_ID, { message: msg, message2: msg2, memberId, channelName, timeouts: [t1, t2, t3] });
 });
 
 client.login(process.env.TOKEN)
