@@ -4106,6 +4106,11 @@ if (response?.needsWanted) {
             };
             const description = weatherDesc[current.weather_code] || 'Conditions inconnues';
 
+            // Heure locale sur place (format HHhMM)
+            const localTime = current.time.split('T')[1]; // "18:59"
+            const [heureLocale, minLocale] = localTime.split(':');
+            const heureFormatee = `${heureLocale}h${minLocale}`;
+
             const embed = new EmbedBuilder()
                 .setColor(0x3498db)
                 .setTitle(`🌍 Météo à ${name}${country ? ', ' + country : ''}`)
@@ -4113,7 +4118,8 @@ if (response?.needsWanted) {
                 .addFields(
                     { name: '🌡️ Température', value: `${current.temperature_2m}°C (ressenti ${current.apparent_temperature}°C)`, inline: true },
                     { name: '💧 Humidité', value: `${current.relative_humidity_2m}%`, inline: true },
-                    { name: '💨 Vent', value: `${current.wind_speed_10m} km/h`, inline: true }
+                    { name: '💨 Vent', value: `${current.wind_speed_10m} km/h`, inline: true },
+                    { name: '🕒 Heure locale', value: heureFormatee, inline: true }
                 )
                 .setFooter({ text: 'Données via Open-Meteo' })
                 .setTimestamp();
