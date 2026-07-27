@@ -65,7 +65,8 @@ const BIRTHDAY_GIF = 'https://cdn.discordapp.com/attachments/1128032964924670053
 
 async function checkBirthdays() {
     const now = new Date();
-    const today = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const today = `${String(parisNow.getDate()).padStart(2, '0')}/${String(parisNow.getMonth() + 1).padStart(2, '0')}`;
 
     for (const guild of client.guilds.cache.values()) {
         const guildBirthdays = birthdayData.birthdays[guild.id] ?? {};
