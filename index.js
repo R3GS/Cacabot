@@ -1016,6 +1016,13 @@ const cooldowns = new Map();
 const pomodoroSessions = new Map();
 const youtubeSearches = new Map();
 const vocalMessages = new Map();
+const mutedChannels = new Map();
+    function isChannelMuted(channelId) {
+        const entry = mutedChannels.get(channelId);
+        if (!entry) return false;
+        if (Date.now() >= entry.until) { mutedChannels.delete(channelId); return false; }
+        return true;
+    }
 
 // =========================
 //           CHEH
@@ -2087,16 +2094,6 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     if (!isChannelMuted(message.channel.id) && pendingCheh.has(message.channel.id) && (cleanedCheh.includes('ntm') || cleanedCheh.includes('tg') || cleanedCheh.includes('nique ta') || cleanedCheh.includes('ta gueule') || cleanedCheh.includes('jte bz') || cleanedCheh.includes('bztmr') || cleanedCheh.includes('va te faire enculer') || cleanedCheh.includes('la ferme') || cleanedCheh.includes('tais-toi') || cleanedCheh.includes('mange tes'))) {
         pendingCheh.delete(message.channel.id);
         return message.reply(CHEH_GIF);
-    }
-
-    // Chut
-    const mutedChannels = new Map();
-
-    function isChannelMuted(channelId) {
-        const entry = mutedChannels.get(channelId);
-        if (!entry) return false;
-        if (Date.now() >= entry.until) { mutedChannels.delete(channelId); return false; }
-        return true;
     }
 
     // Remplacement liens Instagram (Reels + Posts)
