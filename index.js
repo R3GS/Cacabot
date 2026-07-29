@@ -942,7 +942,6 @@ if (command === "!choix") {
     if (/\bavec qui\b/.test(cleaned)) return reply("Avec quette");
     if (cleaned.includes("pour quoi faire")) return reply("Pour faire feur");
     if (cleaned.includes("pour quoi")) return reply("Pour feur");
-    if (/\bpour qui\b/.test(cleaned)) return reply("Pour quette");
     if (cleaned.includes("pourquoi")) return reply("Pourfeur");
     if (cleaned.includes("c est a quoi")) return reply("C'est \u00e0 feur");
     if (/\bc est a qui\b/.test(cleaned)) return reply("C'est \u00e0 quette");
