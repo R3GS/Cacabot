@@ -943,8 +943,8 @@ if (command === "!choix") {
     if (cleaned.includes("pour quoi faire")) return reply("Pour faire feur");
     if (cleaned.includes("pour quoi")) return reply("Pour feur");
     if (cleaned.includes("pourquoi")) return reply("Pourfeur");
-    if (cleaned.includes("c est a quoi")) return reply("C'est \u00e0 feur");
-    if (/\bc est a qui\b/.test(cleaned)) return reply("C'est \u00e0 quette");
+    if (cleaned.includes("c est a quoi")) return reply("C'est à feur");
+    if (/\bc est a qui\b/.test(cleaned)) return reply("C'est à quette");
     if (
         cleaned === "67" ||
         cleaned.includes(" 67 ") ||
@@ -961,7 +961,6 @@ if (command === "!choix") {
     ) return "https://cdn.discordapp.com/attachments/1480756332373213275/1504649546045718758/pape_monster.png";
     if (cleaned.endsWith("non")) return reply("Bril");
     if (cleaned.endsWith("bite")) return reply("Quoicoubite");
-    if (cleaned.includes("c est qui") || cleaned.includes("cest qui")) return reply("C'est quette");
     if (cleaned.includes("cest quoi")) return reply("C'est feur");
     if (cleaned.includes("de quoi")) return reply("De feur");
     if (cleaned.includes("de qui")) return reply("De quette");
