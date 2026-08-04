@@ -1614,6 +1614,7 @@ async function scheduleRappel(channelId, targetId, texte, ms) {
             rappelReports.set(sentReminder.id, { targetId, texte, channelId });
         } catch (e) {}
     }, ms);
+    catch (e) { console.error('Erreur scheduleRappel:', e);
 }
 
 function getMonthKey() {
