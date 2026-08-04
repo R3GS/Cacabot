@@ -1011,7 +1011,13 @@ if (command === "!choix") {
 
 const pendingCheh = new Map();
 const cooldowns = new Map();
+
 const rappelReports = new Map();
+const pendingRappels = new Map();
+function generateRappelId() {
+    return `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+}
+
 const pomodoroSessions = new Map();
 const youtubeSearches = new Map();
 const vocalMessages = new Map();
@@ -1602,7 +1608,11 @@ function decodeHtmlEntities(text) {
 }
 
 async function scheduleRappel(channelId, targetId, texte, ms) {
-    setTimeout(async () => {
+    const rappelId = generateRappelId();
+    const triggerAt = Date.now() + ms;
+
+    const timeout = setTimeout(async () => {
+        pendingRappels.delete(rappelId);
         try {
             const channel = await client.channels.fetch(channelId);
             const reportButton = new ButtonBuilder()
@@ -1616,6 +1626,9 @@ async function scheduleRappel(channelId, targetId, texte, ms) {
             console.error('Erreur scheduleRappel:', e);
         }
     }, ms);
+
+    pendingRappels.set(rappelId, { targetId, texte, channelId, triggerAt, timeout });
+    return rappelId;
 }
 
 function getMonthKey() {
@@ -4086,6 +4099,45 @@ if (response?.needsWanted) {
     if (response?.needsRappel) {
         const args = message.content.trim().split(/\s+/);
         const isEpsys = message.author.id === '436218312574107658';
+
+        const sub = args[1]?.toLowerCase();
+
+        if (sub === 'list') {
+            const mine = [...pendingRappels.entries()].filter(([, r]) => r.targetId === message.author.id);
+            if (mine.length === 0) return message.reply("Tu n'as aucun rappel en attente !");
+
+            const fields = mine
+                .sort((a, b) => a[1].triggerAt - b[1].triggerAt)
+                .map(([id, r]) => {
+                    const remainingMs = r.triggerAt - Date.now();
+                    const mins = Math.max(0, Math.floor(remainingMs / 60000));
+                    const secs = Math.max(0, Math.floor((remainingMs % 60000) / 1000));
+                    const dansStr = mins > 0 ? `dans ${mins}min ${secs}s` : `dans ${secs}s`;
+                    return { name: r.texte, value: dansStr, inline: false };
+                });
+
+            const embed = new EmbedBuilder()
+                .setColor(0x5865f2)
+                .setTitle('⏰ Tes rappels en attente')
+                .addFields(fields);
+            return message.reply({ embeds: [embed] });
+        }
+
+        if (sub === 'remove') {
+            const query = args.slice(2).join(' ').toLowerCase();
+            if (!query) return message.reply('Usage : `!rappel remove [nom du rappel]`');
+
+            const mine = [...pendingRappels.entries()].filter(([, r]) => r.targetId === message.author.id);
+            const match = mine.find(([, r]) => r.texte.toLowerCase() === query)
+                ?? mine.find(([, r]) => r.texte.toLowerCase().includes(query));
+
+            if (!match) return message.reply("Aucun rappel correspondant trouvé !");
+
+            const [id, r] = match;
+            clearTimeout(r.timeout);
+            pendingRappels.delete(id);
+            return message.reply(`🗑️ Rappel supprimé : **${r.texte}**`);
+        }
 
         // Détecter si c'est !rappel [ID] Xmin/h [message] (Epsys only)
         const looksLikeId = args[1] && /^\d{17,19}$/.test(args[1]);
