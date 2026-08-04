@@ -1612,9 +1612,11 @@ async function scheduleRappel(channelId, targetId, texte, ms) {
             const reportRow = new ActionRowBuilder().addComponents(reportButton);
             const sentReminder = await channel.send({ content: `🔔 <@${targetId}> Rappel : **${texte}**`, components: [reportRow] });
             rappelReports.set(sentReminder.id, { targetId, texte, channelId });
-        } catch (e) {}
+        } catch (e) {
+            console.error('Erreur scheduleRappel:', e);
+        }
     }, ms);
-} catch (e) { console.error('Erreur scheduleRappel:', e); }
+}
 
 function getMonthKey() {
     const now = new Date();
