@@ -1011,6 +1011,7 @@ if (command === "!choix") {
 
 const pendingCheh = new Map();
 const cooldowns = new Map();
+const rappelReports = new Map();
 const pomodoroSessions = new Map();
 const youtubeSearches = new Map();
 const vocalMessages = new Map();
@@ -1598,6 +1599,21 @@ function decodeHtmlEntities(text) {
         .replace(/&#39;/g, "'")
         .replace(/&apos;/g, "'")
         .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(code));
+}
+
+async function scheduleRappel(channelId, targetId, texte, ms) {
+    setTimeout(async () => {
+        try {
+            const channel = await client.channels.fetch(channelId);
+            const reportButton = new ButtonBuilder()
+                .setCustomId(`rappel_report_${targetId}`)
+                .setLabel('🔁 Reporter')
+                .setStyle(ButtonStyle.Secondary);
+            const reportRow = new ActionRowBuilder().addComponents(reportButton);
+            const sentReminder = await channel.send({ content: `🔔 <@${targetId}> Rappel : **${texte}**`, components: [reportRow] });
+            rappelReports.set(sentReminder.id, { targetId, texte, channelId });
+        } catch (e) {}
+    }, ms);
 }
 
 function getMonthKey() {
@@ -4101,11 +4117,7 @@ if (response?.needsWanted) {
         if (ms > 24 * 60 * 60 * 1000) return message.reply('Maximum 24h !');
 
         await message.reply(`\u23f0 Rappel enregistr\u00e9 ! Je ping <@${targetId}> dans **${timeStr}**.`);
-        setTimeout(async () => {
-            try {
-                await message.channel.send(`\ud83d\udd14 <@${targetId}> Rappel : **${texte}**`);
-            } catch (e) {}
-        }, ms);
+        scheduleRappel(message.channel.id, targetId, texte, ms);
         return;
     }
 
@@ -4314,12 +4326,92 @@ if (response?.needsWanted) {
 
 
 
-// =========================
-//     LISTENER INTERACTIONS
-// =========================
+    // =========================
+    //     LISTENER INTERACTIONS
+    // =========================
 
 client.on('interactionCreate', async (interaction) => {
-    try {
+try {
+
+    // =========================
+    // BOUTON RAPPEL REPORTER
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('rappel_report_')) {
+        const targetId = interaction.customId.replace('rappel_report_', '');
+        if (interaction.user.id !== targetId) {
+            return interaction.reply({ content: "Ce rappel n'est pas pour toi !", ephemeral: true });
+        }
+        const data = rappelReports.get(interaction.message.id);
+        if (!data) return interaction.reply({ content: "Ce rappel a expir\u00e9 !", ephemeral: true });
+
+        const delayMenu = new StringSelectMenuBuilder()
+            .setCustomId(`rappel_delay_${targetId}`)
+            .setPlaceholder('Choisis un d\u00e9lai...')
+            .addOptions(
+                { label: '15 minutes', value: '15min' },
+                { label: '30 minutes', value: '30min' },
+                { label: '1 heure', value: '1h' },
+                { label: '2 heures', value: '2h' },
+                { label: '\u00c0 d\u00e9terminer', value: 'custom' }
+            );
+        const row = new ActionRowBuilder().addComponents(delayMenu);
+        return interaction.update({ content: 'Choisis quand est-ce que tu veux que le rappel soit renvoy\u00e9 :', components: [row] });
+    }
+
+    // =========================
+    // MENU DELAI RAPPEL
+    // =========================
+
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('rappel_delay_')) {
+        const targetId = interaction.customId.replace('rappel_delay_', '');
+        if (interaction.user.id !== targetId) {
+            return interaction.reply({ content: "Ce rappel n'est pas pour toi !", ephemeral: true });
+        }
+        const data = rappelReports.get(interaction.message.id);
+        if (!data) return interaction.reply({ content: "Ce rappel a expir\u00e9 !", ephemeral: true });
+
+        const value = interaction.values[0];
+
+        if (value === 'custom') {
+            await interaction.update({ content: 'Choisis un d\u00e9lai (ex : `10min`, `2h`) :', components: [] });
+
+            const filter = m => m.author.id === targetId;
+            const collector = interaction.channel.createMessageCollector({ filter, time: 5 * 60 * 1000, max: 1 });
+
+            collector.on('collect', async (m) => {
+                const timeStr = m.content.trim().toLowerCase();
+                let ms = 0;
+                if (timeStr.endsWith('min')) ms = parseInt(timeStr) * 60 * 1000;
+                else if (timeStr.endsWith('h')) ms = parseInt(timeStr) * 60 * 60 * 1000;
+                else if (timeStr.endsWith('s')) ms = parseInt(timeStr) * 1000;
+
+                m.delete().catch(() => {});
+
+                if (isNaN(ms) || ms <= 0 || ms > 24 * 60 * 60 * 1000) {
+                    await interaction.editReply({ content: 'D\u00e9lai invalide ! Le report a \u00e9t\u00e9 annul\u00e9.', components: [] }).catch(() => {});
+                    return;
+                }
+
+                await interaction.editReply({ content: `\u23f0 Rappel report\u00e9 ! Je ping <@${targetId}> dans **${timeStr}**.`, components: [] }).catch(() => {});
+                scheduleRappel(data.channelId, targetId, data.texte, ms);
+            });
+
+            collector.on('end', (collected) => {
+                if (collected.size === 0) {
+                    interaction.editReply({ content: '\u23f1\ufe0f Temps \u00e9coul\u00e9, report annul\u00e9.', components: [] }).catch(() => {});
+                }
+            });
+            return;
+        }
+
+        let ms = 0;
+        if (value.endsWith('min')) ms = parseInt(value) * 60 * 1000;
+        else if (value.endsWith('h')) ms = parseInt(value) * 60 * 60 * 1000;
+
+        await interaction.update({ content: `\u23f0 Rappel report\u00e9 ! Je ping <@${targetId}> dans **${value}**.`, components: [] });
+        scheduleRappel(data.channelId, targetId, data.texte, ms);
+    }
 
     // =========================
     //     BOUTONS YOUTUBE
