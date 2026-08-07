@@ -2132,7 +2132,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
         const auteurNom = message.member?.displayName ?? message.author.username;
         const liensConvertis = instaMatches.map(url => url.replace('instagram.com', 'kkinstagram.com'));
         await message.delete().catch(() => {});
-        await message.channel.send(`**${auteurNom}** a reposté ce reel Instagram !\n-# *(je change juste le lien pour que tout le monde y ait accès)*`);
+        await message.channel.send(`**${auteurNom}** a reposté cette publication Instagram !\n-# *(je change juste le lien pour que tout le monde y ait accès)*`);
         setTimeout(() => {
             message.channel.send(liensConvertis.join('\n')).catch(() => {});
         }, 300);
