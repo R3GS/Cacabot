@@ -1021,6 +1021,7 @@ function generateRappelId() {
 const pomodoroSessions = new Map();
 const youtubeSearches = new Map();
 const vocalMessages = new Map();
+const dernierMessageParUtilisateur = new Map();
 const mutedChannels = new Map();
     function isChannelMuted(channelId) {
         const entry = mutedChannels.get(channelId);
@@ -2074,6 +2075,27 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     }
 
     if (message.author.bot) return;
+
+        if (message.author.bot) return;
+
+    // Supprimer le message précédent si Shin poste sa pub Twitch dans le salon #Promo
+    const REPOST_WATCH_USER = '1070742213635625050';
+    const REPOST_WATCH_CHANNEL = '1230637295649034240';
+
+        if (message.author.id === REPOST_WATCH_USER && message.channel.id === REPOST_WATCH_CHANNEL) {
+        const contientLien = message.content.includes('https://www.twitch.tv/belrose_shin');
+
+        if (contientLien) {
+            const cle = `${message.channel.id}-${message.author.id}`;
+            const precedent = dernierMessageParUtilisateur.get(cle);
+
+            if (precedent) {
+                await precedent.delete().catch(() => {});
+            }
+
+            dernierMessageParUtilisateur.set(cle, message);
+        }
+    }
 
     // !chut / !unchut
     const CHUT_AUTHORIZED = ['738191002187202630', '436218312574107658', '1070742213635625050', '899733709173948487', '375746968737021962', '116682911314345993'];
