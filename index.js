@@ -2214,12 +2214,13 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     }
 
     // Anti-raid : timeout au 1er message d'un compte flaggé pendant une rafale
-    if (message.guild && message.member && raidFlaggedUsers.has(message.author.id)) {
+        if (message.guild && message.member && raidFlaggedUsers.has(message.author.id)) {
         raidFlaggedUsers.delete(message.author.id);
         try {
             await message.member.timeout(RAID_TIMEOUT_MS, 'Anti-raid automatique');
             raidMuteRecord.set(message.author.id, Date.now() + RAID_TIMEOUT_MS);
             await message.channel.send(`🚨 **${message.member.displayName}** fait partie d'une vague d'arrivées suspectes et a été mis en pause **5 minutes**.`);
+            await message.member.send("Ton compte a été repéré dans une vague d'arrivées suspectes sur le serveur, tu as été mis en pause 5 minutes. Si tu quittes et reviens dans les 15 minutes qui suivent la fin de cette pause, tu seras automatiquement exclu du serveur.").catch(() => {});
         } catch (err) {
             console.error('Erreur timeout anti-raid:', err);
         }
