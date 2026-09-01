@@ -2079,6 +2079,10 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     // Ping Notifs Shorts quand Gappy sort un nouveau TikTok
     client.on('messageCreate', async (message) => {
+        if (message.author.id === client.user.id) {
+            topData.messages['1503495713097519355'] = (topData.messages['1503495713097519355'] || 0) + 1;
+            return;
+        }
         if (message.author.bot) return;
 
         // Ping automatique du rôle quand un utilisateur spécifique poste dans un salon spécifique
