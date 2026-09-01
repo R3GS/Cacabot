@@ -6007,7 +6007,7 @@ return interaction.update({ embeds: [embed], components: rows });
                 .setDescription("# \ud83e\udd16 Cacabot")
                 .addFields(
                     { name: "\ud83e\udd16 !botinfo", value: "Affiche les informations de Cacabot." },
-                    { name: "🤫 !stop/!unstop", value: "Faire taire Cacabot (feur, quette, etc.) pendant 1h, ou le faire revenir avant la fin. Dis aussi \"Cacabot stop\" ou \"Cacabot reviens\"." }
+                    { name: "🤫 !stop/!unstop", value: "Faire taire Cacabot pendant 1h, ou le faire revenir avant la fin." }
                     { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." }
                 );
         }
