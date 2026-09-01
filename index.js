@@ -56,6 +56,18 @@ async function saveAll() {
 
 setInterval(() => saveAll(), 60 * 60 * 1000);
 
+process.on('SIGTERM', async () => {
+    console.log('🛑 SIGTERM reçu, sauvegarde avant arrêt...');
+    await saveAll();
+    process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+    console.log('🛑 SIGINT reçu, sauvegarde avant arrêt...');
+    await saveAll();
+    process.exit(0);
+});
+
 // Aliases pour compatibilite
 const saveTop = saveAll;
 const saveBirthdays = saveAll;
