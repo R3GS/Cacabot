@@ -1034,6 +1034,21 @@ const pomodoroSessions = new Map();
 const youtubeSearches = new Map();
 const vocalMessages = new Map();
 const dernierMessageParUtilisateur = new Map();
+// --- Anti-spam ---
+const spamTracker = new Map(); // userId -> timestamps[]
+const SPAM_WINDOW_MS = 5000;
+const SPAM_THRESHOLD = 5;
+const SPAM_TIMEOUT_MS = 5 * 60 * 1000;
+
+// --- Anti-raid ---
+const raidJoinTracker = new Map();   // guildId -> [{ userId, timestamp }]
+const raidFlaggedUsers = new Map();  // userId -> true (en attente de son 1er message)
+const raidMuteRecord = new Map();    // userId -> timestamp de fin du timeout raid
+const RAID_ACCOUNT_AGE_MS = 14 * 24 * 60 * 60 * 1000; // 2 semaines
+const RAID_WINDOW_MS = 60 * 1000;    // 60s
+const RAID_THRESHOLD = 3;
+const RAID_TIMEOUT_MS = 5 * 60 * 1000;
+const RAID_ESCALATION_WINDOW_MS = 15 * 60 * 1000; // 15min après la fin du mute
 const mutedChannels = new Map();
     function isChannelMuted(channelId) {
         const entry = mutedChannels.get(channelId);
@@ -2178,6 +2193,36 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
         if (ancien) clearTimeout(ancien.timeout);
         mutedChannels.delete(message.channel.id);
         return message.reply('Me revoilà :)');
+    }
+
+        // Anti-spam
+    if (message.guild && message.member && !CHUT_AUTHORIZED.includes(message.author.id)) {
+        const now = Date.now();
+        const spamTimestamps = (spamTracker.get(message.author.id) || []).filter(t => now - t < SPAM_WINDOW_MS);
+        spamTimestamps.push(now);
+        spamTracker.set(message.author.id, spamTimestamps);
+
+        if (spamTimestamps.length >= SPAM_THRESHOLD) {
+            spamTracker.delete(message.author.id);
+            try {
+                await message.member.timeout(SPAM_TIMEOUT_MS, 'Anti-spam automatique');
+                await message.channel.send(`🔇 **${message.member.displayName}** a été mis en pause **5 minutes** pour spam.`);
+            } catch (err) {
+                console.error('Erreur timeout anti-spam:', err);
+            }
+        }
+    }
+
+    // Anti-raid : timeout au 1er message d'un compte flaggé pendant une rafale
+    if (message.guild && message.member && raidFlaggedUsers.has(message.author.id)) {
+        raidFlaggedUsers.delete(message.author.id);
+        try {
+            await message.member.timeout(RAID_TIMEOUT_MS, 'Anti-raid automatique');
+            raidMuteRecord.set(message.author.id, Date.now() + RAID_TIMEOUT_MS);
+            await message.channel.send(`🚨 **${message.member.displayName}** fait partie d'une vague d'arrivées suspectes et a été mis en pause **5 minutes**.`);
+        } catch (err) {
+            console.error('Erreur timeout anti-raid:', err);
+        }
     }
 
     // Ping Cacabot seul -> "Quoi ? (Feur)"
@@ -6298,6 +6343,25 @@ client.on('guildMemberAdd', async (member) => {
     if (member.guild.id === '720057528351850547') {
         const accountAge = Date.now() - member.user.createdTimestamp;
         const oneMonth = 30 * 24 * 60 * 60 * 1000;
+                // --- Escalade anti-raid : kick si retour trop rapide après un timeout raid ---
+        const previousRaidMuteEnd = raidMuteRecord.get(member.id);
+        if (previousRaidMuteEnd && Date.now() - previousRaidMuteEnd < RAID_ESCALATION_WINDOW_MS) {
+            raidMuteRecord.delete(member.id);
+            await member.kick('Anti-raid : retour trop rapide après un timeout raid').catch(() => {});
+            return;
+        }
+
+        // --- Détection anti-raid : rafale de comptes très récents ---
+        if (accountAge < RAID_ACCOUNT_AGE_MS) {
+            const joins = (raidJoinTracker.get(member.guild.id) || []).filter(j => Date.now() - j.timestamp < RAID_WINDOW_MS);
+            joins.push({ userId: member.id, timestamp: Date.now() });
+            raidJoinTracker.set(member.guild.id, joins);
+
+            if (joins.length >= RAID_THRESHOLD) {
+                for (const j of joins) raidFlaggedUsers.set(j.userId, true);
+                raidJoinTracker.delete(member.guild.id);
+            }
+        }
         if (accountAge < oneMonth) {
             const modChannel = member.guild.channels.cache.get('720082701192921231');
             if (!modChannel) return;
