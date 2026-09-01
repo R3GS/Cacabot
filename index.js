@@ -5974,8 +5974,7 @@ return interaction.update({ embeds: [embed], components: rows });
                     { name: "\ud83d\udc64 !profil", value: "Afficher le profil d'un membre." },
                     { name: "\ud83d\uddbc\ufe0f !avatar", value: "Afficher l'avatar d'un membre en grand." },
                     { name: "\ud83c\udfc5 !top", value: "Afficher le top 10 des membres les plus actifs." },
-                    { name: "\ud83d\udcac !actif", value: "Affiche les membres les plus actifs du jour et de la semaine." },
-                    { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." }
+                    { name: "\ud83d\udcac !actif", value: "Affiche les membres les plus actifs du jour et de la semaine." }
                 );
         }
 
