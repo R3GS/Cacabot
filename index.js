@@ -2134,6 +2134,36 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
         return message.reply('Merci :)');
     }
 
+        // !stop / !unstop / "Cacabot stop" / "Cacabot reviens" (accessible à tout le monde, 1h fixe)
+    const STOP_DURATION_MS = 60 * 60 * 1000;
+    const stopCommand = message.content.trim().split(/\s+/)[0]?.toLowerCase();
+    const stopCleaned = message.content
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+
+    const isStopTrigger = stopCommand === '!stop' || /\bcacabot\s+stop\b/.test(stopCleaned);
+    const isUnstopTrigger = stopCommand === '!unstop' || /\bcacabot\s+reviens\b/.test(stopCleaned);
+
+    if (isStopTrigger) {
+        const ancien = mutedChannels.get(message.channel.id);
+        if (ancien) clearTimeout(ancien.timeout);
+
+        const until = Date.now() + STOP_DURATION_MS;
+        const timeout = setTimeout(() => mutedChannels.delete(message.channel.id), STOP_DURATION_MS);
+        mutedChannels.set(message.channel.id, { until, timeout });
+
+        return message.reply(':zipper_mouth:');
+    }
+
+    if (isUnstopTrigger) {
+        const ancien = mutedChannels.get(message.channel.id);
+        if (ancien) clearTimeout(ancien.timeout);
+        mutedChannels.delete(message.channel.id);
+        return message.reply('Me revoilà :)');
+    }
+
     // Ping Cacabot seul -> "Quoi ? (Feur)"
     const strippedMsg = message.content.replace(/<@!?1503495713097519355>/g, '').trim();
     if (!isChannelMuted(message.channel.id) && message.content.includes('1503495713097519355') && strippedMsg.length === 0) {
@@ -5945,8 +5975,7 @@ return interaction.update({ embeds: [embed], components: rows });
                     { name: "\ud83d\uddbc\ufe0f !avatar", value: "Afficher l'avatar d'un membre en grand." },
                     { name: "\ud83c\udfc5 !top", value: "Afficher le top 10 des membres les plus actifs." },
                     { name: "\ud83d\udcac !actif", value: "Affiche les membres les plus actifs du jour et de la semaine." },
-                    { name: "\ud83e\udd16 !botinfo", value: "Affiche les informations de Cacabot." },
-                    { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." },
+                    { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." }
                 );
         }
 
@@ -5979,6 +6008,7 @@ return interaction.update({ embeds: [embed], components: rows });
                 .setDescription("# \ud83e\udd16 Cacabot")
                 .addFields(
                     { name: "\ud83e\udd16 !botinfo", value: "Affiche les informations de Cacabot." },
+                    { name: "🤫 !stop/!unstop", value: "Faire taire Cacabot (feur, quette, etc.) pendant 1h, ou le faire revenir avant la fin. Dis aussi \"Cacabot stop\" ou \"Cacabot reviens\"." }
                     { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." }
                 );
         }
@@ -6092,7 +6122,7 @@ return interaction.update({ embeds: [embed], components: rows });
                 .addOptions(
                     { label: '\ud83d\udcac Discord', description: 'serveur, info, avatar, top, actif', value: 'discord' },
                     { label: '\u25b6\ufe0f YouTube', description: 'youtube, stats, last', value: 'youtube' },
-                    { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping', value: 'cacabot' },
+                    { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping, stop', value: 'cacabot' },
                     { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel, météo, pomodoro', value: 'autres' }
                 );
 
