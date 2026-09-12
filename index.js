@@ -607,7 +607,7 @@ if (command === "!choix") {
     //         !KISS
     // =========================
 
-    if (command === "!kiss") {
+    if (command === "!kiss" || command === "!bisou") {
         return { needsKiss: true };
     }
 
@@ -615,7 +615,7 @@ if (command === "!choix") {
     //         !KISS
     // =========================
 
-    if (command === "!run") {
+    if (command === "!run" || command === "!court") {
         return { needsRun: true };
     }
 
@@ -623,7 +623,7 @@ if (command === "!choix") {
     //         !HUG
     // =========================
 
-    if (command === "!hug") {
+    if (command === "!hug" || command === "!calin") {
         return { needsHug: true };
     }
 
@@ -631,7 +631,7 @@ if (command === "!choix") {
     //         !DANSE
     // =========================
 
-    if (command === "!danse") {
+    if (command === "!danse" || command === "!dance") {
         return { needsDance: true };
     }
 
@@ -663,7 +663,7 @@ if (command === "!choix") {
     //         !BANG
     // =========================
 
-    if (command === "!bang") {
+    if (command === "!bang" || command === "!tir" || command === "!pan") {
         return { needsBang: true };
     }
 
@@ -671,7 +671,7 @@ if (command === "!choix") {
     //         !PUNCH
     // =========================
 
-    if (command === "!punch") {
+    if (command === "!punch" || command === "!frappe") {
         return { needsPunch: true };
     }
 
@@ -685,15 +685,15 @@ if (command === "!choix") {
     return { needsWanted: true };
 }
 
-    if (command === "!cry") {
+    if (command === "!cry" || command === "!pleure") {
         return { needsCry: true };
     }
 
-    if (command === "!palaref") {
+    if (command === "!palaref" || command === "!pref") {
         return { needsPalaref: true };
     }
 
-    if (command === "!explode") {
+    if (command === "!explode" || command === "!explose") {
         return { needsExplode: true };
     }
 
@@ -5870,20 +5870,21 @@ return interaction.update({ embeds: [embed], components: rows });
                 .setColor(0xffdc5d)
                 .setDescription("# \ud83d\udc46 Interact")
                 .addFields(
-                    { name: "💋!kiss", value: "Embrassez quelqu'un sur le serveur !" },
-                    { name: "🫂!hug", value: "Faites un c\u00e2lin \u00e0 quelqu'un sur le serveur !" },
-                    { name: "💃!danse", value: "Dansez avec quelqu'un sur le serveur !" },
+                    { name: "💋!kiss / !bisou", value: "Embrassez quelqu'un sur le serveur !" },
+                    { name: "🫂!hug / !calin", value: "Faites un c\u00e2lin \u00e0 quelqu'un sur le serveur !" },
+                    { name: "💃!danse / !dance", value: "Dansez avec quelqu'un sur le serveur !" },
                     { name: "🗯️!insult", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
                     { name: "☠️!die", value: "Mourez en direct sur le serveur !" },
                     { name: "🔨!ban", value: "Bannir quelqu'un du serveur... symboliquement." },
                     { name: "😛!bait", value: "Ragebait quelqu'un du serveur, gratuitement." },
-                    { name: "💥!explode", value: "Explose." },
-                    { name: "\ud83d\ude10 !palaref", value: "Ce moment g\u00eanant quand vous n'avez pas la ref..." },
-                    { name: "\ud83d\ude2d !cry", value: "Pleure." },
-                    { name: "👊!punch", value: "Frappez quelqu'un sur le serveur !" },
-                    { name: "🔫!bang", value: "Tirez sur quelqu'un sur le serveur !" },
+                    { name: "💥!explode / !explose", value: "Explose." },
+                    { name: "\ud83d\ude10 !palaref / !pref", value: "Ce moment g\u00eanant quand vous n'avez pas la ref..." },
+                    { name: "\ud83d\ude2d !glaref / !gref / !jailaref", value: "Vous avez la ref!" },
+                    { name: "\ud83d\ude2d !cry / !pleure", value: "Pleure." },
+                    { name: "👊!punch / !frappe", value: "Frappez quelqu'un sur le serveur !" },
+                    { name: "🔫!bang / !tir / !pan", value: "Tirez sur quelqu'un sur le serveur !" },
                     { name: "🗿!rizz", value: "Rizzez quelqu'un sur le serveur !" },
-                    { name: "🏃 !run", value: "Fuis quelqu'un sur le serveur !" },
+                    { name: "🏃!run", value: "Fuis quelqu'un sur le serveur !" },
                     { name: "😆!rire", value: "Riez un bon coup !" }
                 );
         }
