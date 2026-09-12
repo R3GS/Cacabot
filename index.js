@@ -3186,11 +3186,7 @@ if (response?.needsWanted) {
             .setLabel('🐒 Singe fort ensemble')
             .setStyle(ButtonStyle.Secondary);
         const row = new ActionRowBuilder().addComponents(btn);
-        const embed = new EmbedBuilder()
-            .setColor(0x503649)
-            .setImage(gif);
-
-        return message.reply({ embeds: [embed], components: [row] });
+        return message.reply({ files: [gif], components: [row] });
     }
 
     // !explode
@@ -5748,11 +5744,7 @@ return interaction.update({ embeds: [embed], components: rows });
             .setLabel('🐒 Singe fort ensemble')
             .setStyle(ButtonStyle.Secondary);
         const row = new ActionRowBuilder().addComponents(btn);
-        const embed = new EmbedBuilder()
-            .setColor(0x503649)
-            .setImage(gif);
-
-        return interaction.reply({ embeds: [embed], components: [row] });
+        return interaction.reply({ files: [gif], components: [row] });
     }
 
     // =========================
