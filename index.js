@@ -501,6 +501,15 @@ function getResponse(raw) {
         return gifs[Math.floor(Math.random() * gifs.length)];
     }
 
+
+    // =========================
+    //         !SYLVAIN
+    // =========================
+
+    if (command === "!sylvain") {
+        return { needsSylvain: true };
+    }
+
     // =========================
     //         !CHOIX
     // =========================
@@ -1288,6 +1297,7 @@ function buildDanceEmbed(description, solo) {
 const insultGifs = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505057050491879594/springtrap-middle.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505057050965708810/zooble-amazing-digital-circus.gif",
+    "https://tenor.com/view/vilebrequin-vilebrequin-sylvain-levy-vilebrequin-sylvain-vilebrequin-levy-sylvain-levy-gif-21866498",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505057051502706838/fuck-off-fuck-you.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505057052093841618/birdie.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505057052597424178/dog-middle-finger.gif",
@@ -1319,6 +1329,7 @@ function buildInsultEmbed(description) {
 
 const laughGifs = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505063705681854595/jdg-joueur-du-grenier.gif",
+    "https://tenor.com/view/sylvain-sylvain-rire-rire-vilebrequin-sylvain-lyve-gif-8633655158314530858"
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505063706151882812/mr-jday-mdr.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505063706428571760/misterjday-mdr.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505065995864244334/laughing-emoji-laughing.gif",
@@ -3032,7 +3043,7 @@ if (response?.needsWanted) {
 
     // !palaref
     if (response?.needsPalaref) {
-        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
+        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://tenor.com/view/vilebrequin-vilebrequin-sylvain-levy-vilebrequin-sylvain-vilebrequin-levy-sylvain-levy-gif-24319115", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
         const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
         const auteurNom = message.member?.displayName ?? message.author.username;
         let cible = message.mentions.users.first();
@@ -3145,6 +3156,40 @@ if (response?.needsWanted) {
             .setColor(0x503649)
             .setDescription(description)
             .setImage(gif);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
+    // !sylvain
+    if (response?.needsSylvain) {
+        const sylvainGifs = [
+            "https://media1.tenor.com/m/camhluUNGO0AAAAd/sylvain-lyve-sylvain-levy.gif",
+            "https://media1.tenor.com/m/mhNSNZ7Ye4wAAAAC/sylvain-lyve-vilbrequin.gif",
+            "https://media1.tenor.com/m/n7NmIiefhZ4AAAAC/sylvain-lyve-vilbrequin.gif",
+            "https://media1.tenor.com/m/p66oAFFJ2pcAAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+            "https://media1.tenor.com/m/XFUotrruCacAAAAC/vilebrequin-sylvain.gif",
+            "https://media1.tenor.com/m/pCExmpKfecgAAAAC/vilebrequin-sylvain.gif",
+            "https://media1.tenor.com/m/MkoOhxjfLeYAAAAC/vilebrequin-sylvain.gif",
+            "https://media1.tenor.com/m/q5GDY7A8aUMAAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+            "https://media1.tenor.com/m/8K7M2XtHOFsAAAAC/vilebrequin-sylvain.gif",
+            "https://media1.tenor.com/m/E3abpzYLviIAAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+            "https://media1.tenor.com/m/CH0fiUJj5psAAAAC/sylvain-lyve-sylvain-levy.gif",
+            "https://media1.tenor.com/m/VD8UmHWnJPgAAAAC/vilebrequin-vilebrequin-sylvain.gif",
+            "https://media1.tenor.com/m/UUO8TiMNDXAAAAAC/keep-pushing-race.gif",
+            "https://media1.tenor.com/m/q9PEP4AcLKkAAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+            "https://media1.tenor.com/m/aNmsYZdcuG8AAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+            "https://media1.tenor.com/m/d9Dnn5iOeCoAAAAd/sylvain-sylvain-rire.gif"
+        ];
+        const gif = sylvainGifs[Math.floor(Math.random() * sylvainGifs.length)];
+
+        const btn = new ButtonBuilder()
+            .setCustomId('sylvain_again')
+            .setLabel('🐒 Singe fort ensemble')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(btn);
+        const embed = new EmbedBuilder()
+            .setColor(0x503649)
+            .setImage(gif);
+
         return message.reply({ embeds: [embed], components: [row] });
     }
 
@@ -5674,6 +5719,43 @@ return interaction.update({ embeds: [embed], components: rows });
     }
 
     // =========================
+    // BOUTON SYLVAIN
+    // =========================
+
+    if (interaction.isButton() && interaction.customId === 'sylvain_again') {
+        const sylvainGifs = [
+            "https://media1.tenor.com/m/camhluUNGO0AAAAd/sylvain-lyve-sylvain-levy.gif",
+            "https://media1.tenor.com/m/mhNSNZ7Ye4wAAAAC/sylvain-lyve-vilbrequin.gif",
+            "https://media1.tenor.com/m/n7NmIiefhZ4AAAAC/sylvain-lyve-vilbrequin.gif",
+            "https://media1.tenor.com/m/p66oAFFJ2pcAAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+            "https://media1.tenor.com/m/XFUotrruCacAAAAC/vilebrequin-sylvain.gif",
+            "https://media1.tenor.com/m/pCExmpKfecgAAAAC/vilebrequin-sylvain.gif",
+            "https://media1.tenor.com/m/MkoOhxjfLeYAAAAC/vilebrequin-sylvain.gif",
+            "https://media1.tenor.com/m/q5GDY7A8aUMAAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+            "https://media1.tenor.com/m/8K7M2XtHOFsAAAAC/vilebrequin-sylvain.gif",
+            "https://media1.tenor.com/m/E3abpzYLviIAAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+            "https://media1.tenor.com/m/CH0fiUJj5psAAAAC/sylvain-lyve-sylvain-levy.gif",
+            "https://media1.tenor.com/m/VD8UmHWnJPgAAAAC/vilebrequin-vilebrequin-sylvain.gif",
+            "https://media1.tenor.com/m/UUO8TiMNDXAAAAAC/keep-pushing-race.gif",
+            "https://media1.tenor.com/m/q9PEP4AcLKkAAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+            "https://media1.tenor.com/m/aNmsYZdcuG8AAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+            "https://media1.tenor.com/m/d9Dnn5iOeCoAAAAd/sylvain-sylvain-rire.gif"
+        ];
+        const gif = sylvainGifs[Math.floor(Math.random() * sylvainGifs.length)];
+
+        const btn = new ButtonBuilder()
+            .setCustomId('sylvain_again')
+            .setLabel('🐒 Singe fort ensemble')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(btn);
+        const embed = new EmbedBuilder()
+            .setColor(0x503649)
+            .setImage(gif);
+
+        return interaction.reply({ embeds: [embed], components: [row] });
+    }
+
+    // =========================
     // BOUTON EXPLODE WITH
     // =========================
 
@@ -6053,7 +6135,7 @@ return interaction.update({ embeds: [embed], components: rows });
             .setCustomId(`help_fun_${helpAuthorId}`)
             .setPlaceholder('Choisis une cat\u00e9gorie')
             .addOptions(
-                { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, palaref, punch, bang, rizz, rire, danse, run', value: 'interact' },
+                { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, palaref, jailaref, punch, bang, rizz, rire, danse, run', value: 'interact' },
                 { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                 { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
                 { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague, horoscope, wanted', value: 'random' }
@@ -6242,7 +6324,7 @@ return interaction.update({ embeds: [embed], components: rows });
                 .setCustomId(`help_fun_${helpAuthorId}`)
                 .setPlaceholder('Choisis une cat\u00e9gorie')
                 .addOptions(
-                    { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, palaref, punch, bang, rizz, rire, danse, run', value: 'interact' },
+                    { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, palaref, jailaref, punch, bang, rizz, rire, danse, run', value: 'interact' },
                     { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                     { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
                     { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague, horoscope, wanted', value: 'random' }
