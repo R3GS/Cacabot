@@ -2151,8 +2151,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
         const until = Date.now() + ms;
         const timeout = setTimeout(() => mutedChannels.delete(message.channel.id), ms);
         mutedChannels.set(message.channel.id, { until, timeout });
-
-        return message.reply(`Ok... Je me tais pendant **${timeStr}** alors...`);
+        return message.react('🤐').catch(() => {});
     }
 
     if (chutCommand === '!unchut') {
@@ -2162,7 +2161,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
         const ancien = mutedChannels.get(message.channel.id);
         if (ancien) clearTimeout(ancien.timeout);
         mutedChannels.delete(message.channel.id);
-        return message.reply('Merci :)');
+        return message.react('👋').catch(() => {});
     }
 
         // !stop / !unstop / "Cacabot stop" / "Cacabot reviens" (accessible à tout le monde, 1h fixe)
@@ -2184,15 +2183,14 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
         const until = Date.now() + STOP_DURATION_MS;
         const timeout = setTimeout(() => mutedChannels.delete(message.channel.id), STOP_DURATION_MS);
         mutedChannels.set(message.channel.id, { until, timeout });
-
-        return message.reply(':zipper_mouth:');
+        return message.react('🤐').catch(() => {});
     }
 
     if (isUnstopTrigger) {
         const ancien = mutedChannels.get(message.channel.id);
         if (ancien) clearTimeout(ancien.timeout);
         mutedChannels.delete(message.channel.id);
-        return message.reply('Me revoilà :)');
+        return message.react('👋').catch(() => {});
     }
 
         // Anti-spam
