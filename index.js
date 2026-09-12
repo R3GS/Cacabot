@@ -692,6 +692,10 @@ if (command === "!choix") {
     if (command === "!palaref" || command === "!pref") {
         return { needsPalaref: true };
     }
+    
+    if (command === "!jailaref" || command === "!glaref" || command === "!gref") {
+        return { needsJailaref: true };
+    }
 
     if (command === "!explode" || command === "!explose") {
         return { needsExplode: true };
@@ -3076,6 +3080,65 @@ if (response?.needsWanted) {
         const btn = new ButtonBuilder()
             .setCustomId(`palaref_aussi_${message.author.id}_${auteurNom}_${cible?.id ?? 'none'}`)
             .setLabel('\ud83d\ude10 Pas la ref non plus')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(btn);
+        const embed = new EmbedBuilder()
+            .setColor(0x503649)
+            .setDescription(description)
+            .setImage(gif);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
+    // !jailaref
+    if (response?.needsJailaref) {
+        const jailarefGifs = ["https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/f1/7d/7y2QyYzWIYksGnnK.gif", "https://cdn.discordapp.com/attachments/720079691041472572/1548362421079646481/caf5c232438734937f6e1cf4c7bc5411.png", "https://media1.tenor.com/m/13XpzbwtVnYAAAAC/dway-the-roc.gif", "https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/14/44/oqcpwYRAEpXGYqfyw.gif", "https://static2.klipy.com/ii/50d7c955398dfd7e3c8ba5281154280f/79/6d/eoUS3shzyQLpKm.gif", "https://static2.klipy.com/ii/d7aec6f6f171607374b2065c836f92f4/3d/31/08K8MgEk.gif", "https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/64/b0/SdnOajVDadHUy.gif", "https://cdn.discordapp.com/attachments/720079691041472572/1548366731666268250/image2.gif", "https://static2.klipy.com/ii/9294a2e836d178ddc22430dd7765727e/44/86/6QBidjUuV1oBpAnHIw7o.gif"];
+        const gif = jailarefGifs[Math.floor(Math.random() * jailarefGifs.length)];
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        let cible = message.mentions.users.first();
+
+        if (!cible) {
+            const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (query) {
+                if (client.user.username.toLowerCase().includes(query.toLowerCase()) || 'cacabot'.includes(query.toLowerCase())) {
+                    cible = client.user;
+                } else {
+                    const result = findMemberByName(message.guild, query);
+                    if (result.multiple) {
+                        askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const cibleNom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
+                            const btn = new ButtonBuilder()
+                                .setCustomId(`jailaref_with_${message.author.id}_${auteurNom}_${user.id}`)
+                                .setLabel('😎 J\'ai la ref aussi')
+                                .setStyle(ButtonStyle.Secondary);
+                            const row = new ActionRowBuilder().addComponents(btn);
+                            const embed = new EmbedBuilder()
+                                .setColor(0x503649)
+                                .setDescription(`😎 **${auteurNom}** a la ref de **${cibleNom}** !`)
+                                .setImage(gif);
+                            message.reply({ embeds: [embed], components: [row] });
+                        });
+                        return;
+                    }
+                    if (result.found) cible = result.found.user;
+                }
+            }
+        }
+
+        let description;
+        if (!cible) {
+            description = `😎 **${auteurNom}** a la ref !`;
+        } else if (cible.id === message.author.id) {
+            return message.reply({ content: "Bah oui, t'as forcément ta propre ref...", ephemeral: true });
+        } else if (cible.id === client.user.id) {
+            description = `😎 **${auteurNom}** a ma ref !`;
+        } else {
+            const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+            description = `😎 **${auteurNom}** a la ref de **${cibleNom}** !`;
+        }
+
+        const btn = new ButtonBuilder()
+            .setCustomId(`jailaref_with_${message.author.id}_${auteurNom}_${cible?.id ?? 'none'}`)
+            .setLabel('😎 J\'ai la ref aussi')
             .setStyle(ButtonStyle.Secondary);
         const row = new ActionRowBuilder().addComponents(btn);
         const embed = new EmbedBuilder()
@@ -5570,13 +5633,41 @@ return interaction.update({ embeds: [embed], components: rows });
             return interaction.reply({ content: "Bah c'est ta ref", ephemeral: true });
         }
 
-        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
+        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://klipy.com/gifs/tuc-gian-3", "https://cdn.discordapp.com/attachments/1480756332373213275/1548362733408362578/michel-palareff-v0-r9ywzo3614u31.png?ex=6aa6c8aa&is=6aa5772a&hm=20f2c75585bd442371e0095f00b4f1ffbf94e00b2e5ed5b1e56c5b3fd2c0b313&", "https://klipy.com/gifs/fnaf-215", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
         const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
         const clickerNom = interaction.member?.displayName ?? interaction.user.username;
 
         const embed = new EmbedBuilder()
             .setColor(0x503649)
             .setDescription(`\ud83d\ude10 **${clickerNom}** n'a pas la ref non plus...`)
+            .setImage(gif);
+
+        return interaction.reply({ embeds: [embed] });
+    }
+
+    // =========================
+    // BOUTON JAILAREF
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('jailaref_with_')) {
+        const parts = interaction.customId.split('_');
+        const originalAuthorId = parts[2];
+        const targetId = parts[4];
+
+        if (interaction.user.id === originalAuthorId) {
+            return interaction.reply({ content: "On a compris que t'avais la ref :)", ephemeral: true });
+        }
+        if (interaction.user.id === targetId) {
+            return interaction.reply({ content: "Bah c'est ta ref", ephemeral: true });
+        }
+
+                const jailarefGifs = ["https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/f1/7d/7y2QyYzWIYksGnnK.gif", "https://cdn.discordapp.com/attachments/720079691041472572/1548362421079646481/caf5c232438734937f6e1cf4c7bc5411.png", "https://media1.tenor.com/m/13XpzbwtVnYAAAAC/dway-the-roc.gif", "https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/14/44/oqcpwYRAEpXGYqfyw.gif", "https://static2.klipy.com/ii/50d7c955398dfd7e3c8ba5281154280f/79/6d/eoUS3shzyQLpKm.gif", "https://static2.klipy.com/ii/d7aec6f6f171607374b2065c836f92f4/3d/31/08K8MgEk.gif", "https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/64/b0/SdnOajVDadHUy.gif", "https://cdn.discordapp.com/attachments/720079691041472572/1548366731666268250/image2.gif", "https://static2.klipy.com/ii/9294a2e836d178ddc22430dd7765727e/44/86/6QBidjUuV1oBpAnHIw7o.gif"];
+        const gif = jailarefGifs[Math.floor(Math.random() * jailarefGifs.length)];
+        const clickerNom = interaction.member?.displayName ?? interaction.user.username;
+
+        const embed = new EmbedBuilder()
+            .setColor(0x503649)
+            .setDescription(`😎 **${clickerNom}** a la ref aussi !`)
             .setImage(gif);
 
         return interaction.reply({ embeds: [embed] });
