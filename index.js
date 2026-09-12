@@ -3180,7 +3180,14 @@ if (response?.needsWanted) {
             "https://media1.tenor.com/m/d9Dnn5iOeCoAAAAd/sylvain-sylvain-rire.gif"
         ];
         const gif = sylvainGifs[Math.floor(Math.random() * sylvainGifs.length)];
-        return interaction.reply({ files: [gif] });
+
+        const btn = new ButtonBuilder()
+            .setCustomId('sylvain_again')
+            .setLabel('🐒 Singe fort ensemble')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(btn);
+
+        return message.reply({ files: [gif], components: [row] });
     }
 
     // !explode
