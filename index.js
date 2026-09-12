@@ -1329,7 +1329,7 @@ function buildInsultEmbed(description) {
 
 const laughGifs = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505063705681854595/jdg-joueur-du-grenier.gif",
-    "https://tenor.com/view/sylvain-sylvain-rire-rire-vilebrequin-sylvain-lyve-gif-8633655158314530858"
+    "https://tenor.com/view/sylvain-sylvain-rire-rire-vilebrequin-sylvain-lyve-gif-8633655158314530858",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505063706151882812/mr-jday-mdr.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505063706428571760/misterjday-mdr.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505065995864244334/laughing-emoji-laughing.gif",
