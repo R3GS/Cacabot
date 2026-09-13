@@ -2258,10 +2258,20 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     if (instaMatches) {
         const auteurNom = message.member?.displayName ?? message.author.username;
         const liensConvertis = instaMatches.map(url => url.replace('instagram.com', 'kkinstagram.com'));
+
+        const row = new ActionRowBuilder().addComponents(
+            instaMatches.slice(0, 5).map((url, i) =>
+                new ButtonBuilder()
+                    .setLabel(instaMatches.length > 1 ? `🔗 Lien original ${i + 1}` : '🔗 Lien original')
+                    .setStyle(ButtonStyle.Link)
+                    .setURL(url)
+            )
+        );
+
         await message.delete().catch(() => {});
         await message.channel.send(`**${auteurNom}** a reposté cette publication Instagram !\n-# *(je change juste le lien pour que tout le monde y ait accès)*`);
         setTimeout(() => {
-            message.channel.send(liensConvertis.join('\n')).catch(() => {});
+            message.channel.send({ content: liensConvertis.join('\n'), components: [row] }).catch(() => {});
         }, 300);
         return;
     }
