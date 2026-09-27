@@ -932,6 +932,7 @@ if (command === "!choix") {
 
     if (/\bh?e+h?y?\s+p[e]+t[i]+t|\beh\s+p[e]+t[i]+t/i.test(cleaned)) return { needsHePetit: true };
     if (cleaned.includes("j ai menti") || cleaned.includes("jai menti")) return { files: ["./jai_menti.mp3"] };
+    if (cleaned === "lele" || cleaned === "ley ley" || /^papayou+$/.test(cleaned)) return { files: ["./PAPAYOU.mp3"] };
     if (cleaned.includes("absolute cacabot")) return "https://cdn.discordapp.com/attachments/1128032964924670053/1514231086153207998/ABSOLUTE_CACABOT.gif";
     if (cleaned.includes("henry tran") || cleaned.includes("singapour")) {
         const videos = [
