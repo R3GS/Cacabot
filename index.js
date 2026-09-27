@@ -511,6 +511,14 @@ function getResponse(raw) {
     }
 
     // =========================
+    //         !ROULETTE
+    // =========================
+
+    if (command === "!roulette") {
+        return { needsRoulette: true };
+    }
+
+    // =========================
     //         !CHOIX
     // =========================
 
@@ -978,7 +986,6 @@ if (command === "!choix") {
         cleaned.endsWith(" 67")
     ) return "https://media.discordapp.net/attachments/1480734932933542049/1504170153317761085/67.gif";
     if (cleaned.includes("six seven")) return "https://media.discordapp.net/attachments/1480734932933542049/1504170153317761085/67.gif";
-    if (cleaned.includes("tasty crousty")) return "https://cdn.discordapp.com/attachments/1480756332373213275/1530598009874812928/ezgif-83397d855d997e32.gif?ex=6a6627fa&is=6a64d67a&hm=b24367b811767f42b15530ae963eed53e853b516e9912afc6ff5be5c3a42a8a1&";
     if (
         cleaned === "monster" ||
         cleaned.includes(" monster ") ||
@@ -1063,6 +1070,102 @@ const RAID_WINDOW_MS = 60 * 1000;    // 60s
 const RAID_THRESHOLD = 3;
 const RAID_TIMEOUT_MS = 5 * 60 * 1000;
 const RAID_ESCALATION_WINDOW_MS = 15 * 60 * 1000; // 15min après la fin du mute
+// --- Roulette ---
+const rouletteCooldowns = new Map(); // userId -> timestamp de fin de cooldown
+const ROULETTE_COOLDOWN_MS = 15 * 60 * 1000;
+
+// Table de tirage : de la plus rare à la plus courante. Un seul résultat par tirage.
+const ROULETTE_TABLE = [
+    { id: 'bonus-epsys-petitdej',    chance: 1 / 9999 },
+    { id: 'bonus-epsys-goodies',     chance: 1 / 7500 },
+    { id: 'bonus-youtube-credit',    chance: 1 / 5000 },
+    { id: 'bonus-elu-roulette',      chance: 1 / 4096 },
+    { id: 'malus-pseudo-lock',       chance: 1 / 300 },
+    { id: 'malus-ban',               chance: 1 / 250 },
+    { id: 'bonus-legendaire',        chance: 1 / 250 },
+    { id: 'malus-exclu-semaine',     chance: 1 / 100 },
+    { id: 'bonus-role-superieur',    chance: 1 / 100 },
+    { id: 'malus-exclu-jour',        chance: 1 / 50 },
+    { id: 'bonus-redirect-malus',    chance: 1 / 50 },
+    { id: 'malus-exclu-heure',       chance: 1 / 30 },
+    { id: 'bonus-couronne',          chance: 1 / 30 },
+    { id: 'malus-timeout-20min',     chance: 1 / 20 },
+    { id: 'bonus-cooldown-zero-90s', chance: 1 / 20 },
+    { id: 'malus-timeout-5min',      chance: 1 / 10 },
+    { id: 'bonus-cooldown-zero-30s', chance: 1 / 10 },
+    { id: 'malus-timeout-3min',      chance: 1 / 6 },
+    { id: 'bonus-gif-ou-audio',      chance: 1 / 6 }
+];
+
+function tirerRoulette() {
+    for (const entry of ROULETTE_TABLE) {
+        if (Math.random() < entry.chance) return entry.id;
+    }
+    return 'aucun-resultat';
+}
+
+const ROULETTE_FAILS = [
+    "Retente ta chance dans 15 minutes ptdr", "Le hasard, ce traître 😔", "Nan là c'est mort", "Bril",
+    "Raté, dommage", "Feur (mais pour ton tirage)", "Rien du tout mdr", "C'est chiant ça fait tourner en rond pour rien",
+    "Aled t'as rien gagné", "Reviens plus tard", "Nique sa mère la roulette", "Ratio de malchance ce mec",
+    "Rien, comme prévu", "Mdrrr t'as vraiment cru", "Nada", "Rien, la prochaine", "Ça pue", "Bah non",
+    "T'y crois trop toi", "Aucun résultat, tkt", "Ptdrrr rien", "Reviens dans 15min gros", "Toujours rien avec toi",
+    "Bof", "Raté frérot", "Nan c'est vide", "Zéro comme d'hab", "Ça sert à rien de réessayer tout de suite",
+    "Chance de merde", "Rip ton tirage", "C'est mort pour cette fois", "Aucun résultat ptdr", "Nan",
+    "Rien à dire de plus", "Vide total", "Rien du tout, bg", "La chance t'aime pas", "Meh", "Retente ta chance",
+    "Rien mdr désolé", "C'est raté", "Nul comme tirage", "Le hasard t'a snobé", "Toujours rien",
+    "Aucun bonus aucun malus, calme toi", "Bof bof", "Rien, next", "Ratio", "C'est vide ce tirage",
+    "Ça compte pour du beurre", "Rien à signaler", "Naaaan", "C'est raté champion", "Rien, dsl", "Chance nulle",
+    "Nada mec", "Mdr t'espérais quoi", "Bah rien en fait", "Aucun effet", "C'est mort", "Ptdr non", "Rien pour toi",
+    "Nul", "Toujours aussi malchanceux", "Rien, calme", "Aucun résultat, ratio", "C'est vide gros", "Chance en carton",
+    "Nique", "Rien, essaie encore", "Bof franchement", "Rip", "Nan c'est raté", "Rien du tout, sois pas triste",
+    "Aucun résultat mdrrr", "C'est raté, tant pis", "Nul ce tirage", "Chance de zéro", "Ptdr t'as rien eu",
+    "Rien, prochaine fois peut-être", "C'est vide comme ta chance", "Nan rien", "Toujours pareil avec toi",
+    "Aucun bonus, dommage", "C'est raté, à plus", "Rien de fou", "Chance ratée", "Mdr encore raté",
+    "Nan c'est nul ce tirage", "Rien pour cette fois", "C'est mort, retente", "Aucun résultat, ratio de malade",
+    "Bof, rien", "Nul comme d'hab", "Rien à faire", "C'est vide frérot", "Chance à chier", "Ptdr rien du tout",
+    "Nan c'est raté, dommage", "Rien, la chance c'est pas pour toi aujourd'hui"
+];
+
+const ROULETTE_NOMS_PSEUDO_LOCK = [
+    "Caca boudin", "Diarrhée explosive", "_XxD4rkSasuk3xX_", "BardellaLover69", "Sam Gratlékouy",
+    "Pierre Chabrier", "SansPlomb95", "Cherche une copine sur Meubeuge", "https://youtu.be/vCIG5VeP_I0",
+    "Oestrodose", "Puff goût paf"
+];
+
+function texteResultatRoulette(outcomeId, auteurNom, failIndex) {
+    switch (outcomeId) {
+        case 'malus-timeout-3min':
+            return `💀 **${auteurNom}** est timeout pendant **3 minutes**.`;
+        case 'aucun-resultat':
+            return ROULETTE_FAILS[failIndex];
+        default:
+            return `🚧 Résultat tiré : \`${outcomeId}\` — pas encore codé, on le branche à l'étape suivante.`;
+    }
+}
+
+function buildRouletteEmbed(outcomeId, auteurNom, failIndex) {
+    return new EmbedBuilder()
+        .setColor(0x503649)
+        .setDescription(texteResultatRoulette(outcomeId, auteurNom, failIndex))
+        .setFooter({ text: '🎰 Cooldown : 15 min • En attendant, va perdre du temps sur neal.fun' });
+}
+
+function buildRoulettePaytableEmbed() {
+    return new EmbedBuilder()
+        .setColor(0x503649)
+        .setTitle('🎰 Table des résultats — !roulette')
+        .addFields(
+            {
+                name: '💀 Malus', value:
+                    '1/6 — Timeout 3 min\n1/10 — Timeout 5 min\n1/20 — Timeout 20 min\n1/30 — Exclu 1h\n1/50 — Exclu 1j\n1/100 — Exclu 1 semaine\n1/300 — Pseudo changé de force, verrouillé 1 mois\n1/250 — Ban définitif'
+            },
+            {
+                name: '🎉 Bonus', value:
+                    '1/6 — Gif Sylvain ou audio PAPAYOU\n1/10 — 0 cooldown pendant 30s\n1/20 — 0 cooldown pendant 1min30\n1/30 — Couronne 👑 sous tes messages 12h\n1/50 — 3 prochains malus redirigés (cumulable)\n1/100 — Rôle supérieur\n1/250 — Rôle Regaïen·ne légendaire\n1/4096 — Rôle Élu·e de la Roulette\n1/5000 — Crédit YouTube\n1/7500 — Goodies Epsys\n1/9999 — Petit déj Epsys'
+            }
+        );
+}
 const mutedChannels = new Map();
     function isChannelMuted(channelId) {
         const entry = mutedChannels.get(channelId);
@@ -3199,6 +3302,35 @@ if (response?.needsWanted) {
         const row = new ActionRowBuilder().addComponents(btn);
 
         return message.reply({ files: [gif], components: [row] });
+    }
+
+    // !roulette
+    if (response?.needsRoulette) {
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        const now = Date.now();
+        const finCooldown = rouletteCooldowns.get(message.author.id);
+
+        if (finCooldown && now < finCooldown) {
+            const reste = Math.ceil((finCooldown - now) / 1000 / 60);
+            return message.reply(`⏳ Tu dois encore attendre **${reste} min** avant de retenter ta chance.`);
+        }
+        rouletteCooldowns.set(message.author.id, now + ROULETTE_COOLDOWN_MS);
+
+        const outcomeId = tirerRoulette();
+        const failIndex = outcomeId === 'aucun-resultat' ? Math.floor(Math.random() * ROULETTE_FAILS.length) : 0;
+
+        if (outcomeId === 'malus-timeout-3min') {
+            await message.member.timeout(3 * 60 * 1000, 'Roulette').catch(() => {});
+        }
+
+        const embed = buildRouletteEmbed(outcomeId, auteurNom, failIndex);
+        const btn = new ButtonBuilder()
+            .setCustomId(`roulette_table_${outcomeId}_${failIndex}_${auteurNom}`)
+            .setLabel('📋 Voir tous les résultats')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(btn);
+
+        return message.reply({ embeds: [embed], components: [row] });
     }
 
     // !explode
@@ -5757,6 +5889,42 @@ return interaction.update({ embeds: [embed], components: rows });
             .setStyle(ButtonStyle.Secondary);
         const row = new ActionRowBuilder().addComponents(btn);
         return interaction.reply({ files: [gif], components: [row] });
+    }
+
+    // =========================
+    // BOUTONS ROULETTE
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('roulette_table_')) {
+        const parts = interaction.customId.split('_');
+        const outcomeId = parts[2];
+        const failIndex = parts[3];
+        const auteurNom = parts.slice(4).join('_');
+
+        const embed = buildRoulettePaytableEmbed();
+        const btn = new ButtonBuilder()
+            .setCustomId(`roulette_back_${outcomeId}_${failIndex}_${auteurNom}`)
+            .setLabel('⬅️ Retour au résultat')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(btn);
+
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('roulette_back_')) {
+        const parts = interaction.customId.split('_');
+        const outcomeId = parts[2];
+        const failIndex = parseInt(parts[3], 10);
+        const auteurNom = parts.slice(4).join('_');
+
+        const embed = buildRouletteEmbed(outcomeId, auteurNom, failIndex);
+        const btn = new ButtonBuilder()
+            .setCustomId(`roulette_table_${outcomeId}_${failIndex}_${auteurNom}`)
+            .setLabel('📋 Voir tous les résultats')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(btn);
+
+        return interaction.update({ embeds: [embed], components: [row] });
     }
 
     // =========================
