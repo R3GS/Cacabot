@@ -30,7 +30,19 @@ async function loadAll() {
         weeklyData = json.record.weekly ?? {};
         monthlyData = json.record.monthly ?? {};
         youtubeWatchData = json.record.youtubeWatch ?? {};
-        console.log('\u2705 Donn\u00e9es charg\u00e9es depuis JSONBin');
+
+        rouletteCooldowns.clear();
+        for (const [k, v] of Object.entries(json.record.roulette?.cooldowns ?? {})) rouletteCooldowns.set(k, v);
+        rouletteFreeRollUntil.clear();
+        for (const [k, v] of Object.entries(json.record.roulette?.freeRoll ?? {})) rouletteFreeRollUntil.set(k, v);
+        rouletteCouronneUntil.clear();
+        for (const [k, v] of Object.entries(json.record.roulette?.couronne ?? {})) rouletteCouronneUntil.set(k, v);
+        roulettePseudoLock.clear();
+        for (const [k, v] of Object.entries(json.record.roulette?.pseudoLock ?? {})) roulettePseudoLock.set(k, v);
+        rouletteRedirectCharges.clear();
+        for (const [k, v] of Object.entries(json.record.roulette?.redirectCharges ?? {})) rouletteRedirectCharges.set(k, v);
+
+        console.log('✅ Données chargées depuis JSONBin');
     } catch (err) {
         console.error('Erreur chargement JSONBin:', err);
     }
@@ -44,7 +56,17 @@ async function saveAll() {
         const res = await fetch(JSONBIN_URL, {
             method: 'PUT',
             headers: { 'X-Master-Key': JSONBIN_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ messages: topData.messages, birthdays: birthdayData.birthdays, birthdayChannels: birthdayData.channels, daily: dailyData, weekly: weeklyData, monthly: monthlyData, youtubeWatch: youtubeWatchData })
+            body: JSON.stringify({
+                messages: topData.messages, birthdays: birthdayData.birthdays, birthdayChannels: birthdayData.channels,
+                daily: dailyData, weekly: weeklyData, monthly: monthlyData, youtubeWatch: youtubeWatchData,
+                roulette: {
+                    cooldowns: Object.fromEntries(rouletteCooldowns),
+                    freeRoll: Object.fromEntries(rouletteFreeRollUntil),
+                    couronne: Object.fromEntries(rouletteCouronneUntil),
+                    pseudoLock: Object.fromEntries(roulettePseudoLock),
+                    redirectCharges: Object.fromEntries(rouletteRedirectCharges)
+                }
+            })
         });
         const json = await res.json();
         console.log('💾 Sauvegarde JSONBin:', res.status, json);
@@ -1072,7 +1094,11 @@ const RAID_TIMEOUT_MS = 5 * 60 * 1000;
 const RAID_ESCALATION_WINDOW_MS = 15 * 60 * 1000; // 15min après la fin du mute
 
 // --- Roulette ---
+const rouletteFreeRollUntil = new Map(); // userId -> timestamp jusqu'où le cooldown est ignoré
 const rouletteCooldowns = new Map(); // userId -> timestamp de fin de cooldown
+const rouletteCouronneUntil = new Map(); // userId -> timestamp de fin
+const rouletteRedirectCharges = new Map(); // userId -> nombre de malus à rediriger
+const roulettePseudoLock = new Map(); // userId -> { until: timestamp, pseudo: string }
 const ROULETTE_COOLDOWN_MS = 15 * 60 * 1000;
 const ROULETTE_COOLDOWN_EXEMPT = ['744217896581857281', '902651805614358568', '436218312574107658'];
 
@@ -1139,6 +1165,14 @@ const ROULETTE_NOMS_PSEUDO_LOCK = [
     "Oestrodose", "Puff goût paf"
 ];
 
+const ROULETTE_RANGS = [
+    { id: '720080477926457476', label: 'Regaïen.ne' },
+    { id: '720080749360971817', label: 'Regaïen.ne amateur.e' },
+    { id: '720080968396046428', label: 'Regaïen.ne bavard.e' },
+    { id: '720081125438914690', label: 'Regaïen.ne populaire' },
+    { id: '1230643204664070328', label: 'Regaïen.ne légendraire' }
+];
+
 const ROULETTE_GIFS_AUDIOS = [
     "https://media1.tenor.com/m/camhluUNGO0AAAAd/sylvain-lyve-sylvain-levy.gif",
     "https://media1.tenor.com/m/mhNSNZ7Ye4wAAAAC/sylvain-lyve-vilbrequin.gif",
@@ -1161,6 +1195,9 @@ const ROULETTE_GIFS_AUDIOS = [
 
 async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failIndex) {
     switch (outcomeId) {
+        case 'bonus-redirect-malus':
+            rouletteRedirectCharges.set(message.member.id, (rouletteRedirectCharges.get(message.member.id) || 0) + 3);
+            return `😈 **${auteurNom}** peut désormais rediriger ses **3 prochains malus** vers quelqu'un d'autre !`;
         case 'malus-timeout-3min':
             await message.member.timeout(3 * 60 * 1000, 'Roulette').catch(() => {});
             return `💀 **${auteurNom}** est mute pendant **3 minutes**.`;
@@ -1184,6 +1221,97 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             await message.channel.send({ files: [media] }).catch(() => {});
             return `🎉 **${auteurNom}** a fait spawn un petit cadeau !`;
         }
+                case 'bonus-twitch-jeu':
+            await message.channel.send(`Bravo ! Tu as gagné le choix du jeu du prochain stream Twitch (jeu court uniquement) ! <@436218312574107658> viendra te voir pour en discuter✨`);
+            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
+            return `🎉 **${auteurNom}** a gagné le choix du jeu du prochain stream !`;
+        case 'bonus-commande-perso':
+            await message.channel.send(`Bravo ! Tu as gagné le droit d'ajouter une commande de ton choix à Cacabot (modifiable par les admins) ! <@436218312574107658> viendra te voir pour en discuter✨`);
+            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
+            return `🎉 **${auteurNom}** a gagné une commande Cacabot personnalisée !`;
+        case 'bonus-epsys-5e':
+            await message.channel.send(`Bravo ! Tu as gagné 5€ de la YouTube Money d'Epsys ! <@436218312574107658> viendra te voir pour en discuter✨`);
+            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
+            return `🎉 **${auteurNom}** a gagné 5€ !`;
+        case 'bonus-epsys-photo':
+            await message.channel.send(`Bravo ! Tu as gagné une photo disgracieuse d'Epsys signée et envoyée chez toi par la Poste ! <@436218312574107658> viendra te voir pour en discuter✨`);
+            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
+            return `🎉 **${auteurNom}** a gagné une photo disgracieuse d'Epsys !`;
+        case 'bonus-youtube-credit':
+            await message.channel.send(`WOW, ça c'est de la chance ! Ton pseudo crédité sous chaque vidéo YouTube d'Epsys à partir d'aujourd'hui ! <@436218312574107658> viendra te voir pour en discuter✨`);
+            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
+            return `🎉 **${auteurNom}** a gagné un crédit YouTube !`;
+        case 'bonus-epsys-goodies':
+            await message.channel.send(`Bravo ! Tu as gagné un goodie Epsys gratuit au choix (T-Shirt/Mug/Lot de 5 pin's) ! <@436218312574107658> viendra te voir pour en discuter✨`);
+            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
+            return `🎉 **${auteurNom}** a gagné un goodie Epsys !`;
+        case 'bonus-epsys-petitdej':
+            await message.channel.send(`QUOI ?? Je pensais même pas que quelqu'un pouvait l'avoir ! Lors d'une prochaine convention ou rencontre IRL, Epsys devra t'apporter un petit déjeuner en maid dress x) <@436218312574107658> viendra te voir pour en discuter✨`);
+            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
+            return `🎉 **${auteurNom}** a gagné le petit déj légendaire !`;
+        
+                case 'bonus-elu-roulette': {
+            const roleId = '1553670290448457829';
+            if (message.member.roles.cache.has(roleId)) {
+                return `🎉 **${auteurNom}** a déjà le rôle **Élu·e de la Roulette** — pas de doublon possible !`;
+            }
+            await message.member.roles.add(roleId).catch(() => {});
+            return `👑 **${auteurNom}** obtient le rôle **Élu·e de la Roulette** !`;
+        }
+                case 'bonus-role-superieur': {
+            let rangActuel = -1;
+            for (let i = ROULETTE_RANGS.length - 1; i >= 0; i--) {
+                if (message.member.roles.cache.has(ROULETTE_RANGS[i].id)) { rangActuel = i; break; }
+            }
+            if (rangActuel === ROULETTE_RANGS.length - 1) {
+                return `🎉 **${auteurNom}** est déjà **${ROULETTE_RANGS[rangActuel].label}**, le rang max — 🚧 menu de choix alternatif pas encore codé.`;
+            }
+            const prochainRang = ROULETTE_RANGS[rangActuel + 1];
+            if (rangActuel > 0) await message.member.roles.remove(ROULETTE_RANGS[rangActuel].id).catch(() => {});
+            await message.member.roles.add(prochainRang.id).catch(() => {});
+            return `🎉 **${auteurNom}** passe au rang **${prochainRang.label}** !`;
+        }
+        case 'bonus-legendaire': {
+            const roleId = ROULETTE_RANGS[ROULETTE_RANGS.length - 1].id;
+            if (message.member.roles.cache.has(roleId)) {
+                return `🎉 **${auteurNom}** est déjà **Regaïen·ne légendaire** — 🚧 menu de choix alternatif pas encore codé.`;
+            }
+            for (const rang of ROULETTE_RANGS) {
+                if (rang.id !== ROULETTE_RANGS[0].id && message.member.roles.cache.has(rang.id)) {
+                    await message.member.roles.remove(rang.id).catch(() => {});
+                }
+            }
+            await message.member.roles.add(roleId).catch(() => {});
+            return `👑 **${auteurNom}** passe directement au rang **Regaïen·ne légendaire** !`;
+        }
+
+        case 'bonus-cooldown-zero-30s':
+            rouletteFreeRollUntil.set(message.member.id, Date.now() + 30 * 1000);
+            return `⚡ **${auteurNom}** peut retenter sa chance sans cooldown pendant **30 secondes** !`;
+        case 'bonus-cooldown-zero-90s':
+            rouletteFreeRollUntil.set(message.member.id, Date.now() + 90 * 1000);
+            return `⚡ **${auteurNom}** peut retenter sa chance sans cooldown pendant **1min30** !`;
+        case 'malus-ban':
+            await message.channel.send(`☠️ **${auteurNom}** vient de se faire bannir du serveur par la roulette. RIP.`).catch(() => {});
+            await message.member.ban({ reason: 'Roulette' }).catch(() => {});
+            return `☠️ **${auteurNom}** est banni du serveur.`;
+
+        case 'bonus-couronne':
+            rouletteCouronneUntil.set(message.member.id, Date.now() + 12 * 60 * 60 * 1000);
+            return `👑 **${auteurNom}** est officiellement respecté·e par Cacabot pendant **12h** !`;
+        case 'malus-pseudo-lock-semaine': {
+            const pseudo = ROULETTE_NOMS_PSEUDO_LOCK[Math.floor(Math.random() * ROULETTE_NOMS_PSEUDO_LOCK.length)];
+            roulettePseudoLock.set(message.member.id, { until: Date.now() + 7 * 24 * 60 * 60 * 1000, pseudo });
+            await message.member.setNickname(pseudo).catch(() => {});
+            return `😈 **${auteurNom}** se retrouve avec le pseudo **${pseudo}**, verrouillé pendant **1 semaine** !`;
+        }
+        case 'malus-pseudo-lock-mois': {
+            const pseudo = ROULETTE_NOMS_PSEUDO_LOCK[Math.floor(Math.random() * ROULETTE_NOMS_PSEUDO_LOCK.length)];
+            roulettePseudoLock.set(message.member.id, { until: Date.now() + 30 * 24 * 60 * 60 * 1000, pseudo });
+            await message.member.setNickname(pseudo).catch(() => {});
+            return `😈 **${auteurNom}** se retrouve avec le pseudo **${pseudo}**, verrouillé pendant **1 mois** !`;
+        }
+
         case 'aucun-resultat':
             return ROULETTE_FAILS[failIndex];
         default:
@@ -1196,7 +1324,7 @@ function buildRoulettePresentationEmbed() {
         .setColor(0x503649)
         .setTitle('🎰 !roulette')
         .setDescription("Tente ta chance : bonus rares, malus douloureux, ou rien du tout.\nCooldown : **15 min** entre deux tentatives.")
-        .setFooter({ text: 'En attendant ton prochain tour, va perdre du temps sur [neal.fun](https://neal.fun)' });
+        .setFooter({ text: 'En attendant ton prochain tour, va perdre du temps sur https://neal.fun' });
 }
 
 function buildRouletteResultEmbed(outcomeId, texte) {
@@ -5963,7 +6091,10 @@ return interaction.update({ embeds: [embed], components: rows });
         }
 
         const now = Date.now();
-        if (!ROULETTE_COOLDOWN_EXEMPT.includes(authorId)) {
+        const finFreeRoll = rouletteFreeRollUntil.get(authorId);
+        const enFreeRoll = finFreeRoll && now < finFreeRoll;
+
+        if (!ROULETTE_COOLDOWN_EXEMPT.includes(authorId) && !enFreeRoll) {
             const finCooldown = rouletteCooldowns.get(authorId);
             if (finCooldown && now < finCooldown) {
                 const reste = Math.ceil((finCooldown - now) / 1000 / 60);
@@ -5975,11 +6106,65 @@ return interaction.update({ embeds: [embed], components: rows });
         const auteurNom = interaction.guild?.members.cache.get(authorId)?.displayName ?? interaction.user.username;
         const outcomeId = tirerRoulette();
         const failIndex = outcomeId === 'aucun-resultat' ? Math.floor(Math.random() * ROULETTE_FAILS.length) : 0;
-        const texte = await appliquerEtDecrireResultat(outcomeId, interaction, auteurNom, failIndex);
+
+        let cible = interaction.member;
+        let cibleNom = auteurNom;
+        let prefixeRedirect = '';
+
+        if (outcomeId.startsWith('malus-')) {
+            const charges = rouletteRedirectCharges.get(authorId) || 0;
+            if (charges > 0) {
+                const membresEligibles = interaction.guild.members.cache.filter(m => !m.user.bot && m.id !== authorId);
+                if (membresEligibles.size > 0) {
+                    cible = membresEligibles.random();
+                    cibleNom = cible.displayName;
+                    rouletteRedirectCharges.set(authorId, charges - 1);
+                    prefixeRedirect = `😈 **${auteurNom}** avait un malus en réserve, redirigé vers **${cibleNom}** !\n`;
+                }
+            }
+        }
+
+        const proxy = { member: cible, channel: interaction.channel, guild: interaction.guild };
+        const texte = await appliquerEtDecrireResultat(outcomeId, proxy, cibleNom, failIndex);
+
+        const embed = buildRouletteResultEmbed(outcomeId, prefixeRedirect + texte);
+        const probasBtn = new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary);
+
+        const roleMaxId = ROULETTE_RANGS[ROULETTE_RANGS.length - 1].id;
+        const dejaMaxRole = (outcomeId === 'bonus-role-superieur' || outcomeId === 'bonus-legendaire') && cible.roles.cache.has(roleMaxId);
+
+        if (dejaMaxRole) {
+            const menu = new StringSelectMenuBuilder()
+                .setCustomId(`roulette_fallback_${authorId}`)
+                .setPlaceholder('Choisis un bonus à la place')
+                .addOptions(
+                    { label: '🎉 Gif Sylvain ou audio PAPAYOU', value: 'bonus-gif-ou-audio' },
+                    { label: '⚡ 0 cooldown pendant 30s', value: 'bonus-cooldown-zero-30s' },
+                    { label: '⚡ 0 cooldown pendant 1min30', value: 'bonus-cooldown-zero-90s' },
+                    { label: '👑 Couronne pendant 12h', value: 'bonus-couronne' },
+                    { label: '😈 3 malus redirigés (cumulable)', value: 'bonus-redirect-malus' }
+                );
+            const rowMenu = new ActionRowBuilder().addComponents(menu);
+            const rowBtn = new ActionRowBuilder().addComponents(probasBtn);
+            return interaction.update({ embeds: [embed], components: [rowMenu, rowBtn] });
+        }
+
+        const row = new ActionRowBuilder().addComponents(probasBtn);
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('roulette_fallback_')) {
+        const authorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "C'est pas ton tirage, tape `!roulette` toi-même 😌", ephemeral: true });
+        }
+        const outcomeId = interaction.values[0];
+        const auteurNom = interaction.member?.displayName ?? interaction.user.username;
+        const texte = await appliquerEtDecrireResultat(outcomeId, interaction, auteurNom, 0);
 
         const embed = buildRouletteResultEmbed(outcomeId, texte);
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_0`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary)
         );
         return interaction.update({ embeds: [embed], components: [row] });
     }
@@ -6781,6 +6966,31 @@ client.on('messageReactionAdd', async (reaction, user) => {
     mutedChannels.set(msg.channel.id, { until, timeout });
 
     await msg.react('🆗').catch(() => {});
+});
+
+// Couronne roulette : réaction auto sous chaque message pendant la durée active
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+    const finCouronne = rouletteCouronneUntil.get(message.author.id);
+    if (!finCouronne) return;
+    if (Date.now() >= finCouronne) {
+        rouletteCouronneUntil.delete(message.author.id);
+        return;
+    }
+    await message.react('👑').catch(() => {});
+});
+
+// Verrouillage de pseudo roulette : remet le pseudo imposé si quelqu'un essaie de le changer
+client.on('guildMemberUpdate', async (oldMember, newMember) => {
+    const lock = roulettePseudoLock.get(newMember.id);
+    if (!lock) return;
+    if (Date.now() >= lock.until) {
+        roulettePseudoLock.delete(newMember.id);
+        return;
+    }
+    if (newMember.nickname !== lock.pseudo) {
+        await newMember.setNickname(lock.pseudo).catch(() => {});
+    }
 });
 
 // =========================
