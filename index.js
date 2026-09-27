@@ -6589,13 +6589,14 @@ return interaction.update({ embeds: [embed], components: rows });
                 .setColor(0xf5f8fa)
                 .setDescription("# \ud83d\udca5 Random")
                 .addFields(
+                    { name: "\ud83c\udfb0!roulette / !rlt", value: "Faire tourner la roulette et tomber sur un bonus... ou un malus." },
                     { name: "🧠!destin", value: "Pr\u00e9dit votre destin et fait part des \u00e9v\u00e8nements de votre futur." },
                     { name: "🐕!animal", value: "Devine votre animal spirituel parmi pr\u00e8s de 7000 combinaisons !" },
                     { name: "👔!epsys", value: "Poste des GIFs al\u00e9atoires d'Epsys, parce que." },
                     { name: "🤣!blague", value: "Lance une blague al\u00e9atoire en 3 cat\u00e9gories !" },
                     { name: "🪙!flip", value: "Pour d\u00e9cider \u00e0 pile ou face !" },
                     { name: "🔮!horoscope", value: "L'horoscope du jour selon Cacabot." },
-                    { name: "\ud83d\udea8 !wanted", value: "D\u00e9signe le criminel du jour parmi les membres." }
+                    { name: "\ud83d\udea8!wanted", value: "D\u00e9signe le criminel du jour parmi les membres." }
                 );
         }
 
@@ -6650,7 +6651,7 @@ return interaction.update({ embeds: [embed], components: rows });
                 { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, palaref, jailaref, punch, bang, rizz, rire, danse, run', value: 'interact' },
                 { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
                 { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
-                { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague, horoscope, wanted', value: 'random' }
+                { label: '\ud83d\udca5 Random', description: 'roulette, destin, animal, epsys, flip, blague, horoscope, wanted', value: 'random' }
             );
 
         const funBackButton = new ButtonBuilder()
