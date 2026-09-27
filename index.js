@@ -6165,69 +6165,6 @@ return interaction.update({ embeds: [embed], components: rows });
         return interaction.update({ embeds: resultat.embeds, components: resultat.components });
     }
 
-        const now = Date.now();
-        const finFreeRoll = rouletteFreeRollUntil.get(authorId);
-        const enFreeRoll = finFreeRoll && now < finFreeRoll;
-
-        if (!ROULETTE_COOLDOWN_EXEMPT.includes(authorId) && !enFreeRoll) {
-            const finCooldown = rouletteCooldowns.get(authorId);
-            if (finCooldown && now < finCooldown) {
-                const reste = Math.ceil((finCooldown - now) / 1000 / 60);
-                return interaction.reply({ content: `⏳ Tu dois encore attendre **${reste} min** avant de retenter ta chance.`, ephemeral: true });
-            }
-            rouletteCooldowns.set(authorId, now + ROULETTE_COOLDOWN_MS);
-        }
-
-        const auteurNom = interaction.guild?.members.cache.get(authorId)?.displayName ?? interaction.user.username;
-        const outcomeId = tirerRoulette();
-        const failIndex = outcomeId === 'aucun-resultat' ? Math.floor(Math.random() * ROULETTE_FAILS.length) : 0;
-
-        let cible = interaction.member;
-        let cibleNom = auteurNom;
-        let prefixeRedirect = '';
-
-        if (outcomeId.startsWith('malus-')) {
-            const charges = rouletteRedirectCharges.get(authorId) || 0;
-            if (charges > 0) {
-                const membresEligibles = interaction.guild.members.cache.filter(m => !m.user.bot && m.id !== authorId);
-                if (membresEligibles.size > 0) {
-                    cible = membresEligibles.random();
-                    cibleNom = cible.displayName;
-                    rouletteRedirectCharges.set(authorId, charges - 1);
-                    prefixeRedirect = `😈 **${auteurNom}** avait un malus en réserve, redirigé vers **${cibleNom}** !\n`;
-                }
-            }
-        }
-
-        const proxy = { member: cible, channel: interaction.channel, guild: interaction.guild };
-        const texte = await appliquerEtDecrireResultat(outcomeId, proxy, cibleNom, failIndex);
-
-        const embed = buildRouletteResultEmbed(outcomeId, prefixeRedirect + texte);
-        const probasBtn = new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary);
-
-        const roleMaxId = ROULETTE_RANGS[ROULETTE_RANGS.length - 1].id;
-        const dejaMaxRole = (outcomeId === 'bonus-role-superieur' || outcomeId === 'bonus-legendaire') && cible.roles.cache.has(roleMaxId);
-
-        if (dejaMaxRole) {
-            const menu = new StringSelectMenuBuilder()
-                .setCustomId(`roulette_fallback_${authorId}`)
-                .setPlaceholder('Choisis un bonus à la place')
-                .addOptions(
-                    { label: '🎉 Gif Sylvain ou audio PAPAYOU', value: 'bonus-gif-ou-audio' },
-                    { label: '⚡ 0 cooldown pendant 30s', value: 'bonus-cooldown-zero-30s' },
-                    { label: '⚡ 0 cooldown pendant 1min30', value: 'bonus-cooldown-zero-90s' },
-                    { label: '👑 Couronne pendant 12h', value: 'bonus-couronne' },
-                    { label: '😈 3 malus redirigés (cumulable)', value: 'bonus-redirect-malus' }
-                );
-            const rowMenu = new ActionRowBuilder().addComponents(menu);
-            const rowBtn = new ActionRowBuilder().addComponents(probasBtn);
-            return interaction.update({ embeds: [embed], components: [rowMenu, rowBtn] });
-        }
-
-        const row = new ActionRowBuilder().addComponents(probasBtn);
-        return interaction.update({ embeds: [embed], components: [row] });
-    }
-
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('roulette_fallback_')) {
         const authorId = interaction.customId.split('_')[2];
         if (interaction.user.id !== authorId) {
