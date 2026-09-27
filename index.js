@@ -1070,31 +1070,38 @@ const RAID_WINDOW_MS = 60 * 1000;    // 60s
 const RAID_THRESHOLD = 3;
 const RAID_TIMEOUT_MS = 5 * 60 * 1000;
 const RAID_ESCALATION_WINDOW_MS = 15 * 60 * 1000; // 15min après la fin du mute
+
 // --- Roulette ---
 const rouletteCooldowns = new Map(); // userId -> timestamp de fin de cooldown
 const ROULETTE_COOLDOWN_MS = 15 * 60 * 1000;
+const ROULETTE_COOLDOWN_EXEMPT = ['744217896581857281', '902651805614358568', '436218312574107658'];
 
 // Table de tirage : de la plus rare à la plus courante. Un seul résultat par tirage.
 const ROULETTE_TABLE = [
-    { id: 'bonus-epsys-petitdej',    chance: 1 / 9999 },
-    { id: 'bonus-epsys-goodies',     chance: 1 / 7500 },
-    { id: 'bonus-youtube-credit',    chance: 1 / 5000 },
-    { id: 'bonus-elu-roulette',      chance: 1 / 4096 },
-    { id: 'malus-pseudo-lock',       chance: 1 / 300 },
-    { id: 'malus-ban',               chance: 1 / 250 },
-    { id: 'bonus-legendaire',        chance: 1 / 250 },
-    { id: 'malus-exclu-semaine',     chance: 1 / 100 },
-    { id: 'bonus-role-superieur',    chance: 1 / 100 },
-    { id: 'malus-exclu-jour',        chance: 1 / 50 },
-    { id: 'bonus-redirect-malus',    chance: 1 / 50 },
-    { id: 'malus-exclu-heure',       chance: 1 / 30 },
-    { id: 'bonus-couronne',          chance: 1 / 30 },
-    { id: 'malus-timeout-20min',     chance: 1 / 20 },
-    { id: 'bonus-cooldown-zero-90s', chance: 1 / 20 },
-    { id: 'malus-timeout-5min',      chance: 1 / 10 },
-    { id: 'bonus-cooldown-zero-30s', chance: 1 / 10 },
-    { id: 'malus-timeout-3min',      chance: 1 / 6 },
-    { id: 'bonus-gif-ou-audio',      chance: 1 / 6 }
+    { id: 'bonus-epsys-petitdej',      chance: 1 / 9999 },
+    { id: 'bonus-epsys-goodies',       chance: 1 / 7500 },
+    { id: 'bonus-youtube-credit',      chance: 1 / 5000 },
+    { id: 'malus-ban',                 chance: 1 / 5000 },
+    { id: 'bonus-elu-roulette',        chance: 1 / 4096 },
+    { id: 'bonus-epsys-photo',         chance: 1 / 3000 },
+    { id: 'bonus-epsys-5e',            chance: 1 / 2000 },
+    { id: 'bonus-commande-perso',      chance: 1 / 1000 },
+    { id: 'bonus-twitch-jeu',          chance: 1 / 500 },
+    { id: 'malus-pseudo-lock-mois',    chance: 1 / 300 },
+    { id: 'bonus-legendaire',          chance: 1 / 250 },
+    { id: 'malus-exclu-semaine',       chance: 1 / 200 },
+    { id: 'bonus-role-superieur',      chance: 1 / 100 },
+    { id: 'malus-pseudo-lock-semaine', chance: 1 / 100 },
+    { id: 'bonus-redirect-malus',      chance: 1 / 50 },
+    { id: 'malus-exclu-jour',          chance: 1 / 50 },
+    { id: 'bonus-couronne',            chance: 1 / 30 },
+    { id: 'malus-exclu-heure',         chance: 1 / 30 },
+    { id: 'bonus-cooldown-zero-90s',   chance: 1 / 20 },
+    { id: 'malus-timeout-20min',       chance: 1 / 20 },
+    { id: 'bonus-cooldown-zero-30s',   chance: 1 / 10 },
+    { id: 'malus-timeout-5min',        chance: 1 / 10 },
+    { id: 'bonus-gif-ou-audio',        chance: 1 / 6 },
+    { id: 'malus-timeout-3min',        chance: 1 / 6 }
 ];
 
 function tirerRoulette() {
@@ -1105,38 +1112,78 @@ function tirerRoulette() {
 }
 
 const ROULETTE_FAILS = [
-    "Retente ta chance dans 15 minutes ptdr", "Le hasard, ce traître 😔", "Nan là c'est mort", "Bril",
-    "Raté, dommage", "Feur (mais pour ton tirage)", "Rien du tout mdr", "C'est chiant ça fait tourner en rond pour rien",
-    "Aled t'as rien gagné", "Reviens plus tard", "Nique sa mère la roulette", "Ratio de malchance ce mec",
-    "Rien, comme prévu", "Mdrrr t'as vraiment cru", "Nada", "Rien, la prochaine", "Ça pue", "Bah non",
-    "T'y crois trop toi", "Aucun résultat, tkt", "Ptdrrr rien", "Reviens dans 15min gros", "Toujours rien avec toi",
-    "Bof", "Raté frérot", "Nan c'est vide", "Zéro comme d'hab", "Ça sert à rien de réessayer tout de suite",
+    "Retente ta chance dans 15 minutes ptdr", "Le hasard, ce traître 😔", "Nan là c'est mort", "Nope",
+    "Raté, dommage", "Tout caca ce tirage...", "Rien du tout mdr", "C'est chiant ça fait tourner en rond pour rien",
+    "OH! T'as rien gagné.", "OH MON DIEU! Rien.", "Nsm la roulette", "Bon bah salut hein.",
+    "Rien, comme prévu", "Continue d'y croire, hein", "Nada", "Rien, à la prochaine!", "Ça pue", "Bah non",
+    "T'y crois trop toi", "Aucun résultat, tkt", "Ptdrrr rien", "Reviens dans 15min lol", "Toujours rien avec toi",
+    "Bof...", "Raté.", "Erreur_404", "Zéro, comme d'hab", "Ça sert à rien de réessayer tout de suite",
     "Chance de merde", "Rip ton tirage", "C'est mort pour cette fois", "Aucun résultat ptdr", "Nan",
-    "Rien à dire de plus", "Vide total", "Rien du tout, bg", "La chance t'aime pas", "Meh", "Retente ta chance",
-    "Rien mdr désolé", "C'est raté", "Nul comme tirage", "Le hasard t'a snobé", "Toujours rien",
-    "Aucun bonus aucun malus, calme toi", "Bof bof", "Rien, next", "Ratio", "C'est vide ce tirage",
-    "Ça compte pour du beurre", "Rien à signaler", "Naaaan", "C'est raté champion", "Rien, dsl", "Chance nulle",
-    "Nada mec", "Mdr t'espérais quoi", "Bah rien en fait", "Aucun effet", "C'est mort", "Ptdr non", "Rien pour toi",
-    "Nul", "Toujours aussi malchanceux", "Rien, calme", "Aucun résultat, ratio", "C'est vide gros", "Chance en carton",
-    "Nique", "Rien, essaie encore", "Bof franchement", "Rip", "Nan c'est raté", "Rien du tout, sois pas triste",
-    "Aucun résultat mdrrr", "C'est raté, tant pis", "Nul ce tirage", "Chance de zéro", "Ptdr t'as rien eu",
-    "Rien, prochaine fois peut-être", "C'est vide comme ta chance", "Nan rien", "Toujours pareil avec toi",
-    "Aucun bonus, dommage", "C'est raté, à plus", "Rien de fou", "Chance ratée", "Mdr encore raté",
-    "Nan c'est nul ce tirage", "Rien pour cette fois", "C'est mort, retente", "Aucun résultat, ratio de malade",
-    "Bof, rien", "Nul comme d'hab", "Rien à faire", "C'est vide frérot", "Chance à chier", "Ptdr rien du tout",
-    "Nan c'est raté, dommage", "Rien, la chance c'est pas pour toi aujourd'hui"
+    "Rien à dire de plus", "Vide total", "Rien du tout", "C'est pas ton jour on dirait", "Meh", "Retente ta chance",
+    "Rien mdr désolé", "C'est raté", "Bon bah à toute à l'heure !", "Le hasard, le hasard...", "Toujours rien",
+    "Pas de nouvelle, bonne nouvelle !", "Bof bof", "FF", "Ratio", "Hmmm, je crois qu'il y a rien... A moins que... Ah non, y a rien.",
+    "Rien à signaler", "Naaaan", "Au revoir, bisous.   -Maman", "Rien, dsl", "[Insérer musique à la trompette]",
+    "[Insérer musique triste au violon]", "Mdr t'espérais quoi", "Bah rien en fait", "Aucun effet", "C'est mort", "Ptdr non", "Rien pour toi",
+    "Nul", "C'est un peu trop  calme... J'aime pas trop beaucoup ça...", "Aucun résultat, ratio", "C'est vide", "Chance en carton",
+    "Ah.", "Rien, essaie encore. 'Fin pas tout de suite mais dans 15 minutes, quoi.", "Bof franchement", "Rip", "Nan c'est raté", "Rien du tout, sois pas triste",
+    "Aucun résultat mdrrr", "C'est raté, tant pis", "Nul ce tirage", "Chance zéro", "Ptdr t'as rien eu",
+    "Rien, la prochaine fois peut-être", "Nan, rien", "Aucun bonus, dommage", "C'est raté, à plus", "Rien de fou", "Chance ratée", "Mdr encore raté",
+    "Nan c'est nul ce tirage", "Rien pour cette fois", "C'est mort, retente", "Aucun résultat",
+    "Bof, rien", "Nul comme d'hab", "Rien à faire", "C'est vide", "Chance à chier", "Ptdr rien du tout",
+    "Nan c'est raté, dommage", "Rien, la chance n'est pas de ton côté aujourd'hui"
 ];
 
 const ROULETTE_NOMS_PSEUDO_LOCK = [
     "Caca boudin", "Diarrhée explosive", "_XxD4rkSasuk3xX_", "BardellaLover69", "Sam Gratlékouy",
-    "Pierre Chabrier", "SansPlomb95", "Cherche une copine sur Meubeuge", "https://youtu.be/vCIG5VeP_I0",
+    "Pierre Chabrier", "SansPlomb95", "Cherche une copine sur Maubeuge", "https://youtu.be/vCIG5VeP_I0",
     "Oestrodose", "Puff goût paf"
 ];
 
-function texteResultatRoulette(outcomeId, auteurNom, failIndex) {
+const ROULETTE_GIFS_AUDIOS = [
+    "https://media1.tenor.com/m/camhluUNGO0AAAAd/sylvain-lyve-sylvain-levy.gif",
+    "https://media1.tenor.com/m/mhNSNZ7Ye4wAAAAC/sylvain-lyve-vilbrequin.gif",
+    "https://media1.tenor.com/m/n7NmIiefhZ4AAAAC/sylvain-lyve-vilbrequin.gif",
+    "https://media1.tenor.com/m/p66oAFFJ2pcAAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+    "https://media1.tenor.com/m/XFUotrruCacAAAAC/vilebrequin-sylvain.gif",
+    "https://media1.tenor.com/m/pCExmpKfecgAAAAC/vilebrequin-sylvain.gif",
+    "https://media1.tenor.com/m/MkoOhxjfLeYAAAAC/vilebrequin-sylvain.gif",
+    "https://media1.tenor.com/m/q5GDY7A8aUMAAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+    "https://media1.tenor.com/m/8K7M2XtHOFsAAAAC/vilebrequin-sylvain.gif",
+    "https://media1.tenor.com/m/E3abpzYLviIAAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+    "https://media1.tenor.com/m/CH0fiUJj5psAAAAC/sylvain-lyve-sylvain-levy.gif",
+    "https://media1.tenor.com/m/VD8UmHWnJPgAAAAC/vilebrequin-vilebrequin-sylvain.gif",
+    "https://media1.tenor.com/m/UUO8TiMNDXAAAAAC/keep-pushing-race.gif",
+    "https://media1.tenor.com/m/q9PEP4AcLKkAAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+    "https://media1.tenor.com/m/aNmsYZdcuG8AAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+    "https://media1.tenor.com/m/d9Dnn5iOeCoAAAAd/sylvain-sylvain-rire.gif",
+    "./PAPAYOU.mp3"
+];
+
+async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failIndex) {
     switch (outcomeId) {
         case 'malus-timeout-3min':
-            return `💀 **${auteurNom}** est timeout pendant **3 minutes**.`;
+            await message.member.timeout(3 * 60 * 1000, 'Roulette').catch(() => {});
+            return `💀 **${auteurNom}** est mute pendant **3 minutes**.`;
+        case 'malus-timeout-5min':
+            await message.member.timeout(5 * 60 * 1000, 'Roulette').catch(() => {});
+            return `💀 **${auteurNom}** est mute pendant **5 minutes**.`;
+        case 'malus-timeout-20min':
+            await message.member.timeout(20 * 60 * 1000, 'Roulette').catch(() => {});
+            return `💀 **${auteurNom}** est mute pendant **20 minutes**.`;
+        case 'malus-exclu-heure':
+            await message.member.timeout(60 * 60 * 1000, 'Roulette').catch(() => {});
+            return `💀 **${auteurNom}** est exclu.e pendant **1 heure**.`;
+        case 'malus-exclu-jour':
+            await message.member.timeout(24 * 60 * 60 * 1000, 'Roulette').catch(() => {});
+            return `💀 **${auteurNom}** est exclu.e pendant **1 jour**.`;
+        case 'malus-exclu-semaine':
+            await message.member.timeout(7 * 24 * 60 * 60 * 1000, 'Roulette').catch(() => {});
+            return `💀 **${auteurNom}** est exclu.e pendant **1 semaine**.`;
+        case 'bonus-gif-ou-audio': {
+            const media = ROULETTE_GIFS_AUDIOS[Math.floor(Math.random() * ROULETTE_GIFS_AUDIOS.length)];
+            await message.channel.send({ files: [media] }).catch(() => {});
+            return `🎉 **${auteurNom}** a fait spawn un petit cadeau !`;
+        }
         case 'aucun-resultat':
             return ROULETTE_FAILS[failIndex];
         default:
@@ -1144,11 +1191,18 @@ function texteResultatRoulette(outcomeId, auteurNom, failIndex) {
     }
 }
 
-function buildRouletteEmbed(outcomeId, auteurNom, failIndex) {
+function buildRoulettePresentationEmbed() {
     return new EmbedBuilder()
         .setColor(0x503649)
-        .setDescription(texteResultatRoulette(outcomeId, auteurNom, failIndex))
-        .setFooter({ text: '🎰 Cooldown : 15 min • En attendant, va perdre du temps sur neal.fun' });
+        .setTitle('🎰 !roulette')
+        .setDescription("Tente ta chance : bonus rares, malus douloureux, ou rien du tout.\nCooldown : **15 min** entre deux tentatives.")
+        .setFooter({ text: 'En attendant ton prochain tour, va perdre du temps sur [neal.fun](https://neal.fun)' });
+}
+
+function buildRouletteResultEmbed(outcomeId, texte) {
+    return new EmbedBuilder()
+        .setColor(0x503649)
+        .setDescription(texte);
 }
 
 function buildRoulettePaytableEmbed() {
@@ -1157,15 +1211,16 @@ function buildRoulettePaytableEmbed() {
         .setTitle('🎰 Table des résultats — !roulette')
         .addFields(
             {
-                name: '💀 Malus', value:
-                    '1/6 — Timeout 3 min\n1/10 — Timeout 5 min\n1/20 — Timeout 20 min\n1/30 — Exclu 1h\n1/50 — Exclu 1j\n1/100 — Exclu 1 semaine\n1/300 — Pseudo changé de force, verrouillé 1 mois\n1/250 — Ban définitif'
+                name: '🎉 Bonus', value:
+                    '**1/6** — Gif de Sylvain ou PAPAYOU.mp3\n**1/10** — Tirage à volonté pendant 30s\n**1/20** — Tirage à volonté pendant 1min30\n**1/30** — Une couronne 👑 sous tes messages pendant 12h\n**1/50** — 3 prochains malus redirigés vers un.e autre membre\n**1/100** — Rôle de Regaïen.ne supérieur\n**1/200** *(réservé)*\n**1/250** — Rôle de Regaïen·ne légendraire\n**1/300** *(réservé)*\n**1/500** — Choix du jeu du prochain stream Twitch (jeu court uniquement)\n**1/1000** — Ajoute une commande Cacabot de ton choix\n**1/2000** — 5€ de la YouTube Money d\'Epsys\n**1/3000** — 1 photo disgracieuse d\'Epsys signée et envoyée par la Poste\n**1/4096** — Rôle spécial d'**Élu·e de la Roulette**\n**1/5000** — Pseudo crédité sous chaque vidéo YouTube\n**1/7500** — Goodies d'Epsys gratuit au choix: T-Shirt/Mug/Lot de 5pin's\n**1/9999** — Petit déj apporté par Epsys en maid dress'
             },
             {
-                name: '🎉 Bonus', value:
-                    '1/6 — Gif Sylvain ou audio PAPAYOU\n1/10 — 0 cooldown pendant 30s\n1/20 — 0 cooldown pendant 1min30\n1/30 — Couronne 👑 sous tes messages 12h\n1/50 — 3 prochains malus redirigés (cumulable)\n1/100 — Rôle supérieur\n1/250 — Rôle Regaïen·ne légendaire\n1/4096 — Rôle Élu·e de la Roulette\n1/5000 — Crédit YouTube\n1/7500 — Goodies Epsys\n1/9999 — Petit déj Epsys'
+                name: '💀 Malus', value:
+                    '**1/6** — Mute de 3 minutes\n**1/10** — Mute de 5 minutes\n**1/20** — Mute de 20 minutes\n**1/30** — Exclusion de 1 heure\n**1/50** — Exclusion de 1 jour\n**1/100** — Pseudo horrible changé de force, verrouillé pendant 1 semaine\n**1/200** — Exclusion de 1 semaine\n**1/300** — Pseudo horrible changé de force, verrouillé pendant 1 mois\n**1/5000** — Ban définitif (révocable si besoin)'
             }
         );
 }
+
 const mutedChannels = new Map();
     function isChannelMuted(channelId) {
         const entry = mutedChannels.get(channelId);
@@ -3306,30 +3361,11 @@ if (response?.needsWanted) {
 
     // !roulette
     if (response?.needsRoulette) {
-        const auteurNom = message.member?.displayName ?? message.author.username;
-        const now = Date.now();
-        const finCooldown = rouletteCooldowns.get(message.author.id);
-
-        if (finCooldown && now < finCooldown) {
-            const reste = Math.ceil((finCooldown - now) / 1000 / 60);
-            return message.reply(`⏳ Tu dois encore attendre **${reste} min** avant de retenter ta chance.`);
-        }
-        rouletteCooldowns.set(message.author.id, now + ROULETTE_COOLDOWN_MS);
-
-        const outcomeId = tirerRoulette();
-        const failIndex = outcomeId === 'aucun-resultat' ? Math.floor(Math.random() * ROULETTE_FAILS.length) : 0;
-
-        if (outcomeId === 'malus-timeout-3min') {
-            await message.member.timeout(3 * 60 * 1000, 'Roulette').catch(() => {});
-        }
-
-        const embed = buildRouletteEmbed(outcomeId, auteurNom, failIndex);
-        const btn = new ButtonBuilder()
-            .setCustomId(`roulette_table_${outcomeId}_${failIndex}_${auteurNom}`)
-            .setLabel('📋 Voir tous les résultats')
-            .setStyle(ButtonStyle.Secondary);
-        const row = new ActionRowBuilder().addComponents(btn);
-
+        const embed = buildRoulettePresentationEmbed();
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`roulette_probas_pres_${message.author.id}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`roulette_tenter_${message.author.id}`).setLabel('🍀 Tenter sa chance').setStyle(ButtonStyle.Primary)
+        );
         return message.reply({ embeds: [embed], components: [row] });
     }
 
@@ -5891,39 +5927,95 @@ return interaction.update({ embeds: [embed], components: rows });
         return interaction.reply({ files: [gif], components: [row] });
     }
 
-    // =========================
+        // =========================
     // BOUTONS ROULETTE
     // =========================
 
-    if (interaction.isButton() && interaction.customId.startsWith('roulette_table_')) {
-        const parts = interaction.customId.split('_');
-        const outcomeId = parts[2];
-        const failIndex = parts[3];
-        const auteurNom = parts.slice(4).join('_');
-
+    if (interaction.isButton() && interaction.customId.startsWith('roulette_probas_pres_')) {
+        const authorId = interaction.customId.split('_')[3];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "C'est pas ton tirage, tape `!roulette` toi-même 😌", ephemeral: true });
+        }
         const embed = buildRoulettePaytableEmbed();
-        const btn = new ButtonBuilder()
-            .setCustomId(`roulette_back_${outcomeId}_${failIndex}_${auteurNom}`)
-            .setLabel('⬅️ Retour au résultat')
-            .setStyle(ButtonStyle.Secondary);
-        const row = new ActionRowBuilder().addComponents(btn);
-
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`roulette_back_pres_${authorId}`).setLabel('⬅️ Retour').setStyle(ButtonStyle.Secondary)
+        );
         return interaction.update({ embeds: [embed], components: [row] });
     }
 
-    if (interaction.isButton() && interaction.customId.startsWith('roulette_back_')) {
+    if (interaction.isButton() && interaction.customId.startsWith('roulette_back_pres_')) {
+        const authorId = interaction.customId.split('_')[3];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "C'est pas ton tirage, tape `!roulette` toi-même 😌", ephemeral: true });
+        }
+        const embed = buildRoulettePresentationEmbed();
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`roulette_probas_pres_${authorId}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`roulette_tenter_${authorId}`).setLabel('🍀 Tenter sa chance').setStyle(ButtonStyle.Primary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('roulette_tenter_')) {
+        const authorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "C'est pas ton tirage, tape `!roulette` toi-même 😌", ephemeral: true });
+        }
+
+        const now = Date.now();
+        if (!ROULETTE_COOLDOWN_EXEMPT.includes(authorId)) {
+            const finCooldown = rouletteCooldowns.get(authorId);
+            if (finCooldown && now < finCooldown) {
+                const reste = Math.ceil((finCooldown - now) / 1000 / 60);
+                return interaction.reply({ content: `⏳ Tu dois encore attendre **${reste} min** avant de retenter ta chance.`, ephemeral: true });
+            }
+            rouletteCooldowns.set(authorId, now + ROULETTE_COOLDOWN_MS);
+        }
+
+        const auteurNom = interaction.guild?.members.cache.get(authorId)?.displayName ?? interaction.user.username;
+        const outcomeId = tirerRoulette();
+        const failIndex = outcomeId === 'aucun-resultat' ? Math.floor(Math.random() * ROULETTE_FAILS.length) : 0;
+        const texte = await appliquerEtDecrireResultat(outcomeId, interaction, auteurNom, failIndex);
+
+        const embed = buildRouletteResultEmbed(outcomeId, texte);
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('roulette_probas_res_')) {
         const parts = interaction.customId.split('_');
-        const outcomeId = parts[2];
-        const failIndex = parseInt(parts[3], 10);
-        const auteurNom = parts.slice(4).join('_');
+        const authorId = parts[3];
+        const outcomeId = parts[4];
+        const failIndex = parts[5];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "C'est pas ton tirage, tape `!roulette` toi-même 😌", ephemeral: true });
+        }
+        const embed = buildRoulettePaytableEmbed();
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`roulette_back_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('⬅️ Retour').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
 
-        const embed = buildRouletteEmbed(outcomeId, auteurNom, failIndex);
-        const btn = new ButtonBuilder()
-            .setCustomId(`roulette_table_${outcomeId}_${failIndex}_${auteurNom}`)
-            .setLabel('📋 Voir tous les résultats')
-            .setStyle(ButtonStyle.Secondary);
-        const row = new ActionRowBuilder().addComponents(btn);
-
+    if (interaction.isButton() && interaction.customId.startsWith('roulette_back_res_')) {
+        const parts = interaction.customId.split('_');
+        const authorId = parts[3];
+        const outcomeId = parts[4];
+        const failIndex = parts[5];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "C'est pas ton tirage, tape `!roulette` toi-même 😌", ephemeral: true });
+        }
+        // Retour au résultat déjà tiré : on ré-affiche le même texte sans retirer ni réappliquer la sanction/le gain.
+        const auteurNom = interaction.guild?.members.cache.get(authorId)?.displayName ?? interaction.user.username;
+        const texte = outcomeId === 'aucun-resultat'
+            ? ROULETTE_FAILS[parseInt(failIndex, 10)]
+            : `Résultat déjà appliqué : \`${outcomeId}\` pour **${auteurNom}**.`;
+        const embed = buildRouletteResultEmbed(outcomeId, texte);
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary)
+        );
         return interaction.update({ embeds: [embed], components: [row] });
     }
 
