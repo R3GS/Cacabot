@@ -845,7 +845,7 @@ if (command === "!choix") {
         return { needsPing: true };
     }
 
-    if (command === "!botinfo") {
+    if (command === "!botinfo" || command === "!about" || command === "!abt") {
         return { needsInfo: true };
     }
 
