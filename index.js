@@ -6505,6 +6505,23 @@ client.on('messageReactionAdd', async (reaction, user) => {
     await msg.channel.send(`Bah alors, **${memberNom}**, on m'envoie un doigt d'honneur ?`);
 });
 
+client.on('messageReactionAdd', async (reaction, user) => {
+    if (user.bot) return;
+    if (!['🛑', '❌', '👎', '🤫', '🔇'].includes(reaction.emoji.name)) return;
+
+    const msg = reaction.message;
+    if (msg.author.id !== client.user.id) return;
+    if (!/feur|bril|quoicoubeh/i.test(msg.content)) return;
+
+    const ancien = mutedChannels.get(msg.channel.id);
+    if (ancien) clearTimeout(ancien.timeout);
+
+    const until = Date.now() + STOP_DURATION_MS;
+    const timeout = setTimeout(() => mutedChannels.delete(msg.channel.id), STOP_DURATION_MS);
+    mutedChannels.set(msg.channel.id, { until, timeout });
+
+    await msg.react('🆗').catch(() => {});
+});
 
 // =========================
 //   LISTENER MEMBER JOIN
