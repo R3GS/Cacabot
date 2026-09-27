@@ -1350,7 +1350,7 @@ async function lancerVoteRoulette(membre, channel) {
                 rouletteFreeRollUntil.set(membre.id, Date.now() + 3 * 60 * 1000);
                 rouletteImmuniteUntil.set(membre.id, Date.now() + 3 * 60 * 1000);
                 await channel.send(`✅ Le vote a tranché : **${membre.displayName}** gagne un tirage à volonté pendant 3 minutes !`);
-            }
+            } else {
                 await membre.timeout(24 * 60 * 60 * 1000, 'Roulette - vote').catch(() => {});
                 await channel.send(`❌ Le vote a tranché : **${membre.displayName}** est exclu.e pendant 1 jour.`);
             }
