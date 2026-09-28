@@ -1127,6 +1127,10 @@ const ROULETTE_COOLDOWN_EXEMPT = ['744217896581857281', '902651805614358568', '4
 const rouletteUwuUntil = new Map();        // userId -> timestamp de fin
 const rouletteLettreInterdite = new Map(); // userId -> { until: timestamp, lettre: string }
 const EPSYS_ID = '436218312574107658';
+const MODO_ROLE_ID = '720081311716606004';
+function estModo(member) {
+    return member?.roles?.cache?.has(MODO_ROLE_ID) ?? false;
+}
 const rouletteTimeoutUntil = new Map(); // userId -> timestamp de fin, UNIQUEMENT pour les timeouts causés par la roulette
 const rouletteWebhooks = new Map(); // channelId -> Webhook
 const rouletteVotesActifs = new Map(); // messageId -> { userId, channelId, guildId }
@@ -1311,21 +1315,37 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
     switch (outcomeId) {
         case 'malus-timeout-3min':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 3 minutes !`;
-                    await message.member.timeout(3 * 60 * 1000, 'Roulette').catch(() => {});
-                    rouletteTimeoutUntil.set(message.member.id, Date.now() + 3 * 60 * 1000);
+            if (estModo(message.member)) {
+                rouletteCooldowns.set(message.member.id, Date.now() + 3 * 60 * 1000);
+                return `🛡️ **${auteurNom}** est Modo : le mute de 3 minutes est remplacé par un cooldown de **3 minutes**.`;
+            }
+            await message.member.timeout(3 * 60 * 1000, 'Roulette').catch(() => {});
+            rouletteTimeoutUntil.set(message.member.id, Date.now() + 3 * 60 * 1000);
             return `**${auteurNom}** est mute pendant **3 minutes**.`;
         case 'malus-timeout-5min':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 5 minutes !`;
-                    await message.member.timeout(5 * 60 * 1000, 'Roulette').catch(() => {});
-                    rouletteTimeoutUntil.set(message.member.id, Date.now() + 5 * 60 * 1000);
+            if (estModo(message.member)) {
+                rouletteCooldowns.set(message.member.id, Date.now() + 5 * 60 * 1000);
+                return `🛡️ **${auteurNom}** est Modo : le mute de 5 minutes est remplacé par un cooldown de **5 minutes**.`;
+            }
+            await message.member.timeout(5 * 60 * 1000, 'Roulette').catch(() => {});
+            rouletteTimeoutUntil.set(message.member.id, Date.now() + 5 * 60 * 1000);
             return `**${auteurNom}** est mute pendant **5 minutes**.`;
         case 'malus-timeout-20min':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 20 minutes !`;
-                await message.member.timeout(20 * 60 * 1000, 'Roulette').catch(() => {});
-                rouletteTimeoutUntil.set(message.member.id, Date.now() + 20 * 60 * 1000);
+            if (estModo(message.member)) {
+                rouletteCooldowns.set(message.member.id, Date.now() + 20 * 60 * 1000);
+                return `🛡️ **${auteurNom}** est Modo : le mute de 20 minutes est remplacé par un cooldown de **20 minutes**.`;
+            }
+            await message.member.timeout(20 * 60 * 1000, 'Roulette').catch(() => {});
+            rouletteTimeoutUntil.set(message.member.id, Date.now() + 20 * 60 * 1000);
             return `**${auteurNom}** est mute pendant **20 minutes**.`;
         case 'malus-exclu-heure':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 heure !`;
+            if (estModo(message.member)) {
+                rouletteCooldowns.set(message.member.id, Date.now() + 60 * 60 * 1000);
+                return `🛡️ **${auteurNom}** est Modo : l'exclusion de 1 heure est remplacée par un cooldown de **1 heure**.`;
+            }
             return malusDiffere(message, auteurNom, 'Exclusion de 1 heure', 'exclu.e pendant **1 heure**', 'a été exclu.e pendant **1 heure**',
                 () => {
                     message.member.timeout(60 * 60 * 1000, 'Roulette').catch(() => {});
@@ -1333,6 +1353,10 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 });
         case 'malus-exclu-jour':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 jour !`;
+            if (estModo(message.member)) {
+                rouletteCooldowns.set(message.member.id, Date.now() + 24 * 60 * 60 * 1000);
+                return `🛡️ **${auteurNom}** est Modo : l'exclusion de 1 jour est remplacée par un cooldown de **1 jour**.`;
+            }
             return malusDiffere(message, auteurNom, 'Exclusion de 1 jour', 'exclu.e pendant **1 jour**', 'a été exclu.e pendant **1 jour**',
                 () => {
                     message.member.timeout(24 * 60 * 60 * 1000, 'Roulette').catch(() => {});
@@ -1340,6 +1364,10 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 });
         case 'malus-exclu-semaine':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 semaine !`;
+            if (estModo(message.member)) {
+                rouletteCooldowns.set(message.member.id, Date.now() + 7 * 24 * 60 * 60 * 1000);
+                return `🛡️ **${auteurNom}** est Modo : l'exclusion de 1 semaine est remplacée par un cooldown de **1 semaine**.`;
+            }
             return malusDiffere(message, auteurNom, 'Exclusion de 1 semaine', 'exclu.e pendant **1 semaine**', 'a été exclu.e pendant **1 semaine**',
                 () => {
                     message.member.timeout(7 * 24 * 60 * 60 * 1000, 'Roulette').catch(() => {});
@@ -1420,6 +1448,10 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             rouletteFreeRollUntil.set(message.member.id, Date.now() + 90 * 1000);
             return `⚡ **${auteurNom}** peut retenter sa chance sans cooldown pendant **1min30** !`;
         case 'malus-ban':
+            if (estModo(message.member)) {
+                rouletteCooldowns.set(message.member.id, Date.now() + 7 * 24 * 60 * 60 * 1000);
+                return `🛡️ **${auteurNom}** est Modo : le ban est remplacé par un cooldown de **1 semaine**.`;
+            }
             return malusDiffere(message, auteurNom, 'Ban définitif', 'banni.e du serveur', 'a été banni.e du serveur',
                 () => message.member.ban({ reason: 'Roulette' }).catch(() => {}));
 
