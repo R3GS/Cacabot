@@ -1375,7 +1375,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
 
 async function lancerVoteRoulette(membre, channel) {
     const embed = new EmbedBuilder()
-        .setColor(0x503649)
+        .setColor(0xffd20a)
         .setTitle('🗳️ Vote public')
         .setDescription(`Que mérite **${membre.displayName}** ?\n\n✅ Tirage à volonté pendant 3min (immunité au timeout)\n❌ Exclusion de 1 jour\n\nVote ouvert pendant **2h**.`);
     const msg = await channel.send({ embeds: [embed] });
@@ -1401,7 +1401,7 @@ async function lancerVoteRoulette(membre, channel) {
 
 function buildRoulettePresentationEmbed() {
     return new EmbedBuilder()
-        .setColor(0x503649)
+        .setColor(0xffd20a)
         .setTitle('🎰 Roulette')
         .setDescription("Tente ta chance : bonus rares, malus douloureux, ou rien du tout.\nCooldown : **15 min** entre deux tentatives.")
         .setFooter({ text: 'Astuce : Envoie !roulette go ou !rlt go pour faire un tirage sans passer par cet écran !' });
@@ -1477,9 +1477,10 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
 
 function buildRouletteResultEmbed(outcomeId, texte) {
     const embed = new EmbedBuilder()
-        .setColor(0x503649)
+        .setColor(0xffd20a)
         .setDescription(texte);
     if (outcomeId === 'aucun-resultat') {
+        embed.setTitle('💨 AUCUN RÉSULTAT !');
         embed.setFooter({ text: 'Échec du tirage, reviens dans 15 minutes !' });
     }
     return embed;
@@ -1517,13 +1518,13 @@ function buildRoulettePaytableEmbed() {
         '**1/3400** (0.029%) — Ban définitif (révocable si besoin)'
     ];
     const special = [
-        '**1/125** (0.8%) — Vote public : tirage à volonté 3min (immunité) ou exclusion 1 jour, décidé en 2h'
+        '**1/125** (0.8%) — Vote public : tirage à volonté pendant 3min (immunité au mute) ou exclusion pendant 1 jour, décidé en 2h'
     ];
     const rien = [
-        `**1/2** (${ROULETTE_TAUX_ECHEC * 100}%) — Rien du tout, tirage raté`
+        `**1/2** (${ROULETTE_TAUX_ECHEC * 100}%) — Rien du tout`
     ];
 
-    const section = (titre, lignes) => `__**${titre}**__\n${lignes.join('\n')}`;
+    const section = (titre, lignes) => `**${titre} :**\n${lignes.join('\n')}`;
 
     return new EmbedBuilder()
         .setColor(0xffd20a)
@@ -3548,7 +3549,7 @@ if (response?.needsWanted) {
                                 .setStyle(ButtonStyle.Secondary);
                             const row = new ActionRowBuilder().addComponents(btn);
                             const embed = new EmbedBuilder()
-                                .setColor(0x503649)
+                                .setColor(0xffd20a)
                                 .setDescription(`\ud83d\ude10 **${auteurNom}** n'a pas la ref de **${cibleNom}**...`)
                                 .setImage(gif);
                             message.reply({ embeds: [embed], components: [row] });
@@ -3578,7 +3579,7 @@ if (response?.needsWanted) {
             .setStyle(ButtonStyle.Secondary);
         const row = new ActionRowBuilder().addComponents(btn);
         const embed = new EmbedBuilder()
-            .setColor(0x503649)
+            .setColor(0xffd20a)
             .setDescription(description)
             .setImage(gif);
         return message.reply({ embeds: [embed], components: [row] });
@@ -3607,7 +3608,7 @@ if (response?.needsWanted) {
                                 .setStyle(ButtonStyle.Secondary);
                             const row = new ActionRowBuilder().addComponents(btn);
                             const embed = new EmbedBuilder()
-                                .setColor(0x503649)
+                                .setColor(0xffd20a)
                                 .setDescription(`😎 **${auteurNom}** a la ref de **${cibleNom}** !`)
                                 .setImage(gif);
                             message.reply({ embeds: [embed], components: [row] });
@@ -3637,7 +3638,7 @@ if (response?.needsWanted) {
             .setStyle(ButtonStyle.Secondary);
         const row = new ActionRowBuilder().addComponents(btn);
         const embed = new EmbedBuilder()
-            .setColor(0x503649)
+            .setColor(0xffd20a)
             .setDescription(description)
             .setImage(gif);
         return message.reply({ embeds: [embed], components: [row] });
@@ -6195,7 +6196,7 @@ return interaction.update({ embeds: [embed], components: rows });
         const clickerNom = interaction.member?.displayName ?? interaction.user.username;
 
         const embed = new EmbedBuilder()
-            .setColor(0x503649)
+            .setColor(0xffd20a)
             .setDescription(`\ud83d\ude10 **${clickerNom}** n'a pas la ref non plus...`)
             .setImage(gif);
 
@@ -6223,7 +6224,7 @@ return interaction.update({ embeds: [embed], components: rows });
         const clickerNom = interaction.member?.displayName ?? interaction.user.username;
 
         const embed = new EmbedBuilder()
-            .setColor(0x503649)
+            .setColor(0xffd20a)
             .setDescription(`😎 **${clickerNom}** a la ref aussi !`)
             .setImage(gif);
 
