@@ -1536,7 +1536,7 @@ function buildRouletteResultEmbed(outcomeId, texte) {
 
     if (outcomeId === 'aucun-resultat') {
         embed.setColor(0x259485)
-            .setTitle(`💨 AUCUN RÉSULTAT ! (1/2 | ${ROULETTE_TAUX_ECHEC * 100}%)`)
+            .setTitle(`💨 AUCUN RÉSULTAT ! (1/2 | 50%)`)
             .setFooter({ text: 'Échec du tirage, reviens dans 15 minutes :)' });
     } else if (outcomeId.startsWith('bonus-')) {
         embed.setColor(0x00ff15).setTitle(`🎉 BONUS - ${nom} !${suffixe}`);
