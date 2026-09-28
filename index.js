@@ -1384,7 +1384,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 });
         case 'bonus-gif-ou-audio': {
             await message.channel.send({ files: ["./PAPAYOU.mp3"] }).catch(() => {});
-            return `🎉**${auteurNom}** a fait spawn un petit cadeau !`;
+            return `**${auteurNom}** a fait spawn un petit cadeau !`;
         }
                 case 'bonus-twitch-jeu':
             await message.channel.send(`Bravo ! Tu as gagné le choix du jeu du prochain stream Twitch (jeu court uniquement) ! <@436218312574107658> viendra te voir pour en discuter✨`);
