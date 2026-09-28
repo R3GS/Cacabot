@@ -1107,6 +1107,21 @@ function memoriserResultatRoulette(messageId, embed) {
     rouletteResultats.set(messageId, embed);
     if (rouletteResultats.size > 200) rouletteResultats.delete(rouletteResultats.keys().next().value);
 }
+const rouletteChoixEnAttente = new Set(); // ids des messages dont le bonus alternatif n'a pas encore été choisi
+
+function buildMenuFallbackRoulette(authorId) {
+    const menu = new StringSelectMenuBuilder()
+        .setCustomId(`roulette_fallback_${authorId}`)
+        .setPlaceholder('Choisis un bonus à la place')
+        .addOptions(
+            { label: '🎉 Audio PAPAYOU', value: 'bonus-gif-ou-audio' },
+            { label: '⚡ 0 cooldown pendant 30s', value: 'bonus-cooldown-zero-30s' },
+            { label: '⚡ 0 cooldown pendant 1min30', value: 'bonus-cooldown-zero-90s' },
+            { label: '👑 Couronne pendant 12h', value: 'bonus-couronne' },
+            { label: '😈 3 malus redirigés (cumulable)', value: 'bonus-redirect-malus' }
+        );
+    return new ActionRowBuilder().addComponents(menu);
+}
 const ROULETTE_COOLDOWN_EXEMPT = ['744217896581857281', '902651805614358568', '436218312574107658'];
 const rouletteUwuUntil = new Map();        // userId -> timestamp de fin
 const roulettelettreInterdite = new Map(); // userId -> { until: timestamp, lettre: string }
@@ -1239,15 +1254,15 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'malus-timeout-3min':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 3 minutes !`;
             await message.member.timeout(3 * 60 * 1000, 'Roulette').catch(() => {});
-            return `💀 **${auteurNom}** est mute pendant **3 minutes**.`;
+            return `**${auteurNom}** est mute pendant **3 minutes**.`;
         case 'malus-timeout-5min':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 5 minutes !`;
             await message.member.timeout(5 * 60 * 1000, 'Roulette').catch(() => {});
-            return `💀 **${auteurNom}** est mute pendant **5 minutes**.`;
+            return `**${auteurNom}** est mute pendant **5 minutes**.`;
         case 'malus-timeout-20min':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 20 minutes !`;
             await message.member.timeout(20 * 60 * 1000, 'Roulette').catch(() => {});
-            return `💀 **${auteurNom}** est mute pendant **20 minutes**.`;
+            return `**${auteurNom}** est mute pendant **20 minutes**.`;
         case 'malus-exclu-heure':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 heure !`;
             return malusDiffere(message, auteurNom, 'Exclusion de 1 heure', 'exclu.e pendant **1 heure**', 'a été exclu.e pendant **1 heure**',
@@ -1262,41 +1277,41 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 () => message.member.timeout(7 * 24 * 60 * 60 * 1000, 'Roulette').catch(() => {}));
         case 'bonus-gif-ou-audio': {
             await message.channel.send({ files: ["./PAPAYOU.mp3"] }).catch(() => {});
-            return `🎉 **${auteurNom}** a fait spawn un petit cadeau !`;
+            return `**${auteurNom}** a fait spawn un petit cadeau !`;
         }
                 case 'bonus-twitch-jeu':
             await message.channel.send(`Bravo ! Tu as gagné le choix du jeu du prochain stream Twitch (jeu court uniquement) ! <@436218312574107658> viendra te voir pour en discuter✨`);
             await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
-            return `🎉 **${auteurNom}** a gagné le choix du jeu du prochain stream !`;
+            return `**${auteurNom}** a gagné le choix du jeu du prochain stream !`;
         case 'bonus-commande-perso':
             await message.channel.send(`Bravo ! Tu as gagné le droit d'ajouter une commande de ton choix à Cacabot (modifiable par les admins) ! <@436218312574107658> viendra te voir pour en discuter✨`);
             await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
-            return `🎉 **${auteurNom}** a gagné une commande Cacabot personnalisée !`;
+            return `**${auteurNom}** a gagné une commande Cacabot personnalisée !`;
         case 'bonus-epsys-5e':
             await message.channel.send(`Bravo ! Tu as gagné 5€ de la YouTube Money d'Epsys ! <@436218312574107658> viendra te voir pour en discuter✨`);
             await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
-            return `🎉 **${auteurNom}** a gagné 5€ !`;
+            return `**${auteurNom}** a gagné 5€ !`;
         case 'bonus-epsys-photo':
             await message.channel.send(`Bravo ! Tu as gagné une photo disgracieuse d'Epsys signée et envoyée chez toi par la Poste ! <@436218312574107658> viendra te voir pour en discuter✨`);
             await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
-            return `🎉 **${auteurNom}** a gagné une photo disgracieuse d'Epsys !`;
+            return `**${auteurNom}** a gagné une photo disgracieuse d'Epsys !`;
         case 'bonus-youtube-credit':
             await message.channel.send(`WOW, ça c'est de la chance ! Ton pseudo crédité sous chaque vidéo YouTube d'Epsys à partir d'aujourd'hui ! <@436218312574107658> viendra te voir pour en discuter✨`);
             await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
-            return `🎉 **${auteurNom}** a gagné un crédit YouTube !`;
+            return `**${auteurNom}** a gagné un crédit YouTube !`;
         case 'bonus-epsys-goodies':
             await message.channel.send(`Bravo ! Tu as gagné un goodie Epsys gratuit au choix (T-Shirt/Mug/Lot de 5 pin's) ! <@436218312574107658> viendra te voir pour en discuter✨`);
             await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
-            return `🎉 **${auteurNom}** a gagné un goodie Epsys !`;
+            return `**${auteurNom}** a gagné un goodie Epsys !`;
         case 'bonus-epsys-petitdej':
             await message.channel.send(`QUOI ?? Je pensais même pas que quelqu'un pouvait l'avoir ! Lors d'une prochaine convention ou rencontre IRL, Epsys devra t'apporter un petit déjeuner en maid dress x) <@436218312574107658> viendra te voir pour en discuter✨`);
             await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
-            return `🎉 **${auteurNom}** a gagné le petit déj légendaire !`;
+            return `**${auteurNom}** a gagné le petit déj légendaire !`;
         
                 case 'bonus-elu-roulette': {
             const roleId = '1553670290448457829';
             if (message.member.roles.cache.has(roleId)) {
-                return `🎉 **${auteurNom}** a déjà le rôle **Élu·e de la Roulette** — pas de doublon possible !`;
+                return `**${auteurNom}** a déjà le rôle **Élu·e de la Roulette** — pas de doublon possible !`;
             }
             await message.member.roles.add(roleId).catch(() => {});
             return `👑 **${auteurNom}** obtient le rôle **Élu·e de la Roulette** !`;
@@ -1307,17 +1322,17 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 if (message.member.roles.cache.has(ROULETTE_RANGS[i].id)) { rangActuel = i; break; }
             }
             if (rangActuel === ROULETTE_RANGS.length - 1) {
-                return `🎉 **${auteurNom}** est déjà **${ROULETTE_RANGS[rangActuel].label}**, le rang max — 🚧 menu de choix alternatif pas encore codé.`;
+                return `**${auteurNom}** est déjà **${ROULETTE_RANGS[rangActuel].label}**, le rang max !\nChoisis un autre bonus à la place dans le menu ci-dessous.`;
             }
             const prochainRang = ROULETTE_RANGS[rangActuel + 1];
             if (rangActuel > 0) await message.member.roles.remove(ROULETTE_RANGS[rangActuel].id).catch(() => {});
             await message.member.roles.add(prochainRang.id).catch(() => {});
-            return `🎉 **${auteurNom}** passe au rang **${prochainRang.label}** !`;
+            return `**${auteurNom}** passe au rang **${prochainRang.label}** !`;
         }
         case 'bonus-legendaire': {
             const roleId = ROULETTE_RANGS[ROULETTE_RANGS.length - 1].id;
             if (message.member.roles.cache.has(roleId)) {
-                return `🎉 **${auteurNom}** est déjà **Regaïen·ne légendaire** — 🚧 menu de choix alternatif pas encore codé.`;
+                return `**${auteurNom}** est déjà **${ROULETTE_RANGS[ROULETTE_RANGS.length - 1].label}**, le rang max !\nChoisis un autre bonus à la place dans le menu ci-dessous.`;
             }
             for (const rang of ROULETTE_RANGS) {
                 if (rang.id !== ROULETTE_RANGS[0].id && message.member.roles.cache.has(rang.id)) {
@@ -1369,7 +1384,8 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'aucun-resultat':
             return ROULETTE_FAILS[failIndex];
         default:
-            return `🚧 Résultat tiré : \`${outcomeId}\` — pas encore codé, on le branche à l'étape suivante.`;
+            console.error(`[Roulette] Résultat sans case : ${outcomeId}`);
+            return `⚠️ Ce résultat n'est pas encore codé, <@436218312574107658> va devoir s'en occuper !`;
     }
 }
 
@@ -1456,17 +1472,11 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
     const dejaMaxRole = (outcomeId === 'bonus-role-superieur' || outcomeId === 'bonus-legendaire') && cible.roles.cache.has(roleMaxId);
 
     if (dejaMaxRole) {
-        const menu = new StringSelectMenuBuilder()
-            .setCustomId(`roulette_fallback_${authorId}`)
-            .setPlaceholder('Choisis un bonus à la place')
-            .addOptions(
-                { label: '🎉 Audio PAPAYOU', value: 'bonus-gif-ou-audio' },
-                { label: '⚡ 0 cooldown pendant 30s', value: 'bonus-cooldown-zero-30s' },
-                { label: '⚡ 0 cooldown pendant 1min30', value: 'bonus-cooldown-zero-90s' },
-                { label: '👑 Couronne pendant 12h', value: 'bonus-couronne' },
-                { label: '😈 3 malus redirigés (cumulable)', value: 'bonus-redirect-malus' }
-            );
-        return { embeds: [embed], components: [new ActionRowBuilder().addComponents(menu), new ActionRowBuilder().addComponents(probasBtn)] };
+        return {
+            embeds: [embed],
+            components: [buildMenuFallbackRoulette(authorId), new ActionRowBuilder().addComponents(probasBtn)],
+            attenteChoix: true
+        };
     }
     const differe = proxy.differe;
     return {
@@ -3560,7 +3570,7 @@ if (response?.needsWanted) {
                                 .setStyle(ButtonStyle.Secondary);
                             const row = new ActionRowBuilder().addComponents(btn);
                             const embed = new EmbedBuilder()
-                                .setColor(0xffd20a)
+                                .setColor(0x503649)
                                 .setDescription(`\ud83d\ude10 **${auteurNom}** n'a pas la ref de **${cibleNom}**...`)
                                 .setImage(gif);
                             message.reply({ embeds: [embed], components: [row] });
@@ -3590,7 +3600,7 @@ if (response?.needsWanted) {
             .setStyle(ButtonStyle.Secondary);
         const row = new ActionRowBuilder().addComponents(btn);
         const embed = new EmbedBuilder()
-            .setColor(0xffd20a)
+            .setColor(0x503649)
             .setDescription(description)
             .setImage(gif);
         return message.reply({ embeds: [embed], components: [row] });
@@ -3619,7 +3629,7 @@ if (response?.needsWanted) {
                                 .setStyle(ButtonStyle.Secondary);
                             const row = new ActionRowBuilder().addComponents(btn);
                             const embed = new EmbedBuilder()
-                                .setColor(0xffd20a)
+                                .setColor(0x503649)
                                 .setDescription(`😎 **${auteurNom}** a la ref de **${cibleNom}** !`)
                                 .setImage(gif);
                             message.reply({ embeds: [embed], components: [row] });
@@ -3649,7 +3659,7 @@ if (response?.needsWanted) {
             .setStyle(ButtonStyle.Secondary);
         const row = new ActionRowBuilder().addComponents(btn);
         const embed = new EmbedBuilder()
-            .setColor(0xffd20a)
+            .setColor(0x503649)
             .setDescription(description)
             .setImage(gif);
         return message.reply({ embeds: [embed], components: [row] });
@@ -3700,6 +3710,7 @@ if (response?.needsWanted) {
 }
             const envoye = await message.reply({ embeds: resultat.embeds, components: resultat.components });
             memoriserResultatRoulette(envoye.id, resultat.embeds[0]);
+            if (resultat.attenteChoix) rouletteChoixEnAttente.add(envoye.id);
             if (resultat.differe) {
                 setTimeout(async () => {
                     const embedFinal = await resultat.differe();
@@ -6207,7 +6218,7 @@ return interaction.update({ embeds: [embed], components: rows });
         const clickerNom = interaction.member?.displayName ?? interaction.user.username;
 
         const embed = new EmbedBuilder()
-            .setColor(0xffd20a)
+            .setColor(0x503649)
             .setDescription(`\ud83d\ude10 **${clickerNom}** n'a pas la ref non plus...`)
             .setImage(gif);
 
@@ -6235,7 +6246,7 @@ return interaction.update({ embeds: [embed], components: rows });
         const clickerNom = interaction.member?.displayName ?? interaction.user.username;
 
         const embed = new EmbedBuilder()
-            .setColor(0xffd20a)
+            .setColor(0x503649)
             .setDescription(`😎 **${clickerNom}** a la ref aussi !`)
             .setImage(gif);
 
@@ -6315,6 +6326,7 @@ return interaction.update({ embeds: [embed], components: rows });
         }
         await interaction.update({ embeds: resultat.embeds, components: resultat.components });
         memoriserResultatRoulette(interaction.message.id, resultat.embeds[0]);
+        if (resultat.attenteChoix) rouletteChoixEnAttente.add(interaction.message.id);
         if (resultat.differe) {
             setTimeout(async () => {
                 const embedFinal = await resultat.differe();
@@ -6338,6 +6350,7 @@ return interaction.update({ embeds: [embed], components: rows });
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_0`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary)
         );
+        rouletteChoixEnAttente.delete(interaction.message.id);
         memoriserResultatRoulette(interaction.message.id, embed);
         return interaction.update({ embeds: [embed], components: [row] });
     }
@@ -6354,7 +6367,10 @@ return interaction.update({ embeds: [embed], components: rows });
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`roulette_back_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('⬅️ Retour').setStyle(ButtonStyle.Secondary)
         );
-        return interaction.update({ embeds: [embed], components: [row] });
+        const components = rouletteChoixEnAttente.has(interaction.message.id)
+            ? [buildMenuFallbackRoulette(authorId), row]
+            : [row];
+        return interaction.update({ embeds: [embed], components });
     }
 
     if (interaction.isButton() && interaction.customId.startsWith('roulette_back_res_')) {
