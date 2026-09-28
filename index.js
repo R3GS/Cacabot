@@ -1388,7 +1388,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 });
         case 'bonus-gif-ou-audio': {
             await message.channel.send({ files: ["./PAPAYOU.mp3"] }).catch(() => {});
-            return `**${auteurNom}** a fait spawn un petit cadeau !`;
+            return `🎉**${auteurNom}** a fait spawn un petit cadeau !`;
         }
                 case 'bonus-twitch-jeu':
             await message.channel.send(`Bravo ! Tu as gagné le choix du jeu du prochain stream Twitch (jeu court uniquement) ! <@436218312574107658> viendra te voir pour en discuter✨`);
@@ -1747,7 +1747,7 @@ function buildRouletteResultEmbed(outcomeId, texte) {
     const couleur = entry ? (couleurs[entry.type] ?? 0x503649) : 0x99aab5;
 
     const titre = outcomeId === 'aucun-resultat'
-        ? `☔ AUCUN RÉSULTAT ! (${libelleProbaRoulette('aucun-resultat')})`
+        ? `💨 AUCUN RÉSULTAT ! (${libelleProbaRoulette('aucun-resultat')})`
         : entry ? `${entry.nom} (${libelleProbaRoulette(outcomeId)})` : null;
 
     const embed = new EmbedBuilder().setColor(couleur).setDescription(texteFinal);
