@@ -1053,6 +1053,9 @@ if (command === "!choix") {
     if (lower.startsWith("quoi")) {
         if (Math.random() < 0.5) return reply("Quoicoubeh");
         return reply("Feur");
+    }
+
+    return reply("Feur");
 }
 
 const pendingCheh = new Map();
@@ -1150,7 +1153,7 @@ const ROULETTE_TABLE = [
     { id: 'bonus-cooldown-zero-30s',   type: 'bonus', poids: 1 / 17,    nom: 'Tirage à volonté pendant 30s', desc: 'Tirage à volonté pendant 30s' },
     { id: 'malus-timeout-5min',        type: 'malus', poids: 1 / 17,    nom: 'Mute de 5 minutes', desc: 'Mute de 5 minutes' },
     { id: 'bonus-gif-ou-audio',        type: 'bonus', poids: 1 / 10,    nom: 'PAPAYOU.mp3', desc: 'PAPAYOU.mp3' },
-    { id: 'malus-timeout-3min',        type: 'malus', poids: 1 / 10,    nom: 'Mute de 3 minutes', desc: 'Mute de 3 minutes' }
+    { id: 'malus-timeout-3min',        type: 'malus', poids: 1 / 10,    nom: 'Mute de 3 minutes', desc: 'Mute de 3 minutes' },
     { id: 'bonus-bouclier',            type: 'bonus', poids: 1 / 20,    nom: 'Immunité au prochain malus', desc: 'Immunité au prochain malus' },
     { id: 'bonus-redirect-choix',      type: 'bonus', poids: 1 / 100,   nom: 'Malus redirigé au choix', desc: 'Redirige ton prochain malus vers la personne de ton choix' },
     { id: 'bonus-pseudo-choix',        type: 'bonus', poids: 1 / 250,   nom: 'Pseudo au choix', desc: 'Choisis le pseudo d\'un·e membre, verrouillé pendant 48h (révocable si problématique)' },
