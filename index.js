@@ -2,6 +2,7 @@ require('dotenv').config();
 const JSONBIN_ID = '6a08f315adc21f119aaed5c7';
 const JSONBIN_KEY = process.env.JSONBIN_KEY;
 console.log('JSONBIN_KEY définie :', !!JSONBIN_KEY, '| longueur :', JSONBIN_KEY?.length);
+console.log('Variables vues par le bot :', Object.keys(process.env).filter(k => /JSON|TOKEN|GITHUB|YOUTUBE/i.test(k)));
 const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_ID}`;
 
 let topData = { messages: {} };
