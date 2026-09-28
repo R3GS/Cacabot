@@ -1360,27 +1360,23 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             const pseudo = ROULETTE_NOMS_PSEUDO_LOCK[Math.floor(Math.random() * ROULETTE_NOMS_PSEUDO_LOCK.length)];
             roulettePseudoLock.set(message.member.id, { until: Date.now() + 7 * 24 * 60 * 60 * 1000, pseudo });
             await message.member.setNickname(pseudo).catch(() => {});
-            return `😈 **${auteurNom}** se retrouve avec le pseudo **${pseudo}**, verrouillé pendant **1 semaine** !`;
+            return `**${auteurNom}** se retrouve avec le pseudo **${pseudo}**, verrouillé pendant **1 semaine** !`;
         }
         case 'malus-pseudo-lock-mois': {
             const pseudo = ROULETTE_NOMS_PSEUDO_LOCK[Math.floor(Math.random() * ROULETTE_NOMS_PSEUDO_LOCK.length)];
             roulettePseudoLock.set(message.member.id, { until: Date.now() + 30 * 24 * 60 * 60 * 1000, pseudo });
             await message.member.setNickname(pseudo).catch(() => {});
-            return `😈 **${auteurNom}** se retrouve avec le pseudo **${pseudo}**, verrouillé pendant **1 mois** !`;
+            return `**${auteurNom}** se retrouve avec le pseudo **${pseudo}**, verrouillé pendant **1 mois** !`;
         }
 
         case 'malus-uwu-24h':
             rouletteUwuUntil.set(message.member.id, Date.now() + 24 * 60 * 60 * 1000);
-            return `😈 **${auteurNom}** doit terminer chacun de ses messages par **UwU** pendant **24h** !`;
+            return `**${auteurNom}** doit terminer chacun de ses messages par **UwU** pendant **24h** !`;
         case 'malus-lettre-interdite': {
             const lettre = String.fromCharCode(65 + Math.floor(Math.random() * 26));
             roulettelettreInterdite.set(message.member.id, { until: Date.now() + 12 * 60 * 60 * 1000, lettre });
-            return `😈 **${auteurNom}** ne peut plus utiliser la lettre **${lettre}** pendant **12h** !`;
+            return `**${auteurNom}** ne peut plus utiliser la lettre **${lettre}** pendant **12h** !`;
         }
-        case 'special-vote-immunite-exclusion':
-            await lancerVoteRoulette(message.member, message.channel);
-            return `🗳️ **${auteurNom}** déclenche un vote public ! Immunité + tirage à volonté 3min, ou exclusion 1 jour — le serveur décide.`;
-
         case 'aucun-resultat':
             return ROULETTE_FAILS[failIndex];
         default:
@@ -1389,12 +1385,14 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
     }
 }
 
-async function lancerVoteRoulette(membre, channel) {
-    const embed = new EmbedBuilder()
+function buildVoteRouletteEmbed(membre) {
+    return new EmbedBuilder()
         .setColor(0xffd20a)
-        .setTitle('🗳️ Vote public')
-        .setDescription(`Que mérite **${membre.displayName}** ?\n\n✅ Tirage à volonté pendant 3min (immunité au timeout)\n❌ Exclusion de 1 jour\n\nVote ouvert pendant **2h**.`);
-    const msg = await channel.send({ embeds: [embed] });
+        .setTitle(`🗳️ VOTE PUBLIC ! (${libelleProbaRoulette('special-vote-immunite-exclusion')})`)
+        .setDescription(`Que mérite **${membre.displayName}** ?\n\n✅ Tirage à volonté pendant 3min (immunité au mute)\n❌ Exclusion pendant 1 jour\n\nVote ouvert pendant **2h**.`);
+}
+
+async function demarrerVoteRoulette(msg, membre) {
     await msg.react('✅');
     await msg.react('❌');
 
@@ -1404,7 +1402,7 @@ async function lancerVoteRoulette(membre, channel) {
     setTimeout(async () => {
         clearInterval(rappels);
         try {
-            const fresh = await channel.messages.fetch(msg.id);
+            const fresh = await msg.channel.messages.fetch(msg.id);
             const oui = fresh.reactions.cache.get('✅')?.count ?? 1;
             const non = fresh.reactions.cache.get('❌')?.count ?? 1;
             if (oui >= non) {
@@ -1449,6 +1447,10 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
     let cibleNom = auteurNom;
     let prefixeRedirect = '';
 
+    if (outcomeId === 'special-vote-immunite-exclusion') {
+        return { embeds: [buildVoteRouletteEmbed(membre)], components: [], vote: membre };
+    }
+
     if (outcomeId.startsWith('malus-')) {
         const charges = rouletteRedirectCharges.get(authorId) || 0;
         if (charges > 0) {
@@ -1489,20 +1491,31 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
     };
 }
 
+function libelleProbaRoulette(outcomeId) {
+    const entry = ROULETTE_TABLE.find(e => e.id === outcomeId);
+    if (!entry) return null;
+    const n = Math.round(1 / entry.chance);
+    const pct = 100 / n;
+    const pctTxt = pct >= 0.1 ? String(parseFloat(pct.toFixed(2))) : pct.toFixed(3);
+    return `1/${n} | ${pctTxt}%`;
+}
+
 function buildRouletteResultEmbed(outcomeId, texte) {
     const nom = ROULETTE_NOMS[outcomeId] ?? outcomeId;
+    const proba = libelleProbaRoulette(outcomeId);
+    const suffixe = proba ? ` (${proba})` : '';
     const embed = new EmbedBuilder().setDescription(texte);
 
     if (outcomeId === 'aucun-resultat') {
         embed.setColor(0x259485)
-            .setTitle('💨 AUCUN RÉSULTAT !')
+            .setTitle(`💨 AUCUN RÉSULTAT ! (1/2 | ${ROULETTE_TAUX_ECHEC * 100}%)`)
             .setFooter({ text: 'Échec du tirage, reviens dans 15 minutes :)' });
     } else if (outcomeId.startsWith('bonus-')) {
-        embed.setColor(0x00ff15).setTitle(`🎉 BONUS - ${nom} !`);
+        embed.setColor(0x00ff15).setTitle(`🎉 BONUS - ${nom} !${suffixe}`);
     } else if (outcomeId.startsWith('malus-')) {
-        embed.setColor(0xc20000).setTitle(`💀 MALUS - ${nom} !`);
+        embed.setColor(0xc20000).setTitle(`💀 MALUS - ${nom} !${suffixe}`);
     } else {
-        embed.setColor(0xffd20a); // vote public : neutre, ni bonus ni malus
+        embed.setColor(0xffd20a).setTitle(`🗳️ VOTE PUBLIC ! (${proba})`); // neutre, ni bonus ni malus
     }
     return embed;
 }
@@ -3711,6 +3724,7 @@ if (response?.needsWanted) {
             const envoye = await message.reply({ embeds: resultat.embeds, components: resultat.components });
             memoriserResultatRoulette(envoye.id, resultat.embeds[0]);
             if (resultat.attenteChoix) rouletteChoixEnAttente.add(envoye.id);
+            if (resultat.vote) await demarrerVoteRoulette(envoye, resultat.vote);
             if (resultat.differe) {
                 setTimeout(async () => {
                     const embedFinal = await resultat.differe();
@@ -6327,6 +6341,7 @@ return interaction.update({ embeds: [embed], components: rows });
         await interaction.update({ embeds: resultat.embeds, components: resultat.components });
         memoriserResultatRoulette(interaction.message.id, resultat.embeds[0]);
         if (resultat.attenteChoix) rouletteChoixEnAttente.add(interaction.message.id);
+        if (resultat.vote) await demarrerVoteRoulette(interaction.message, resultat.vote);
         if (resultat.differe) {
             setTimeout(async () => {
                 const embedFinal = await resultat.differe();
