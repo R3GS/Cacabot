@@ -1382,7 +1382,11 @@ async function lancerVoteRoulette(membre, channel) {
     await msg.react('✅');
     await msg.react('❌');
 
+    // Rappel 🆙 toutes les 55 min tant que le vote est ouvert
+    const rappels = setInterval(() => { msg.reply('🆙').catch(() => {}); }, 55 * 60 * 1000);
+
     setTimeout(async () => {
+        clearInterval(rappels);
         try {
             const fresh = await channel.messages.fetch(msg.id);
             const oui = fresh.reactions.cache.get('✅')?.count ?? 1;
@@ -1390,10 +1394,10 @@ async function lancerVoteRoulette(membre, channel) {
             if (oui >= non) {
                 rouletteFreeRollUntil.set(membre.id, Date.now() + 3 * 60 * 1000);
                 rouletteImmuniteUntil.set(membre.id, Date.now() + 3 * 60 * 1000);
-                await channel.send(`✅ Le vote a tranché : **${membre.displayName}** gagne un tirage à volonté pendant 3 minutes !`);
+                await msg.reply(`✅ Le vote a tranché : **${membre.displayName}** gagne un tirage à volonté pendant 3 minutes !`);
             } else {
                 await membre.timeout(24 * 60 * 60 * 1000, 'Roulette - vote').catch(() => {});
-                await channel.send(`❌ Le vote a tranché : **${membre.displayName}** est exclu.e pendant 1 jour.`);
+                await msg.reply(`❌ Le vote a tranché : **${membre.displayName}** est exclu.e pendant 1 jour.`);
             }
         } catch (e) {}
     }, 2 * 60 * 60 * 1000);
@@ -1476,12 +1480,19 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
 }
 
 function buildRouletteResultEmbed(outcomeId, texte) {
-    const embed = new EmbedBuilder()
-        .setColor(0xffd20a)
-        .setDescription(texte);
+    const nom = ROULETTE_NOMS[outcomeId] ?? outcomeId;
+    const embed = new EmbedBuilder().setDescription(texte);
+
     if (outcomeId === 'aucun-resultat') {
-        embed.setTitle('💨 AUCUN RÉSULTAT !');
-        embed.setFooter({ text: 'Échec du tirage, reviens dans 15 minutes !' });
+        embed.setColor(0x259485)
+            .setTitle('💨 AUCUN RÉSULTAT !')
+            .setFooter({ text: 'Échec du tirage, reviens dans 15 minutes :)' });
+    } else if (outcomeId.startsWith('bonus-')) {
+        embed.setColor(0x00ff15).setTitle(`🎉 BONUS - ${nom} !`);
+    } else if (outcomeId.startsWith('malus-')) {
+        embed.setColor(0xc20000).setTitle(`💀 MALUS - ${nom} !`);
+    } else {
+        embed.setColor(0xffd20a); // vote public : neutre, ni bonus ni malus
     }
     return embed;
 }
