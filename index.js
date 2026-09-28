@@ -1053,9 +1053,6 @@ if (command === "!choix") {
     if (lower.startsWith("quoi")) {
         if (Math.random() < 0.5) return reply("Quoicoubeh");
         return reply("Feur");
-    }
-
-    return reply("Feur");
 }
 
 const pendingCheh = new Map();
