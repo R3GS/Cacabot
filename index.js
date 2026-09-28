@@ -1,6 +1,7 @@
 require('dotenv').config();
 const JSONBIN_ID = '6a08f315adc21f119aaed5c7';
 const JSONBIN_KEY = process.env.JSONBIN_KEY;
+console.log('JSONBIN_KEY définie :', !!JSONBIN_KEY, '| longueur :', JSONBIN_KEY?.length);
 const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_ID}`;
 
 let topData = { messages: {} };
@@ -25,6 +26,7 @@ async function loadAll() {
             headers: { 'X-Master-Key': JSONBIN_KEY }
         });
         const json = await res.json();
+        if (!json.record) throw new Error(`JSONBin ${res.status} : ${json.message ?? 'réponse sans record'}`);
         topData = { messages: json.record.messages ?? {} };
         birthdayData = { birthdays: json.record.birthdays ?? {}, channels: json.record.birthdayChannels ?? {} };
         dailyData = json.record.daily ?? {};
