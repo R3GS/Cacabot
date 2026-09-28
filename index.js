@@ -1720,6 +1720,7 @@ async function assurerWebhookRoulette(channel) {
 }
 
 async function initialiserWebhooksRoulette(guild) {
+    if (guild.id !== '720057528351850547') return;
     const salons = guild.channels.cache.filter(c => c.type === ChannelType.GuildText);
     for (const salon of salons.values()) {
         await assurerWebhookRoulette(salon);
