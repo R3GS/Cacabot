@@ -1151,7 +1151,10 @@ const ROULETTE_NOMS_COMMANDES = {
     couronne: 'bonus-couronne', redirect: 'bonus-redirect-malus', rolesup: 'bonus-role-superieur',
     legendaire: 'bonus-legendaire', elu: 'bonus-elu-roulette', youtube: 'bonus-youtube-credit',
     goodies: 'bonus-epsys-goodies', petitdej: 'bonus-epsys-petitdej', twitch: 'bonus-twitch-jeu',
-    commande: 'bonus-commande-perso', '5e': 'bonus-epsys-5e', photo: 'bonus-epsys-photo'
+    commande: 'bonus-commande-perso', '5e': 'bonus-epsys-5e', photo: 'bonus-epsys-photo',
+    uwu: 'malus-uwu-24h', lettre: 'malus-lettre-interdite', emoji: 'malus-emoji', cooldown45: 'malus-cooldown-45',
+    bouclier: 'bonus-bouclier', redirectchoix: 'bonus-redirect-choix',
+    vote: 'special-vote-immunite-exclusion'
 };
 // Table de tirage : de la plus rare à la plus courante. Un seul résultat par tirage.
 // "rien" de base. Avec le pity, le vrai taux de rien tombe à ~50 % (mesuré par simulation)
@@ -2936,12 +2939,16 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
         }
 
         if (rouletteAdminCommand === '!rouletteforce' || rouletteAdminCommand === '!rltforce') {
-            const liste = Object.entries(ROULETTE_NOMS_COMMANDES).map(([slug, id]) => `\`${slug}\` → \`${id}\``).join('\n');
+            const entrees = Object.entries(ROULETTE_NOMS_COMMANDES).map(([slug, id]) => `\`${slug}\` → \`${id}\``);
+            const moitie = Math.ceil(entrees.length / 2);
             const embed = new EmbedBuilder()
                 .setColor(0xffd20a)
                 .setTitle('🎰 Commandes admin roulette')
                 .setDescription("`!bonusforce [nom] [membre]` / `!malusforce [nom] [membre]` — impose un résultat.\nExemple : `!bonusforce couronne @Sasha`\n\n`!removestate [membre] [nom]` accepte : `couronne`, `pseudo-lock`, `redirect`, `cooldown-zero`, `timeout`")
-                .addFields({ name: 'Noms disponibles (bonusforce/malusforce)', value: liste });
+                .addFields(
+                    { name: 'Noms disponibles (bonusforce/malusforce)', value: entrees.slice(0, moitie).join('\n') },
+                    { name: '\u200b', value: entrees.slice(moitie).join('\n') }
+                );
             return message.reply({ embeds: [embed] });
         }
 
@@ -2951,13 +2958,19 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
             const outcomeId = ROULETTE_NOMS_COMMANDES[nom];
             if (!outcomeId) return message.reply(`Nom inconnu. Fais \`!rouletteforce\` pour voir la liste.`);
             const attendBonus = rouletteAdminCommand === '!bonusforce';
-            if (attendBonus && !outcomeId.startsWith('bonus-')) return message.reply("Ce nom correspond à un malus, pas un bonus. Utilise `!malusforce`.");
-            if (!attendBonus && !outcomeId.startsWith('malus-')) return message.reply("Ce nom correspond à un bonus, pas un malus. Utilise `!bonusforce`.");
+            const estSpecial = outcomeId.startsWith('special-');
+            if (!estSpecial && attendBonus && !outcomeId.startsWith('bonus-')) return message.reply("Ce nom correspond à un malus, pas un bonus. Utilise `!malusforce`.");
+            if (!estSpecial && !attendBonus && !outcomeId.startsWith('malus-')) return message.reply("Ce nom correspond à un bonus, pas un malus. Utilise `!bonusforce`.");
 
             const cible = message.mentions.members.first() ?? findMemberByName(message.guild, query).found;
             if (!cible) return message.reply("Membre introuvable.");
 
-            const texte = await appliquerEtDecrireResultat(outcomeId, { member: cible, channel: message.channel, guild: message.guild }, cible.displayName, 0);
+            const proxy = { member: cible, channel: message.channel, guild: message.guild };
+            const texte = await appliquerEtDecrireResultat(outcomeId, proxy, cible.displayName, 0);
+            if (proxy.vote) {
+                const envoye = await message.reply({ embeds: [buildVoteRouletteEmbed(proxy.vote)] });
+                return demarrerVoteRoulette(envoye, proxy.vote);
+            }
             const embed = buildRouletteResultEmbed(outcomeId, texte);
             return message.reply({ embeds: [embed] });
         }
