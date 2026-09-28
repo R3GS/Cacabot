@@ -135,6 +135,7 @@ const {
     ActionRowBuilder,
     StringSelectMenuBuilder,
     ButtonBuilder,
+    ChannelType,
     ButtonStyle
 } = require('discord.js');
 
@@ -535,6 +536,10 @@ function getResponse(raw) {
     if (command === "!roulette" || command === "!rlt") {
         const arg = raw.trim().split(" ")[1]?.toLowerCase();
         return { needsRoulette: true, direct: arg === 'go' };
+    }
+
+    if (command === "!roulettestate" || command === "!rltstate") {
+        return { needsRouletteState: true };
     }
 
     // =========================
@@ -1120,9 +1125,17 @@ function buildMenuFallbackRoulette(authorId) {
 }
 const ROULETTE_COOLDOWN_EXEMPT = ['744217896581857281', '902651805614358568', '436218312574107658'];
 const rouletteUwuUntil = new Map();        // userId -> timestamp de fin
-const roulettelettreInterdite = new Map(); // userId -> { until: timestamp, lettre: string }
+const rouletteLettreInterdite = new Map(); // userId -> { until: timestamp, lettre: string }
 const EPSYS_ID = '436218312574107658';
 const rouletteTimeoutUntil = new Map(); // userId -> timestamp de fin, UNIQUEMENT pour les timeouts causés par la roulette
+const rouletteWebhooks = new Map(); // channelId -> Webhook
+const rouletteVotesActifs = new Map(); // messageId -> { userId, channelId, guildId }
+const rouletteTimeoutImmuniteUntil = new Map(); // userId -> timestamp de fin
+
+function estImmuniseAuTimeout(userId) {
+    const fin = rouletteTimeoutImmuniteUntil.get(userId);
+    return fin && Date.now() < fin;
+}
 
 const ROULETTE_NOMS_COMMANDES = {
     timeout3: 'malus-timeout-3min', timeout5: 'malus-timeout-5min', timeout20: 'malus-timeout-20min',
@@ -1241,7 +1254,7 @@ const ROULETTE_ETATS = {
     redirectCharges: rouletteRedirectCharges,
     pity:            roulettePity,
     uwu:             rouletteUwuUntil,
-    lettreInterdite: roulettelettreInterdite,
+    lettreInterdite: rouletteLettreInterdite,
     immunite:        rouletteImmuniteUntil
 };
 
@@ -1268,7 +1281,7 @@ const ROULETTE_FAILS = [
 ];
 
 const ROULETTE_NOMS_PSEUDO_LOCK = [
-    "Caca boudin", "Diarrhée explosive", "_XxD4rkSasuk3xX_", "BardellaLover69", "Sam Gratlékouy",
+    "Caca boudin", "Diarrhée explosive", "_XxD4rkSasuk3xX_", "BardellaLover69", "Sam Gratlékouy", "CharlieKirkFanAccountV2",
     "Pierre Chabrier", "SansPlomb95", "Cherche une copine sur Maubeuge", "https://youtu.be/vCIG5VeP_I0",
     "Oestrodose", "Puff goût paf"
 ];
@@ -1314,18 +1327,24 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'malus-exclu-heure':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 heure !`;
             return malusDiffere(message, auteurNom, 'Exclusion de 1 heure', 'exclu.e pendant **1 heure**', 'a été exclu.e pendant **1 heure**',
-                () => message.member.timeout(60 * 60 * 1000, 'Roulette').catch(() => {}));
-                rouletteTimeoutUntil.set(message.member.id, Date.now() + 60 * 60 * 1000);
+                () => {
+                    message.member.timeout(60 * 60 * 1000, 'Roulette').catch(() => {});
+                    rouletteTimeoutUntil.set(message.member.id, Date.now() + 60 * 60 * 1000);
+                });
         case 'malus-exclu-jour':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 jour !`;
             return malusDiffere(message, auteurNom, 'Exclusion de 1 jour', 'exclu.e pendant **1 jour**', 'a été exclu.e pendant **1 jour**',
-                () => message.member.timeout(24 * 60 * 60 * 1000, 'Roulette').catch(() => {}));
-                rouletteTimeoutUntil.set(message.member.id, Date.now() + 24 * 60 * 60 * 1000);
+                () => {
+                    message.member.timeout(24 * 60 * 60 * 1000, 'Roulette').catch(() => {});
+                    rouletteTimeoutUntil.set(message.member.id, Date.now() + 24 * 60 * 60 * 1000);
+                });
         case 'malus-exclu-semaine':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 semaine !`;
             return malusDiffere(message, auteurNom, 'Exclusion de 1 semaine', 'exclu.e pendant **1 semaine**', 'a été exclu.e pendant **1 semaine**',
-                () => message.member.timeout(7 * 24 * 60 * 60 * 1000, 'Roulette').catch(() => {}));
-                await message.member.timeout(7 * 24 * 60 * 60 * 1000, 'Roulette').catch(() => {});
+                () => {
+                    message.member.timeout(7 * 24 * 60 * 60 * 1000, 'Roulette').catch(() => {});
+                    rouletteTimeoutUntil.set(message.member.id, Date.now() + 7 * 24 * 60 * 60 * 1000);
+                });
         case 'bonus-gif-ou-audio': {
             await message.channel.send({ files: ["./PAPAYOU.mp3"] }).catch(() => {});
             return `**${auteurNom}** a fait spawn un petit cadeau !`;
@@ -1425,7 +1444,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             return `**${auteurNom}** doit terminer chacun de ses messages par **UwU** pendant **24h** !`;
         case 'malus-lettre-interdite': {
             const lettre = String.fromCharCode(65 + Math.floor(Math.random() * 26));
-            roulettelettreInterdite.set(message.member.id, { until: Date.now() + 12 * 60 * 60 * 1000, lettre });
+            rouletteLettreInterdite.set(message.member.id, { until: Date.now() + 12 * 60 * 60 * 1000, lettre });
             return `**${auteurNom}** ne peut plus utiliser la lettre **${lettre}** pendant **12h** !`;
         }
         case 'bonus-redirect-malus': {
@@ -1477,8 +1496,25 @@ function buildRoulettePresentationEmbed() {
     return new EmbedBuilder()
         .setColor(0xffd20a)
         .setTitle('🎰 Roulette')
-        .setDescription("Tente ta chance : bonus rares, malus douloureux, ou rien du tout.\nCooldown : **15 min** entre deux tentatives.")
+.setDescription("Tente ta chance : bonus rares, malus douloureux, ou rien du tout.\nCooldown : **15 min** entre deux tentatives.\n\nUtilise `!roulettestate` | `!rltstate` [membre] pour voir les bonus/malus actifs d'un·e membre")
         .setFooter({ text: 'Astuce : Envoie !roulette go ou !rlt go pour faire un tirage sans passer par cet écran !' });
+}
+
+function buildRouletteStateEmbed(cible) {
+    const actifs = [];
+    if (rouletteCouronneUntil.has(cible.id)) actifs.push('👑 couronne (réaction auto)');
+    if (roulettePseudoLock.has(cible.id)) actifs.push(`🔒 pseudo verrouillé (${roulettePseudoLock.get(cible.id).pseudo})`);
+    if ((rouletteRedirectCharges.get(cible.id) || 0) > 0) actifs.push(`😈 ${rouletteRedirectCharges.get(cible.id)} redirection(s) de malus en réserve`);
+    if (rouletteFreeRollUntil.has(cible.id) && Date.now() < rouletteFreeRollUntil.get(cible.id)) actifs.push('⚡ tirage à volonté actif');
+    if (rouletteTimeoutUntil.has(cible.id) && Date.now() < rouletteTimeoutUntil.get(cible.id)) actifs.push('💀 timeout roulette actif');
+    if (rouletteImmuniteUntil.has(cible.id) && Date.now() < rouletteImmuniteUntil.get(cible.id)) actifs.push('🛡️ immunisé·e au prochain malus');
+    if (rouletteUwuUntil.has(cible.id) && Date.now() < rouletteUwuUntil.get(cible.id)) actifs.push('😳 doit finir ses messages par UwU');
+    if (rouletteLettreInterdite.has(cible.id) && Date.now() < rouletteLettreInterdite.get(cible.id).until) actifs.push(`🔤 lettre interdite : ${rouletteLettreInterdite.get(cible.id).lettre}`);
+
+    return new EmbedBuilder()
+        .setColor(0x503649)
+        .setTitle(`État roulette de ${cible.displayName}`)
+        .setDescription(actifs.length ? actifs.join('\n') : "Rien d'actif en ce moment.");
 }
 
 async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
@@ -1545,6 +1581,31 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
             return buildRouletteResultEmbed(outcomeId, prefixeRedirect + differe.texteFinal);
         } : null
     };
+}
+
+async function assurerWebhookRoulette(channel) {
+    if (rouletteWebhooks.has(channel.id)) return rouletteWebhooks.get(channel.id);
+    try {
+        const existants = await channel.fetchWebhooks();
+        let webhook = existants.find(w => w.name === 'Cacabot Roulette');
+        if (!webhook) {
+            webhook = await channel.createWebhook({ name: 'Cacabot Roulette' });
+        }
+        rouletteWebhooks.set(channel.id, webhook);
+        return webhook;
+    } catch (err) {
+        console.error(`Impossible de créer/récupérer le webhook roulette dans #${channel.name} :`, err.message);
+        return null;
+    }
+}
+
+async function initialiserWebhooksRoulette(guild) {
+    const salons = guild.channels.cache.filter(c => c.type === ChannelType.GuildText);
+    for (const salon of salons.values()) {
+        await assurerWebhookRoulette(salon);
+        await new Promise(r => setTimeout(r, 300));
+    }
+    console.log(`✅ Webhooks roulette prêts sur ${salons.size} salons de ${guild.name}`);
 }
 
 function libelleProbaRoulette(outcomeId) {
@@ -3845,6 +3906,28 @@ if (response?.needsWanted) {
 
         return message.reply({ files: [gif], components: [row] });
     }
+
+// !roulettestate / !rltstate
+if (response?.needsRouletteState) {
+    const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+    let cible = message.mentions.members.first();
+    if (!cible) {
+        if (!query) {
+            cible = message.member;
+        } else {
+            const result = findMemberByName(message.guild, query);
+            if (result.multiple) {
+                return askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                    const membre = message.guild.members.cache.get(user.id);
+                    if (membre) message.reply({ embeds: [buildRouletteStateEmbed(membre)] });
+                });
+            }
+            cible = result.found;
+        }
+    }
+    if (!cible) return message.reply("Membre introuvable.");
+    return message.reply({ embeds: [buildRouletteStateEmbed(cible)] });
+}
 
     // !roulette
     if (response?.needsRoulette) {
@@ -6494,14 +6577,10 @@ return interaction.update({ embeds: [embed], components: rows });
             return interaction.reply({ content: "C'est pas ton tirage, tape `!roulette` toi-même 😌", ephemeral: true });
         }
         const resultat = await tirerEtConstruireResultatRoulette(authorId, interaction.guild, interaction.channel);
-        if (resultat.cooldown) {
-                const avertissement = await message.reply(`⏳ Attends la fin du cooldown avant de relancer un tirage ! Il te reste **${resultat.reste} min**.`);
-                setTimeout(() => {
-                    avertissement.delete().catch(() => {});
-                    message.delete().catch(() => {});
-                }, 5000);
-                return;
-        }
+    if (resultat.cooldown) {
+        await interaction.reply({ content: `⏳ Attends la fin du cooldown avant de relancer un tirage ! Il te reste **${resultat.reste} min**.`, ephemeral: true });
+        return;
+    }
         await interaction.update({ embeds: resultat.embeds, components: resultat.components });
         memoriserResultatRoulette(interaction.message.id, resultat.embeds[0]);
         if (resultat.attenteChoix) rouletteChoixEnAttente.add(interaction.message.id);
@@ -7278,6 +7357,12 @@ return interaction.update({ embeds: [embed], components: rows });
 //         CONNEXION
 // =========================
 
+client.on('channelCreate', async (channel) => {
+    if (channel.type === ChannelType.GuildText) {
+        await assurerWebhookRoulette(channel).catch(() => {});
+    }
+});
+
 client.once('ready', async () => {
     console.log(`✅ ${client.user.tag} est connecté`);
     await loadAll();
@@ -7287,6 +7372,10 @@ client.once('ready', async () => {
     }
     // for (const guild of client.guilds.cache.values()) { scheduleWanted(guild); }
     console.log(`✅ Membres fetchés`)
+
+    for (const guild of client.guilds.cache.values()) {
+        await initialiserWebhooksRoulette(guild);
+    }
 
     const msUntilMidnightParis = () => {
         const now = new Date();
@@ -7357,60 +7446,61 @@ client.on('messageCreate', async (message) => {
     await message.react('👑').catch(() => {});
 });
 
-// Malus roulette : doit finir ses messages par UwU
+
+// Malus UwU : republie chaque message avec "UwU" ajouté, via webhook
 client.on('messageCreate', async (message) => {
+    if (message.webhookId) return;
     if (message.author.bot) return;
     const finUwu = rouletteUwuUntil.get(message.author.id);
     if (!finUwu) return;
-    if (Date.now() >= finUwu) { rouletteUwuUntil.delete(message.author.id); return; }
-    if (message.content.trim().toLowerCase().endsWith('uwu')) return;
+    if (Date.now() >= finUwu) {
+        rouletteUwuUntil.delete(message.author.id);
+        return;
+    }
+    if (!message.content) return;
 
-    const avertissement = await message.channel.send(`⚠️ **${message.author}**, ton message ne finit pas par UwU ! Tu as **10 secondes** pour le corriger avant suppression.`);
-    let corrige = false;
-    const onEdit = (oldMsg, newMsg) => {
-        if (newMsg.id !== message.id) return;
-        if (newMsg.content.trim().toLowerCase().endsWith('uwu')) corrige = true;
-    };
-    message.client.on('messageUpdate', onEdit);
+    const salonWebhook = message.channel.isThread() ? message.channel.parent : message.channel;
+    const webhook = await assurerWebhookRoulette(salonWebhook);
+    if (!webhook) return;
 
-    setTimeout(async () => {
-        message.client.off('messageUpdate', onEdit);
-        if (corrige) {
-            await avertissement.edit('✅ Tout est en ordre !');
-            setTimeout(() => avertissement.delete().catch(() => {}), 2000);
-        } else {
-            await message.delete().catch(() => {});
-            await avertissement.delete().catch(() => {});
-        }
-    }, 10000);
+    await message.delete().catch(() => {});
+    await webhook.send({
+        content: `${message.content} UwU`,
+        username: message.member?.displayName ?? message.author.username,
+        avatarURL: message.member?.displayAvatarURL() ?? message.author.displayAvatarURL(),
+        files: [...message.attachments.values()].map(a => a.url),
+        threadId: message.channel.isThread() ? message.channel.id : undefined
+    }).catch(() => {});
 });
 
-// Malus roulette : lettre interdite
+// Malus lettre interdite : republie le message via webhook, lettre retirée
 client.on('messageCreate', async (message) => {
+    if (message.webhookId) return;
     if (message.author.bot) return;
-    const lock = roulettelettreInterdite.get(message.author.id);
+    const lock = rouletteLettreInterdite.get(message.author.id);
     if (!lock) return;
-    if (Date.now() >= lock.until) { roulettelettreInterdite.delete(message.author.id); return; }
-    if (!message.content.toLowerCase().includes(lock.lettre.toLowerCase())) return;
+    if (Date.now() >= lock.until) {
+        rouletteLettreInterdite.delete(message.author.id);
+        return;
+    }
+    if (!message.content) return;
 
-    const avertissement = await message.channel.send(`⚠️ **${message.author}**, tu as utilisé la lettre **${lock.lettre}** ! Tu as **30 secondes** pour la retirer avant suppression.`);
-    let corrige = false;
-    const onEdit = (oldMsg, newMsg) => {
-        if (newMsg.id !== message.id) return;
-        if (!newMsg.content.toLowerCase().includes(lock.lettre.toLowerCase())) corrige = true;
-    };
-    message.client.on('messageUpdate', onEdit);
+    const regex = new RegExp(lock.lettre, 'gi');
+    if (!regex.test(message.content)) return;
 
-    setTimeout(async () => {
-        message.client.off('messageUpdate', onEdit);
-        if (corrige) {
-            await avertissement.edit('✅ Tout est en ordre !');
-            setTimeout(() => avertissement.delete().catch(() => {}), 2000);
-        } else {
-            await message.delete().catch(() => {});
-            await avertissement.delete().catch(() => {});
-        }
-    }, 30000);
+    const nouveauContenu = message.content.replace(regex, '') || '​';
+    const salonWebhook = message.channel.isThread() ? message.channel.parent : message.channel;
+    const webhook = await assurerWebhookRoulette(salonWebhook);
+    if (!webhook) return;
+
+    await message.delete().catch(() => {});
+    await webhook.send({
+        content: nouveauContenu,
+        username: message.member?.displayName ?? message.author.username,
+        avatarURL: message.member?.displayAvatarURL() ?? message.author.displayAvatarURL(),
+        files: [...message.attachments.values()].map(a => a.url),
+        threadId: message.channel.isThread() ? message.channel.id : undefined
+    }).catch(() => {});
 });
 
 // Verrouillage de pseudo roulette : remet le pseudo imposé si quelqu'un essaie de le changer
