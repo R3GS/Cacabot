@@ -1102,44 +1102,85 @@ const rouletteRedirectCharges = new Map(); // userId -> nombre de malus à redir
 const roulettePseudoLock = new Map(); // userId -> { until: timestamp, pseudo: string }
 const ROULETTE_COOLDOWN_MS = 15 * 60 * 1000;
 const rouletteImmuniteUntil = new Map(); // userId -> timestamp de fin d'immunité au timeout
+const rouletteResultats = new Map(); // id du message -> embed du résultat affiché
+function memoriserResultatRoulette(messageId, embed) {
+    rouletteResultats.set(messageId, embed);
+    if (rouletteResultats.size > 200) rouletteResultats.delete(rouletteResultats.keys().next().value);
+}
 const ROULETTE_COOLDOWN_EXEMPT = ['744217896581857281', '902651805614358568', '436218312574107658'];
 const rouletteUwuUntil = new Map();        // userId -> timestamp de fin
 const roulettelettreInterdite = new Map(); // userId -> { until: timestamp, lettre: string }
 
 // Table de tirage : de la plus rare à la plus courante. Un seul résultat par tirage.
 const ROULETTE_TABLE = [
-    { id: 'bonus-epsys-petitdej',      chance: 1 / 9999 },
-    { id: 'bonus-epsys-goodies',       chance: 1 / 7500 },
-    { id: 'bonus-youtube-credit',      chance: 1 / 5000 },
-    { id: 'bonus-elu-roulette',        chance: 1 / 4096 },
-    { id: 'bonus-epsys-photo',         chance: 1 / 3000 },
-    { id: 'bonus-epsys-5e',            chance: 1 / 2000 },
-    { id: 'malus-ban',                 chance: 1 / 2000 },
-    { id: 'bonus-commande-perso',      chance: 1 / 1000 },
-    { id: 'bonus-twitch-jeu',          chance: 1 / 500 },
-    { id: 'malus-pseudo-lock-mois',    chance: 1 / 300 },
-    { id: 'bonus-legendaire',          chance: 1 / 250 },
-    { id: 'malus-exclu-semaine',       chance: 1 / 200 },
-    { id: 'bonus-role-superieur',      chance: 1 / 100 },
-    { id: 'malus-pseudo-lock-semaine', chance: 1 / 100 },
-    { id: 'special-vote-immunite-exclusion', chance: 1 / 75 },
-    { id: 'bonus-redirect-malus',      chance: 1 / 50 },
-    { id: 'malus-exclu-jour',          chance: 1 / 50 },
-    { id: 'malus-lettre-interdite', chance: 1 / 45 },
-    { id: 'malus-uwu-24h',          chance: 1 / 33 },
-    { id: 'bonus-couronne',            chance: 1 / 30 },
-    { id: 'malus-exclu-heure',         chance: 1 / 30 },
-    { id: 'bonus-cooldown-zero-90s',   chance: 1 / 20 },
-    { id: 'malus-timeout-20min',       chance: 1 / 20 },
-    { id: 'bonus-cooldown-zero-30s',   chance: 1 / 10 },
-    { id: 'malus-timeout-5min',        chance: 1 / 10 },
-    { id: 'bonus-gif-ou-audio',        chance: 1 / 6 },
-    { id: 'malus-timeout-3min',        chance: 1 / 6 }
+    { id: 'bonus-epsys-petitdej',            chance: 1 / 17000 },
+    { id: 'bonus-epsys-goodies',             chance: 1 / 12500 },
+    { id: 'bonus-youtube-credit',            chance: 1 / 8500 },
+    { id: 'bonus-elu-roulette',              chance: 1 / 7000 },
+    { id: 'bonus-epsys-photo',               chance: 1 / 5000 },
+    { id: 'bonus-epsys-5e',                  chance: 1 / 3400 },
+    { id: 'malus-ban',                       chance: 1 / 3400 },
+    { id: 'bonus-commande-perso',            chance: 1 / 1700 },
+    { id: 'bonus-twitch-jeu',                chance: 1 / 850 },
+    { id: 'malus-pseudo-lock-mois',          chance: 1 / 500 },
+    { id: 'bonus-legendaire',                chance: 1 / 420 },
+    { id: 'malus-exclu-semaine',             chance: 1 / 350 },
+    { id: 'bonus-role-superieur',            chance: 1 / 170 },
+    { id: 'malus-pseudo-lock-semaine',       chance: 1 / 170 },
+    { id: 'special-vote-immunite-exclusion', chance: 1 / 125 },
+    { id: 'bonus-redirect-malus',            chance: 1 / 85 },
+    { id: 'malus-exclu-jour',                chance: 1 / 85 },
+    { id: 'malus-lettre-interdite',          chance: 1 / 75 },
+    { id: 'malus-uwu-24h',                   chance: 1 / 55 },
+    { id: 'bonus-couronne',                  chance: 1 / 50 },
+    { id: 'malus-exclu-heure',               chance: 1 / 50 },
+    { id: 'bonus-cooldown-zero-90s',         chance: 1 / 35 },
+    { id: 'malus-timeout-20min',             chance: 1 / 35 },
+    { id: 'bonus-cooldown-zero-30s',         chance: 1 / 17 },
+    { id: 'malus-timeout-5min',              chance: 1 / 17 },
+    { id: 'bonus-gif-ou-audio',              chance: 1 / 10 },
+    { id: 'malus-timeout-3min',              chance: 1 / 10 }
 ];
 
+const ROULETTE_TAUX_ECHEC = 0.5; // 50% de "rien"
+
+const ROULETTE_NOMS = {
+    'bonus-epsys-petitdej':            'Petit déj apporté par Epsys',
+    'bonus-epsys-goodies':             'Goodies d\'Epsys',
+    'bonus-youtube-credit':            'Pseudo crédité sous chaque vidéo YouTube',
+    'bonus-elu-roulette':              'Élu·e de la Roulette',
+    'bonus-epsys-photo':               'Photo disgracieuse d\'Epsys',
+    'bonus-epsys-5e':                  '5€ de la YouTube Money d\'Epsys',
+    'bonus-commande-perso':            'Commande Cacabot personnalisée',
+    'bonus-twitch-jeu':                'Choix du jeu du prochain stream Twitch',
+    'bonus-legendaire':                'Regaïen·ne légendaire',
+    'bonus-role-superieur':            'Regaïen.ne supérieur',
+    'bonus-redirect-malus':            '3 malus redirigés',
+    'bonus-couronne':                  'Couronne 👑 pendant 12h',
+    'bonus-cooldown-zero-90s':         'Tirage à volonté pendant 1min30',
+    'bonus-cooldown-zero-30s':         'Tirage à volonté pendant 30s',
+    'bonus-gif-ou-audio':              'PAPAYOU.mp3',
+    'malus-ban':                       'Ban définitif',
+    'malus-exclu-semaine':             'Exclusion de 1 semaine',
+    'malus-exclu-jour':                'Exclusion de 1 jour',
+    'malus-exclu-heure':               'Exclusion de 1 heure',
+    'malus-timeout-20min':             'Mute de 20 minutes',
+    'malus-timeout-5min':              'Mute de 5 minutes',
+    'malus-timeout-3min':              'Mute de 3 minutes',
+    'malus-pseudo-lock-mois':          'Pseudo verrouillé pendant 1 mois',
+    'malus-pseudo-lock-semaine':       'Pseudo verrouillé pendant 1 semaine',
+    'malus-lettre-interdite':          'Lettre interdite pendant 12h',
+    'malus-uwu-24h':                   'UwU obligatoire pendant 24h',
+    'special-vote-immunite-exclusion': 'Vote public'
+};
+
 function tirerRoulette() {
+    const totalSucces = ROULETTE_TABLE.reduce((s, e) => s + e.chance, 0);
+    const totalGlobal = totalSucces / (1 - ROULETTE_TAUX_ECHEC);
+    let tirage = Math.random() * totalGlobal;
     for (const entry of ROULETTE_TABLE) {
-        if (Math.random() < entry.chance) return entry.id;
+        if (tirage < entry.chance) return entry.id;
+        tirage -= entry.chance;
     }
     return 'aucun-resultat';
 }
@@ -1180,15 +1221,17 @@ const ROULETTE_RANGS = [
     { id: '1230643204664070328', label: 'Regaïen.ne légendraire' }
 ];
 
-const ROULETTE_GIFS_AUDIOS = [
-    "./PAPAYOU.mp3"
-];
-
 function estImmuniseRoulette(userId) {
     const fin = rouletteImmuniteUntil.get(userId);
     if (!fin) return false;
     if (Date.now() >= fin) { rouletteImmuniteUntil.delete(userId); return false; }
     return true;
+}
+
+// Malus violent : prévient d'abord, applique 10s plus tard, puis le message est modifié
+function malusDiffere(message, nom, titre, futur, passe, action) {
+    message.differe = { action, texteFinal: `💀 **${nom}** ${passe}.` };
+    return `⚠️ **${nom}**, tu es tombé.e sur le malus **${titre}** : tu seras ${futur}.\nProfite de tes **10 dernières secondes** !`;
 }
 
 async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failIndex) {
@@ -1207,19 +1250,18 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             return `💀 **${auteurNom}** est mute pendant **20 minutes**.`;
         case 'malus-exclu-heure':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 heure !`;
-            await message.member.timeout(60 * 60 * 1000, 'Roulette').catch(() => {});
-            return `💀 **${auteurNom}** est exclu.e pendant **1 heure**.`;
+            return malusDiffere(message, auteurNom, 'Exclusion de 1 heure', 'exclu.e pendant **1 heure**', 'a été exclu.e pendant **1 heure**',
+                () => message.member.timeout(60 * 60 * 1000, 'Roulette').catch(() => {}));
         case 'malus-exclu-jour':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 jour !`;
-            await message.member.timeout(24 * 60 * 60 * 1000, 'Roulette').catch(() => {});
-            return `💀 **${auteurNom}** est exclu.e pendant **1 jour**.`;
+            return malusDiffere(message, auteurNom, 'Exclusion de 1 jour', 'exclu.e pendant **1 jour**', 'a été exclu.e pendant **1 jour**',
+                () => message.member.timeout(24 * 60 * 60 * 1000, 'Roulette').catch(() => {}));
         case 'malus-exclu-semaine':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 semaine !`;
-            await message.member.timeout(7 * 24 * 60 * 60 * 1000, 'Roulette').catch(() => {});
-            return `💀 **${auteurNom}** est exclu.e pendant **1 semaine**.`;
+            return malusDiffere(message, auteurNom, 'Exclusion de 1 semaine', 'exclu.e pendant **1 semaine**', 'a été exclu.e pendant **1 semaine**',
+                () => message.member.timeout(7 * 24 * 60 * 60 * 1000, 'Roulette').catch(() => {}));
         case 'bonus-gif-ou-audio': {
-            const media = ROULETTE_GIFS_AUDIOS[Math.floor(Math.random() * ROULETTE_GIFS_AUDIOS.length)];
-            await message.channel.send({ files: [media] }).catch(() => {});
+            await message.channel.send({ files: ["./PAPAYOU.mp3"] }).catch(() => {});
             return `🎉 **${auteurNom}** a fait spawn un petit cadeau !`;
         }
                 case 'bonus-twitch-jeu':
@@ -1293,9 +1335,8 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             rouletteFreeRollUntil.set(message.member.id, Date.now() + 90 * 1000);
             return `⚡ **${auteurNom}** peut retenter sa chance sans cooldown pendant **1min30** !`;
         case 'malus-ban':
-            await message.channel.send(`☠️ **${auteurNom}** vient de se faire bannir du serveur par la roulette. RIP.`).catch(() => {});
-            await message.member.ban({ reason: 'Roulette' }).catch(() => {});
-            return `☠️ **${auteurNom}** est banni du serveur.`;
+            return malusDiffere(message, auteurNom, 'Ban définitif', 'banni.e du serveur', 'a été banni.e du serveur',
+                () => message.member.ban({ reason: 'Roulette' }).catch(() => {}));
 
         case 'bonus-couronne':
             rouletteCouronneUntil.set(message.member.id, Date.now() + 12 * 60 * 60 * 1000);
@@ -1415,7 +1456,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
             .setCustomId(`roulette_fallback_${authorId}`)
             .setPlaceholder('Choisis un bonus à la place')
             .addOptions(
-                { label: '🎉 Gif Sylvain ou audio PAPAYOU', value: 'bonus-gif-ou-audio' },
+                { label: '🎉 Audio PAPAYOU', value: 'bonus-gif-ou-audio' },
                 { label: '⚡ 0 cooldown pendant 30s', value: 'bonus-cooldown-zero-30s' },
                 { label: '⚡ 0 cooldown pendant 1min30', value: 'bonus-cooldown-zero-90s' },
                 { label: '👑 Couronne pendant 12h', value: 'bonus-couronne' },
@@ -1423,8 +1464,15 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
             );
         return { embeds: [embed], components: [new ActionRowBuilder().addComponents(menu), new ActionRowBuilder().addComponents(probasBtn)] };
     }
-
-    return { embeds: [embed], components: [new ActionRowBuilder().addComponents(probasBtn)] };
+    const differe = proxy.differe;
+    return {
+        embeds: [embed],
+        components: [new ActionRowBuilder().addComponents(probasBtn)],
+        differe: differe ? async () => {
+            await differe.action();
+            return buildRouletteResultEmbed(outcomeId, prefixeRedirect + differe.texteFinal);
+        } : null
+    };
 }
 
 function buildRouletteResultEmbed(outcomeId, texte) {
@@ -1439,21 +1487,51 @@ function buildRouletteResultEmbed(outcomeId, texte) {
 
 function buildRoulettePaytableEmbed() {
     return new EmbedBuilder()
-        .setColor(0x503649)
+        .setColor(0xffd20a)
         .setTitle('🎰 Probabilités')
         .addFields(
             {
-                name: '🎉 Bonus', value:
-                    '**1/6** — PAPAYOU.mp3\n**1/10** — Tirage à volonté pendant 30s\n**1/20** — Tirage à volonté pendant 1min30\n**1/30** — Une couronne 👑 sous tes messages pendant 12h\n**1/50** — 3 prochains malus redirigés vers un.e autre membre\n**1/100** — Rôle de Regaïen.ne supérieur\n**1/250** — Rôle de Regaïen·ne légendraire\n**1/500** — Choix du jeu du prochain stream Twitch - jeu court uniquement\n**1/1000** — Ajoute une commande Cacabot de ton choix\n**1/2000** — 5€ de la YouTube Money d\'Epsys\n**1/3000** — 1 photo disgracieuse d\'Epsys signée et envoyée par la Poste\n**1/4096** — Rôle spécial d\'**Élu·e de la Roulette**\n**1/5000** — Pseudo crédité sous chaque vidéo YouTube\n**1/7500** — Goodies d\'Epsys gratuit au choix: T-Shirt/Mug/Lot de 5pin\'s\n**1/9999** — Petit déj apporté par Epsys en maid dress'
+                name: '🎉 BONUS', value: [
+                    '**1/10** (10%) — PAPAYOU.mp3',
+                    '**1/17** (5.88%) — Tirage à volonté pendant 30s',
+                    '**1/35** (2.86%) — Tirage à volonté pendant 1min30',
+                    '**1/50** (2%) — Une couronne 👑 sous tes messages pendant 12h',
+                    '**1/85** (1.18%) — 3 prochains malus redirigés vers un.e autre membre',
+                    '**1/170** (0.59%) — Rôle de Regaïen.ne supérieur',
+                    '**1/420** (0.24%) — Rôle de Regaïen·ne légendraire',
+                    '**1/850** (0.12%) — Choix du jeu du prochain stream Twitch - jeu court uniquement',
+                    '**1/1700** (0.059%) — Ajoute une commande Cacabot de ton choix',
+                    '**1/3400** (0.029%) — 5€ de la YouTube Money d\'Epsys',
+                    '**1/5000** (0.020%) — 1 photo disgracieuse d\'Epsys signée et envoyée par la Poste',
+                    '**1/7000** (0.014%) — Rôle spécial d\'**Élu·e de la Roulette**',
+                    '**1/8500** (0.012%) — Pseudo crédité sous chaque vidéo YouTube',
+                    '**1/12500** (0.008%) — Goodies d\'Epsys gratuit au choix: T-Shirt/Mug/Lot de 5pin\'s',
+                    '**1/17000** (0.006%) — Petit déj apporté par Epsys en maid dress'
+                ].join('\n')
             },
             {
-                name: '💀 Malus', value:
-                    '**1/6** — Mute de 3 minutes\n**1/10** — Mute de 5 minutes\n**1/20** — Mute de 20 minutes\n**1/30** — Exclusion de 1 heure\n*1/33** — Doit finir chaque message par UwU pendant 24h\n**1/45** — Ne peut plus utiliser une lettre au hasard pendant 12h\n**1/50** — Exclusion de 1 jour\n**1/100** — Pseudo horrible changé de force, verrouillé pendant 1 semaine\n**1/200** — Exclusion de 1 semaine\n**1/300** — Pseudo horrible changé de force, verrouillé pendant 1 mois\n**1/2000** — Ban définitif (révocable si besoin)'
+                name: '💀 MALUS', value: [
+                    '**1/10** (10%) — Mute de 3 minutes',
+                    '**1/17** (5.88%) — Mute de 5 minutes',
+                    '**1/35** (2.86%) — Mute de 20 minutes',
+                    '**1/50** (2%) — Exclusion de 1 heure',
+                    '**1/55** (1.82%) — Doit finir chaque message par UwU pendant 24h',
+                    '**1/75** (1.33%) — Ne peut plus utiliser une lettre au hasard pendant 12h',
+                    '**1/85** (1.18%) — Exclusion de 1 jour',
+                    '**1/170** (0.59%) — Pseudo horrible changé de force, verrouillé pendant 1 semaine',
+                    '**1/350** (0.29%) — Exclusion de 1 semaine',
+                    '**1/500** (0.2%) — Pseudo horrible changé de force, verrouillé pendant 1 mois',
+                    '**1/3400** (0.029%) — Ban définitif (révocable si besoin)'
+                ].join('\n')
             },
             {
-    name: '🗳️ Spécial', value:
-        '**1/75** — Vote public : tirage à volonté 3min (immunité) ou exclusion 1 jour, décidé en 2h'
-}
+                name: '🗳️ SPÉCIAL', value:
+                    '**1/125** (0.8%) — Vote public : tirage à volonté 3min (immunité) ou exclusion 1 jour, décidé en 2h'
+            },
+            {
+                name: '😶 RIEN', value:
+                    `**1/2** (${ROULETTE_TAUX_ECHEC * 100}%) — Rien du tout, tirage raté`
+            }
         );
 }
 
@@ -3607,7 +3685,16 @@ if (response?.needsWanted) {
             }, 5000); // délai avant suppression, ajuste la valeur si tu veux laisser plus/moins de temps
     return;
 }
-            return message.reply({ embeds: resultat.embeds, components: resultat.components });
+            const envoye = await message.reply({ embeds: resultat.embeds, components: resultat.components });
+            memoriserResultatRoulette(envoye.id, resultat.embeds[0]);
+            if (resultat.differe) {
+                setTimeout(async () => {
+                    const embedFinal = await resultat.differe();
+                    memoriserResultatRoulette(envoye.id, embedFinal);
+                    envoye.edit({ embeds: [embedFinal] }).catch(() => {});
+                }, 10000);
+            }
+            return envoye;
         }
         const embed = buildRoulettePresentationEmbed();
         const row = new ActionRowBuilder().addComponents(
@@ -6175,7 +6262,7 @@ return interaction.update({ embeds: [embed], components: rows });
         return interaction.reply({ files: [gif], components: [row] });
     }
 
-        // =========================
+    // =========================
     // BOUTONS ROULETTE
     // =========================
 
@@ -6213,7 +6300,16 @@ return interaction.update({ embeds: [embed], components: rows });
         if (resultat.cooldown) {
             return interaction.reply({ content: `⏳ Tu dois encore attendre **${resultat.reste} min** avant de retenter ta chance.`, ephemeral: true });
         }
-        return interaction.update({ embeds: resultat.embeds, components: resultat.components });
+        await interaction.update({ embeds: resultat.embeds, components: resultat.components });
+        memoriserResultatRoulette(interaction.message.id, resultat.embeds[0]);
+        if (resultat.differe) {
+            setTimeout(async () => {
+                const embedFinal = await resultat.differe();
+                memoriserResultatRoulette(interaction.message.id, embedFinal);
+                interaction.message.edit({ embeds: [embedFinal] }).catch(() => {});
+            }, 10000);
+        }
+        return;
     }
 
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('roulette_fallback_')) {
@@ -6229,6 +6325,7 @@ return interaction.update({ embeds: [embed], components: rows });
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_0`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary)
         );
+        memoriserResultatRoulette(interaction.message.id, embed);
         return interaction.update({ embeds: [embed], components: [row] });
     }
 
@@ -6256,11 +6353,19 @@ return interaction.update({ embeds: [embed], components: rows });
             return interaction.reply({ content: "C'est pas ton tirage, tape `!roulette` toi-même 😌", ephemeral: true });
         }
         // Retour au résultat déjà tiré : on ré-affiche le même texte sans retirer ni réappliquer la sanction/le gain.
-        const auteurNom = interaction.guild?.members.cache.get(authorId)?.displayName ?? interaction.user.username;
-        const texte = outcomeId === 'aucun-resultat'
-            ? ROULETTE_FAILS[parseInt(failIndex, 10)]
-            : `Résultat déjà appliqué : \`${outcomeId}\` pour **${auteurNom}**.`;
-        const embed = buildRouletteResultEmbed(outcomeId, texte);
+        let embed = rouletteResultats.get(interaction.message.id);
+        if (!embed) {
+            // Filet de sécurité (bot redémarré ou résultat trop ancien) : récap simplifié
+            const auteurNom = interaction.guild?.members.cache.get(authorId)?.displayName ?? interaction.user.username;
+            const nom = ROULETTE_NOMS[outcomeId] ?? outcomeId;
+            const type = outcomeId.startsWith('malus-') ? 'le malus'
+                       : outcomeId.startsWith('bonus-') ? 'le bonus'
+                       : 'le résultat';
+            const texte = outcomeId === 'aucun-resultat'
+                ? ROULETTE_FAILS[parseInt(failIndex, 10)]
+                : `**${auteurNom}** est tombé.e sur ${type} **${nom}**.\n*Il a déjà été appliqué, revenir ici ne le déclenche pas une deuxième fois.*`;
+            embed = buildRouletteResultEmbed(outcomeId, texte);
+        }
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary)
         );
@@ -6753,8 +6858,8 @@ return interaction.update({ embeds: [embed], components: rows });
                 .setColor(0x5865f2)
                 .setDescription("# \ud83e\udd16 Cacabot")
                 .addFields(
-                    { name: "\ud83e\udd16 !botinfo", value: "Affiche les informations de Cacabot." },
-                    { name: "🤫 !stop/!unstop", value: "Faire taire Cacabot pendant 1h, ou le faire revenir avant la fin." },
+                    { name: "\ud83e\udd16 !botinfo / !about / !abt", value: "Affiche les informations de Cacabot." },
+                    { name: "🤫 !stop / !unstop", value: "Faire taire Cacabot pendant 1h, ou le faire revenir avant la fin." },
                     { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." }
                 );
         }
