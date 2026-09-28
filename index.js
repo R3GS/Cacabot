@@ -1142,13 +1142,6 @@ function finitParUnEmoji(texte) {
 }
 const rouletteTimeoutUntil = new Map(); // userId -> timestamp de fin, UNIQUEMENT pour les timeouts causés par la roulette
 const rouletteWebhooks = new Map(); // channelId -> Webhook
-const rouletteVotesActifs = new Map(); // messageId -> { userId, channelId, guildId }
-const rouletteTimeoutImmuniteUntil = new Map(); // userId -> timestamp de fin
-
-function estImmuniseAuTimeout(userId) {
-    const fin = rouletteTimeoutImmuniteUntil.get(userId);
-    return fin && Date.now() < fin;
-}
 
 const ROULETTE_NOMS_COMMANDES = {
     timeout3: 'malus-timeout-3min', timeout5: 'malus-timeout-5min', timeout20: 'malus-timeout-20min',
@@ -1549,6 +1542,9 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             });
             return `📌 **${auteurNom}** a gagné un message épinglé définitivement dans ce salon !`;
         }
+        case 'special-vote-immunite-exclusion':
+            message.vote = message.member;
+            return `🗳️ **${auteurNom}** déclenche un **vote public** !`;
         case 'aucun-resultat':
             return ROULETTE_FAILS[failIndex];
         default:
@@ -1575,8 +1571,13 @@ async function demarrerVoteRoulette(msg, membre) {
         clearInterval(rappels);
         try {
             const fresh = await msg.channel.messages.fetch(msg.id);
-            const oui = fresh.reactions.cache.get('✅')?.count ?? 1;
-            const non = fresh.reactions.cache.get('❌')?.count ?? 1;
+            const reagirOui = await fresh.reactions.cache.get('✅')?.users.fetch() ?? new Map();
+            const reagirNon = await fresh.reactions.cache.get('❌')?.users.fetch() ?? new Map();
+            const idsOui = [...reagirOui.values()].filter(u => !u.bot).map(u => u.id);
+            const idsNon = [...reagirNon.values()].filter(u => !u.bot).map(u => u.id);
+            const doubles = new Set(idsOui.filter(id => idsNon.includes(id)));
+            const oui = idsOui.filter(id => !doubles.has(id)).length;
+            const non = idsNon.filter(id => !doubles.has(id)).length;
             if (oui >= non) {
                 rouletteFreeRollUntil.set(membre.id, Date.now() + 3 * 60 * 1000);
                 rouletteImmuniteUntil.set(membre.id, Date.now() + 3 * 60 * 1000);
@@ -1691,8 +1692,9 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
     }
     const differe = proxy.differe;
     return {
-        embeds: [embed],
+        embeds: proxy.vote ? [buildVoteRouletteEmbed(proxy.vote)] : [embed],
         components: [new ActionRowBuilder().addComponents(probasBtn)],
+        vote: proxy.vote ?? null,
         differe: differe ? async () => {
             await differe.action();
             return buildRouletteResultEmbed(outcomeId, prefixeRedirect + differe.texteFinal);
@@ -1743,12 +1745,16 @@ function buildRouletteResultEmbed(outcomeId, texte) {
         : texte;
 
     const entry = ROULETTE_TABLE.find(e => e.id === outcomeId);
-    const couleurs = { bonus: 0x57f287, malus: 0xed4245, special: 0xffd20a };
-    const couleur = entry ? (couleurs[entry.type] ?? 0x503649) : 0x99aab5;
+    const couleurs = { bonus: 0x00bf19, malus: 0x9e0000, special: 0xdb6600 };
+    const prefixes = { bonus: '🎉 BONUS', malus: '💀 MALUS', special: '🌗 SPÉCIAL' };
+
+    const couleur = outcomeId === 'aucun-resultat'
+        ? 0x20876f
+        : (entry ? (couleurs[entry.type] ?? 0x503649) : 0x99aab5);
 
     const titre = outcomeId === 'aucun-resultat'
         ? `💨 AUCUN RÉSULTAT ! (${libelleProbaRoulette('aucun-resultat')})`
-        : entry ? `${entry.nom} (${libelleProbaRoulette(outcomeId)})` : null;
+        : entry ? `${prefixes[entry.type] ?? ''} - ${entry.nom} (${libelleProbaRoulette(outcomeId)})` : null;
 
     const embed = new EmbedBuilder().setColor(couleur).setDescription(texteFinal);
     if (titre) embed.setTitle(titre);
@@ -7558,88 +7564,61 @@ client.on('messageCreate', async (message) => {
 });
 
 
-// Malus UwU : republie chaque message avec "UwU" ajouté, via webhook
+// Malus roulette (UwU + lettre interdite + emoji) : un seul repost via webhook
 client.on('messageCreate', async (message) => {
-    if (message.webhookId) return;
-    if (message.author.bot) return;
-    const finUwu = rouletteUwuUntil.get(message.author.id);
-    if (!finUwu) return;
-    if (Date.now() >= finUwu) {
-        rouletteUwuUntil.delete(message.author.id);
-        return;
-    }
+    if (message.webhookId || message.author.bot || !message.guild) return;
     if (!message.content) return;
+    if (/^[!\/]/.test(message.content.trim())) return; // ne pas casser les commandes
+
+    const id = message.author.id;
+    const now = Date.now();
+    let contenu = message.content;
+    let modifie = false;
+
+    const lock = rouletteLettreInterdite.get(id);
+    if (lock) {
+        if (now >= lock.until) rouletteLettreInterdite.delete(id);
+        else {
+            const regex = new RegExp(lock.lettre, 'gi');
+            if (regex.test(contenu)) {
+                contenu = message.content.replace(regex, '') || '\u200b';
+                modifie = true;
+            }
+        }
+    }
+
+    const finUwu = rouletteUwuUntil.get(id);
+    if (finUwu) {
+        if (now >= finUwu) rouletteUwuUntil.delete(id);
+        else { contenu = `${contenu} UwU`; modifie = true; }
+    }
+
+    const finEmoji = rouletteEmojiUntil.get(id);
+    if (finEmoji) {
+        if (now >= finEmoji) rouletteEmojiUntil.delete(id);
+        else if (!finitParUnEmoji(contenu)) {
+            contenu = `${contenu} ${ROULETTE_EMOJIS_ALEATOIRES[Math.floor(Math.random() * ROULETTE_EMOJIS_ALEATOIRES.length)]}`;
+            modifie = true;
+        }
+    }
+
+    if (!modifie) return;
 
     const salonWebhook = message.channel.isThread() ? message.channel.parent : message.channel;
     const webhook = await assurerWebhookRoulette(salonWebhook);
     if (!webhook) return;
 
-    await message.delete().catch(() => {});
-    await webhook.send({
-        content: `${message.content} UwU`,
-        username: message.member?.displayName ?? message.author.username,
-        avatarURL: message.member?.displayAvatarURL() ?? message.author.displayAvatarURL(),
-        files: [...message.attachments.values()].map(a => a.url),
-        threadId: message.channel.isThread() ? message.channel.id : undefined
-    }).catch(() => {});
-});
-
-// Malus lettre interdite : republie le message via webhook, lettre retirée
-client.on('messageCreate', async (message) => {
-    if (message.webhookId) return;
-    if (message.author.bot) return;
-    const lock = rouletteLettreInterdite.get(message.author.id);
-    if (!lock) return;
-    if (Date.now() >= lock.until) {
-        rouletteLettreInterdite.delete(message.author.id);
-        return;
-    }
-    if (!message.content) return;
-
-    const regex = new RegExp(lock.lettre, 'gi');
-    if (!regex.test(message.content)) return;
-
-    const nouveauContenu = message.content.replace(regex, '') || '​';
-    const salonWebhook = message.channel.isThread() ? message.channel.parent : message.channel;
-    const webhook = await assurerWebhookRoulette(salonWebhook);
-    if (!webhook) return;
-
-    await message.delete().catch(() => {});
-    await webhook.send({
-        content: nouveauContenu,
-        username: message.member?.displayName ?? message.author.username,
-        avatarURL: message.member?.displayAvatarURL() ?? message.author.displayAvatarURL(),
-        files: [...message.attachments.values()].map(a => a.url),
-        threadId: message.channel.isThread() ? message.channel.id : undefined
-    }).catch(() => {});
-});
-
-// Malus emoji obligatoire : republie le message avec un emoji ajouté, via webhook
-client.on('messageCreate', async (message) => {
-    if (message.webhookId) return;
-    if (message.author.bot) return;
-    const finEmoji = rouletteEmojiUntil.get(message.author.id);
-    if (!finEmoji) return;
-    if (Date.now() >= finEmoji) {
-        rouletteEmojiUntil.delete(message.author.id);
-        return;
-    }
-    if (!message.content) return;
-    if (finitParUnEmoji(message.content)) return;
-
-    const emoji = ROULETTE_EMOJIS_ALEATOIRES[Math.floor(Math.random() * ROULETTE_EMOJIS_ALEATOIRES.length)];
-    const salonWebhook = message.channel.isThread() ? message.channel.parent : message.channel;
-    const webhook = await assurerWebhookRoulette(salonWebhook);
-    if (!webhook) return;
-
-    await message.delete().catch(() => {});
-    await webhook.send({
-        content: `${message.content} ${emoji}`,
-        username: message.member?.displayName ?? message.author.username,
-        avatarURL: message.member?.displayAvatarURL() ?? message.author.displayAvatarURL(),
-        files: [...message.attachments.values()].map(a => a.url),
-        threadId: message.channel.isThread() ? message.channel.id : undefined
-    }).catch(() => {});
+    try {
+        await webhook.send({
+            content: contenu.slice(0, 2000),
+            username: message.member?.displayName ?? message.author.username,
+            avatarURL: message.member?.displayAvatarURL() ?? message.author.displayAvatarURL(),
+            files: [...message.attachments.values()].map(a => a.url),
+            threadId: message.channel.isThread() ? message.channel.id : undefined,
+            allowedMentions: { parse: [] }
+        });
+        await message.delete().catch(() => {});
+    } catch (e) {}
 });
 
 // Verrouillage de pseudo roulette : remet le pseudo imposé si quelqu'un essaie de le changer
