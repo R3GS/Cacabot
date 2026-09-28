@@ -1,6 +1,6 @@
 require('dotenv').config();
 const JSONBIN_ID = '6a08f315adc21f119aaed5c7';
-const JSONBIN_KEY = '$2a$10$4aNH8UsrNWZXAfraECrYp.yAWPzFvnOY7EAc8oifTNLrpfN3dnRuq';
+const JSONBIN_KEY = process.env.JSONBIN_KEY;
 const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_ID}`;
 
 let topData = { messages: {} };
@@ -17,6 +17,7 @@ let dailyData = {};
 let weeklyData = {};
 let monthlyData = {};
 let youtubeWatchData = {};
+let donneesChargees = false;
 
 async function loadAll() {
     try {
@@ -31,17 +32,12 @@ async function loadAll() {
         monthlyData = json.record.monthly ?? {};
         youtubeWatchData = json.record.youtubeWatch ?? {};
 
-        rouletteCooldowns.clear();
-        for (const [k, v] of Object.entries(json.record.roulette?.cooldowns ?? {})) rouletteCooldowns.set(k, v);
-        rouletteFreeRollUntil.clear();
-        for (const [k, v] of Object.entries(json.record.roulette?.freeRoll ?? {})) rouletteFreeRollUntil.set(k, v);
-        rouletteCouronneUntil.clear();
-        for (const [k, v] of Object.entries(json.record.roulette?.couronne ?? {})) rouletteCouronneUntil.set(k, v);
-        roulettePseudoLock.clear();
-        for (const [k, v] of Object.entries(json.record.roulette?.pseudoLock ?? {})) roulettePseudoLock.set(k, v);
-        rouletteRedirectCharges.clear();
-        for (const [k, v] of Object.entries(json.record.roulette?.redirectCharges ?? {})) rouletteRedirectCharges.set(k, v);
+        for (const [nom, map] of Object.entries(ROULETTE_ETATS)) {
+            map.clear();
+            for (const [k, v] of Object.entries(json.record.roulette?.[nom] ?? {})) map.set(k, v);
+        }
 
+        donneesChargees = true;
         console.log('✅ Données chargées depuis JSONBin');
     } catch (err) {
         console.error('Erreur chargement JSONBin:', err);
@@ -52,6 +48,7 @@ let lastsaveSaveTime = null;
 let messagesSinceLastsaveSave = 0;
 
 async function saveAll() {
+    if (!donneesChargees) { console.warn('⚠️ Sauvegarde ignorée : données non chargées'); return; }
     try {
         const res = await fetch(JSONBIN_URL, {
             method: 'PUT',
@@ -59,13 +56,9 @@ async function saveAll() {
             body: JSON.stringify({
                 messages: topData.messages, birthdays: birthdayData.birthdays, birthdayChannels: birthdayData.channels,
                 daily: dailyData, weekly: weeklyData, monthly: monthlyData, youtubeWatch: youtubeWatchData,
-                roulette: {
-                    cooldowns: Object.fromEntries(rouletteCooldowns),
-                    freeRoll: Object.fromEntries(rouletteFreeRollUntil),
-                    couronne: Object.fromEntries(rouletteCouronneUntil),
-                    pseudoLock: Object.fromEntries(roulettePseudoLock),
-                    redirectCharges: Object.fromEntries(rouletteRedirectCharges)
-                }
+                roulette: Object.fromEntries(
+                    Object.entries(ROULETTE_ETATS).map(([nom, map]) => [nom, Object.fromEntries(map)])
+                )
             })
         });
         const json = await res.json();
@@ -1127,78 +1120,115 @@ const rouletteUwuUntil = new Map();        // userId -> timestamp de fin
 const roulettelettreInterdite = new Map(); // userId -> { until: timestamp, lettre: string }
 
 // Table de tirage : de la plus rare à la plus courante. Un seul résultat par tirage.
+// "rien" de base. Avec le pity, le vrai taux de rien tombe à ~50 % (mesuré par simulation)
+const ROULETTE_TAUX_ECHEC = 0.533;
+const ROULETTE_PITY_MALUS = 3; // malus depuis le dernier bonus => bonus garanti
+const ROULETTE_PITY_NULS = 5;  // résultats nuls depuis le dernier bonus => bonus garanti
+
+// type : 'bonus' | 'malus' | 'special'   poids : poids relatif   nom : titre d'embed   desc : ligne de la paytable
 const ROULETTE_TABLE = [
-    { id: 'bonus-epsys-petitdej',            chance: 1 / 17000 },
-    { id: 'bonus-epsys-goodies',             chance: 1 / 12500 },
-    { id: 'bonus-youtube-credit',            chance: 1 / 8500 },
-    { id: 'bonus-elu-roulette',              chance: 1 / 7000 },
-    { id: 'bonus-epsys-photo',               chance: 1 / 5000 },
-    { id: 'bonus-epsys-5e',                  chance: 1 / 3400 },
-    { id: 'malus-ban',                       chance: 1 / 3400 },
-    { id: 'bonus-commande-perso',            chance: 1 / 1700 },
-    { id: 'bonus-twitch-jeu',                chance: 1 / 850 },
-    { id: 'malus-pseudo-lock-mois',          chance: 1 / 500 },
-    { id: 'bonus-legendaire',                chance: 1 / 420 },
-    { id: 'malus-exclu-semaine',             chance: 1 / 350 },
-    { id: 'bonus-role-superieur',            chance: 1 / 170 },
-    { id: 'malus-pseudo-lock-semaine',       chance: 1 / 170 },
-    { id: 'special-vote-immunite-exclusion', chance: 1 / 125 },
-    { id: 'bonus-redirect-malus',            chance: 1 / 85 },
-    { id: 'malus-exclu-jour',                chance: 1 / 85 },
-    { id: 'malus-lettre-interdite',          chance: 1 / 75 },
-    { id: 'malus-uwu-24h',                   chance: 1 / 55 },
-    { id: 'bonus-couronne',                  chance: 1 / 50 },
-    { id: 'malus-exclu-heure',               chance: 1 / 50 },
-    { id: 'bonus-cooldown-zero-90s',         chance: 1 / 35 },
-    { id: 'malus-timeout-20min',             chance: 1 / 35 },
-    { id: 'bonus-cooldown-zero-30s',         chance: 1 / 17 },
-    { id: 'malus-timeout-5min',              chance: 1 / 17 },
-    { id: 'bonus-gif-ou-audio',              chance: 1 / 10 },
-    { id: 'malus-timeout-3min',              chance: 1 / 10 }
+    { id: 'bonus-epsys-petitdej',      type: 'bonus', poids: 1 / 17000, nom: 'Petit déj apporté par Epsys', desc: 'Petit déj apporté par Epsys en maid dress' },
+    { id: 'bonus-epsys-goodies',       type: 'bonus', poids: 1 / 12500, nom: 'Goodies d\'Epsys', desc: 'Goodies d\'Epsys gratuit au choix: T-Shirt/Mug/Lot de 5pin\'s' },
+    { id: 'bonus-youtube-credit',      type: 'bonus', poids: 1 / 8500,  nom: 'Pseudo crédité sous chaque vidéo YouTube', desc: 'Pseudo crédité sous chaque vidéo YouTube' },
+    { id: 'bonus-elu-roulette',        type: 'bonus', poids: 1 / 7000,  nom: 'Élu·e de la Roulette', desc: 'Rôle spécial d\'**Élu·e de la Roulette**' },
+    { id: 'bonus-epsys-photo',         type: 'bonus', poids: 1 / 5000,  nom: 'Photo disgracieuse d\'Epsys', desc: '1 photo disgracieuse d\'Epsys signée et envoyée par la Poste' },
+    { id: 'bonus-epsys-5e',            type: 'bonus', poids: 1 / 3400,  nom: '5€ de la YouTube Money d\'Epsys', desc: '5€ de la YouTube Money d\'Epsys' },
+    { id: 'malus-ban',                 type: 'malus', poids: 1 / 3400,  nom: 'Ban définitif', desc: 'Ban définitif (révocable si besoin)' },
+    { id: 'bonus-commande-perso',      type: 'bonus', poids: 1 / 1700,  nom: 'Commande Cacabot personnalisée', desc: 'Ajoute une commande Cacabot de ton choix' },
+    { id: 'bonus-twitch-jeu',          type: 'bonus', poids: 1 / 850,   nom: 'Choix du jeu du prochain stream Twitch', desc: 'Choix du jeu du prochain stream Twitch - jeu court uniquement' },
+    { id: 'malus-pseudo-lock-mois',    type: 'malus', poids: 1 / 500,   nom: 'Pseudo verrouillé pendant 1 mois', desc: 'Pseudo horrible changé de force, verrouillé pendant 1 mois' },
+    { id: 'bonus-legendaire',          type: 'bonus', poids: 1 / 420,   nom: 'Regaïen·ne légendraire', desc: 'Rôle de Regaïen·ne légendraire' },
+    { id: 'malus-exclu-semaine',       type: 'malus', poids: 1 / 350,   nom: 'Exclusion de 1 semaine', desc: 'Exclusion de 1 semaine' },
+    { id: 'bonus-role-superieur',      type: 'bonus', poids: 1 / 170,   nom: 'Regaïen.ne supérieur', desc: 'Rôle de Regaïen.ne supérieur' },
+    { id: 'malus-pseudo-lock-semaine', type: 'malus', poids: 1 / 170,   nom: 'Pseudo verrouillé pendant 1 semaine', desc: 'Pseudo horrible changé de force, verrouillé pendant 1 semaine' },
+    { id: 'special-vote-immunite-exclusion', type: 'special', poids: 1 / 125, nom: 'Vote public', desc: 'Vote public : tirage à volonté pendant 3min (immunité au mute) ou exclusion pendant 1 jour, décidé en 2h' },
+    { id: 'bonus-redirect-malus',      type: 'bonus', poids: 1 / 85,    nom: '3 malus redirigés', desc: '3 prochains malus redirigés vers un.e autre membre' },
+    { id: 'malus-exclu-jour',          type: 'malus', poids: 1 / 85,    nom: 'Exclusion de 1 jour', desc: 'Exclusion de 1 jour' },
+    { id: 'malus-lettre-interdite',    type: 'malus', poids: 1 / 75,    nom: 'Lettre interdite pendant 12h', desc: 'Ne peut plus utiliser une lettre au hasard pendant 12h' },
+    { id: 'malus-uwu-24h',             type: 'malus', poids: 1 / 55,    nom: 'UwU obligatoire pendant 24h', desc: 'Doit finir chaque message par UwU pendant 24h' },
+    { id: 'bonus-couronne',            type: 'bonus', poids: 1 / 50,    nom: 'Couronne 👑 pendant 12h', desc: 'Une couronne 👑 sous tes messages pendant 12h' },
+    { id: 'malus-exclu-heure',         type: 'malus', poids: 1 / 50,    nom: 'Exclusion de 1 heure', desc: 'Exclusion de 1 heure' },
+    { id: 'bonus-cooldown-zero-90s',   type: 'bonus', poids: 1 / 35,    nom: 'Tirage à volonté pendant 1min30', desc: 'Tirage à volonté pendant 1min30' },
+    { id: 'malus-timeout-20min',       type: 'malus', poids: 1 / 35,    nom: 'Mute de 20 minutes', desc: 'Mute de 20 minutes' },
+    { id: 'bonus-cooldown-zero-30s',   type: 'bonus', poids: 1 / 17,    nom: 'Tirage à volonté pendant 30s', desc: 'Tirage à volonté pendant 30s' },
+    { id: 'malus-timeout-5min',        type: 'malus', poids: 1 / 17,    nom: 'Mute de 5 minutes', desc: 'Mute de 5 minutes' },
+    { id: 'bonus-gif-ou-audio',        type: 'bonus', poids: 1 / 10,    nom: 'PAPAYOU.mp3', desc: 'PAPAYOU.mp3' },
+    { id: 'malus-timeout-3min',        type: 'malus', poids: 1 / 10,    nom: 'Mute de 3 minutes', desc: 'Mute de 3 minutes' }
+    { id: 'bonus-bouclier',            type: 'bonus', poids: 1 / 20,    nom: 'Immunité au prochain malus', desc: 'Immunité au prochain malus' },
+    { id: 'bonus-redirect-choix',      type: 'bonus', poids: 1 / 100,   nom: 'Malus redirigé au choix', desc: 'Redirige ton prochain malus vers la personne de ton choix' },
+    { id: 'bonus-pseudo-choix',        type: 'bonus', poids: 1 / 250,   nom: 'Pseudo au choix', desc: 'Choisis le pseudo d\'un·e membre, verrouillé pendant 48h (révocable si problématique)' },
+    { id: 'bonus-epingle',             type: 'bonus', poids: 1 / 150,   nom: 'Message épinglé', desc: 'Un message épinglé définitivement dans le salon (règles du serveur à respecter)' },
+    { id: 'malus-emoji',               type: 'malus', poids: 1 / 100,   nom: 'Emoji obligatoire', desc: 'Doit finir chaque message par un emoji aléatoire pendant 24h' },
+    { id: 'malus-cooldown-45',         type: 'malus', poids: 1 / 40,    nom: 'Cooldown de 45 min', desc: 'Les 3 prochains tirages ont un cooldown de 45 minutes' },
 ];
 
-const ROULETTE_TAUX_ECHEC = 0.5; // 50% de "rien"
+// Généré depuis la table : plus de doublon à maintenir
+const ROULETTE_NOMS = Object.fromEntries(ROULETTE_TABLE.map(e => [e.id, e.nom]));
 
-const ROULETTE_NOMS = {
-    'bonus-epsys-petitdej':            'Petit déj apporté par Epsys',
-    'bonus-epsys-goodies':             'Goodies d\'Epsys',
-    'bonus-youtube-credit':            'Pseudo crédité sous chaque vidéo YouTube',
-    'bonus-elu-roulette':              'Élu·e de la Roulette',
-    'bonus-epsys-photo':               'Photo disgracieuse d\'Epsys',
-    'bonus-epsys-5e':                  '5€ de la YouTube Money d\'Epsys',
-    'bonus-commande-perso':            'Commande Cacabot personnalisée',
-    'bonus-twitch-jeu':                'Choix du jeu du prochain stream Twitch',
-    'bonus-legendaire':                'Regaïen·ne légendaire',
-    'bonus-role-superieur':            'Regaïen.ne supérieur',
-    'bonus-redirect-malus':            '3 malus redirigés',
-    'bonus-couronne':                  'Couronne 👑 pendant 12h',
-    'bonus-cooldown-zero-90s':         'Tirage à volonté pendant 1min30',
-    'bonus-cooldown-zero-30s':         'Tirage à volonté pendant 30s',
-    'bonus-gif-ou-audio':              'PAPAYOU.mp3',
-    'malus-ban':                       'Ban définitif',
-    'malus-exclu-semaine':             'Exclusion de 1 semaine',
-    'malus-exclu-jour':                'Exclusion de 1 jour',
-    'malus-exclu-heure':               'Exclusion de 1 heure',
-    'malus-timeout-20min':             'Mute de 20 minutes',
-    'malus-timeout-5min':              'Mute de 5 minutes',
-    'malus-timeout-3min':              'Mute de 3 minutes',
-    'malus-pseudo-lock-mois':          'Pseudo verrouillé pendant 1 mois',
-    'malus-pseudo-lock-semaine':       'Pseudo verrouillé pendant 1 semaine',
-    'malus-lettre-interdite':          'Lettre interdite pendant 12h',
-    'malus-uwu-24h':                   'UwU obligatoire pendant 24h',
-    'special-vote-immunite-exclusion': 'Vote public'
-};
-
-function tirerRoulette() {
-    const totalSucces = ROULETTE_TABLE.reduce((s, e) => s + e.chance, 0);
-    const totalGlobal = totalSucces / (1 - ROULETTE_TAUX_ECHEC);
-    let tirage = Math.random() * totalGlobal;
-    for (const entry of ROULETTE_TABLE) {
-        if (tirage < entry.chance) return entry.id;
-        tirage -= entry.chance;
-    }
-    return 'aucun-resultat';
+// --- Probas réelles et affichage (toujours calculés depuis la table) ---
+function probaReelle(entry) {
+    const total = ROULETTE_TABLE.reduce((s, e) => s + e.poids, 0);
+    return entry.poids * (1 - ROULETTE_TAUX_ECHEC) / total;
 }
+
+function arrondiJoli(n) {
+    if (n < 20) return Math.round(n);
+    if (n < 100) return Math.round(n / 5) * 5;
+    if (n < 1000) return Math.round(n / 10) * 10;
+    if (n < 5000) return Math.round(n / 100) * 100;
+    return Math.round(n / 500) * 500;
+}
+
+function probaAffichee(p) {
+    const n = arrondiJoli(1 / p);
+    const pct = 100 / n;
+    return { n, pct: pct >= 0.1 ? String(parseFloat(pct.toFixed(2))) : pct.toFixed(3) };
+}
+
+// --- Tirage + pity ---
+const roulettePity = new Map(); // userId -> { malus, nuls } depuis le dernier bonus
+
+function piocherRoulette(pool, totalGlobal, defaut) {
+    let tirage = Math.random() * totalGlobal;
+    for (const e of pool) {
+        if (tirage < e.poids) return e.id;
+        tirage -= e.poids;
+    }
+    return defaut;
+}
+
+function tirerRoulette(userId) {
+    const pity = roulettePity.get(userId) ?? { malus: 0, nuls: 0 };
+    const garanti = pity.malus >= ROULETTE_PITY_MALUS || pity.nuls >= ROULETTE_PITY_NULS;
+
+    let outcomeId;
+    if (garanti) {
+        const bonus = ROULETTE_TABLE.filter(e => e.type === 'bonus');
+        outcomeId = piocherRoulette(bonus, bonus.reduce((s, e) => s + e.poids, 0), bonus[bonus.length - 1].id);
+    } else {
+        const total = ROULETTE_TABLE.reduce((s, e) => s + e.poids, 0);
+        outcomeId = piocherRoulette(ROULETTE_TABLE, total / (1 - ROULETTE_TAUX_ECHEC), 'aucun-resultat');
+    }
+
+    const type = ROULETTE_TABLE.find(e => e.id === outcomeId)?.type;
+    if (type === 'bonus') roulettePity.delete(userId);
+    else if (type === 'malus') { pity.malus++; roulettePity.set(userId, pity); }
+    else if (outcomeId === 'aucun-resultat') { pity.nuls++; roulettePity.set(userId, pity); }
+    return outcomeId;
+}
+
+// Registre des états roulette sauvegardés dans JSONBin : pour en ajouter un, une seule ligne ici
+const ROULETTE_ETATS = {
+    cooldowns:       rouletteCooldowns,
+    freeRoll:        rouletteFreeRollUntil,
+    couronne:        rouletteCouronneUntil,
+    pseudoLock:      roulettePseudoLock,
+    redirectCharges: rouletteRedirectCharges,
+    pity:            roulettePity,
+    uwu:             rouletteUwuUntil,
+    lettreInterdite: roulettelettreInterdite,
+    immunite:        rouletteImmuniteUntil
+};
 
 const ROULETTE_FAILS = [
     "Retente ta chance dans 15 minutes ptdr", "Le hasard, ce traître 😔", "Nan là c'est mort", "Nope",
@@ -1440,7 +1470,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
 
     const membre = guild.members.cache.get(authorId);
     const auteurNom = membre?.displayName ?? 'Quelqu\'un';
-    const outcomeId = tirerRoulette();
+    const outcomeId = tirerRoulette(authorId);
     const failIndex = outcomeId === 'aucun-resultat' ? Math.floor(Math.random() * ROULETTE_FAILS.length) : 0;
 
     let cible = membre;
@@ -1494,10 +1524,8 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
 function libelleProbaRoulette(outcomeId) {
     const entry = ROULETTE_TABLE.find(e => e.id === outcomeId);
     if (!entry) return null;
-    const n = Math.round(1 / entry.chance);
-    const pct = 100 / n;
-    const pctTxt = pct >= 0.1 ? String(parseFloat(pct.toFixed(2))) : pct.toFixed(3);
-    return `1/${n} | ${pctTxt}%`;
+    const { n, pct } = probaAffichee(probaReelle(entry));
+    return `1/${n} | ${pct}%`;
 }
 
 function buildRouletteResultEmbed(outcomeId, texte) {
@@ -1521,54 +1549,27 @@ function buildRouletteResultEmbed(outcomeId, texte) {
 }
 
 function buildRoulettePaytableEmbed() {
-    const bonus = [
-        '**1/10** (10%) — PAPAYOU.mp3',
-        '**1/17** (5.88%) — Tirage à volonté pendant 30s',
-        '**1/35** (2.86%) — Tirage à volonté pendant 1min30',
-        '**1/50** (2%) — Une couronne 👑 sous tes messages pendant 12h',
-        '**1/85** (1.18%) — 3 prochains malus redirigés vers un.e autre membre',
-        '**1/170** (0.59%) — Rôle de Regaïen.ne supérieur',
-        '**1/420** (0.24%) — Rôle de Regaïen·ne légendraire',
-        '**1/850** (0.12%) — Choix du jeu du prochain stream Twitch - jeu court uniquement',
-        '**1/1700** (0.059%) — Ajoute une commande Cacabot de ton choix',
-        '**1/3400** (0.029%) — 5€ de la YouTube Money d\'Epsys',
-        '**1/5000** (0.020%) — 1 photo disgracieuse d\'Epsys signée et envoyée par la Poste',
-        '**1/7000** (0.014%) — Rôle spécial d\'**Élu·e de la Roulette**',
-        '**1/8500** (0.012%) — Pseudo crédité sous chaque vidéo YouTube',
-        '**1/12500** (0.008%) — Goodies d\'Epsys gratuit au choix: T-Shirt/Mug/Lot de 5pin\'s',
-        '**1/17000** (0.006%) — Petit déj apporté par Epsys en maid dress'
-    ];
-    const malus = [
-        '**1/10** (10%) — Mute de 3 minutes',
-        '**1/17** (5.88%) — Mute de 5 minutes',
-        '**1/35** (2.86%) — Mute de 20 minutes',
-        '**1/50** (2%) — Exclusion de 1 heure',
-        '**1/55** (1.82%) — Doit finir chaque message par UwU pendant 24h',
-        '**1/75** (1.33%) — Ne peut plus utiliser une lettre au hasard pendant 12h',
-        '**1/85** (1.18%) — Exclusion de 1 jour',
-        '**1/170** (0.59%) — Pseudo horrible changé de force, verrouillé pendant 1 semaine',
-        '**1/350** (0.29%) — Exclusion de 1 semaine',
-        '**1/500** (0.2%) — Pseudo horrible changé de force, verrouillé pendant 1 mois',
-        '**1/3400** (0.029%) — Ban définitif (révocable si besoin)'
-    ];
-    const special = [
-        '**1/125** (0.8%) — Vote public : tirage à volonté pendant 3min (immunité au mute) ou exclusion pendant 1 jour, décidé en 2h'
-    ];
-    const rien = [
-        `**1/2** (${ROULETTE_TAUX_ECHEC * 100}%) — Rien du tout`
-    ];
-
-    const section = (titre, lignes) => `**${titre} :**\n${lignes.join('\n')}`;
+    const section = (titre, type) => {
+        const lignes = ROULETTE_TABLE
+            .filter(e => e.type === type)
+            .sort((a, b) => b.poids - a.poids)
+            .map(e => {
+                const { n, pct } = probaAffichee(probaReelle(e));
+                return `**1/${n}** (${pct}%) — ${e.desc}`;
+            });
+        return lignes.length ? `**${titre} :**\n${lignes.join('\n')}` : null;
+    };
 
     return new EmbedBuilder()
         .setColor(0xffd20a)
         .setTitle('🎰 Probabilités')
         .setDescription([
-            section('🎉 BONUS', bonus),
-            section('💀 MALUS', malus),
-            section('🗳️ SPÉCIAL', special),
-            section('😶 RIEN', rien)
-        ].join('\n\n'));
+            section('🎉 BONUS', 'bonus'),
+            section('💀 MALUS', 'malus'),
+            section('🗳️ SPÉCIAL', 'special'),
+            '**😶 RIEN :**\n**1/2** (~50%) — Rien du tout',
+            `**🍀 PITY :**\nAprès ${ROULETTE_PITY_MALUS} malus ou ${ROULETTE_PITY_NULS} résultats nuls, ton prochain tirage est un bonus garanti.`
+        ].filter(Boolean).join('\n\n'));
 }
 
 const mutedChannels = new Map();
