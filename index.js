@@ -1616,6 +1616,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
 }
 
 async function assurerWebhookRoulette(channel) {
+    if (channel.guild?.id !== '720057528351850547') return null;
     if (rouletteWebhooks.has(channel.id)) return rouletteWebhooks.get(channel.id);
     try {
         const existants = await channel.fetchWebhooks();
