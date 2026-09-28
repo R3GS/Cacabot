@@ -1121,7 +1121,19 @@ function buildMenuFallbackRoulette(authorId) {
 const ROULETTE_COOLDOWN_EXEMPT = ['744217896581857281', '902651805614358568', '436218312574107658'];
 const rouletteUwuUntil = new Map();        // userId -> timestamp de fin
 const roulettelettreInterdite = new Map(); // userId -> { until: timestamp, lettre: string }
+const EPSYS_ID = '436218312574107658';
+const rouletteTimeoutUntil = new Map(); // userId -> timestamp de fin, UNIQUEMENT pour les timeouts causés par la roulette
 
+const ROULETTE_NOMS_COMMANDES = {
+    timeout3: 'malus-timeout-3min', timeout5: 'malus-timeout-5min', timeout20: 'malus-timeout-20min',
+    exclu1h: 'malus-exclu-heure', exclu1j: 'malus-exclu-jour', exclu1semaine: 'malus-exclu-semaine',
+    pseudo1semaine: 'malus-pseudo-lock-semaine', pseudo1mois: 'malus-pseudo-lock-mois', ban: 'malus-ban',
+    gif: 'bonus-gif-ou-audio', cooldown30s: 'bonus-cooldown-zero-30s', cooldown90s: 'bonus-cooldown-zero-90s',
+    couronne: 'bonus-couronne', redirect: 'bonus-redirect-malus', rolesup: 'bonus-role-superieur',
+    legendaire: 'bonus-legendaire', elu: 'bonus-elu-roulette', youtube: 'bonus-youtube-credit',
+    goodies: 'bonus-epsys-goodies', petitdej: 'bonus-epsys-petitdej', twitch: 'bonus-twitch-jeu',
+    commande: 'bonus-commande-perso', '5e': 'bonus-epsys-5e', photo: 'bonus-epsys-photo'
+};
 // Table de tirage : de la plus rare à la plus courante. Un seul résultat par tirage.
 // "rien" de base. Avec le pity, le vrai taux de rien tombe à ~50 % (mesuré par simulation)
 const ROULETTE_TAUX_ECHEC = 0.533;
@@ -1286,28 +1298,34 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
     switch (outcomeId) {
         case 'malus-timeout-3min':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 3 minutes !`;
-            await message.member.timeout(3 * 60 * 1000, 'Roulette').catch(() => {});
+                    await message.member.timeout(3 * 60 * 1000, 'Roulette').catch(() => {});
+                    rouletteTimeoutUntil.set(message.member.id, Date.now() + 3 * 60 * 1000);
             return `**${auteurNom}** est mute pendant **3 minutes**.`;
         case 'malus-timeout-5min':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 5 minutes !`;
-            await message.member.timeout(5 * 60 * 1000, 'Roulette').catch(() => {});
+                    await message.member.timeout(5 * 60 * 1000, 'Roulette').catch(() => {});
+                    rouletteTimeoutUntil.set(message.member.id, Date.now() + 5 * 60 * 1000);
             return `**${auteurNom}** est mute pendant **5 minutes**.`;
         case 'malus-timeout-20min':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 20 minutes !`;
-            await message.member.timeout(20 * 60 * 1000, 'Roulette').catch(() => {});
+                await message.member.timeout(20 * 60 * 1000, 'Roulette').catch(() => {});
+                rouletteTimeoutUntil.set(message.member.id, Date.now() + 20 * 60 * 1000);
             return `**${auteurNom}** est mute pendant **20 minutes**.`;
         case 'malus-exclu-heure':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 heure !`;
             return malusDiffere(message, auteurNom, 'Exclusion de 1 heure', 'exclu.e pendant **1 heure**', 'a été exclu.e pendant **1 heure**',
                 () => message.member.timeout(60 * 60 * 1000, 'Roulette').catch(() => {}));
+                rouletteTimeoutUntil.set(message.member.id, Date.now() + 60 * 60 * 1000);
         case 'malus-exclu-jour':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 jour !`;
             return malusDiffere(message, auteurNom, 'Exclusion de 1 jour', 'exclu.e pendant **1 jour**', 'a été exclu.e pendant **1 jour**',
                 () => message.member.timeout(24 * 60 * 60 * 1000, 'Roulette').catch(() => {}));
+                rouletteTimeoutUntil.set(message.member.id, Date.now() + 24 * 60 * 60 * 1000);
         case 'malus-exclu-semaine':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 semaine !`;
             return malusDiffere(message, auteurNom, 'Exclusion de 1 semaine', 'exclu.e pendant **1 semaine**', 'a été exclu.e pendant **1 semaine**',
                 () => message.member.timeout(7 * 24 * 60 * 60 * 1000, 'Roulette').catch(() => {}));
+                await message.member.timeout(7 * 24 * 60 * 60 * 1000, 'Roulette').catch(() => {});
         case 'bonus-gif-ou-audio': {
             await message.channel.send({ files: ["./PAPAYOU.mp3"] }).catch(() => {});
             return `**${auteurNom}** a fait spawn un petit cadeau !`;
@@ -1409,6 +1427,11 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             const lettre = String.fromCharCode(65 + Math.floor(Math.random() * 26));
             roulettelettreInterdite.set(message.member.id, { until: Date.now() + 12 * 60 * 60 * 1000, lettre });
             return `**${auteurNom}** ne peut plus utiliser la lettre **${lettre}** pendant **12h** !`;
+        }
+        case 'bonus-redirect-malus': {
+            const total = (rouletteRedirectCharges.get(message.member.id) || 0) + 3;
+            rouletteRedirectCharges.set(message.member.id, total);
+            return `😈 **${auteurNom}** peut rediriger ses **3 prochains malus** vers un·e autre membre ! (${total} en réserve)`;
         }
         case 'aucun-resultat':
             return ROULETTE_FAILS[failIndex];
@@ -1532,23 +1555,12 @@ function libelleProbaRoulette(outcomeId) {
 }
 
 function buildRouletteResultEmbed(outcomeId, texte) {
-    const nom = ROULETTE_NOMS[outcomeId] ?? outcomeId;
-    const proba = libelleProbaRoulette(outcomeId);
-    const suffixe = proba ? ` (${proba})` : '';
-    const embed = new EmbedBuilder().setDescription(texte);
-
-    if (outcomeId === 'aucun-resultat') {
-        embed.setColor(0x259485)
-            .setTitle(`💨 AUCUN RÉSULTAT ! (1/2 | 50%)`)
-            .setFooter({ text: 'Échec du tirage, reviens dans 15 minutes :)' });
-    } else if (outcomeId.startsWith('bonus-')) {
-        embed.setColor(0x00ff15).setTitle(`🎉 BONUS - ${nom} !${suffixe}`);
-    } else if (outcomeId.startsWith('malus-')) {
-        embed.setColor(0xc20000).setTitle(`💀 MALUS - ${nom} !${suffixe}`);
-    } else {
-        embed.setColor(0xffd20a).setTitle(`🗳️ VOTE PUBLIC ! (${proba})`); // neutre, ni bonus ni malus
-    }
-    return embed;
+    const texteFinal = outcomeId === 'aucun-resultat'
+        ? `${texte}\n\n*Échec du tirage, reviens dans 15 minutes !*`
+        : texte;
+    return new EmbedBuilder()
+        .setColor(0x503649)
+        .setDescription(texteFinal);
 }
 
 function buildRoulettePaytableEmbed() {
@@ -2703,6 +2715,127 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     const isStopTrigger = stopCommand === '!stop' || /\bcacabot\s+stop\b/.test(stopCleaned);
     const isUnstopTrigger = stopCommand === '!unstop' || /\bcacabot\s+reviens\b/.test(stopCleaned);
+
+    // =========================
+    // COMMANDES ADMIN ROULETTE (Epsys uniquement)
+    // =========================
+    const rouletteAdminCommand = message.content.trim().split(" ")[0]?.toLowerCase();
+    if (['!reroll', '!bonusforce', '!malusforce', '!rouletteforce', '!rltforce', '!resetroulettestate', '!resetrlt', '!removestatetable', '!removestate'].includes(rouletteAdminCommand)) {
+        if (message.author.id !== EPSYS_ID) {
+            return message.reply("Cette commande est réservée à Epsys.");
+        }
+
+        const argsBruts = message.content.trim().split(" ").slice(1);
+
+        if (rouletteAdminCommand === '!reroll') {
+            const query = argsBruts.join(" ");
+            const cible = message.mentions.members.first() ?? findMemberByName(message.guild, query).found;
+            if (!cible) return message.reply("Membre introuvable.");
+            rouletteCooldowns.delete(cible.id);
+            rouletteFreeRollUntil.delete(cible.id);
+            return message.reply(`Le cooldown de <@${cible.id}> a été réinitialisé ! ✅`);
+        }
+
+        if (rouletteAdminCommand === '!rouletteforce' || rouletteAdminCommand === '!rltforce') {
+            const liste = Object.entries(ROULETTE_NOMS_COMMANDES).map(([slug, id]) => `\`${slug}\` → \`${id}\``).join('\n');
+            const embed = new EmbedBuilder()
+                .setColor(0x503649)
+                .setTitle('🎰 Commandes admin roulette')
+                .setDescription("`!bonusforce [nom] [membre]` / `!malusforce [nom] [membre]` — impose un résultat.\nExemple : `!bonusforce couronne @Sasha`\n\n`!removestate [membre] [nom]` accepte : `couronne`, `pseudo-lock`, `redirect`, `cooldown-zero`, `timeout`")
+                .addFields({ name: 'Noms disponibles (bonusforce/malusforce)', value: liste });
+            return message.reply({ embeds: [embed] });
+        }
+
+        if (rouletteAdminCommand === '!bonusforce' || rouletteAdminCommand === '!malusforce') {
+            const nom = argsBruts[0]?.toLowerCase();
+            const query = argsBruts.slice(1).join(" ");
+            const outcomeId = ROULETTE_NOMS_COMMANDES[nom];
+            if (!outcomeId) return message.reply(`Nom inconnu. Fais \`!rouletteforce\` pour voir la liste.`);
+            const attendBonus = rouletteAdminCommand === '!bonusforce';
+            if (attendBonus && !outcomeId.startsWith('bonus-')) return message.reply("Ce nom correspond à un malus, pas un bonus. Utilise `!malusforce`.");
+            if (!attendBonus && !outcomeId.startsWith('malus-')) return message.reply("Ce nom correspond à un bonus, pas un malus. Utilise `!bonusforce`.");
+
+            const cible = message.mentions.members.first() ?? findMemberByName(message.guild, query).found;
+            if (!cible) return message.reply("Membre introuvable.");
+
+            const texte = await appliquerEtDecrireResultat(outcomeId, { member: cible, channel: message.channel, guild: message.guild }, cible.displayName, 0);
+            const embed = buildRouletteResultEmbed(outcomeId, texte);
+            return message.reply({ embeds: [embed] });
+        }
+
+        if (rouletteAdminCommand === '!resetroulettestate' || rouletteAdminCommand === '!resetrlt') {
+            const query = argsBruts.join(" ");
+            const cible = message.mentions.members.first() ?? findMemberByName(message.guild, query).found;
+            if (!cible) return message.reply("Membre introuvable.");
+
+            rouletteCouronneUntil.delete(cible.id);
+            rouletteRedirectCharges.delete(cible.id);
+            rouletteFreeRollUntil.delete(cible.id);
+
+            if (roulettePseudoLock.has(cible.id)) {
+                roulettePseudoLock.delete(cible.id);
+                await cible.setNickname(null).catch(() => {});
+            }
+            if (rouletteTimeoutUntil.has(cible.id)) {
+                rouletteTimeoutUntil.delete(cible.id);
+                await cible.timeout(null).catch(() => {});
+            }
+
+            return message.reply(`L'état roulette de <@${cible.id}> a été entièrement réinitialisé.`);
+        }
+
+        if (rouletteAdminCommand === '!removestatetable') {
+            const query = argsBruts.join(" ");
+            const cible = message.mentions.members.first() ?? findMemberByName(message.guild, query).found;
+            if (!cible) return message.reply("Membre introuvable.");
+
+            const actifs = [];
+            if (rouletteCouronneUntil.has(cible.id)) actifs.push('👑 couronne');
+            if (roulettePseudoLock.has(cible.id)) actifs.push(`🔒 pseudo verrouillé (${roulettePseudoLock.get(cible.id).pseudo})`);
+            if ((rouletteRedirectCharges.get(cible.id) || 0) > 0) actifs.push(`😈 ${rouletteRedirectCharges.get(cible.id)} redirection(s) de malus`);
+            if (rouletteFreeRollUntil.has(cible.id) && Date.now() < rouletteFreeRollUntil.get(cible.id)) actifs.push('⚡ 0 cooldown actif');
+            if (rouletteTimeoutUntil.has(cible.id) && Date.now() < rouletteTimeoutUntil.get(cible.id)) actifs.push('💀 timeout roulette actif');
+
+            const embed = new EmbedBuilder()
+                .setColor(0x503649)
+                .setTitle(`État roulette de ${cible.displayName}`)
+                .setDescription(actifs.length ? actifs.join('\n') : "Rien d'actif en ce moment.");
+            return message.reply({ embeds: [embed] });
+        }
+
+        if (rouletteAdminCommand === '!removestate') {
+            const nom = argsBruts[argsBruts.length - 1]?.toLowerCase();
+            const query = argsBruts.slice(0, -1).join(" ");
+            const cible = message.mentions.members.first() ?? findMemberByName(message.guild, query).found;
+            if (!cible) return message.reply("Membre introuvable.");
+
+            switch (nom) {
+                case 'couronne':
+                    rouletteCouronneUntil.delete(cible.id);
+                    break;
+                case 'pseudo-lock':
+                    roulettePseudoLock.delete(cible.id);
+                    await cible.setNickname(null).catch(() => {});
+                    break;
+                case 'redirect':
+                    rouletteRedirectCharges.delete(cible.id);
+                    break;
+                case 'cooldown-zero':
+                    rouletteFreeRollUntil.delete(cible.id);
+                    break;
+                case 'timeout':
+                    if (!rouletteTimeoutUntil.has(cible.id) || Date.now() >= rouletteTimeoutUntil.get(cible.id)) {
+                        return message.reply("Cette personne n'a pas de timeout actif venant de la roulette.");
+                    }
+                    rouletteTimeoutUntil.delete(cible.id);
+                    await cible.timeout(null).catch(() => {});
+                    break;
+                default:
+                    return message.reply("Nom inconnu. Options : `couronne`, `pseudo-lock`, `redirect`, `cooldown-zero`, `timeout`.");
+            }
+            return message.reply(`\`${nom}\` a été retiré de <@${cible.id}>.`);
+        }
+    }
 
     if (isStopTrigger) {
         const ancien = mutedChannels.get(message.channel.id);
@@ -4726,9 +4859,12 @@ if (response?.needsWanted) {
                 { name: '\ud83d\udd2e !horoscope [ID_salon]', value: 'Forcer l\'envoi de l\'horoscope dans un salon sp\u00e9cifique.', inline: false },
                 { name: '\u23f0 !rappel [ID] Xmin/h [message]', value: 'Envoyer un rappel \u00e0 un membre sp\u00e9cifique par son ID.', inline: false },
                 { name: '🚨 !wanted set @Membre/pseudo/ID', value: 'Forcer le.a criminel.le du jour.', inline: false },
-                { name: '\ud83d\udd04 !wanted reset', value: 'G\u00e9n\u00e9rer un nouveau criminel du jour.', inline: false }
+                { name: '🔄 !wanted reset', value: 'Générer un nouveau criminel du jour.', inline: false }
             );
-        return message.reply({ embeds: [embed] });
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`helpx_roulette_${message.author.id}`).setLabel('🎰 Commandes Roulette').setStyle(ButtonStyle.Secondary)
+        );
+        return message.reply({ embeds: [embed], components: [row] });
     }
 
     /// !prune
@@ -6308,6 +6444,25 @@ return interaction.update({ embeds: [embed], components: rows });
     // BOUTONS ROULETTE
     // =========================
 
+    if (interaction.isButton() && interaction.customId.startsWith('helpx_roulette_')) {
+        const authorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+        }
+        const embed = new EmbedBuilder()
+            .setColor(0x503649)
+            .setTitle('🎰 Commandes admin roulette')
+            .setDescription(
+                "`!reroll [membre]` — réinitialise le cooldown d'un.e membre\n" +
+                "`!bonusforce`/`!malusforce [ID bonus/malus] [membre]` — impose un bonus/malus à un.e membre\n" +
+                "`!rouletteforce`/`!rltforce` — affiche les ID des bonus/malus\n" +
+                "`!resetroulettestate`/`!resetrlt [membre]` — reset tout l'état roulette d'un.e membre\n" +
+                "`!removestatetable [membre]` — affiche les bonus/malus actifs sur un.e membre\n" +
+                "`!removestate [membre] [nom]` — retire un seul effet actif d'un.e membre"
+            );
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+
     if (interaction.isButton() && interaction.customId.startsWith('roulette_probas_pres_')) {
         const authorId = interaction.customId.split('_')[3];
         if (interaction.user.id !== authorId) {
@@ -6340,7 +6495,12 @@ return interaction.update({ embeds: [embed], components: rows });
         }
         const resultat = await tirerEtConstruireResultatRoulette(authorId, interaction.guild, interaction.channel);
         if (resultat.cooldown) {
-            return interaction.reply({ content: `⏳ Tu dois encore attendre **${resultat.reste} min** avant de retenter ta chance.`, ephemeral: true });
+                const avertissement = await message.reply(`⏳ Attends la fin du cooldown avant de relancer un tirage ! Il te reste **${resultat.reste} min**.`);
+                setTimeout(() => {
+                    avertissement.delete().catch(() => {});
+                    message.delete().catch(() => {});
+                }, 5000);
+                return;
         }
         await interaction.update({ embeds: resultat.embeds, components: resultat.components });
         memoriserResultatRoulette(interaction.message.id, resultat.embeds[0]);
