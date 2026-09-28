@@ -1486,53 +1486,54 @@ function buildRouletteResultEmbed(outcomeId, texte) {
 }
 
 function buildRoulettePaytableEmbed() {
+    const bonus = [
+        '**1/10** (10%) — PAPAYOU.mp3',
+        '**1/17** (5.88%) — Tirage à volonté pendant 30s',
+        '**1/35** (2.86%) — Tirage à volonté pendant 1min30',
+        '**1/50** (2%) — Une couronne 👑 sous tes messages pendant 12h',
+        '**1/85** (1.18%) — 3 prochains malus redirigés vers un.e autre membre',
+        '**1/170** (0.59%) — Rôle de Regaïen.ne supérieur',
+        '**1/420** (0.24%) — Rôle de Regaïen·ne légendraire',
+        '**1/850** (0.12%) — Choix du jeu du prochain stream Twitch - jeu court uniquement',
+        '**1/1700** (0.059%) — Ajoute une commande Cacabot de ton choix',
+        '**1/3400** (0.029%) — 5€ de la YouTube Money d\'Epsys',
+        '**1/5000** (0.020%) — 1 photo disgracieuse d\'Epsys signée et envoyée par la Poste',
+        '**1/7000** (0.014%) — Rôle spécial d\'**Élu·e de la Roulette**',
+        '**1/8500** (0.012%) — Pseudo crédité sous chaque vidéo YouTube',
+        '**1/12500** (0.008%) — Goodies d\'Epsys gratuit au choix: T-Shirt/Mug/Lot de 5pin\'s',
+        '**1/17000** (0.006%) — Petit déj apporté par Epsys en maid dress'
+    ];
+    const malus = [
+        '**1/10** (10%) — Mute de 3 minutes',
+        '**1/17** (5.88%) — Mute de 5 minutes',
+        '**1/35** (2.86%) — Mute de 20 minutes',
+        '**1/50** (2%) — Exclusion de 1 heure',
+        '**1/55** (1.82%) — Doit finir chaque message par UwU pendant 24h',
+        '**1/75** (1.33%) — Ne peut plus utiliser une lettre au hasard pendant 12h',
+        '**1/85** (1.18%) — Exclusion de 1 jour',
+        '**1/170** (0.59%) — Pseudo horrible changé de force, verrouillé pendant 1 semaine',
+        '**1/350** (0.29%) — Exclusion de 1 semaine',
+        '**1/500** (0.2%) — Pseudo horrible changé de force, verrouillé pendant 1 mois',
+        '**1/3400** (0.029%) — Ban définitif (révocable si besoin)'
+    ];
+    const special = [
+        '**1/125** (0.8%) — Vote public : tirage à volonté 3min (immunité) ou exclusion 1 jour, décidé en 2h'
+    ];
+    const rien = [
+        `**1/2** (${ROULETTE_TAUX_ECHEC * 100}%) — Rien du tout, tirage raté`
+    ];
+
+    const section = (titre, lignes) => `__**${titre}**__\n${lignes.join('\n')}`;
+
     return new EmbedBuilder()
         .setColor(0xffd20a)
         .setTitle('🎰 Probabilités')
-        .addFields(
-            {
-                name: '🎉 BONUS', value: [
-                    '**1/10** (10%) — PAPAYOU.mp3',
-                    '**1/17** (5.88%) — Tirage à volonté pendant 30s',
-                    '**1/35** (2.86%) — Tirage à volonté pendant 1min30',
-                    '**1/50** (2%) — Une couronne 👑 sous tes messages pendant 12h',
-                    '**1/85** (1.18%) — 3 prochains malus redirigés vers un.e autre membre',
-                    '**1/170** (0.59%) — Rôle de Regaïen.ne supérieur',
-                    '**1/420** (0.24%) — Rôle de Regaïen·ne légendraire',
-                    '**1/850** (0.12%) — Choix du jeu du prochain stream Twitch - jeu court uniquement',
-                    '**1/1700** (0.059%) — Ajoute une commande Cacabot de ton choix',
-                    '**1/3400** (0.029%) — 5€ de la YouTube Money d\'Epsys',
-                    '**1/5000** (0.020%) — 1 photo disgracieuse d\'Epsys signée et envoyée par la Poste',
-                    '**1/7000** (0.014%) — Rôle spécial d\'**Élu·e de la Roulette**',
-                    '**1/8500** (0.012%) — Pseudo crédité sous chaque vidéo YouTube',
-                    '**1/12500** (0.008%) — Goodies d\'Epsys gratuit au choix: T-Shirt/Mug/Lot de 5pin\'s',
-                    '**1/17000** (0.006%) — Petit déj apporté par Epsys en maid dress'
-                ].join('\n')
-            },
-            {
-                name: '💀 MALUS', value: [
-                    '**1/10** (10%) — Mute de 3 minutes',
-                    '**1/17** (5.88%) — Mute de 5 minutes',
-                    '**1/35** (2.86%) — Mute de 20 minutes',
-                    '**1/50** (2%) — Exclusion de 1 heure',
-                    '**1/55** (1.82%) — Doit finir chaque message par UwU pendant 24h',
-                    '**1/75** (1.33%) — Ne peut plus utiliser une lettre au hasard pendant 12h',
-                    '**1/85** (1.18%) — Exclusion de 1 jour',
-                    '**1/170** (0.59%) — Pseudo horrible changé de force, verrouillé pendant 1 semaine',
-                    '**1/350** (0.29%) — Exclusion de 1 semaine',
-                    '**1/500** (0.2%) — Pseudo horrible changé de force, verrouillé pendant 1 mois',
-                    '**1/3400** (0.029%) — Ban définitif (révocable si besoin)'
-                ].join('\n')
-            },
-            {
-                name: '🗳️ SPÉCIAL', value:
-                    '**1/125** (0.8%) — Vote public : tirage à volonté 3min (immunité) ou exclusion 1 jour, décidé en 2h'
-            },
-            {
-                name: '😶 RIEN', value:
-                    `**1/2** (${ROULETTE_TAUX_ECHEC * 100}%) — Rien du tout, tirage raté`
-            }
-        );
+        .setDescription([
+            section('🎉 BONUS', bonus),
+            section('💀 MALUS', malus),
+            section('🗳️ SPÉCIAL', special),
+            section('😶 RIEN', rien)
+        ].join('\n\n'));
 }
 
 const mutedChannels = new Map();
