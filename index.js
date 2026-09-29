@@ -74,6 +74,15 @@ async function saveAll() {
 
 setInterval(() => saveAll(), 60 * 60 * 1000);
 
+let saveEnAttente = null;
+function demanderSauvegarde() {
+    if (saveEnAttente) return;
+    saveEnAttente = setTimeout(async () => {
+        saveEnAttente = null;
+        await saveAll().catch(() => {});
+    }, 10000);
+}
+
 process.on('SIGTERM', async () => {
     console.log('🛑 SIGTERM reçu, sauvegarde avant arrêt...');
     await saveAll();
