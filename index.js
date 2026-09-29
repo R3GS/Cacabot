@@ -1844,12 +1844,23 @@ async function demarrerVoteRoulette(msg, membre) {
 
 function buildRoulettePresentationEmbed(authorId) {
     const jackpot = authorId ? (rouletteJackpotBonus.get(authorId) || 0) : 0;
-    const ligneJackpot = jackpot > 0 ? `\n🎰 Chance de bonus boostée de **+${Math.round(jackpot * 100)}%** grâce à tes derniers échecs !` : '';
-    return new EmbedBuilder()
+
+    const embed = new EmbedBuilder()
         .setColor(0xffd20a)
         .setTitle('🎰 Roulette')
-        .setDescription("Tente ta chance : bonus rares, malus douloureux, ou rien du tout.\nCooldown : **15 min** entre deux tentatives.\n\nUtilise `!roulettestate` | `!rltstate` [membre] pour voir les bonus/malus actifs d'un·e membre\nUtilise `!roulettestats` | `!rltstats` [membre] pour voir les stats d'un·e membre" + ligneJackpot)
-        .setFooter({ text: 'Astuce : Envoie !roulette go ou !rlt go pour faire un tirage sans passer par cet écran !' });
+        .setDescription("Tente ta chance : bonus rares, malus douloureux, ou rien du tout.")
+        .addFields(
+            { name: '⏳ Cooldown', value: '**15 min** entre deux tentatives', inline: true },
+            { name: '📊 Voir un·e membre', value: '`!roulettestate` | `!rltstate` [membre]', inline: false },
+            { name: '📈 Voir les stats', value: '`!roulettestats` | `!rltstats` [membre]', inline: false }
+        );
+
+    if (jackpot > 0) {
+        embed.addFields({ name: '🎰 Bonus boosté', value: `Chance de bonus augmentée de **+${Math.round(jackpot * 100)}%** grâce à tes derniers échecs !`, inline: false });
+    }
+
+    embed.setFooter({ text: 'Astuce : Envoie !roulette go ou !rlt go pour faire un tirage sans passer par cet écran !' });
+    return embed;
 }
 
 function buildRouletteStateEmbed(cible) {
