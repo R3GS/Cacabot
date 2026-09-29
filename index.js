@@ -4437,6 +4437,7 @@ if (response?.needsRouletteStats) {
     return message.reply({ embeds: [buildRouletteStatsEmbed(cible)] });
 }
 
+
     // !roulette
     if (response?.needsRoulette) {
         if (response.direct) {
