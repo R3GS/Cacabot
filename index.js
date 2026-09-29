@@ -1159,7 +1159,7 @@ const ROULETTE_JACKPOT_MAX = 0.5;        // plafond à 50%
 const ROULETTE_HOF_CHANNEL_ID = '1554331383361577010';
 const ROULETTE_HOF_SEUIL = 0.0005; // 0,05%
 
-const ROULETTE_EMOJIS_ALEATOIRES = ['😂','😍','🔥','💀','🎉','😭','👀','🤡','😈','🍀','✨','🐸','🦆','🥶','😳'];
+const ROULETTE_EMOJIS_ALEATOIRES = ['😂','😍','🔥','💀','🎉','😭','👀','🤡','😏','👁️👄👁️','🫦','😡',':jerma:'];
 function finitParUnEmoji(texte) {
     return /\p{Extended_Pictographic}\uFE0F?$/u.test(texte.trim());
 }
