@@ -542,6 +542,10 @@ function getResponse(raw) {
         return { needsRouletteState: true };
     }
 
+    if (command === "!roulettestats" || command === "!rltstats") {
+        return { needsRouletteStats: true };
+    }
+
     // =========================
     //         !CHOIX
     // =========================
@@ -1139,6 +1143,12 @@ const rouletteCooldown45Charges = new Map();   // userId -> nombre de tirages re
 const rouletteCooldownCourtCharges = new Map();   // userId -> nombre de tirages restants à 5min
 const rouletteBouclierActif = new Map();       // userId -> true (consommé au prochain malus)
 const rouletteRedirectChoixCible = new Map();  // userId -> id du membre choisi pour la prochaine redirection
+const rouletteJackpotBonus = new Map(); // userId -> % cumulé (0 à 1) de chance de bonus grâce aux "rien" d'affilée
+const rouletteStats = new Map();        // userId -> { tirages, bonus, malus, rien, plusGrosGain: {nom, proba}|null, serieActuelle, pireSerie }
+const ROULETTE_JACKPOT_INCREMENT = 0.01; // +1% par "rien"
+const ROULETTE_JACKPOT_MAX = 0.5;        // plafond à 50%
+const ROULETTE_HOF_CHANNEL_ID = '1554331383361577010';
+const ROULETTE_HOF_SEUIL = 0.00005; // 0,005%
 
 const ROULETTE_EMOJIS_ALEATOIRES = ['😂','😍','🔥','💀','🎉','😭','👀','🤡','😈','🍀','✨','🐸','🦆','🥶','😳'];
 function finitParUnEmoji(texte) {
@@ -1415,14 +1425,27 @@ function tirerRoulette(userId) {
         const bonus = ROULETTE_TABLE.filter(e => e.type === 'bonus');
         outcomeId = piocherRoulette(bonus, bonus.reduce((s, e) => s + e.poids, 0), bonus[bonus.length - 1].id);
     } else {
-        const total = ROULETTE_TABLE.reduce((s, e) => s + e.poids, 0);
-        outcomeId = piocherRoulette(ROULETTE_TABLE, total / (1 - ROULETTE_TAUX_ECHEC), 'aucun-resultat');
+        const jackpot = rouletteJackpotBonus.get(userId) || 0;
+        if (jackpot > 0 && Math.random() < jackpot) {
+            const bonus = ROULETTE_TABLE.filter(e => e.type === 'bonus');
+            outcomeId = piocherRoulette(bonus, bonus.reduce((s, e) => s + e.poids, 0), bonus[bonus.length - 1].id);
+        } else {
+            const total = ROULETTE_TABLE.reduce((s, e) => s + e.poids, 0);
+            outcomeId = piocherRoulette(ROULETTE_TABLE, total / (1 - ROULETTE_TAUX_ECHEC), 'aucun-resultat');
+        }
     }
 
     const type = ROULETTE_TABLE.find(e => e.id === outcomeId)?.type;
-    if (type === 'bonus') roulettePity.delete(userId);
-    else if (type === 'malus') { pity.malus++; roulettePity.set(userId, pity); }
-    else if (outcomeId === 'aucun-resultat') { pity.nuls++; roulettePity.set(userId, pity); }
+    if (type === 'bonus') {
+        roulettePity.delete(userId);
+        rouletteJackpotBonus.delete(userId);
+    } else if (type === 'malus') {
+        pity.malus++; roulettePity.set(userId, pity);
+    } else if (outcomeId === 'aucun-resultat') {
+        pity.nuls++; roulettePity.set(userId, pity);
+        const actuel = rouletteJackpotBonus.get(userId) || 0;
+        rouletteJackpotBonus.set(userId, Math.min(ROULETTE_JACKPOT_MAX, actuel + ROULETTE_JACKPOT_INCREMENT));
+    }
     return outcomeId;
 }
 
@@ -1443,6 +1466,8 @@ const ROULETTE_ETATS = {
     cooldownCourt:      rouletteCooldownCourtCharges,
     bouclier:        rouletteBouclierActif,
     redirectChoixCible: rouletteRedirectChoixCible,
+    jackpot:            rouletteJackpotBonus,
+    stats:              rouletteStats,
     immunite:        rouletteImmuniteUntil,
     timeoutRoulette: rouletteTimeoutUntil
 };
@@ -1808,11 +1833,13 @@ async function demarrerVoteRoulette(msg, membre) {
     }, 2 * 60 * 60 * 1000);
 }
 
-function buildRoulettePresentationEmbed() {
+function buildRoulettePresentationEmbed(authorId) {
+    const jackpot = authorId ? (rouletteJackpotBonus.get(authorId) || 0) : 0;
+    const ligneJackpot = jackpot > 0 ? `\n🎰 Chance de bonus boostée de **+${Math.round(jackpot * 100)}%** grâce à tes derniers échecs !` : '';
     return new EmbedBuilder()
         .setColor(0xffd20a)
         .setTitle('🎰 Roulette')
-.setDescription("Tente ta chance : bonus rares, malus douloureux, ou rien du tout.\nCooldown : **15 min** entre deux tentatives.\n\nUtilise `!roulettestate` | `!rltstate` [membre] pour voir les bonus/malus actifs d'un·e membre")
+        .setDescription("Tente ta chance : bonus rares, malus douloureux, ou rien du tout.\nCooldown : **15 min** entre deux tentatives.\n\nUtilise `!roulettestate` | `!rltstate` [membre] pour voir les bonus/malus actifs d'un·e membre\nUtilise `!roulettestats` | `!rltstats` [membre] pour voir les stats d'un·e membre" + ligneJackpot)
         .setFooter({ text: 'Astuce : Envoie !roulette go ou !rlt go pour faire un tirage sans passer par cet écran !' });
 }
 
@@ -1839,6 +1866,59 @@ function buildRouletteStateEmbed(cible) {
         .setColor(0xffd20a)
         .setTitle(`État roulette de ${cible.displayName}`)
         .setDescription(actifs.length ? actifs.join('\n') : "Rien d'actif en ce moment.");
+}
+
+function buildRouletteStatsEmbed(cible) {
+    const stats = rouletteStats.get(cible.id) ?? { tirages: 0, bonus: 0, malus: 0, rien: 0, plusGrosGain: null, pireSerie: 0 };
+    const gain = stats.plusGrosGain
+        ? `**${stats.plusGrosGain.nom}** (${probaAffichee(stats.plusGrosGain.proba).pct}%)`
+        : 'Aucun bonus encore';
+
+    return new EmbedBuilder()
+        .setColor(0xffd20a)
+        .setTitle(`📊 Stats roulette de ${cible.displayName}`)
+        .setDescription(
+            `🎲 Tirages : **${stats.tirages}**\n` +
+            `🎉 Bonus : **${stats.bonus}**\n` +
+            `💀 Malus : **${stats.malus}**\n` +
+            `😶 Rien : **${stats.rien}**\n` +
+            `🏆 Plus gros gain : ${gain}\n` +
+            `📉 Plus longue série de malchance : **${stats.pireSerie}**`
+        );
+}
+
+function updateRouletteStats(userId, outcomeId, entry) {
+    const stats = rouletteStats.get(userId) ?? { tirages: 0, bonus: 0, malus: 0, rien: 0, plusGrosGain: null, serieActuelle: 0, pireSerie: 0 };
+    stats.tirages++;
+    if (entry?.type === 'bonus') {
+        stats.bonus++;
+        stats.serieActuelle = 0;
+        const proba = probaReelle(entry);
+        if (!stats.plusGrosGain || proba < stats.plusGrosGain.proba) stats.plusGrosGain = { nom: entry.nom, proba };
+    } else if (entry?.type === 'malus') {
+        stats.malus++;
+        stats.serieActuelle++;
+        stats.pireSerie = Math.max(stats.pireSerie, stats.serieActuelle);
+    } else if (outcomeId === 'aucun-resultat') {
+        stats.rien++;
+        stats.serieActuelle++;
+        stats.pireSerie = Math.max(stats.pireSerie, stats.serieActuelle);
+    }
+    rouletteStats.set(userId, stats);
+}
+
+async function envoyerHallOfFame(guild, auteurNom, entry) {
+    if (!entry) return;
+    const proba = probaReelle(entry);
+    if (proba >= ROULETTE_HOF_SEUIL) return;
+    const salon = guild.channels.cache.get(ROULETTE_HOF_CHANNEL_ID);
+    if (!salon) return;
+    const { n, pct } = probaAffichee(proba);
+    const couleur = entry.type === 'bonus' ? 0x57f287 : entry.type === 'malus' ? 0xed4245 : 0xffd20a;
+    const embed = new EmbedBuilder()
+        .setColor(couleur)
+        .setDescription(`🎉 **${auteurNom}** vient de décrocher **${entry.nom}** ! (1/${n} | ${pct}%)`);
+    await salon.send({ embeds: [embed] }).catch(() => {});
 }
 
 async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
@@ -1868,7 +1948,9 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
     const auteurNom = membre?.displayName ?? 'Quelqu\'un';
     const outcomeId = tirerRoulette(authorId);
     const failIndex = outcomeId === 'aucun-resultat' ? Math.floor(Math.random() * ROULETTE_FAILS.length) : 0;
-
+    const entryTiree = ROULETTE_TABLE.find(e => e.id === outcomeId);
+    updateRouletteStats(authorId, outcomeId, entryTiree);
+    envoyerHallOfFame(guild, auteurNom, entryTiree).catch(() => {});
     let cible = membre;
     let cibleNom = auteurNom;
     let prefixeRedirect = '';
@@ -4331,6 +4413,27 @@ if (response?.needsRouletteState) {
     return message.reply({ embeds: [buildRouletteStateEmbed(cible)] });
 }
 
+if (response?.needsRouletteStats) {
+    const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+    let cible = message.mentions.members.first();
+    if (!cible) {
+        if (!query) {
+            cible = message.member;
+        } else {
+            const result = findMemberByName(message.guild, query);
+            if (result.multiple) {
+                return askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                    const membre = message.guild.members.cache.get(user.id);
+                    if (membre) message.reply({ embeds: [buildRouletteStatsEmbed(membre)] });
+                });
+            }
+            cible = result.found;
+        }
+    }
+    if (!cible) return message.reply("Membre introuvable.");
+    return message.reply({ embeds: [buildRouletteStatsEmbed(cible)] });
+}
+
     // !roulette
     if (response?.needsRoulette) {
         if (response.direct) {
@@ -4356,7 +4459,7 @@ if (response?.needsRouletteState) {
             }
             return envoye;
         }
-        const embed = buildRoulettePresentationEmbed();
+        const embed = buildRoulettePresentationEmbed(message.author.id);
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`roulette_probas_pres_${message.author.id}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`roulette_tenter_${message.author.id}`).setLabel('🍀 Tenter sa chance').setStyle(ButtonStyle.Primary)
@@ -6969,7 +7072,7 @@ return interaction.update({ embeds: [embed], components: rows });
         if (interaction.user.id !== authorId) {
             return interaction.reply({ content: "C'est pas ton tirage, tape `!roulette` toi-même 😌", ephemeral: true });
         }
-        const embed = buildRoulettePresentationEmbed();
+        const embed = buildRoulettePresentationEmbed(message.author.id);
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`roulette_probas_pres_${authorId}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`roulette_tenter_${authorId}`).setLabel('🍀 Tenter sa chance').setStyle(ButtonStyle.Primary)
