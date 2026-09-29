@@ -1281,6 +1281,97 @@ const ROULETTE_TABLE = [
 // Généré depuis la table : plus de doublon à maintenir
 const ROULETTE_NOMS = Object.fromEntries(ROULETTE_TABLE.map(e => [e.id, e.nom]));
 
+const ROULETTE_ID_VERS_SLUG = Object.fromEntries(Object.entries(ROULETTE_NOMS_COMMANDES).map(([slug, id]) => [id, slug]));
+
+const ROULETTE_EMOJIS_PAR_ID = {
+    'bonus-epsys-petitdej': '🍳', 'bonus-epsys-goodies': '🎁', 'bonus-youtube-credit': '📹',
+    'bonus-elu-roulette': '🎖️', 'bonus-epsys-photo': '📸', 'bonus-epsys-5e': '💶',
+    'malus-ban': '☠️', 'bonus-commande-perso': '🛠️', 'bonus-twitch-jeu': '🎮',
+    'malus-pseudo-lock-mois': '🔒', 'bonus-legendaire': '👑', 'malus-exclu-semaine': '🚫',
+    'bonus-role-superieur': '🏆', 'malus-pseudo-lock-semaine': '🔐', 'special-vote-immunite-exclusion': '🗳️',
+    'bonus-redirect-malus': '😈', 'malus-exclu-jour': '🚫', 'malus-lettre-interdite': '🔤',
+    'malus-uwu-24h': '😳', 'bonus-couronne': '👑', 'malus-exclu-heure': '🚫',
+    'bonus-cooldown-zero-90s': '⚡', 'malus-timeout-20min': '🔇', 'bonus-cooldown-zero-30s': '⚡',
+    'malus-timeout-5min': '🔇', 'bonus-gif-ou-audio': '🎉', 'malus-timeout-3min': '🔇',
+    'bonus-bouclier': '🛡️', 'bonus-redirect-choix': '🎯', 'bonus-pseudo-choix': '✏️',
+    'bonus-epingle': '📌', 'malus-emoji': '😀', 'malus-leet': '🤖', 'malus-caps': '🔠',
+    'malus-emoji-only': '🙂', 'malus-censure': '▇', 'malus-mots-melanges': '🔀',
+    'malus-lettres-melangees': '🔡', 'malus-limite-100': '✂️', 'malus-limite-30': '✂️',
+    'special-tournee-generale': '🥂', 'malus-cooldown-45': '⏳', 'malus-prime': '💥'
+};
+function buildHelpxPresentationEmbed() {
+    return new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle('👑 Commandes Epsys-Only')
+        .setDescription("Commandes exclusivement accessibles par <@436218312574107658>.\n\nChoisis une catégorie dans le menu ci-dessous 👇");
+}
+
+function buildHelpxMenu(authorId) {
+    return new StringSelectMenuBuilder()
+        .setCustomId(`helpx_menu_${authorId}`)
+        .setPlaceholder('Choisis une catégorie')
+        .addOptions(
+            { label: 'Cacabot', emoji: '🤖', value: 'cacabot' },
+            { label: 'Générateurs', emoji: '🔮', value: 'generateurs' },
+            { label: 'Pour les autres', emoji: '👥', value: 'autres' },
+            { label: 'Roulette', emoji: '🎰', value: 'roulette' }
+        );
+}
+
+function buildHelpxCategorieEmbed(categorie) {
+    const embed = new EmbedBuilder().setColor(0x5865f2);
+    if (categorie === 'cacabot') {
+        return embed.setTitle('🤖 Commandes liées à Cacabot')
+            .addFields(
+                { name: '📣 **!say [ID_salon] [message]**', value: 'Envoyer un message dans un salon au nom de Cacabot.' },
+                { name: '💾 **!save**', value: 'Forcer une sauvegarde immédiate sur JSONBin.' },
+                { name: '💾 **!lastsave**', value: 'Afficher la date et l\'heure de la dernière sauvegarde JSONBin.' }
+            );
+    }
+    if (categorie === 'generateurs') {
+        return embed.setTitle('🔮 Commandes génératrices')
+            .addFields(
+                { name: '🔮 **!horoscope [ID_salon]**', value: 'Forcer l\'envoi de l\'horoscope dans un salon spécifique.' },
+                { name: '🚨 **!wanted set @Membre/pseudo/ID**', value: 'Forcer le.a criminel.le du jour.' },
+                { name: '🔄 **!wanted reset**', value: 'Générer un nouveau criminel du jour.' }
+            );
+    }
+    if (categorie === 'autres') {
+        return embed.setTitle('👥 Commandes pour les autres membres')
+            .addFields(
+                { name: '⏰ **!rappel [ID] Xmin/h [message]**', value: 'Envoyer un rappel à un membre spécifique par son ID.' },
+                { name: '📝 **!setmessages @Membre**', value: 'Définir manuellement le nombre de messages d\'un membre.' }
+            );
+    }
+    if (categorie === 'roulette') {
+        return embed.setColor(0xffd20a).setTitle('🎰 Commandes roulette')
+            .addFields(
+                { name: '🔄 **!reroll [membre]**', value: 'Réinitialise le cooldown d\'un·e membre.' },
+                { name: '🎉/💀 **!bonusforce / !malusforce [id] [membre]**', value: 'Impose un bonus ou un malus à un·e membre.' },
+                { name: '📋 **!bonusID / !malusID**', value: 'Affiche tous les identifiants de bonus/malus/spécial, triés par bouton.' },
+                { name: '♻️ **!resetroulettestate / !resetrlt [membre]**', value: 'Réinitialise tout l\'état roulette d\'un·e membre.' },
+                { name: '🗑️ **!removestate [membre] [nom]**', value: 'Retire un seul effet actif d\'un·e membre.' }
+            );
+    }
+    return embed.setTitle('❓ Inconnu').setDescription('Catégorie introuvable.');
+}
+
+function buildRouletteTypeEmbed(type) {
+    const titres = { bonus: '🎉 Bonus', malus: '💀 Malus', special: '✨ Spéciaux' };
+    const lignes = ROULETTE_TABLE
+        .filter(e => e.type === type)
+        .sort((a, b) => b.poids - a.poids)
+        .map(e => {
+            const emoji = ROULETTE_EMOJIS_PAR_ID[e.id] ?? '❓';
+            const slug = ROULETTE_ID_VERS_SLUG[e.id];
+            return slug ? `${emoji} **${e.nom}** — \`${slug}\`` : `${emoji} **${e.nom}**`;
+        });
+    return new EmbedBuilder()
+        .setColor(0xffd20a)
+        .setTitle(`${titres[type]} — !roulette`)
+        .setDescription(lignes.join('\n'));
+}
+
 // --- Probas réelles et affichage (toujours calculés depuis la table) ---
 function probaReelle(entry) {
     const total = ROULETTE_TABLE.reduce((s, e) => s + e.poids, 0);
@@ -3049,8 +3140,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     // COMMANDES ADMIN ROULETTE (Epsys uniquement)
     // =========================
     const rouletteAdminCommand = message.content.trim().split(" ")[0]?.toLowerCase();
-    if (['!reroll', '!bonusforce', '!malusforce', '!rouletteforce', '!rltforce', '!resetroulettestate', '!resetrlt', '!removestate'].includes(rouletteAdminCommand)) {
-        if (message.author.id !== EPSYS_ID) {
+    if (['!reroll', '!bonusforce', '!malusforce', '!bonusID', '!malusID', '!resetroulettestate', '!resetrlt', '!removestate'].includes(rouletteAdminCommand)) {        if (message.author.id !== EPSYS_ID) {
             return message.reply("Cette commande est réservée à Epsys.");
         }
 
@@ -3065,25 +3155,22 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
             return message.reply(`Le cooldown de <@${cible.id}> a été réinitialisé ! ✅`);
         }
 
-        if (rouletteAdminCommand === '!rouletteforce' || rouletteAdminCommand === '!rltforce') {
-            const entrees = Object.entries(ROULETTE_NOMS_COMMANDES).map(([slug, id]) => `\`${slug}\` → \`${id}\``);
-            const moitie = Math.ceil(entrees.length / 2);
-            const embed = new EmbedBuilder()
-                .setColor(0xffd20a)
-                .setTitle('🎰 Commandes admin roulette')
-                .setDescription("`!bonusforce [nom] [membre]` / `!malusforce [nom] [membre]` — impose un résultat.\nExemple : `!bonusforce couronne @Sasha`\n\n`!removestate [membre] [nom]` accepte : `couronne`, `pseudo-lock`, `redirect`, `cooldown-zero`, `timeout`")
-                .addFields(
-                    { name: 'Noms disponibles (bonusforce/malusforce)', value: entrees.slice(0, moitie).join('\n') },
-                    { name: '\u200b', value: entrees.slice(moitie).join('\n') }
-                );
-            return message.reply({ embeds: [embed] });
+        if (rouletteAdminCommand === '!bonusID' || rouletteAdminCommand === '!malusID') {
+            const embed = buildRouletteTypeEmbed('bonus')
+                .setDescription("`!bonusforce [id] [membre]` / `!malusforce [id] [membre]` — impose un résultat.\nExemple : `!bonusforce couronne @Sasha`\n\n" + buildRouletteTypeEmbed('bonus').data.description);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`roulette_id_bonus_${message.author.id}`).setLabel('🎉 Bonus').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`roulette_id_malus_${message.author.id}`).setLabel('💀 Malus').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId(`roulette_id_special_${message.author.id}`).setLabel('✨ Spécial').setStyle(ButtonStyle.Secondary)
+            );
+            return message.reply({ embeds: [embed], components: [row] });
         }
 
         if (rouletteAdminCommand === '!bonusforce' || rouletteAdminCommand === '!malusforce') {
             const nom = argsBruts[0]?.toLowerCase();
             const query = argsBruts.slice(1).join(" ");
             const outcomeId = ROULETTE_NOMS_COMMANDES[nom];
-            if (!outcomeId) return message.reply(`Nom inconnu. Fais \`!rouletteforce\` pour voir la liste.`);
+            if (!outcomeId) return message.reply(`Nom inconnu. Fais \`!bonusID\` pour voir la liste.`);
             const attendBonus = rouletteAdminCommand === '!bonusforce';
             const estSpecial = outcomeId.startsWith('special-');
             if (!estSpecial && attendBonus && !outcomeId.startsWith('bonus-')) return message.reply("Ce nom correspond à un malus, pas un bonus. Utilise `!malusforce`.");
@@ -5227,23 +5314,8 @@ if (response?.needsRouletteState) {
         if (message.author.id !== '436218312574107658') {
             return message.reply("Tu n'es pas autoris\u00e9(e) \u00e0 faire cette commande.");
         }
-        const embed = new EmbedBuilder()
-            .setColor(0x5865f2)
-            .setTitle('\ud83d\udc51 Commandes Epsys-Only')
-            .setDescription('Commandes exclusivement accessibles par <@436218312574107658>.')
-            .addFields(
-                { name: '\ud83d\udcdd !setmessages @Membre', value: 'D\u00e9finir manuellement le nombre de messages d\'un membre.', inline: false },
-                { name: '\ud83d\udce3 !say [ID_salon] [message]', value: 'Envoyer un message dans un salon au nom de Cacabot.', inline: false },
-                { name: '\ud83d\udcbe !save', value: 'Forcer une sauvegarde imm\u00e9diate sur JSONBin.', inline: false },
-                { name: '\ud83d\udcbe !lastsave', value: 'Afficher la date et l\'heure de la derni\u00e8re sauvegarde JSONBin.', inline: false },
-                { name: '\ud83d\udd2e !horoscope [ID_salon]', value: 'Forcer l\'envoi de l\'horoscope dans un salon sp\u00e9cifique.', inline: false },
-                { name: '\u23f0 !rappel [ID] Xmin/h [message]', value: 'Envoyer un rappel \u00e0 un membre sp\u00e9cifique par son ID.', inline: false },
-                { name: '🚨 !wanted set @Membre/pseudo/ID', value: 'Forcer le.a criminel.le du jour.', inline: false },
-                { name: '🔄 !wanted reset', value: 'Générer un nouveau criminel du jour.', inline: false }
-            );
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`helpx_roulette_${message.author.id}`).setLabel('🎰 Commandes Roulette').setStyle(ButtonStyle.Secondary)
-        );
+        const embed = buildHelpxPresentationEmbed();
+        const row = new ActionRowBuilder().addComponents(buildHelpxMenu(message.author.id));
         return message.reply({ embeds: [embed], components: [row] });
     }
 
@@ -6823,6 +6895,26 @@ return interaction.update({ embeds: [embed], components: rows });
     // =========================
     // BOUTONS ROULETTE
     // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('roulette_id_')) {
+        const parts = interaction.customId.split('_');
+        const type = parts[2];
+        const authorId = parts[3];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+        }
+        return interaction.update({ embeds: [buildRouletteTypeEmbed(type)] });
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('helpx_menu_')) {
+        const authorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+        }
+        const embed = buildHelpxCategorieEmbed(interaction.values[0]);
+        const row = new ActionRowBuilder().addComponents(buildHelpxMenu(authorId));
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
 
     if (interaction.isButton() && interaction.customId.startsWith('helpx_roulette_')) {
         const authorId = interaction.customId.split('_')[2];
