@@ -4442,13 +4442,9 @@ if (response?.needsRouletteStats) {
         if (response.direct) {
             const resultat = await tirerEtConstruireResultatRoulette(message.author.id, message.guild, message.channel);
             if (resultat.cooldown) {
-                const avertissement = await message.reply(`Attends la fin du cooldown avant de relancer un tirage ! Il te reste **${resultat.reste} minute${resultat.reste > 1 ? 's' : ''}**.`);
-                setTimeout(() => {
-                avertissement.delete().catch(() => {});
-                message.delete().catch(() => {});
-            }, 5000); // délai avant suppression, ajuste la valeur si tu veux laisser plus/moins de temps
-    return;
-}
+                await message.reply(`Attends la fin du cooldown avant de relancer un tirage ! Il te reste **${resultat.reste} minute${resultat.reste > 1 ? 's' : ''}**.`);
+                return;
+            }
             const envoye = await message.reply({ embeds: resultat.embeds, components: resultat.components });
             memoriserResultatRoulette(envoye.id, resultat.embeds[0]);
             if (resultat.attenteChoix) rouletteChoixEnAttente.add(envoye.id);
