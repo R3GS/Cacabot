@@ -1587,6 +1587,7 @@ async function demarrerVoteRoulette(msg, membre) {
                 await msg.reply(`✅ Le vote a tranché : **${membre.displayName}** gagne un tirage à volonté pendant 3 minutes !`);
             } else {
                 await membre.timeout(24 * 60 * 60 * 1000, 'Roulette - vote').catch(() => {});
+                rouletteTimeoutUntil.set(membre.id, Date.now() + 24 * 60 * 60 * 1000);
                 await msg.reply(`❌ Le vote a tranché : **${membre.displayName}** est exclu.e pendant 1 jour.`);
             }
         } catch (e) {}
@@ -1611,7 +1612,10 @@ function buildRouletteStateEmbed(cible) {
     if (rouletteImmuniteUntil.has(cible.id) && Date.now() < rouletteImmuniteUntil.get(cible.id)) actifs.push('🛡️ immunisé·e au prochain malus');
     if (rouletteUwuUntil.has(cible.id) && Date.now() < rouletteUwuUntil.get(cible.id)) actifs.push('😳 doit finir ses messages par UwU');
     if (rouletteLettreInterdite.has(cible.id) && Date.now() < rouletteLettreInterdite.get(cible.id).until) actifs.push(`🔤 lettre interdite : ${rouletteLettreInterdite.get(cible.id).lettre}`);
-
+    if (rouletteEmojiUntil.has(cible.id) && Date.now() < rouletteEmojiUntil.get(cible.id)) actifs.push('😀 doit finir ses messages par un emoji');
+    if ((rouletteCooldown45Charges.get(cible.id) || 0) > 0) actifs.push(`⏳ ${rouletteCooldown45Charges.get(cible.id)} tirage(s) à cooldown de 45 min`);
+    if (rouletteBouclierActif.has(cible.id)) actifs.push('🛡️ bouclier actif (prochain malus annulé)');
+    if (rouletteRedirectChoixCible.has(cible.id)) actifs.push('🎯 redirection de malus au choix en attente');
     return new EmbedBuilder()
         .setColor(0xffd20a)
         .setTitle(`État roulette de ${cible.displayName}`)
@@ -2983,6 +2987,13 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
             rouletteCouronneUntil.delete(cible.id);
             rouletteRedirectCharges.delete(cible.id);
             rouletteFreeRollUntil.delete(cible.id);
+            rouletteUwuUntil.delete(cible.id);
+            rouletteLettreInterdite.delete(cible.id);
+            rouletteEmojiUntil.delete(cible.id);
+            rouletteCooldown45Charges.delete(cible.id);
+            rouletteBouclierActif.delete(cible.id);
+            rouletteRedirectChoixCible.delete(cible.id);
+            rouletteImmuniteUntil.delete(cible.id);
 
             if (roulettePseudoLock.has(cible.id)) {
                 roulettePseudoLock.delete(cible.id);
@@ -3023,8 +3034,29 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
                     rouletteTimeoutUntil.delete(cible.id);
                     await cible.timeout(null).catch(() => {});
                     break;
+                case 'uwu':
+                    rouletteUwuUntil.delete(cible.id);
+                    break;
+                case 'lettre':
+                    rouletteLettreInterdite.delete(cible.id);
+                    break;
+                case 'emoji':
+                    rouletteEmojiUntil.delete(cible.id);
+                    break;
+                case 'cooldown45':
+                    rouletteCooldown45Charges.delete(cible.id);
+                    break;
+                case 'bouclier':
+                    rouletteBouclierActif.delete(cible.id);
+                    break;
+                case 'redirect-choix':
+                    rouletteRedirectChoixCible.delete(cible.id);
+                    break;
+                case 'immunite':
+                    rouletteImmuniteUntil.delete(cible.id);
+                    break;
                 default:
-                    return message.reply("Nom inconnu. Options : `couronne`, `pseudo-lock`, `redirect`, `cooldown-zero`, `timeout`.");
+                    return message.reply("Nom inconnu. Options : `couronne`, `pseudo-lock`, `redirect`, `redirect-choix`, `cooldown-zero`, `cooldown45`, `timeout`, `uwu`, `lettre`, `emoji`, `bouclier`, `immunite`.");
             }
             return message.reply(`\`${nom}\` a été retiré de <@${cible.id}>.`);
         }
