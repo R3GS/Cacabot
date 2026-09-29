@@ -7871,6 +7871,7 @@ return interaction.update({ embeds: [embed], components: rows });
 }
 });
 
+
 // =========================
 //         CONNEXION
 // =========================
