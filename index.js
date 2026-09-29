@@ -1851,7 +1851,7 @@ function buildRoulettePresentationEmbed(authorId) {
         .setDescription("Tente ta chance : bonus rares, malus douloureux, ou rien du tout.")
         .addFields(
             { name: '⏳ Cooldown', value: '**15 min** entre deux tentatives', inline: true },
-            { name: "📊 Voir l'état d'un·e membre', value: '`!roulettestate` | `!rltstate` [membre]", inline: false },
+            { name: "📊 Voir l'état d'un·e membre", value: '`!roulettestate` | `!rltstate` [membre]', inline: false },
             { name: '📈 Voir les stats', value: '`!roulettestats` | `!rltstats` [membre]', inline: false }
         );
 
