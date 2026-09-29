@@ -1912,13 +1912,16 @@ async function envoyerHallOfFame(guild, auteurNom, entry) {
     const proba = probaReelle(entry);
     if (proba >= ROULETTE_HOF_SEUIL) return;
     const salon = guild.channels.cache.get(ROULETTE_HOF_CHANNEL_ID);
-    if (!salon) return;
+    if (!salon) {
+        console.error(`[Hall of Fame] Salon ${ROULETTE_HOF_CHANNEL_ID} introuvable dans le cache de la guild ${guild.id}`);
+        return;
+    }
     const { n, pct } = probaAffichee(proba);
     const couleur = entry.type === 'bonus' ? 0x57f287 : entry.type === 'malus' ? 0xed4245 : 0xffd20a;
     const embed = new EmbedBuilder()
         .setColor(couleur)
         .setDescription(`🎉 **${auteurNom}** vient de décrocher **${entry.nom}** ! (1/${n} | ${pct}%)`);
-    await salon.send({ embeds: [embed] }).catch(() => {});
+    await salon.send({ embeds: [embed] }).catch(err => console.error('[Hall of Fame] Échec envoi :', err.message));
 }
 
 async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
