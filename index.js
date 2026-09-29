@@ -1740,7 +1740,6 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             });
             collector.on('collect', async (m) => {
                 await m.pin().catch(() => {});
-                message.channel.send(`📌 Message de **${auteurNom}** épinglé définitivement !`);
             });
             return `📌 **${auteurNom}** a gagné un droit spécial ! Envoie dans les **30 secondes** le message que tu veux épingler définitivement dans ce salon !`;
         }
