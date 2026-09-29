@@ -1136,6 +1136,7 @@ const rouletteLeetUntil = new Map();           // userId -> timestamp de fin
 const rouletteTransfos = new Map(); // userId -> { caps, emojiOnly, limite100, limite30, mots, lettres, censure } (chacun = timestamp de fin)
 let rouletteTourneeJusquA = 0;      // fin de la Tournée générale (non sauvegardé, ça ne dure qu'1 minute)
 const rouletteCooldown45Charges = new Map();   // userId -> nombre de tirages restants à 45min
+const rouletteCooldownCourtCharges = new Map();   // userId -> nombre de tirages restants à 5min
 const rouletteBouclierActif = new Map();       // userId -> true (consommé au prochain malus)
 const rouletteRedirectChoixCible = new Map();  // userId -> id du membre choisi pour la prochaine redirection
 
@@ -1212,7 +1213,7 @@ const ROULETTE_NOMS_COMMANDES = {
     timeout3: 'malus-timeout-3min', timeout5: 'malus-timeout-5min', timeout20: 'malus-timeout-20min',
     exclu1h: 'malus-exclu-heure', exclu1j: 'malus-exclu-jour', exclu1semaine: 'malus-exclu-semaine',
     pseudo1semaine: 'malus-pseudo-lock-semaine', pseudo1mois: 'malus-pseudo-lock-mois', ban: 'malus-ban',
-    gif: 'bonus-gif-ou-audio', cooldown30s: 'bonus-cooldown-zero-30s', cooldown90s: 'bonus-cooldown-zero-90s',
+    papayou: 'bonus-gif-ou-audio', cooldown30s: 'bonus-cooldown-zero-30s', cooldown90s: 'bonus-cooldown-zero-90s',
     couronne: 'bonus-couronne', redirect: 'bonus-redirect-malus', rolesup: 'bonus-role-superieur',
     legendaire: 'bonus-legendaire', elu: 'bonus-elu-roulette', youtube: 'bonus-youtube-credit',
     goodies: 'bonus-epsys-goodies', petitdej: 'bonus-epsys-petitdej', twitch: 'bonus-twitch-jeu',
@@ -1260,6 +1261,7 @@ const ROULETTE_TABLE = [
     { id: 'bonus-cooldown-zero-30s',   type: 'bonus', poids: 1 / 17,    nom: 'Tirage à volonté pendant 30s', desc: 'Tirage à volonté pendant 30s' },
     { id: 'malus-timeout-5min',        type: 'malus', poids: 1 / 17,    nom: 'Mute de 5 minutes', desc: 'Mute de 5 minutes' },
     { id: 'bonus-gif-ou-audio',        type: 'bonus', poids: 1 / 10,    nom: 'PAPAYOU.mp3', desc: 'PAPAYOU.mp3' },
+    { id: 'bonus-cooldown-court', type: 'bonus', poids: 1 / 10, nom: 'Cooldown réduit à 5 min', desc: 'Les 3 prochains tirages ont un cooldown de 5 minutes' },
     { id: 'malus-timeout-3min',        type: 'malus', poids: 1 / 10,    nom: 'Mute de 3 minutes', desc: 'Mute de 3 minutes' },
     { id: 'bonus-bouclier',            type: 'bonus', poids: 1 / 20,    nom: 'Immunité au prochain malus', desc: 'Immunité au prochain malus' },
     { id: 'bonus-redirect-choix',      type: 'bonus', poids: 1 / 100,   nom: 'Malus redirigé au choix', desc: 'Redirige ton prochain malus vers la personne de ton choix' },
@@ -1438,6 +1440,7 @@ const ROULETTE_ETATS = {
     leet:            rouletteLeetUntil,
     transfos:        rouletteTransfos,
     cooldown45:      rouletteCooldown45Charges,
+    cooldownCourt:      rouletteCooldownCourtCharges,
     bouclier:        rouletteBouclierActif,
     redirectChoixCible: rouletteRedirectChoixCible,
     immunite:        rouletteImmuniteUntil,
@@ -1699,6 +1702,9 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'malus-cooldown-45':
             rouletteCooldown45Charges.set(message.member.id, 3);
             return `⏳ **${auteurNom}** aura un cooldown de **45 minutes** sur ses **3 prochains tirages** !`;
+        case 'bonus-cooldown-court':
+            rouletteCooldownCourtCharges.set(message.member.id, 3);
+            return `⚡ **${auteurNom}** aura un cooldown de **5 minutes** sur ses **3 prochains tirages** !`;
         case 'bonus-bouclier':
             rouletteBouclierActif.set(message.member.id, true);
             return `🛡️ **${auteurNom}** est protégé·e : son prochain malus sera annulé !`;
@@ -1826,6 +1832,7 @@ function buildRouletteStateEmbed(cible) {
     const libTf = { caps: '🔠 majuscules', emojiOnly: '🙂 emoji only', limite100: '✂️ limite 100 caractères', limite30: '✂️ limite 30 caractères', mots: '🔀 mots mélangés', lettres: '🔤 lettres mélangées', censure: '▇ mots censurés' };
     for (const [k, fin] of Object.entries(tf)) if (Date.now() < fin && libTf[k]) actifs.push(libTf[k]);
     if ((rouletteCooldown45Charges.get(cible.id) || 0) > 0) actifs.push(`⏳ ${rouletteCooldown45Charges.get(cible.id)} tirage(s) à cooldown de 45 min`);
+    if ((rouletteCooldownCourtCharges.get(cible.id) || 0) > 0) actifs.push(`⚡ ${rouletteCooldownCourtCharges.get(cible.id)} tirage(s) à cooldown de 5 min`);
     if (rouletteBouclierActif.has(cible.id)) actifs.push('🛡️ bouclier actif (prochain malus annulé)');
     if (rouletteRedirectChoixCible.has(cible.id)) actifs.push('🎯 redirection de malus au choix en attente');
     return new EmbedBuilder()
@@ -1844,8 +1851,12 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
         if (finCooldown && now < finCooldown) {
             return { cooldown: true, reste: Math.ceil((finCooldown - now) / 1000 / 60) };
         }
+        const chargesCourt = rouletteCooldownCourtCharges.get(authorId) || 0;
         const charges45 = rouletteCooldown45Charges.get(authorId) || 0;
-        if (charges45 > 0) {
+        if (chargesCourt > 0) {
+            rouletteCooldownCourtCharges.set(authorId, chargesCourt - 1);
+            rouletteCooldowns.set(authorId, now + 5 * 60 * 1000);
+        } else if (charges45 > 0) {
             rouletteCooldown45Charges.set(authorId, charges45 - 1);
             rouletteCooldowns.set(authorId, now + 45 * 60 * 1000);
         } else {
@@ -3199,6 +3210,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
             rouletteCouronneUntil.delete(cible.id);
             rouletteRedirectCharges.delete(cible.id);
+            rouletteCooldownCourtCharges.delete(cible.id);
             rouletteFreeRollUntil.delete(cible.id);
             rouletteUwuUntil.delete(cible.id);
             rouletteLettreInterdite.delete(cible.id);
@@ -3232,6 +3244,9 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
             switch (nom) {
                 case 'couronne':
                     rouletteCouronneUntil.delete(cible.id);
+                    break;
+                case 'cooldown-court':
+                    rouletteCooldownCourtCharges.delete(cible.id);
                     break;
                 case 'pseudo-lock':
                     roulettePseudoLock.delete(cible.id);
@@ -3278,7 +3293,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
                     rouletteImmuniteUntil.delete(cible.id);
                     break;
                 default:
-                    return message.reply("Nom inconnu. Options : `couronne`, `transfo`, `pseudo-lock`, `redirect`, `redirect-choix`, `cooldown-zero`, `cooldown45`, `timeout`, `leet`, `uwu`, `lettre`, `emoji`, `bouclier`, `immunite`.");
+                    return message.reply("Nom inconnu. Options : `couronne`, `transfo`, `pseudo-lock`, `redirect`, `redirect-choix`, `cooldown-zero`, `cooldown45`, `cooldown-court`, `timeout`, `leet`, `uwu`, `lettre`, `emoji`, `bouclier`, `immunite`.");
             }
             await saveAll();            
             return message.reply(`\`${nom}\` a été retiré de <@${cible.id}>.`);
@@ -6930,7 +6945,7 @@ return interaction.update({ embeds: [embed], components: rows });
             .setDescription(
                 "`!reroll [membre]` — réinitialise le cooldown d'un.e membre\n" +
                 "`!bonusforce`/`!malusforce [ID bonus/malus] [membre]` — impose un bonus/malus à un.e membre\n" +
-                "`!rouletteforce`/`!rltforce` — affiche les ID des bonus/malus\n" +
+                "`!rouletteID`/`!rltID` — affiche les ID des bonus/malus\n" +
                 "`!resetroulettestate`/`!resetrlt [membre]` — reset tout l'état roulette d'un.e membre\n" +
                 "`!removestate [membre] [nom]` — retire un seul effet actif d'un.e membre"
             );
