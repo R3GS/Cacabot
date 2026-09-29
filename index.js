@@ -7874,6 +7874,7 @@ client.on('channelCreate', async (channel) => {
 
 client.once('ready', async () => {
     console.log(`✅ ${client.user.tag} est connecté`);
+    await new Promise(r => setTimeout(r, 15000)); // laisse le temps à l'ancien conteneur de finir sa sauvegarde
     await loadAll();
     cleanOldData();
     for (const guild of client.guilds.cache.values()) {
