@@ -1157,7 +1157,7 @@ const rouletteStats = new Map();        // userId -> { tirages, bonus, malus, ri
 const ROULETTE_JACKPOT_INCREMENT = 0.01; // +1% par "rien"
 const ROULETTE_JACKPOT_MAX = 0.5;        // plafond à 50%
 const ROULETTE_HOF_CHANNEL_ID = '1554331383361577010';
-const ROULETTE_HOF_SEUIL = 0.00005; // 0,005%
+const ROULETTE_HOF_SEUIL = 0.0005; // 0,05%
 
 const ROULETTE_EMOJIS_ALEATOIRES = ['😂','😍','🔥','💀','🎉','😭','👀','🤡','😈','🍀','✨','🐸','🦆','🥶','😳'];
 function finitParUnEmoji(texte) {
