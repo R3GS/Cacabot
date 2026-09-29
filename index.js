@@ -1133,6 +1133,8 @@ function estModo(member) {
 }
 const rouletteEmojiUntil = new Map();          // userId -> timestamp de fin
 const rouletteLeetUntil = new Map();           // userId -> timestamp de fin
+const rouletteTransfos = new Map(); // userId -> { caps, emojiOnly, limite100, limite30, mots, lettres, censure } (chacun = timestamp de fin)
+let rouletteTourneeJusquA = 0;      // fin de la Tournée générale (non sauvegardé, ça ne dure qu'1 minute)
 const rouletteCooldown45Charges = new Map();   // userId -> nombre de tirages restants à 45min
 const rouletteBouclierActif = new Map();       // userId -> true (consommé au prochain malus)
 const rouletteRedirectChoixCible = new Map();  // userId -> id du membre choisi pour la prochaine redirection
@@ -1153,6 +1155,41 @@ function estMessageExempte(texte, mentionneBot) {
     // Emojis seuls (classiques, avec teinte de peau, drapeaux, personnalisés)
     if (/^(?:\p{Extended_Pictographic}|\p{Emoji_Modifier}|\p{Regional_Indicator}|[0-9#*]\uFE0F?\u20E3|[\uFE0F\u200D\u20E3]|<a?:\w+:\d+>|\s)+$/u.test(t)) return true;
     return false;
+}
+function activerTransfo(userId, type, dureeMs) {
+    const t = rouletteTransfos.get(userId) ?? {};
+    t[type] = Date.now() + dureeMs;
+    rouletteTransfos.set(userId, t);
+}
+function surTexte(texte, fn) {
+    return texte
+        .split(/(<[^>]+>|https?:\/\/\S+|```[\s\S]*?```|`[^`]*`)/g)
+        .map((morceau, idx) => idx % 2 === 1 ? morceau : fn(morceau))
+        .join('');
+}
+function melanger(liste) {
+    for (let i = liste.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [liste[i], liste[j]] = [liste[j], liste[i]];
+    }
+    return liste;
+}
+function appliquerTransfos(userId, texte) {
+    const t = rouletteTransfos.get(userId);
+    if (!t) return texte;
+    const now = Date.now();
+    for (const k of Object.keys(t)) if (now >= t[k]) delete t[k];
+    if (Object.keys(t).length === 0) { rouletteTransfos.delete(userId); return texte; }
+
+    let r = texte;
+    if (t.mots && !r.includes('```')) r = melanger(r.split(/\s+/).filter(Boolean)).join(' ');
+    if (t.lettres) r = surTexte(r, m => m.replace(/\p{L}{2,}/gu, mot => melanger([...mot]).join('')));
+    if (t.censure) r = surTexte(r, m => m.replace(/\S+/g, mot => Math.random() < 1 / 3 ? '▇▇' : mot));
+    if (t.emojiOnly) r = surTexte(r, m => m.replace(/\S+/g, () => ROULETTE_EMOJIS_ALEATOIRES[Math.floor(Math.random() * ROULETTE_EMOJIS_ALEATOIRES.length)]));
+    if (t.caps) r = surTexte(r, m => m.toUpperCase());
+    const max = Math.min(t.limite30 ? 30 : Infinity, t.limite100 ? 100 : Infinity);
+    if (max !== Infinity && [...r].length > max) r = [...r].slice(0, max).join('').replace(/<[^>]*$/, '');
+    return r;
 }
 function versLeet(texte) {
     const table = { a: '4', e: '3', i: '1', o: '0', s: '5', t: '7' };
@@ -1180,8 +1217,12 @@ const ROULETTE_NOMS_COMMANDES = {
     legendaire: 'bonus-legendaire', elu: 'bonus-elu-roulette', youtube: 'bonus-youtube-credit',
     goodies: 'bonus-epsys-goodies', petitdej: 'bonus-epsys-petitdej', twitch: 'bonus-twitch-jeu',
     commande: 'bonus-commande-perso', '5e': 'bonus-epsys-5e', photo: 'bonus-epsys-photo',
+    pseudochoix: 'bonus-pseudo-choix', epingle: 'bonus-epingle', prime: 'malus-prime',
     uwu: 'malus-uwu-24h', lettre: 'malus-lettre-interdite', emoji: 'malus-emoji', cooldown45: 'malus-cooldown-45',
     bouclier: 'bonus-bouclier', redirectchoix: 'bonus-redirect-choix', leet: 'malus-leet',
+    caps: 'malus-caps', emojionly: 'malus-emoji-only', censure: 'malus-censure', mots: 'malus-mots-melanges',
+    lettres: 'malus-lettres-melangees', limite100: 'malus-limite-100', limite30: 'malus-limite-30',
+    tournee: 'special-tournee-generale',
     vote: 'special-vote-immunite-exclusion'
 };
 // Table de tirage : de la plus rare à la plus courante. Un seul résultat par tirage.
@@ -1197,6 +1238,7 @@ const ROULETTE_TABLE = [
     { id: 'bonus-youtube-credit',      type: 'bonus', poids: 1 / 8500,  nom: 'Pseudo crédité sous chaque vidéo YouTube', desc: 'Pseudo crédité sous chaque vidéo YouTube' },
     { id: 'bonus-elu-roulette',        type: 'bonus', poids: 1 / 7000,  nom: 'Élu·e de la Roulette', desc: 'Rôle spécial d\'**Élu·e de la Roulette**' },
     { id: 'bonus-epsys-photo',         type: 'bonus', poids: 1 / 5000,  nom: 'Photo disgracieuse d\'Epsys', desc: '1 photo disgracieuse d\'Epsys signée et envoyée par la Poste' },
+    { id: 'malus-prime',               type: 'malus', poids: 1 / 5000,  nom: 'MALUS PRIME', desc: 'Cumule TOUS les malus de texte/pseudo en même temps (hors mute, exclusion, cooldown, ban)' },
     { id: 'bonus-epsys-5e',            type: 'bonus', poids: 1 / 3400,  nom: '5€ de la YouTube Money d\'Epsys', desc: '5€ de la YouTube Money d\'Epsys' },
     { id: 'malus-ban',                 type: 'malus', poids: 1 / 3400,  nom: 'Ban définitif', desc: 'Ban définitif (révocable si besoin)' },
     { id: 'bonus-commande-perso',      type: 'bonus', poids: 1 / 1700,  nom: 'Commande Cacabot personnalisée', desc: 'Ajoute une commande Cacabot de ton choix' },
@@ -1225,6 +1267,14 @@ const ROULETTE_TABLE = [
     { id: 'bonus-epingle',             type: 'bonus', poids: 1 / 150,   nom: 'Message épinglé', desc: 'Un message épinglé définitivement dans le salon (règles du serveur à respecter)' },
     { id: 'malus-emoji',               type: 'malus', poids: 1 / 100,   nom: 'Emoji obligatoire', desc: 'Doit finir chaque message par un emoji aléatoire pendant 24h' },
     { id: 'malus-leet',                type: 'malus', poids: 1 / 90,    nom: 'Leet speak pendant 12h', desc: 'Tous ses messages sont écrits en leet speak (a→4, e→3...) pendant 12h' },
+    { id: 'malus-caps',               type: 'malus',   poids: 1 / 100, nom: 'MAJUSCULES pendant 2h', desc: 'Doit parler en MAJUSCULES pendant 2h' },
+    { id: 'malus-emoji-only',         type: 'malus',   poids: 1 / 200, nom: 'Emoji only pendant 1h', desc: 'Tous ses mots sont remplacés par des emojis pendant 1h' },
+    { id: 'malus-censure',            type: 'malus',   poids: 1 / 250, nom: 'Censure pendant 2h', desc: 'Un mot sur 3 est censuré (▇▇) pendant 2h' },
+    { id: 'malus-mots-melanges',      type: 'malus',   poids: 1 / 300, nom: 'Mots mélangés pendant 2h', desc: 'Les mots de ses messages sont mélangés pendant 2h' },
+    { id: 'malus-lettres-melangees',  type: 'malus',   poids: 1 / 400, nom: 'Lettres mélangées pendant 1h', desc: 'Les lettres de chaque mot sont mélangées pendant 1h' },
+    { id: 'malus-limite-100',         type: 'malus',   poids: 1 / 500, nom: 'Limite de 100 caractères pendant 2h', desc: 'Messages coupés à 100 caractères pendant 2h' },
+    { id: 'malus-limite-30',          type: 'malus',   poids: 1 / 550, nom: 'Limite de 30 caractères pendant 1h', desc: 'Messages coupés à 30 caractères pendant 1h' },
+    { id: 'special-tournee-generale', type: 'special', poids: 1 / 600, nom: 'Tournée générale', desc: 'Tournée générale : les cooldowns de tout le monde sont éteints pendant 1 minute' },
     { id: 'malus-cooldown-45',         type: 'malus', poids: 1 / 40,    nom: 'Cooldown de 45 min', desc: 'Les 3 prochains tirages ont un cooldown de 45 minutes' },
 ];
 
@@ -1295,8 +1345,10 @@ const ROULETTE_ETATS = {
     lettreInterdite: rouletteLettreInterdite,
     emoji:           rouletteEmojiUntil,
     leet:            rouletteLeetUntil,
+    transfos:        rouletteTransfos,
     cooldown45:      rouletteCooldown45Charges,
     bouclier:        rouletteBouclierActif,
+    redirectChoixCible: rouletteRedirectChoixCible,
     immunite:        rouletteImmuniteUntil,
     timeoutRoulette: rouletteTimeoutUntil
 };
@@ -1526,6 +1578,30 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'malus-emoji':
             rouletteEmojiUntil.set(message.member.id, Date.now() + 24 * 60 * 60 * 1000);
             return `**${auteurNom}** doit terminer chacun de ses messages par un **emoji aléatoire** pendant **24h** !`;
+        case 'malus-caps':
+            activerTransfo(message.member.id, 'caps', 2 * 60 * 60 * 1000);
+            return `**${auteurNom}** doit **PARLER EN MAJUSCULES** pendant **2h** !`;
+        case 'malus-emoji-only':
+            activerTransfo(message.member.id, 'emojiOnly', 60 * 60 * 1000);
+            return `**${auteurNom}** ne peut plus s'exprimer qu'en **emojis** pendant **1h** !`;
+        case 'malus-censure':
+            activerTransfo(message.member.id, 'censure', 2 * 60 * 60 * 1000);
+            return `**${auteurNom}** est **censuré·e** : un mot sur 3 disparaît pendant **2h** !`;
+        case 'malus-mots-melanges':
+            activerTransfo(message.member.id, 'mots', 2 * 60 * 60 * 1000);
+            return `**${auteurNom}** a les **mots mélangés** pendant **2h** !`;
+        case 'malus-lettres-melangees':
+            activerTransfo(message.member.id, 'lettres', 60 * 60 * 1000);
+            return `**${auteurNom}** a les **lettres mélangées** pendant **1h** !`;
+        case 'malus-limite-100':
+            activerTransfo(message.member.id, 'limite100', 2 * 60 * 60 * 1000);
+            return `**${auteurNom}** est limité·e à **100 caractères** par message pendant **2h** !`;
+        case 'malus-limite-30':
+            activerTransfo(message.member.id, 'limite30', 60 * 60 * 1000);
+            return `**${auteurNom}** est limité·e à **30 caractères** par message pendant **1h** !`;
+        case 'special-tournee-generale':
+            rouletteTourneeJusquA = Date.now() + 60 * 1000;
+            return `🍻 **${auteurNom}** paie sa tournée ! **Tous les cooldowns sont éteints pendant 1 minute**, tirez à volonté !`;
         case 'malus-leet':
             rouletteLeetUntil.set(message.member.id, Date.now() + 12 * 60 * 60 * 1000);
             return `**${auteurNom}** parle maintenant en **l33t sp34k** pendant **12h** !`;
@@ -1581,6 +1657,16 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'special-vote-immunite-exclusion':
             message.vote = message.member;
             return `🗳️ **${auteurNom}** déclenche un **vote public** !`;
+        case 'malus-prime': {
+            await appliquerEtDecrireResultat('malus-lettre-interdite', message, auteurNom, 0);
+            await appliquerEtDecrireResultat('malus-uwu-24h', message, auteurNom, 0);
+            await appliquerEtDecrireResultat('malus-emoji', message, auteurNom, 0);
+            await appliquerEtDecrireResultat('malus-leet', message, auteurNom, 0);
+            await appliquerEtDecrireResultat('malus-caps', message, auteurNom, 0);
+            await appliquerEtDecrireResultat('malus-mots-melanges', message, auteurNom, 0);
+            await appliquerEtDecrireResultat('malus-lettres-melangees', message, auteurNom, 0);
+            return `☠️☠️☠️ **${auteurNom}** subit le **MALUS PRIME** : absolument tous les malus de texte en même temps (censure, emoji only, mute, exclusion, cooldown et ban épargnés) !`;
+        }
         case 'aucun-resultat':
             return ROULETTE_FAILS[failIndex];
         default:
@@ -1647,6 +1733,9 @@ function buildRouletteStateEmbed(cible) {
     if (rouletteLettreInterdite.has(cible.id) && Date.now() < rouletteLettreInterdite.get(cible.id).until) actifs.push(`🔤 lettre interdite : ${rouletteLettreInterdite.get(cible.id).lettre}`);
     if (rouletteEmojiUntil.has(cible.id) && Date.now() < rouletteEmojiUntil.get(cible.id)) actifs.push('😀 doit finir ses messages par un emoji');
     if (rouletteLeetUntil.has(cible.id) && Date.now() < rouletteLeetUntil.get(cible.id)) actifs.push('🤖 parle en l33t sp34k');
+    const tf = rouletteTransfos.get(cible.id) ?? {};
+    const libTf = { caps: '🔠 majuscules', emojiOnly: '🙂 emoji only', limite100: '✂️ limite 100 caractères', limite30: '✂️ limite 30 caractères', mots: '🔀 mots mélangés', lettres: '🔤 lettres mélangées', censure: '▇ mots censurés' };
+    for (const [k, fin] of Object.entries(tf)) if (Date.now() < fin && libTf[k]) actifs.push(libTf[k]);
     if ((rouletteCooldown45Charges.get(cible.id) || 0) > 0) actifs.push(`⏳ ${rouletteCooldown45Charges.get(cible.id)} tirage(s) à cooldown de 45 min`);
     if (rouletteBouclierActif.has(cible.id)) actifs.push('🛡️ bouclier actif (prochain malus annulé)');
     if (rouletteRedirectChoixCible.has(cible.id)) actifs.push('🎯 redirection de malus au choix en attente');
@@ -1659,7 +1748,7 @@ function buildRouletteStateEmbed(cible) {
 async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
     const now = Date.now();
     const finFreeRoll = rouletteFreeRollUntil.get(authorId);
-    const enFreeRoll = finFreeRoll && now < finFreeRoll;
+    const enFreeRoll = (finFreeRoll && now < finFreeRoll) || now < rouletteTourneeJusquA;
 
     if (!ROULETTE_COOLDOWN_EXEMPT.includes(authorId) && !enFreeRoll) {
         const finCooldown = rouletteCooldowns.get(authorId);
@@ -3025,6 +3114,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
             rouletteLettreInterdite.delete(cible.id);
             rouletteEmojiUntil.delete(cible.id);
             rouletteLeetUntil.delete(cible.id);
+            rouletteTransfos.delete(cible.id);
             rouletteCooldown45Charges.delete(cible.id);
             rouletteBouclierActif.delete(cible.id);
             rouletteRedirectChoixCible.delete(cible.id);
@@ -3082,6 +3172,9 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
                 case 'leet':
                     rouletteLeetUntil.delete(cible.id);
                     break;
+                case 'transfo':
+                    rouletteTransfos.delete(cible.id);
+                    break;
                 case 'cooldown45':
                     rouletteCooldown45Charges.delete(cible.id);
                     break;
@@ -3095,7 +3188,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
                     rouletteImmuniteUntil.delete(cible.id);
                     break;
                 default:
-                    return message.reply("Nom inconnu. Options : `couronne`, `pseudo-lock`, `redirect`, `redirect-choix`, `cooldown-zero`, `cooldown45`, `timeout`, `leet`, `uwu`, `lettre`, `emoji`, `bouclier`, `immunite`.");
+                    return message.reply("Nom inconnu. Options : `couronne`, `transfo`, `pseudo-lock`, `redirect`, `redirect-choix`, `cooldown-zero`, `cooldown45`, `timeout`, `leet`, `uwu`, `lettre`, `emoji`, `bouclier`, `immunite`.");
             }
             await saveAll();            
             return message.reply(`\`${nom}\` a été retiré de <@${cible.id}>.`);
@@ -7681,6 +7774,9 @@ client.on('messageCreate', async (message) => {
             if (leet !== contenu) { contenu = leet; modifie = true; }
         }
     }
+
+    const apresTransfos = appliquerTransfos(id, contenu);
+    if (apresTransfos !== contenu) { contenu = apresTransfos; modifie = true; }
 
     const finUwu = rouletteUwuUntil.get(id);
     if (finUwu) {
