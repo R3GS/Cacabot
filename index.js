@@ -1270,11 +1270,11 @@ const ROULETTE_TABLE = [
     { id: 'malus-caps',               type: 'malus',   poids: 1 / 100, nom: 'MAJUSCULES pendant 2h', desc: 'Doit parler en MAJUSCULES pendant 2h' },
     { id: 'malus-emoji-only',         type: 'malus',   poids: 1 / 200, nom: 'Emoji only pendant 1h', desc: 'Tous ses mots sont remplacés par des emojis pendant 1h' },
     { id: 'malus-censure',            type: 'malus',   poids: 1 / 250, nom: 'Censure pendant 2h', desc: 'Un mot sur 3 est censuré (▇▇) pendant 2h' },
-    { id: 'malus-mots-melanges',      type: 'malus',   poids: 1 / 300, nom: 'Mots mélangés pendant 2h', desc: 'Les mots de ses messages sont mélangés pendant 2h' },
+    { id: 'malus-mots-melanges',      type: 'malus',   poids: 1 / 300, nom: 'Mots mélangés pendant 2h', desc: 'Les mots de chaque message sont mélangés pendant 2h' },
     { id: 'malus-lettres-melangees',  type: 'malus',   poids: 1 / 400, nom: 'Lettres mélangées pendant 1h', desc: 'Les lettres de chaque mot sont mélangées pendant 1h' },
-    { id: 'malus-limite-100',         type: 'malus',   poids: 1 / 500, nom: 'Limite de 100 caractères pendant 2h', desc: 'Messages coupés à 100 caractères pendant 2h' },
-    { id: 'malus-limite-30',          type: 'malus',   poids: 1 / 550, nom: 'Limite de 30 caractères pendant 1h', desc: 'Messages coupés à 30 caractères pendant 1h' },
-    { id: 'special-tournee-generale', type: 'special', poids: 1 / 600, nom: 'Tournée générale', desc: 'Tournée générale : les cooldowns de tout le monde sont éteints pendant 1 minute' },
+    { id: 'malus-limite-100',         type: 'malus',   poids: 1 / 500, nom: 'Limite de 100 caractères pendant 2h', desc: 'Messages coupés à 100 caractères maximum pendant 2h' },
+    { id: 'malus-limite-30',          type: 'malus',   poids: 1 / 550, nom: 'Limite de 30 caractères pendant 1h', desc: 'Messages coupés à 30 caractères maximum pendant 1h' },
+    { id: 'special-tournee-generale', type: 'special', poids: 1 / 600, nom: 'Tournée générale', desc: 'Tournée générale ! Les cooldowns de tout le monde sont éteints pendant 1 minute' },
     { id: 'malus-cooldown-45',         type: 'malus', poids: 1 / 40,    nom: 'Cooldown de 45 min', desc: 'Les 3 prochains tirages ont un cooldown de 45 minutes' },
 ];
 
@@ -1348,7 +1348,7 @@ function buildHelpxCategorieEmbed(categorie) {
             .addFields(
                 { name: '🔄 **!reroll [membre]**', value: 'Réinitialise le cooldown d\'un·e membre.' },
                 { name: '🎉/💀 **!bonusforce / !malusforce [id] [membre]**', value: 'Impose un bonus ou un malus à un·e membre.' },
-                { name: '📋 **!bonusID / !malusID**', value: 'Affiche tous les identifiants de bonus/malus/spécial, triés par bouton.' },
+{ name: '📋 **!rouletteID / !rltid**', value: 'Affiche tous les identifiants de bonus/malus/spécial, triés par bouton.' },
                 { name: '♻️ **!resetroulettestate / !resetrlt [membre]**', value: 'Réinitialise tout l\'état roulette d\'un·e membre.' },
                 { name: '🗑️ **!removestate [membre] [nom]**', value: 'Retire un seul effet actif d\'un·e membre.' }
             );
@@ -3140,7 +3140,8 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     // COMMANDES ADMIN ROULETTE (Epsys uniquement)
     // =========================
     const rouletteAdminCommand = message.content.trim().split(" ")[0]?.toLowerCase();
-    if (['!reroll', '!bonusforce', '!malusforce', '!bonusID', '!malusID', '!resetroulettestate', '!resetrlt', '!removestate'].includes(rouletteAdminCommand)) {        if (message.author.id !== EPSYS_ID) {
+    if (['!reroll', '!bonusforce', '!malusforce', '!rouletteid', '!rltid', '!resetroulettestate', '!resetrlt', '!removestate'].includes(rouletteAdminCommand)) {
+        if (message.author.id !== EPSYS_ID) {
             return message.reply("Cette commande est réservée à Epsys.");
         }
 
@@ -3155,9 +3156,13 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
             return message.reply(`Le cooldown de <@${cible.id}> a été réinitialisé ! ✅`);
         }
 
-        if (rouletteAdminCommand === '!bonusID' || rouletteAdminCommand === '!malusID') {
+        if (rouletteAdminCommand === '!rouletteid' || rouletteAdminCommand === '!rltid') {
             const embed = buildRouletteTypeEmbed('bonus')
-                .setDescription("`!bonusforce [id] [membre]` / `!malusforce [id] [membre]` — impose un résultat.\nExemple : `!bonusforce couronne @Sasha`\n\n" + buildRouletteTypeEmbed('bonus').data.description);
+                .setDescription(
+                    "`!bonusforce [id] [membre]` / `!malusforce [id] [membre]` — impose un résultat.\n" +
+                    "Exemple : `!bonusforce couronne @Sasha`\n\n" +
+                    buildRouletteTypeEmbed('bonus').data.description
+                );
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId(`roulette_id_bonus_${message.author.id}`).setLabel('🎉 Bonus').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId(`roulette_id_malus_${message.author.id}`).setLabel('💀 Malus').setStyle(ButtonStyle.Danger),
