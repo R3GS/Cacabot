@@ -1734,7 +1734,6 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             return `✍️ **${auteurNom}** a gagné le choix du pseudo d'un·e membre !`;
         }
         case 'bonus-epingle': {
-            await message.channel.send(`📌 **${auteurNom}**, envoie dans les **30 secondes** le message que tu veux épingler définitivement dans ce salon !`);
             const collector = message.channel.createMessageCollector({
                 filter: m => m.author.id === message.member.id,
                 time: 30000, max: 1
@@ -1743,7 +1742,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 await m.pin().catch(() => {});
                 message.channel.send(`📌 Message de **${auteurNom}** épinglé définitivement !`);
             });
-            return `📌 **${auteurNom}** a gagné un message épinglé définitivement dans ce salon !`;
+            return `📌 **${auteurNom}** a gagné un droit spécial ! Envoie dans les **30 secondes** le message que tu veux épingler définitivement dans ce salon !`;
         }
         case 'special-vote-immunite-exclusion':
             message.vote = message.member;
