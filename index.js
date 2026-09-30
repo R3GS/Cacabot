@@ -1136,7 +1136,7 @@ function buildMenuFallbackRoulette(authorId) {
         );
     return new ActionRowBuilder().addComponents(menu);
 }
-const ROULETTE_COOLDOWN_EXEMPT = ['744217896581857281', '902651805614358568', '436218312574107658'];
+const ROULETTE_COOLDOWN_EXEMPT = ['744217896581857281', '902651805614358568'];
 const rouletteUwuUntil = new Map();        // userId -> timestamp de fin
 const rouletteLettreInterdite = new Map(); // userId -> { until: timestamp, lettre: string }
 const EPSYS_ID = '436218312574107658';
@@ -1247,56 +1247,56 @@ const ROULETTE_NOMS_COMMANDES = {
 };
 // Table de tirage : de la plus rare à la plus courante. Un seul résultat par tirage.
 // "rien" de base. Avec le pity, le vrai taux de rien tombe à ~50 % (mesuré par simulation)
-const ROULETTE_TAUX_ECHEC = 0.533;
+const ROULETTE_TAUX_ECHEC = 0.5;
 const ROULETTE_PITY_MALUS = 3; // malus depuis le dernier bonus => bonus garanti
 const ROULETTE_PITY_NULS = 5;  // résultats nuls depuis le dernier bonus => bonus garanti
 
 // type : 'bonus' | 'malus' | 'special'   poids : poids relatif   nom : titre d'embed   desc : ligne de la paytable
 const ROULETTE_TABLE = [
-    { id: 'bonus-epsys-petitdej',      type: 'bonus', poids: 1 / 17000, nom: 'Petit déj apporté par Epsys', desc: 'Petit déj apporté par Epsys en maid dress' },
-    { id: 'bonus-epsys-goodies',       type: 'bonus', poids: 1 / 12500, nom: 'Goodies d\'Epsys', desc: 'Goodies d\'Epsys gratuit au choix: T-Shirt/Mug/Lot de 5pin\'s' },
-    { id: 'bonus-youtube-credit',      type: 'bonus', poids: 1 / 8500,  nom: 'Pseudo crédité sous chaque vidéo YouTube', desc: 'Pseudo crédité sous chaque vidéo YouTube' },
-    { id: 'bonus-elu-roulette',        type: 'bonus', poids: 1 / 7000,  nom: 'Élu·e de la Roulette', desc: 'Rôle spécial d\'**Élu·e de la Roulette**' },
-    { id: 'bonus-epsys-photo',         type: 'bonus', poids: 1 / 5000,  nom: 'Photo disgracieuse d\'Epsys', desc: '1 photo disgracieuse d\'Epsys signée et envoyée par la Poste' },
-    { id: 'malus-prime',               type: 'malus', poids: 1 / 5000,  nom: 'MALUS PRIME', desc: 'Cumule TOUS les malus de texte/pseudo en même temps (hors mute, exclusion, cooldown, ban)' },
-    { id: 'bonus-epsys-5e',            type: 'bonus', poids: 1 / 3400,  nom: '5€ de la YouTube Money d\'Epsys', desc: '5€ de la YouTube Money d\'Epsys' },
-    { id: 'malus-ban',                 type: 'malus', poids: 1 / 3400,  nom: 'Ban définitif', desc: 'Ban définitif (révocable si besoin)' },
-    { id: 'bonus-commande-perso',      type: 'bonus', poids: 1 / 1700,  nom: 'Commande Cacabot personnalisée', desc: 'Ajoute une commande Cacabot de ton choix' },
-    { id: 'bonus-twitch-jeu',          type: 'bonus', poids: 1 / 850,   nom: 'Choix du jeu du prochain stream Twitch', desc: 'Choix du jeu du prochain stream Twitch - jeu court uniquement' },
-    { id: 'malus-pseudo-lock-mois',    type: 'malus', poids: 1 / 500,   nom: 'Pseudo verrouillé pendant 1 mois', desc: 'Pseudo horrible changé de force, verrouillé pendant 1 mois' },
-    { id: 'bonus-legendaire',          type: 'bonus', poids: 1 / 420,   nom: 'Regaïen·ne légendraire', desc: 'Rôle de Regaïen·ne légendraire' },
-    { id: 'malus-exclu-semaine',       type: 'malus', poids: 1 / 350,   nom: 'Exclusion de 1 semaine', desc: 'Exclusion de 1 semaine' },
-    { id: 'bonus-role-superieur',      type: 'bonus', poids: 1 / 170,   nom: 'Regaïen.ne supérieur', desc: 'Rôle de Regaïen.ne supérieur' },
-    { id: 'malus-pseudo-lock-semaine', type: 'malus', poids: 1 / 170,   nom: 'Pseudo verrouillé pendant 1 semaine', desc: 'Pseudo horrible changé de force, verrouillé pendant 1 semaine' },
+    { id: 'bonus-epsys-petitdej',      type: 'bonus',   poids: 1 / 17000, nom: 'Petit déj apporté par Epsys en maid dress', desc: 'Petit déj apporté par Epsys en maid dress' },
+    { id: 'bonus-epsys-goodies',       type: 'bonus',   poids: 1 / 12500, nom: 'Goodies d\'Epsys', desc: 'Goodies d\'Epsys gratuit au choix: T-Shirt/Mug/Lot de 5pin\'s' },
+    { id: 'bonus-youtube-credit',      type: 'bonus',   poids: 1 / 8500,  nom: 'Pseudo crédité sous chaque vidéo YouTube', desc: 'Pseudo crédité sous chaque vidéo YouTube' },
+    { id: 'bonus-elu-roulette',        type: 'bonus',   poids: 1 / 7000,  nom: 'Rôle Élu·e de la Roulette', desc: 'Rôle spécial d\'**Élu·e de la Roulette**' },
+    { id: 'bonus-epsys-photo',         type: 'bonus',   poids: 1 / 5000,  nom: 'Photo disgracieuse d\'Epsys dédicacée', desc: '1 photo disgracieuse d\'Epsys signée et envoyée par la Poste' },
+    { id: 'malus-prime',               type: 'malus',   poids: 1 / 5000,  nom: 'MALUS PRIME', desc: 'Cumule TOUS les malus de texte/pseudo en même temps (hors mute, exclusion, cooldown, ban)' },
+    { id: 'bonus-epsys-5e',            type: 'bonus',   poids: 1 / 3400,  nom: '5€ de la YouTube Money d\'Epsys', desc: '5€ de la YouTube Money d\'Epsys' },
+    { id: 'malus-ban',                 type: 'malus',   poids: 1 / 15000, nom: 'Ban définitif', desc: 'Ban définitif (révocable si besoin)' },
+    { id: 'bonus-commande-perso',      type: 'bonus',   poids: 1 / 1700,  nom: 'Commande Cacabot personnalisée', desc: 'Ajoute une commande Cacabot de ton choix' },
+    { id: 'bonus-twitch-jeu',          type: 'bonus',   poids: 1 / 850,   nom: 'Choix du jeu du prochain stream Twitch', desc: 'Choix du jeu du prochain stream Twitch - jeu court uniquement' },
+    { id: 'malus-pseudo-lock-mois',    type: 'malus',   poids: 1 / 500,   nom: 'Pseudo horrible verrouillé pendant 1 mois', desc: 'Pseudo horrible changé de force, verrouillé pendant 1 mois' },
+    { id: 'bonus-legendaire',          type: 'bonus',   poids: 1 / 420,   nom: 'Regaïen·ne légendraire', desc: 'Rôle de Regaïen·ne légendraire' },
+    { id: 'malus-exclu-semaine',       type: 'malus',   poids: 1 / 350,   nom: 'Exclusion de 1 semaine', desc: 'Exclusion de 1 semaine' },
+    { id: 'bonus-role-superieur',      type: 'bonus',   poids: 1 / 170,   nom: 'Rôle de Regaïen.ne niv. supérieur', desc: 'Rôle de Regaïen.ne supérieur' },
+    { id: 'malus-pseudo-lock-semaine', type: 'malus',   poids: 1 / 170,   nom: 'Pseudo horrible verrouillé pendant 1 semaine', desc: 'Pseudo horrible changé de force, verrouillé pendant 1 semaine' },
     { id: 'special-vote-immunite-exclusion', type: 'special', poids: 1 / 125, nom: 'Vote public', desc: 'Vote public : tirage à volonté pendant 3min (immunité au mute) ou exclusion pendant 1 jour, décidé en 2h' },
-    { id: 'bonus-redirect-malus',      type: 'bonus', poids: 1 / 85,    nom: '3 malus redirigés', desc: '3 prochains malus redirigés vers un.e autre membre' },
-    { id: 'malus-exclu-jour',          type: 'malus', poids: 1 / 85,    nom: 'Exclusion de 1 jour', desc: 'Exclusion de 1 jour' },
-    { id: 'malus-lettre-interdite',    type: 'malus', poids: 1 / 75,    nom: 'Lettre interdite pendant 12h', desc: 'Ne peut plus utiliser une lettre au hasard pendant 12h' },
-    { id: 'malus-uwu-24h',             type: 'malus', poids: 1 / 55,    nom: 'UwU obligatoire pendant 24h', desc: 'Doit finir chaque message par UwU pendant 24h' },
-    { id: 'bonus-couronne',            type: 'bonus', poids: 1 / 50,    nom: 'Couronne 👑 pendant 12h', desc: 'Une couronne 👑 sous tes messages pendant 12h' },
-    { id: 'malus-exclu-heure',         type: 'malus', poids: 1 / 50,    nom: 'Exclusion de 1 heure', desc: 'Exclusion de 1 heure' },
-    { id: 'bonus-cooldown-zero-90s',   type: 'bonus', poids: 1 / 35,    nom: 'Tirage à volonté pendant 1min30', desc: 'Tirage à volonté pendant 1min30' },
-    { id: 'malus-timeout-20min',       type: 'malus', poids: 1 / 35,    nom: 'Mute de 20 minutes', desc: 'Mute de 20 minutes' },
-    { id: 'bonus-cooldown-zero-30s',   type: 'bonus', poids: 1 / 17,    nom: 'Tirage à volonté pendant 30s', desc: 'Tirage à volonté pendant 30s' },
-    { id: 'malus-timeout-5min',        type: 'malus', poids: 1 / 17,    nom: 'Mute de 5 minutes', desc: 'Mute de 5 minutes' },
-    { id: 'bonus-gif-ou-audio',        type: 'bonus', poids: 1 / 10,    nom: 'PAPAYOU.mp3', desc: 'PAPAYOU.mp3' },
-    { id: 'bonus-cooldown-court', type: 'bonus', poids: 1 / 10, nom: 'Cooldown réduit à 5 min', desc: 'Les 3 prochains tirages ont un cooldown de 5 minutes' },
-    { id: 'malus-timeout-3min',        type: 'malus', poids: 1 / 10,    nom: 'Mute de 3 minutes', desc: 'Mute de 3 minutes' },
-    { id: 'bonus-bouclier',            type: 'bonus', poids: 1 / 20,    nom: 'Immunité au prochain malus', desc: 'Immunité au prochain malus' },
-    { id: 'bonus-redirect-choix',      type: 'bonus', poids: 1 / 100,   nom: 'Malus redirigé au choix', desc: 'Redirige ton prochain malus vers la personne de ton choix' },
-    { id: 'bonus-pseudo-choix',        type: 'bonus', poids: 1 / 250,   nom: 'Pseudo au choix', desc: 'Choisis le pseudo d\'un·e membre, verrouillé pendant 48h (révocable si problématique)' },
-    { id: 'bonus-epingle',             type: 'bonus', poids: 1 / 150,   nom: 'Message épinglé', desc: 'Un message épinglé définitivement dans le salon (règles du serveur à respecter)' },
-    { id: 'malus-emoji',               type: 'malus', poids: 1 / 100,   nom: 'Emoji obligatoire', desc: 'Doit finir chaque message par un emoji aléatoire pendant 24h' },
-    { id: 'malus-leet',                type: 'malus', poids: 1 / 90,    nom: 'Leet speak pendant 12h', desc: 'Tous ses messages sont écrits en leet speak (a→4, e→3...) pendant 12h' },
-    { id: 'malus-caps',               type: 'malus',   poids: 1 / 100, nom: 'MAJUSCULES pendant 2h', desc: 'Doit parler en MAJUSCULES pendant 2h' },
-    { id: 'malus-emoji-only',         type: 'malus',   poids: 1 / 200, nom: 'Emoji only pendant 1h', desc: 'Tous ses mots sont remplacés par des emojis pendant 1h' },
-    { id: 'malus-censure',            type: 'malus',   poids: 1 / 250, nom: 'Censure pendant 2h', desc: 'Un mot sur 3 est censuré (▇▇) pendant 2h' },
-    { id: 'malus-mots-melanges',      type: 'malus',   poids: 1 / 300, nom: 'Mots mélangés pendant 2h', desc: 'Les mots de chaque message sont mélangés pendant 2h' },
-    { id: 'malus-lettres-melangees',  type: 'malus',   poids: 1 / 400, nom: 'Lettres mélangées pendant 1h', desc: 'Les lettres de chaque mot sont mélangées pendant 1h' },
-    { id: 'malus-limite-100',         type: 'malus',   poids: 1 / 500, nom: 'Limite de 100 caractères pendant 2h', desc: 'Messages coupés à 100 caractères maximum pendant 2h' },
-    { id: 'malus-limite-30',          type: 'malus',   poids: 1 / 550, nom: 'Limite de 30 caractères pendant 1h', desc: 'Messages coupés à 30 caractères maximum pendant 1h' },
-    { id: 'special-tournee-generale', type: 'special', poids: 1 / 600, nom: 'Tournée générale', desc: 'Tournée générale ! Les cooldowns de tout le monde sont éteints pendant 1 minute' },
-    { id: 'malus-cooldown-45',         type: 'malus', poids: 1 / 40,    nom: 'Cooldown de 45 min', desc: 'Les 3 prochains tirages ont un cooldown de 45 minutes' },
+    { id: 'bonus-redirect-malus',      type: 'bonus',   poids: 1 / 85,    nom: '3 malus redirigés au hasard', desc: '3 prochains malus redirigés vers un.e autre membre' },
+    { id: 'malus-exclu-jour',          type: 'malus',   poids: 1 / 85,    nom: 'Exclusion de 1 jour', desc: 'Exclusion de 1 jour' },
+    { id: 'malus-lettre-interdite',    type: 'malus',   poids: 1 / 75,    nom: 'Lettre interdite pendant 12h', desc: 'Ne peut plus utiliser une lettre au hasard pendant 12h' },
+    { id: 'malus-uwu-24h',             type: 'malus',   poids: 1 / 55,    nom: 'UwU obligatoire pendant 24h', desc: 'Doit finir chaque message par UwU pendant 24h' },
+    { id: 'bonus-couronne',            type: 'bonus',   poids: 1 / 50,    nom: 'Couronne 👑 pendant 12h', desc: 'Une couronne 👑 sous tes messages pendant 12h' },
+    { id: 'malus-exclu-heure',         type: 'malus',   poids: 1 / 50,    nom: 'Exclusion de 1 heure', desc: 'Exclusion de 1 heure' },
+    { id: 'bonus-cooldown-zero-90s',   type: 'bonus',   poids: 1 / 35,    nom: 'Tirage à volonté pendant 1min30', desc: 'Tirage à volonté pendant 1min30' },
+    { id: 'malus-timeout-20min',       type: 'malus',   poids: 1 / 35,    nom: 'Mute de 20 minutes', desc: 'Mute de 20 minutes' },
+    { id: 'bonus-cooldown-zero-30s',   type: 'bonus',   poids: 1 / 17,    nom: 'Tirage à volonté pendant 30s', desc: 'Tirage à volonté pendant 30s' },
+    { id: 'malus-timeout-5min',        type: 'malus',   poids: 1 / 17,    nom: 'Mute de 5 minutes', desc: 'Mute de 5 minutes' },
+    { id: 'bonus-gif-ou-audio',        type: 'bonus',   poids: 1 / 10,    nom: 'PAPAYOU.mp3', desc: 'PAPAYOU.mp3' },
+    { id: 'bonus-cooldown-court',      type: 'bonus',   poids: 1 / 10,    nom: 'Cooldown réduit à 5 min', desc: 'Les 3 prochains tirages ont un cooldown de 5 minutes' },
+    { id: 'malus-timeout-3min',        type: 'malus',   poids: 1 / 10,    nom: 'Mute de 3 minutes', desc: 'Mute de 3 minutes' },
+    { id: 'bonus-bouclier',            type: 'bonus',   poids: 1 / 20,    nom: 'Immunité au prochain malus', desc: 'Immunité au prochain malus' },
+    { id: 'bonus-redirect-choix',      type: 'bonus',   poids: 1 / 100,   nom: 'Malus redirigé au choix', desc: 'Redirige ton prochain malus vers la personne de ton choix' },
+    { id: 'bonus-pseudo-choix',        type: 'bonus',   poids: 1 / 250,   nom: 'Pseudo au choix', desc: 'Choisis le pseudo d\'un·e membre, verrouillé pendant 48h (révocable si problématique)' },
+    { id: 'bonus-epingle',             type: 'bonus',   poids: 1 / 150,   nom: 'Message épinglé', desc: 'Un message épinglé définitivement dans le salon (règles du serveur à respecter)' },
+    { id: 'malus-emoji',               type: 'malus',   poids: 1 / 100,   nom: 'Emoji obligatoire', desc: 'Doit finir chaque message par un emoji aléatoire pendant 24h' },
+    { id: 'malus-leet',                type: 'malus',   poids: 1 / 90,    nom: 'Leet speak pendant 12h', desc: 'Tous ses messages sont écrits en leet speak (a→4, e→3...) pendant 12h' },
+    { id: 'malus-caps',                type: 'malus',   poids: 1 / 100,   nom: 'MAJUSCULES pendant 2h', desc: 'Doit parler en MAJUSCULES pendant 2h' },
+    { id: 'malus-emoji-only',          type: 'malus',   poids: 1 / 200,   nom: 'Emoji only pendant 1h', desc: 'Tous ses mots sont remplacés par des emojis pendant 1h' },
+    { id: 'malus-censure',             type: 'malus',   poids: 1 / 250,   nom: 'Censure pendant 2h', desc: 'Un mot sur 3 est censuré (▇▇) pendant 2h' },
+    { id: 'malus-mots-melanges',       type: 'malus',   poids: 1 / 300,   nom: 'Mots mélangés pendant 2h', desc: 'Les mots de chaque message sont mélangés pendant 2h' },
+    { id: 'malus-lettres-melangees',   type: 'malus',   poids: 1 / 400,   nom: 'Lettres mélangées pendant 1h', desc: 'Les lettres de chaque mot sont mélangées pendant 1h' },
+    { id: 'malus-limite-100',          type: 'malus',   poids: 1 / 500,   nom: 'Limite de 100 caractères pendant 2h', desc: 'Messages coupés à 100 caractères maximum pendant 2h' },
+    { id: 'malus-limite-30',           type: 'malus',   poids: 1 / 550,   nom: 'Limite de 30 caractères pendant 1h', desc: 'Messages coupés à 30 caractères maximum pendant 1h' },
+    { id: 'special-tournee-generale',  type: 'special', poids: 1 / 600,   nom: 'Tournée générale', desc: 'Tournée générale ! Les cooldowns de tout le monde sont éteints pendant 1 minute' },
+    { id: 'malus-cooldown-45',         type: 'malus',   poids: 1 / 40,    nom: 'Cooldown de 45 min', desc: 'Les 3 prochains tirages ont un cooldown de 45 minutes' },
 ];
 
 // Généré depuis la table : plus de doublon à maintenir
@@ -1847,12 +1847,38 @@ function buildRoulettePresentationEmbed(authorId) {
 
     const embed = new EmbedBuilder()
         .setColor(0xffd20a)
-        .setTitle('🎰 Roulette')
-        .setDescription("Tente ta chance : bonus rares, malus douloureux, ou rien du tout.")
+        .setTitle('🎰 | ROULETTE REGAÏENNE | 🎰')
+        .setDescription("La roulette qui te fait gagner des trucs... ou qui te fait ban.")
+        .setThumbnail('https://img.draftbot.fr/1790779684480-32c7eef2bc565cb0.png')
+        .setImage('https://img.draftbot.fr/1790778435185-73ff19eb6e704abb.gif')
         .addFields(
-            { name: '⏳ Cooldown', value: '**15 min** entre deux tentatives', inline: true },
-            { name: "📊 Voir l'état d'un·e membre", value: '`!roulettestate` | `!rltstate` [membre]', inline: false },
-            { name: '📈 Voir les stats', value: '`!roulettestats` | `!rltstats` [membre]', inline: false }
+            {
+                name: 'Présentation de la roulette 🍀',
+                value: "Tente ta chance : bonus rares, malus douloureux, ou rien du tout.\n" +
+                       "⏳ Cooldown : **15 min** entre deux tentatives.",
+                inline: false
+            },
+            {
+                name: 'Commandes utiles 💡',
+                value: "📊 `!roulettestate` | `!rltstate` [membre] : voir les effets actifs d'un·e membre (malus, bonus, cooldown...)\n" +
+                       "📈 `!roulettestats` | `!rltstats` [membre] : voir les statistiques d'un·e membre (tirages, bonus, malus, pire série...)",
+                inline: false
+            },
+            {
+                name: 'Système de pity 📈',
+                value: `Après **${ROULETTE_PITY_MALUS} malus** ou **${ROULETTE_PITY_NULS} résultats nuls** depuis ton dernier bonus, le tirage suivant est un **bonus garanti** !`,
+                inline: false
+            },
+            {
+                name: 'Hall of fame 🏆',
+                value: `Les bonus ultra rares (moins de **${(ROULETTE_HOF_SEUIL * 100).toFixed(2)}%** de chance) sont affichés dans <#${ROULETTE_HOF_CHANNEL_ID}> !`,
+                inline: false
+            },
+            {
+                name: 'Probabilités 🎲',
+                value: "Clique sur le bouton **🎲 Probabilités** sous ce message pour voir toutes les chances d'avoir certains bonus ou malus !.",
+                inline: false
+            }
         );
 
     if (jackpot > 0) {
