@@ -1741,7 +1741,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'bonus-cooldown-court': {
             const finActuel = rouletteCooldowns.get(message.member.id);
             if (finActuel && finActuel > Date.now() + 5 * 60 * 1000) rouletteCooldowns.set(message.member.id, Date.now() + 5 * 60 * 1000);
-            rouletteCooldownCourtCharges.set(message.member.id, 2);
+            rouletteCooldownCourtCharges.set(message.member.id, 3);
             return `⚡ **${auteurNom}** aura un cooldown de **5 minutes** sur ses **3 prochains tirages** !`;
         }
         case 'bonus-bouclier':
