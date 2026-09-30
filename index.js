@@ -1858,8 +1858,8 @@ function buildRoulettePresentationEmbed(authorId) {
             },
             {
                 name: 'Commandes utiles 💡',
-                value: "📊 `!roulettestate` | `!rltstate` [membre]\n> Voir les effets actifs d'un·e membre (malus, bonus, cooldown...)\n\n" +
-                       "📈 `!roulettestats` | `!rltstats` [membre]\n> Voir les statistiques d'un·e membre (tirages, bonus, malus, pire série...)",
+                value: "📊 `!roulettestate` | `!rltstate` [membre]\n Voir les effets actifs d'un·e membre (malus, bonus, cooldown...)\n" +
+                       "📈 `!roulettestats` | `!rltstats` [membre]\n Voir les statistiques d'un·e membre (tirages, bonus, malus, pire série...)",
                 inline: false
             },
             {
@@ -1880,7 +1880,7 @@ function buildRoulettePresentationEmbed(authorId) {
         );
 
     if (jackpot > 0) {
-        embed.addFields({ name: '🎰 Bonus boosté', value: `Chance de bonus augmentée de **+${Math.round(jackpot * 100)}%** grâce à tes derniers échecs !`, inline: false });
+        embed.addFields({ name: '🎰 Bonus boosté', value: `Chance de bonus augmentée de **+${Math.round(jackpot * 100)}%** à chaque échec ! Reinitialisée lorsqu'un bonus est roll.`, inline: false });
     }
     embed.data.fields = embed.data.fields.map(f => ({ ...f, value: f.value + '\n\u200b' }));
     embed.setFooter({ text: 'Astuce : Envoie !roulette go ou !rlt go pour faire un tirage sans passer par cet écran !' });
