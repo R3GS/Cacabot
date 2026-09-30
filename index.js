@@ -1848,7 +1848,6 @@ function buildRoulettePresentationEmbed(authorId) {
     const embed = new EmbedBuilder()
         .setColor(0xffd20a)
         .setTitle('🎰 | ROULETTE REGAÏENNE | 🎰')
-        .setThumbnail('https://img.draftbot.fr/1790779684480-32c7eef2bc565cb0.png')
         .setImage('https://img.draftbot.fr/1790778435185-73ff19eb6e704abb.gif')
         .addFields(
             {
@@ -7117,7 +7116,7 @@ return interaction.update({ embeds: [embed], components: rows });
         if (interaction.user.id !== authorId) {
             return interaction.reply({ content: "C'est pas ton tirage, tape `!roulette` toi-même 😌", ephemeral: true });
         }
-        const embed = buildRoulettePresentationEmbed(message.author.id);
+        const embed = buildRoulettePresentationEmbed(authorId);
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`roulette_probas_pres_${authorId}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`roulette_tenter_${authorId}`).setLabel('🍀 Tenter sa chance').setStyle(ButtonStyle.Primary)
