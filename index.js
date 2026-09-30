@@ -1848,13 +1848,12 @@ function buildRoulettePresentationEmbed(authorId) {
     const embed = new EmbedBuilder()
         .setColor(0xffd20a)
         .setTitle('🎰 | ROULETTE REGAÏENNE | 🎰')
-        .setDescription("La roulette qui te fait gagner des trucs... ou qui te fait ban.")
         .setThumbnail('https://img.draftbot.fr/1790779684480-32c7eef2bc565cb0.png')
         .setImage('https://img.draftbot.fr/1790778435185-73ff19eb6e704abb.gif')
         .addFields(
             {
                 name: 'Présentation de la roulette 🍀',
-                value: "Tente ta chance : bonus rares, malus douloureux, ou rien du tout.\n" +
+                value: "La roulette qui te fait gagner des trucs... ou qui te fait ban.\n\n" +
                        "⏳ Cooldown : **15 min** entre deux tentatives.",
                 inline: false
             },
@@ -1876,7 +1875,7 @@ function buildRoulettePresentationEmbed(authorId) {
             },
             {
                 name: 'Probabilités 🎲',
-                value: "Clique sur le bouton **🎲 Probabilités** sous ce message pour voir toutes les chances d'avoir certains bonus ou malus !.",
+                value: "Clique sur le bouton **🎲 Probabilités** sous ce message pour voir toutes les chances d'avoir certains bonus ou malus !",
                 inline: false
             }
         );
