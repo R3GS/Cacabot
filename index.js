@@ -1733,12 +1733,17 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'malus-leet':
             rouletteLeetUntil.set(message.member.id, Date.now() + 12 * 60 * 60 * 1000);
             return `**${auteurNom}** parle maintenant en **l33t sp34k** pendant **12h** !`;
-        case 'malus-cooldown-45':
-            rouletteCooldown45Charges.set(message.member.id, 3);
+        case 'malus-cooldown-45': {
+            rouletteCooldowns.set(message.member.id, Date.now() + 45 * 60 * 1000);
+            rouletteCooldown45Charges.set(message.member.id, 2);
             return `⏳ **${auteurNom}** aura un cooldown de **45 minutes** sur ses **3 prochains tirages** !`;
-        case 'bonus-cooldown-court':
-            rouletteCooldownCourtCharges.set(message.member.id, 3);
+        }
+        case 'bonus-cooldown-court': {
+            const finActuel = rouletteCooldowns.get(message.member.id);
+            if (finActuel && finActuel > Date.now() + 5 * 60 * 1000) rouletteCooldowns.set(message.member.id, Date.now() + 5 * 60 * 1000);
+            rouletteCooldownCourtCharges.set(message.member.id, 2);
             return `⚡ **${auteurNom}** aura un cooldown de **5 minutes** sur ses **3 prochains tirages** !`;
+        }
         case 'bonus-bouclier':
             rouletteBouclierActif.set(message.member.id, true);
             return `🛡️ **${auteurNom}** est protégé·e : son prochain malus sera annulé !`;
