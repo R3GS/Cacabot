@@ -2090,10 +2090,10 @@ function buildRouletteStateEmbed(cible) {
 
     return new EmbedBuilder()
         .setColor(0xffd20a)
-        .setTitle(`🎰 État roulette de ${cible.displayName}`)
+        .setTitle(`ÉTAT ROULETTE DE ${cible.displayName}`)
         .addFields(
-            { name: '🎉 Bonus actifs', value: bonus.length ? bonus.join('\n') : '*Aucun bonus actif*', inline: false },
-            { name: '💀 Malus actifs', value: malus.length ? malus.join('\n') : '*Aucun malus actif*', inline: false }
+            { name: 'BONUS :', value: (bonus.length ? bonus.join('\n') : '*Aucun bonus actif*') + '\n\u200b', inline: false },
+            { name: 'MALUS :', value: malus.length ? malus.join('\n') : '*Aucun malus actif*', inline: false }
         )
         .setFooter({ text: footerText });
 }
