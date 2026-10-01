@@ -2026,6 +2026,25 @@ async function envoyerHallOfFame(guild, auteurNom, entry) {
     await salon.send({ embeds: [embed] }).catch(err => console.error('[Hall of Fame] Échec envoi :', err.message));
 }
 
+// Membres éligibles à une redirection aléatoire : top 30 des plus actifs, bots exclus, sans l'auteur du tirage
+function membresTop30Roulette(guild, authorId) {
+    return Object.entries(topData.messages)
+        .sort((a, b) => b[1] - a[1])
+        .map(([id]) => guild.members.cache.get(id))
+        .filter(m => m && !m.user.bot)
+        .slice(0, 30)
+        .filter(m => m.id !== authorId);
+}
+
+// Ping la personne qui reçoit un malus redirigé, avec la raison (envoyé après l'embed du résultat)
+async function envoyerPingRedirection(channel, resultat) {
+    if (!resultat.pingCible) return;
+    await channel.send({
+        content: resultat.pingCible.texte,
+        allowedMentions: { users: [resultat.pingCible.id] }
+    }).catch(() => {});
+}
+
 async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
     const now = Date.now();
     const finFreeRoll = rouletteFreeRollUntil.get(authorId);
@@ -2060,6 +2079,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
     let cible = membre;
     let cibleNom = auteurNom;
     let prefixeRedirect = '';
+    let pingRedirection = null;
 
     if (outcomeId.startsWith('malus-') && rouletteBouclierActif.has(authorId)) {
         rouletteBouclierActif.delete(authorId);
@@ -2077,16 +2097,18 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
                 cible = cibleChoisie;
                 cibleNom = cible.displayName;
                 prefixeRedirect = `🎯 **${auteurNom}** avait choisi de rediriger son malus, envoyé vers **${cibleNom}** !\n`;
+                pingRedirection = { id: cible.id, raison: " quelqu'un a choisi de te l'envoyer.." };
             }
         } else {
             const charges = rouletteRedirectCharges.get(authorId) || 0;
             if (charges > 0) {
-                const membresEligibles = guild.members.cache.filter(m => !m.user.bot && m.id !== authorId);
-                if (membresEligibles.size > 0) {
-                    cible = membresEligibles.random();
+                const candidats = membresTop30Roulette(guild, authorId);
+                if (candidats.length > 0) {
+                    cible = candidats[Math.floor(Math.random() * candidats.length)];
                     cibleNom = cible.displayName;
                     rouletteRedirectCharges.set(authorId, charges - 1);
                     prefixeRedirect = `😈 **${auteurNom}** avait un malus en réserve, redirigé vers **${cibleNom}** !\n`;
+                    pingRedirection = { id: cible.id, raison: 'il avait un malus en réserve' };
                 }
             }
         }
@@ -2113,6 +2135,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
         embeds: proxy.vote ? [buildVoteRouletteEmbed(proxy.vote)] : [embed],
         components: [buildRowResultatRoulette(authorId, outcomeId, failIndex)],
         vote: proxy.vote ?? null,
+        pingCible: pingRedirection ? { id: pingRedirection.id, texte: `🔔 <@${pingRedirection.id}>, **${auteurNom}** t'a redirigé le malus **${ROULETTE_NOMS[outcomeId]}** (${pingRedirection.raison}) !` } : null,
         differe: differe ? async () => {
             await differe.action();
             return buildRouletteResultEmbed(outcomeId, prefixeRedirect + differe.texteFinal);
@@ -4556,6 +4579,7 @@ if (response?.needsRouletteStats) {
                 return;
             }
             const envoye = await message.reply({ embeds: resultat.embeds, components: resultat.components });
+            await envoyerPingRedirection(message.channel, resultat);
             memoriserResultatRoulette(envoye.id, resultat.embeds[0]);
             if (resultat.attenteChoix) rouletteChoixEnAttente.add(envoye.id);
             if (resultat.vote) await demarrerVoteRoulette(envoye, resultat.vote);
@@ -7201,6 +7225,7 @@ return interaction.update({ embeds: [embed], components: rows });
         return;
     }
         await interaction.update({ embeds: resultat.embeds, components: resultat.components });
+        await envoyerPingRedirection(interaction.channel, resultat);
         memoriserResultatRoulette(interaction.message.id, resultat.embeds[0]);
         if (resultat.attenteChoix) rouletteChoixEnAttente.add(interaction.message.id);
         if (resultat.vote) await demarrerVoteRoulette(interaction.message, resultat.vote);
@@ -8073,8 +8098,12 @@ client.on('messageReactionAdd', async (reaction, user) => {
     await msg.react('🆗').catch(() => {});
 });
 
-// Couronne roulette : réaction auto sous chaque message pendant la durée active
+// Couronne roulette : réaction 👑 uniquement sur le premier message de chaque bloc de messages
+const dernierAuteurParSalon = new Map(); // channelId -> userId du dernier message envoyé dans ce salon
 client.on('messageCreate', async (message) => {
+    if (!message.guild || message.webhookId) return;
+    const precedentId = dernierAuteurParSalon.get(message.channel.id);
+    dernierAuteurParSalon.set(message.channel.id, message.author.id);
     if (message.author.bot) return;
     const finCouronne = rouletteCouronneUntil.get(message.author.id);
     if (!finCouronne) return;
@@ -8082,6 +8111,7 @@ client.on('messageCreate', async (message) => {
         rouletteCouronneUntil.delete(message.author.id);
         return;
     }
+    if (precedentId === message.author.id) return; // même bloc : déjà couronné
     await message.react('👑').catch(() => {});
 });
 
