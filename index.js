@@ -1114,6 +1114,8 @@ const RAID_ESCALATION_WINDOW_MS = 15 * 60 * 1000; // 15min après la fin du mute
 const rouletteFreeRollUntil = new Map(); // userId -> timestamp jusqu'où le cooldown est ignoré
 const rouletteCooldowns = new Map(); // userId -> timestamp de fin de cooldown
 const rouletteCouronneUntil = new Map(); // userId -> timestamp de fin
+const rouletteAntiFeurUntil = new Map(); // userId -> timestamp de fin (24h)
+const rouletteCoupTripleCharges = new Map(); // userId -> nombre de tirages gratuits restants
 const rouletteRedirectCharges = new Map(); // userId -> nombre de malus à rediriger
 const roulettePseudoLock = new Map(); // userId -> { until: timestamp, pseudo: string }
 const ROULETTE_COOLDOWN_MS = 15 * 60 * 1000;
@@ -1159,6 +1161,34 @@ const rouletteStats = new Map();        // userId -> { tirages, bonus, malus, ri
 const ROULETTE_JACKPOT_INCREMENT = 0.01; // +1% par "rien"
 const ROULETTE_JACKPOT_MAX = 0.5;        // plafond à 50%
 const ROULETTE_HOF_CHANNEL_ID = '1554331383361577010';
+const ROULETTE_SALON_ID = '1553954760900608091'; // Salon où envoyer les annonces Happy Hour
+
+function estHappyHour() {
+    const now = new Date();
+    const parisDate = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    return parisDate.getHours() === 20; // Actif entre 20h00 et 20h59
+}
+
+let dernierEnvoiHappyHour = null;
+function verifierHappyHour() {
+    const now = new Date();
+    const paris = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const h = paris.getHours();
+    const m = paris.getMinutes();
+    const salon = client.channels.cache.get(ROULETTE_SALON_ID);
+    if (!salon) return;
+
+    if (h === 20 && m === 0 && dernierEnvoiHappyHour !== '20h00') {
+        dernierEnvoiHappyHour = '20h00';
+        salon.send('# __🎰 C\'EST L\'HAPPY HOUR SUR LA ROULETTE ! (20h - 21h)__\n🔥 Pendant 1 heure, les cooldowns de tout le monde passent à **5 minutes** au lieu de 15 ! Tentez votre chance !');
+    } else if (h === 20 && m === 30 && dernierEnvoiHappyHour !== '20h30') {
+        dernierEnvoiHappyHour = '20h30';
+        salon.send('# __🎰 PLUS QUE 30 MINUTES D\'HAPPY HOUR !__\n⚡ Les tirages sont toujours à **5 minutes** de cooldown jusqu\'à 21h !');
+    } else if (h === 21 && m === 0 && dernierEnvoiHappyHour !== '21h00') {
+        dernierEnvoiHappyHour = '21h00';
+        salon.send('# __🏁 FIN DE L\'HAPPY HOUR !__\nRetour au cooldown normal de 15 minutes. Merci d\'avoir joué !');
+    }
+}
 const ROULETTE_WEBHOOK_EXCLUS = new Set([
     '1553948893354401923',
     '862253918583390238',
@@ -1189,6 +1219,18 @@ function activerTransfo(userId, type, dureeMs) {
     const t = rouletteTransfos.get(userId) ?? {};
     t[type] = Date.now() + dureeMs;
     rouletteTransfos.set(userId, t);
+}
+function basculerTransfo(userId, type, dureeMs) {
+    const t = rouletteTransfos.get(userId) ?? {};
+    if (t[type] && Date.now() < t[type]) {
+        delete t[type];
+        if (Object.keys(t).length === 0) rouletteTransfos.delete(userId);
+        else rouletteTransfos.set(userId, t);
+        return true; // Était actif, a été annulé
+    }
+    t[type] = Date.now() + dureeMs;
+    rouletteTransfos.set(userId, t);
+    return false; // N'était pas actif, a été appliqué
 }
 function surTexte(texte, fn) {
     return texte
@@ -1266,7 +1308,8 @@ const ROULETTE_NOMS_COMMANDES = {
     timeout3: 'malus-timeout-3min', timeout5: 'malus-timeout-5min', timeout20: 'malus-timeout-20min',
     exclu1h: 'malus-exclu-heure', exclu1j: 'malus-exclu-jour', exclu1semaine: 'malus-exclu-semaine',
     pseudo1semaine: 'malus-pseudo-lock-semaine', pseudo1mois: 'malus-pseudo-lock-mois', ban: 'malus-ban',
-    papayou: 'bonus-gif-ou-audio', cooldown30s: 'bonus-cooldown-zero-30s', cooldown90s: 'bonus-cooldown-zero-90s',
+    papayou: 'bonus-gif-ou-audio', antifeur: 'bonus-anti-feur', couptriple: 'bonus-coup-triple', cooldowncourt: 'bonus-cooldown-court',
+    cooldown30s: 'bonus-cooldown-zero-30s', cooldown90s: 'bonus-cooldown-zero-90s',
     couronne: 'bonus-couronne', redirect: 'bonus-redirect-malus', rolesup: 'bonus-role-superieur',
     legendaire: 'bonus-legendaire', elu: 'bonus-elu-roulette', youtube: 'bonus-youtube-credit',
     goodies: 'bonus-epsys-goodies', petitdej: 'bonus-epsys-petitdej', twitch: 'bonus-twitch-jeu',
@@ -1287,51 +1330,59 @@ const ROULETTE_PITY_NULS = 5;  // résultats nuls depuis le dernier bonus => bon
 
 // type : 'bonus' | 'malus' | 'special'   poids : poids relatif   nom : titre d'embed   desc : ligne de la paytable
 const ROULETTE_TABLE = [
-    { id: 'bonus-epsys-petitdej',      type: 'bonus',   poids: 1 / 17000, nom: 'Petit déj apporté par Epsys en maid dress', desc: 'Petit déj apporté par Epsys en maid dress' },
-    { id: 'bonus-epsys-goodies',       type: 'bonus',   poids: 1 / 12500, nom: 'Goodies d\'Epsys', desc: 'Goodies d\'Epsys gratuit au choix: T-Shirt/Mug/Lot de 5pin\'s' },
-    { id: 'bonus-youtube-credit',      type: 'bonus',   poids: 1 / 8500,  nom: 'Pseudo crédité sous chaque vidéo YouTube', desc: 'Pseudo crédité sous chaque vidéo YouTube' },
-    { id: 'bonus-elu-roulette',        type: 'bonus',   poids: 1 / 7000,  nom: 'Rôle Élu·e de la Roulette', desc: 'Rôle spécial d\'**Élu·e de la Roulette**' },
-    { id: 'bonus-epsys-photo',         type: 'bonus',   poids: 1 / 5000,  nom: 'Photo disgracieuse d\'Epsys dédicacée', desc: '1 photo disgracieuse d\'Epsys signée et envoyée par la Poste' },
-    { id: 'malus-prime',               type: 'malus',   poids: 1 / 5000,  nom: 'MALUS PRIME', desc: 'Cumule TOUS les malus de texte/pseudo en même temps (hors mute, exclusion, cooldown, ban)' },
-    { id: 'bonus-epsys-5e',            type: 'bonus',   poids: 1 / 3400,  nom: '5€ de la YouTube Money d\'Epsys', desc: '5€ de la YouTube Money d\'Epsys' },
-    { id: 'malus-ban',                 type: 'malus',   poids: 1 / 15000, nom: 'Ban définitif', desc: 'Ban définitif (révocable si besoin)' },
-    { id: 'bonus-commande-perso',      type: 'bonus',   poids: 1 / 1700,  nom: 'Commande Cacabot personnalisée', desc: 'Ajoute une commande Cacabot de ton choix' },
-    { id: 'bonus-twitch-jeu',          type: 'bonus',   poids: 1 / 850,   nom: 'Choix du jeu du prochain stream Twitch', desc: 'Choix du jeu du prochain stream Twitch - jeu court uniquement' },
-    { id: 'malus-pseudo-lock-mois',    type: 'malus',   poids: 1 / 500,   nom: 'Pseudo horrible verrouillé pendant 1 mois', desc: 'Pseudo horrible changé de force, verrouillé pendant 1 mois' },
-    { id: 'bonus-legendaire',          type: 'bonus',   poids: 1 / 420,   nom: 'Regaïen·ne légendraire', desc: 'Rôle de Regaïen·ne légendraire' },
-    { id: 'malus-exclu-semaine',       type: 'malus',   poids: 1 / 350,   nom: 'Exclusion de 1 semaine', desc: 'Exclusion de 1 semaine' },
-    { id: 'bonus-role-superieur',      type: 'bonus',   poids: 1 / 170,   nom: 'Rôle de Regaïen.ne niv. supérieur', desc: 'Rôle de Regaïen.ne supérieur' },
-    { id: 'malus-pseudo-lock-semaine', type: 'malus',   poids: 1 / 170,   nom: 'Pseudo horrible verrouillé pendant 1 semaine', desc: 'Pseudo horrible changé de force, verrouillé pendant 1 semaine' },
-    { id: 'special-vote-immunite-exclusion', type: 'special', poids: 1 / 125, nom: 'Vote public', desc: 'Vote public : tirage à volonté pendant 3min (immunité au mute) ou exclusion pendant 1 jour, décidé en 2h' },
-    { id: 'bonus-redirect-malus',      type: 'bonus',   poids: 1 / 85,    nom: '3 malus redirigés au hasard', desc: '3 prochains malus redirigés vers un.e autre membre' },
-    { id: 'malus-exclu-jour',          type: 'malus',   poids: 1 / 85,    nom: 'Exclusion de 1 jour', desc: 'Exclusion de 1 jour' },
-    { id: 'malus-lettre-interdite',    type: 'malus',   poids: 1 / 75,    nom: 'Lettre interdite pendant 12h', desc: 'Ne peut plus utiliser une lettre au hasard pendant 12h' },
-    { id: 'malus-uwu-24h',             type: 'malus',   poids: 1 / 55,    nom: 'UwU obligatoire pendant 24h', desc: 'Doit finir chaque message par UwU pendant 24h' },
-    { id: 'bonus-couronne',            type: 'bonus',   poids: 1 / 50,    nom: 'Couronne 👑 pendant 12h', desc: 'Une couronne 👑 sous tes messages pendant 12h' },
-    { id: 'malus-exclu-heure',         type: 'malus',   poids: 1 / 50,    nom: 'Exclusion de 1 heure', desc: 'Exclusion de 1 heure' },
-    { id: 'bonus-cooldown-zero-90s',   type: 'bonus',   poids: 1 / 35,    nom: 'Tirage à volonté pendant 1min30', desc: 'Tirage à volonté pendant 1min30' },
-    { id: 'malus-timeout-20min',       type: 'malus',   poids: 1 / 35,    nom: 'Mute de 20 minutes', desc: 'Mute de 20 minutes' },
-    { id: 'bonus-cooldown-zero-30s',   type: 'bonus',   poids: 1 / 17,    nom: 'Tirage à volonté pendant 30s', desc: 'Tirage à volonté pendant 30s' },
-    { id: 'malus-timeout-5min',        type: 'malus',   poids: 1 / 17,    nom: 'Mute de 5 minutes', desc: 'Mute de 5 minutes' },
+    
+    // ───────── BONUS (du plus fréquent au plus rare) ─────────
     { id: 'bonus-gif-ou-audio',        type: 'bonus',   poids: 1 / 10,    nom: 'PAPAYOU.mp3', desc: 'PAPAYOU.mp3' },
     { id: 'bonus-cooldown-court',      type: 'bonus',   poids: 1 / 10,    nom: 'Cooldown réduit à 5 min', desc: 'Les 3 prochains tirages ont un cooldown de 5 minutes' },
-    { id: 'malus-timeout-3min',        type: 'malus',   poids: 1 / 10,    nom: 'Mute de 3 minutes', desc: 'Mute de 3 minutes' },
-    { id: 'bonus-bouclier',            type: 'bonus',   poids: 1 / 20,    nom: 'Immunité au prochain malus', desc: 'Immunité au prochain malus' },
+    { id: 'bonus-bouclier',            type: 'bonus',   poids: 1 / 12,    nom: 'Immunité au prochain malus', desc: 'Immunité au prochain malus' },
+    { id: 'bonus-anti-feur',           type: 'bonus',   poids: 1 / 15,    nom: 'Immunité Anti-Feur (24h)', desc: 'Cacabot réagit avec 🛡️ au lieu de te répondre Feur pendant 24h' },
+    { id: 'bonus-cooldown-zero-30s',   type: 'bonus',   poids: 1 / 17,    nom: 'Tirage à volonté pendant 30s', desc: 'Tirage à volonté pendant 30s' },
+    { id: 'bonus-coup-triple',         type: 'bonus',   poids: 1 / 20,    nom: 'Coup Triple', desc: 'Tes 3 prochains tirages sont immédiats et sans aucun cooldown' },
+    { id: 'bonus-cooldown-zero-90s',   type: 'bonus',   poids: 1 / 35,    nom: 'Tirage à volonté pendant 1min30', desc: 'Tirage à volonté pendant 1min30' },
+    { id: 'bonus-couronne',            type: 'bonus',   poids: 1 / 50,    nom: 'Couronne 👑 pendant 12h', desc: 'Une couronne 👑 sous tes messages pendant 12h' },
+    { id: 'bonus-redirect-malus',      type: 'bonus',   poids: 1 / 85,    nom: '3 malus redirigés au hasard', desc: '3 prochains malus redirigés vers un.e autre membre' },
     { id: 'bonus-redirect-choix',      type: 'bonus',   poids: 1 / 100,   nom: 'Malus redirigé au choix', desc: 'Redirige ton prochain malus vers la personne de ton choix' },
-    { id: 'bonus-pseudo-choix',        type: 'bonus',   poids: 1 / 250,   nom: 'Pseudo au choix', desc: 'Choisis le pseudo d\'un·e membre, verrouillé pendant 48h (révocable si problématique)' },
     { id: 'bonus-epingle',             type: 'bonus',   poids: 1 / 150,   nom: 'Message épinglé', desc: 'Un message épinglé définitivement dans le salon (règles du serveur à respecter)' },
-    { id: 'malus-emoji',               type: 'malus',   poids: 1 / 100,   nom: 'Emoji obligatoire', desc: 'Doit finir chaque message par un emoji aléatoire pendant 24h' },
-    { id: 'malus-leet',                type: 'malus',   poids: 1 / 90,    nom: 'Leet speak pendant 12h', desc: 'Tous ses messages sont écrits en leet speak (a→4, e→3...) pendant 12h' },
-    { id: 'malus-caps',                type: 'malus',   poids: 1 / 100,   nom: 'MAJUSCULES pendant 2h', desc: 'Doit parler en MAJUSCULES pendant 2h' },
-    { id: 'malus-emoji-only',          type: 'malus',   poids: 1 / 200,   nom: 'Emoji only pendant 1h', desc: 'Tous ses mots sont remplacés par des emojis pendant 1h' },
-    { id: 'malus-censure',             type: 'malus',   poids: 1 / 250,   nom: 'Censure pendant 2h', desc: 'Un mot sur 3 est censuré (▇▇) pendant 2h' },
-    { id: 'malus-mots-melanges',       type: 'malus',   poids: 1 / 300,   nom: 'Mots mélangés pendant 2h', desc: 'Les mots de chaque message sont mélangés pendant 2h' },
-    { id: 'malus-lettres-melangees',   type: 'malus',   poids: 1 / 400,   nom: 'Lettres mélangées pendant 1h', desc: 'Les lettres de chaque mot sont mélangées pendant 1h' },
-    { id: 'malus-limite-100',          type: 'malus',   poids: 1 / 500,   nom: 'Limite de 100 caractères pendant 2h', desc: 'Messages coupés à 100 caractères maximum pendant 2h' },
-    { id: 'malus-limite-30',           type: 'malus',   poids: 1 / 550,   nom: 'Limite de 30 caractères pendant 1h', desc: 'Messages coupés à 30 caractères maximum pendant 1h' },
-    { id: 'malus-bebe',                type: 'malus',   poids: 1 / 450,   nom: 'Parler bébé pendant 2h', desc: 'Les « j » deviennent des « z » et les « r » des « w » dans tous ses messages pendant 2h' },
+    { id: 'bonus-role-superieur',      type: 'bonus',   poids: 1 / 170,   nom: 'Rôle de Regaïen.ne niv. supérieur', desc: 'Rôle de Regaïen.ne supérieur' },
+    { id: 'bonus-pseudo-choix',        type: 'bonus',   poids: 1 / 250,   nom: 'Pseudo au choix', desc: 'Choisis le pseudo d\'un·e membre, verrouillé pendant 48h (révocable si problématique)' },
+    { id: 'bonus-legendaire',          type: 'bonus',   poids: 1 / 420,   nom: 'Regaïen·ne légendraire', desc: 'Rôle de Regaïen·ne légendraire' },
+    { id: 'bonus-twitch-jeu',          type: 'bonus',   poids: 1 / 850,   nom: 'Choix du jeu du prochain stream Twitch', desc: 'Choix du jeu du prochain stream Twitch - jeu court uniquement' },
+    { id: 'bonus-commande-perso',      type: 'bonus',   poids: 1 / 1700,  nom: 'Commande Cacabot personnalisée', desc: 'Ajoute une commande Cacabot de ton choix' },
+    { id: 'bonus-epsys-5e',            type: 'bonus',   poids: 1 / 3400,  nom: '5€ de la YouTube Money d\'Epsys', desc: '5€ de la YouTube Money d\'Epsys' },
+    { id: 'bonus-epsys-photo',         type: 'bonus',   poids: 1 / 5000,  nom: 'Photo disgracieuse d\'Epsys dédicacée', desc: '1 photo disgracieuse d\'Epsys signée et envoyée par la Poste' },
+    { id: 'bonus-elu-roulette',        type: 'bonus',   poids: 1 / 7000,  nom: 'Rôle Élu·e de la Roulette', desc: 'Rôle spécial d\'**Élu·e de la Roulette**' },
+    { id: 'bonus-youtube-credit',      type: 'bonus',   poids: 1 / 8500,  nom: 'Pseudo crédité sous chaque vidéo YouTube', desc: 'Pseudo crédité sous chaque vidéo YouTube' },
+    { id: 'bonus-epsys-goodies',       type: 'bonus',   poids: 1 / 12500, nom: 'Goodies d\'Epsys', desc: 'Goodies d\'Epsys gratuit au choix: T-Shirt/Mug/Lot de 5pin\'s' },
+    { id: 'bonus-epsys-petitdej',      type: 'bonus',   poids: 1 / 17000, nom: 'Petit déj apporté par Epsys en maid dress', desc: 'Petit déj apporté par Epsys en maid dress' },
+
+    // ───────── MALUS (du plus fréquent au plus rare) ─────────
+    { id: 'malus-timeout-3min',        type: 'malus',   poids: 1 / 10,    nom: 'Mute de 3 minutes', desc: 'Mute de 3 minutes' },
+    { id: 'malus-timeout-5min',        type: 'malus',   poids: 1 / 15,    nom: 'Mute de 5 minutes', desc: 'Mute de 5 minutes' },
+    { id: 'malus-cooldown-45',         type: 'malus',   poids: 1 / 20,    nom: 'Cooldown de 45 min', desc: 'Les 2 prochains tirages ont un cooldown de 45 minutes' },
+    { id: 'malus-timeout-20min',       type: 'malus',   poids: 1 / 25,    nom: 'Mute de 20 minutes', desc: 'Mute de 20 minutes' },
+    { id: 'malus-emoji-only',          type: 'malus',   poids: 1 / 35,    nom: 'Emoji only pendant 1h', desc: 'Tous ses mots sont remplacés par des emojis pendant 1h' },
+    { id: 'malus-bebe',                type: 'malus',   poids: 1 / 45,    nom: 'Parler bébé pendant 2h', desc: 'Les « j » deviennent des « z » et les « r » des « w » dans tous ses messages pendant 2h' },
+    { id: 'malus-emoji',               type: 'malus',   poids: 1 / 55,    nom: 'Emoji obligatoire', desc: 'Doit finir chaque message par un emoji aléatoire pendant 24h' },
+    { id: 'malus-caps',                type: 'malus',   poids: 1 / 70,    nom: 'MAJUSCULES pendant 2h', desc: 'Doit parler en MAJUSCULES pendant 2h' },
+    { id: 'malus-censure',             type: 'malus',   poids: 1 / 85,    nom: 'Censure pendant 2h', desc: 'Un mot sur 3 est censuré (▇▇) pendant 2h' },
+    { id: 'malus-exclu-heure',         type: 'malus',   poids: 1 / 100,   nom: 'Exclusion de 1 heure', desc: 'Exclusion de 1 heure' },
+    { id: 'malus-exclu-jour',          type: 'malus',   poids: 1 / 350,   nom: 'Exclusion de 1 jour', desc: 'Exclusion de 1 jour' },
+    { id: 'malus-mots-melanges',       type: 'malus',   poids: 1 / 120,   nom: 'Mots mélangés pendant 2h', desc: 'Les mots de chaque message sont mélangés pendant 2h' },
+    { id: 'malus-pseudo-lock-semaine', type: 'malus',   poids: 1 / 150,   nom: 'Pseudo horrible verrouillé pendant 1 semaine', desc: 'Pseudo horrible changé de force, verrouillé pendant 1 semaine' },
+    { id: 'malus-lettres-melangees',   type: 'malus',   poids: 1 / 180,   nom: 'Lettres mélangées pendant 1h', desc: 'Les lettres de chaque mot sont mélangées pendant 1h' },
+    { id: 'malus-limite-100',          type: 'malus',   poids: 1 / 220,   nom: 'Limite de 100 caractères pendant 2h', desc: 'Messages coupés à 100 caractères maximum pendant 2h' },
+    { id: 'malus-limite-30',           type: 'malus',   poids: 1 / 270,   nom: 'Limite de 30 caractères pendant 1h', desc: 'Messages coupés à 30 caractères maximum pendant 1h' },
+    { id: 'malus-leet',                type: 'malus',   poids: 1 / 330,   nom: 'Leet speak pendant 12h', desc: 'Tous ses messages sont écrits en leet speak (a→4, e→3...) pendant 12h' },
+    { id: 'malus-lettre-interdite',    type: 'malus',   poids: 1 / 400,   nom: 'Lettre interdite pendant 12h', desc: 'Ne peut plus utiliser une lettre au hasard pendant 12h' },
+    { id: 'malus-uwu-24h',             type: 'malus',   poids: 1 / 480,   nom: 'UwU obligatoire pendant 24h', desc: 'Doit finir chaque message par UwU pendant 24h' },
+    { id: 'malus-pseudo-lock-mois',    type: 'malus',   poids: 1 / 600,   nom: 'Pseudo horrible verrouillé pendant 1 mois', desc: 'Pseudo horrible changé de force, verrouillé pendant 1 mois' },
+    { id: 'malus-prime',               type: 'malus',   poids: 1 / 800,   nom: 'MALUS PRIME', desc: 'Cumule TOUS les malus de texte/pseudo en même temps (hors mute, exclusion, cooldown, ban)' },
+    { id: 'malus-exclu-semaine',       type: 'malus',   poids: 1 / 1200,  nom: 'Exclusion de 1 semaine', desc: 'Exclusion de 1 semaine' },
+    { id: 'malus-ban',                 type: 'malus',   poids: 1 / 15000, nom: 'Ban définitif', desc: 'Ban définitif (révocable si besoin)' },
+
+    // ───────── SPÉCIAL (du plus fréquent au plus rare) ─────────
+    { id: 'special-vote-immunite-exclusion', type: 'special', poids: 1 / 125, nom: 'Vote public', desc: 'Vote public : tirage à volonté pendant 3min (immunité au mute) ou exclusion pendant 1 jour, décidé en 2h' },
     { id: 'special-tournee-generale',  type: 'special', poids: 1 / 600,   nom: 'Tournée générale', desc: 'Tournée générale ! Les cooldowns de tout le monde sont éteints pendant 1 minute' },
-    { id: 'malus-cooldown-45',         type: 'malus',   poids: 1 / 40,    nom: 'Cooldown de 45 min', desc: 'Les 3 prochains tirages ont un cooldown de 45 minutes' },
 ];
 
 // Généré depuis la table : plus de doublon à maintenir
@@ -1348,7 +1399,8 @@ const ROULETTE_EMOJIS_PAR_ID = {
     'bonus-redirect-malus': '😈', 'malus-exclu-jour': '🚫', 'malus-lettre-interdite': '🔤',
     'malus-uwu-24h': '😳', 'bonus-couronne': '👑', 'malus-exclu-heure': '🚫',
     'bonus-cooldown-zero-90s': '⚡', 'malus-timeout-20min': '🔇', 'bonus-cooldown-zero-30s': '⚡',
-    'malus-timeout-5min': '🔇', 'bonus-gif-ou-audio': '🎉', 'malus-timeout-3min': '🔇',
+    'malus-timeout-5min': '🔇', 'bonus-gif-ou-audio': '🎉', 'bonus-anti-feur': '🛡️', 'bonus-coup-triple': '🎰',
+    'bonus-cooldown-court': '⚡', 'malus-timeout-3min': '🔇',
     'bonus-bouclier': '🛡️', 'bonus-redirect-choix': '🎯', 'bonus-pseudo-choix': '✏️',
     'bonus-epingle': '📌', 'malus-emoji': '😀', 'malus-leet': '🤖', 'malus-caps': '🔠',
     'malus-emoji-only': '🙂', 'malus-censure': '▇', 'malus-mots-melanges': '🔀',
@@ -1498,6 +1550,8 @@ const ROULETTE_ETATS = {
     cooldowns:       rouletteCooldowns,
     freeRoll:        rouletteFreeRollUntil,
     couronne:        rouletteCouronneUntil,
+    antiFeur:        rouletteAntiFeurUntil,
+    coupTriple:      rouletteCoupTripleCharges,
     pseudoLock:      roulettePseudoLock,
     redirectCharges: rouletteRedirectCharges,
     pity:            roulettePity,
@@ -1560,6 +1614,11 @@ function estImmuniseRoulette(userId) {
     return true;
 }
 
+function annulerTiragesAGogo(userId) {
+    rouletteFreeRollUntil.delete(userId);
+    rouletteCoupTripleCharges.delete(userId);
+}
+
 // Malus violent : prévient d'abord, applique 10s plus tard, puis le message est modifié
 function malusDiffere(message, nom, titre, futur, passe, action) {
     message.differe = { action, texteFinal: `💀 **${nom}** ${passe}.` };
@@ -1570,24 +1629,21 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
     switch (outcomeId) {
         case 'malus-timeout-3min':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 3 minutes !`;
-            if (estModo(message.member)) {
-                rouletteCooldowns.set(message.member.id, Date.now() + 3 * 60 * 1000);
-                return `🛡️ **${auteurNom}** est Modo : le mute de 3 minutes est remplacé par un cooldown de **3 minutes**.`;
-            }
+            if (estModo(message.member)) return `🛡️ **${auteurNom}** est Modo : le mute de 3 minutes est annulé !`;
+            annulerTiragesAGogo(message.member.id);
             await message.member.timeout(3 * 60 * 1000, 'Roulette').catch(() => {});
             rouletteTimeoutUntil.set(message.member.id, Date.now() + 3 * 60 * 1000);
             return `**${auteurNom}** est mute pendant **3 minutes**.`;
         case 'malus-timeout-5min':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 5 minutes !`;
-            if (estModo(message.member)) {
-                rouletteCooldowns.set(message.member.id, Date.now() + 5 * 60 * 1000);
-                return `🛡️ **${auteurNom}** est Modo : le mute de 5 minutes est remplacé par un cooldown de **5 minutes**.`;
-            }
+            if (estModo(message.member)) return `🛡️ **${auteurNom}** est Modo : le mute de 5 minutes est annulé !`;
+            annulerTiragesAGogo(message.member.id);
             await message.member.timeout(5 * 60 * 1000, 'Roulette').catch(() => {});
             rouletteTimeoutUntil.set(message.member.id, Date.now() + 5 * 60 * 1000);
             return `**${auteurNom}** est mute pendant **5 minutes**.`;
         case 'malus-timeout-20min':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 20 minutes !`;
+            annulerTiragesAGogo(message.member.id);
             if (estModo(message.member)) {
                 rouletteCooldowns.set(message.member.id, Date.now() + 20 * 60 * 1000);
                 return `🛡️ **${auteurNom}** est Modo : le mute de 20 minutes est remplacé par un cooldown de **20 minutes**.`;
@@ -1597,6 +1653,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             return `**${auteurNom}** est mute pendant **20 minutes**.`;
         case 'malus-exclu-heure':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 heure !`;
+            annulerTiragesAGogo(message.member.id);
             if (estModo(message.member)) {
                 rouletteCooldowns.set(message.member.id, Date.now() + 60 * 60 * 1000);
                 return `🛡️ **${auteurNom}** est Modo : l'exclusion de 1 heure est remplacée par un cooldown de **1 heure**.`;
@@ -1608,6 +1665,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 });
         case 'malus-exclu-jour':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 jour !`;
+            annulerTiragesAGogo(message.member.id);
             if (estModo(message.member)) {
                 rouletteCooldowns.set(message.member.id, Date.now() + 24 * 60 * 60 * 1000);
                 return `🛡️ **${auteurNom}** est Modo : l'exclusion de 1 jour est remplacée par un cooldown de **1 jour**.`;
@@ -1619,6 +1677,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 });
         case 'malus-exclu-semaine':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 semaine !`;
+            annulerTiragesAGogo(message.member.id);
             if (estModo(message.member)) {
                 rouletteCooldowns.set(message.member.id, Date.now() + 7 * 24 * 60 * 60 * 1000);
                 return `🛡️ **${auteurNom}** est Modo : l'exclusion de 1 semaine est remplacée par un cooldown de **1 semaine**.`;
@@ -1632,6 +1691,13 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             await message.channel.send({ files: ["./PAPAYOU.mp3"] }).catch(() => {});
             return `**${auteurNom}** a fait spawn un petit cadeau !`;
         }
+        case 'bonus-anti-feur':
+            rouletteAntiFeurUntil.set(message.member.id, Date.now() + 24 * 60 * 60 * 1000);
+            return `🛡️ **${auteurNom}** est immunisé·e contre Cacabot pendant **24h** ! Il réagira avec 🛡️ à la place de Feur.`;
+        case 'bonus-coup-triple':
+            rouletteCooldowns.delete(message.member.id);
+            rouletteCoupTripleCharges.set(message.member.id, 3);
+            return `🎰 **${auteurNom}** décroche le **COUP TRIPLE** ! Ses **3 prochains tirages** sont immédiats et sans aucun cooldown !`;
                 case 'bonus-twitch-jeu':
             await message.channel.send(`Bravo ! Tu as gagné le choix du jeu du prochain stream Twitch (jeu court uniquement) ! <@436218312574107658> viendra te voir pour en discuter✨`);
             await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
@@ -1703,6 +1769,8 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             rouletteFreeRollUntil.set(message.member.id, Date.now() + 90 * 1000);
             return `⚡ **${auteurNom}** peut retenter sa chance sans cooldown pendant **1min30** !`;
         case 'malus-ban':
+            if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le ban définitif !`;
+            annulerTiragesAGogo(message.member.id);
             if (estModo(message.member)) {
                 rouletteCooldowns.set(message.member.id, Date.now() + 7 * 24 * 60 * 60 * 1000);
                 return `🛡️ **${auteurNom}** est Modo : le ban est remplacé par un cooldown de **1 semaine**.`;
@@ -1726,10 +1794,21 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             return `**${auteurNom}** se retrouve avec le pseudo **${pseudo}**, verrouillé pendant **1 mois** !`;
         }
 
-        case 'malus-uwu-24h':
+        case 'malus-uwu-24h': {
+            const finUwu = rouletteUwuUntil.get(message.member.id);
+            if (finUwu && Date.now() < finUwu) {
+                rouletteUwuUntil.delete(message.member.id);
+                return `✨ **Miracle !** **${auteurNom}** retombe sur le malus **UwU** alors qu'il était encore actif : il est **annulé** !`;
+            }
             rouletteUwuUntil.set(message.member.id, Date.now() + 24 * 60 * 60 * 1000);
             return `**${auteurNom}** doit terminer chacun de ses messages par **UwU** pendant **24h** !`;
+        }
         case 'malus-lettre-interdite': {
+            const lockLettre = rouletteLettreInterdite.get(message.member.id);
+            if (lockLettre && Date.now() < lockLettre.until) {
+                rouletteLettreInterdite.delete(message.member.id);
+                return `✨ **Miracle !** **${auteurNom}** retombe sur la **lettre interdite** alors qu'elle était encore active : elle est **annulée** !`;
+            }
             const lettre = String.fromCharCode(65 + Math.floor(Math.random() * 26));
             rouletteLettreInterdite.set(message.member.id, { until: Date.now() + 12 * 60 * 60 * 1000, lettre });
             return `**${auteurNom}** ne peut plus utiliser la lettre **${lettre}** pendant **12h** !`;
@@ -1739,43 +1818,72 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             rouletteRedirectCharges.set(message.member.id, total);
             return `😈 **${auteurNom}** peut rediriger ses **3 prochains malus** vers un·e autre membre ! (${total} en réserve)`;
         }
-        case 'malus-emoji':
+        case 'malus-emoji': {
+            const finEmoji = rouletteEmojiUntil.get(message.member.id);
+            if (finEmoji && Date.now() < finEmoji) {
+                rouletteEmojiUntil.delete(message.member.id);
+                return `✨ **Miracle !** **${auteurNom}** retombe sur l'**emoji obligatoire** alors qu'il était encore actif : il est **annulé** !`;
+            }
             rouletteEmojiUntil.set(message.member.id, Date.now() + 24 * 60 * 60 * 1000);
             return `**${auteurNom}** doit terminer chacun de ses messages par un **emoji aléatoire** pendant **24h** !`;
+        }
         case 'malus-caps':
-            activerTransfo(message.member.id, 'caps', 2 * 60 * 60 * 1000);
+            if (basculerTransfo(message.member.id, 'caps', 2 * 60 * 60 * 1000)) {
+                return `✨ **Miracle !** **${auteurNom}** retombe sur les **MAJUSCULES** alors qu'elles étaient encore actives : le malus est **annulé** !`;
+            }
             return `**${auteurNom}** doit **PARLER EN MAJUSCULES** pendant **2h** !`;
         case 'malus-emoji-only':
-            activerTransfo(message.member.id, 'emojiOnly', 60 * 60 * 1000);
+            if (basculerTransfo(message.member.id, 'emojiOnly', 60 * 60 * 1000)) {
+                return `✨ **Miracle !** **${auteurNom}** retombe sur l'**emoji only** alors qu'il était encore actif : le malus est **annulé** !`;
+            }
             return `**${auteurNom}** ne peut plus s'exprimer qu'en **emojis** pendant **1h** !`;
         case 'malus-censure':
-            activerTransfo(message.member.id, 'censure', 2 * 60 * 60 * 1000);
+            if (basculerTransfo(message.member.id, 'censure', 2 * 60 * 60 * 1000)) {
+                return `✨ **Miracle !** **${auteurNom}** retombe sur la **censure** alors qu'elle était encore active : le malus est **annulé** !`;
+            }
             return `**${auteurNom}** est **censuré·e** : un mot sur 3 disparaît pendant **2h** !`;
         case 'malus-mots-melanges':
-            activerTransfo(message.member.id, 'mots', 2 * 60 * 60 * 1000);
+            if (basculerTransfo(message.member.id, 'mots', 2 * 60 * 60 * 1000)) {
+                return `✨ **Miracle !** **${auteurNom}** retombe sur les **mots mélangés** alors qu'ils étaient encore actifs : le malus est **annulé** !`;
+            }
             return `**${auteurNom}** a les **mots mélangés** pendant **2h** !`;
         case 'malus-lettres-melangees':
-            activerTransfo(message.member.id, 'lettres', 60 * 60 * 1000);
+            if (basculerTransfo(message.member.id, 'lettres', 60 * 60 * 1000)) {
+                return `✨ **Miracle !** **${auteurNom}** retombe sur les **lettres mélangées** alors qu'elles étaient encore actives : le malus est **annulé** !`;
+            }
             return `**${auteurNom}** a les **lettres mélangées** pendant **1h** !`;
         case 'malus-limite-100':
-            activerTransfo(message.member.id, 'limite100', 2 * 60 * 60 * 1000);
+            if (basculerTransfo(message.member.id, 'limite100', 2 * 60 * 60 * 1000)) {
+                return `✨ **Miracle !** **${auteurNom}** retombe sur la **limite de 100 caractères** alors qu'elle était encore active : le malus est **annulé** !`;
+            }
             return `**${auteurNom}** est limité·e à **100 caractères** par message pendant **2h** !`;
         case 'malus-limite-30':
-            activerTransfo(message.member.id, 'limite30', 60 * 60 * 1000);
+            if (basculerTransfo(message.member.id, 'limite30', 60 * 60 * 1000)) {
+                return `✨ **Miracle !** **${auteurNom}** retombe sur la **limite de 30 caractères** alors qu'elle était encore active : le malus est **annulé** !`;
+            }
             return `**${auteurNom}** est limité·e à **30 caractères** par message pendant **1h** !`;
         case 'special-tournee-generale':
             rouletteTourneeJusquA = Date.now() + 60 * 1000;
             return `🍻 **${auteurNom}** paie sa tournée ! **Tous les cooldowns sont éteints pendant 1 minute**, tirez à volonté !`;
-        case 'malus-leet':
+        case 'malus-leet': {
+            const finLeet = rouletteLeetUntil.get(message.member.id);
+            if (finLeet && Date.now() < finLeet) {
+                rouletteLeetUntil.delete(message.member.id);
+                return `✨ **Miracle !** **${auteurNom}** retombe sur le **l33t sp34k** alors qu'il était encore actif : il est **annulé** !`;
+            }
             rouletteLeetUntil.set(message.member.id, Date.now() + 12 * 60 * 60 * 1000);
             return `**${auteurNom}** parle maintenant en **l33t sp34k** pendant **12h** !`;
+        }
         case 'malus-bebe':
-            activerTransfo(message.member.id, 'bebe', 2 * 60 * 60 * 1000);
+            if (basculerTransfo(message.member.id, 'bebe', 2 * 60 * 60 * 1000)) {
+                return `✨ **Miracle !** **${auteurNom}** retombe sur le **parler bébé** alors qu'il était encore actif : le malus est **annulé** !`;
+            }
             return `🍼 **${auteurNom}** parle maintenant comme un bébé pendant **2h** : ses « j » deviennent des « z » et ses « r » des « w » !`;
         case 'malus-cooldown-45': {
+            annulerTiragesAGogo(message.member.id);
             rouletteCooldowns.set(message.member.id, Date.now() + 45 * 60 * 1000);
-            rouletteCooldown45Charges.set(message.member.id, 2);
-            return `⏳ **${auteurNom}** aura un cooldown de **45 minutes** sur ses **3 prochains tirages** !`;
+            rouletteCooldown45Charges.set(message.member.id, 1);
+            return `⏳ **${auteurNom}** aura un cooldown de **45 minutes** sur ses **2 prochains tirages** !`;
         }
         case 'bonus-cooldown-court': {
             const finActuel = rouletteCooldowns.get(message.member.id);
@@ -1787,23 +1895,23 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             rouletteBouclierActif.set(message.member.id, true);
             return `🛡️ **${auteurNom}** est protégé·e : son prochain malus sera annulé !`;
         case 'bonus-redirect-choix': {
-            await message.channel.send(`🎯 **${auteurNom}**, mentionne le·la membre vers qui rediriger ton **prochain malus** (30 secondes) !`);
+            await message.channel.send(`🎯 **${auteurNom}**, tu as gagné le pouvoir de choisir qui prendra ton prochain malus à ta place !\nMentionne la personne de ton choix avec **@membre** dans ce salon (tu as **5 minutes**) pour lui attribuer.`);
             const collector = message.channel.createMessageCollector({
                 filter: m => m.author.id === message.member.id && m.mentions.members.first(),
-                time: 30000, max: 1
+                time: 5 * 60 * 1000, max: 1
             });
             collector.on('collect', (m) => {
                 const cibleChoisie = m.mentions.members.first();
                 rouletteRedirectChoixCible.set(message.member.id, cibleChoisie.id);
-                message.channel.send(`✅ Prochain malus de **${auteurNom}** redirigé vers **${cibleChoisie.displayName}** !`);
+                message.channel.send(`✅ C'est enregistré ! Le prochain malus de **${auteurNom}** sera automatiquement envoyé à **${cibleChoisie.displayName}** !`);
             });
             return `🎯 **${auteurNom}** a gagné une redirection de malus au choix !`;
         }
         case 'bonus-pseudo-choix': {
-            await message.channel.send(`✍️ **${auteurNom}**, réponds avec \`@membre nouveau pseudo\` pour choisir le pseudo d'un·e membre pendant **48h** (30 secondes) !`);
+            await message.channel.send(`✍️ **${auteurNom}**, tu as gagné le droit de renommer un·e membre et de bloquer son pseudo pendant **48h** !\nÉcris son **@mention** suivi du **nouveau pseudo** (exemple : \`@Caca Boudin\`) dans les **5 minutes**.`);
             const collector = message.channel.createMessageCollector({
                 filter: m => m.author.id === message.member.id && m.mentions.members.first(),
-                time: 30000, max: 1
+                time: 5 * 60 * 1000, max: 1
             });
             collector.on('collect', async (m) => {
                 const cibleChoisie = m.mentions.members.first();
@@ -1820,12 +1928,12 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'bonus-epingle': {
             const collector = message.channel.createMessageCollector({
                 filter: m => m.author.id === message.member.id,
-                time: 30000, max: 1
+                time: 5 * 60 * 1000, max: 1
             });
             collector.on('collect', async (m) => {
                 await m.pin().catch(() => {});
             });
-            return `📌 **${auteurNom}** a gagné un droit spécial ! Envoie dans les **30 secondes** le message que tu veux épingler définitivement dans ce salon !`;
+            return `📌 **${auteurNom}** a gagné un droit spécial ! Envoie dans les **5 minutes** le message que tu veux épingler définitivement dans ce salon !`;
         }
         case 'special-vote-immunite-exclusion':
             message.vote = message.member;
@@ -1897,8 +2005,13 @@ function buildRoulettePresentationEmbed(authorId) {
         .addFields(
             {
                 name: 'Présentation de la roulette 🍀',
-                value: "La roulette qui te fait gagner des trucs... ou qui te fait ban.\n" +
-                       "⏳ Cooldown : **15 min** entre deux tentatives.",
+                value: "La roulette qui te fait gagner des trucs... ou pas.",
+                inline: false
+            },
+            {
+                name: 'Infos utiles ℹ️',
+                value: "⏳ Cooldown : **15 min** entre deux tentatives.\n" +
+                       "🔥 Happy Hour : Tous les soirs de **20h à 21h** (cooldown réduit à **5 min**) !",
                 inline: false
             },
             {
@@ -1934,8 +2047,12 @@ function buildRoulettePresentationEmbed(authorId) {
 
 function buildRouletteStateEmbed(cible) {
     const actifs = [];
-    if (rouletteCouronneUntil.has(cible.id)) actifs.push('👑 couronne (réaction auto)');
-    if (roulettePseudoLock.has(cible.id)) actifs.push(`🔒 pseudo verrouillé (${roulettePseudoLock.get(cible.id).pseudo})`);
+    const finCd = rouletteCooldowns.get(cible.id);
+    if (finCd && Date.now() < finCd) actifs.push(`⏳ cooldown en cours (<t:${Math.ceil(finCd / 1000)}:R>)`);
+    if (rouletteCouronneUntil.has(cible.id) && Date.now() < rouletteCouronneUntil.get(cible.id)) actifs.push('👑 couronne (réaction auto)');
+    if (rouletteAntiFeurUntil.has(cible.id) && Date.now() < rouletteAntiFeurUntil.get(cible.id)) actifs.push('🛡️ immunité anti-feur active (24h)');
+    if ((rouletteCoupTripleCharges.get(cible.id) || 0) > 0) actifs.push(`🎰 ${rouletteCoupTripleCharges.get(cible.id)} tirage(s) gratuit(s) sans cooldown`);
+    if (roulettePseudoLock.has(cible.id) && Date.now() < roulettePseudoLock.get(cible.id).until) actifs.push(`🔒 pseudo verrouillé (${roulettePseudoLock.get(cible.id).pseudo})`);
     if ((rouletteRedirectCharges.get(cible.id) || 0) > 0) actifs.push(`😈 ${rouletteRedirectCharges.get(cible.id)} redirection(s) de malus en réserve`);
     if (rouletteFreeRollUntil.has(cible.id) && Date.now() < rouletteFreeRollUntil.get(cible.id)) actifs.push('⚡ tirage à volonté actif');
     if (rouletteTimeoutUntil.has(cible.id) && Date.now() < rouletteTimeoutUntil.get(cible.id)) actifs.push('💀 timeout roulette actif');
@@ -2048,7 +2165,13 @@ async function envoyerPingRedirection(channel, resultat) {
 async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
     const now = Date.now();
     const finFreeRoll = rouletteFreeRollUntil.get(authorId);
-    const enFreeRoll = (finFreeRoll && now < finFreeRoll) || now < rouletteTourneeJusquA;
+    const chargesTriple = rouletteCoupTripleCharges.get(authorId) || 0;
+    const enFreeRoll = (finFreeRoll && now < finFreeRoll) || now < rouletteTourneeJusquA || chargesTriple > 0;
+
+    if (chargesTriple > 0) {
+        rouletteCoupTripleCharges.set(authorId, chargesTriple - 1);
+        if (chargesTriple - 1 === 0) rouletteCoupTripleCharges.delete(authorId);
+    }
 
     if (!ROULETTE_COOLDOWN_EXEMPT.includes(authorId) && !enFreeRoll) {
         const finCooldown = rouletteCooldowns.get(authorId);
@@ -2064,7 +2187,8 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
             rouletteCooldown45Charges.set(authorId, charges45 - 1);
             rouletteCooldowns.set(authorId, now + 45 * 60 * 1000);
         } else {
-            rouletteCooldowns.set(authorId, now + ROULETTE_COOLDOWN_MS);
+            const dureeCooldown = estHappyHour() ? 5 * 60 * 1000 : ROULETTE_COOLDOWN_MS;
+            rouletteCooldowns.set(authorId, now + dureeCooldown);
         }
     }
 
@@ -2084,7 +2208,6 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
     if (outcomeId.startsWith('malus-') && rouletteBouclierActif.has(authorId)) {
         rouletteBouclierActif.delete(authorId);
         const embed = buildRouletteResultEmbed(outcomeId, `🛡️ **${auteurNom}** évite le malus **${ROULETTE_NOMS[outcomeId]}** grâce à son bouclier !`);
-        const probasBtn = new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary);
         return { embeds: [embed], components: [buildRowResultatRoulette(authorId, outcomeId, failIndex)] };
     }
 
@@ -2118,7 +2241,6 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
     const texte = await appliquerEtDecrireResultat(outcomeId, proxy, cibleNom, failIndex);
 
     const embed = buildRouletteResultEmbed(outcomeId, prefixeRedirect + texte);
-    const probasBtn = new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary);
 
     const roleMaxId = ROULETTE_RANGS[ROULETTE_RANGS.length - 1].id;
     const dejaMaxRole = (outcomeId === 'bonus-role-superieur' || outcomeId === 'bonus-legendaire') && cible.roles.cache.has(roleMaxId);
@@ -3568,9 +3690,10 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     // Ping Cacabot seul -> "Quoi ? (Feur)"
     const strippedMsg = message.content.replace(/<@!?1503495713097519355>/g, '').trim();
     if (!isChannelMuted(message.channel.id) && message.content.includes('1503495713097519355') && strippedMsg.length === 0) {
+        const finAf = rouletteAntiFeurUntil.get(message.author.id);
+        if (finAf && Date.now() < finAf) return message.react('🛡️').catch(() => {});
         return message.reply('Quoi ? (Feur)');
     }
-
     // Cheh
     const cleanedCheh = message.content.toLowerCase().trim();
     if (!isChannelMuted(message.channel.id) && pendingCheh.has(message.channel.id) && (cleanedCheh.includes('ntm') || cleanedCheh.includes('tg') || cleanedCheh.includes('nique ta') || cleanedCheh.includes('ta gueule') || cleanedCheh.includes('jte bz') || cleanedCheh.includes('bztmr') || cleanedCheh.includes('va te faire enculer') || cleanedCheh.includes('la ferme') || cleanedCheh.includes('tais-toi') || cleanedCheh.includes('mange tes'))) {
@@ -4575,7 +4698,10 @@ if (response?.needsRouletteStats) {
         if (response.direct) {
             const resultat = await tirerEtConstruireResultatRoulette(message.author.id, message.guild, message.channel);
             if (resultat.cooldown) {
-                await message.reply(`Attends la fin du cooldown avant de relancer un tirage ! Il te reste **${resultat.reste} minute${resultat.reste > 1 ? 's' : ''}**.`);
+                const notifRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('roulette_notif').setLabel('🔔 Me prévenir').setStyle(ButtonStyle.Secondary)
+                );
+                await message.reply({ content: `Attends la fin du cooldown avant de relancer un tirage ! Il te reste **${resultat.reste} minute${resultat.reste > 1 ? 's' : ''}**.`, components: [notifRow] });
                 return;
             }
             const envoye = await message.reply({ embeds: resultat.embeds, components: resultat.components });
@@ -5985,6 +6111,10 @@ if (response?.needsRouletteStats) {
 
     if (typeof response === "string") {
         if (response.trim().length === 0) return;
+        const finAntiFeur = rouletteAntiFeurUntil.get(message.author.id);
+        if (finAntiFeur && Date.now() < finAntiFeur) {
+            return message.react('🛡️').catch(() => {});
+        }
         const autoReplyMsg = await message.reply({ content: response });
         if (pendingCheh.has(message.channel.id)) clearTimeout(pendingCheh.get(message.channel.id).timeout);
         const chehTimeout = setTimeout(() => { pendingCheh.delete(message.channel.id); }, 10000);
@@ -7221,7 +7351,10 @@ return interaction.update({ embeds: [embed], components: rows });
         }
         const resultat = await tirerEtConstruireResultatRoulette(authorId, interaction.guild, interaction.channel);
     if (resultat.cooldown) {
-        await interaction.reply({ content: `⏳ Attends la fin du cooldown avant de relancer un tirage ! Il te reste **${resultat.reste} min**.`, ephemeral: true });
+        const notifRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('roulette_notif').setLabel('🔔 Me prévenir').setStyle(ButtonStyle.Secondary)
+        );
+        await interaction.reply({ content: `⏳ Attends la fin du cooldown avant de relancer un tirage ! Il te reste **${resultat.reste} min**.`, components: [notifRow], ephemeral: true });
         return;
     }
         await interaction.update({ embeds: resultat.embeds, components: resultat.components });
@@ -7258,21 +7391,17 @@ return interaction.update({ embeds: [embed], components: rows });
         return interaction.update({ embeds: [embed], components: [row] });
     }
 
-    if (interaction.isButton() && interaction.customId.startsWith('roulette_notif_')) {
-        const authorId = interaction.customId.split('_')[2];
-        if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "C'est pas ton tirage, tape `!roulette` toi-même 😌", ephemeral: true });
-        }
-        const fin = rouletteCooldowns.get(authorId) ?? 0;
+    if (interaction.isButton() && interaction.customId.startsWith('roulette_notif')) {
+        const userId = interaction.user.id;
+        const fin = rouletteCooldowns.get(userId) ?? 0;
         if (Date.now() >= fin) {
-            return interaction.reply({ content: "Ton cooldown est déjà terminé, tu peux relancer ! 🎰", ephemeral: true });
+            return interaction.reply({ content: "Ton cooldown est déjà terminé, tu peux relancer dès maintenant ! 🎰", ephemeral: true });
         }
-        if (rouletteNotifs.has(authorId)) {
-            return interaction.reply({ content: "🔔 Tu seras déjà prévenu·e à la fin de ton cooldown.", ephemeral: true });
+        if (rouletteNotifs.has(userId)) {
+            return interaction.reply({ content: "T'inquiète pas, c'était déjà prévu, tu seras ping quand ton cooldown sera écoulé !", ephemeral: true });
         }
-        rouletteNotifs.set(authorId, interaction.channelId);
-        armerNotifRoulette(authorId, interaction.channelId);
-        demanderSauvegarde();
+        rouletteNotifs.set(userId, interaction.channelId);
+        armerNotifRoulette(userId, interaction.channelId);
         return interaction.reply({ content: `🔔 C'est noté ! Je te ping ici <t:${Math.ceil(fin / 1000)}:R>.`, ephemeral: true });
     }
 
@@ -8031,6 +8160,7 @@ client.once('ready', async () => {
     await loadAll();
     for (const [uid, chId] of rouletteNotifs) armerNotifRoulette(uid, chId);
     cleanOldData();
+    setInterval(verifierHappyHour, 30 * 1000); // Vérifie toutes les 30 secondes pour les alertes 20h00, 20h30 et 21h00
     for (const guild of client.guilds.cache.values()) {
         await guild.members.fetch().catch(() => {});
     }
