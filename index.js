@@ -1998,77 +1998,124 @@ async function demarrerVoteRoulette(msg, membre) {
 function buildRoulettePresentationEmbed(authorId) {
     const jackpot = authorId ? (rouletteJackpotBonus.get(authorId) || 0) : 0;
 
+    const fields = [
+        {
+            name: 'Présentation de la roulette 🍀',
+            value: "La roulette qui te fait gagner des trucs... ou pas.",
+            inline: false
+        },
+        {
+            name: 'Cooldown ⏳',
+            value: "15 minutes",
+            inline: false
+        },
+        {
+            name: 'Système de pity 📈',
+            value: `Après **${ROULETTE_PITY_MALUS} malus** ou **${ROULETTE_PITY_NULS} résultats nuls** depuis ton dernier bonus, le tirage suivant est un **bonus garanti** !`,
+            inline: false
+        },
+        {
+            name: 'Happy hour 🔥',
+            value: "Tous les soirs de **20h à 21h**, le cooldown passe à **5 minutes** pour tout le monde !",
+            inline: false
+        },
+        {
+            name: 'Hall of fame 🏆',
+            value: `Les bonus ultra rares (moins de **${(ROULETTE_HOF_SEUIL * 100).toFixed(2)}%** de chance) sont affichés dans <#${ROULETTE_HOF_CHANNEL_ID}> !`,
+            inline: false
+        }
+    ];
+
+    if (jackpot > 0) {
+        fields.push({
+            name: 'Bonus boosté 🎰',
+            value: `Chance de bonus augmentée de **+${Math.round(jackpot * 100)}%** à chaque échec ! Réinitialisée lorsqu'un bonus est roll.`,
+            inline: false
+        });
+    }
+
+    fields.push(
+        {
+            name: 'Commandes utiles 💡',
+            value: "📊 `!roulettestate` | `!rltstate` [membre]\n Voir les effets actifs d'un·e membre (malus, bonus, cooldown...)\n" +
+                   "📈 `!roulettestats` | `!rltstats` [membre]\n Voir les statistiques d'un·e membre (tirages, bonus, malus, pire série...)",
+            inline: false
+        },
+        {
+            name: 'Probabilités 🎲',
+            value: "Clique sur le bouton **🎲 Probabilités** sous ce message pour voir toutes les chances d'avoir certains bonus ou malus !",
+            inline: false
+        }
+    );
+
     const embed = new EmbedBuilder()
         .setColor(0xffd20a)
         .setTitle('🎰 | ROULETTE REGAÏENNE | 🎰')
         .setImage('https://img.draftbot.fr/1790778435185-73ff19eb6e704abb.gif')
-        .addFields(
-            {
-                name: 'Présentation de la roulette 🍀',
-                value: "La roulette qui te fait gagner des trucs... ou pas.",
-                inline: false
-            },
-            {
-                name: 'Infos utiles ℹ️',
-                value: "⏳ Cooldown : **15 min** entre deux tentatives.\n" +
-                       "🔥 Happy Hour : Tous les soirs de **20h à 21h** (cooldown réduit à **5 min**) !",
-                inline: false
-            },
-            {
-                name: 'Commandes utiles 💡',
-                value: "📊 `!roulettestate` | `!rltstate` [membre]\n Voir les effets actifs d'un·e membre (malus, bonus, cooldown...)\n" +
-                       "📈 `!roulettestats` | `!rltstats` [membre]\n Voir les statistiques d'un·e membre (tirages, bonus, malus, pire série...)",
-                inline: false
-            },
-            {
-                name: 'Système de pity 📈',
-                value: `Après **${ROULETTE_PITY_MALUS} malus** ou **${ROULETTE_PITY_NULS} résultats nuls** depuis ton dernier bonus, le tirage suivant est un **bonus garanti** !`,
-                inline: false
-            },
-            {
-                name: 'Hall of fame 🏆',
-                value: `Les bonus ultra rares (moins de **${(ROULETTE_HOF_SEUIL * 100).toFixed(2)}%** de chance) sont affichés dans <#${ROULETTE_HOF_CHANNEL_ID}> !`,
-                inline: false
-            },
-            {
-                name: 'Probabilités 🎲',
-                value: "Clique sur le bouton **🎲 Probabilités** sous ce message pour voir toutes les chances d'avoir certains bonus ou malus !",
-                inline: false
-            }
-        );
+        .addFields(fields);
 
-    if (jackpot > 0) {
-        embed.addFields({ name: '🎰 Bonus boosté', value: `Chance de bonus augmentée de **+${Math.round(jackpot * 100)}%** à chaque échec ! Reinitialisée lorsqu'un bonus est roll.`, inline: false });
-    }
     embed.data.fields = embed.data.fields.map(f => ({ ...f, value: f.value + '\n\u200b' }));
-    embed.setFooter({ text: 'Astuce : Envoie !roulette go ou !rlt go pour faire un tirage sans passer par cet écran !' });
+    embed.setFooter({ text: 'Astuce : Envoie [!roulette go] ou [!rlt go] pour faire un tirage instantané sans passer par cet écran !' });
     return embed;
 }
 
 function buildRouletteStateEmbed(cible) {
     const now = Date.now();
+    const tstamp = (ms) => `<t:${Math.ceil(ms / 1000)}:R>`;
     const bonus = [];
     const malus = [];
 
     // --- BONUS ---
-    if (rouletteCouronneUntil.has(cible.id) && now < rouletteCouronneUntil.get(cible.id)) bonus.push('👑 Couronne 12h (réaction auto)');
-    if (rouletteAntiFeurUntil.has(cible.id) && now < rouletteAntiFeurUntil.get(cible.id)) bonus.push('🛡️ Immunité anti-feur (24h)');
-    if ((rouletteCoupTripleCharges.get(cible.id) || 0) > 0) bonus.push(`🎰 ${rouletteCoupTripleCharges.get(cible.id)} tirage(s) gratuit(s) sans cooldown`);
-    if (rouletteFreeRollUntil.has(cible.id) && now < rouletteFreeRollUntil.get(cible.id)) bonus.push('⚡ Tirage à volonté actif');
-    if (rouletteBouclierActif.has(cible.id)) bonus.push('🛡️ Bouclier actif (prochain malus annulé)');
-    if ((rouletteRedirectCharges.get(cible.id) || 0) > 0) bonus.push(`😈 ${rouletteRedirectCharges.get(cible.id)} redirection(s) de malus en réserve`);
-    if (rouletteRedirectChoixCible.has(cible.id)) bonus.push('🎯 Redirection de malus au choix en attente');
-    if ((rouletteCooldownCourtCharges.get(cible.id) || 0) > 0) bonus.push(`⚡ ${rouletteCooldownCourtCharges.get(cible.id)} tirage(s) à cooldown réduit (5 min)`);
-    if (rouletteImmuniteUntil.has(cible.id) && now < rouletteImmuniteUntil.get(cible.id)) bonus.push('🛡️ Immunité temporaire au timeout');
+    if (rouletteCouronneUntil.has(cible.id) && now < rouletteCouronneUntil.get(cible.id)) {
+        bonus.push(`👑 Couronne (fin ${tstamp(rouletteCouronneUntil.get(cible.id))})`);
+    }
+    if (rouletteAntiFeurUntil.has(cible.id) && now < rouletteAntiFeurUntil.get(cible.id)) {
+        bonus.push(`🛡️ Immunité anti-feur (fin ${tstamp(rouletteAntiFeurUntil.get(cible.id))})`);
+    }
+    if (rouletteFreeRollUntil.has(cible.id) && now < rouletteFreeRollUntil.get(cible.id)) {
+        bonus.push(`⚡ Tirage à volonté (fin ${tstamp(rouletteFreeRollUntil.get(cible.id))})`);
+    }
+    if (rouletteImmuniteUntil.has(cible.id) && now < rouletteImmuniteUntil.get(cible.id)) {
+        bonus.push(`🛡️ Immunité au timeout (fin ${tstamp(rouletteImmuniteUntil.get(cible.id))})`);
+    }
+    if ((rouletteCoupTripleCharges.get(cible.id) || 0) > 0) {
+        bonus.push(`🎰 ${rouletteCoupTripleCharges.get(cible.id)} tirage(s) gratuit(s) sans cooldown`);
+    }
+    if (rouletteBouclierActif.has(cible.id)) {
+        bonus.push('🛡️ Bouclier actif (prochain malus annulé)');
+    }
+    if ((rouletteRedirectCharges.get(cible.id) || 0) > 0) {
+        bonus.push(`😈 ${rouletteRedirectCharges.get(cible.id)} redirection(s) de malus en réserve`);
+    }
+    if (rouletteRedirectChoixCible.has(cible.id)) {
+        bonus.push('🎯 Redirection de malus au choix en attente');
+    }
+    if ((rouletteCooldownCourtCharges.get(cible.id) || 0) > 0) {
+        bonus.push(`⚡ ${rouletteCooldownCourtCharges.get(cible.id)} tirage(s) à cooldown réduit (5 min)`);
+    }
 
     // --- MALUS ---
-    if (roulettePseudoLock.has(cible.id) && now < roulettePseudoLock.get(cible.id).until) malus.push(`🔒 Pseudo verrouillé (${roulettePseudoLock.get(cible.id).pseudo})`);
-    if (rouletteTimeoutUntil.has(cible.id) && now < rouletteTimeoutUntil.get(cible.id)) malus.push('💀 Timeout roulette actif');
-    if (rouletteUwuUntil.has(cible.id) && now < rouletteUwuUntil.get(cible.id)) malus.push('😳 Doit finir ses messages par UwU');
-    if (rouletteLettreInterdite.has(cible.id) && now < rouletteLettreInterdite.get(cible.id).until) malus.push(`🔤 Lettre interdite : ${rouletteLettreInterdite.get(cible.id).lettre}`);
-    if (rouletteEmojiUntil.has(cible.id) && now < rouletteEmojiUntil.get(cible.id)) malus.push('😀 Doit finir ses messages par un emoji');
-    if (rouletteLeetUntil.has(cible.id) && now < rouletteLeetUntil.get(cible.id)) malus.push('🤖 Parle en l33t sp34k');
-    if ((rouletteCooldown45Charges.get(cible.id) || 0) > 0) malus.push(`⏳ ${rouletteCooldown45Charges.get(cible.id)} tirage(s) à cooldown de 45 min`);
+    if (roulettePseudoLock.has(cible.id) && now < roulettePseudoLock.get(cible.id).until) {
+        malus.push(`🔒 Pseudo verrouillé (${roulettePseudoLock.get(cible.id).pseudo}) (fin ${tstamp(roulettePseudoLock.get(cible.id).until)})`);
+    }
+    if (rouletteTimeoutUntil.has(cible.id) && now < rouletteTimeoutUntil.get(cible.id)) {
+        malus.push(`💀 Timeout roulette (fin ${tstamp(rouletteTimeoutUntil.get(cible.id))})`);
+    }
+    if (rouletteUwuUntil.has(cible.id) && now < rouletteUwuUntil.get(cible.id)) {
+        malus.push(`😳 Doit finir par UwU (fin ${tstamp(rouletteUwuUntil.get(cible.id))})`);
+    }
+    if (rouletteLettreInterdite.has(cible.id) && now < rouletteLettreInterdite.get(cible.id).until) {
+        malus.push(`🔤 Lettre interdite : **${rouletteLettreInterdite.get(cible.id).lettre}** (fin ${tstamp(rouletteLettreInterdite.get(cible.id).until)})`);
+    }
+    if (rouletteEmojiUntil.has(cible.id) && now < rouletteEmojiUntil.get(cible.id)) {
+        malus.push(`😀 Doit finir par un emoji (fin ${tstamp(rouletteEmojiUntil.get(cible.id))})`);
+    }
+    if (rouletteLeetUntil.has(cible.id) && now < rouletteLeetUntil.get(cible.id)) {
+        malus.push(`🤖 Parle en l33t sp34k (fin ${tstamp(rouletteLeetUntil.get(cible.id))})`);
+    }
+    if ((rouletteCooldown45Charges.get(cible.id) || 0) > 0) {
+        malus.push(`⏳ ${rouletteCooldown45Charges.get(cible.id)} tirage(s) restant(s) à cooldown de 45 min`);
+    }
 
     const tf = rouletteTransfos.get(cible.id) ?? {};
     const libTf = {
@@ -2077,7 +2124,7 @@ function buildRouletteStateEmbed(cible) {
         censure: '▇ Mots censurés', bebe: '🍼 Parler bébé (j→z, r→w)'
     };
     for (const [k, fin] of Object.entries(tf)) {
-        if (now < fin && libTf[k]) malus.push(libTf[k]);
+        if (now < fin && libTf[k]) malus.push(`${libTf[k]} (fin ${tstamp(fin)})`);
     }
 
     // --- COOLDOWN (FOOTER) ---
