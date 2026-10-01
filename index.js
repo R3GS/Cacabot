@@ -1116,6 +1116,7 @@ const rouletteCooldowns = new Map(); // userId -> timestamp de fin de cooldown
 const rouletteCouronneUntil = new Map(); // userId -> timestamp de fin
 const rouletteAntiFeurUntil = new Map(); // userId -> timestamp de fin (24h)
 const rouletteCoupTripleCharges = new Map(); // userId -> nombre de tirages gratuits restants
+const rouletteCoupTripleScore = new Map();   // userId -> nombre de bonus d'affilée pendant le Coup Triple
 const rouletteRedirectCharges = new Map(); // userId -> nombre de malus à rediriger
 const roulettePseudoLock = new Map(); // userId -> { until: timestamp, pseudo: string }
 const ROULETTE_COOLDOWN_MS = 15 * 60 * 1000;
@@ -1158,6 +1159,48 @@ const rouletteBouclierActif = new Map();       // userId -> true (consommé au p
 const rouletteRedirectChoixCible = new Map();  // userId -> id du membre choisi pour la prochaine redirection
 const rouletteJackpotBonus = new Map(); // userId -> % cumulé (0 à 1) de chance de bonus grâce aux "rien" d'affilée
 const rouletteStats = new Map();        // userId -> { tirages, bonus, malus, rien, plusGrosGain: {nom, proba}|null, serieActuelle, pireSerie }
+const rouletteAchievements = new Map(); // userId -> { [achievementId]: timestamp }
+
+const ROULETTE_ACHIEVEMENTS = [
+    { id: 'desert-cosmique',   nom: 'Désert absolu',              emoji: '🌵', desc: 'Enchaîner une série de 10 résultats « Rien » consécutifs' },
+    { id: 'chat-noir',         nom: 'Victime du Destin',          emoji: '🐈‍⬛', desc: 'Subir la Malédiction du Chat Noir avec +5% de bonus boosté ou plus' },
+    { id: 'malus-prime',       nom: 'La totale',                  emoji: '💥', desc: 'Décrocher et subir le MALUS PRIME' },
+    { id: 'double-peine',      nom: 'La Double Peine',            emoji: '⏳', desc: 'Tomber sur Cooldown 45 min alors qu\'il reste des charges actives' },
+    { id: 'condamne-plebe',    nom: 'Condamnation publique',      emoji: '🪓', desc: 'Être exclu.e 1 jour suite au vote public' },
+    { id: 'incomprehensible',  nom: 'L\'Incompréhensible',        emoji: '🔤', desc: 'Cumuler 3 malus de texte ou plus en même temps' },
+    { id: 'hof',               nom: 'Superstar',                  emoji: '🏆', desc: 'Décrocher un gain légendaire du Hall of Fame (≤ 0,05%)' },
+    { id: 'pare-balles',       nom: 'Pare-Balles',                emoji: '🛡️', desc: 'Bloquer un mute de 20 min ou une exclusion grâce à un bouclier' },
+    { id: 'pharmacien',        nom: 'Chimiste en herbe',          emoji: '🧪', desc: 'Déclencher la mécanique de contre-poison pour annuler un malus actif' },
+    { id: 'braquage-parfait',  nom: 'Braquage Parfait',           emoji: '🎰', desc: 'Obtenir 3 bonus sur les 3 tirages gratuits d\'un Coup Triple' },
+    { id: 'innocente',         nom: 'L\'Innocenté.e',             emoji: '🕊️', desc: 'Sortir libre d\'un vote public' },
+    { id: 'veteran-250',       nom: 'Pro du gambling',            emoji: '🎲', desc: 'Atteindre 250 tirages au total' },
+    { id: 'centurion-500',     nom: 'Gambling addict',            emoji: '👑', desc: 'Atteindre 500 tirages au total' },
+    { id: 'baptiseur',         nom: 'Gravé dans la roche',        emoji: '✍️', desc: 'Verrouiller le pseudo d\'un.e autre membre avec le bonus Pseudo au choix' },
+    { id: 'epingle',           nom: 'Maman je passe à la télé !', emoji: '📌', desc: 'Épingler un message dans le salon avec le bonus Message épinglé' }
+];
+
+async function deverrouillerSucces(userId, achId, channel) {
+    let userAchs = rouletteAchievements.get(userId);
+    if (!userAchs) {
+        userAchs = {};
+        rouletteAchievements.set(userId, userAchs);
+    }
+    if (userAchs[achId]) return; // déjà obtenu
+
+    userAchs[achId] = Date.now();
+    rouletteAchievements.set(userId, userAchs);
+    demanderSauvegarde();
+
+    const ach = ROULETTE_ACHIEVEMENTS.find(a => a.id === achId);
+    if (!ach) return;
+
+    const embed = new EmbedBuilder()
+        .setColor(0xffd700)
+        .setTitle('🎊 SUCCÈS DÉVERROUILLÉ !')
+        .setDescription(`<@${userId}> vient d'obtenir le succès **${ach.emoji} ${ach.nom}** !\n\n*📂 ${ach.desc}*`);
+
+    await channel?.send({ embeds: [embed] }).catch(() => {});
+}
 const ROULETTE_JACKPOT_INCREMENT = 0.01; // +1% par "rien"
 const ROULETTE_JACKPOT_MAX = 0.5;        // plafond à 50%
 const ROULETTE_HOF_CHANNEL_ID = '1554331383361577010';
@@ -1199,6 +1242,13 @@ const ROULETTE_WEBHOOK_EXCLUS = new Set([
 const ROULETTE_HOF_SEUIL = 0.0005; // 0,05%
 
 const ROULETTE_EMOJIS_ALEATOIRES = ['😂','😍','🔥','💀','🎉','😭','👀','🤡','😏','👁️👄👁️','🫦','😡',];
+const ROULETTE_BOOMER_FINS = [
+    '..... A BON ENTENDEUR ... 🤣🤣',
+    '.... BISOUS A LA FAMILLE .. 🍷👍',
+    '.... PAUVRE FRANCE .... Amitiés .. 🇫🇷',
+    '... A MEDITER .... ☕🙋‍♂️',
+    '.... C ETAIT MIEUX AVANT ... 😡🤬'
+];
 function finitParUnEmoji(texte) {
     return /\p{Extended_Pictographic}\uFE0F?$/u.test(texte.trim());
 }
@@ -1258,6 +1308,7 @@ function appliquerTransfos(userId, texte) {
     if (t.censure) r = surTexte(r, m => m.replace(/\S+/g, mot => Math.random() < 1 / 3 ? '▇▇' : mot));
     if (t.emojiOnly) r = surTexte(r, m => m.replace(/\S+/g, () => ROULETTE_EMOJIS_ALEATOIRES[Math.floor(Math.random() * ROULETTE_EMOJIS_ALEATOIRES.length)]));
     if (t.bebe) r = surTexte(r, m => m.replace(/j/g, 'z').replace(/J/g, 'Z').replace(/r/g, 'w').replace(/R/g, 'W'));
+    if (t.boomer) r = surTexte(r, m => m.replace(/[\.!\?]+/g, '..... ') + ' ' + ROULETTE_BOOMER_FINS[Math.floor(Math.random() * ROULETTE_BOOMER_FINS.length)]);
     if (t.caps) r = surTexte(r, m => m.toUpperCase());
     const max = Math.min(t.limite30 ? 30 : Infinity, t.limite100 ? 100 : Infinity);
     if (max !== Infinity && [...r].length > max) r = [...r].slice(0, max).join('').replace(/<[^>]*$/, '');
@@ -1314,7 +1365,7 @@ const ROULETTE_NOMS_COMMANDES = {
     legendaire: 'bonus-legendaire', elu: 'bonus-elu-roulette', youtube: 'bonus-youtube-credit',
     goodies: 'bonus-epsys-goodies', petitdej: 'bonus-epsys-petitdej', twitch: 'bonus-twitch-jeu',
     commande: 'bonus-commande-perso', '5e': 'bonus-epsys-5e', photo: 'bonus-epsys-photo',
-    pseudochoix: 'bonus-pseudo-choix', epingle: 'bonus-epingle', prime: 'malus-prime',
+    pseudochoix: 'bonus-pseudo-choix', epingle: 'bonus-epingle', prime: 'malus-prime', chatnoir: 'malus-chat-noir', boomer: 'malus-boomer',
     uwu: 'malus-uwu-24h', lettre: 'malus-lettre-interdite', emoji: 'malus-emoji', cooldown45: 'malus-cooldown-45',
     bouclier: 'bonus-bouclier', redirectchoix: 'bonus-redirect-choix', leet: 'malus-leet',
     caps: 'malus-caps', emojionly: 'malus-emoji-only', censure: 'malus-censure', mots: 'malus-mots-melanges',
@@ -1363,7 +1414,9 @@ const ROULETTE_TABLE = [
     { id: 'malus-emoji-only',          type: 'malus',   poids: 1 / 35,    nom: 'Emoji only pendant 1h', desc: 'Tous ses mots sont remplacés par des emojis pendant 1h' },
     { id: 'malus-bebe',                type: 'malus',   poids: 1 / 45,    nom: 'Parler bébé pendant 2h', desc: 'Les « j » deviennent des « z » et les « r » des « w » dans tous ses messages pendant 2h' },
     { id: 'malus-emoji',               type: 'malus',   poids: 1 / 55,    nom: 'Emoji obligatoire', desc: 'Doit finir chaque message par un emoji aléatoire pendant 6h' },
+    { id: 'malus-chat-noir',           type: 'malus',   poids: 1 / 65,    nom: 'Malédiction du Chat Noir', desc: 'Réinitialise immédiatement ta pity et ton boost de bonus à zéro' },
     { id: 'malus-caps',                type: 'malus',   poids: 1 / 70,    nom: 'MAJUSCULES pendant 2h', desc: 'Doit parler en MAJUSCULES pendant 2h' },
+    { id: 'malus-boomer',              type: 'malus',   poids: 1 / 75,    nom: 'Mode Boomer pendant 2h', desc: 'Parle comme un boomer sur Facebook pendant 2h' },
     { id: 'malus-censure',             type: 'malus',   poids: 1 / 85,    nom: 'Censure pendant 2h', desc: 'Un mot sur 3 est censuré (▇▇) pendant 2h' },
     { id: 'malus-exclu-heure',         type: 'malus',   poids: 1 / 100,   nom: 'Exclusion de 1 heure', desc: 'Exclusion de 1 heure' },
     { id: 'malus-exclu-jour',          type: 'malus',   poids: 1 / 350,   nom: 'Exclusion de 1 jour', desc: 'Exclusion de 1 jour' },
@@ -1405,7 +1458,7 @@ const ROULETTE_EMOJIS_PAR_ID = {
     'bonus-epingle': '📌', 'malus-emoji': '😀', 'malus-leet': '🤖', 'malus-caps': '🔠',
     'malus-emoji-only': '🙂', 'malus-censure': '▇', 'malus-mots-melanges': '🔀',
     'malus-lettres-melangees': '🔡', 'malus-limite-100': '✂️', 'malus-limite-30': '✂️',
-    'special-tournee-generale': '🥂', 'malus-cooldown-45': '⏳', 'malus-prime': '💥', 'malus-bebe': '🍼'
+    'special-tournee-generale': '🥂', 'malus-cooldown-45': '⏳', 'malus-prime': '💥', 'malus-bebe': '🍼', 'malus-chat-noir': '🐈‍⬛', 'malus-boomer': '🧓'
 };
 function buildHelpxPresentationEmbed() {
     return new EmbedBuilder()
@@ -1566,6 +1619,7 @@ const ROULETTE_ETATS = {
     redirectChoixCible: rouletteRedirectChoixCible,
     jackpot:            rouletteJackpotBonus,
     stats:              rouletteStats,
+    achievements:       rouletteAchievements,
     immunite:        rouletteImmuniteUntil,
     timeoutRoulette: rouletteTimeoutUntil,
     notifs: rouletteNotifs
@@ -1827,11 +1881,23 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             rouletteEmojiUntil.set(message.member.id, Date.now() + 6 * 60 * 60 * 1000);
             return `**${auteurNom}** doit terminer chacun de ses messages par un **emoji aléatoire** pendant **6h** !`;
         }
+        case 'malus-chat-noir':
+            if ((rouletteJackpotBonus.get(message.member.id) || 0) >= 0.05) {
+                deverrouillerSucces(message.member.id, 'chat-noir', message.channel);
+            }
+            roulettePity.delete(message.member.id);
+            rouletteJackpotBonus.delete(message.member.id);
+            return `🐈‍⬛ **${auteurNom}** subit la **Malédiction du Chat Noir** : sa pity et son bonus jackpot accumulés sont réduits à zéro !`;
         case 'malus-caps':
             if (basculerTransfo(message.member.id, 'caps', 2 * 60 * 60 * 1000)) {
                 return `✨ **Miracle !** **${auteurNom}** retombe sur les **MAJUSCULES** alors qu'elles étaient encore actives : le malus est **annulé** !`;
             }
             return `**${auteurNom}** doit **PARLER EN MAJUSCULES** pendant **2h** !`;
+        case 'malus-boomer':
+            if (basculerTransfo(message.member.id, 'boomer', 2 * 60 * 60 * 1000)) {
+                return `✨ **Miracle !** **${auteurNom}** retombe sur le **mode Boomer** alors qu'il était encore actif : le malus est **annulé** !`;
+            }
+            return `🧓 **${auteurNom}** passe en **mode Boomer** pendant **2h** ..... A bon entendeur ... !`;
         case 'malus-emoji-only':
             if (basculerTransfo(message.member.id, 'emojiOnly', 60 * 60 * 1000)) {
                 return `✨ **Miracle !** **${auteurNom}** retombe sur l'**emoji only** alors qu'il était encore actif : le malus est **annulé** !`;
@@ -1880,6 +1946,9 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             }
             return `🍼 **${auteurNom}** parle maintenant comme un bébé pendant **2h** : ses « j » deviennent des « z » et ses « r » des « w » !`;
         case 'malus-cooldown-45': {
+            if ((rouletteCooldown45Charges.get(message.member.id) || 0) > 0) {
+                deverrouillerSucces(message.member.id, 'double-peine', message.channel);
+            }
             annulerTiragesAGogo(message.member.id);
             rouletteCooldowns.set(message.member.id, Date.now() + 45 * 60 * 1000);
             rouletteCooldown45Charges.set(message.member.id, 1);
@@ -1921,6 +1990,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 }
                 roulettePseudoLock.set(cibleChoisie.id, { until: Date.now() + 48 * 60 * 60 * 1000, pseudo: nouveauPseudo });
                 await cibleChoisie.setNickname(nouveauPseudo).catch(() => {});
+                deverrouillerSucces(message.member.id, 'baptiseur', message.channel);
                 message.channel.send(`✅ **${cibleChoisie.displayName}** se retrouve avec le pseudo **${nouveauPseudo}**, choisi par **${auteurNom}**, verrouillé pendant **48h** !`);
             });
             return `✍️ **${auteurNom}** a gagné le choix du pseudo d'un·e membre !`;
@@ -1932,6 +2002,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             });
             collector.on('collect', async (m) => {
                 await m.pin().catch(() => {});
+                deverrouillerSucces(message.member.id, 'epingle', message.channel);
             });
             return `📌 **${auteurNom}** a gagné un droit spécial ! Envoie dans les **5 minutes** le message que tu veux épingler définitivement dans ce salon !`;
         }
@@ -1939,6 +2010,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             message.vote = message.member;
             return `🗳️ **${auteurNom}** déclenche un **vote public** !`;
         case 'malus-prime': {
+            deverrouillerSucces(message.member.id, 'malus-prime', message.channel);
             await appliquerEtDecrireResultat('malus-lettre-interdite', message, auteurNom, 0);
             await appliquerEtDecrireResultat('malus-uwu-24h', message, auteurNom, 0);
             await appliquerEtDecrireResultat('malus-emoji', message, auteurNom, 0);
@@ -1985,10 +2057,12 @@ async function demarrerVoteRoulette(msg, membre) {
             if (oui >= non) {
                 rouletteFreeRollUntil.set(membre.id, Date.now() + 3 * 60 * 1000);
                 rouletteImmuniteUntil.set(membre.id, Date.now() + 3 * 60 * 1000);
+                deverrouillerSucces(membre.id, 'innocente', msg.channel);
                 await msg.reply(`✅ Le vote a tranché : **${membre.displayName}** gagne un tirage à volonté pendant 3 minutes !`);
             } else {
                 await membre.timeout(24 * 60 * 60 * 1000, 'Roulette - vote').catch(() => {});
                 rouletteTimeoutUntil.set(membre.id, Date.now() + 24 * 60 * 60 * 1000);
+                deverrouillerSucces(membre.id, 'condamne-plebe', msg.channel);
                 await msg.reply(`❌ Le vote a tranché : **${membre.displayName}** est exclu.e pendant 1 jour.`);
             }
         } catch (e) {}
@@ -2121,7 +2195,7 @@ function buildRouletteStateEmbed(cible) {
     const libTf = {
         caps: '🔠 Majuscules obligatoires', emojiOnly: '🙂 Emoji only', limite100: '✂️ Limite 100 caractères',
         limite30: '✂️ Limite 30 caractères', mots: '🔀 Mots mélangés', lettres: '🔤 Lettres mélangées',
-        censure: '▇ Mots censurés', bebe: '🍼 Parler bébé (j→z, r→w)'
+        censure: '▇ Mots censurés', bebe: '🍼 Parler bébé (j→z, r→w)', boomer: '🧓 Mode Boomer Facebook'
     };
     for (const [k, fin] of Object.entries(tf)) {
         if (now < fin && libTf[k]) malus.push(`${libTf[k]} (fin ${tstamp(fin)})`);
@@ -2143,6 +2217,50 @@ function buildRouletteStateEmbed(cible) {
             { name: 'MALUS :', value: malus.length ? malus.join('\n') : '*Aucun malus actif*', inline: false }
         )
         .setFooter({ text: footerText });
+}
+
+function buildRouletteAchievementsEmbed(cible, page = 0, authorId) {
+    const userAchs = rouletteAchievements.get(cible.id) ?? {};
+    const totalAchs = ROULETTE_ACHIEVEMENTS.length;
+    const debl = Object.keys(userAchs).length;
+
+    const PAGE_SIZE = 5;
+    const totalPages = Math.ceil(totalAchs / PAGE_SIZE);
+    const start = page * PAGE_SIZE;
+    const slice = ROULETTE_ACHIEVEMENTS.slice(start, start + PAGE_SIZE);
+
+    const lignes = slice.map(a => {
+        const ts = userAchs[a.id];
+        if (ts) {
+            return `✅ **${a.emoji} ${a.nom}**\n${a.desc}\n-# *Débloqué <t:${Math.floor(ts / 1000)}:R>*`;
+        }
+        return `🔒 **${a.emoji} ${a.nom}**\n${a.desc}`;
+    }).join('\n\n');
+
+    const embed = new EmbedBuilder()
+        .setColor(0xffd20a)
+        .setTitle(`🎖️ Succès de ${cible.displayName} (${debl}/${totalAchs})`)
+        .setDescription(lignes)
+        .setFooter({ text: `Page ${page + 1}/${totalPages}` });
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`rlt_achs_${cible.id}_${page - 1}_${authorId}`)
+            .setLabel('⬅️ Précédent')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(page === 0),
+        new ButtonBuilder()
+            .setCustomId(`rlt_achs_${cible.id}_${page + 1}_${authorId}`)
+            .setLabel('➡️ Suivant')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(page >= totalPages - 1),
+        new ButtonBuilder()
+            .setCustomId(`rlt_stats_back_${cible.id}_${authorId}`)
+            .setLabel('↩️ Stats')
+            .setStyle(ButtonStyle.Primary)
+    );
+
+    return { embed, row };
 }
 
 function buildRouletteStatsEmbed(cible) {
@@ -2167,6 +2285,9 @@ function buildRouletteStatsEmbed(cible) {
 function updateRouletteStats(userId, outcomeId, entry) {
     const stats = rouletteStats.get(userId) ?? { tirages: 0, bonus: 0, malus: 0, rien: 0, plusGrosGain: null, serieActuelle: 0, pireSerie: 0 };
     stats.tirages++;
+    if (stats.tirages >= 250) deverrouillerSucces(userId, 'veteran-250', client.channels.cache.get(ROULETTE_SALON_ID));
+    if (stats.tirages >= 500) deverrouillerSucces(userId, 'centurion-500', client.channels.cache.get(ROULETTE_SALON_ID));
+    if (outcomeId === 'aucun-resultat' && stats.serieActuelle >= 10) deverrouillerSucces(userId, 'desert-cosmique', client.channels.cache.get(ROULETTE_SALON_ID));
     if (entry?.type === 'bonus') {
         stats.bonus++;
         stats.serieActuelle = 0;
@@ -2229,7 +2350,7 @@ async function envoyerHallOfFame(guild, membre, entry) {
         .setTimestamp();
 
     if (avatar) embed.setThumbnail(avatar);
-
+    deverrouillerSucces(membre.id, 'hof', salon);
     await salon.send({
         content: `🎉 Félicitations à <@${membre.id}> pour son coup de maître !`,
         embeds: [embed]
@@ -2300,6 +2421,9 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
 
     if (outcomeId.startsWith('malus-') && rouletteBouclierActif.has(authorId)) {
         rouletteBouclierActif.delete(authorId);
+        if (['malus-timeout-20min', 'malus-exclu-heure', 'malus-exclu-jour', 'malus-exclu-semaine', 'malus-ban'].includes(outcomeId)) {
+            deverrouillerSucces(authorId, 'pare-balles', channel);
+        }
         const embed = buildRouletteResultEmbed(outcomeId, `🛡️ **${auteurNom}** évite le malus **${ROULETTE_NOMS[outcomeId]}** grâce à son bouclier !`);
         return { embeds: [embed], components: [buildRowResultatRoulette(authorId, outcomeId, failIndex)] };
     }
@@ -2332,6 +2456,38 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
 
     const proxy = { member: cible, channel, guild };
     const texte = await appliquerEtDecrireResultat(outcomeId, proxy, cibleNom, failIndex);
+
+    // 🧪 Succès : Le Pharmacien (contre-poison déclenché)
+    if (texte.includes('Miracle !')) {
+        deverrouillerSucces(cible.id, 'pharmacien', channel);
+    }
+
+    // 🔤 Succès : L'Incompréhensible (cumule 3 malus de texte ou plus en même temps)
+    const nowCheck = Date.now();
+    let malusTexteCumules = 0;
+    if (rouletteUwuUntil.has(cible.id) && nowCheck < rouletteUwuUntil.get(cible.id)) malusTexteCumules++;
+    if (rouletteLettreInterdite.has(cible.id) && nowCheck < rouletteLettreInterdite.get(cible.id).until) malusTexteCumules++;
+    if (rouletteEmojiUntil.has(cible.id) && nowCheck < rouletteEmojiUntil.get(cible.id)) malusTexteCumules++;
+    if (rouletteLeetUntil.has(cible.id) && nowCheck < rouletteLeetUntil.get(cible.id)) malusTexteCumules++;
+    for (const fin of Object.values(rouletteTransfos.get(cible.id) ?? {})) {
+        if (nowCheck < fin) malusTexteCumules++;
+    }
+    if (malusTexteCumules >= 3) {
+        deverrouillerSucces(cible.id, 'incomprehensible', channel);
+    }
+
+    // 🎰 Succès : Le Braquage Parfait (3/3 bonus pendant un Coup Triple)
+    if (outcomeId === 'bonus-coup-triple') {
+        rouletteCoupTripleScore.set(authorId, 0);
+    } else if (chargesTriple > 0) {
+        if (entryTiree?.type === 'bonus') {
+            const score = (rouletteCoupTripleScore.get(authorId) || 0) + 1;
+            rouletteCoupTripleScore.set(authorId, score);
+            if (score >= 3) deverrouillerSucces(authorId, 'braquage-parfait', channel);
+        } else {
+            rouletteCoupTripleScore.delete(authorId);
+        }
+    }
 
     const embed = buildRouletteResultEmbed(outcomeId, prefixeRedirect + texte);
 
@@ -4777,14 +4933,22 @@ if (response?.needsRouletteStats) {
             if (result.multiple) {
                 return askDisambiguation(message, message.guild, result.candidates, async (user) => {
                     const membre = message.guild.members.cache.get(user.id);
-                    if (membre) message.reply({ embeds: [buildRouletteStatsEmbed(membre)] });
+                    if (membre) {
+                        const row = new ActionRowBuilder().addComponents(
+                            new ButtonBuilder().setCustomId(`rlt_achs_${membre.id}_0_${message.author.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary)
+                        );
+                        message.reply({ embeds: [buildRouletteStatsEmbed(membre)], components: [row] });
+                    }
                 });
             }
             cible = result.found;
         }
     }
     if (!cible) return message.reply("Membre introuvable.");
-    return message.reply({ embeds: [buildRouletteStatsEmbed(cible)] });
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`rlt_achs_${cible.id}_0_${message.author.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary)
+    );
+    return message.reply({ embeds: [buildRouletteStatsEmbed(cible)], components: [row] });
 }
 
 
@@ -7374,6 +7538,37 @@ return interaction.update({ embeds: [embed], components: rows });
     // =========================
     // BOUTONS ROULETTE
     // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('rlt_achs_')) {
+        const parts = interaction.customId.split('_');
+        const cibleId = parts[2];
+        const page = parseInt(parts[3], 10);
+        const authorId = parts[4];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Ce n'est pas ta commande, fais `!rltstats` !", ephemeral: true });
+        }
+        const cible = interaction.guild.members.cache.get(cibleId);
+        if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
+
+        const { embed, row } = buildRouletteAchievementsEmbed(cible, page, authorId);
+        return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('rlt_stats_back_')) {
+        const parts = interaction.customId.split('_');
+        const cibleId = parts[3];
+        const authorId = parts[4];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Ce n'est pas ta commande, fais `!rltstats` !", ephemeral: true });
+        }
+        const cible = interaction.guild.members.cache.get(cibleId);
+        if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`rlt_achs_${cible.id}_0_${authorId}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary)
+        );
+        return interaction.update({ embeds: [buildRouletteStatsEmbed(cible)], components: [row] });
+    }
 
     if (interaction.isButton() && interaction.customId.startsWith('roulette_id_')) {
         const parts = interaction.customId.split('_');
