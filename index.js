@@ -2046,33 +2046,56 @@ function buildRoulettePresentationEmbed(authorId) {
 }
 
 function buildRouletteStateEmbed(cible) {
-    const actifs = [];
-    const finCd = rouletteCooldowns.get(cible.id);
-    if (finCd && Date.now() < finCd) actifs.push(`⏳ cooldown en cours (<t:${Math.ceil(finCd / 1000)}:R>)`);
-    if (rouletteCouronneUntil.has(cible.id) && Date.now() < rouletteCouronneUntil.get(cible.id)) actifs.push('👑 couronne (réaction auto)');
-    if (rouletteAntiFeurUntil.has(cible.id) && Date.now() < rouletteAntiFeurUntil.get(cible.id)) actifs.push('🛡️ immunité anti-feur active (24h)');
-    if ((rouletteCoupTripleCharges.get(cible.id) || 0) > 0) actifs.push(`🎰 ${rouletteCoupTripleCharges.get(cible.id)} tirage(s) gratuit(s) sans cooldown`);
-    if (roulettePseudoLock.has(cible.id) && Date.now() < roulettePseudoLock.get(cible.id).until) actifs.push(`🔒 pseudo verrouillé (${roulettePseudoLock.get(cible.id).pseudo})`);
-    if ((rouletteRedirectCharges.get(cible.id) || 0) > 0) actifs.push(`😈 ${rouletteRedirectCharges.get(cible.id)} redirection(s) de malus en réserve`);
-    if (rouletteFreeRollUntil.has(cible.id) && Date.now() < rouletteFreeRollUntil.get(cible.id)) actifs.push('⚡ tirage à volonté actif');
-    if (rouletteTimeoutUntil.has(cible.id) && Date.now() < rouletteTimeoutUntil.get(cible.id)) actifs.push('💀 timeout roulette actif');
-    if (rouletteImmuniteUntil.has(cible.id) && Date.now() < rouletteImmuniteUntil.get(cible.id)) actifs.push('🛡️ immunisé·e au prochain malus');
-    if (rouletteUwuUntil.has(cible.id) && Date.now() < rouletteUwuUntil.get(cible.id)) actifs.push('😳 doit finir ses messages par UwU');
-    if (rouletteLettreInterdite.has(cible.id) && Date.now() < rouletteLettreInterdite.get(cible.id).until) actifs.push(`🔤 lettre interdite : ${rouletteLettreInterdite.get(cible.id).lettre}`);
-    if (rouletteEmojiUntil.has(cible.id) && Date.now() < rouletteEmojiUntil.get(cible.id)) actifs.push('😀 doit finir ses messages par un emoji');
-    if (rouletteLeetUntil.has(cible.id) && Date.now() < rouletteLeetUntil.get(cible.id)) actifs.push('🤖 parle en l33t sp34k');
+    const now = Date.now();
+    const bonus = [];
+    const malus = [];
+
+    // --- BONUS ---
+    if (rouletteCouronneUntil.has(cible.id) && now < rouletteCouronneUntil.get(cible.id)) bonus.push('👑 Couronne 12h (réaction auto)');
+    if (rouletteAntiFeurUntil.has(cible.id) && now < rouletteAntiFeurUntil.get(cible.id)) bonus.push('🛡️ Immunité anti-feur (24h)');
+    if ((rouletteCoupTripleCharges.get(cible.id) || 0) > 0) bonus.push(`🎰 ${rouletteCoupTripleCharges.get(cible.id)} tirage(s) gratuit(s) sans cooldown`);
+    if (rouletteFreeRollUntil.has(cible.id) && now < rouletteFreeRollUntil.get(cible.id)) bonus.push('⚡ Tirage à volonté actif');
+    if (rouletteBouclierActif.has(cible.id)) bonus.push('🛡️ Bouclier actif (prochain malus annulé)');
+    if ((rouletteRedirectCharges.get(cible.id) || 0) > 0) bonus.push(`😈 ${rouletteRedirectCharges.get(cible.id)} redirection(s) de malus en réserve`);
+    if (rouletteRedirectChoixCible.has(cible.id)) bonus.push('🎯 Redirection de malus au choix en attente');
+    if ((rouletteCooldownCourtCharges.get(cible.id) || 0) > 0) bonus.push(`⚡ ${rouletteCooldownCourtCharges.get(cible.id)} tirage(s) à cooldown réduit (5 min)`);
+    if (rouletteImmuniteUntil.has(cible.id) && now < rouletteImmuniteUntil.get(cible.id)) bonus.push('🛡️ Immunité temporaire au timeout');
+
+    // --- MALUS ---
+    if (roulettePseudoLock.has(cible.id) && now < roulettePseudoLock.get(cible.id).until) malus.push(`🔒 Pseudo verrouillé (${roulettePseudoLock.get(cible.id).pseudo})`);
+    if (rouletteTimeoutUntil.has(cible.id) && now < rouletteTimeoutUntil.get(cible.id)) malus.push('💀 Timeout roulette actif');
+    if (rouletteUwuUntil.has(cible.id) && now < rouletteUwuUntil.get(cible.id)) malus.push('😳 Doit finir ses messages par UwU');
+    if (rouletteLettreInterdite.has(cible.id) && now < rouletteLettreInterdite.get(cible.id).until) malus.push(`🔤 Lettre interdite : ${rouletteLettreInterdite.get(cible.id).lettre}`);
+    if (rouletteEmojiUntil.has(cible.id) && now < rouletteEmojiUntil.get(cible.id)) malus.push('😀 Doit finir ses messages par un emoji');
+    if (rouletteLeetUntil.has(cible.id) && now < rouletteLeetUntil.get(cible.id)) malus.push('🤖 Parle en l33t sp34k');
+    if ((rouletteCooldown45Charges.get(cible.id) || 0) > 0) malus.push(`⏳ ${rouletteCooldown45Charges.get(cible.id)} tirage(s) à cooldown de 45 min`);
+
     const tf = rouletteTransfos.get(cible.id) ?? {};
-    const libTf = { caps: '🔠 majuscules', emojiOnly: '🙂 emoji only', limite100: '✂️ limite 100 caractères', limite30: '✂️ limite 30 caractères', mots: '🔀 mots mélangés', lettres: '🔤 lettres mélangées', censure: '▇ mots censurés' };
-    for (const [k, fin] of Object.entries(tf)) if (Date.now() < fin && libTf[k]) actifs.push(libTf[k]);
-    if (tf.bebe && Date.now() < tf.bebe) actifs.push('🍼 parle bébé (j→z, r→w)');
-    if ((rouletteCooldown45Charges.get(cible.id) || 0) > 0) actifs.push(`⏳ ${rouletteCooldown45Charges.get(cible.id)} tirage(s) à cooldown de 45 min`);
-    if ((rouletteCooldownCourtCharges.get(cible.id) || 0) > 0) actifs.push(`⚡ ${rouletteCooldownCourtCharges.get(cible.id)} tirage(s) à cooldown de 5 min`);
-    if (rouletteBouclierActif.has(cible.id)) actifs.push('🛡️ bouclier actif (prochain malus annulé)');
-    if (rouletteRedirectChoixCible.has(cible.id)) actifs.push('🎯 redirection de malus au choix en attente');
+    const libTf = {
+        caps: '🔠 Majuscules obligatoires', emojiOnly: '🙂 Emoji only', limite100: '✂️ Limite 100 caractères',
+        limite30: '✂️ Limite 30 caractères', mots: '🔀 Mots mélangés', lettres: '🔤 Lettres mélangées',
+        censure: '▇ Mots censurés', bebe: '🍼 Parler bébé (j→z, r→w)'
+    };
+    for (const [k, fin] of Object.entries(tf)) {
+        if (now < fin && libTf[k]) malus.push(libTf[k]);
+    }
+
+    // --- COOLDOWN (FOOTER) ---
+    const finCd = rouletteCooldowns.get(cible.id);
+    let footerText = '⏳ Cooldown : Aucun (prêt à lancer !)';
+    if (finCd && now < finCd) {
+        const minsRestantes = Math.ceil((finCd - now) / 60000);
+        footerText = `⏳ Cooldown restant : ~${minsRestantes} min`;
+    }
+
     return new EmbedBuilder()
         .setColor(0xffd20a)
-        .setTitle(`État roulette de ${cible.displayName}`)
-        .setDescription(actifs.length ? actifs.join('\n') : "Rien d'actif en ce moment.");
+        .setTitle(`🎰 État roulette de ${cible.displayName}`)
+        .addFields(
+            { name: '🎉 Bonus actifs', value: bonus.length ? bonus.join('\n') : '*Aucun bonus actif*', inline: false },
+            { name: '💀 Malus actifs', value: malus.length ? malus.join('\n') : '*Aucun malus actif*', inline: false }
+        )
+        .setFooter({ text: footerText });
 }
 
 function buildRouletteStatsEmbed(cible) {
