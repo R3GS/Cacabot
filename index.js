@@ -1097,6 +1097,8 @@ const spamTracker = new Map(); // userId -> timestamps[]
 const SPAM_WINDOW_MS = 5000;
 const SPAM_THRESHOLD = 5;
 const SPAM_TIMEOUT_MS = 5 * 60 * 1000;
+const SPAM_EXEMPT_CHANNELS = ['1553954760900608091'];
+const SPAM_EXEMPT_REGEX = /^!(rlt|roulette)(\s+go)?\s*$/i;
 
 // --- Anti-raid ---
 const raidJoinTracker = new Map();   // guildId -> [{ userId, timestamp }]
@@ -1157,6 +1159,13 @@ const rouletteStats = new Map();        // userId -> { tirages, bonus, malus, ri
 const ROULETTE_JACKPOT_INCREMENT = 0.01; // +1% par "rien"
 const ROULETTE_JACKPOT_MAX = 0.5;        // plafond à 50%
 const ROULETTE_HOF_CHANNEL_ID = '1554331383361577010';
+const ROULETTE_WEBHOOK_EXCLUS = new Set([
+    '1553948893354401923',
+    '862253918583390238',
+    '730795053563248640',
+    '745115366065176598',
+    '738514269234266242'
+]);
 const ROULETTE_HOF_SEUIL = 0.0005; // 0,05%
 
 const ROULETTE_EMOJIS_ALEATOIRES = ['😂','😍','🔥','💀','🎉','😭','👀','🤡','😏','👁️👄👁️','🫦','😡',];
@@ -1206,6 +1215,7 @@ function appliquerTransfos(userId, texte) {
     if (t.lettres) r = surTexte(r, m => m.replace(/\p{L}{2,}/gu, mot => melanger([...mot]).join('')));
     if (t.censure) r = surTexte(r, m => m.replace(/\S+/g, mot => Math.random() < 1 / 3 ? '▇▇' : mot));
     if (t.emojiOnly) r = surTexte(r, m => m.replace(/\S+/g, () => ROULETTE_EMOJIS_ALEATOIRES[Math.floor(Math.random() * ROULETTE_EMOJIS_ALEATOIRES.length)]));
+    if (t.bebe) r = surTexte(r, m => m.replace(/j/g, 'z').replace(/J/g, 'Z').replace(/r/g, 'w').replace(/R/g, 'W'));
     if (t.caps) r = surTexte(r, m => m.toUpperCase());
     const max = Math.min(t.limite30 ? 30 : Infinity, t.limite100 ? 100 : Infinity);
     if (max !== Infinity && [...r].length > max) r = [...r].slice(0, max).join('').replace(/<[^>]*$/, '');
@@ -1227,6 +1237,30 @@ function retirerLettre(texte, lettre) {
 }
 const rouletteTimeoutUntil = new Map(); // userId -> timestamp de fin, UNIQUEMENT pour les timeouts causés par la roulette
 const rouletteWebhooks = new Map(); // channelId -> Webhook
+const rouletteNotifs = new Map();      // userId -> channelId (sauvegardé dans JSONBin)
+const rouletteNotifTimers = new Map(); // userId -> timeout (non sauvegardé, réarmé au démarrage)
+
+function armerNotifRoulette(userId, channelId) {
+    clearTimeout(rouletteNotifTimers.get(userId));
+    const fin = rouletteCooldowns.get(userId) ?? 0;
+    const delai = Math.max(fin - Date.now(), 0);
+    const timer = setTimeout(async () => {
+        rouletteNotifTimers.delete(userId);
+        const finActuelle = rouletteCooldowns.get(userId) ?? 0;
+        if (Date.now() < finActuelle) return armerNotifRoulette(userId, channelId); // cooldown rallongé entre-temps
+        rouletteNotifs.delete(userId);
+        const salon = await client.channels.fetch(channelId).catch(() => null);
+        await salon?.send(`🎰 <@${userId}>, ton cooldown roulette est terminé ! Tape \`!rlt\` pour retenter ta chance.`).catch(() => {});
+    }, Math.min(delai, 2 ** 31 - 1));
+    rouletteNotifTimers.set(userId, timer);
+}
+
+function buildRowResultatRoulette(authorId, outcomeId, failIndex) {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`roulette_notif_${authorId}`).setLabel('🔔 Me prévenir').setStyle(ButtonStyle.Secondary)
+    );
+}
 
 const ROULETTE_NOMS_COMMANDES = {
     timeout3: 'malus-timeout-3min', timeout5: 'malus-timeout-5min', timeout20: 'malus-timeout-20min',
@@ -1242,7 +1276,7 @@ const ROULETTE_NOMS_COMMANDES = {
     bouclier: 'bonus-bouclier', redirectchoix: 'bonus-redirect-choix', leet: 'malus-leet',
     caps: 'malus-caps', emojionly: 'malus-emoji-only', censure: 'malus-censure', mots: 'malus-mots-melanges',
     lettres: 'malus-lettres-melangees', limite100: 'malus-limite-100', limite30: 'malus-limite-30',
-    tournee: 'special-tournee-generale',
+    tournee: 'special-tournee-generale', bebe: 'malus-bebe',
     vote: 'special-vote-immunite-exclusion'
 };
 // Table de tirage : de la plus rare à la plus courante. Un seul résultat par tirage.
@@ -1295,6 +1329,7 @@ const ROULETTE_TABLE = [
     { id: 'malus-lettres-melangees',   type: 'malus',   poids: 1 / 400,   nom: 'Lettres mélangées pendant 1h', desc: 'Les lettres de chaque mot sont mélangées pendant 1h' },
     { id: 'malus-limite-100',          type: 'malus',   poids: 1 / 500,   nom: 'Limite de 100 caractères pendant 2h', desc: 'Messages coupés à 100 caractères maximum pendant 2h' },
     { id: 'malus-limite-30',           type: 'malus',   poids: 1 / 550,   nom: 'Limite de 30 caractères pendant 1h', desc: 'Messages coupés à 30 caractères maximum pendant 1h' },
+    { id: 'malus-bebe',                type: 'malus',   poids: 1 / 450,   nom: 'Parler bébé pendant 2h', desc: 'Les « j » deviennent des « z » et les « r » des « w » dans tous ses messages pendant 2h' },
     { id: 'special-tournee-generale',  type: 'special', poids: 1 / 600,   nom: 'Tournée générale', desc: 'Tournée générale ! Les cooldowns de tout le monde sont éteints pendant 1 minute' },
     { id: 'malus-cooldown-45',         type: 'malus',   poids: 1 / 40,    nom: 'Cooldown de 45 min', desc: 'Les 3 prochains tirages ont un cooldown de 45 minutes' },
 ];
@@ -1318,7 +1353,7 @@ const ROULETTE_EMOJIS_PAR_ID = {
     'bonus-epingle': '📌', 'malus-emoji': '😀', 'malus-leet': '🤖', 'malus-caps': '🔠',
     'malus-emoji-only': '🙂', 'malus-censure': '▇', 'malus-mots-melanges': '🔀',
     'malus-lettres-melangees': '🔡', 'malus-limite-100': '✂️', 'malus-limite-30': '✂️',
-    'special-tournee-generale': '🥂', 'malus-cooldown-45': '⏳', 'malus-prime': '💥'
+    'special-tournee-generale': '🥂', 'malus-cooldown-45': '⏳', 'malus-prime': '💥', 'malus-bebe': '🍼'
 };
 function buildHelpxPresentationEmbed() {
     return new EmbedBuilder()
@@ -1478,7 +1513,8 @@ const ROULETTE_ETATS = {
     jackpot:            rouletteJackpotBonus,
     stats:              rouletteStats,
     immunite:        rouletteImmuniteUntil,
-    timeoutRoulette: rouletteTimeoutUntil
+    timeoutRoulette: rouletteTimeoutUntil,
+    notifs: rouletteNotifs
 };
 
 const ROULETTE_FAILS = [
@@ -1733,6 +1769,9 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'malus-leet':
             rouletteLeetUntil.set(message.member.id, Date.now() + 12 * 60 * 60 * 1000);
             return `**${auteurNom}** parle maintenant en **l33t sp34k** pendant **12h** !`;
+        case 'malus-bebe':
+            activerTransfo(message.member.id, 'bebe', 2 * 60 * 60 * 1000);
+            return `🍼 **${auteurNom}** parle maintenant comme un bébé pendant **2h** : ses « j » deviennent des « z » et ses « r » des « w » !`;
         case 'malus-cooldown-45': {
             rouletteCooldowns.set(message.member.id, Date.now() + 45 * 60 * 1000);
             rouletteCooldown45Charges.set(message.member.id, 2);
@@ -1799,6 +1838,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             await appliquerEtDecrireResultat('malus-caps', message, auteurNom, 0);
             await appliquerEtDecrireResultat('malus-mots-melanges', message, auteurNom, 0);
             await appliquerEtDecrireResultat('malus-lettres-melangees', message, auteurNom, 0);
+            await appliquerEtDecrireResultat('malus-bebe', message, auteurNom, 0);
             return `☠️☠️☠️ **${auteurNom}** subit le **MALUS PRIME** : absolument tous les malus de texte en même temps (censure, emoji only, mute, exclusion, cooldown et ban épargnés) !`;
         }
         case 'aucun-resultat':
@@ -1907,6 +1947,7 @@ function buildRouletteStateEmbed(cible) {
     const tf = rouletteTransfos.get(cible.id) ?? {};
     const libTf = { caps: '🔠 majuscules', emojiOnly: '🙂 emoji only', limite100: '✂️ limite 100 caractères', limite30: '✂️ limite 30 caractères', mots: '🔀 mots mélangés', lettres: '🔤 lettres mélangées', censure: '▇ mots censurés' };
     for (const [k, fin] of Object.entries(tf)) if (Date.now() < fin && libTf[k]) actifs.push(libTf[k]);
+    if (tf.bebe && Date.now() < tf.bebe) actifs.push('🍼 parle bébé (j→z, r→w)');
     if ((rouletteCooldown45Charges.get(cible.id) || 0) > 0) actifs.push(`⏳ ${rouletteCooldown45Charges.get(cible.id)} tirage(s) à cooldown de 45 min`);
     if ((rouletteCooldownCourtCharges.get(cible.id) || 0) > 0) actifs.push(`⚡ ${rouletteCooldownCourtCharges.get(cible.id)} tirage(s) à cooldown de 5 min`);
     if (rouletteBouclierActif.has(cible.id)) actifs.push('🛡️ bouclier actif (prochain malus annulé)');
@@ -1956,6 +1997,18 @@ function updateRouletteStats(userId, outcomeId, entry) {
     rouletteStats.set(userId, stats);
 }
 
+const ROULETTE_ROLE_ADDICT_ID = '1555245236249436160';
+const ROULETTE_ADDICT_SEUIL = 500;
+
+async function verifierRoleGamblingAddict(membre) {
+    if (!membre) return;
+    const stats = rouletteStats.get(membre.id);
+    if (!stats || stats.tirages < ROULETTE_ADDICT_SEUIL) return;
+    if (membre.roles.cache.has(ROULETTE_ROLE_ADDICT_ID)) return;
+    await membre.roles.add(ROULETTE_ROLE_ADDICT_ID, `Gambling addict : ${stats.tirages} rolls`)
+        .catch(err => console.error('[Gambling addict] Impossible de donner le rôle :', err.message));
+}
+
 async function envoyerHallOfFame(guild, auteurNom, entry) {
     if (!entry) return;
     const proba = probaReelle(entry);
@@ -2003,6 +2056,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
     const entryTiree = ROULETTE_TABLE.find(e => e.id === outcomeId);
     updateRouletteStats(authorId, outcomeId, entryTiree);
     envoyerHallOfFame(guild, auteurNom, entryTiree).catch(() => {});
+    verifierRoleGamblingAddict(membre).catch(() => {});
     let cible = membre;
     let cibleNom = auteurNom;
     let prefixeRedirect = '';
@@ -2011,7 +2065,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
         rouletteBouclierActif.delete(authorId);
         const embed = buildRouletteResultEmbed(outcomeId, `🛡️ **${auteurNom}** évite le malus **${ROULETTE_NOMS[outcomeId]}** grâce à son bouclier !`);
         const probasBtn = new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary);
-        return { embeds: [embed], components: [new ActionRowBuilder().addComponents(probasBtn)] };
+        return { embeds: [embed], components: [buildRowResultatRoulette(authorId, outcomeId, failIndex)] };
     }
 
     if (outcomeId.startsWith('malus-')) {
@@ -2050,14 +2104,14 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
     if (dejaMaxRole) {
         return {
             embeds: [embed],
-            components: [buildMenuFallbackRoulette(authorId), new ActionRowBuilder().addComponents(probasBtn)],
+            components: [buildMenuFallbackRoulette(authorId), buildRowResultatRoulette(authorId, outcomeId, failIndex)],
             attenteChoix: true
         };
     }
     const differe = proxy.differe;
     return {
         embeds: proxy.vote ? [buildVoteRouletteEmbed(proxy.vote)] : [embed],
-        components: [new ActionRowBuilder().addComponents(probasBtn)],
+        components: [buildRowResultatRoulette(authorId, outcomeId, failIndex)],
         vote: proxy.vote ?? null,
         differe: differe ? async () => {
             await differe.action();
@@ -2068,6 +2122,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
 
 async function assurerWebhookRoulette(channel) {
     if (channel.guild?.id !== '720057528351850547') return null;
+    if (ROULETTE_WEBHOOK_EXCLUS.has(channel.id)) return null;
     if (rouletteWebhooks.has(channel.id)) return rouletteWebhooks.get(channel.id);
     try {
         const existants = await channel.fetchWebhooks();
@@ -3452,7 +3507,12 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     }
 
         // Anti-spam
-    if (message.guild && message.member && !CHUT_AUTHORIZED.includes(message.author.id)) {
+    if (
+        message.guild && message.member &&
+        !CHUT_AUTHORIZED.includes(message.author.id) &&
+        !SPAM_EXEMPT_CHANNELS.includes(message.channel.id) &&
+        !SPAM_EXEMPT_REGEX.test(message.content.trim())
+    ) {
         const now = Date.now();
         const spamTimestamps = (spamTracker.get(message.author.id) || []).filter(t => now - t < SPAM_WINDOW_MS);
         spamTimestamps.push(now);
@@ -7111,7 +7171,8 @@ return interaction.update({ embeds: [embed], components: rows });
         }
         const embed = buildRoulettePaytableEmbed();
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`roulette_back_pres_${authorId}`).setLabel('⬅️ Retour').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`roulette_back_pres_${authorId}`).setLabel('⬅️ Retour').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`roulette_tenter_${authorId}`).setLabel('🍀 Tenter sa chance').setStyle(ButtonStyle.Primary)
         );
         return interaction.update({ embeds: [embed], components: [row] });
     }
@@ -7164,11 +7225,30 @@ return interaction.update({ embeds: [embed], components: rows });
 
         const embed = buildRouletteResultEmbed(outcomeId, texte);
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_0`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_0`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`roulette_notif_${authorId}`).setLabel('🔔 Me prévenir').setStyle(ButtonStyle.Secondary)
         );
         rouletteChoixEnAttente.delete(interaction.message.id);
         memoriserResultatRoulette(interaction.message.id, embed);
         return interaction.update({ embeds: [embed], components: [row] });
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('roulette_notif_')) {
+        const authorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "C'est pas ton tirage, tape `!roulette` toi-même 😌", ephemeral: true });
+        }
+        const fin = rouletteCooldowns.get(authorId) ?? 0;
+        if (Date.now() >= fin) {
+            return interaction.reply({ content: "Ton cooldown est déjà terminé, tu peux relancer ! 🎰", ephemeral: true });
+        }
+        if (rouletteNotifs.has(authorId)) {
+            return interaction.reply({ content: "🔔 Tu seras déjà prévenu·e à la fin de ton cooldown.", ephemeral: true });
+        }
+        rouletteNotifs.set(authorId, interaction.channelId);
+        armerNotifRoulette(authorId, interaction.channelId);
+        demanderSauvegarde();
+        return interaction.reply({ content: `🔔 C'est noté ! Je te ping ici <t:${Math.ceil(fin / 1000)}:R>.`, ephemeral: true });
     }
 
     if (interaction.isButton() && interaction.customId.startsWith('roulette_probas_res_')) {
@@ -7211,9 +7291,7 @@ return interaction.update({ embeds: [embed], components: rows });
                 : `**${auteurNom}** est tombé.e sur ${type} **${nom}**.\n*Il a déjà été appliqué, revenir ici ne le déclenche pas une deuxième fois.*`;
             embed = buildRouletteResultEmbed(outcomeId, texte);
         }
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary)
-        );
+        const row = buildRowResultatRoulette(authorId, outcomeId, failIndex);
         return interaction.update({ embeds: [embed], components: [row] });
     }
 
@@ -7926,6 +8004,7 @@ client.once('ready', async () => {
     console.log(`✅ ${client.user.tag} est connecté`);
     await new Promise(r => setTimeout(r, 15000)); // laisse le temps à l'ancien conteneur de finir sa sauvegarde
     await loadAll();
+    for (const [uid, chId] of rouletteNotifs) armerNotifRoulette(uid, chId);
     cleanOldData();
     for (const guild of client.guilds.cache.values()) {
         await guild.members.fetch().catch(() => {});
@@ -8011,6 +8090,7 @@ client.on('messageCreate', async (message) => {
 client.on('messageCreate', async (message) => {
     if (message.webhookId || message.author.bot || !message.guild) return;
     if (!message.content) return;
+    if (ROULETTE_WEBHOOK_EXCLUS.has(message.channel.id) || ROULETTE_WEBHOOK_EXCLUS.has(message.channel.parentId)) return;
     if (estMessageExempte(message.content, message.mentions.users.has(client.user.id))) return;
 
     const id = message.author.id;
