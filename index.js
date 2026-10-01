@@ -1362,7 +1362,7 @@ const ROULETTE_TABLE = [
     { id: 'malus-timeout-20min',       type: 'malus',   poids: 1 / 25,    nom: 'Mute de 20 minutes', desc: 'Mute de 20 minutes' },
     { id: 'malus-emoji-only',          type: 'malus',   poids: 1 / 35,    nom: 'Emoji only pendant 1h', desc: 'Tous ses mots sont remplacés par des emojis pendant 1h' },
     { id: 'malus-bebe',                type: 'malus',   poids: 1 / 45,    nom: 'Parler bébé pendant 2h', desc: 'Les « j » deviennent des « z » et les « r » des « w » dans tous ses messages pendant 2h' },
-    { id: 'malus-emoji',               type: 'malus',   poids: 1 / 55,    nom: 'Emoji obligatoire', desc: 'Doit finir chaque message par un emoji aléatoire pendant 24h' },
+    { id: 'malus-emoji',               type: 'malus',   poids: 1 / 55,    nom: 'Emoji obligatoire', desc: 'Doit finir chaque message par un emoji aléatoire pendant 6h' },
     { id: 'malus-caps',                type: 'malus',   poids: 1 / 70,    nom: 'MAJUSCULES pendant 2h', desc: 'Doit parler en MAJUSCULES pendant 2h' },
     { id: 'malus-censure',             type: 'malus',   poids: 1 / 85,    nom: 'Censure pendant 2h', desc: 'Un mot sur 3 est censuré (▇▇) pendant 2h' },
     { id: 'malus-exclu-heure',         type: 'malus',   poids: 1 / 100,   nom: 'Exclusion de 1 heure', desc: 'Exclusion de 1 heure' },
@@ -1372,9 +1372,9 @@ const ROULETTE_TABLE = [
     { id: 'malus-lettres-melangees',   type: 'malus',   poids: 1 / 180,   nom: 'Lettres mélangées pendant 1h', desc: 'Les lettres de chaque mot sont mélangées pendant 1h' },
     { id: 'malus-limite-100',          type: 'malus',   poids: 1 / 220,   nom: 'Limite de 100 caractères pendant 2h', desc: 'Messages coupés à 100 caractères maximum pendant 2h' },
     { id: 'malus-limite-30',           type: 'malus',   poids: 1 / 270,   nom: 'Limite de 30 caractères pendant 1h', desc: 'Messages coupés à 30 caractères maximum pendant 1h' },
-    { id: 'malus-leet',                type: 'malus',   poids: 1 / 330,   nom: 'Leet speak pendant 12h', desc: 'Tous ses messages sont écrits en leet speak (a→4, e→3...) pendant 12h' },
-    { id: 'malus-lettre-interdite',    type: 'malus',   poids: 1 / 400,   nom: 'Lettre interdite pendant 12h', desc: 'Ne peut plus utiliser une lettre au hasard pendant 12h' },
-    { id: 'malus-uwu-24h',             type: 'malus',   poids: 1 / 480,   nom: 'UwU obligatoire pendant 24h', desc: 'Doit finir chaque message par UwU pendant 24h' },
+    { id: 'malus-leet',                type: 'malus',   poids: 1 / 330,   nom: 'Leet speak pendant 6h', desc: 'Tous ses messages sont écrits en leet speak (a→4, e→3...) pendant 6h' },
+    { id: 'malus-lettre-interdite',    type: 'malus',   poids: 1 / 400,   nom: 'Lettre interdite pendant 6h', desc: 'Ne peut plus utiliser une lettre au hasard pendant 6h' },
+    { id: 'malus-uwu-24h',             type: 'malus',   poids: 1 / 480,   nom: 'UwU obligatoire pendant 6h', desc: 'Doit finir chaque message par UwU pendant 6h' },
     { id: 'malus-pseudo-lock-mois',    type: 'malus',   poids: 1 / 600,   nom: 'Pseudo horrible verrouillé pendant 1 mois', desc: 'Pseudo horrible changé de force, verrouillé pendant 1 mois' },
     { id: 'malus-prime',               type: 'malus',   poids: 1 / 800,   nom: 'MALUS PRIME', desc: 'Cumule TOUS les malus de texte/pseudo en même temps (hors mute, exclusion, cooldown, ban)' },
     { id: 'malus-exclu-semaine',       type: 'malus',   poids: 1 / 1200,  nom: 'Exclusion de 1 semaine', desc: 'Exclusion de 1 semaine' },
@@ -1800,8 +1800,8 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 rouletteUwuUntil.delete(message.member.id);
                 return `✨ **Miracle !** **${auteurNom}** retombe sur le malus **UwU** alors qu'il était encore actif : il est **annulé** !`;
             }
-            rouletteUwuUntil.set(message.member.id, Date.now() + 24 * 60 * 60 * 1000);
-            return `**${auteurNom}** doit terminer chacun de ses messages par **UwU** pendant **24h** !`;
+            rouletteUwuUntil.set(message.member.id, Date.now() + 6 * 60 * 60 * 1000);
+            return `**${auteurNom}** doit terminer chacun de ses messages par **UwU** pendant **6h** !`;
         }
         case 'malus-lettre-interdite': {
             const lockLettre = rouletteLettreInterdite.get(message.member.id);
@@ -1810,8 +1810,8 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 return `✨ **Miracle !** **${auteurNom}** retombe sur la **lettre interdite** alors qu'elle était encore active : elle est **annulée** !`;
             }
             const lettre = String.fromCharCode(65 + Math.floor(Math.random() * 26));
-            rouletteLettreInterdite.set(message.member.id, { until: Date.now() + 12 * 60 * 60 * 1000, lettre });
-            return `**${auteurNom}** ne peut plus utiliser la lettre **${lettre}** pendant **12h** !`;
+            rouletteLettreInterdite.set(message.member.id, { until: Date.now() + 6 * 60 * 60 * 1000, lettre });
+            return `**${auteurNom}** ne peut plus utiliser la lettre **${lettre}** pendant **6h** !`;
         }
         case 'bonus-redirect-malus': {
             const total = (rouletteRedirectCharges.get(message.member.id) || 0) + 3;
@@ -1824,8 +1824,8 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 rouletteEmojiUntil.delete(message.member.id);
                 return `✨ **Miracle !** **${auteurNom}** retombe sur l'**emoji obligatoire** alors qu'il était encore actif : il est **annulé** !`;
             }
-            rouletteEmojiUntil.set(message.member.id, Date.now() + 24 * 60 * 60 * 1000);
-            return `**${auteurNom}** doit terminer chacun de ses messages par un **emoji aléatoire** pendant **24h** !`;
+            rouletteEmojiUntil.set(message.member.id, Date.now() + 6 * 60 * 60 * 1000);
+            return `**${auteurNom}** doit terminer chacun de ses messages par un **emoji aléatoire** pendant **6h** !`;
         }
         case 'malus-caps':
             if (basculerTransfo(message.member.id, 'caps', 2 * 60 * 60 * 1000)) {
@@ -1871,8 +1871,8 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 rouletteLeetUntil.delete(message.member.id);
                 return `✨ **Miracle !** **${auteurNom}** retombe sur le **l33t sp34k** alors qu'il était encore actif : il est **annulé** !`;
             }
-            rouletteLeetUntil.set(message.member.id, Date.now() + 12 * 60 * 60 * 1000);
-            return `**${auteurNom}** parle maintenant en **l33t sp34k** pendant **12h** !`;
+            rouletteLeetUntil.set(message.member.id, Date.now() + 6 * 60 * 60 * 1000);
+            return `**${auteurNom}** parle maintenant en **l33t sp34k** pendant **6h** !`;
         }
         case 'malus-bebe':
             if (basculerTransfo(message.member.id, 'bebe', 2 * 60 * 60 * 1000)) {
