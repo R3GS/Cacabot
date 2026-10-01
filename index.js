@@ -2196,21 +2196,44 @@ async function verifierRoleGamblingAddict(membre) {
         .catch(err => console.error('[Gambling addict] Impossible de donner le rôle :', err.message));
 }
 
-async function envoyerHallOfFame(guild, auteurNom, entry) {
-    if (!entry) return;
+async function envoyerHallOfFame(guild, membre, entry) {
+    if (!entry || entry.type !== 'bonus') return;
     const proba = probaReelle(entry);
     if (proba >= ROULETTE_HOF_SEUIL) return;
-    const salon = guild.channels.cache.get(ROULETTE_HOF_CHANNEL_ID);
+
+    const salon = guild.channels.cache.get(ROULETTE_HOF_CHANNEL_ID) 
+        ?? await guild.channels.fetch(ROULETTE_HOF_CHANNEL_ID).catch(() => null);
     if (!salon) {
-        console.error(`[Hall of Fame] Salon ${ROULETTE_HOF_CHANNEL_ID} introuvable dans le cache de la guild ${guild.id}`);
+        console.error(`[Hall of Fame] Salon ${ROULETTE_HOF_CHANNEL_ID} introuvable`);
         return;
     }
+
     const { n, pct } = probaAffichee(proba);
-    const couleur = entry.type === 'bonus' ? 0x57f287 : entry.type === 'malus' ? 0xed4245 : 0xffd20a;
+    const nom = membre?.displayName ?? membre?.user?.username ?? 'Un·e membre';
+    const avatar = membre?.user?.displayAvatarURL({ dynamic: true, size: 256 }) 
+        ?? membre?.displayAvatarURL?.({ dynamic: true, size: 256 });
+    const emoji = ROULETTE_EMOJIS_PAR_ID[entry.id] ?? '🏆';
+
     const embed = new EmbedBuilder()
-        .setColor(couleur)
-        .setDescription(`🎉 **${auteurNom}** vient de décrocher **${entry.nom}** ! (1/${n} | ${pct}%)`);
-    await salon.send({ embeds: [embed] }).catch(err => console.error('[Hall of Fame] Échec envoi :', err.message));
+        .setColor(0xffd700)
+        .setTitle('🏆 NOUVEL EXPLOIT AU PANTHÉON !')
+        .setDescription(`Le destin a parlé ! Un bonus ultra rare vient d'être décroché sur la roulette !`)
+        .addFields(
+            { name: '👤 Membre récompensé·e', value: `<@${membre.id}> (${nom})`, inline: true },
+            { name: `${emoji} Bonus obtenu`, value: `**${entry.nom}**`, inline: true },
+            { name: '\u200b', value: '\u200b', inline: true },
+            { name: '🎲 Chance de tirage', value: `**1/${n}** (${pct}%)`, inline: true },
+            { name: '📅 Date de l\'exploit', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+        )
+        .setFooter({ text: 'Panthéon de la Roulette • Regaïa' })
+        .setTimestamp();
+
+    if (avatar) embed.setThumbnail(avatar);
+
+    await salon.send({
+        content: `🎉 Félicitations à <@${membre.id}> pour son coup de maître !`,
+        embeds: [embed]
+    }).catch(err => console.error('[Hall of Fame] Échec envoi :', err.message));
 }
 
 // Membres éligibles à une redirection aléatoire : top 30 des plus actifs, bots exclus, sans l'auteur du tirage
@@ -2268,7 +2291,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
     const failIndex = outcomeId === 'aucun-resultat' ? Math.floor(Math.random() * ROULETTE_FAILS.length) : 0;
     const entryTiree = ROULETTE_TABLE.find(e => e.id === outcomeId);
     updateRouletteStats(authorId, outcomeId, entryTiree);
-    envoyerHallOfFame(guild, auteurNom, entryTiree).catch(() => {});
+    envoyerHallOfFame(guild, membre, entryTiree).catch(() => {});
     verifierRoleGamblingAddict(membre).catch(() => {});
     let cible = membre;
     let cibleNom = auteurNom;
@@ -3599,6 +3622,8 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
             const proxy = { member: cible, channel: message.channel, guild: message.guild };
             const texte = await appliquerEtDecrireResultat(outcomeId, proxy, cible.displayName, 0);
+            const entryForcee = ROULETTE_TABLE.find(e => e.id === outcomeId);
+            if (attendBonus) envoyerHallOfFame(message.guild, cible, entryForcee).catch(() => {});
             if (proxy.vote) {
                 const envoye = await message.reply({ embeds: [buildVoteRouletteEmbed(proxy.vote)] });
                 return demarrerVoteRoulette(envoye, proxy.vote);
