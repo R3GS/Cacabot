@@ -496,12 +496,7 @@ function getResponse(raw) {
     }
 
     if (command === "!help") {
-        return {
-            data: new EmbedBuilder()
-                .setColor(0x00ffff)
-                .setTitle("\ud83d\udca9 AIDE \u00c0 CACABOT")
-                .setDescription("Hey ! Voici Cacabot, qui, malgr\u00e9 son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\n\nPour d\u00e9couvrir les diff\u00e9rentes commandes disponibles de Cacabot, choisis l'une des cat\u00e9gories ci-dessous !")
-        };
+        return { needsHelp: true };
     }
 
     // =========================
@@ -807,6 +802,10 @@ if (command === "!choix") {
         return { needsBlague: true };
     }
 
+    if (command === "!topchef") {
+        return { needsTopChef: true };
+    }
+
     if (command === "!actif") {
         return { needsActif: true };
     }
@@ -1096,6 +1095,15 @@ const pomodoroSessions = new Map();
 const youtubeSearches = new Map();
 const vocalMessages = new Map();
 const dernierMessageParUtilisateur = new Map();
+const MOD_CHANNEL_ID = '1555402748193669192';
+
+// --- Anti-phishing ---
+const PHISHING_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:discor(?:d(?:app)?|cl|cb|ct|cl-app|d-nitro|d-gift|dapp|dstatus)?[-_.]+(?:gift|nitro|giveaway|drop|claim|steam|promo|boost|vip|com\.ru|xyz|tk|ga|ml|cf|gq|club|top|click|link)|steamcommuni(?:i|l)ty\.[a-z]+)\b/i;
+
+// --- Slowmode d'urgence ---
+const slowmodeTrackers = new Map(); // channelId -> [{ userId, timestamp }]
+const slowmodeActifs = new Set();   // channelIds actuellement en slowmode d'urgence
+
 // --- Anti-spam ---
 const spamTracker = new Map(); // userId -> timestamps[]
 const SPAM_WINDOW_MS = 5000;
@@ -1544,6 +1552,152 @@ function buildSuggestionRow(data) {
     );
 }
 
+function buildHelpHomeEmbed() {
+    return new EmbedBuilder()
+        .setColor(0x00ffff)
+        .setTitle('💩 GUIDE OFFICIEL DE CACABOT')
+        .setThumbnail(client.user?.displayAvatarURL({ dynamic: true, size: 256 }) ?? null)
+        .setDescription(
+            "Hey ! Voici le manuel d'utilisation officiel de Cacabot.\n" +
+            "Choisis une catégorie dans le menu ci-dessous pour afficher les commandes correspondantes !\n\n" +
+            "🔥 **À LA UNE EN CE MOMENT :**\n" +
+            "> 🎰 `!roulette` (ou `!rlt`) — La fameuse roulette qui te fait gagner des trucs... ou pas.\n\n" +
+            "💡 **ASTUCE :**\n" +
+            "-# Tu as une idée d'amélioration pour le bot ou le serveur ? Envoie `!suggestion [ton idée]` dans le salon <#720079866199801937> !\n\n" +
+            "📚 **DESCRIPTION DES CATÉGORIES :**\n" +
+            "• 🎭 **Interactions & Social** — Toutes les commandes pour interagir, clasher, réagir ou s'amuser avec les autres membres.\n" +
+            "• 🎰 **Jeux, Hasard & Destin** — La roulette, le criminel du jour, les prédictions d'avenir et jeux de hasard.\n" +
+            "• 🍽️ **Salons & Vie du Serveur** — Le verdict Top Chef, les questions du soir, les choix et les anniversaires.\n" +
+            "• 📊 **Stats & Utilitaires** — Classements d'activité, profils, avatar, météo, sessions pomodoro et serveur.\n" +
+            "• 🤖 **Cacabot & Infos** — Commandes YouTube, état du bot, latence et gestion de Cacabot."
+        );
+}
+
+function buildHelpMenu(authorId, messageId) {
+    const menu = new StringSelectMenuBuilder()
+        .setCustomId(`help_select_${authorId}_${messageId ?? ''}`)
+        .setPlaceholder('Choisis une catégorie de commandes...')
+        .addOptions(
+            { label: 'Interactions & Social', emoji: '🎭', description: 'kiss, hug, insult, die, ban, bait, punch, rizz...', value: 'interact' },
+            { label: 'Jeux, Hasard & Destin', emoji: '🎰', description: 'roulette, wanted, destin, animal, flip, blague...', value: 'jeux' },
+            { label: 'Salons & Vie du Serveur', emoji: '🍽️', description: 'topchef, question, choix, anniversaire...', value: 'serveur' },
+            { label: 'Stats & Utilitaires', emoji: '📊', description: 'top, actif, profil, avatar, serveur, météo, pomodoro...', value: 'util' },
+            { label: 'Cacabot & Infos', emoji: '🤖', description: 'botinfo, ping, stop, youtube, last, stats...', value: 'cacabot' }
+        );
+    return new ActionRowBuilder().addComponents(menu);
+}
+
+function buildHelpNavRow(authorId, messageId) {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`help_home_${authorId}_${messageId ?? ''}`)
+            .setLabel('Accueil')
+            .setEmoji('🏠')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`help_delete_${authorId}_${messageId ?? ''}`)
+            .setLabel('Fermer')
+            .setEmoji('🗑️')
+            .setStyle(ButtonStyle.Danger)
+    );
+}
+
+function buildHelpCategoryEmbed(category) {
+    const embed = new EmbedBuilder();
+
+    if (category === 'interact') {
+        return embed.setColor(0xffdc5d)
+            .setTitle('🎭 Interactions & Social')
+            .setDescription('Toutes les commandes pour interagir avec les membres du serveur :\n\n' +
+                '• `!kiss` / `!bisou` [@membre] — Embrasser un·e membre\n' +
+                '• `!hug` / `!calin` [@membre] — Faire un câlin réconfortant\n' +
+                '• `!danse` / `!dance` [@membre] — Danser en solo ou à deux\n' +
+                '• `!insult` [@membre] — Insulter gratuitement quelqu\'un\n' +
+                '• `!punch` / `!frappe` [@membre] — Frapper un·e membre\n' +
+                '• `!bang` / `!tir` [@membre] — Tirer sur un·e membre\n' +
+                '• `!rizz` [@membre] — Tenter de séduire un·e membre\n' +
+                '• `!run` / `!court` [@membre] — Prendre la fuite\n' +
+                '• `!bait` [@membre] — Ragebait un·e membre\n' +
+                '• `!explode` / `!explose` — Exploser spontanément\n' +
+                '• `!die` [@membre] — Mourir (ou à cause de quelqu\'un)\n' +
+                '• `!ban` [@membre] — Bannissement symbolique avec GIF\n' +
+                '• `!palaref` / `!pref` [@membre] — Quand tu n\'as pas la ref\n' +
+                '• `!jailaref` / `!glaref` [@membre] — Quand tu as la ref\n' +
+                '• `!cry` / `!pleure` [@membre] — Pleurer en solo ou avec un proche\n' +
+                '• `!rire` — Partager une bonne barre de rire'
+            );
+    }
+
+    if (category === 'jeux') {
+        return embed.setColor(0xffd20a)
+            .setTitle('🎰 Jeux, Hasard & Destin')
+            .setDescription('Tente ta chance et défie le hasard :\n\n' +
+                '• `!roulette` / `!rlt` — Lancer un tirage sur la Roulette Regaïenne\n' +
+                '• `!rlt go` — Tirage roulette instantané sans passer par l\'écran d\'accueil\n' +
+                '• `!rltstate` [membre] — Voir les effets et malus actifs\n' +
+                '• `!rltstats` [membre] — Voir les stats complètes et les succès\n' +
+                '• `!wanted` — Consulter l\'avis de recherche du criminel du jour\n' +
+                '• `!destin` — Découvre ta prophétie personnalisée\n' +
+                '• `!animal` [membre] — Devine ton animal spirituel (+ de 7000 combos)\n' +
+                '• `!flip` — Jouer à pile ou face (en solo ou en duel de pari)\n' +
+                '• `!blague` — Lance une blague (Soft, Classique ou Humour noir)\n' +
+                '• `!horoscope` — L\'oracle cosmique du jour selon Cacabot\n' +
+                '• `!epsys` — Envoie un GIF aléatoire d\'Epsys\n' +
+                '• `!sylvain` — Singe fort ensemble'
+            );
+    }
+
+    if (category === 'serveur') {
+        return embed.setColor(0xe67e22)
+            .setTitle('🍽️ Salons & Vie du Serveur')
+            .setDescription('Commandes liées à la vie communautaire et aux salons dédiés :\n\n' +
+                '• `!topchef` — Note et critique ton plat dans <#food> sur 20\n' +
+                '• `!question` — Lance une question de discussion parmi 6 thèmes\n' +
+                '• `!choix [option1] ou [option2]` — Demande à Cacabot de trancher un dilemme\n' +
+                '• `!anniversaire set [JJ/MM]` — Enregistre ta date d\'anniversaire\n' +
+                '• `!anniversaire show` [membre] — Affiche un anniversaire\n' +
+                '• `!anniversaire list` — Liste tous les anniversaires du serveur\n' +
+                '• `!anniversaire next` — Affiche le prochain anniversaire à fêter\n' +
+                '• `!anniversaire remove` — Supprime ton anniversaire enregistré\n' +
+                '• `!suggestion [ton idée]` — Dépose une proposition dans <#720079866199801937>'
+            );
+    }
+
+    if (category === 'util') {
+        return embed.setColor(0x3498db)
+            .setTitle('📊 Stats & Utilitaires')
+            .setDescription('Statistiques du serveur et outils pratiques au quotidien :\n\n' +
+                '• `!top` — Classement des 10 membres les plus actifs (tous temps)\n' +
+                '• `!actif` — Membres les plus actifs du jour, de la semaine et du mois\n' +
+                '• `!profil` [membre] — Affiche la fiche détaillée d\'un membre\n' +
+                '• `!avatar` [membre] — Affiche la photo de profil en haute résolution\n' +
+                '• `!serveur` — Affiche toutes les infos et statistiques du serveur\n' +
+                '• `!météo [ville]` — Météo en temps réel, ressenti et vent\n' +
+                '• `!pomodoro` — Lance une session de travail minutée (travail + pause)\n' +
+                '• `!pomodoro stop` — Arrête la session pomodoro en cours\n' +
+                '• `!rappel [durée] [message]` — Programme un rappel (ex : `!rappel 30min réviser`)\n' +
+                '• `!rappel list` / `remove` — Gérer tes rappels en cours\n' +
+                '• `!aternos` — Affiche l\'IP du serveur Minecraft de Regaïa\n' +
+                '• `!prune [X]` — Supprime les X derniers messages (Modos uniquement)'
+            );
+    }
+
+    if (category === 'cacabot') {
+        return embed.setColor(0x5865f2)
+            .setTitle('🤖 Cacabot & Infos')
+            .setDescription('Commandes relatives au bot et à YouTube :\n\n' +
+                '• `!botinfo` / `!about` — Présentation, version, uptime et créatrices\n' +
+                '• `!ping` — Mesure la latence du bot et du WebSocket Discord\n' +
+                '• `!stop` / `!unstop` — Faire taire Cacabot pendant 1h (ou le réactiver)\n' +
+                '• `!youtube [recherche]` — Recherche et prévisualise des vidéos YouTube\n' +
+                '• `!last [chaîne]` — Affiche la toute dernière vidéo d\'une chaîne\n' +
+                '• `!stats [chaîne]` — Statistiques complètes d\'une chaîne YouTube'
+            );
+    }
+
+    return embed.setTitle('❓ Inconnu').setDescription('Catégorie introuvable.');
+}
+
 function buildHelpxPresentationEmbed() {
     return new EmbedBuilder()
         .setColor(0x5865f2)
@@ -1698,16 +1852,19 @@ const ROULETTE_ETATS = {
     leet:            rouletteLeetUntil,
     transfos:        rouletteTransfos,
     cooldown45:      rouletteCooldown45Charges,
-    cooldownCourt:      rouletteCooldownCourtCharges,
+    cooldownCourt:   rouletteCooldownCourtCharges,
     bouclier:        rouletteBouclierActif,
     redirectChoixCible: rouletteRedirectChoixCible,
     jackpot:            rouletteJackpotBonus,
     stats:              rouletteStats,
     achievements:       rouletteAchievements,
     suggestions:        suggestionsData,
-    immunite:        rouletteImmuniteUntil,
-    timeoutRoulette: rouletteTimeoutUntil,
-    notifs: rouletteNotifs
+    immunite:           rouletteImmuniteUntil,
+    timeoutRoulette:    rouletteTimeoutUntil,
+    notifs:             rouletteNotifs,
+    malusConsecutifs:   rouletteMalusConsecutifs,
+    antiFeurDodges:     rouletteAntiFeurDodges,
+    malusDifferents:    rouletteMalusDifferents
 };
 
 const ROULETTE_FAILS = [
@@ -1841,11 +1998,14 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'bonus-anti-feur':
             rouletteAntiFeurUntil.set(message.member.id, Date.now() + 24 * 60 * 60 * 1000);
             return `🛡️ **${auteurNom}** est immunisé·e contre Cacabot pendant **24h** ! Il réagira avec 🛡️ à la place de Feur.`;
-        case 'bonus-coup-triple':
+        case 'bonus-coup-triple': {
             rouletteCooldowns.delete(message.member.id);
-            rouletteCoupTripleCharges.set(message.member.id, 3);
-            return `🎰 **${auteurNom}** décroche le **COUP TRIPLE** ! Ses **3 prochains tirages** sont immédiats et sans aucun cooldown !`;
-                case 'bonus-twitch-jeu':
+            const chargesActuelles = rouletteCoupTripleCharges.get(message.member.id) || 0;
+            const totalCharges = chargesActuelles + 3;
+            rouletteCoupTripleCharges.set(message.member.id, totalCharges);
+            return `🎰 **${auteurNom}** décroche le **COUP TRIPLE** ! **3 tirages supplémentaires** immédiats et sans aucun cooldown (${totalCharges} en réserve) !`;
+        }
+        case 'bonus-twitch-jeu':
             await message.channel.send(`Bravo ! Tu as gagné le choix du jeu du prochain stream Twitch (jeu court uniquement) ! <@436218312574107658> viendra te voir pour en discuter✨`);
             await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
             return `**${auteurNom}** a gagné le choix du jeu du prochain stream !`;
@@ -2110,14 +2270,16 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             return `🗳️ **${auteurNom}** déclenche un **vote public** !`;
         case 'malus-prime': {
             deverrouillerSucces(message.member.id, 'malus-prime', message.channel);
-            await appliquerEtDecrireResultat('malus-lettre-interdite', message, auteurNom, 0);
-            await appliquerEtDecrireResultat('malus-uwu-24h', message, auteurNom, 0);
-            await appliquerEtDecrireResultat('malus-emoji', message, auteurNom, 0);
-            await appliquerEtDecrireResultat('malus-leet', message, auteurNom, 0);
-            await appliquerEtDecrireResultat('malus-caps', message, auteurNom, 0);
-            await appliquerEtDecrireResultat('malus-mots-melanges', message, auteurNom, 0);
-            await appliquerEtDecrireResultat('malus-lettres-melangees', message, auteurNom, 0);
-            await appliquerEtDecrireResultat('malus-bebe', message, auteurNom, 0);
+            const fin6h = Date.now() + 6 * 60 * 60 * 1000;
+            const lettreAlea = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+            rouletteLettreInterdite.set(message.member.id, { until: fin6h, lettre: lettreAlea });
+            rouletteUwuUntil.set(message.member.id, fin6h);
+            rouletteEmojiUntil.set(message.member.id, fin6h);
+            rouletteLeetUntil.set(message.member.id, fin6h);
+            activerTransfo(message.member.id, 'caps', 2 * 60 * 60 * 1000);
+            activerTransfo(message.member.id, 'mots', 2 * 60 * 60 * 1000);
+            activerTransfo(message.member.id, 'lettres', 60 * 60 * 1000);
+            activerTransfo(message.member.id, 'bebe', 2 * 60 * 60 * 1000);
             return `☠️☠️☠️ **${auteurNom}** subit le **MALUS PRIME** : absolument tous les malus de texte en même temps (censure, emoji only, mute, exclusion, cooldown et ban épargnés) !`;
         }
         case 'aucun-resultat':
@@ -2159,10 +2321,15 @@ async function demarrerVoteRoulette(msg, membre) {
                 deverrouillerSucces(membre.id, 'innocente', msg.channel);
                 await msg.reply(`✅ Le vote a tranché : **${membre.displayName}** gagne un tirage à volonté pendant 3 minutes !`);
             } else {
-                await membre.timeout(24 * 60 * 60 * 1000, 'Roulette - vote').catch(() => {});
-                rouletteTimeoutUntil.set(membre.id, Date.now() + 24 * 60 * 60 * 1000);
                 deverrouillerSucces(membre.id, 'condamne-plebe', msg.channel);
-                await msg.reply(`❌ Le vote a tranché : **${membre.displayName}** est exclu.e pendant 1 jour.`);
+                if (estModo(membre)) {
+                    rouletteCooldowns.set(membre.id, Date.now() + 24 * 60 * 60 * 1000);
+                    await msg.reply(`❌ Le vote a tranché : **${membre.displayName}** est Modo, l'exclusion est remplacée par un cooldown de **1 jour**.`);
+                } else {
+                    await membre.timeout(24 * 60 * 60 * 1000, 'Roulette - vote').catch(() => {});
+                    rouletteTimeoutUntil.set(membre.id, Date.now() + 24 * 60 * 60 * 1000);
+                    await msg.reply(`❌ Le vote a tranché : **${membre.displayName}** est exclu.e pendant 1 jour.`);
+                }
             }
         } catch (e) {}
     }, 2 * 60 * 60 * 1000);
@@ -2540,10 +2707,11 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
         rouletteMalusConsecutifs.set(authorId, cons);
         if (cons >= 3) deverrouillerSucces(authorId, 'enchainement-fatal', channel);
 
-        let diffSet = rouletteMalusDifferents.get(authorId);
-        if (!diffSet) { diffSet = new Set(); rouletteMalusDifferents.set(authorId, diffSet); }
-        diffSet.add(outcomeId);
-        if (diffSet.size >= 10) deverrouillerSucces(authorId, 'seum-en-personne', channel);
+        let diffList = rouletteMalusDifferents.get(authorId);
+        if (!Array.isArray(diffList)) { diffList = []; }
+        if (!diffList.includes(outcomeId)) diffList.push(outcomeId);
+        rouletteMalusDifferents.set(authorId, diffList);
+        if (diffList.length >= 10) deverrouillerSucces(authorId, 'seum-en-personne', channel);
     } else {
         rouletteMalusConsecutifs.delete(authorId);
     }
@@ -2634,7 +2802,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
         }
     }
 
-    const embed = buildRouletteResultEmbed(outcomeId, prefixeRedirect + texte);
+    const embed = buildRouletteResultEmbed(outcomeId, prefixeRedirect + texte, authorId);
 
     const roleMaxId = ROULETTE_RANGS[ROULETTE_RANGS.length - 1].id;
     const dejaMaxRole = (outcomeId === 'bonus-role-superieur' || outcomeId === 'bonus-legendaire') && cible.roles.cache.has(roleMaxId);
@@ -2698,9 +2866,18 @@ function libelleProbaRoulette(outcomeId) {
     return `1/${n} | ${pct}%`;
 }
 
-function buildRouletteResultEmbed(outcomeId, texte) {
+function buildRouletteResultEmbed(outcomeId, texte, authorId = null) {
+    let delaiTexte = '15 minutes';
+    if (authorId) {
+        if ((rouletteCooldown45Charges.get(authorId) || 0) > 0) {
+            delaiTexte = '45 minutes';
+        } else if ((rouletteCooldownCourtCharges.get(authorId) || 0) > 0 || estHappyHour()) {
+            delaiTexte = '5 minutes';
+        }
+    }
+
     const texteFinal = outcomeId === 'aucun-resultat'
-        ? `${texte}\n\n*Échec du tirage, reviens dans 15 minutes !*`
+        ? `${texte}\n\n*Échec du tirage, reviens dans ${delaiTexte} !*`
         : texte;
 
     const entry = ROULETTE_TABLE.find(e => e.id === outcomeId);
@@ -4047,6 +4224,62 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
         return message.react('👋').catch(() => {});
     }
 
+        // Anti-phishing (Faux Nitro / Liens de vol de compte)
+    if (message.guild && message.member && !estModo(message.member) && PHISHING_REGEX.test(message.content)) {
+        await message.delete().catch(() => {});
+        await message.member.timeout(24 * 60 * 60 * 1000, 'Anti-phishing automatique (lien frauduleux)').catch(() => {});
+        
+        await message.channel.send(`🛡️ **${message.member.displayName}** a envoyé un lien frauduleux (compte probablement piraté). Il a été mis en pause 24h.`);
+
+        const modChan = message.guild.channels.cache.get(MOD_CHANNEL_ID);
+        if (modChan) {
+            const embedPhish = new EmbedBuilder()
+                .setColor(0xff0000)
+                .setTitle('🚨 ALERTE PHISHING / FAUX NITRO')
+                .setDescription(`Un lien malveillant a été stoppé net dans <#${message.channel.id}>.`)
+                .addFields(
+                    { name: '👤 Auteur', value: `<@${message.author.id}> (\`${message.author.id}\`)`, inline: true },
+                    { name: '🔗 Contenu bloqué', value: `\`\`\`${message.content.slice(0, 500)}\`\`\``, inline: false }
+                )
+                .setTimestamp();
+
+            const banBtn = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`antiphish_ban_${message.author.id}`)
+                    .setLabel('🔨 Bannir le compte piraté')
+                    .setStyle(ButtonStyle.Danger)
+            );
+            await modChan.send({ embeds: [embedPhish], components: [banBtn] });
+        }
+        return;
+    }
+
+    // Slowmode d'urgence automatique (anti-débordement)
+    if (message.guild && !message.author.bot && message.channel.type === ChannelType.GuildText && !slowmodeActifs.has(message.channel.id)) {
+        const now = Date.now();
+        const logs = (slowmodeTrackers.get(message.channel.id) || []).filter(e => now - e.timestamp < 8000);
+        logs.push({ userId: message.author.id, timestamp: now });
+        slowmodeTrackers.set(message.channel.id, logs);
+
+        const auteursUniques = new Set(logs.map(e => e.userId));
+        // Si 15 messages ou plus en 8 secondes par au moins 3 personnes différentes
+        if (logs.length >= 15 && auteursUniques.size >= 3) {
+            slowmodeActifs.add(message.channel.id);
+            slowmodeTrackers.delete(message.channel.id);
+
+            const ancienSlowmode = message.channel.rateLimitPerUser || 0;
+            await message.channel.setRateLimitPerUser(10, 'Slowmode d\'urgence automatique').catch(() => {});
+
+            await message.channel.send('🛑 **Oula, le salon s\'emballe !** Slowmode temporaire de **10 secondes** activé pendant **3 minutes** pour apaiser les esprits.');
+
+            setTimeout(async () => {
+                await message.channel.setRateLimitPerUser(ancienSlowmode, 'Fin du slowmode d\'urgence').catch(() => {});
+                slowmodeActifs.delete(message.channel.id);
+                await message.channel.send('✅ **Fin du slowmode d\'urgence**, retour au rythme normal !').catch(() => {});
+            }, 3 * 60 * 1000);
+        }
+    }
+
         // Anti-spam
     if (
         message.guild && message.member &&
@@ -4071,13 +4304,35 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     }
 
     // Anti-raid : timeout au 1er message d'un compte flaggé pendant une rafale
-        if (message.guild && message.member && raidFlaggedUsers.has(message.author.id)) {
+    if (message.guild && message.member && raidFlaggedUsers.has(message.author.id)) {
         raidFlaggedUsers.delete(message.author.id);
         try {
-            await message.member.timeout(RAID_TIMEOUT_MS, 'Anti-raid automatique');
+            await message.member.timeout(RAID_TIMEOUT_MS, 'Anti-raid automatique').catch(() => {});
             raidMuteRecord.set(message.author.id, Date.now() + RAID_TIMEOUT_MS);
             await message.channel.send(`🚨 **${message.member.displayName}** fait partie d'une vague d'arrivées suspectes et a été mis en pause **5 minutes**.`);
             await message.member.send("Ton compte a été repéré dans une vague d'arrivées suspectes sur le serveur, tu as été mis en pause 5 minutes. Si tu quittes et reviens dans les 15 minutes qui suivent la fin de cette pause, tu seras automatiquement exclu du serveur.").catch(() => {});
+
+            const modLogChan = message.guild.channels.cache.get(MOD_CHANNEL_ID);
+            if (modLogChan) {
+                const raidEmbed = new EmbedBuilder()
+                    .setColor(0xff0033)
+                    .setTitle('🚨 ALERTE ANTI-RAID')
+                    .setDescription(`Un compte suspect a tenté d'écrire pendant une vague d'arrivées et a été mis en pause 5 min.`)
+                    .addFields(
+                        { name: '👤 Suspect', value: `<@${message.author.id}> (\`${message.author.id}\`)`, inline: true },
+                        { name: '📍 Salon ciblé', value: `<#${message.channel.id}>`, inline: true },
+                        { name: '💬 Premier message', value: `\`\`\`${message.content.slice(0, 500) || '*Vide / Média*'}\`\`\``, inline: false }
+                    )
+                    .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
+                    .setTimestamp();
+
+                const raidButtons = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`mod_action_kick_${message.author.id}`).setLabel('👢 Expulser').setStyle(ButtonStyle.Secondary),
+                    new ButtonBuilder().setCustomId(`mod_action_ban_${message.author.id}`).setLabel('🔨 Bannir').setStyle(ButtonStyle.Danger),
+                    new ButtonBuilder().setCustomId(`mod_action_dismiss_${message.author.id}`).setLabel('✅ Ignorer').setStyle(ButtonStyle.Success)
+                );
+                await modLogChan.send({ embeds: [raidEmbed], components: [raidButtons] });
+            }
         } catch (err) {
             console.error('Erreur timeout anti-raid:', err);
         }
@@ -5909,6 +6164,69 @@ if (response?.needsRouletteStats) {
         return message.reply({ embeds: [anniversaireEmbed] });
     }
 
+    // !topchef
+    if (response?.needsTopChef) {
+        const critiques = [
+            // Dithyrambiques / Admiratives
+            "L'équilibre des textures, la brillance du jus, la gourmandise absolue... Maïté verse une larme de fierté depuis là-haut. **19.5/20**",
+            "C'est indécent tellement ça donne faim. Envoie une part en Colissimo immédiatement ou je porte plainte. **19/20**",
+            "Visuel digne d'un restaurant 4 étoiles Michelin. C'est du grand art, respect au chef ! **18.5/20**",
+            "C'est tellement beau que j'oserais même pas planter ma fourchette dedans, je mettrais l'assiette sous cadre au Louvre. **20/20**",
+            "La cuisson est millimétrée, l'assaisonnement est chirurgical, un sans-faute remarquable. **18/20**",
+            "Un chef-d'œuvre de pure gourmandise. Si tu ne m'invites pas à dîner cette semaine, je supprime ton compte Discord. **19.5/20**",
+            "C'est croustillant, c'est fondant, ça donne envie d'engloutir mon écran. **17.5/20**",
+            "Y a beaucoup trop de fromage fondu, ce qui signifie mathématiquement que c'est la perfection absolue. **18/20**",
+
+            // Cauchemardesques / Cursed
+            "On dirait le résultat d'une expérience clandestine dans un labo abandonné de Tchernobyl... mais bizarrement ça doit se manger. **4/20**",
+            "C'est visuellement terrorisant, même un chien errant affamé ferait trois pas en arrière. Courage à ton système digestif. **2/20**",
+            "Gordon Ramsay vient de voir la photo : il a immédiatement supprimé son compte Twitter et s'est retiré dans un monastère tibétain. **1/20**",
+            "Philippe Etchebest vient de défoncer un mur porteur en placo de rage rien qu'en regardant ce dressage. **3/20**",
+            "C'est carbonisé à l'extérieur et encore congelé au milieu. Une véritable prouesse thermodynamique. **5/20**",
+            "Je sais pas si ça se mange avec une fourchette ou si ça s'exorcise avec de l'eau bénite et un prêtre. **3.5/20**",
+            "Le terme « intoxication alimentaire » a été inventé spécifiquement pour anticiper ce plat. **0.5/20**",
+            "J'ai montré la photo à mon chat, il a instinctivement commencé à gratter autour de mon téléphone comme si c'était sa litière. **1.5/20**",
+            "Le dressage ressemble fidèlement à un constat d'accident de la route réalisé par la gendarmerie. **4/20**",
+            "Si tu survis à la digestion de ce truc sans passer 48h aux toilettes, tu deviens officiellement immortel. **6/20**",
+
+            // Goofy / Réconfort / Absurdes
+            "Le genre de plat que tu manges debout au-dessus de l'évier à 3h42 du matin en caleçon sans aucun regret. **14/20**",
+            "Ça ressemble à un plat cuisiné par mon daron en pleine crise de panique, mais au fond j'ai très envie de goûter. **12/20**",
+            "C'est pas de la grande cuisine, mais ça comble un vide existentiel. C'est totalement validé. **13.5/20**",
+            "On sent tout l'amour et le désespoir d'une personne qui avait une flemme monumentale d'aller faire des courses. **12/20**",
+            "C'est ultra gras, c'est lourd, ça va boucher 3 artères principales, mais on n'a qu'une seule vie après tout. **15/20**",
+            "Visuellement c'est un 4/20, mais spirituellement et caloriquement parlant c'est un coup de génie. **14.5/20**",
+            "Ça a l'air très suspect mais j'engloutirais l'assiette entière en 30 secondes chrono sans respirer. **16/20**",
+            "La présentation rappelle celle d'un étudiant fauché un dimanche soir de pluie. C'est émouvant et poétique. **11.5/20**",
+            "Ça ressemble au repas que servirait une tavernière de RPG pour restaurer 45 points de vie. **13/20**",
+            "Plat officiellement validé par le tribunal de Regaïa, mais vigoureusement condamné par le ministère de la Santé. **12.5/20**",
+            "Pour un plat improvisé à l'arrache dans le serv d'Epsys, c'est franchement honorable. **15/20**",
+            "Ce plat dégage une énergie purement chaotique mais étrangement réconfortante. **14/20**",
+            "C'est le plat officiel du seum du dimanche soir. Un grand classique de la cuisine. **16.5/20**"
+        ];
+
+        let cibleMembre = message.member;
+        if (message.reference) {
+            const repliedMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+            if (repliedMsg && repliedMsg.member) {
+                cibleMembre = repliedMsg.member;
+            }
+        } else if (message.mentions.members.first()) {
+            cibleMembre = message.mentions.members.first();
+        }
+
+        const nom = cibleMembre?.displayName ?? message.author.username;
+        const phrase = critiques[Math.floor(Math.random() * critiques.length)];
+
+        const embed = new EmbedBuilder()
+            .setColor(0xe67e22)
+            .setTitle(`👨‍🍳 Le Verdict Top Chef pour ${nom}`)
+            .setDescription(`> ${phrase}`)
+            .setFooter({ text: 'Cacabot Critique Gastronomique • Salon Food' });
+
+        return message.reply({ embeds: [embed] });
+    }
+
     // !blague
     if (response?.needsBlague) {
         const authorId = message.author.id;
@@ -6530,17 +6848,11 @@ if (response?.needsRouletteStats) {
     }
 
     // !help
-    if (response?.data) {
-        const menu = new StringSelectMenuBuilder()
-            .setCustomId(`help_menu_${message.author.id}_${message.id}`)
-            .setPlaceholder('Choisis une cat\u00e9gorie')
-            .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'Interact, Discussion, Anniversaire, Random', value: 'fun' },
-                { label: '\ud83d\udee0 Utilitaire', description: 'Discord, YouTube, Cacabot, Autres', value: 'util' },
-            );
-
-        const row = new ActionRowBuilder().addComponents(menu);
-        return message.reply({ embeds: [response.data], components: [row] });
+    if (response?.needsHelp) {
+        const embed = buildHelpHomeEmbed();
+        const menuRow = buildHelpMenu(message.author.id, message.id);
+        const navRow = buildHelpNavRow(message.author.id, message.id);
+        return message.reply({ embeds: [embed], components: [menuRow, navRow] });
     }
 
     // Réponse texte simple
@@ -6573,6 +6885,58 @@ if (response?.needsRouletteStats) {
 
 client.on('interactionCreate', async (interaction) => {
 try {
+
+    // Actions de modération sur les comptes récents
+    if (interaction.isButton() && interaction.customId.startsWith('mod_action_')) {
+        if (!estModo(interaction.member) && !interaction.member.permissions.has('KickMembers')) {
+            return interaction.reply({ content: "Tu n'as pas la permission d'effectuer cette action.", ephemeral: true });
+        }
+
+        const parts = interaction.customId.split('_');
+        const action = parts[2]; // kick, ban ou dismiss
+        const targetId = parts[3];
+
+        if (action === 'dismiss') {
+            await interaction.message.edit({ components: [] }).catch(() => {});
+            return interaction.reply(`✅ Alerte classée sans suite pour <@${targetId}> par <@${interaction.user.id}>.`);
+        }
+
+        if (action === 'kick') {
+            const cible = await interaction.guild.members.fetch(targetId).catch(() => null);
+            if (!cible) {
+                return interaction.reply({ content: "Ce membre a déjà quitté le serveur.", ephemeral: true });
+            }
+            await cible.kick(`Expulsé par ${interaction.user.tag} (compte récent suspect)`)
+                .then(async () => {
+                    await interaction.message.edit({ components: [] }).catch(() => {});
+                    interaction.reply(`👢 <@${targetId}> a été expulsé.e du serveur par <@${interaction.user.id}>.`);
+                })
+                .catch(() => interaction.reply({ content: "Impossible d'expulser ce membre (permissions insuffisantes).", ephemeral: true }));
+            return;
+        }
+
+        if (action === 'ban') {
+            await interaction.guild.members.ban(targetId, { reason: `Banni par ${interaction.user.tag} (compte récent suspect)` })
+                .then(async () => {
+                    await interaction.message.edit({ components: [] }).catch(() => {});
+                    interaction.reply(`🔨 <@${targetId}> a été banni.e définitivement par <@${interaction.user.id}>.`);
+                })
+                .catch(() => interaction.reply({ content: "Impossible de bannir ce membre (permissions insuffisantes).", ephemeral: true }));
+            return;
+        }
+    }
+
+    // Bouton de bannissement rapide anti-phishing
+    if (interaction.isButton() && interaction.customId.startsWith('antiphish_ban_')) {
+        if (!estModo(interaction.member) && !interaction.member.permissions.has('BanMembers')) {
+            return interaction.reply({ content: "Tu n'as pas la permission d'utiliser ce bouton !", ephemeral: true });
+        }
+        const targetId = interaction.customId.replace('antiphish_ban_', '');
+        await interaction.guild.members.ban(targetId, { reason: 'Compte piraté / Phishing détecté par Cacabot' })
+            .then(() => interaction.reply(`✅ Le compte <@${targetId}> a été définitivement banni par <@${interaction.user.id}>.`))
+            .catch(() => interaction.reply({ content: "Impossible de bannir ce membre (permissions insuffisantes ou membre déjà parti).", ephemeral: true }));
+        return;
+    }
 
     // =========================
     // BOUTON RAPPEL REPORTER
@@ -7961,7 +8325,10 @@ return interaction.update({ embeds: [embed], components: rows });
             embed = buildRouletteResultEmbed(outcomeId, texte);
         }
         const row = buildRowResultatRoulette(authorId, outcomeId, failIndex);
-        return interaction.update({ embeds: [embed], components: [row] });
+        const components = rouletteChoixEnAttente.has(interaction.message.id)
+            ? [buildMenuFallbackRoulette(authorId), row]
+            : [row];
+        return interaction.update({ embeds: [embed], components });
     }
 
     // =========================
@@ -8233,418 +8600,81 @@ return interaction.update({ embeds: [embed], components: rows });
     }
 
     // =========================
-    // MENU SELECT FUN
+    // INTERACTIONS !HELP OPTIMISÉ
     // =========================
 
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_fun_')) {
-        const funParts = interaction.customId.split('_');
-        const helpAuthorId = funParts[2];
-        const helpMessageId = funParts[3] ?? null;
-        if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
-        }
-
-        const value = interaction.values[0];
-        let embed;
-
-        if (value === 'interact') {
-            embed = new EmbedBuilder()
-                .setColor(0xffdc5d)
-                .setDescription("# \ud83d\udc46 Interact")
-                .addFields(
-                    { name: "💋!kiss / !bisou", value: "Embrassez quelqu'un sur le serveur !" },
-                    { name: "🫂!hug / !calin", value: "Faites un c\u00e2lin \u00e0 quelqu'un sur le serveur !" },
-                    { name: "💃!danse / !dance", value: "Dansez avec quelqu'un sur le serveur !" },
-                    { name: "🗯️!insult", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
-                    { name: "☠️!die", value: "Mourez en direct sur le serveur !" },
-                    { name: "🔨!ban", value: "Bannir quelqu'un du serveur... symboliquement." },
-                    { name: "😛!bait", value: "Ragebait quelqu'un du serveur, gratuitement." },
-                    { name: "💥!explode / !explose", value: "Explose." },
-                    { name: "\ud83d\ude10 !palaref / !pref", value: "Ce moment g\u00eanant quand vous n'avez pas la ref..." },
-                    { name: "\ud83d\ude2d !glaref / !gref / !jailaref", value: "Vous avez la ref!" },
-                    { name: "\ud83d\ude2d !cry / !pleure", value: "Pleure." },
-                    { name: "👊!punch / !frappe", value: "Frappez quelqu'un sur le serveur !" },
-                    { name: "🔫!bang / !tir / !pan", value: "Tirez sur quelqu'un sur le serveur !" },
-                    { name: "🗿!rizz", value: "Rizzez quelqu'un sur le serveur !" },
-                    { name: "🏃!run", value: "Fuis quelqu'un sur le serveur !" },
-                    { name: "😆!rire", value: "Riez un bon coup !" }
-                );
-        }
-
-        if (value === 'discussion') {
-            embed = new EmbedBuilder()
-                .setColor(0x6bb5ff)
-                .setDescription("# \ud83d\udcac Discussion")
-                .addFields(
-                    { name: "❓!question", value: "Lance une question al\u00e9atoire parmi 6 cat\u00e9gories !" },
-                    { name: "⚖️!choix", value: "Vous avez du mal \u00e0 faire un choix ? Demandez \u00e0 Cacabot." }
-                );
-        }
-
-        if (value === 'random') {
-            embed = new EmbedBuilder()
-                .setColor(0xf5f8fa)
-                .setDescription("# \ud83d\udca5 Random")
-                .addFields(
-                    { name: "\ud83c\udfb0!roulette / !rlt", value: "Faire tourner la roulette et tomber sur un bonus... ou un malus." },
-                    { name: "🧠!destin", value: "Pr\u00e9dit votre destin et fait part des \u00e9v\u00e8nements de votre futur." },
-                    { name: "🐕!animal", value: "Devine votre animal spirituel parmi pr\u00e8s de 7000 combinaisons !" },
-                    { name: "👔!epsys", value: "Poste des GIFs al\u00e9atoires d'Epsys, parce que." },
-                    { name: "🤣!blague", value: "Lance une blague al\u00e9atoire en 3 cat\u00e9gories !" },
-                    { name: "🪙!flip", value: "Pour d\u00e9cider \u00e0 pile ou face !" },
-                    { name: "🔮!horoscope", value: "L'horoscope du jour selon Cacabot." },
-                    { name: "\ud83d\udea8!wanted", value: "D\u00e9signe le criminel du jour parmi les membres." }
-                );
-        }
-
-        if (value === 'anniversaire') {
-            embed = new EmbedBuilder()
-                .setColor(0xff69b4)
-                .setDescription("# \ud83c\udf82 Anniversaire")
-                .addFields(
-                    { name: "!anniversaire set JJ/MM", value: "Enregistre ton anniversaire." },
-                    { name: "!anniversaire show", value: "Affiche ton anniversaire enregistr\u00e9." },
-                    { name: "!anniversaire list", value: "Liste tous les anniversaires du serveur." },
-                    { name: "!anniversaire next", value: "Affiche le prochain anniversaire du serveur." }
-                );
-        }
-
-        if (!embed) {
-            embed = new EmbedBuilder().setColor(0xff0000).setTitle("Erreur").setDescription("Cat\u00e9gorie inconnue");
-        }
-
-        const backButton = new ButtonBuilder()
-            .setCustomId(`help_fun_back_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('\u2b05 Retour')
-            .setStyle(ButtonStyle.Secondary);
-        const deleteButton = new ButtonBuilder()
-            .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('\u274c Supprimer')
-            .setStyle(ButtonStyle.Secondary);
-        const backRow = new ActionRowBuilder().addComponents(backButton, deleteButton);
-        return interaction.update({ embeds: [embed], components: [backRow] });
-    }
-
-    // =========================
-    // BOUTON RETOUR FUN
-    // =========================
-
-    if (interaction.isButton() && interaction.customId.startsWith('help_fun_back_')) {
-        const funBackParts = interaction.customId.split('_');
-        const helpAuthorId = funBackParts[3];
-        const helpMessageId = funBackParts[4] ?? null;
-        if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
-        }
-
-        const funEmbed = new EmbedBuilder()
-            .setColor(0xffcc00)
-            .setDescription("# \ud83c\udf89 Fun\n*Toutes les commandes pour animer le serveur et faire des trucs inutiles mais dr\u00f4les.*\n\n\ud83d\udc46 **Interact** \u2014 Interagis avec les membres du serveur\n\ud83d\udcac **Discussion** \u2014 Lance des d\u00e9bats ou laisse le hasard d\u00e9cider\n\ud83c\udf82 **Anniversaire** \u2014 Pour les anniversaires des membres du serveur\n\ud83d\udca5 **Random** \u2014 Commandes al\u00e9atoires et surprises");
-
-        const funMenu = new StringSelectMenuBuilder()
-            .setCustomId(`help_fun_${helpAuthorId}`)
-            .setPlaceholder('Choisis une cat\u00e9gorie')
-            .addOptions(
-                { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, palaref, jailaref, punch, bang, rizz, rire, danse, run', value: 'interact' },
-                { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
-                { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
-                { label: '\ud83d\udca5 Random', description: 'roulette, destin, animal, epsys, flip, blague, horoscope, wanted', value: 'random' }
-            );
-
-        const funBackButton = new ButtonBuilder()
-            .setCustomId(`help_back_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('\u2b05 Retour')
-            .setStyle(ButtonStyle.Secondary);
-        const funDeleteButton = new ButtonBuilder()
-            .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('\u274c Supprimer')
-            .setStyle(ButtonStyle.Secondary);
-        const funRow = new ActionRowBuilder().addComponents(funMenu);
-        const funBackRow = new ActionRowBuilder().addComponents(funBackButton, funDeleteButton);
-        return interaction.update({ embeds: [funEmbed], components: [funRow, funBackRow] });
-    }
-
-    // =========================
-    // BOUTON NOUVELLE QUESTION
-    // =========================
-
-    if (interaction.isButton() && interaction.customId.startsWith('question_new_')) {
-        const authorId = interaction.customId.split('_')[2];
-        if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
-        }
-
-        const embed = new EmbedBuilder()
-            .setColor(0x9b59b6)
-            .setTitle("\u2753 Question du soir")
-            .setDescription("Choisis une cat\u00e9gorie pour recevoir une question al\u00e9atoire !");
-
-        const menu = new StringSelectMenuBuilder()
-            .setCustomId('question_menu')
-            .setPlaceholder('Choisis une cat\u00e9gorie')
-            .addOptions(
-                { label: '\ud83d\udde3\ufe0f D\u00e9bats / Opinions', value: 'debats' },
-                { label: '\ud83e\udd2b Confession / Introspection', value: 'confession' },
-                { label: '\ud83e\udd14 Hypoth\u00e9tiques', value: 'hypothetiques' },
-                { label: '\ud83c\udfe0 Sp\u00e9ciales Rega\u00efa', value: 'serveur' },
-                { label: '\ud83e\udde0 Philosophie de comptoir', value: 'philosophie' },
-                { label: '\ud83c\udfb2 Al\u00e9atoires / Chaos', value: 'aleatoires' }
-            );
-
-        const row = new ActionRowBuilder().addComponents(menu);
-        return interaction.update({ embeds: [embed], components: [row] });
-    }
-
-    // =========================
-    // MENU SELECT UTIL
-    // =========================
-
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_util_')) {
-        const helpAuthorId = interaction.customId.split('_')[2];
-        const helpMessageId = interaction.customId.split('_')[3] ?? null;
-        if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
-        }
-
-        const value = interaction.values[0];
-        let embed;
-
-        if (value === 'discord') {
-            embed = new EmbedBuilder()
-                .setColor(0xbdddf4)
-                .setDescription("# \ud83d\udcac Discord")
-                .addFields(
-                    { name: "<:serveur_icon:1505456319946031144> !serveur", value: "Afficher les informations du serveur." },
-                    { name: "\ud83d\udc64 !profil", value: "Afficher le profil d'un membre." },
-                    { name: "\ud83d\uddbc\ufe0f !avatar", value: "Afficher l'avatar d'un membre en grand." },
-                    { name: "\ud83c\udfc5 !top", value: "Afficher le top 10 des membres les plus actifs." },
-                    { name: "\ud83d\udcac !actif", value: "Affiche les membres les plus actifs du jour et de la semaine." }
-                );
-        }
-
-        if (value === 'youtube') {
-            embed = new EmbedBuilder()
-                .setColor(0xff0000)
-                .setDescription("# <:youtube_icon:1505457903585198151> YouTube")
-                .addFields(
-                    { name: "🔎 !youtube", value: "Rechercher une vidéo sur YouTube." },
-                    { name: "❗ !last", value: "Afficher la dernière vidéo d'une chaîne." },
-                    { name: "📈 !stats", value: "Regarder les stats d'une chaîne YouTube." }
-                    );
-        }
-
-        if (value === 'autres') {
-            embed = new EmbedBuilder()
-                .setColor(0x95a5a6)
-                .setDescription("# \ud83d\uddd2\ufe0f Autres")
-                .addFields(
-                    { name: "<:aternos_icon:1505454393049485362> !aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." },
-                    { name: "\u23f0 !rappel", value: "Se faire rappeler quelque chose dans X minutes/heures." },
-                    { name: "\u26c5 !météo", value: "Affiche la météo d'une ville." },
-                    { name: "🍅 !pomodoro", value: "Démarrer une séance de pomodoro." }
-                );
-        }
-
-        if (value === 'cacabot') {
-            embed = new EmbedBuilder()
-                .setColor(0x5865f2)
-                .setDescription("# \ud83e\udd16 Cacabot")
-                .addFields(
-                    { name: "\ud83e\udd16 !botinfo / !about / !abt", value: "Affiche les informations de Cacabot." },
-                    { name: "🤫 !stop / !unstop", value: "Faire taire Cacabot pendant 1h, ou le faire revenir avant la fin." },
-                    { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." }
-                );
-        }
-
-        if (!embed) {
-            embed = new EmbedBuilder().setColor(0xff0000).setTitle("Erreur").setDescription("Cat\u00e9gorie inconnue");
-        }
-
-        const backButton = new ButtonBuilder()
-            .setCustomId(`help_back_util_${helpAuthorId}`)
-            .setLabel('\u2b05 Retour')
-            .setStyle(ButtonStyle.Secondary);
-        const deleteButton = new ButtonBuilder()
-            .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('\u274c Supprimer')
-            .setStyle(ButtonStyle.Secondary);
-        const backRow = new ActionRowBuilder().addComponents(backButton, deleteButton);
-        return interaction.update({ embeds: [embed], components: [backRow] });
-    }
-
-    // =========================
-    // BOUTON RETOUR UTIL
-    // =========================
-
-    if (interaction.isButton() && interaction.customId.startsWith('help_back_util_')) {
-        const helpAuthorId = interaction.customId.replace('help_back_util_', '');
-        if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
-        }
-
-        const utilEmbed = new EmbedBuilder()
-            .setColor(0x8899a6)
-            .setTitle("\ud83d\udee0 Utilitaire")
-            .setDescription("<:discord_icon:1505454379669524532> **Discord** \u2014 Commandes relatives au serveur\n<:youtube_icon:1505457903585198151> **YouTube** \u2014 Pour explorer le meilleur site de tous les temps\n\ud83e\udd16 **Cacabot** \u2014 Commandes relatives \u00e0 Cacabot\n\ud83d\uddd2\ufe0f **Autres** \u2014 Autres commandes non-r\u00e9pertori\u00e9es");
-
-        const utilMenu = new StringSelectMenuBuilder()
-            .setCustomId(`help_util_${helpAuthorId}`)
-            .setPlaceholder('Choisis une cat\u00e9gorie')
-            .addOptions(
-                { label: '\ud83d\udcac Discord', description: 'serveur, info, avatar, top, actif', value: 'discord' },
-                { label: '▶️ YouTube', description: 'youtube, stats, last', value: 'youtube' },
-                { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping', value: 'cacabot' },
-                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel, météo, pomodoro', value: 'autres' }
-            );
-
-        const utilBackButton = new ButtonBuilder()
-            .setCustomId(`help_back_${helpAuthorId}`)
-            .setLabel('\u2b05 Retour')
-            .setStyle(ButtonStyle.Secondary);
-        const utilDeleteButton = new ButtonBuilder()
-            .setCustomId(`help_delete_${helpAuthorId}_`)
-            .setLabel('\u274c Supprimer')
-            .setStyle(ButtonStyle.Secondary);
-        const utilRow = new ActionRowBuilder().addComponents(utilMenu);
-        const utilBackRow = new ActionRowBuilder().addComponents(utilBackButton, utilDeleteButton);
-        return interaction.update({ embeds: [utilEmbed], components: [utilRow, utilBackRow] });
-    }
-
-    // =========================
-    // MENU SELECT
-    // =========================
-
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_menu_')) {
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_select_')) {
         const parts = interaction.customId.split('_');
-        const helpAuthorId = parts[2];
-        const helpMessageId = parts[3] ?? null;
-        if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
+        const authorId = parts[2];
+        const messageId = parts[3] ?? null;
+
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Ce menu d'aide ne t'est pas destiné !", ephemeral: true });
         }
 
-        const value = interaction.values[0];
-        let embed;
-
-        if (value === 'fun') {
-            const funEmbed = new EmbedBuilder()
-                .setColor(0xffcc00)
-                .setDescription("# \ud83c\udf89 Fun\n*Toutes les commandes pour animer le serveur et faire des trucs inutiles mais dr\u00f4les.*\n\n\ud83d\udc46 **Interact** \u2014 Interagis avec les membres du serveur\n\ud83d\udcac **Discussion** \u2014 Lance des d\u00e9bats ou laisse le hasard d\u00e9cider\n\ud83c\udf82 **Anniversaire** \u2014 Pour les anniversaires des membres du serveur\n\ud83d\udca5 **Random** \u2014 Commandes al\u00e9atoires et surprises");
-
-            const funMenu = new StringSelectMenuBuilder()
-                .setCustomId(`help_fun_${helpAuthorId}`)
-                .setPlaceholder('Choisis une cat\u00e9gorie')
-                .addOptions(
-                    { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, palaref, jailaref, punch, bang, rizz, rire, danse, run', value: 'interact' },
-                    { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
-                    { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
-                    { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague, horoscope, wanted', value: 'random' }
-                );
-
-            const funBackButton = new ButtonBuilder()
-                .setCustomId(`help_back_${helpAuthorId}_${helpMessageId ?? ''}`)
-                .setLabel('\u2b05 Retour')
-                .setStyle(ButtonStyle.Secondary);
-            const funDeleteButton = new ButtonBuilder()
-                .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
-                .setLabel('\u274c Supprimer')
-                .setStyle(ButtonStyle.Secondary);
-            const funRow = new ActionRowBuilder().addComponents(funMenu);
-            const funBackRow = new ActionRowBuilder().addComponents(funBackButton, funDeleteButton);
-            return interaction.update({ embeds: [funEmbed], components: [funRow, funBackRow] });
-        }
-
-        if (value === 'util') {
-            const utilEmbed = new EmbedBuilder()
-                .setColor(0x3498db)
-                .setTitle("\ud83d\udee0 Utilitaire")
-                .setDescription("<:discord_icon:1505454379669524532> **Discord** \u2014 Commandes relatives au serveur\n<:youtube_icon:1505457903585198151> **YouTube** \u2014 Pour explorer le meilleur site de tous les temps\n\ud83e\udd16 **Cacabot** \u2014 Commandes relatives \u00e0 Cacabot\n\ud83d\uddd2\ufe0f **Autres** \u2014 Autres commandes non-r\u00e9pertori\u00e9es");
-
-            const utilMenu = new StringSelectMenuBuilder()
-                .setCustomId(`help_util_${helpAuthorId}`)
-                .setPlaceholder('Choisis une cat\u00e9gorie')
-                .addOptions(
-                    { label: '\ud83d\udcac Discord', description: 'serveur, info, avatar, top, actif', value: 'discord' },
-                    { label: '\u25b6\ufe0f YouTube', description: 'youtube, stats, last', value: 'youtube' },
-                    { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping, stop', value: 'cacabot' },
-                    { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel, météo, pomodoro', value: 'autres' }
-                );
-
-            const utilBackButton = new ButtonBuilder()
-                .setCustomId(`help_back_${helpAuthorId}`)
-                .setLabel('\u2b05 Retour')
-                .setStyle(ButtonStyle.Secondary);
-            const utilDeleteButton = new ButtonBuilder()
-                .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
-                .setLabel('\u274c Supprimer')
-                .setStyle(ButtonStyle.Secondary);
-            const utilRow = new ActionRowBuilder().addComponents(utilMenu);
-            const utilBackRow = new ActionRowBuilder().addComponents(utilBackButton, utilDeleteButton);
-            return interaction.update({ embeds: [utilEmbed], components: [utilRow, utilBackRow] });
-        }
-
-        if (!embed) {
-            embed = new EmbedBuilder()
-                .setColor(0xff0000)
-                .setTitle("Erreur")
-                .setDescription("Cat\u00e9gorie inconnue");
-        }
-
-        const backButton = new ButtonBuilder()
-            .setCustomId(`help_back_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('\u2b05 Retour')
-            .setStyle(ButtonStyle.Secondary);
-        const deleteButton = new ButtonBuilder()
-            .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('\u274c Supprimer')
-            .setStyle(ButtonStyle.Secondary);
-        const row = new ActionRowBuilder().addComponents(backButton, deleteButton);
-        return interaction.update({ embeds: [embed], components: [row] });
+        const category = interaction.values[0];
+        const embed = buildHelpCategoryEmbed(category);
+        const menuRow = buildHelpMenu(authorId, messageId);
+        const navRow = buildHelpNavRow(authorId, messageId);
+        return interaction.update({ embeds: [embed], components: [menuRow, navRow] });
     }
 
-    // =========================
-    // BOUTON SUPPRIMER
-    // =========================
+    if (interaction.isButton() && interaction.customId.startsWith('help_home_')) {
+        const parts = interaction.customId.split('_');
+        const authorId = parts[2];
+        const messageId = parts[3] ?? null;
+
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Ce bouton ne t'est pas destiné !", ephemeral: true });
+        }
+
+        const embed = buildHelpHomeEmbed();
+        const menuRow = buildHelpMenu(authorId, messageId);
+        const navRow = buildHelpNavRow(authorId, messageId);
+        return interaction.update({ embeds: [embed], components: [menuRow, navRow] });
+    }
 
     if (interaction.isButton() && interaction.customId.startsWith('help_delete_')) {
-        const delParts = interaction.customId.split('_');
-        const helpAuthorId = delParts[2];
-        const helpMessageId = delParts[3] ?? null;
-        if (interaction.user.id !== helpAuthorId) {
+        const parts = interaction.customId.split('_');
+        const authorId = parts[2];
+        const messageId = parts[3] ?? null;
+
+        if (interaction.user.id !== authorId) {
             return interaction.reply({ content: "Tu ne peux pas supprimer ce message !", ephemeral: true });
         }
-        // Supprimer l'embed
+
         await interaction.message.delete().catch(() => {});
-        // Supprimer le message original de la commande
-        if (helpMessageId && helpMessageId !== '') {
-            const originalMsg = await interaction.channel.messages.fetch(helpMessageId).catch(() => null);
+        if (messageId && messageId !== '') {
+            const originalMsg = await interaction.channel.messages.fetch(messageId).catch(() => null);
             if (originalMsg) await originalMsg.delete().catch(() => {});
         }
         return;
     }
 
-    // =========================
-    // BOUTON RETOUR
-    // =========================
-
-    if (interaction.isButton() && interaction.customId.startsWith('help_back_')) {
-        const backParts = interaction.customId.split('_');
-        const helpAuthorId = backParts[2];
-        const helpMessageId = backParts[3] ?? null;
-        if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
+    // Bouton nouvelle question pour !question
+    if (interaction.isButton() && interaction.customId.startsWith('question_new_')) {
+        const authorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Ce bouton ne t'est pas destiné !", ephemeral: true });
         }
+
         const embed = new EmbedBuilder()
-            .setColor(0x00ffff)
-            .setTitle("\ud83d\udca9 AIDE \u00c0 CACABOT")
-            .setDescription("Hey ! Voici Cacabot, qui, malgr\u00e9 son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\n\nPour d\u00e9couvrir les diff\u00e9rentes commandes disponibles de Cacabot, choisis l'une des cat\u00e9gories ci-dessous !");
+            .setColor(0x9b59b6)
+            .setTitle("❓ Question du soir")
+            .setDescription("Choisis une catégorie pour recevoir une question aléatoire !");
 
         const menu = new StringSelectMenuBuilder()
-            .setCustomId(`help_menu_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setPlaceholder('Choisis une cat\u00e9gorie')
+            .setCustomId('question_menu')
+            .setPlaceholder('Choisis une catégorie')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'Interact, Discussion, Anniversaire, Random', value: 'fun' },
-                { label: '\ud83d\udee0 Utilitaire', description: 'Discord, YouTube, Cacabot, Autres', value: 'util' }
+                { label: '🗣️ Débats / Opinions', value: 'debats' },
+                { label: '🤫 Confession / Introspection', value: 'confession' },
+                { label: '🤔 Hypothétiques', value: 'hypothetiques' },
+                { label: '🏠 Spéciales Regaïa', value: 'serveur' },
+                { label: '🧠 Philosophie de comptoir', value: 'philosophie' },
+                { label: '🎲 Aléatoires / Chaos', value: 'aleatoires' }
             );
+
         const row = new ActionRowBuilder().addComponents(menu);
         return interaction.update({ embeds: [embed], components: [row] });
     }
@@ -8657,7 +8687,6 @@ return interaction.update({ embeds: [embed], components: rows });
     }
 }
 });
-
 
 // =========================
 //         CONNEXION
@@ -8831,6 +8860,43 @@ client.on('messageCreate', async (message) => {
     } catch (e) {}
 });
 
+// Détection des Ghost Pings
+client.on('messageDelete', async (message) => {
+    if (!message.guild || message.author?.bot) return;
+    if (message.channel.id === MOD_CHANNEL_ID) return;
+
+    // Vérifie si le message a été supprimé rapidement (moins de 2 minutes après envoi)
+    const ageMs = Date.now() - message.createdTimestamp;
+    if (ageMs > 2 * 60 * 1000) return;
+
+    // Filtre les mentions d'humains réels (hors bots et hors auteur du message)
+    const ciblesHumaines = message.mentions.users.filter(u => !u.bot && u.id !== message.author.id);
+    const rolesMentionnes = message.mentions.roles;
+
+    if (ciblesHumaines.size === 0 && rolesMentionnes.size === 0) return;
+
+    const modChannel = message.guild.channels.cache.get(MOD_CHANNEL_ID);
+    if (!modChannel) return;
+
+    const mentionsStr = [
+        ...ciblesHumaines.map(u => `<@${u.id}>`),
+        ...rolesMentionnes.map(r => `<@&${r.id}>`)
+    ].join(', ');
+
+    const embedGhost = new EmbedBuilder()
+        .setColor(0xe74c3c)
+        .setTitle('👻 Ghost Ping détecté !')
+        .setDescription(`Un message contenant des mentions a été supprimé rapidement dans <#${message.channel.id}>.`)
+        .addFields(
+            { name: '👤 Auteur', value: `<@${message.author.id}> (${message.author.tag})`, inline: true },
+            { name: '🎯 Cible(s)', value: mentionsStr, inline: true },
+            { name: '💬 Contenu supprimé', value: message.content ? `\`\`\`${message.content.slice(0, 1000)}\`\`\`` : '*Contenu média ou vide*', inline: false }
+        )
+        .setTimestamp();
+
+    await modChannel.send({ embeds: [embedGhost] }).catch(() => {});
+});
+
 // Verrouillage de pseudo roulette : remet le pseudo imposé si quelqu'un essaie de le changer
 client.on('guildMemberUpdate', async (oldMember, newMember) => {
     const lock = roulettePseudoLock.get(newMember.id);
@@ -8878,17 +8944,33 @@ client.on('guildMemberAdd', async (member) => {
             }
         }
         if (accountAge < oneMonth) {
-            const modChannel = member.guild.channels.cache.get('720082701192921231');
+            const modChannel = member.guild.channels.cache.get(MOD_CHANNEL_ID);
             if (!modChannel) return;
             const jours = Math.floor(accountAge / (24 * 60 * 60 * 1000));
             const embed = new EmbedBuilder()
                 .setColor(0xff9900)
                 .setTitle('⚠️ Compte récent détecté')
-                .setDescription(`<@${member.id}> vient de rejoindre le serveur, mais son compte n'a été créé qu'il y a **${jours} jour${jours > 1 ? 's' : ''}**.\n\nC'est peut-être un bot ou un compte secondaire. Ceci peut être une fausse alerte, mais restez vigilants !`)
+                .setDescription(`<@${member.id}> vient de rejoindre le serveur, mais son compte n'a été créé qu'il y a **${jours} jour${jours > 1 ? 's' : ''}**.\n\nC'est peut-être un bot ou un compte secondaire. Que souhaitez-vous faire ?`)
                 .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
                 .setFooter({ text: `ID : ${member.id}` })
                 .setTimestamp();
-            await modChannel.send({ embeds: [embed] });
+
+            const actionRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`mod_action_kick_${member.id}`)
+                    .setLabel('👢 Expulser')
+                    .setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder()
+                    .setCustomId(`mod_action_ban_${member.id}`)
+                    .setLabel('🔨 Bannir')
+                    .setStyle(ButtonStyle.Danger),
+                new ButtonBuilder()
+                    .setCustomId(`mod_action_dismiss_${member.id}`)
+                    .setLabel('✅ Fausse alerte')
+                    .setStyle(ButtonStyle.Success)
+            );
+
+            await modChannel.send({ embeds: [embed], components: [actionRow] });
         }
     }
 });
