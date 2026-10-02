@@ -7074,7 +7074,9 @@ try {
             .replace('M', 'min ')
             .replace('S', 's');
 
-        const views = parseInt(stats.viewCount).toLocaleString('fr-FR');
+        const views = stats.viewCount ? parseInt(stats.viewCount).toLocaleString('fr-FR') : '0';
+        const likes = stats.likeCount ? parseInt(stats.likeCount).toLocaleString('fr-FR') : 'Masqué';
+        const comments = stats.commentCount ? parseInt(stats.commentCount).toLocaleString('fr-FR') : 'Désactivés';
         const date = new Date(snippet.publishedAt).toLocaleDateString('fr-FR', {
             day: 'numeric', month: 'long', year: 'numeric'
         });
@@ -7090,6 +7092,8 @@ try {
                 { name: '📺 Chaîne', value: snippet.channelTitle, inline: true },
                 { name: '⏱️ Durée', value: duration, inline: true },
                 { name: '👁️ Vues', value: views, inline: true },
+                { name: '👍 Likes', value: likes, inline: true },
+                { name: '💬 Commentaires', value: comments, inline: true },
                 { name: '📅 Publié le', value: date, inline: true }
             )
             .setFooter({ text: `Résultat ${index + 1}/${videos.length}` });
