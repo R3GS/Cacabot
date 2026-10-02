@@ -1513,14 +1513,14 @@ function buildSuggestionEmbed(data, authorMember) {
         .setColor(0xd96b00) // Orange chaleureux, légèrement foncé
         .setTitle('💡 NOUVELLE SUGGESTION')
         .setDescription(
-            `**Proposition :**\n>>> ${data.texte}\n\n` +
+            `**Proposition :**\n> ${data.texte}\n\n` +
             `**Auteur·rice :** <@${data.authorId}>\n\n` +
             `**Votes actuels :**\n` +
             `✅ **Pour :** ${pourCount} (${pourPct}%)\n` +
             `❌ **Contre :** ${contreCount} (${contrePct}%)\n\n` +
             `\`${barre}\``
         )
-        .setFooter({ text: 'Clique sur un bouton pour voter ou modifier ton vote !' })
+        .setFooter({ text: 'Clique sur un bouton pour voter ou modifier ton vote !\nUtilisez !suggestion pour soumettre vos idées' })
         .setTimestamp();
 
     if (avatarUrl) {
