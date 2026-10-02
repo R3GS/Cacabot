@@ -1563,17 +1563,17 @@ function buildHelpHomeEmbed() {
             "🔥・**À LA UNE EN CE MOMENT :**\n" +
             "-# 🎰 `!roulette` | `!rlt` — La fameuse roulette qui te fait gagner des trucs... ou pas. → <#1553954760900608091>\n" +
             "💡・**ASTUCE :**\n" +
-            "-# Tu as une idée d'amélioration pour le bot ou le serveur ? Envoie `!suggestion [ton idée]` dans le salon <#720079866199801937> !\n" +
+            "-# Tu as une idée d'amélioration pour le bot ou le serveur ? Envoie `!suggestion [ton idée]` dans le salon <#720079866199801937>\n" +
             "## ✨ **CATÉGORIES DISPONIBLES :**\n\n" +
-            "### 💥・Interactions & Social" +
+            "### 💥・Interactions & Social\n" +
             "*Interagis, clashe, réagis ou amuse-toi avec les autres membres du serveur.*\n" +
-            "### 🔮・Jeux, Hasard & Destin" +
+            "### 🔮・Jeux, Hasard & Destin\n" +
             "*La roulette, le criminel du jour, tes prédictions d'avenir et jeux de hasard.*\n" +
-            "### 💬・Salons & Vie du Serveur" +
+            "### 💬・Salons & Vie du Serveur\n" +
             "*Le verdict Top Chef, les questions du soir, les dilemmes et anniversaires.*\n" +
-            "### 📊・Stats & Utilitaires" +
+            "### 📊・Stats & Utilitaires\n" +
             "*Classements d'activité, profils, avatar, météo, sessions pomodoro et serveur.*\n" +
-            "### 🤖・Cacabot & Infos" +
+            "### 🤖・Cacabot & Infos\n" +
             "*Commandes YouTube, état du bot, latence et gestion de Cacabot.*"
         );
 }
