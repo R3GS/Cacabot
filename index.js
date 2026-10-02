@@ -1555,15 +1555,15 @@ function buildSuggestionRow(data) {
 function buildHelpHomeEmbed() {
     return new EmbedBuilder()
         .setColor(0x00ffff)
-        .setTitle('💩 GUIDE OFFICIEL DE CACABOT')
-        .setThumbnail(client.user?.displayAvatarURL({ dynamic: true, size: 256 }) ?? null)
         .setDescription(
+            "# 💩 GUIDE DE CACABOT\n\n" +
             "Hey ! Voici le manuel d'utilisation officiel de Cacabot.\n" +
             "Choisis une catégorie dans le menu ci-dessous pour afficher les commandes correspondantes !\n\n" +
             "🔥・**À LA UNE EN CE MOMENT :**\n" +
             "-# 🎰 `!roulette` | `!rlt` — La fameuse roulette qui te fait gagner des trucs... ou pas. → <#1553954760900608091>\n\n" +
             "💡・**ASTUCE :**\n" +
             "-# Tu as une idée d'amélioration pour le bot ou le serveur ? Envoie `!suggestion [ton idée]` dans le salon <#720079866199801937>\n\n" +
+            "---\n\n" +
             "## **__CATÉGORIES DISPONIBLES :__**"
         )
         .addFields(
@@ -1694,9 +1694,9 @@ function buildHelpCategoryEmbed(category) {
             .setTitle('<:YouTube:1505457903585198151>  YouTube')
             .setDescription(
                 "Commandes pour explorer et suivre YouTube directement sur Discord :\n\n" +
-                "🔎 `!youtube [recherche]` — Rechercher et faire défiler des vidéos YouTube avec aperçu\n" +
+                "🔎 `!youtube [recherche]` — Rechercher et faire défiler des vidéos YouTube\n" +
                 "🎬 `!last [chaîne]` — Afficher la toute dernière vidéo sortie sur une chaîne\n" +
-                "📊 `!stats [chaîne]` — Statistiques détaillées d'une chaîne (abonnés, vues, vidéos)"
+                "📊 `!stats [chaîne]` — Statistiques détaillées d'une chaîne YouTube"
             );
     }
 
