@@ -1528,39 +1528,6 @@ function buildSuggestionEmbed(data, authorMember) {
     }
     return embed;
 }
-    const pourCount = data.pour.length;
-    const contreCount = data.contre.length;
-    const total = pourCount + contreCount;
-
-    const pourPct = total > 0 ? Math.round((pourCount / total) * 100) : 0;
-    const contrePct = total > 0 ? (100 - pourPct) : 0;
-
-    let barre = '░░░░░░░░░░';
-    if (total > 0) {
-        const nbVert = Math.round((pourCount / total) * 10);
-        const nbRouge = 10 - nbVert;
-        barre = '🟩'.repeat(nbVert) + '🟥'.repeat(nbRouge);
-    }
-
-    const auteurNom = authorMember?.displayName ?? 'Un·e membre';
-    const avatarUrl = authorMember?.user?.displayAvatarURL({ dynamic: true }) ?? authorMember?.displayAvatarURL?.({ dynamic: true });
-
-    const embed = new EmbedBuilder()
-        .setColor(0xffb703)
-        .setTitle('💡 NOUVELLE SUGGESTION')
-        .setDescription(
-            `**Proposition :**\n>>> ${data.texte}\n\n` +
-            `**Auteur·rice :** <@${data.authorId}>\n\n` +
-            `**Votes actuels :**\n` +
-            `✅ **Pour :** ${pourCount} (${pourPct}%)\n` +
-            `❌ **Contre :** ${contreCount} (${contrePct}%)\n\n` +
-            `\`${barre}\``
-        )
-        .setFooter({ text: 'Clique sur un bouton pour voter ou modifier ton vote !' })
-        .setTimestamp();
-
-    if (avatarUrl) embed.setThumbnail(avatarUrl);
-    return embed;
 
 function buildSuggestionRow(data) {
     return new ActionRowBuilder().addComponents(
