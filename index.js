@@ -1561,7 +1561,6 @@ function buildSuggestionEmbed(data, authorMember) {
 
     if (avatarUrl) embed.setThumbnail(avatarUrl);
     return embed;
-}
 
 function buildSuggestionRow(data) {
     return new ActionRowBuilder().addComponents(
