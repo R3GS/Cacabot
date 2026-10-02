@@ -491,6 +491,10 @@ function getResponse(raw) {
     //         !HELP
     // =========================
 
+    if (command === "!suggestion" || command === "!suggest" || command === "!sugg") {
+        return { needsSuggestion: true };
+    }
+
     if (command === "!help") {
         return {
             data: new EmbedBuilder()
@@ -1166,6 +1170,7 @@ const rouletteRedirectChoixCible = new Map();  // userId -> id du membre choisi 
 const rouletteJackpotBonus = new Map(); // userId -> % cumulé (0 à 1) de chance de bonus grâce aux "rien" d'affilée
 const rouletteStats = new Map();        // userId -> { tirages, bonus, malus, rien, plusGrosGain: {nom, proba}|null, serieActuelle, pireSerie }
 const rouletteAchievements = new Map(); // userId -> { [achievementId]: timestamp }
+const suggestionsData = new Map();     // messageId -> { authorId, texte, pour: string[], contre: string[] }
 
 const ROULETTE_ACHIEVEMENTS = [
     // ───────── LES 15 PREMIERS ─────────
@@ -1186,18 +1191,18 @@ const ROULETTE_ACHIEVEMENTS = [
     { id: 'epingle',           nom: 'Maman je passe à la télé !', emoji: '📌', desc: 'Épingler un message dans le salon avec le bonus Message épinglé' },
 
     // ───────── LES 15 NOUVEAUX ─────────
-    { id: 'tournee-patron',    nom: 'Tournée du Patron',          emoji: '🍻', desc: 'Déclencher l\'événement rare de la Tournée générale (1/600)' },
-    { id: 'survivant-enfer',   nom: 'Survivant de l\'Enfer',      emoji: '☠️', desc: 'Tirer l\'Exclusion d\'une semaine ou le Ban définitif' },
+    { id: 'tournee-patron',    nom: 'C\'est ma tournée !',        emoji: '🍻', desc: 'Déclencher l\'événement rare de la Tournée générale (1/600)' },
+    { id: 'survivant-enfer',   nom: 'Survivant.e de l\'Enfer',    emoji: '☠️', desc: 'Tirer l\'Exclusion d\'une semaine ou le Ban définitif' },
     { id: 'ascension-sociale', nom: 'L\'Ascension Sociale',       emoji: '👑', desc: 'Monter d\'un rang de Regaïen ou toucher Regaïen légendaire' },
-    { id: 'la-rafale',         nom: 'La Rafale',                  emoji: '⚡', desc: 'Effectuer au moins 3 tirages pendant un seul Tirage à volonté' },
-    { id: 'oiseau-nuit',       nom: 'L\'Oiseau de Nuit',          emoji: '🔥', desc: 'Effectuer au moins 10 tirages pendant une session d\'Happy Hour' },
-    { id: 'sniper-impitoyable',nom: 'Sniper Impitoyable',         emoji: '🎯', desc: 'Rediriger avec succès un malus avec la Redirection au choix' },
+    { id: 'la-rafale',         nom: 'Rafale',                     emoji: '⚡', desc: 'Effectuer au moins 3 tirages pendant un seul Tirage à volonté' },
+    { id: 'oiseau-nuit',       nom: 'Oiseau de Nuit',             emoji: '🔥', desc: 'Effectuer au moins 10 tirages pendant une session d\'Happy Hour' },
+    { id: 'sniper-impitoyable',nom: 'Sniper',                     emoji: '🎯', desc: 'Rediriger avec succès un malus avec la Redirection au choix' },
     { id: 'tete-dure',         nom: 'Tête Dure',                  emoji: '🛡️', desc: 'Esquiver au moins 5 fois le Feur de Cacabot grâce à l\'Anti-Feur' },
-    { id: 'laristocrate',      nom: 'L\'Aristocrate',             emoji: '👑', desc: 'Décrocher le bonus de la Couronne 12h' },
+    { id: 'laristocrate',      nom: 'Aristocrate',                emoji: '👑', desc: 'Décrocher le bonus de la Couronne 12h' },
     { id: 'enchainement-fatal',nom: 'Enchaînement Fatal',         emoji: '🪨', desc: 'Subir 3 malus consécutifs d\'affilée sans aucun répit' },
-    { id: 'silence-radio',     nom: 'Silence Radio',              emoji: '🤫', desc: 'Tirer et subir l\'Exclusion de 1 jour' },
-    { id: 'le-sauvetage',      nom: 'Le Sauvetage',               emoji: '📈', desc: 'Décrocher un bonus garanti grâce au système de Pity' },
-    { id: 'crise-quarantaine', nom: 'Crise de la Quarantaine',    emoji: '👶', desc: 'Cumuler le Mode Boomer et le Parler Bébé en même temps' },
+    { id: 'silence-radio',     nom: 'Silence Radio',              emoji: '🤫', desc: 'Subir l\'Exclusion de 1 jour' },
+    { id: 'le-sauvetage',      nom: 'Sauvetage',                  emoji: '📈', desc: 'Décrocher un bonus garanti grâce au système de Pity' },
+    { id: 'crise-quarantaine', nom: 'Crise de la Quarantaine',    emoji: '👶', desc: 'Cumuler le Mode Boomer et le Baby Mode en même temps' },
     { id: 'fan-carlos',        nom: 'Fan de Carlos',              emoji: '🎶', desc: 'Faire spawn PAPAYOU.mp3 3 fois dans la même journée' },
     { id: 'seum-en-personne',  nom: 'Le seum en personne',        emoji: '🧻', desc: 'Avoir subi au moins 10 malus différents sur la roulette' },
     { id: 'argent-epsys',      nom: 'De l\'argent !',             emoji: '💶', desc: 'Recevoir 5€ de la YouTube money d\'Epsys (0,015%)' }
@@ -1485,6 +1490,94 @@ const ROULETTE_EMOJIS_PAR_ID = {
     'malus-lettres-melangees': '🔡', 'malus-limite-100': '✂️', 'malus-limite-30': '✂️',
     'special-tournee-generale': '🥂', 'malus-cooldown-45': '⏳', 'malus-prime': '💥', 'malus-bebe': '🍼', 'malus-chat-noir': '🐈‍⬛', 'malus-boomer': '🧓'
 };
+
+function buildSuggestionEmbed(data, authorMember) {
+    const pourCount = data.pour.length;
+    const contreCount = data.contre.length;
+    const total = pourCount + contreCount;
+
+    const pourPct = total > 0 ? Math.round((pourCount / total) * 100) : 0;
+    const contrePct = total > 0 ? (100 - pourPct) : 0;
+
+    let barre = '░░░░░░░░░░';
+    if (total > 0) {
+        const nbVert = Math.round((pourCount / total) * 10);
+        const nbRouge = 10 - nbVert;
+        barre = '🟩'.repeat(nbVert) + '🟥'.repeat(nbRouge);
+    }
+
+    const avatarUrl = authorMember?.user?.displayAvatarURL({ dynamic: true, size: 256 }) 
+                   ?? authorMember?.displayAvatarURL?.({ dynamic: true, size: 256 });
+
+    const embed = new EmbedBuilder()
+        .setColor(0xd96b00) // Orange chaleureux, légèrement foncé
+        .setTitle('💡 NOUVELLE SUGGESTION')
+        .setDescription(
+            `**Proposition :**\n>>> ${data.texte}\n\n` +
+            `**Auteur·rice :** <@${data.authorId}>\n\n` +
+            `**Votes actuels :**\n` +
+            `✅ **Pour :** ${pourCount} (${pourPct}%)\n` +
+            `❌ **Contre :** ${contreCount} (${contrePct}%)\n\n` +
+            `\`${barre}\``
+        )
+        .setFooter({ text: 'Clique sur un bouton pour voter ou modifier ton vote !' })
+        .setTimestamp();
+
+    if (avatarUrl) {
+        embed.setThumbnail(avatarUrl); // Place l'avatar en haut à droite de l'embed
+    }
+    return embed;
+}
+    const pourCount = data.pour.length;
+    const contreCount = data.contre.length;
+    const total = pourCount + contreCount;
+
+    const pourPct = total > 0 ? Math.round((pourCount / total) * 100) : 0;
+    const contrePct = total > 0 ? (100 - pourPct) : 0;
+
+    let barre = '░░░░░░░░░░';
+    if (total > 0) {
+        const nbVert = Math.round((pourCount / total) * 10);
+        const nbRouge = 10 - nbVert;
+        barre = '🟩'.repeat(nbVert) + '🟥'.repeat(nbRouge);
+    }
+
+    const auteurNom = authorMember?.displayName ?? 'Un·e membre';
+    const avatarUrl = authorMember?.user?.displayAvatarURL({ dynamic: true }) ?? authorMember?.displayAvatarURL?.({ dynamic: true });
+
+    const embed = new EmbedBuilder()
+        .setColor(0xffb703)
+        .setTitle('💡 NOUVELLE SUGGESTION')
+        .setDescription(
+            `**Proposition :**\n>>> ${data.texte}\n\n` +
+            `**Auteur·rice :** <@${data.authorId}>\n\n` +
+            `**Votes actuels :**\n` +
+            `✅ **Pour :** ${pourCount} (${pourPct}%)\n` +
+            `❌ **Contre :** ${contreCount} (${contrePct}%)\n\n` +
+            `\`${barre}\``
+        )
+        .setFooter({ text: 'Clique sur un bouton pour voter ou modifier ton vote !' })
+        .setTimestamp();
+
+    if (avatarUrl) embed.setThumbnail(avatarUrl);
+    return embed;
+}
+
+function buildSuggestionRow(data) {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('sugg_vote_pour')
+            .setLabel(`Pour (${data.pour.length})`)
+            .setEmoji('✅')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId('sugg_vote_contre')
+            .setLabel(`Contre (${data.contre.length})`)
+            .setEmoji('❌')
+            .setStyle(ButtonStyle.Danger)
+    );
+}
+
 function buildHelpxPresentationEmbed() {
     return new EmbedBuilder()
         .setColor(0x5865f2)
@@ -1645,6 +1738,7 @@ const ROULETTE_ETATS = {
     jackpot:            rouletteJackpotBonus,
     stats:              rouletteStats,
     achievements:       rouletteAchievements,
+    suggestions:        suggestionsData,
     immunite:        rouletteImmuniteUntil,
     timeoutRoulette: rouletteTimeoutUntil,
     notifs: rouletteNotifs
@@ -4220,6 +4314,36 @@ return message.reply({ embeds: [embed], components: [row] });
             }
         }
         return message.reply(getAnimalResponse(message));
+    }
+
+    // !suggestion
+    if (response?.needsSuggestion) {
+        const SUGGESTION_CHANNEL_ID = '720079866199801937';
+        if (message.channel.id !== SUGGESTION_CHANNEL_ID) {
+            return message.channel.send(`💡 <@${message.author.id}>, les suggestions se font uniquement dans le salon <#${SUGGESTION_CHANNEL_ID}> !`);
+        }
+
+        const texte = message.content.trim().split(/\s+/).slice(1).join(" ");
+        if (!texte) {
+            return message.reply("Usage : `!suggestion [ton idée/proposition]`\nExemple : `!suggestion Créer un salon Meubles IKEA`");
+        }
+
+        const data = {
+            authorId: message.author.id,
+            texte: texte,
+            pour: [],
+            contre: []
+        };
+
+        const embed = buildSuggestionEmbed(data, message.member);
+        const row = buildSuggestionRow(data);
+
+        await message.delete().catch(() => {});
+        const sent = await message.channel.send({ embeds: [embed], components: [row] });
+
+        suggestionsData.set(sent.id, data);
+        demanderSauvegarde();
+        return;
     }
 
     // !stats
@@ -7631,6 +7755,48 @@ return interaction.update({ embeds: [embed], components: rows });
     // =========================
     // BOUTONS ROULETTE
     // =========================
+
+    if (interaction.isButton() && (interaction.customId === 'sugg_vote_pour' || interaction.customId === 'sugg_vote_contre')) {
+        const msgId = interaction.message.id;
+        const data = suggestionsData.get(msgId);
+        if (!data) {
+            return interaction.reply({ content: "Cette suggestion est trop ancienne ou introuvable.", ephemeral: true });
+        }
+
+        const userId = interaction.user.id;
+        const votePour = interaction.customId === 'sugg_vote_pour';
+        let feedback = '';
+
+        if (votePour) {
+            if (data.pour.includes(userId)) {
+                data.pour = data.pour.filter(id => id !== userId);
+                feedback = '❌ Vote « Pour » retiré !';
+            } else {
+                data.pour.push(userId);
+                data.contre = data.contre.filter(id => id !== userId);
+                feedback = '✅ Tu as voté « Pour » !';
+            }
+        } else {
+            if (data.contre.includes(userId)) {
+                data.contre = data.contre.filter(id => id !== userId);
+                feedback = '❌ Vote « Contre » retiré !';
+            } else {
+                data.contre.push(userId);
+                data.pour = data.pour.filter(id => id !== userId);
+                feedback = '❌ Tu as voté « Contre » !';
+            }
+        }
+
+        suggestionsData.set(msgId, data);
+        demanderSauvegarde();
+
+        const authorMember = interaction.guild.members.cache.get(data.authorId);
+        const embed = buildSuggestionEmbed(data, authorMember);
+        const row = buildSuggestionRow(data);
+
+        await interaction.update({ embeds: [embed], components: [row] });
+        return interaction.followUp({ content: feedback, ephemeral: true });
+    }
 
     if (interaction.isButton() && interaction.customId.startsWith('rlt_achs_')) {
         const parts = interaction.customId.split('_');
