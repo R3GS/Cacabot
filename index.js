@@ -1563,22 +1563,24 @@ function buildHelpHomeEmbed() {
             "🔥・**À LA UNE EN CE MOMENT :**\n" +
             "-# 🎰 `!roulette` | `!rlt` — La fameuse roulette qui te fait gagner des trucs... ou pas. → <#1553954760900608091>\n\n" +
             "💡・**ASTUCE :**\n" +
-            "-# Tu as une idée d'amélioration pour le bot ou le serveur ? Envoie `!suggestion [ton idée]` dans le salon <#720079866199801937>\n" +
+            "-# Tu as une idée d'amélioration pour le bot ou le serveur ? Envoie `!suggestion [ton idée]` dans le salon <#720079866199801937>\n\n" +
             "## **__CATÉGORIES DISPONIBLES :__**"
         )
         .addFields(
-            // Ligne 1 (2 par 2)
+            // Ligne 1
             { name: '💥・Interactions & Social', value: 'Interagis, clashe, réagis ou amuse-toi avec les membres.', inline: true },
             { name: '🔮・Jeux, Hasard & Destin', value: 'La roulette, le criminel du jour, prédictions et hasard.', inline: true },
-            { name: '\u200b', value: '\u200b', inline: true }, // Espace invisible pour forcer les 2 colonnes sur PC
+            { name: '\u200b', value: '\u200b', inline: true },
 
-            // Ligne 2 (2 par 2)
+            // Ligne 2
             { name: '💬・Salons & Vie du Serveur', value: 'Le verdict Top Chef, questions du soir, choix et anniversaires.', inline: true },
             { name: '📊・Stats & Utilitaires', value: 'Classements, profils, avatar, météo, pomodoro et serveur.', inline: true },
-            { name: '\u200b', value: '\u200b', inline: true }, // Espace invisible
+            { name: '\u200b', value: '\u200b', inline: true },
 
-            // Ligne 3 (Pleine largeur en bas)
-            { name: '🤖・Cacabot & Infos', value: 'Commandes YouTube, état du bot, latence et gestion de Cacabot.', inline: false }
+            // Ligne 3 (YouTube à gauche, Cacabot à droite)
+            { name: '<:YouTube:1505457903585198151>・YouTube', value: 'Recherche de vidéos, dernière sortie et stats de chaînes.', inline: true },
+            { name: '🤖・Cacabot & Infos', value: 'Infos du bot, latence en direct, silence et gestion.', inline: true },
+            { name: '\u200b', value: '\u200b', inline: true }
         );
 }
 
@@ -1589,9 +1591,10 @@ function buildHelpMenu(authorId, messageId) {
         .addOptions(
             { label: 'Interactions & Social', emoji: '💥', description: 'kiss, hug, insult, die, ban, bait, punch, rizz...', value: 'interact' },
             { label: 'Jeux, Hasard & Destin', emoji: '🔮', description: 'roulette, wanted, destin, animal, flip, blague...', value: 'jeux' },
-            { label: 'Salons & Vie du Serveur', emoji: '💬', description: 'topchef, question, choix, anniversaire...', value: 'serveur' },
+            { label: 'Salons & Vie du Serveur', emoji: '💬', description: 'topchef, question, choix, anniversaire, suggestion...', value: 'serveur' },
             { label: 'Stats & Utilitaires', emoji: '📊', description: 'top, actif, profil, avatar, serveur, météo, pomodoro...', value: 'util' },
-            { label: 'Cacabot & Infos', emoji: '🤖', description: 'botinfo, ping, stop, youtube, last, stats...', value: 'cacabot' }
+            { label: 'YouTube', emoji: '1505457903585198151', description: 'youtube, last, stats...', value: 'youtube' },
+            { label: 'Cacabot & Infos', emoji: '🤖', description: 'botinfo, ping, stop, unstop...', value: 'cacabot' }
         );
     return new ActionRowBuilder().addComponents(menu);
 }
@@ -1686,17 +1689,25 @@ function buildHelpCategoryEmbed(category) {
             );
     }
 
+    if (category === 'youtube') {
+        return embed.setColor(0xff0000)
+            .setTitle('<:YouTube:1505457903585198151>  YouTube')
+            .setDescription(
+                "Commandes pour explorer et suivre YouTube directement sur Discord :\n\n" +
+                "🔎 `!youtube [recherche]` — Rechercher et faire défiler des vidéos YouTube avec aperçu\n" +
+                "🎬 `!last [chaîne]` — Afficher la toute dernière vidéo sortie sur une chaîne\n" +
+                "📊 `!stats [chaîne]` — Statistiques détaillées d'une chaîne (abonnés, vues, vidéos)"
+            );
+    }
+
     if (category === 'cacabot') {
         return embed.setColor(0x5865f2)
             .setTitle('🤖  Cacabot & Infos')
             .setDescription(
-                "Commandes relatives au bot et à YouTube :\n\n" +
-                "🤖 `!botinfo` | `!about` — Fiche détaillée, version et crédits de Cacabot\n" +
-                "🏓 `!ping` — Mesure la latence du bot\n" +
-                "🤫 `!stop` / `!unstop` — Faire taire Cacabot pendant 1h (ou le faire revenir)\n" +
-                "🔎 `!youtube [recherche]` — Rechercher et prévisualiser des vidéos YouTube\n" +
-                "🎬 `!last [chaîne]` — Afficher la toute dernière vidéo publiée par une chaîne\n" +
-                "📊 `!stats [chaîne]` — Statistiques détaillées d'une chaîne YouTube"
+                "Commandes et réglages liés à Cacabot :\n\n" +
+                "🤖 `!botinfo` / `!about` — Présentation, version, uptime et créatrices\n" +
+                "🏓 `!ping` — Mesure la latence du bot et du WebSocket Discord\n" +
+                "🤫 `!stop` / `!unstop` — Faire taire Cacabot pendant 1h (ou le faire revenir)"
             );
     }
 
