@@ -4681,7 +4681,7 @@ return message.reply({ embeds: [embed], components: [row] });
         const buildYoutubeEmbed = (index) => {
             const video = videos[index];
             const snippet = video.snippet;
-            const stats = video.statistics;
+            const stats = video.statistics || {};
 
             const duration = video.contentDetails.duration
                 .replace('PT', '')
@@ -4689,7 +4689,9 @@ return message.reply({ embeds: [embed], components: [row] });
                 .replace('M', 'min ')
                 .replace('S', 's');
 
-            const views = parseInt(stats.viewCount).toLocaleString('fr-FR');
+            const views = stats.viewCount ? parseInt(stats.viewCount).toLocaleString('fr-FR') : '0';
+            const likes = stats.likeCount ? parseInt(stats.likeCount).toLocaleString('fr-FR') : 'Masqué';
+            const comments = stats.commentCount ? parseInt(stats.commentCount).toLocaleString('fr-FR') : 'Désactivés';
             const date = new Date(snippet.publishedAt).toLocaleDateString('fr-FR', {
                 day: 'numeric', month: 'long', year: 'numeric'
             });
@@ -4705,6 +4707,8 @@ return message.reply({ embeds: [embed], components: [row] });
                     { name: '📺 Chaîne', value: snippet.channelTitle, inline: true },
                     { name: '⏱️ Durée', value: duration, inline: true },
                     { name: '👁️ Vues', value: views, inline: true },
+                    { name: '👍 Likes', value: likes, inline: true },
+                    { name: '💬 Commentaires', value: comments, inline: true },
                     { name: '📅 Publié le', value: date, inline: true }
                 )
                 .setFooter({ text: `Résultat ${index + 1}/${videos.length}` });
@@ -7066,7 +7070,7 @@ try {
     const buildYoutubeEmbed = (index) => {
         const v = videos[index];
         const snippet = v.snippet;
-        const stats = v.statistics;
+        const stats = v.statistics || {};
 
         const duration = v.contentDetails.duration
             .replace('PT', '')
