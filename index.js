@@ -1560,20 +1560,20 @@ function buildHelpHomeEmbed() {
         .setDescription(
             "Hey ! Voici le manuel d'utilisation officiel de Cacabot.\n" +
             "Choisis une catégorie dans le menu ci-dessous pour afficher les commandes correspondantes !\n\n" +
-            "🔥 **À LA UNE EN CE MOMENT :**\n" +
-            "-# 🎰 `!roulette` | `!rlt` — La fameuse roulette qui te fait gagner des trucs... ou pas. → <#1553954760900608091>\n\n" +
-            "💡 **ASTUCE :**\n" +
-            "-# Tu as une idée d'amélioration pour le bot ou le serveur ? Envoie `!suggestion [ton idée]` dans le salon <#720079866199801937> !\n\n" +
+            "🔥・**À LA UNE EN CE MOMENT :**\n" +
+            "-# 🎰 `!roulette` | `!rlt` — La fameuse roulette qui te fait gagner des trucs... ou pas. → <#1553954760900608091>\n" +
+            "💡・**ASTUCE :**\n" +
+            "-# Tu as une idée d'amélioration pour le bot ou le serveur ? Envoie `!suggestion [ton idée]` dans le salon <#720079866199801937> !\n" +
             "## ✨ **CATÉGORIES DISPONIBLES :**\n\n" +
-            "### 💥・Interactions & Social\n" +
+            "### 💥・Interactions & Social" +
             "*Interagis, clashe, réagis ou amuse-toi avec les autres membres du serveur.*\n" +
-            "### 🔮・Jeux, Hasard & Destin\n" +
+            "### 🔮・Jeux, Hasard & Destin" +
             "*La roulette, le criminel du jour, tes prédictions d'avenir et jeux de hasard.*\n" +
-            "### 🍕・Salons & Vie du Serveur\n" +
+            "### 💬・Salons & Vie du Serveur" +
             "*Le verdict Top Chef, les questions du soir, les dilemmes et anniversaires.*\n" +
-            "### 📊・Stats & Utilitaires\n" +
+            "### 📊・Stats & Utilitaires" +
             "*Classements d'activité, profils, avatar, météo, sessions pomodoro et serveur.*\n" +
-            "### 🤖・Cacabot & Infos\n" +
+            "### 🤖・Cacabot & Infos" +
             "*Commandes YouTube, état du bot, latence et gestion de Cacabot.*"
         );
 }
@@ -1583,9 +1583,9 @@ function buildHelpMenu(authorId, messageId) {
         .setCustomId(`help_select_${authorId}_${messageId ?? ''}`)
         .setPlaceholder('Choisis une catégorie de commandes...')
         .addOptions(
-            { label: 'Interactions & Social', emoji: '🎭', description: 'kiss, hug, insult, die, ban, bait, punch, rizz...', value: 'interact' },
-            { label: 'Jeux, Hasard & Destin', emoji: '🎰', description: 'roulette, wanted, destin, animal, flip, blague...', value: 'jeux' },
-            { label: 'Salons & Vie du Serveur', emoji: '🍽️', description: 'topchef, question, choix, anniversaire...', value: 'serveur' },
+            { label: 'Interactions & Social', emoji: '💥', description: 'kiss, hug, insult, die, ban, bait, punch, rizz...', value: 'interact' },
+            { label: 'Jeux, Hasard & Destin', emoji: '🔮', description: 'roulette, wanted, destin, animal, flip, blague...', value: 'jeux' },
+            { label: 'Salons & Vie du Serveur', emoji: '💬', description: 'topchef, question, choix, anniversaire...', value: 'serveur' },
             { label: 'Stats & Utilitaires', emoji: '📊', description: 'top, actif, profil, avatar, serveur, météo, pomodoro...', value: 'util' },
             { label: 'Cacabot & Infos', emoji: '🤖', description: 'botinfo, ping, stop, youtube, last, stats...', value: 'cacabot' }
         );
