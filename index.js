@@ -6202,12 +6202,12 @@ if (response?.needsRouletteStats) {
             "On dirait le résultat d'une expérience clandestine dans un labo abandonné de Tchernobyl... mais bizarrement ça doit se manger. **4/20**",
             "C'est visuellement terrorisant, même un chien errant affamé ferait trois pas en arrière. Courage à ton système digestif. **2/20**",
             "Gordon Ramsay vient de voir la photo : il a immédiatement supprimé son compte Twitter et s'est retiré dans un monastère tibétain. **1/20**",
-            "Philippe Etchebest vient de défoncer un mur porteur en placo de rage rien qu'en regardant ce dressage. **3/20**",
+            "Philippe Etchebest vient de défoncer un mur rien qu'en regardant ce dressage. **3/20**",
             "C'est carbonisé à l'extérieur et encore congelé au milieu. Une véritable prouesse thermodynamique. **5/20**",
             "Je sais pas si ça se mange avec une fourchette ou si ça s'exorcise avec de l'eau bénite et un prêtre. **3.5/20**",
             "Le terme « intoxication alimentaire » a été inventé spécifiquement pour anticiper ce plat. **0.5/20**",
             "J'ai montré la photo à mon chat, il a instinctivement commencé à gratter autour de mon téléphone comme si c'était sa litière. **1.5/20**",
-            "Le dressage ressemble fidèlement à un constat d'accident de la route réalisé par la gendarmerie. **4/20**",
+            "Le dressage ressemble fidèlement à un constat d'accident de la route réalisé par la gendarmerie (mais ACAB sinon). **4/20**",
             "Si tu survis à la digestion de ce truc sans passer 48h aux toilettes, tu deviens officiellement immortel. **6/20**",
 
             // Goofy / Réconfort / Absurdes
