@@ -1577,7 +1577,7 @@ function buildHelpHomeEmbed() {
             { name: '\u200b', value: '\u200b', inline: true },
 
             // Ligne 3 (YouTube à gauche, Cacabot à droite)
-            { name: '<:YouTube:1505457903585198151>・YouTube', value: 'Recherche de vidéos, dernière sortie et stats de chaînes.', inline: true },
+            { name: '<:YouTube:1505457903585198151>・YouTube', value: 'Recherche de vidéos, dernières sorties et stats de chaînes.', inline: true },
             { name: '🤖・Cacabot & Infos', value: 'Infos du bot, latence en direct, silence et gestion.', inline: true },
             { name: '\u200b', value: '\u200b', inline: true }
         );
@@ -4694,11 +4694,13 @@ return message.reply({ embeds: [embed], components: [row] });
                 day: 'numeric', month: 'long', year: 'numeric'
             });
 
+            const miniatureUrl = snippet.thumbnails.maxres?.url ?? snippet.thumbnails.high?.url ?? snippet.thumbnails.default?.url;
+
             return new EmbedBuilder()
                 .setColor(0xff0000)
                 .setTitle(snippet.title)
                 .setURL(`https://www.youtube.com/watch?v=${video.id}`)
-                .setThumbnail(snippet.thumbnails.high.url)
+                .setImage(miniatureUrl)
                 .addFields(
                     { name: '📺 Chaîne', value: snippet.channelTitle, inline: true },
                     { name: '⏱️ Durée', value: duration, inline: true },
@@ -7077,11 +7079,13 @@ try {
             day: 'numeric', month: 'long', year: 'numeric'
         });
 
+        const miniatureUrl = snippet.thumbnails.maxres?.url ?? snippet.thumbnails.high?.url ?? snippet.thumbnails.default?.url;
+
         return new EmbedBuilder()
             .setColor(0xff0000)
             .setTitle(snippet.title)
             .setURL(`https://www.youtube.com/watch?v=${v.id}`)
-            .setThumbnail(snippet.thumbnails.high.url)
+            .setImage(miniatureUrl)
             .addFields(
                 { name: '📺 Chaîne', value: snippet.channelTitle, inline: true },
                 { name: '⏱️ Durée', value: duration, inline: true },
