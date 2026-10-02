@@ -1117,6 +1117,12 @@ const rouletteCouronneUntil = new Map(); // userId -> timestamp de fin
 const rouletteAntiFeurUntil = new Map(); // userId -> timestamp de fin (24h)
 const rouletteCoupTripleCharges = new Map(); // userId -> nombre de tirages gratuits restants
 const rouletteCoupTripleScore = new Map();   // userId -> nombre de bonus d'affilée pendant le Coup Triple
+const rouletteFreeRollCompteur = new Map();  // userId -> nombre de tirages pendant le tirage à volonté
+const rouletteHappyHourCompteur = new Map(); // userId -> { date: string, count: number }
+const rouletteAntiFeurDodges = new Map();    // userId -> nombre de feurs esquivés
+const roulettePapayouDaily = new Map();      // userId -> { date: string, count: number }
+const rouletteMalusConsecutifs = new Map();  // userId -> nombre de malus d'affilée
+const rouletteMalusDifferents = new Map();   // userId -> Set de malus subis
 const rouletteRedirectCharges = new Map(); // userId -> nombre de malus à rediriger
 const roulettePseudoLock = new Map(); // userId -> { until: timestamp, pseudo: string }
 const ROULETTE_COOLDOWN_MS = 15 * 60 * 1000;
@@ -1162,6 +1168,7 @@ const rouletteStats = new Map();        // userId -> { tirages, bonus, malus, ri
 const rouletteAchievements = new Map(); // userId -> { [achievementId]: timestamp }
 
 const ROULETTE_ACHIEVEMENTS = [
+    // ───────── LES 15 PREMIERS ─────────
     { id: 'desert-cosmique',   nom: 'Désert absolu',              emoji: '🌵', desc: 'Enchaîner une série de 10 résultats « Rien » consécutifs' },
     { id: 'chat-noir',         nom: 'Victime du Destin',          emoji: '🐈‍⬛', desc: 'Subir la Malédiction du Chat Noir avec +5% de bonus boosté ou plus' },
     { id: 'malus-prime',       nom: 'La totale',                  emoji: '💥', desc: 'Décrocher et subir le MALUS PRIME' },
@@ -1176,7 +1183,24 @@ const ROULETTE_ACHIEVEMENTS = [
     { id: 'veteran-250',       nom: 'Pro du gambling',            emoji: '🎲', desc: 'Atteindre 250 tirages au total' },
     { id: 'centurion-500',     nom: 'Gambling addict',            emoji: '👑', desc: 'Atteindre 500 tirages au total' },
     { id: 'baptiseur',         nom: 'Gravé dans la roche',        emoji: '✍️', desc: 'Verrouiller le pseudo d\'un.e autre membre avec le bonus Pseudo au choix' },
-    { id: 'epingle',           nom: 'Maman je passe à la télé !', emoji: '📌', desc: 'Épingler un message dans le salon avec le bonus Message épinglé' }
+    { id: 'epingle',           nom: 'Maman je passe à la télé !', emoji: '📌', desc: 'Épingler un message dans le salon avec le bonus Message épinglé' },
+
+    // ───────── LES 15 NOUVEAUX ─────────
+    { id: 'tournee-patron',    nom: 'Tournée du Patron',          emoji: '🍻', desc: 'Déclencher l\'événement rare de la Tournée générale (1/600)' },
+    { id: 'survivant-enfer',   nom: 'Survivant de l\'Enfer',      emoji: '☠️', desc: 'Tirer l\'Exclusion d\'une semaine ou le Ban définitif' },
+    { id: 'ascension-sociale', nom: 'L\'Ascension Sociale',       emoji: '👑', desc: 'Monter d\'un rang de Regaïen ou toucher Regaïen légendaire' },
+    { id: 'la-rafale',         nom: 'La Rafale',                  emoji: '⚡', desc: 'Effectuer au moins 3 tirages pendant un seul Tirage à volonté' },
+    { id: 'oiseau-nuit',       nom: 'L\'Oiseau de Nuit',          emoji: '🔥', desc: 'Effectuer au moins 10 tirages pendant une session d\'Happy Hour' },
+    { id: 'sniper-impitoyable',nom: 'Sniper Impitoyable',         emoji: '🎯', desc: 'Rediriger avec succès un malus avec la Redirection au choix' },
+    { id: 'tete-dure',         nom: 'Tête Dure',                  emoji: '🛡️', desc: 'Esquiver au moins 5 fois le Feur de Cacabot grâce à l\'Anti-Feur' },
+    { id: 'laristocrate',      nom: 'L\'Aristocrate',             emoji: '👑', desc: 'Décrocher le bonus de la Couronne 12h' },
+    { id: 'enchainement-fatal',nom: 'Enchaînement Fatal',         emoji: '🪨', desc: 'Subir 3 malus consécutifs d\'affilée sans aucun répit' },
+    { id: 'silence-radio',     nom: 'Silence Radio',              emoji: '🤫', desc: 'Tirer et subir l\'Exclusion de 1 jour' },
+    { id: 'le-sauvetage',      nom: 'Le Sauvetage',               emoji: '📈', desc: 'Décrocher un bonus garanti grâce au système de Pity' },
+    { id: 'crise-quarantaine', nom: 'Crise de la Quarantaine',    emoji: '👶', desc: 'Cumuler le Mode Boomer et le Parler Bébé en même temps' },
+    { id: 'fan-carlos',        nom: 'Fan de Carlos',              emoji: '🎶', desc: 'Faire spawn PAPAYOU.mp3 3 fois dans la même journée' },
+    { id: 'seum-en-personne',  nom: 'Le seum en personne',        emoji: '🧻', desc: 'Avoir subi au moins 10 malus différents sur la roulette' },
+    { id: 'argent-epsys',      nom: 'De l\'argent !',             emoji: '💶', desc: 'Recevoir 5€ de la YouTube money d\'Epsys (0,015%)' }
 ];
 
 async function deverrouillerSucces(userId, achId, channel) {
@@ -1245,9 +1269,10 @@ const ROULETTE_EMOJIS_ALEATOIRES = ['😂','😍','🔥','💀','🎉','😭','�
 const ROULETTE_BOOMER_FINS = [
     '..... A BON ENTENDEUR ... 🤣🤣',
     '.... BISOUS A LA FAMILLE .. 🍷👍',
-    '.... PAUVRE FRANCE .... Amitiés .. 🇫🇷',
+    '.... PAUVRE FRANCE .... Amitiés ..',
     '... A MEDITER .... ☕🙋‍♂️',
-    '.... C ETAIT MIEUX AVANT ... 😡🤬'
+    '.... C ETAIT MIEUX AVANT ... 😡',
+    '...\nBisous   -Mamie'
 ];
 function finitParUnEmoji(texte) {
     return /\p{Extended_Pictographic}\uFE0F?$/u.test(texte.trim());
@@ -1719,6 +1744,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 });
         case 'malus-exclu-jour':
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 jour !`;
+            deverrouillerSucces(message.member.id, 'silence-radio', message.channel);
             annulerTiragesAGogo(message.member.id);
             if (estModo(message.member)) {
                 rouletteCooldowns.set(message.member.id, Date.now() + 24 * 60 * 60 * 1000);
@@ -1730,6 +1756,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                     rouletteTimeoutUntil.set(message.member.id, Date.now() + 24 * 60 * 60 * 1000);
                 });
         case 'malus-exclu-semaine':
+            deverrouillerSucces(message.member.id, 'survivant-enfer', message.channel);
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite l'exclusion de 1 semaine !`;
             annulerTiragesAGogo(message.member.id);
             if (estModo(message.member)) {
@@ -1742,6 +1769,12 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                     rouletteTimeoutUntil.set(message.member.id, Date.now() + 7 * 24 * 60 * 60 * 1000);
                 });
         case 'bonus-gif-ou-audio': {
+            const todayStr = new Date().toDateString();
+            const rec = roulettePapayouDaily.get(message.member.id) ?? { date: todayStr, count: 0 };
+            rec.count = rec.date === todayStr ? rec.count + 1 : 1;
+            rec.date = todayStr;
+            roulettePapayouDaily.set(message.member.id, rec);
+            if (rec.count >= 3) deverrouillerSucces(message.member.id, 'fan-carlos', message.channel);
             await message.channel.send({ files: ["./PAPAYOU.mp3"] }).catch(() => {});
             return `**${auteurNom}** a fait spawn un petit cadeau !`;
         }
@@ -1761,6 +1794,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
             return `**${auteurNom}** a gagné une commande Cacabot personnalisée !`;
         case 'bonus-epsys-5e':
+            deverrouillerSucces(message.member.id, 'argent-epsys', message.channel);
             await message.channel.send(`Bravo ! Tu as gagné 5€ de la YouTube Money d'Epsys ! <@436218312574107658> viendra te voir pour en discuter✨`);
             await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
             return `**${auteurNom}** a gagné 5€ !`;
@@ -1790,6 +1824,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             return `👑 **${auteurNom}** obtient le rôle **Élu·e de la Roulette** !`;
         }
                 case 'bonus-role-superieur': {
+            deverrouillerSucces(message.member.id, 'ascension-sociale', message.channel);
             let rangActuel = -1;
             for (let i = ROULETTE_RANGS.length - 1; i >= 0; i--) {
                 if (message.member.roles.cache.has(ROULETTE_RANGS[i].id)) { rangActuel = i; break; }
@@ -1803,6 +1838,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             return `**${auteurNom}** passe au rang **${prochainRang.label}** !`;
         }
         case 'bonus-legendaire': {
+            deverrouillerSucces(message.member.id, 'ascension-sociale', message.channel);
             const roleId = ROULETTE_RANGS[ROULETTE_RANGS.length - 1].id;
             if (message.member.roles.cache.has(roleId)) {
                 return `**${auteurNom}** est déjà **${ROULETTE_RANGS[ROULETTE_RANGS.length - 1].label}**, le rang max !\nChoisis un autre bonus à la place dans le menu ci-dessous.`;
@@ -1823,6 +1859,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             rouletteFreeRollUntil.set(message.member.id, Date.now() + 90 * 1000);
             return `⚡ **${auteurNom}** peut retenter sa chance sans cooldown pendant **1min30** !`;
         case 'malus-ban':
+            deverrouillerSucces(message.member.id, 'survivant-enfer', message.channel);
             if (estImmuniseRoulette(message.member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le ban définitif !`;
             annulerTiragesAGogo(message.member.id);
             if (estModo(message.member)) {
@@ -1833,6 +1870,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 () => message.member.ban({ reason: 'Roulette' }).catch(() => {}));
 
         case 'bonus-couronne':
+            deverrouillerSucces(message.member.id, 'laristocrate', message.channel);
             rouletteCouronneUntil.set(message.member.id, Date.now() + 12 * 60 * 60 * 1000);
             return `👑 **${auteurNom}** est officiellement respecté·e par Cacabot pendant **12h** !`;
         case 'malus-pseudo-lock-semaine': {
@@ -1929,6 +1967,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             }
             return `**${auteurNom}** est limité·e à **30 caractères** par message pendant **1h** !`;
         case 'special-tournee-generale':
+            deverrouillerSucces(message.member.id, 'tournee-patron', message.channel);
             rouletteTourneeJusquA = Date.now() + 60 * 1000;
             return `🍻 **${auteurNom}** paie sa tournée ! **Tous les cooldowns sont éteints pendant 1 minute**, tirez à volonté !`;
         case 'malus-leet': {
@@ -2408,7 +2447,46 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
 
     const membre = guild.members.cache.get(authorId);
     const auteurNom = membre?.displayName ?? 'Quelqu\'un';
+    // 📈 Succès : Le Sauvetage (pity atteinte)
+    const pityAvant = roulettePity.get(authorId) ?? { malus: 0, nuls: 0 };
+    if (pityAvant.malus >= ROULETTE_PITY_MALUS || pityAvant.nuls >= ROULETTE_PITY_NULS) {
+        deverrouillerSucces(authorId, 'le-sauvetage', channel);
+    }
+
     const outcomeId = tirerRoulette(authorId);
+
+    // ⚡ Succès : La Rafale (3 tirages pendant freeRoll)
+    if (enFreeRoll && (finFreeRoll && now < finFreeRoll)) {
+        const c = (rouletteFreeRollCompteur.get(authorId) || 0) + 1;
+        rouletteFreeRollCompteur.set(authorId, c);
+        if (c >= 3) deverrouillerSucces(authorId, 'la-rafale', channel);
+    } else {
+        rouletteFreeRollCompteur.delete(authorId);
+    }
+
+    // 🔥 Succès : L'Oiseau de Nuit (10 tirages pendant Happy Hour)
+    if (estHappyHour()) {
+        const todayH = new Date().toDateString();
+        const hh = rouletteHappyHourCompteur.get(authorId) ?? { date: todayH, count: 0 };
+        hh.count = hh.date === todayH ? hh.count + 1 : 1;
+        hh.date = todayH;
+        rouletteHappyHourCompteur.set(authorId, hh);
+        if (hh.count >= 10) deverrouillerSucces(authorId, 'oiseau-nuit', channel);
+    }
+
+    // 🪨 Succès : Enchaînement Fatal & 🧻 Le seum en personne
+    if (outcomeId.startsWith('malus-')) {
+        const cons = (rouletteMalusConsecutifs.get(authorId) || 0) + 1;
+        rouletteMalusConsecutifs.set(authorId, cons);
+        if (cons >= 3) deverrouillerSucces(authorId, 'enchainement-fatal', channel);
+
+        let diffSet = rouletteMalusDifferents.get(authorId);
+        if (!diffSet) { diffSet = new Set(); rouletteMalusDifferents.set(authorId, diffSet); }
+        diffSet.add(outcomeId);
+        if (diffSet.size >= 10) deverrouillerSucces(authorId, 'seum-en-personne', channel);
+    } else {
+        rouletteMalusConsecutifs.delete(authorId);
+    }
     const failIndex = outcomeId === 'aucun-resultat' ? Math.floor(Math.random() * ROULETTE_FAILS.length) : 0;
     const entryTiree = ROULETTE_TABLE.find(e => e.id === outcomeId);
     updateRouletteStats(authorId, outcomeId, entryTiree);
@@ -2436,6 +2514,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
             if (cibleChoisie && cibleChoisie.id !== authorId) {
                 cible = cibleChoisie;
                 cibleNom = cible.displayName;
+                deverrouillerSucces(authorId, 'sniper-impitoyable', channel);
                 prefixeRedirect = `🎯 **${auteurNom}** avait choisi de rediriger son malus, envoyé vers **${cibleNom}** !\n`;
                 pingRedirection = { id: cible.id, raison: " quelqu'un a choisi de te l'envoyer.." };
             }
@@ -2456,6 +2535,12 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
 
     const proxy = { member: cible, channel, guild };
     const texte = await appliquerEtDecrireResultat(outcomeId, proxy, cibleNom, failIndex);
+
+    // 👶 Succès : Crise de la Quarantaine (Boomer + Parler Bébé en même temps)
+    const tTransfo = rouletteTransfos.get(cible.id);
+    if (tTransfo?.boomer && tTransfo?.bebe && Date.now() < tTransfo.boomer && Date.now() < tTransfo.bebe) {
+        deverrouillerSucces(cible.id, 'crise-quarantaine', channel);
+    }
 
     // 🧪 Succès : Le Pharmacien (contre-poison déclenché)
     if (texte.includes('Miracle !')) {
@@ -3942,7 +4027,12 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     const strippedMsg = message.content.replace(/<@!?1503495713097519355>/g, '').trim();
     if (!isChannelMuted(message.channel.id) && message.content.includes('1503495713097519355') && strippedMsg.length === 0) {
         const finAf = rouletteAntiFeurUntil.get(message.author.id);
-        if (finAf && Date.now() < finAf) return message.react('🛡️').catch(() => {});
+        if (finAf && Date.now() < finAf) {
+            const d = (rouletteAntiFeurDodges.get(message.author.id) || 0) + 1;
+            rouletteAntiFeurDodges.set(message.author.id, d);
+            if (d >= 5) deverrouillerSucces(message.author.id, 'tete-dure', message.channel);
+            return message.react('🛡️').catch(() => {});
+        }
         return message.reply('Quoi ? (Feur)');
     }
     // Cheh
@@ -6372,6 +6462,9 @@ if (response?.needsRouletteStats) {
         if (response.trim().length === 0) return;
         const finAntiFeur = rouletteAntiFeurUntil.get(message.author.id);
         if (finAntiFeur && Date.now() < finAntiFeur) {
+            const d = (rouletteAntiFeurDodges.get(message.author.id) || 0) + 1;
+            rouletteAntiFeurDodges.set(message.author.id, d);
+            if (d >= 5) deverrouillerSucces(message.author.id, 'tete-dure', message.channel);
             return message.react('🛡️').catch(() => {});
         }
         const autoReplyMsg = await message.reply({ content: response });
