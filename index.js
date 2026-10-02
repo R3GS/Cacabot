@@ -1556,14 +1556,13 @@ function buildHelpHomeEmbed() {
     return new EmbedBuilder()
         .setColor(0x00ffff)
         .setDescription(
-            "# 💩 GUIDE DE CACABOT\n\n" +
-            "Hey ! Voici le manuel d'utilisation officiel de Cacabot.\n" +
+            "# GUIDE DE CACABOT\n\n" +
+            "Voici le manuel d'utilisation de <@1503495713097519355>.\n" +
             "Choisis une catégorie dans le menu ci-dessous pour afficher les commandes correspondantes !\n\n" +
             "🔥・**À LA UNE EN CE MOMENT :**\n" +
             "-# 🎰 `!roulette` | `!rlt` — La fameuse roulette qui te fait gagner des trucs... ou pas. → <#1553954760900608091>\n\n" +
             "💡・**ASTUCE :**\n" +
             "-# Tu as une idée d'amélioration pour le bot ou le serveur ? Envoie `!suggestion [ton idée]` dans le salon <#720079866199801937>\n\n" +
-            "---\n\n" +
             "## **__CATÉGORIES DISPONIBLES :__**"
         )
         .addFields(
