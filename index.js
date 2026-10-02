@@ -1561,20 +1561,24 @@ function buildHelpHomeEmbed() {
             "Hey ! Voici le manuel d'utilisation officiel de Cacabot.\n" +
             "Choisis une catégorie dans le menu ci-dessous pour afficher les commandes correspondantes !\n\n" +
             "🔥・**À LA UNE EN CE MOMENT :**\n" +
-            "-# 🎰 `!roulette` | `!rlt` — La fameuse roulette qui te fait gagner des trucs... ou pas. → <#1553954760900608091>\n" +
+            "-# 🎰 `!roulette` | `!rlt` — La fameuse roulette qui te fait gagner des trucs... ou pas. → <#1553954760900608091>\n\n" +
             "💡・**ASTUCE :**\n" +
             "-# Tu as une idée d'amélioration pour le bot ou le serveur ? Envoie `!suggestion [ton idée]` dans le salon <#720079866199801937>\n" +
-            "## **__CATÉGORIES DISPONIBLES :__**\n\n" +
-            "### 💥・Interactions & Social\n" +
-            "Interagis, clashe, réagis ou amuse-toi avec les autres membres du serveur.\n" +
-            "### 🔮・Jeux, Hasard & Destin\n" +
-            "La roulette, le criminel du jour, tes prédictions d'avenir et jeux de hasard.\n" +
-            "### 💬・Salons & Vie du Serveur\n" +
-            "Le verdict Top Chef, les questions du soir, les dilemmes et anniversaires.\n" +
-            "### 📊・Stats & Utilitaires\n" +
-            "Classements d'activité, profils, avatar, météo, sessions pomodoro et serveur.\n" +
-            "### 🤖・Cacabot & Infos\n" +
-            "Commandes YouTube, état du bot, latence et gestion de Cacabot."
+            "## **__CATÉGORIES DISPONIBLES :__**"
+        )
+        .addFields(
+            // Ligne 1 (2 par 2)
+            { name: '💥・Interactions & Social', value: 'Interagis, clashe, réagis ou amuse-toi avec les membres.', inline: true },
+            { name: '🔮・Jeux, Hasard & Destin', value: 'La roulette, le criminel du jour, prédictions et hasard.', inline: true },
+            { name: '\u200b', value: '\u200b', inline: true }, // Espace invisible pour forcer les 2 colonnes sur PC
+
+            // Ligne 2 (2 par 2)
+            { name: '💬・Salons & Vie du Serveur', value: 'Le verdict Top Chef, questions du soir, choix et anniversaires.', inline: true },
+            { name: '📊・Stats & Utilitaires', value: 'Classements, profils, avatar, météo, pomodoro et serveur.', inline: true },
+            { name: '\u200b', value: '\u200b', inline: true }, // Espace invisible
+
+            // Ligne 3 (Pleine largeur en bas)
+            { name: '🤖・Cacabot & Infos', value: 'Commandes YouTube, état du bot, latence et gestion de Cacabot.', inline: false }
         );
 }
 
@@ -1642,12 +1646,12 @@ function buildHelpCategoryEmbed(category) {
                 "🎰 `!roulette` | `!rlt` — Lancer un tirage sur la Roulette Regaïenne\n" +
                 "🚨 `!wanted` — Consulter l'avis de recherche du criminel du jour\n" +
                 "🔮 `!destin` — Découvrir ta prophétie personnalisée\n" +
-                "🐾 `!animal` [membre] — Retrouve ton animal spirituel (+ de 7000 combinaisons)\n" +
+                "🐕 `!animal` [membre] — Retrouve ton animal spirituel (+ de 7000 combinaisons)\n" +
                 "🪙 `!flip` — Jouer à pile ou face (solo ou en duel)\n" +
                 "🤣 `!blague` — Blagues en 3 catégories (Soft, Classique, Noir)\n" +
                 "🪐 `!horoscope` — L'oracle cosmique du jour selon Cacabot\n" +
                 "👔 `!epsys` — Envoie un GIF aléatoire d'Epsys\n" +
-                "🐒 `!sylvain` — Singe fort ensemble"
+                "🐒 `!sylvain` — Singes forts ensemble"
             );
     }
 
@@ -1659,7 +1663,7 @@ function buildHelpCategoryEmbed(category) {
                 "👨‍🍳 `!topchef` — Note et critique un repas dans <#1489096303508979833> sur 20\n" +
                 "💬 `!question` — Lance une question de discussion parmi 6 thèmes\n" +
                 "⚖️ `!choix [x] ou [y]` — Laisse Cacabot trancher ton dilemme\n" +
-                "🎂 `!anniversaire` — Affiche les commandes relatives aux anniversaires du serveur\n" +
+                "🎂 `!anniversaire` — Les commandes relatives aux anniversaires du serveur\n" +
                 "💡 `!suggestion [...]` — Soumettre une idée dans <#720079866199801937>"
             );
     }
@@ -1671,8 +1675,8 @@ function buildHelpCategoryEmbed(category) {
                 "Statistiques du serveur et outils pratiques au quotidien :\n\n" +
                 "🏆 `!top` — Classement des membres les plus actif.ves (ever)\n" +
                 "📈 `!actif` — Membres les plus actif.ves du jour, de la semaine et du mois\n" +
-                "🪪 `!profil` [membre] — Montre une fiche détaillée et les statistiques d'un.e membre\n" +
-                "🖼️ `!avatar` [membre] — Affiche la photo de profil de quelqu'un en grand format\n" +
+                "🪪 `!profil` [membre] — Montre une fiche détaillée et les stats d'un.e membre\n" +
+                "🖼️ `!avatar` [membre] — Affiche la pdp de quelqu'un en grand format\n" +
                 "🏰 `!serveur` — Informations, statistiques et niveau de boost du serveur\n" +
                 "⛅ `!météo [ville]` — Météo en direct, température ressentie et vent\n" +
                 "🍅 `!pomodoro` — Lancer une session de travail minutée (travail + pause)\n" +
