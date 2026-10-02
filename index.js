@@ -1561,19 +1561,19 @@ function buildHelpHomeEmbed() {
             "Hey ! Voici le manuel d'utilisation officiel de Cacabot.\n" +
             "Choisis une catégorie dans le menu ci-dessous pour afficher les commandes correspondantes !\n\n" +
             "🔥 **À LA UNE EN CE MOMENT :**\n" +
-            "-# 🎰 `!roulette` | `!rlt` — La fameuse roulette qui te fait gagner des trucs... ou pas.\n\n" +
+            "-# 🎰 `!roulette` | `!rlt` — La fameuse roulette qui te fait gagner des trucs... ou pas. → <#1553954760900608091>\n\n" +
             "💡 **ASTUCE :**\n" +
             "-# Tu as une idée d'amélioration pour le bot ou le serveur ? Envoie `!suggestion [ton idée]` dans le salon <#720079866199801937> !\n\n" +
-            "###✨ **CATÉGORIES DISPONIBLES :**\n\n" +
-            "## 💥・Interactions & Social\n" +
+            "## ✨ **CATÉGORIES DISPONIBLES :**\n\n" +
+            "### 💥・Interactions & Social\n" +
             "*Interagis, clashe, réagis ou amuse-toi avec les autres membres du serveur.*\n" +
-            "## 🔮・Jeux, Hasard & Destin\n" +
+            "### 🔮・Jeux, Hasard & Destin\n" +
             "*La roulette, le criminel du jour, tes prédictions d'avenir et jeux de hasard.*\n" +
-            "## 🍕・Salons & Vie du Serveur\n" +
+            "### 🍕・Salons & Vie du Serveur\n" +
             "*Le verdict Top Chef, les questions du soir, les dilemmes et anniversaires.*\n" +
-            "## 📊・Stats & Utilitaires\n" +
+            "### 📊・Stats & Utilitaires\n" +
             "*Classements d'activité, profils, avatar, météo, sessions pomodoro et serveur.*\n" +
-            "## 🤖・Cacabot & Infos\n" +
+            "### 🤖・Cacabot & Infos\n" +
             "*Commandes YouTube, état du bot, latence et gestion de Cacabot.*"
         );
 }
