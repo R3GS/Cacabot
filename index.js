@@ -6242,8 +6242,8 @@ if (response?.needsRouletteStats) {
         const embed = new EmbedBuilder()
             .setColor(0xe67e22)
             .setTitle(`👨‍🍳 Le Verdict Top Chef pour ${nom}`)
-            .setDescription(`> ${phrase}`)
-            .setFooter({ text: 'Cacabot Critique Gastronomique • Salon Food' });
+            .setDescription(`${phrase}`)
+            .setFooter({ text: '- Cacabot Critique Gastronomique' });
 
         return message.reply({ embeds: [embed] });
     }
