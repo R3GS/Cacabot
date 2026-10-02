@@ -1564,7 +1564,7 @@ function buildHelpHomeEmbed() {
             "-# 🎰 `!roulette` | `!rlt` — La fameuse roulette qui te fait gagner des trucs... ou pas. → <#1553954760900608091>\n" +
             "💡・**ASTUCE :**\n" +
             "-# Tu as une idée d'amélioration pour le bot ou le serveur ? Envoie `!suggestion [ton idée]` dans le salon <#720079866199801937>\n" +
-            "## ✨ **__CATÉGORIES DISPONIBLES :__**\n\n" +
+            "## **__CATÉGORIES DISPONIBLES :__**\n\n" +
             "### 💥・Interactions & Social\n" +
             "Interagis, clashe, réagis ou amuse-toi avec les autres membres du serveur.\n" +
             "### 🔮・Jeux, Hasard & Destin\n" +
@@ -1612,91 +1612,87 @@ function buildHelpCategoryEmbed(category) {
 
     if (category === 'interact') {
         return embed.setColor(0xffdc5d)
-            .setTitle('🎭 Interactions & Social')
-            .setDescription('Toutes les commandes pour interagir avec les membres du serveur :\n\n' +
-                '• `!kiss` / `!bisou` [@membre] — Embrasser un·e membre\n' +
-                '• `!hug` / `!calin` [@membre] — Faire un câlin réconfortant\n' +
-                '• `!danse` / `!dance` [@membre] — Danser en solo ou à deux\n' +
-                '• `!insult` [@membre] — Insulter gratuitement quelqu\'un\n' +
-                '• `!punch` / `!frappe` [@membre] — Frapper un·e membre\n' +
-                '• `!bang` / `!tir` [@membre] — Tirer sur un·e membre\n' +
-                '• `!rizz` [@membre] — Tenter de séduire un·e membre\n' +
-                '• `!run` / `!court` [@membre] — Prendre la fuite\n' +
-                '• `!bait` [@membre] — Ragebait un·e membre\n' +
-                '• `!explode` / `!explose` — Exploser spontanément\n' +
-                '• `!die` [@membre] — Mourir (ou à cause de quelqu\'un)\n' +
-                '• `!ban` [@membre] — Bannissement symbolique avec GIF\n' +
-                '• `!palaref` / `!pref` [@membre] — Quand tu n\'as pas la ref\n' +
-                '• `!jailaref` / `!glaref` [@membre] — Quand tu as la ref\n' +
-                '• `!cry` / `!pleure` [@membre] — Pleurer en solo ou avec un proche\n' +
-                '• `!rire` — Partager une bonne barre de rire'
+            .setTitle('💥  Interactions & Social')
+            .setDescription(
+                "Toutes les commandes pour interagir, clasher ou réagir avec les membres :\n\n" +
+                "💋 `!kiss` / `!bisou` [membre] — Embrasser un·e membre\n" +
+                "🫂 `!hug` / `!calin` [membre] — Faire un câlin réconfortant\n" +
+                "💃 `!danse` / `!dance` [membre] — S'ambiancer en solo ou à deux\n" +
+                "🗯️ `!insult` [membre] — Insulter gratuitement quelqu'un\n" +
+                "🥊 `!punch` / `!frappe` [membre] — Frapper un·e membre\n" +
+                "🔫 `!bang` / `!tir` / `!pan` [membre] — Tirer sur un·e membre\n" +
+                "🗿 `!rizz` [membre] — Tenter de charmer un·e membre\n" +
+                "🏃 `!run` / `!court` [membre] — Prendre la fuite\n" +
+                "🎣 `!bait` [membre] — Ragebait un·e membre\n" +
+                "💥 `!explode` / `!explose` — Exploser\n" +
+                "☠️ `!die` [membre] — Mourir (pour rien ou à cause de quelqu'un)\n" +
+                "🔨 `!ban` [membre] — Pour bannir des gens (pour de faux hein)\n" +
+                "😎 `!jailaref` / `!glaref` [membre] — Quand t'as la ref\n" +
+                "😐 `!palaref` / `!pref` [membre] — Quand t'as pas la ref\n" +
+                "😭 `!cry` / `!pleure` [membre] — Pleurer en solo ou avec quelqu'un\n" +
+                "😆 `!rire` — Se taper une bonne barre de rire"
             );
     }
 
     if (category === 'jeux') {
         return embed.setColor(0xffd20a)
-            .setTitle('🎰 Jeux, Hasard & Destin')
-            .setDescription('Tente ta chance et défie le hasard :\n\n' +
-                '• `!roulette` / `!rlt` — Lancer un tirage sur la Roulette Regaïenne\n' +
-                '• `!rlt go` — Tirage roulette instantané sans passer par l\'écran d\'accueil\n' +
-                '• `!rltstate` [membre] — Voir les effets et malus actifs\n' +
-                '• `!rltstats` [membre] — Voir les stats complètes et les succès\n' +
-                '• `!wanted` — Consulter l\'avis de recherche du criminel du jour\n' +
-                '• `!destin` — Découvre ta prophétie personnalisée\n' +
-                '• `!animal` [membre] — Devine ton animal spirituel (+ de 7000 combos)\n' +
-                '• `!flip` — Jouer à pile ou face (en solo ou en duel de pari)\n' +
-                '• `!blague` — Lance une blague (Soft, Classique ou Humour noir)\n' +
-                '• `!horoscope` — L\'oracle cosmique du jour selon Cacabot\n' +
-                '• `!epsys` — Envoie un GIF aléatoire d\'Epsys\n' +
-                '• `!sylvain` — Singe fort ensemble'
+            .setTitle('🔮  Jeux, Hasard & Destin')
+            .setDescription(
+                "Tente ta chance, défie le destin et découvre les prophéties :\n\n" +
+                "🎰 `!roulette` | `!rlt` — Lancer un tirage sur la Roulette Regaïenne\n" +
+                "🚨 `!wanted` — Consulter l'avis de recherche du criminel du jour\n" +
+                "🔮 `!destin` — Découvrir ta prophétie personnalisée\n" +
+                "🐾 `!animal` [membre] — Retrouve ton animal spirituel (+ de 7000 combinaisons)\n" +
+                "🪙 `!flip` — Jouer à pile ou face (solo ou en duel)\n" +
+                "🤣 `!blague` — Blagues en 3 catégories (Soft, Classique, Noir)\n" +
+                "🪐 `!horoscope` — L'oracle cosmique du jour selon Cacabot\n" +
+                "👔 `!epsys` — Envoie un GIF aléatoire d'Epsys\n" +
+                "🐒 `!sylvain` — Singe fort ensemble"
             );
     }
 
     if (category === 'serveur') {
         return embed.setColor(0xe67e22)
-            .setTitle('🍽️ Salons & Vie du Serveur')
-            .setDescription('Commandes liées à la vie communautaire et aux salons dédiés :\n\n' +
-                '• `!topchef` — Note et critique ton plat dans <#food> sur 20\n' +
-                '• `!question` — Lance une question de discussion parmi 6 thèmes\n' +
-                '• `!choix [option1] ou [option2]` — Demande à Cacabot de trancher un dilemme\n' +
-                '• `!anniversaire set [JJ/MM]` — Enregistre ta date d\'anniversaire\n' +
-                '• `!anniversaire show` [membre] — Affiche un anniversaire\n' +
-                '• `!anniversaire list` — Liste tous les anniversaires du serveur\n' +
-                '• `!anniversaire next` — Affiche le prochain anniversaire à fêter\n' +
-                '• `!anniversaire remove` — Supprime ton anniversaire enregistré\n' +
-                '• `!suggestion [ton idée]` — Dépose une proposition dans <#720079866199801937>'
+            .setTitle('🍕  Salons & Vie du Serveur')
+            .setDescription(
+                "Commandes liées à la vie communautaire et aux salons dédiés :\n\n" +
+                "👨‍🍳 `!topchef` — Note et critique un repas dans <#1489096303508979833> sur 20\n" +
+                "💬 `!question` — Lance une question de discussion parmi 6 thèmes\n" +
+                "⚖️ `!choix [x] ou [y]` — Laisse Cacabot trancher ton dilemme\n" +
+                "🎂 `!anniversaire` — Affiche les commandes relatives aux anniversaires du serveur\n" +
+                "💡 `!suggestion [...]` — Soumettre une idée dans <#720079866199801937>"
             );
     }
 
     if (category === 'util') {
         return embed.setColor(0x3498db)
-            .setTitle('📊 Stats & Utilitaires')
-            .setDescription('Statistiques du serveur et outils pratiques au quotidien :\n\n' +
-                '• `!top` — Classement des 10 membres les plus actifs (tous temps)\n' +
-                '• `!actif` — Membres les plus actifs du jour, de la semaine et du mois\n' +
-                '• `!profil` [membre] — Affiche la fiche détaillée d\'un membre\n' +
-                '• `!avatar` [membre] — Affiche la photo de profil en haute résolution\n' +
-                '• `!serveur` — Affiche toutes les infos et statistiques du serveur\n' +
-                '• `!météo [ville]` — Météo en temps réel, ressenti et vent\n' +
-                '• `!pomodoro` — Lance une session de travail minutée (travail + pause)\n' +
-                '• `!pomodoro stop` — Arrête la session pomodoro en cours\n' +
-                '• `!rappel [durée] [message]` — Programme un rappel (ex : `!rappel 30min réviser`)\n' +
-                '• `!rappel list` / `remove` — Gérer tes rappels en cours\n' +
-                '• `!aternos` — Affiche l\'IP du serveur Minecraft de Regaïa\n' +
-                '• `!prune [X]` — Supprime les X derniers messages (Modos uniquement)'
+            .setTitle('📊  Stats & Utilitaires')
+            .setDescription(
+                "Statistiques du serveur et outils pratiques au quotidien :\n\n" +
+                "🏆 `!top` — Classement des membres les plus actif.ves (ever)\n" +
+                "📈 `!actif` — Membres les plus actif.ves du jour, de la semaine et du mois\n" +
+                "🪪 `!profil` [membre] — Montre une fiche détaillée et les statistiques d'un.e membre\n" +
+                "🖼️ `!avatar` [membre] — Affiche la photo de profil de quelqu'un en grand format\n" +
+                "🏰 `!serveur` — Informations, statistiques et niveau de boost du serveur\n" +
+                "⛅ `!météo [ville]` — Météo en direct, température ressentie et vent\n" +
+                "🍅 `!pomodoro` — Lancer une session de travail minutée (travail + pause)\n" +
+                "⏰ `!rappel [durée] [message]` — Programmer un rappel (ex : `!rappel 30min acheter du pain`)\n" +
+                "📋 `!rappel list` / `remove` — Consulter ou supprimer tes rappels actifs\n" +
+                "⛏️ `!aternos` — Affiche l'adresse IP du serveur Minecraft de Regaïa"
             );
     }
 
     if (category === 'cacabot') {
         return embed.setColor(0x5865f2)
-            .setTitle('🤖 Cacabot & Infos')
-            .setDescription('Commandes relatives au bot et à YouTube :\n\n' +
-                '• `!botinfo` / `!about` — Présentation, version, uptime et créatrices\n' +
-                '• `!ping` — Mesure la latence du bot et du WebSocket Discord\n' +
-                '• `!stop` / `!unstop` — Faire taire Cacabot pendant 1h (ou le réactiver)\n' +
-                '• `!youtube [recherche]` — Recherche et prévisualise des vidéos YouTube\n' +
-                '• `!last [chaîne]` — Affiche la toute dernière vidéo d\'une chaîne\n' +
-                '• `!stats [chaîne]` — Statistiques complètes d\'une chaîne YouTube'
+            .setTitle('🤖  Cacabot & Infos')
+            .setDescription(
+                "Commandes relatives au bot et à YouTube :\n\n" +
+                "🤖 `!botinfo` | `!about` — Fiche détaillée, version et crédits de Cacabot\n" +
+                "🏓 `!ping` — Mesure la latence du bot\n" +
+                "🤫 `!stop` / `!unstop` — Faire taire Cacabot pendant 1h (ou le faire revenir)\n" +
+                "🔎 `!youtube [recherche]` — Rechercher et prévisualiser des vidéos YouTube\n" +
+                "🎬 `!last [chaîne]` — Afficher la toute dernière vidéo publiée par une chaîne\n" +
+                "📊 `!stats [chaîne]` — Statistiques détaillées d'une chaîne YouTube"
             );
     }
 
