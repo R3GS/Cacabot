@@ -1221,7 +1221,7 @@ const ROULETTE_ACHIEVEMENTS = [
     { id: 'tournee-patron',    nom: 'C\'est ma tournée !',        emoji: '🍻', desc: 'Déclencher l\'événement rare de la Tournée générale (1/600)' },
     { id: 'survivant-enfer',   nom: 'Survivant.e de l\'Enfer',    emoji: '☠️', desc: 'Tirer l\'Exclusion d\'une semaine ou le Ban définitif' },
     { id: 'ascension-sociale', nom: 'L\'Ascension Sociale',       emoji: '👑', desc: 'Monter d\'un rang de Regaïen ou toucher Regaïen légendaire' },
-    { id: 'la-rafale',         nom: 'Rafale',                     emoji: '⚡', desc: 'Effectuer au moins 3 tirages pendant un seul Tirage à volonté' },
+    { id: 'jour-de-gloire',    nom: 'Jour de Gloire',             emoji: '🎂', desc: 'Obtenir un bonus sur la roulette le jour de son anniversaire' },
     { id: 'oiseau-nuit',       nom: 'Oiseau de Nuit',             emoji: '🔥', desc: 'Effectuer au moins 10 tirages pendant une session d\'Happy Hour' },
     { id: 'sniper-impitoyable',nom: 'Sniper',                     emoji: '🎯', desc: 'Rediriger avec succès un malus avec la Redirection au choix' },
     { id: 'tete-dure',         nom: 'Tête Dure',                  emoji: '🛡️', desc: 'Esquiver au moins 5 fois le Feur de Cacabot grâce à l\'Anti-Feur' },
@@ -2841,15 +2841,6 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
 
     const outcomeId = tirerRoulette(authorId, guild?.id);
 
-    // ⚡ Succès : La Rafale (3 tirages pendant freeRoll)
-    if (enFreeRoll && (finFreeRoll && now < finFreeRoll)) {
-        const c = (rouletteFreeRollCompteur.get(authorId) || 0) + 1;
-        rouletteFreeRollCompteur.set(authorId, c);
-        if (c >= 3) deverrouillerSucces(authorId, 'la-rafale', channel);
-    } else {
-        rouletteFreeRollCompteur.delete(authorId);
-    }
-
     // 🔥 Succès : L'Oiseau de Nuit (10 tirages pendant Happy Hour)
     if (estHappyHour()) {
         const todayH = new Date().toDateString();
@@ -2879,6 +2870,11 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
     updateRouletteStats(authorId, outcomeId, entryTiree);
     envoyerHallOfFame(guild, membre, entryTiree).catch(() => {});
     verifierRoleGamblingAddict(membre).catch(() => {});
+
+    // 🎂 Succès : Jour de Gloire (bonus décroché le jour de son anniversaire)
+    if (entryTiree?.type === 'bonus' && estAnniversaireAujourdhui(guild?.id, authorId)) {
+        deverrouillerSucces(authorId, 'jour-de-gloire', channel);
+    }
     let cible = membre;
     let cibleNom = auteurNom;
     let prefixeRedirect = '';
