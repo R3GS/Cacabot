@@ -29,6 +29,7 @@ let dailyData = {};
 let weeklyData = {};
 let monthlyData = {};
 let youtubeWatchData = {};
+let reactionRolesData = {}; // messageId -> { channelId, roles: { emojiKey: roleId } }
 let donneesChargees = false;
 
 async function loadAll() {
@@ -44,6 +45,7 @@ async function loadAll() {
         weeklyData = json.record.weekly ?? {};
         monthlyData = json.record.monthly ?? {};
         youtubeWatchData = json.record.youtubeWatch ?? {};
+        reactionRolesData = json.record.reactionRoles ?? {};
 
         for (const [nom, map] of Object.entries(ROULETTE_ETATS)) {
             map.clear();
@@ -69,6 +71,7 @@ async function saveAll() {
             body: JSON.stringify({
                 messages: topData.messages, birthdays: birthdayData.birthdays, birthdayChannels: birthdayData.channels,
                 daily: dailyData, weekly: weeklyData, monthly: monthlyData, youtubeWatch: youtubeWatchData,
+                reactionRoles: reactionRolesData,
                 roulette: Object.fromEntries(
                     Object.entries(ROULETTE_ETATS).map(([nom, map]) => [nom, Object.fromEntries(map)])
                 )
@@ -150,6 +153,7 @@ async function checkBirthdays() {
 const {
     Client,
     GatewayIntentBits,
+    Partials,
     EmbedBuilder,
     ActionRowBuilder,
     StringSelectMenuBuilder,
@@ -184,7 +188,7 @@ function parseEmbedColor(colorStr) {
     return 0x5865f2;
 }
 
-function buildEmbedModal() {
+function buildEmbedModal(existingData = null) {
     const modal = new ModalBuilder()
         .setCustomId('embed_builder_modal')
         .setTitle("Créateur d'Embed");
@@ -195,6 +199,7 @@ function buildEmbedModal() {
         .setStyle(TextInputStyle.Short)
         .setPlaceholder("Ex : Annonce importante")
         .setRequired(false);
+    if (existingData?.titre) titleInput.setValue(existingData.titre);
 
     const descInput = new TextInputBuilder()
         .setCustomId('embed_desc')
@@ -202,6 +207,7 @@ function buildEmbedModal() {
         .setStyle(TextInputStyle.Paragraph)
         .setPlaceholder("Le texte principal de ton embed...")
         .setRequired(true);
+    if (existingData?.desc) descInput.setValue(existingData.desc);
 
     const colorInput = new TextInputBuilder()
         .setCustomId('embed_color')
@@ -209,6 +215,7 @@ function buildEmbedModal() {
         .setStyle(TextInputStyle.Short)
         .setPlaceholder("Ex : #ff0000 ou bleu, rouge, or, vert, rose...")
         .setRequired(false);
+    if (existingData?.couleurRaw) colorInput.setValue(existingData.couleurRaw);
 
     const imageInput = new TextInputBuilder()
         .setCustomId('embed_image')
@@ -216,6 +223,7 @@ function buildEmbedModal() {
         .setStyle(TextInputStyle.Short)
         .setPlaceholder("https://exemple.com/image.png")
         .setRequired(false);
+    if (existingData?.image) imageInput.setValue(existingData.image);
 
     const footerInput = new TextInputBuilder()
         .setCustomId('embed_footer')
@@ -223,6 +231,7 @@ function buildEmbedModal() {
         .setStyle(TextInputStyle.Short)
         .setPlaceholder("Ex : L'équipe de Regaïa")
         .setRequired(false);
+    if (existingData?.footer) footerInput.setValue(existingData.footer);
 
     modal.addComponents(
         new ActionRowBuilder().addComponents(titleInput),
@@ -247,7 +256,8 @@ const client = new Client({
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.GuildMessageReactions
-    ]
+    ],
+    partials: [Partials.Message, Partials.Channel, Partials.Reaction]
 });
 
 // =========================
@@ -946,6 +956,10 @@ if (command === "!choix") {
 
     if (command === "!embed") {
         return { needsEmbed: true };
+    }
+
+    if (command === "!rolereac" || command === "!rr") {
+        return { needsRoleReac: true };
     }
 
     if (command === "!rappel") {
@@ -7004,6 +7018,79 @@ if (response?.needsRouletteAchievements) {
         return message.reply({ content: "Clique ci-dessous pour ouvrir le créateur d'embed :", components: [row] });
     }
 
+    // !rolereac (Epsys-only)
+    if (response?.needsRoleReac) {
+        if (message.author.id !== '436218312574107658') return;
+        const args = message.content.trim().split(/\s+/);
+
+        if (args[1]?.toLowerCase() === 'list') {
+            const listMsg = Object.entries(reactionRolesData);
+            if (listMsg.length === 0) return message.reply("Aucun rôle réaction n'est configuré.");
+            const lignes = listMsg.map(([mId, data]) => {
+                const rolesLignes = Object.entries(data.roles).map(([em, rId]) => `• ${em} ➔ <@&${rId}>`).join('\n');
+                return `📍 Message: \`${mId}\` (dans <#${data.channelId}>) :\n${rolesLignes}`;
+            });
+            const embed = new EmbedBuilder().setColor(0x5865f2).setTitle('🎭 Rôles Réaction Actifs').setDescription(lignes.join('\n\n'));
+            return message.reply({ embeds: [embed] });
+        }
+
+        if (args[1]?.toLowerCase() === 'remove') {
+            const msgId = args[2];
+            const emojiStr = args[3];
+            if (!msgId || !emojiStr) return message.reply("Usage : `!rolereac remove [ID_message] [emoji]`");
+            if (!reactionRolesData[msgId] || !reactionRolesData[msgId].roles[emojiStr]) {
+                return message.reply("Ce rôle réaction n'existe pas sur ce message.");
+            }
+            delete reactionRolesData[msgId].roles[emojiStr];
+            if (Object.keys(reactionRolesData[msgId].roles).length === 0) delete reactionRolesData[msgId];
+            demanderSauvegarde();
+            return message.reply(`🗑️ Rôle réaction supprimé pour l'emoji ${emojiStr} sur le message \`${msgId}\`.`);
+        }
+
+        if (args.length < 4) {
+            return message.reply("Usage :\n• Ajouter : `!rolereac [ID_message] [emoji] [@rôle / ID_rôle]`\n• Retirer : `!rolereac remove [ID_message] [emoji]`\n• Liste : `!rolereac list`");
+        }
+
+        const msgId = args[1];
+        const emojiStr = args[2];
+        const roleArg = args[3];
+        const roleId = roleArg.replace(/<@&|>/g, '');
+        const role = message.guild?.roles.cache.get(roleId);
+        if (!role) return message.reply("Rôle introuvable ! Vérifie la mention ou l'ID.");
+
+        try {
+            let targetMsg = await message.channel.messages.fetch(msgId).catch(() => null);
+            let targetChannel = message.channel;
+
+            if (!targetMsg && message.guild) {
+                for (const ch of message.guild.channels.cache.values()) {
+                    if (ch.isTextBased()) {
+                        targetMsg = await ch.messages.fetch(msgId).catch(() => null);
+                        if (targetMsg) { targetChannel = ch; break; }
+                    }
+                }
+            }
+
+            if (!targetMsg) return message.reply("Message introuvable sur le serveur ! Vérifie l'ID.");
+
+            // Le bot réagit sous le message
+            await targetMsg.react(emojiStr).catch(() => {});
+
+            if (!reactionRolesData[msgId]) {
+                reactionRolesData[msgId] = { channelId: targetChannel.id, roles: {} };
+            }
+            reactionRolesData[msgId].roles[emojiStr] = role.id;
+            demanderSauvegarde();
+
+            await message.delete().catch(() => {});
+            const conf = await message.channel.send(`✅ Rôle réaction configuré : ${emojiStr} donnera le rôle **${role.name}** sur le message [clique ici](${targetMsg.url}) !`);
+            setTimeout(() => conf.delete().catch(() => {}), 6000);
+        } catch (err) {
+            return message.reply(`❌ Erreur : ${err.message}`);
+        }
+        return;
+    }
+
     // !rappel
     if (response?.needsRappel) {
         const args = message.content.trim().split(/\s+/);
@@ -7339,7 +7426,7 @@ try {
                 }
                 return;
             }
-            const embed = buildRoulettePresentationEmbed(interaction.user.id);
+            const embed = buildRoulettePresentationEmbed(interaction.user.id, interaction.guildId);
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId(`roulette_probas_pres_${interaction.user.id}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId(`roulette_tenter_${interaction.user.id}`).setLabel('🍀 Tenter sa chance').setStyle(ButtonStyle.Primary)
@@ -7907,7 +7994,7 @@ try {
         if (commandName === 'rltstate') {
             const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
             const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
-            return interaction.reply({ embeds: [buildRouletteStateEmbed(member)] });
+            return interaction.reply({ embeds: [buildRouletteStateEmbed(member, interaction.guildId)] });
         }
 
         // =========================
@@ -8561,6 +8648,13 @@ try {
         return interaction.showModal(buildEmbedModal());
     }
 
+    // Bouton pour retoucher l'embed pré-rempli
+    if (interaction.isButton() && interaction.customId === 'embed_edit_draft') {
+        if (interaction.user.id !== '436218312574107658') return;
+        const draft = embedDrafts.get(interaction.user.id);
+        return interaction.showModal(buildEmbedModal(draft));
+    }
+
     // Soumission du formulaire Modal (Aperçu)
     if (interaction.isModalSubmit() && interaction.customId === 'embed_builder_modal') {
         if (interaction.user.id !== '436218312574107658') return;
@@ -8579,12 +8673,17 @@ try {
         if (image && /^https?:\/\//i.test(image)) embedPreview.setImage(image);
         if (footer) embedPreview.setFooter({ text: footer });
 
-        embedDrafts.set(interaction.user.id, embedPreview);
+        embedDrafts.set(interaction.user.id, { titre, desc, couleurRaw, image, footer, embed: embedPreview });
 
         const channelSelect = new ChannelSelectMenuBuilder()
             .setCustomId('embed_send_channel')
             .setPlaceholder('Choisis le salon où envoyer cet embed...')
             .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement);
+
+        const editBtn = new ButtonBuilder()
+            .setCustomId('embed_edit_draft')
+            .setLabel('✏️ Modifier l\'embed')
+            .setStyle(ButtonStyle.Secondary);
 
         const cancelBtn = new ButtonBuilder()
             .setCustomId('embed_cancel_draft')
@@ -8592,14 +8691,16 @@ try {
             .setStyle(ButtonStyle.Danger);
 
         const rowSelect = new ActionRowBuilder().addComponents(channelSelect);
-        const rowCancel = new ActionRowBuilder().addComponents(cancelBtn);
+        const rowButtons = new ActionRowBuilder().addComponents(editBtn, cancelBtn);
 
-        return interaction.reply({
-            content: "👀 **Voici l'aperçu de ton embed :**\n*(Choisis le salon de destination ci-dessous pour l'envoyer au nom de Cacabot)*",
+        const previewData = {
+            content: "👀 **Voici l'aperçu de ton embed :**\n*(Choisis le salon ci-dessous, ou clique sur Modifier pour retoucher)*",
             embeds: [embedPreview],
-            components: [rowSelect, rowCancel],
-            ephemeral: true
-        });
+            components: [rowSelect, rowButtons]
+        };
+
+        if (interaction.isFromMessage()) return interaction.update(previewData);
+        return interaction.reply({ ...previewData, ephemeral: true });
     }
 
     // Sélection du salon de destination
@@ -8618,7 +8719,7 @@ try {
             return interaction.update({ content: "❌ Salon introuvable.", embeds: [], components: [] });
         }
 
-        await targetChannel.send({ embeds: [draft] }).catch(err => {
+        await targetChannel.send({ embeds: [draft.embed ?? draft] }).catch(err => {
             return interaction.update({ content: `❌ Erreur lors de l'envoi : ${err.message}`, embeds: [], components: [] });
         });
 
@@ -10621,9 +10722,49 @@ client.once('ready', async () => {
 //     LISTENER REACTIONS
 // =========================
 
+// Rôles réaction automatiques (Ajout du rôle)
 client.on('messageReactionAdd', async (reaction, user) => {
     if (user.bot) return;
-    if (reaction.emoji.name !== '\uD83D\uDD95' && reaction.emoji.name !== 'middle_finger') return;
+    if (reaction.partial) await reaction.fetch().catch(() => {});
+    if (reaction.message.partial) await reaction.message.fetch().catch(() => {});
+
+    const msgConfig = reactionRolesData[reaction.message.id];
+    if (!msgConfig) return;
+
+    const emojiKey = reaction.emoji.id ? `<:${reaction.emoji.name}:${reaction.emoji.id}>` : reaction.emoji.name;
+    const roleId = msgConfig.roles[emojiKey] || msgConfig.roles[reaction.emoji.name] || (reaction.emoji.id && msgConfig.roles[reaction.emoji.id]);
+
+    if (roleId) {
+        const member = reaction.message.guild?.members.cache.get(user.id) ?? await reaction.message.guild?.members.fetch(user.id).catch(() => null);
+        if (member && !member.roles.cache.has(roleId)) {
+            await member.roles.add(roleId).catch(err => console.error(`Erreur ajout rôle réaction:`, err.message));
+        }
+    }
+});
+
+// Rôles réaction automatiques (Retrait du rôle)
+client.on('messageReactionRemove', async (reaction, user) => {
+    if (user.bot) return;
+    if (reaction.partial) await reaction.fetch().catch(() => {});
+    if (reaction.message.partial) await reaction.message.fetch().catch(() => {});
+
+    const msgConfig = reactionRolesData[reaction.message.id];
+    if (!msgConfig) return;
+
+    const emojiKey = reaction.emoji.id ? `<:${reaction.emoji.name}:${reaction.emoji.id}>` : reaction.emoji.name;
+    const roleId = msgConfig.roles[emojiKey] || msgConfig.roles[reaction.emoji.name] || (reaction.emoji.id && msgConfig.roles[reaction.emoji.id]);
+
+    if (roleId) {
+        const member = reaction.message.guild?.members.cache.get(user.id) ?? await reaction.message.guild?.members.fetch(user.id).catch(() => null);
+        if (member && member.roles.cache.has(roleId)) {
+            await member.roles.remove(roleId).catch(err => console.error(`Erreur retrait rôle réaction:`, err.message));
+        }
+    }
+});
+
+client.on('messageReactionAdd', async (reaction, user) => {
+    if (user.bot) return;
+    if (reaction.emoji.name !== '🖕' && reaction.emoji.name !== 'middle_finger') return;
 
     const msg = reaction.message;
     if (msg.author.id !== client.user.id) return;
@@ -10740,12 +10881,19 @@ client.on('messageCreate', async (message) => {
             threadId: message.channel.isThread() ? message.channel.id : undefined,
             allowedMentions: { parse: [] }
         });
+        if (!client.webhookDeletedMessages) client.webhookDeletedMessages = new Set();
+        client.webhookDeletedMessages.add(message.id);
+        setTimeout(() => client.webhookDeletedMessages?.delete(message.id), 15000);
         await message.delete().catch(() => {});
     } catch (e) {}
 });
 
 // Détection des Ghost Pings
 client.on('messageDelete', async (message) => {
+    if (client.webhookDeletedMessages?.has(message.id)) {
+        client.webhookDeletedMessages.delete(message.id);
+        return;
+    }
     if (!message.guild || message.author?.bot) return;
     if (message.channel.id === MOD_CHANNEL_ID) return;
 
