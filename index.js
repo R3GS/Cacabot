@@ -944,6 +944,10 @@ if (command === "!choix") {
         return { needsEdit: true };
     }
 
+    if (command === "!embed") {
+        return { needsEmbed: true };
+    }
+
     if (command === "!rappel") {
         return { needsRappel: true };
     }
