@@ -1634,7 +1634,7 @@ function buildHelpCategoryEmbed(category) {
         return embed.setColor(0xffdc5d)
             .setTitle('💥  Interactions & Social')
             .setDescription(
-                "### 💖 Amour, Charme & Affection\n" +
+                "### 💖 __Amour, Charme & Affection :__\n" +
                 "💋 **`!kiss`** | **`!bisou`** `[membre]`\n" +
                 "-# Embrasser un·e membre (solo ou avec bouton pour embrasser en retour)\n" +
                 "🫂 **`!hug`** | **`!calin`** `[membre]`\n" +
@@ -1642,7 +1642,7 @@ function buildHelpCategoryEmbed(category) {
                 "🗿 **`!rizz`** `[membre]`\n" +
                 "-# Tenter de séduire un·e membre avec une technique douteuse\n\n" +
 
-                "### ⚔️ Bagarre, Clashes & Provoc\n" +
+                "### ⚔️ __Bagarre, Clashes & Provoc :__\n" +
                 "🥊 **`!punch`** | **`!frappe`** `[membre]`\n" +
                 "-# Mettre une grosse droite à quelqu'un (bouton riposte disponible)\n" +
                 "🔫 **`!bang`** | **`!tir`** `[membre]`\n" +
@@ -1654,7 +1654,7 @@ function buildHelpCategoryEmbed(category) {
                 "🔨 **`!ban`** `[membre]`\n" +
                 "-# Faussement bannir quelqu'un du serveur avec style\n\n" +
 
-                "### 🎭 Émotions & Délires\n" +
+                "### 🎭 __Émotions & Délires :__\n" +
                 "💃 **`!danse`** `[membre]`\n" +
                 "-# S'ambiancer sur le dancefloor en solo ou inviter quelqu'un\n" +
                 "😆 **`!rire`**\n" +
@@ -1668,7 +1668,7 @@ function buildHelpCategoryEmbed(category) {
                 "☠️ **`!die`** `[membre]`\n" +
                 "-# Mourir dans d'atroces souffrances (ou faire mourir un membre)\n\n" +
 
-                "### 🧠 Culture & Références\n" +
+                "### 🧠 __Culture & Références :__\n" +
                 "😎 **`!jailaref`** `[membre]`\n" +
                 "-# Flexer parce que tu as la référence\n" +
                 "😐 **`!palaref`** `[membre]`\n" +
@@ -1680,7 +1680,7 @@ function buildHelpCategoryEmbed(category) {
         return embed.setColor(0xffd20a)
             .setTitle('🔮  Jeux, Hasard & Destin')
             .setDescription(
-                "### 🎰 Roulette Regaïenne\n" +
+                "### 🎰 __Roulette Regaïenne :__\n" +
                 "🎲 **`!roulette`** | **`!rlt`** `(ou !rlt go)`\n" +
                 "-# Tenter sa chance sur la roulette !\n" +
                 "🎖️ **`!rltsucces`** `[membre]`\n" +
@@ -1690,7 +1690,7 @@ function buildHelpCategoryEmbed(category) {
                 "📈 **`!rltstats`** `[membre]`\n" +
                 "-# Voir l'historique complet des tirages, ratios et pire série\n\n" +
 
-                "### 🔮 Destinée & Hasard\n" +
+                "### 🔮 __Destinée & Hasard :__\n" +
                 "🔮 **`!destin`**\n" +
                 "-# Découvrir ta prophétie...\n" +
                 "🪐 **`!horoscope`**\n" +
@@ -1700,7 +1700,7 @@ function buildHelpCategoryEmbed(category) {
                 "🪙 **`!flip`**\n" +
                 "-# Jouer à pile ou face en solo ou lancer un vrai duel avec quelqu'un\n\n" +
 
-                "### 🤣 Fun & Délires\n" +
+                "### 🤣 __Fun & Délires :__\n" +
                 "🚨 **`!wanted`**\n" +
                 "-# Consulter l'avis de recherche et les preuves du criminel du jour\n" +
                 "🤣 **`!blague`**\n" +
@@ -1716,19 +1716,19 @@ function buildHelpCategoryEmbed(category) {
         return embed.setColor(0xe67e22)
             .setTitle('🍕  Salons & Vie du Serveur')
             .setDescription(
-                "### 🍽️ Salons Spécifiques\n" +
+                "### 🍽️ __Salons Spécifiques :__\n" +
                 "👨‍🍳 **`!topchef`**\n" +
                 "-# Note et critique un plat dans <#1489096303508979833> sur 20 (en réponse ou mention)\n" +
                 "💡 **`!suggestion`** `[ton idée]`\n" +
                 "-# Proposer une idée pour le serveur dans <#720079866199801937>\n\n" +
 
-                "### ⚖️ Choix & Discussions\n" +
+                "### ⚖️ __Choix & Discussions :__\n" +
                 "⚖️ **`!choix [x] ou [y]`**\n" +
                 "-# Laisse Cacabot trancher ton dilemme\n" +
                 "💬 **`!question`**\n" +
                 "-# Déclenche une question de débat du soir parmi 6 thématiques\n\n" +
 
-                "### 🎂 Anniversaires\n" +
+                "### 🎂 __Anniversaires :__\n" +
                 "🎂 **`!anniversaire`**\n" +
                 "-# Affiche toutes les commandes relatives aux anniversaires\n" +
                 "☑️ **`!anniversaire set [JJ/MM]`**\n" +
@@ -1742,7 +1742,7 @@ function buildHelpCategoryEmbed(category) {
         return embed.setColor(0x3498db)
             .setTitle('📊  Stats & Utilitaires')
             .setDescription(
-                "### 🏆 Classements & Membres\n" +
+                "### 🏆 __Classements & Membres :__\n" +
                 "🏆 **`!top`**\n" +
                 "-# Classement général des membres les plus actif.ves (historique global)\n" +
                 "📈 **`!actif`**\n" +
@@ -1752,7 +1752,7 @@ function buildHelpCategoryEmbed(category) {
                 "🖼️ **`!avatar`** `[membre]`\n" +
                 "-# Affiche la photo de profil d'un·e membre en grand format\n\n" +
 
-                "### 🛠️ Organisation & Productivité\n" +
+                "### 🛠️ __Organisation & Productivité :__\n" +
                 "🍅 **`!pomodoro`** `(ou !pomodoro stop)`\n" +
                 "-# Lancer une session de travail minutée interactive avec temps de pause\n" +
                 "⏰ **`!rappel [durée] [message]`**\n" +
@@ -1760,7 +1760,7 @@ function buildHelpCategoryEmbed(category) {
                 "📋 **`!rappel list`** | **`remove`**\n" +
                 "-# Voir ou annuler tes rappels en attente\n\n" +
 
-                "### 🌐 Infos & Autres\n" +
+                "### 🌐 __Infos & Autres :__\n" +
                 "🏰 **`!serveur`**\n" +
                 "-# Statistiques, niveau de boost et informations complètes sur Regaïa\n" +
                 "⛅ **`!météo [ville]`**\n" +
@@ -1774,7 +1774,7 @@ function buildHelpCategoryEmbed(category) {
         return embed.setColor(0xff0000)
             .setTitle('<:YouTube:1505457903585198151>  YouTube')
             .setDescription(
-                "### 🔎 Vidéos & Découverte\n" +
+                "### 🔎 __Vidéos & Découverte :__\n" +
                 "🔎 **`!youtube [recherche]`**\n" +
                 "-# Recherche de vidéos avec lecteur interactif, aperçu 16:9, vues, likes et coms\n" +
                 "🎬 **`!last [chaîne]`**\n" +
@@ -1788,13 +1788,13 @@ function buildHelpCategoryEmbed(category) {
         return embed.setColor(0x5865f2)
             .setTitle('🤖  Cacabot & Infos')
             .setDescription(
-                "### ℹ️ __À propos du Bot__\n" +
+                "### ℹ️ __À propos du Bot :__\n" +
                 "🤖 **`!botinfo`** | **`!about`**\n" +
                 "-# Version, uptime, nombre de messages envoyés et créatrices du bot\n" +
                 "🏓 **`!ping`**\n" +
                 "-# Teste la latence des réponses et du WebSocket Discord en direct\n\n" +
 
-                "### 💭 Gestion\n" +
+                "### 💭 __Gestion :__\n" +
                 "🤫 **`!stop`** | **`!unstop`**\n" +
                 "-# Endormir Cacabot pendant 1h sur le salon (ou le réveiller immédiatement)"
             );
