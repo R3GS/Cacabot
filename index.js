@@ -1788,7 +1788,7 @@ function buildHelpCategoryEmbed(category) {
         return embed.setColor(0x5865f2)
             .setTitle('🤖  Cacabot & Infos')
             .setDescription(
-                "### ℹ️ À propos du Bot\n" +
+                "### ℹ️ __À propos du Bot__\n" +
                 "🤖 **`!botinfo`** | **`!about`**\n" +
                 "-# Version, uptime, nombre de messages envoyés et créatrices du bot\n" +
                 "🏓 **`!ping`**\n" +
