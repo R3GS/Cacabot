@@ -1682,23 +1682,23 @@ function buildHelpCategoryEmbed(category) {
             .setDescription(
                 "### 🎰 Roulette Regaïenne\n" +
                 "🎲 **`!roulette`** | **`!rlt`** `(ou !rlt go)`\n" +
-                "-# Tenter sa chance sur la roulette (cooldown de 15 min, Happy Hour à 20h)\n" +
+                "-# Tenter sa chance sur la roulette !\n" +
                 "🎖️ **`!rltsucces`** `[membre]`\n" +
                 "-# Consulter tes 30 succès débloqués et ta progression\n" +
                 "📊 **`!rltstate`** `[membre]`\n" +
-                "-# Voir tous les bonus, malus et timers actuellement actifs sur un·e membre\n" +
+                "-# Voir tous les bonus, malus et cooldowns actuellement actifs sur un·e membre\n" +
                 "📈 **`!rltstats`** `[membre]`\n" +
                 "-# Voir l'historique complet des tirages, ratios et pire série\n\n" +
 
                 "### 🔮 Destinée & Hasard\n" +
                 "🔮 **`!destin`**\n" +
-                "-# Découvrir ta prophétie personnalisée complètement absurde\n" +
+                "-# Découvrir ta prophétie...\n" +
                 "🪐 **`!horoscope`**\n" +
-                "-# L'oracle cosmique du jour selon Cacabot pour chaque signe\n" +
+                "-# L'oracle cosmique du jour selon Cacabot\n" +
                 "🐕 **`!animal`** `[membre]`\n" +
-                "-# Révèle l'animal spirituel (+ de 7000 combinaisons)\n" +
+                "-# Révèle ton animal spirituel (+ de 7000 combinaisons)\n" +
                 "🪙 **`!flip`**\n" +
-                "-# Jouer à pile ou face en solo ou lancer un vrai duel avec pari\n\n" +
+                "-# Jouer à pile ou face en solo ou lancer un vrai duel avec quelqu'un\n\n" +
 
                 "### 🤣 Fun & Délires\n" +
                 "🚨 **`!wanted`**\n" +
@@ -1720,11 +1720,11 @@ function buildHelpCategoryEmbed(category) {
                 "👨‍🍳 **`!topchef`**\n" +
                 "-# Note et critique un plat dans <#1489096303508979833> sur 20 (en réponse ou mention)\n" +
                 "💡 **`!suggestion`** `[ton idée]`\n" +
-                "-# Proposer une idée dans <#720079866199801937> avec sondage de votes interactif\n\n" +
+                "-# Proposer une idée pour le serveur dans <#720079866199801937>\n\n" +
 
                 "### ⚖️ Choix & Discussions\n" +
                 "⚖️ **`!choix [x] ou [y]`**\n" +
-                "-# Laisse Cacabot trancher définitivement ton dilemme\n" +
+                "-# Laisse Cacabot trancher ton dilemme\n" +
                 "💬 **`!question`**\n" +
                 "-# Déclenche une question de débat du soir parmi 6 thématiques\n\n" +
 
@@ -1744,23 +1744,23 @@ function buildHelpCategoryEmbed(category) {
             .setDescription(
                 "### 🏆 Classements & Membres\n" +
                 "🏆 **`!top`**\n" +
-                "-# Classement général des membres les plus bavards (historique global)\n" +
+                "-# Classement général des membres les plus actif.ves (historique global)\n" +
                 "📈 **`!actif`**\n" +
-                "-# Podium interactif des plus actifs du Jour, de la Semaine et du Mois\n" +
+                "-# Podium interactif des plus actif.ves du Jour, de la Semaine et du Mois\n" +
                 "🪪 **`!profil`** `[membre]`\n" +
-                "-# Fiche d'identité détaillée (messages, date d'arrivée, anniversaire, rôles)\n" +
+                "-# Fiche détaillée de membre(messages, date d'arrivée, anniversaire, rôles)\n" +
                 "🖼️ **`!avatar`** `[membre]`\n" +
-                "-# Affiche la photo de profil d'un·e membre en taille maximale\n\n" +
+                "-# Affiche la photo de profil d'un·e membre en grand format\n\n" +
 
                 "### 🛠️ Organisation & Productivité\n" +
                 "🍅 **`!pomodoro`** `(ou !pomodoro stop)`\n" +
                 "-# Lancer une session de travail minutée interactive avec temps de pause\n" +
                 "⏰ **`!rappel [durée] [message]`**\n" +
-                "-# Te programmer un rappel privé (ex : `!rappel 30min sortir le chien`)\n" +
+                "-# Programmer un rappel perso (ex : `!rappel 30min acheter du pain`)\n" +
                 "📋 **`!rappel list`** | **`remove`**\n" +
                 "-# Voir ou annuler tes rappels en attente\n\n" +
 
-                "### 🌐 Infos & Utilitaires\n" +
+                "### 🌐 Infos & Autres\n" +
                 "🏰 **`!serveur`**\n" +
                 "-# Statistiques, niveau de boost et informations complètes sur Regaïa\n" +
                 "⛅ **`!météo [ville]`**\n" +
@@ -1777,9 +1777,9 @@ function buildHelpCategoryEmbed(category) {
                 "### 🔎 Vidéos & Découverte\n" +
                 "🔎 **`!youtube [recherche]`**\n" +
                 "-# Recherche de vidéos avec lecteur interactif, aperçu 16:9, vues, likes et coms\n" +
-                "🎬 **`!last [chaîne ou @handle]`**\n" +
+                "🎬 **`!last [chaîne]`**\n" +
                 "-# Affiche la toute dernière vidéo publiée par une chaîne en grand format\n" +
-                "📊 **`!stats [chaîne ou @handle]`**\n" +
+                "📊 **`!stats [chaîne]`**\n" +
                 "-# Fiche détaillée d'une chaîne (abonnés, vues cumulées, vidéos, date de création)"
             );
     }
