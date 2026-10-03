@@ -145,7 +145,10 @@ const {
     StringSelectMenuBuilder,
     ButtonBuilder,
     ChannelType,
-    ButtonStyle
+    ButtonStyle,
+    SlashCommandBuilder,
+    REST,
+    Routes
 } = require('discord.js');
 
 const { createCanvas, loadImage, registerFont } = require('canvas');
@@ -7141,6 +7144,138 @@ if (response?.needsRouletteAchievements) {
 client.on('interactionCreate', async (interaction) => {
 try {
 
+    // =========================
+    //   COMMANDES SLASH (/)
+    // =========================
+    if (interaction.isChatInputCommand()) {
+        const { commandName } = interaction;
+
+        if (commandName === 'help') {
+            const embed = buildHelpHomeEmbed();
+            const menuRow = buildHelpMenu(interaction.user.id, null);
+            const navRow = buildHelpNavRow(interaction.user.id, null);
+            return interaction.reply({ embeds: [embed], components: [menuRow, navRow] });
+        }
+
+        if (commandName === 'roulette') {
+            const lancerDirect = interaction.options.getBoolean('lancer') ?? false;
+            if (lancerDirect) {
+                await interaction.deferReply();
+                const resultat = await tirerEtConstruireResultatRoulette(interaction.user.id, interaction.guild, interaction.channel);
+                if (resultat.cooldown) {
+                    const notifRow = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId('roulette_notif').setLabel('🔔 Me prévenir').setStyle(ButtonStyle.Secondary)
+                    );
+                    return interaction.editReply({ content: `⏳ Attends la fin du cooldown avant de relancer un tirage ! Il te reste **${resultat.reste} min**.`, components: [notifRow] });
+                }
+                const envoye = await interaction.editReply({ embeds: resultat.embeds, components: resultat.components });
+                await envoyerPingRedirection(interaction.channel, resultat);
+                memoriserResultatRoulette(envoye.id, resultat.embeds[0]);
+                if (resultat.attenteChoix) rouletteChoixEnAttente.add(envoye.id);
+                if (resultat.vote) await demarrerVoteRoulette(envoye, resultat.vote);
+                if (resultat.differe) {
+                    setTimeout(async () => {
+                        const embedFinal = await resultat.differe();
+                        memoriserResultatRoulette(envoye.id, embedFinal);
+                        envoye.edit({ embeds: [embedFinal] }).catch(() => {});
+                    }, 10000);
+                }
+                return;
+            }
+            const embed = buildRoulettePresentationEmbed(interaction.user.id);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`roulette_probas_pres_${interaction.user.id}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`roulette_tenter_${interaction.user.id}`).setLabel('🍀 Tenter sa chance').setStyle(ButtonStyle.Primary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'profil') {
+            const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
+            const member = interaction.guild?.members.cache.get(cibleUser.id);
+            const joinedAt = member?.joinedAt
+                ? member.joinedAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+                : 'Inconnue';
+            const createdAt = cibleUser.createdAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+            const roles = member?.roles.cache
+                .filter(r => r.id !== interaction.guild.id)
+                .sort((a, b) => b.position - a.position)
+                .map(r => `<@&${r.id}>`)
+                .slice(0, 5)
+                .join(' ') || 'Aucun';
+
+            const nbMessages = topData.messages[cibleUser.id] ?? 0;
+            const birthdayRaw = getGuildBirthdays(interaction.guild.id)[cibleUser.id];
+            const moisNoms = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+            let birthdayStr = 'Inconnu';
+            if (birthdayRaw) {
+                const [j, m] = birthdayRaw.split('/').map(Number);
+                birthdayStr = `${j} ${moisNoms[m - 1]}`;
+            }
+
+            const embed = new EmbedBuilder()
+                .setColor(0x5865f2)
+                .setTitle(member?.displayName ?? cibleUser.username)
+                .setThumbnail(cibleUser.displayAvatarURL({ dynamic: true, size: 256 }))
+                .addFields(
+                    { name: '👤 Pseudo', value: `@${cibleUser.username}`, inline: true },
+                    { name: '💬 Messages envoyés', value: `${nbMessages}`, inline: true },
+                    { name: '\u200b', value: '\u200b', inline: true },
+                    { name: '📅 Arrivée sur le serveur', value: joinedAt, inline: true },
+                    { name: '🕒 Compte créé le', value: createdAt, inline: true },
+                    { name: '\u200b', value: '\u200b', inline: true },
+                    { name: '🎂 Anniversaire', value: birthdayStr, inline: false },
+                    { name: '🏷️ Rôles', value: roles, inline: false }
+                )
+                .setFooter({ text: `ID : ${cibleUser.id}` });
+
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        if (commandName === 'rltsucces') {
+            const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
+            const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
+            const { embed, row } = buildRouletteAchievementsEmbed(member, 0, interaction.user.id);
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'rltstats') {
+            const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
+            const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`rlt_achs_${member.id}_0_${interaction.user.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.reply({ embeds: [buildRouletteStatsEmbed(member)], components: [row] });
+        }
+
+        if (commandName === 'top') {
+            const allSorted = Object.entries(topData.messages).sort((a, b) => b[1] - a[1]);
+            if (allSorted.length === 0) return interaction.reply({ content: "Pas encore de données !", ephemeral: true });
+
+            const PAGE_SIZE = 10;
+            const totalPages = Math.ceil(allSorted.length / PAGE_SIZE);
+            const medals = ['🥇', '🥈', '🥉'];
+            const fields = allSorted.slice(0, PAGE_SIZE).map(([uid, count], i) => {
+                const member = interaction.guild.members.cache.get(uid);
+                if (!member) return null;
+                const medal = i < 3 ? medals[i] : `**${i + 1}.**`;
+                return { name: `${medal} ${member.displayName}`, value: `${count} messages`, inline: false };
+            }).filter(Boolean);
+
+            const embed = new EmbedBuilder()
+                .setColor(0xffd700)
+                .setTitle('🏆 Classement des membres')
+                .addFields(fields)
+                .setFooter({ text: `Page 1/${totalPages} • Compté depuis l'initialisation du bot` });
+
+            const prev = new ButtonBuilder().setCustomId(`top_prev_${interaction.user.id}_0`).setLabel('⬅️ Arrière').setStyle(ButtonStyle.Secondary).setDisabled(true);
+            const next = new ButtonBuilder().setCustomId(`top_next_${interaction.user.id}_0`).setLabel('Suivant ➡️').setStyle(ButtonStyle.Secondary).setDisabled(totalPages <= 1);
+            const row = new ActionRowBuilder().addComponents(prev, next);
+
+            return interaction.reply({ embeds: [embed], components: totalPages > 1 ? [row] : [] });
+        }
+    }
+
     // Actions de modération sur les comptes récents
     if (interaction.isButton() && interaction.customId.startsWith('mod_action_')) {
         if (!estModo(interaction.member) && !interaction.member.permissions.has('KickMembers')) {
@@ -8961,6 +9096,28 @@ client.on('channelCreate', async (channel) => {
 
 client.once('ready', async () => {
     console.log(`✅ ${client.user.tag} est connecté`);
+
+    // Enregistrement des commandes Slash (/)
+    const slashCommands = [
+        new SlashCommandBuilder().setName('help').setDescription('Ouvre le guide d\'utilisation officiel de Cacabot'),
+        new SlashCommandBuilder().setName('roulette').setDescription('Tenter sa chance sur la Roulette Regaïenne')
+            .addBooleanOption(opt => opt.setName('lancer').setDescription('Lancer immédiatement le tirage sans afficher l\'accueil')),
+        new SlashCommandBuilder().setName('profil').setDescription('Affiche la fiche d\'un·e membre (messages, rôles, etc.)')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter (toi par défaut)')),
+        new SlashCommandBuilder().setName('rltsucces').setDescription('Consulter la liste et la progression des 30 succès roulette')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre dont tu veux voir les succès')),
+        new SlashCommandBuilder().setName('rltstats').setDescription('Voir les statistiques complètes d\'un·e membre sur la roulette')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre dont tu veux voir les stats')),
+        new SlashCommandBuilder().setName('top').setDescription('Classement des membres les plus actifs sur le serveur')
+    ].map(cmd => cmd.toJSON());
+
+    const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+    for (const guild of client.guilds.cache.values()) {
+        await rest.put(Routes.applicationGuildCommands(client.user.id, guild.id), { body: slashCommands })
+            .then(() => console.log(`✅ Commandes Slash (/) déployées sur ${guild.name}`))
+            .catch(err => console.error(`Erreur déploiement Slash sur ${guild.name}:`, err.message));
+    }
+
     await new Promise(r => setTimeout(r, 15000)); // laisse le temps à l'ancien conteneur de finir sa sauvegarde
     await loadAll();
     for (const [uid, chId] of rouletteNotifs) armerNotifRoulette(uid, chId);
