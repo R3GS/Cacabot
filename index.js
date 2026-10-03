@@ -1013,6 +1013,10 @@ if (command === "!choix") {
         return { needsRoleReac: true };
     }
 
+    if (command === "!rolebtn" || command === "!btnrole") {
+        return { needsRoleBtn: true };
+    }
+
     if (command === "!rappel") {
         return { needsRappel: true };
     }
@@ -2002,10 +2006,13 @@ function buildHelpxCategorieEmbed(categorie) {
             );
     }
     if (categorie === 'autres') {
-        return embed.setTitle('👥 Commandes pour les autres membres')
+        return embed.setTitle('👥 Rôles & Gestion des membres')
             .addFields(
+                { name: '🔘 **!rolebtn add [ID] [@rôle] [couleur] [Texte]**', value: 'Ajouter un bouton cliquable de rôle sur un message de Cacabot.' },
+                { name: '🗑️ **!rolebtn remove [ID] [@rôle]**', value: 'Retirer un bouton de rôle d\'un message.' },
+                { name: '🎭 **!rolereac [ID] [emoji] [@rôle]**', value: 'Ajouter un rôle réaction classique par emoji (ou `!rolereac list/remove`).' },
                 { name: '⏰ **!rappel [ID] Xmin/h [message]**', value: 'Envoyer un rappel à un membre spécifique par son ID.' },
-                { name: '📝 **!setmessages @Membre**', value: 'Définir manuellement le nombre de messages d\'un membre.' }
+                { name: '📝 **!setmessages @Membre [nombre]**', value: 'Définir manuellement le nombre de messages d\'un membre.' }
             );
     }
     if (categorie === 'roulette') {
@@ -7148,6 +7155,126 @@ if (response?.needsRouletteAchievements) {
         return;
     }
 
+    // !rolebtn (Epsys-only)
+    if (response?.needsRoleBtn) {
+        if (message.author.id !== '436218312574107658') return;
+        const args = message.content.trim().split(/\s+/);
+        const sub = args[1]?.toLowerCase();
+
+        if (sub !== 'add' && sub !== 'remove') {
+            return message.reply(
+                "**Usage :**\n" +
+                "• **Ajouter un bouton :** `!rolebtn add [ID_message] [@rôle] [couleur optionnelle] [Texte avec ou sans emoji]`\n" +
+                "• **Supprimer un bouton :** `!rolebtn remove [ID_message] [@rôle]`\n\n" +
+                "*Couleurs disponibles : bleu, mauve, vert, rouge, rose, orange, gris, blanc, jaune...*"
+            );
+        }
+
+        const msgId = args[2];
+        const roleArg = args[3];
+        if (!msgId || !roleArg) return message.reply("Paramètres manquants ! Vérifie l'ID du message et le rôle.");
+
+        const roleId = roleArg.replace(/<@&|>/g, '');
+        const role = message.guild?.roles.cache.get(roleId);
+        if (!role) return message.reply("Rôle introuvable ! Vérifie la mention ou l'ID.");
+
+        // Recherche du message envoyé par Cacabot
+        let targetMsg = await message.channel.messages.fetch(msgId).catch(() => null);
+        if (!targetMsg && message.guild) {
+            for (const ch of message.guild.channels.cache.values()) {
+                if (ch.isTextBased()) {
+                    targetMsg = await ch.messages.fetch(msgId).catch(() => null);
+                    if (targetMsg) break;
+                }
+            }
+        }
+
+        if (!targetMsg) return message.reply("Message introuvable ! Vérifie l'ID.");
+        if (targetMsg.author.id !== client.user.id) {
+            return message.reply("Je ne peux ajouter des boutons que sur mes **propres messages** (par exemple créés avec `/embed` ou `!say`) !");
+        }
+
+        // --- Cas de suppression ---
+        if (sub === 'remove') {
+            const rows = targetMsg.components.map(row => {
+                const newRow = ActionRowBuilder.from(row);
+                newRow.setComponents(row.components.filter(c => c.customId !== `rolebtn_${role.id}`));
+                return newRow;
+            }).filter(row => row.components.length > 0);
+
+            await targetMsg.edit({ components: rows }).catch(err => message.reply(`Erreur : ${err.message}`));
+            await message.delete().catch(() => {});
+            return message.channel.send(`🗑️ Bouton de rôle pour **${role.name}** retiré du message !`);
+        }
+
+        // --- Cas d'ajout ---
+        let resteArgs = args.slice(4);
+        let style = ButtonStyle.Secondary; // Gris par défaut
+
+        const couleurMap = {
+            bleu: ButtonStyle.Primary, mauve: ButtonStyle.Primary, violet: ButtonStyle.Primary, primary: ButtonStyle.Primary,
+            vert: ButtonStyle.Success, success: ButtonStyle.Success,
+            rouge: ButtonStyle.Danger, rose: ButtonStyle.Danger, danger: ButtonStyle.Danger,
+            gris: ButtonStyle.Secondary, blanc: ButtonStyle.Secondary, noir: ButtonStyle.Secondary, secondary: ButtonStyle.Secondary,
+            jaune: ButtonStyle.Secondary, orange: ButtonStyle.Danger, marron: ButtonStyle.Secondary
+        };
+
+        const premierMot = resteArgs[0]?.toLowerCase();
+        if (premierMot && couleurMap[premierMot]) {
+            style = couleurMap[premierMot];
+            resteArgs.shift(); // On retire le mot de couleur pour ne garder que le texte
+        }
+
+        let texteBrut = resteArgs.join(' ').trim();
+        if (!texteBrut) texteBrut = role.name;
+
+        // Détection automatique d'un emoji en début de texte (ex: "🎮 Gamer" -> emoji: 🎮, label: "Gamer")
+        let emoji = null;
+        let label = texteBrut;
+        const emojiMatch = texteBrut.match(/^((?:<a?:\w+:\d+>|\p{Extended_Pictographic}\uFE0F?))\s*(.*)$/u);
+        if (emojiMatch) {
+            emoji = emojiMatch[1];
+            label = emojiMatch[2].trim() || role.name;
+        }
+
+        const newBtn = new ButtonBuilder()
+            .setCustomId(`rolebtn_${role.id}`)
+            .setStyle(style);
+
+        if (label) newBtn.setLabel(label);
+        if (emoji) newBtn.setEmoji(emoji);
+
+        // Reconstruction des lignes de boutons (max 5 par ligne, max 25 au total)
+        const rows = targetMsg.components.map(r => ActionRowBuilder.from(r));
+        let placeTrouvee = false;
+
+        // Vérifie si le bouton existe déjà pour le mettre à jour
+        for (const row of rows) {
+            const index = row.components.findIndex(c => c.data.custom_id === `rolebtn_${role.id}`);
+            if (index !== -1) {
+                row.components[index] = newBtn;
+                placeTrouvee = true;
+                break;
+            }
+        }
+
+        // Sinon l'ajouter à la dernière ligne ou en créer une nouvelle
+        if (!placeTrouvee) {
+            let derniereLigne = rows[rows.length - 1];
+            if (derniereLigne && derniereLigne.components.length < 5) {
+                derniereLigne.addComponents(newBtn);
+            } else if (rows.length < 5) {
+                rows.push(new ActionRowBuilder().addComponents(newBtn));
+            } else {
+                return message.reply("Limite atteinte : ce message a déjà le maximum de 25 boutons !");
+            }
+        }
+
+        await targetMsg.edit({ components: rows }).catch(err => message.reply(`Erreur : ${err.message}`));
+        await message.delete().catch(() => {});
+        return message.channel.send(`✅ Bouton de rôle pour **${role.name}** ajouté avec succès sur le message !`);
+    }
+
     // !rappel
     if (response?.needsRappel) {
         const args = message.content.trim().split(/\s+/);
@@ -10778,6 +10905,27 @@ client.once('ready', async () => {
 // =========================
 //     LISTENER REACTIONS
 // =========================
+
+// Boutons de rôles interactifs (Ajout / Retrait au clic)
+client.on('interactionCreate', async (interaction) => {
+    if (!interaction.isButton() || !interaction.customId.startsWith('rolebtn_')) return;
+
+    const roleId = interaction.customId.replace('rolebtn_', '');
+    const role = interaction.guild?.roles.cache.get(roleId);
+
+    if (!role) {
+        return interaction.reply({ content: "❌ Ce rôle n'existe plus sur le serveur !", ephemeral: true });
+    }
+
+    const member = interaction.member;
+    if (member.roles.cache.has(roleId)) {
+        await member.roles.remove(roleId).catch(err => console.error("Erreur retrait rôle bouton:", err.message));
+        return interaction.reply({ content: `❌ Le rôle **${role.name}** t'a été retiré !`, ephemeral: true });
+    } else {
+        await member.roles.add(roleId).catch(err => console.error("Erreur ajout rôle bouton:", err.message));
+        return interaction.reply({ content: `✅ Tu as reçu le rôle **${role.name}** !`, ephemeral: true });
+    }
+});
 
 // Rôles réaction automatiques (Ajout du rôle)
 client.on('messageReactionAdd', async (reaction, user) => {
