@@ -15,6 +15,16 @@ let birthdayData = { birthdays: {}, channels: {} };
     function getBirthdayChannelId(guildId) {
         return birthdayData.channels[guildId] ?? BIRTHDAY_CHANNEL_ID;
     }
+
+    function estAnniversaireAujourdhui(guildId, userId) {
+        if (!guildId || !userId) return false;
+        const dateAnniv = birthdayData.birthdays[guildId]?.[userId];
+        if (!dateAnniv) return false;
+        const now = new Date();
+        const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+        const today = `${String(parisNow.getDate()).padStart(2, '0')}/${String(parisNow.getMonth() + 1).padStart(2, '0')}`;
+        return dateAnniv === today;
+    }
 let dailyData = {};
 let weeklyData = {};
 let monthlyData = {};
@@ -1243,7 +1253,7 @@ async function deverrouillerSucces(userId, achId, channel) {
     const embed = new EmbedBuilder()
         .setColor(0xffd700)
         .setTitle('🎊 SUCCÈS DÉVERROUILLÉ !')
-        .setDescription(`<@${userId}> vient d'obtenir le succès **${ach.emoji} ${ach.nom}** !\n\n*📂 ${ach.desc}*`)
+        .setDescription(`<@${userId}> vient d'obtenir le succès **${ach.emoji} ${ach.nom}** !\n\n*${ach.desc}*`)
         .setImage('https://cdn.discordapp.com/attachments/1480756332373213275/1555806751448629410/achievement-unlocked_1.gif');
 
     const row = new ActionRowBuilder().addComponents(
@@ -1912,7 +1922,7 @@ function piocherRoulette(pool, totalGlobal, defaut) {
     return defaut;
 }
 
-function tirerRoulette(userId) {
+function tirerRoulette(userId, guildId = null) {
     const pity = roulettePity.get(userId) ?? { malus: 0, nuls: 0 };
     const garanti = pity.malus >= ROULETTE_PITY_MALUS || pity.nuls >= ROULETTE_PITY_NULS;
 
@@ -1923,7 +1933,8 @@ function tirerRoulette(userId) {
     } else {
         const boostCharges = rouletteJackpotBoostCharges.get(userId) || 0;
         const boostVal = boostCharges > 0 ? (rouletteJackpotBoostValue.get(userId) || 0.25) : 0;
-        const totalJackpot = (rouletteJackpotBonus.get(userId) || 0) + boostVal;
+        const boostAnniv = estAnniversaireAujourdhui(guildId, userId) ? 0.50 : 0;
+        const totalJackpot = (rouletteJackpotBonus.get(userId) || 0) + boostVal + boostAnniv;
 
         if (totalJackpot > 0 && Math.random() < totalJackpot) {
             const bonus = ROULETTE_TABLE.filter(e => e.type === 'bonus');
@@ -2461,8 +2472,11 @@ async function demarrerVoteRoulette(msg, membre) {
     }, 2 * 60 * 60 * 1000);
 }
 
-function buildRoulettePresentationEmbed(authorId) {
+function buildRoulettePresentationEmbed(authorId, guildId = null) {
     const jackpot = authorId ? (rouletteJackpotBonus.get(authorId) || 0) : 0;
+    const boostCharges = authorId ? (rouletteJackpotBoostCharges.get(authorId) || 0) : 0;
+    const boostVal = boostCharges > 0 ? (rouletteJackpotBoostValue.get(authorId) || 0.25) : 0;
+    const cEstSonAnniv = (authorId && guildId) ? estAnniversaireAujourdhui(guildId, authorId) : false;
 
     const fields = [
         {
@@ -2492,10 +2506,19 @@ function buildRoulettePresentationEmbed(authorId) {
         }
     ];
 
-    if (jackpot > 0) {
+    if (cEstSonAnniv) {
+        fields.unshift({
+            name: '🎂・JOYEUX ANNIVERSAIRE ! 🎉',
+            value: "C'est ton jour de fête aujourd'hui ! Tu bénéficies d'un **boost exceptionnel de +50% de chance de bonus** offert sur tous tes tirages de la journée !",
+            inline: false
+        });
+    }
+
+    const totalBoostPct = Math.round((jackpot + boostVal + (cEstSonAnniv ? 0.50 : 0)) * 100);
+    if (totalBoostPct > 0) {
         fields.push({
             name: 'Bonus boosté 🎰',
-            value: `Chance de bonus augmentée de **+${Math.round(jackpot * 100)}%** à chaque échec ! Réinitialisée lorsqu'un bonus est roll.`,
+            value: `Chance de bonus actuellement augmentée de **+${totalBoostPct}%** !`,
             inline: false
         });
     }
@@ -2515,7 +2538,7 @@ function buildRoulettePresentationEmbed(authorId) {
     );
 
     const embed = new EmbedBuilder()
-        .setColor(0xffd20a)
+        .setColor(cEstSonAnniv ? 0xff69b4 : 0xffd20a)
         .setTitle('🎰 | ROULETTE REGAÏENNE | 🎰')
         .setImage('https://img.draftbot.fr/1790778435185-73ff19eb6e704abb.gif')
         .addFields(fields);
@@ -2525,13 +2548,16 @@ function buildRoulettePresentationEmbed(authorId) {
     return embed;
 }
 
-function buildRouletteStateEmbed(cible) {
+function buildRouletteStateEmbed(cible, guildId = null) {
     const now = Date.now();
     const tstamp = (ms) => `<t:${Math.ceil(ms / 1000)}:R>`;
     const bonus = [];
     const malus = [];
 
     // --- BONUS ---
+    if (guildId && estAnniversaireAujourdhui(guildId, cible.id)) {
+        bonus.push('🎂 **Boost Anniversaire** (+50% de chance de bonus toute la journée !)');
+    }
     if (rouletteCouronneUntil.has(cible.id) && now < rouletteCouronneUntil.get(cible.id)) {
         bonus.push(`👑 Couronne (fin ${tstamp(rouletteCouronneUntil.get(cible.id))})`);
     }
@@ -2812,7 +2838,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
         deverrouillerSucces(authorId, 'le-sauvetage', channel);
     }
 
-    const outcomeId = tirerRoulette(authorId);
+    const outcomeId = tirerRoulette(authorId, guild?.id);
 
     // ⚡ Succès : La Rafale (3 tirages pendant freeRoll)
     if (enFreeRoll && (finFreeRoll && now < finFreeRoll)) {
@@ -5578,14 +5604,14 @@ if (response?.needsRouletteState) {
             if (result.multiple) {
                 return askDisambiguation(message, message.guild, result.candidates, async (user) => {
                     const membre = message.guild.members.cache.get(user.id);
-                    if (membre) message.reply({ embeds: [buildRouletteStateEmbed(membre)] });
+                    if (membre) message.reply({ embeds: [buildRouletteStateEmbed(membre, message.guild?.id)] });
                 });
             }
             cible = result.found;
         }
     }
     if (!cible) return message.reply("Membre introuvable.");
-    return message.reply({ embeds: [buildRouletteStateEmbed(cible)] });
+    return message.reply({ embeds: [buildRouletteStateEmbed(cible, message.guild?.id)] });
 }
 
 // !roulettestats (publique)
@@ -5670,7 +5696,7 @@ if (response?.needsRouletteAchievements) {
             }
             return envoye;
         }
-        const embed = buildRoulettePresentationEmbed(message.author.id);
+        const embed = buildRoulettePresentationEmbed(message.author.id, message.guild?.id);
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`roulette_probas_pres_${message.author.id}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`roulette_tenter_${message.author.id}`).setLabel('🍀 Tenter sa chance').setStyle(ButtonStyle.Primary)
@@ -7148,6 +7174,10 @@ try {
     //   COMMANDES SLASH (/)
     // =========================
     if (interaction.isChatInputCommand()) {
+        if (interaction.guildId !== '720057528351850547') {
+            return interaction.reply({ content: "Les commandes slash de Cacabot sont exclusivement réservées au serveur Regaïa !", ephemeral: true });
+        }
+
         const { commandName } = interaction;
 
         if (commandName === 'help') {
@@ -7256,7 +7286,7 @@ try {
             const totalPages = Math.ceil(allSorted.length / PAGE_SIZE);
             const medals = ['🥇', '🥈', '🥉'];
             const fields = allSorted.slice(0, PAGE_SIZE).map(([uid, count], i) => {
-                const member = interaction.guild.members.cache.get(uid);
+                const member = interaction.guild?.members.cache.get(uid);
                 if (!member) return null;
                 const medal = i < 3 ? medals[i] : `**${i + 1}.**`;
                 return { name: `${medal} ${member.displayName}`, value: `${count} messages`, inline: false };
@@ -7273,6 +7303,1119 @@ try {
             const row = new ActionRowBuilder().addComponents(prev, next);
 
             return interaction.reply({ embeds: [embed], components: totalPages > 1 ? [row] : [] });
+        }
+
+        const auteurNom = interaction.member?.displayName ?? interaction.user.username;
+        const auteurId = interaction.user.id;
+
+        if (commandName === 'kiss') {
+            const cibleUser = interaction.options.getUser('membre');
+            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
+            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
+
+            if (cibleUser.id === auteurId) {
+                const embed = buildKissEmbed(auteurNom, auteurNom).setDescription(`💋 **${auteurNom}** s'embrasse ! Attends... Comment c'est possible ?`);
+                return interaction.reply({ embeds: [embed] });
+            }
+            if (cibleUser.id === client.user.id) {
+                const embed = buildKissEmbed(auteurNom, "Cacabot").setDescription(`💋 **${auteurNom}** m'embrasse ! Awww merci <3`);
+                return interaction.reply({ embeds: [embed] });
+            }
+            const embed = buildKissEmbed(auteurNom, cibleNom);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`kiss_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("💋 Embrasser en retour").setStyle(ButtonStyle.Primary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'hug') {
+            const cibleUser = interaction.options.getUser('membre');
+            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
+            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
+
+            if (cibleUser.id === auteurId) {
+                const embed = buildHugEmbed(auteurNom, auteurNom).setDescription(`🫂 **${auteurNom}** se fait un câlin... Ça va aller...`);
+                return interaction.reply({ embeds: [embed] });
+            }
+            if (cibleUser.id === client.user.id) {
+                const embed = buildHugEmbed(auteurNom, "Cacabot").setDescription(`🫂 **${auteurNom}** me fait un câlin !`);
+                return interaction.reply({ embeds: [embed] });
+            }
+            const embed = buildHugEmbed(auteurNom, cibleNom);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`hug_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🫂 Câliner en retour").setStyle(ButtonStyle.Primary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'rizz') {
+            const cibleUser = interaction.options.getUser('membre');
+            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
+            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
+
+            if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te rizz toi-même !", ephemeral: true });
+            if (cibleUser.id === client.user.id) {
+                const embed = buildRizzEmbed(`🗿 **${auteurNom}** me rizz ! Eh beh 😊`);
+                return interaction.reply({ embeds: [embed] });
+            }
+            const embed = buildRizzEmbed(`🗿 **${auteurNom}** rizz **${cibleNom}** !`);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`rizz_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🗿 Rizz en retour").setStyle(ButtonStyle.Primary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'punch') {
+            const cibleUser = interaction.options.getUser('membre');
+            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
+            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
+
+            if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te frapper toi-même ! 'Fin si mais... Ne le fais pas.", ephemeral: true });
+            if (cibleUser.id === client.user.id) {
+                const embed = buildPunchEmbed(`🤜 **${auteurNom}** me frappe ! Aïeuh !`);
+                return interaction.reply({ embeds: [embed] });
+            }
+            const embed = buildPunchEmbed(`🤜 **${auteurNom}** frappe **${cibleNom}** !`);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`punch_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🤜 Frapper en retour").setStyle(ButtonStyle.Primary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'bang') {
+            const cibleUser = interaction.options.getUser('membre');
+            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
+            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
+
+            if (cibleUser.id === auteurId) return interaction.reply({ content: "Évite de te tirer dessus :(", ephemeral: true });
+            if (cibleUser.id === client.user.id) {
+                const embed = buildBangEmbed(`💥 **${auteurNom}** me tire dessus ! HÉ !`);
+                return interaction.reply({ embeds: [embed] });
+            }
+            const embed = buildBangEmbed(`💥 **${auteurNom}** tire sur **${cibleNom}** !`);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`bang_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("💥 Riposter !").setStyle(ButtonStyle.Primary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'insult') {
+            const cibleUser = interaction.options.getUser('membre');
+            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
+            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
+
+            if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas t'insulter toi-même... Mentionne quelqu'un plutôt !", ephemeral: true });
+            if (cibleUser.id === client.user.id) {
+                const embed = buildInsultEmbed(`🖕 **${auteurNom}** m'insulte ! J'ai fait quoi ?!`);
+                return interaction.reply({ embeds: [embed] });
+            }
+            const embed = buildInsultEmbed(`🖕 **${auteurNom}** insulte **${cibleNom}** !`);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`insult_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🖕 Insulter en retour").setStyle(ButtonStyle.Primary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'bait') {
+            const cibleUser = interaction.options.getUser('membre');
+            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
+            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
+
+            if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te ragebait toi-même !", ephemeral: true });
+            const baitGifs = [
+                "https://cdn.discordapp.com/attachments/1072299294519988345/1304467586746028193/brandbird_4.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570790706253864/tadc-bubble-tadc.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570791683522760/tadc-the-amazing-digital-circus.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570792279379988/tadc-caine-tadc.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570793021505736/flight-flightreacts.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570793718022226/superman-superman-flying.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570795160731728/f8957342b4d99638.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570795974295672/down-syndrome.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570796981194822/flight.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570797979172964/catreacts-ragebait.gif"
+            ];
+            const gif = baitGifs[Math.floor(Math.random() * baitGifs.length)];
+            if (cibleUser.id === client.user.id) {
+                const embed = new EmbedBuilder().setColor(0xffb14a).setDescription(`😜 **${auteurNom}** me ragebait ! Gngngngn...`).setImage(gif);
+                return interaction.reply({ embeds: [embed] });
+            }
+            const embed = new EmbedBuilder().setColor(0xffb14a).setDescription(`😜 **${auteurNom}** ragebait **${cibleNom}** !`).setImage(gif);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`bait_venge_${cibleUser.id}_${auteurId}_${auteurNom}`).setLabel("💢 SE VENGER !").setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'ban') {
+            const cibleUser = interaction.options.getUser('membre');
+            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
+            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
+
+            if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te bannir toi-même !", ephemeral: true });
+            const banGifs = [
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557423686029352/cat-screaming-cat-disappearing.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557409148567572/ahh-kid-turns-blue-and-vanishes.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424092741764/duck-disappears.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424491462856/tom-skot.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424805777428/atoms-cry.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425288380576/sr-pelo-screaming.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425690775683/cat-scream.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426043355278/meme-quarantine.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426433294437/flight-flights.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426881958020/nikocado-avocado-nikocado.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557427209109544/moist-moist-critical.gif"
+            ];
+            const gif = banGifs[Math.floor(Math.random() * banGifs.length)];
+            const titre = cibleUser.id === client.user.id ? `**${auteurNom}** me bannit... Pas cool.` : `🔨 **${auteurNom}** bannit **${cibleNom}** !`;
+            const embed = new EmbedBuilder().setColor(0xcdc9dc).setDescription(titre).setImage(gif);
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        if (commandName === 'danse') {
+            const cibleUser = interaction.options.getUser('membre');
+            if (!cibleUser) {
+                const embed = buildDanceEmbed(`💃 **${auteurNom}** s'ambiance comme jamais !`, true);
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`dance_join_${auteurId}_${auteurNom}`).setLabel("💃 Rejoindre la danse").setStyle(ButtonStyle.Primary)
+                );
+                return interaction.reply({ embeds: [embed], components: [row] });
+            }
+            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
+            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
+            if (cibleUser.id === client.user.id) {
+                const embed = buildDanceEmbed(`💃 **${auteurNom}** danse avec moi !`, false);
+                return interaction.reply({ embeds: [embed] });
+            }
+            const embed = buildDanceEmbed(`💃 **${auteurNom}** danse avec **${cibleNom}** !`, false);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`dance_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("💃 Rejoindre la danse").setStyle(ButtonStyle.Primary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'rire') {
+            const cibleUser = interaction.options.getUser('membre');
+            if (cibleUser && cibleUser.id !== auteurId && cibleUser.id !== client.user.id) {
+                const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
+                const cibleNom = cibleMember?.displayName ?? cibleUser.username;
+                const embed = buildLaughEmbed(`😆 **${auteurNom}** se fout de la gueule de **${cibleNom}** !`);
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`laugh_with_${auteurId}_${auteurNom}`).setLabel("😆 Rire avec").setStyle(ButtonStyle.Primary)
+                );
+                return interaction.reply({ embeds: [embed], components: [row] });
+            }
+            const embed = buildLaughEmbed(`😆 **${auteurNom}** se tape une barre !`);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`laugh_with_${auteurId}_${auteurNom}`).setLabel("😆 Rire avec").setStyle(ButtonStyle.Primary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'cry') {
+            const cryGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505906480916725791/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906486872768522/wwe.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487413964941/cry2.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487656972359/hamster.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487959093359/interstellar.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906869598814310/cry.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488625856622/powder.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488932176034/vi.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489271779449/gangle.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489657790466/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489947324589/fred.gif"];
+            const gif = cryGifs[Math.floor(Math.random() * cryGifs.length)];
+            const cibleUser = interaction.options.getUser('membre');
+            let desc, targetId = null, cibleNom = null;
+            if (cibleUser && cibleUser.id === auteurId) {
+                desc = `😭 **${auteurNom}** Pleure...`;
+                return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x597eff).setDescription(desc).setImage(gif)] });
+            } else if (cibleUser && cibleUser.id === client.user.id) {
+                desc = `😭 **${auteurNom}** pleure à cause de moi...`;
+            } else if (cibleUser) {
+                cibleNom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
+                targetId = cibleUser.id;
+                desc = `😭 **${auteurNom}** Pleure à cause de **${cibleNom}**...`;
+            } else {
+                desc = `😭 **${auteurNom}** Pleure...`;
+            }
+            const embed = new EmbedBuilder().setColor(0x597eff).setDescription(desc).setImage(gif);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`cry_with_${auteurId}_${auteurNom}_${targetId ?? 'none'}_${cibleNom ?? 'none'}`).setLabel("😭 Pleurer avec").setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'run') {
+            const cibleUser = interaction.options.getUser('membre');
+            if (!cibleUser || cibleUser.id === auteurId) {
+                const embed = buildRunEmbed(`🏃 **${auteurNom}** fuit !`);
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`run_join_${auteurId}_${auteurNom}`).setLabel("🏃 Accompagner").setStyle(ButtonStyle.Secondary)
+                );
+                return interaction.reply({ embeds: [embed], components: [row] });
+            }
+            if (cibleUser.id === client.user.id) {
+                const embed = buildRunEmbed(`🏃 **${auteurNom}** me fuit ! Reviens-là !`);
+                return interaction.reply({ embeds: [embed] });
+            }
+            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
+            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
+            const embed = buildRunEmbed(`🏃 **${auteurNom}** fuit de **${cibleNom}** !`);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`run_join_${auteurId}_${auteurNom}_${cibleUser.id}`).setLabel("🏃 Accompagner").setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'explode') {
+            const explodeGifs = [
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564402697375794/cat-cats.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564403230183599/cat-explosion_1.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564403653804153/floop-flop.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564404031426661/cat-explodes.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564404400521267/cat-funny.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564404882870292/spideyvivi.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564405281194064/cat-explode-cat-meme.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564405847298150/explosion-missile.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564406224781373/exploding-cat-cat-blowing-up.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564406799532052/cat-gato.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564412172570664/boomshakalaka.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564412763836466/elgatitolover-cat.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564413376335962/cat-explosion-ellie-cat-explosion.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564413795635311/exploding-car-explode.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564414147825774/cat-explosion.gif"
+            ];
+            const gif = explodeGifs[Math.floor(Math.random() * explodeGifs.length)];
+            const embed = new EmbedBuilder().setColor(0xec0f6e).setDescription(`💥 **${auteurNom}** explose !`).setImage(gif);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`explode_with_${auteurId}_${auteurNom}`).setLabel("💥 Exploser avec").setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'die') {
+            const cibleUser = interaction.options.getUser('membre');
+            if (cibleUser && cibleUser.id === client.user.id) {
+                const embed = buildDieEmbed(`☠️ **${auteurNom}** meurt à cause de moi ! (cheh)`);
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`die_with_${auteurId}_${auteurNom}`).setLabel("☠️ Mourir avec").setStyle(ButtonStyle.Primary)
+                );
+                return interaction.reply({ embeds: [embed], components: [row] });
+            }
+            const causeNom = cibleUser && cibleUser.id !== auteurId ? (interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username) : null;
+            const titre = causeNom ? `☠️ **${auteurNom}** meurt à cause de **${causeNom}**` : `☠️ **${auteurNom}** meurt...`;
+            const embed = buildDieEmbed(titre);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`die_with_${auteurId}_${auteurNom}`).setLabel("☠️ Mourir avec").setStyle(ButtonStyle.Primary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'jailaref') {
+            const jailarefGifs = ["https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/f1/7d/7y2QyYzWIYksGnnK.gif", "https://cdn.discordapp.com/attachments/720079691041472572/1548362421079646481/caf5c232438734937f6e1cf4c7bc5411.png", "https://media1.tenor.com/m/13XpzbwtVnYAAAAC/dway-the-roc.gif", "https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/14/44/oqcpwYRAEpXGYqfyw.gif", "https://static2.klipy.com/ii/50d7c955398dfd7e3c8ba5281154280f/79/6d/eoUS3shzyQLpKm.gif", "https://static2.klipy.com/ii/d7aec6f6f171607374b2065c836f92f4/3d/31/08K8MgEk.gif", "https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/64/b0/SdnOajVDadHUy.gif", "https://cdn.discordapp.com/attachments/720079691041472572/1548366731666268250/image2.gif", "https://static2.klipy.com/ii/9294a2e836d178ddc22430dd7765727e/44/86/6QBidjUuV1oBpAnHIw7o.gif"];
+            const gif = jailarefGifs[Math.floor(Math.random() * jailarefGifs.length)];
+            const cibleUser = interaction.options.getUser('membre');
+            let desc;
+            if (!cibleUser) desc = `😎 **${auteurNom}** a la ref !`;
+            else if (cibleUser.id === auteurId) return interaction.reply({ content: "Bah oui, t'as forcément ta propre ref...", ephemeral: true });
+            else if (cibleUser.id === client.user.id) desc = `😎 **${auteurNom}** a ma ref !`;
+            else {
+                const cibleNom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
+                desc = `😎 **${auteurNom}** a la ref de **${cibleNom}** !`;
+            }
+            const embed = new EmbedBuilder().setColor(0x503649).setDescription(desc).setImage(gif);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`jailaref_with_${auteurId}_${auteurNom}_${cibleUser?.id ?? 'none'}`).setLabel("😎 J'ai la ref aussi").setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'palaref') {
+            const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
+            const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
+            const cibleUser = interaction.options.getUser('membre');
+            let desc;
+            if (!cibleUser) desc = `😐 **${auteurNom}** n'a pas la ref...`;
+            else if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu n'as pas ta propre ref ? ...Hein ?", ephemeral: true });
+            else if (cibleUser.id === client.user.id) desc = `😐 **${auteurNom}** n'a pas ma ref...`;
+            else {
+                const cibleNom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
+                desc = `😐 **${auteurNom}** n'a pas la ref de **${cibleNom}**...`;
+            }
+            const embed = new EmbedBuilder().setColor(0x503649).setDescription(desc).setImage(gif);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`palaref_aussi_${auteurId}_${auteurNom}_${cibleUser?.id ?? 'none'}`).setLabel("😐 Pas la ref non plus").setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        // =========================
+        // LOT 2 : JEUX & DESTIN
+        // =========================
+
+        if (commandName === 'destin') {
+            const destinReponse = getResponse("!destin");
+            return interaction.reply({ content: destinReponse });
+        }
+
+        if (commandName === 'horoscope') {
+            const now = new Date();
+            const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+            const dateStr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+            const signes = [
+                { nom: 'Bélier', emoji: '♈' }, { nom: 'Taureau', emoji: '♉' }, { nom: 'Gémeaux', emoji: '♊' },
+                { nom: 'Cancer', emoji: '♋' }, { nom: 'Lion', emoji: '♌' }, { nom: 'Vierge', emoji: '♍' },
+                { nom: 'Balance', emoji: '♎' }, { nom: 'Scorpion', emoji: '♏' }, { nom: 'Sagittaire', emoji: '♐' },
+                { nom: 'Capricorne', emoji: '♑' }, { nom: 'Verseau', emoji: '♒' }, { nom: 'Poissons', emoji: '♓' },
+                { nom: 'Loutre', emoji: '🦦' },
+            ];
+
+            const description = signes.map((s, i) => `${s.emoji} **${s.nom}**\n${getHoroscopeForSign(i, dateKey)}`).join('\n\n');
+
+            const embed = new EmbedBuilder()
+                .setColor(0x2c2f33)
+                .setTitle('🔮 Horoscope du jour')
+                .setDescription(description)
+                .setThumbnail('https://cdn.discordapp.com/attachments/1128032964924670053/1505637234596905080/color-replaced.png')
+                .setFooter({ text: `📅 ${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}` });
+
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        if (commandName === 'animal') {
+            const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
+            return interaction.reply(getAnimalResponse(interaction, cibleUser));
+        }
+
+        if (commandName === 'flip') {
+            if (flipEnCours) {
+                return interaction.reply({ content: "Un lancer est déjà en cours ! Attends ton tour.", ephemeral: true });
+            }
+            flipEnCours = true;
+            const aid = interaction.user.id;
+            const nom = interaction.member?.displayName ?? interaction.user.username;
+            const simpleBtn = new ButtonBuilder().setCustomId(`flip_simple_${aid}`).setLabel("🪙 Lancer simple").setStyle(ButtonStyle.Secondary);
+            const pariBtn = new ButtonBuilder().setCustomId(`flip_pari_${aid}`).setLabel("⚔️ Pari").setStyle(ButtonStyle.Secondary);
+            const cancelBtn = new ButtonBuilder().setCustomId(`flip_cancel_${aid}`).setLabel("❌ Annuler").setStyle(ButtonStyle.Secondary);
+            const row = new ActionRowBuilder().addComponents(simpleBtn, pariBtn, cancelBtn);
+            const embed = new EmbedBuilder()
+                .setColor(0xffd700)
+                .setTitle("🪙 Pile ou face")
+                .setDescription(`**${nom}**, c'est pour un lancer simple, ou alors pour parier avec quelqu'un ?`);
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'blague') {
+            const type = interaction.options.getString('type');
+            if (type) {
+                const categories = {
+                    soft: { label: '😊 Humour soft', color: 0x2ecc71 },
+                    classique: { label: '😄 Humour classique', color: 0x3498db },
+                    noir: { label: '🖤 Humour noir', color: 0x2c2c2c }
+                };
+                // Simule l'envoi d'une blague selon la catégorie choisie
+                const embedMenu = new EmbedBuilder().setColor(categories[type].color).setTitle(categories[type].label);
+                const autreBtn = new ButtonBuilder().setCustomId(`blague_autre_${interaction.user.id}_${type}`).setLabel('🤣 Une autre ?').setStyle(ButtonStyle.Secondary);
+                const menuBtn = new ButtonBuilder().setCustomId(`blague_menu_back_${interaction.user.id}`).setLabel('🔄 Autre type').setStyle(ButtonStyle.Secondary);
+                const row = new ActionRowBuilder().addComponents(autreBtn, menuBtn);
+                // On passe par un message initial pour afficher la blague
+                const fakeInteraction = {
+                    update: async (data) => interaction.reply(data),
+                    user: interaction.user
+                };
+                return sendBlague(fakeInteraction, type, interaction.user.id);
+            }
+            const embed = new EmbedBuilder().setColor(0xe91e63).setTitle('🤣 Blagues').setDescription('Choisis une catégorie !');
+            const menu = new StringSelectMenuBuilder().setCustomId(`blague_menu_${interaction.user.id}`).setPlaceholder('Choisis une catégorie').addOptions(
+                { label: '😊 Humour soft', value: 'soft' },
+                { label: '😄 Humour classique', value: 'classique' },
+                { label: '🖤 Humour noir', value: 'noir' }
+            );
+            const row = new ActionRowBuilder().addComponents(menu);
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'wanted') {
+            await interaction.deferReply();
+            const now = new Date();
+            const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+            const wantedID = getWantedOfTheDay(dateKey, interaction.guild);
+            if (!wantedID) return interaction.editReply('Aucun membre éligible trouvé !');
+            const { embed } = getWantedEmbedData(interaction.guild, dateKey, wantedID);
+            const prime = Math.floor(seedRndWanted(dateKey * 19) * 95) + 5;
+            const nom = interaction.guild?.members.cache.get(wantedID)?.displayName ?? wantedID;
+            try {
+                const avatarUrl = interaction.guild?.members.cache.get(wantedID)?.user.displayAvatarURL({ extension: 'png', size: 512 });
+                const imageBuffer = await generateWantedImage(avatarUrl, nom, prime);
+                embed.setImage('attachment://wanted.png');
+                return interaction.editReply({ embeds: [embed], files: [{ attachment: imageBuffer, name: 'wanted.png' }], components: [buildWantedRow('avis', interaction.user.id)] });
+            } catch (e) {
+                embed.setThumbnail(interaction.guild?.members.cache.get(wantedID)?.user.displayAvatarURL({ dynamic: true }));
+                return interaction.editReply({ embeds: [embed], components: [buildWantedRow('avis', interaction.user.id)] });
+            }
+        }
+
+        if (commandName === 'epsys') {
+            const gif = getResponse("!epsys");
+            return interaction.reply({ content: gif });
+        }
+
+        if (commandName === 'sylvain') {
+            const sylvainGifs = [
+                "https://media1.tenor.com/m/camhluUNGO0AAAAd/sylvain-lyve-sylvain-levy.gif",
+                "https://media1.tenor.com/m/mhNSNZ7Ye4wAAAAC/sylvain-lyve-vilbrequin.gif",
+                "https://media1.tenor.com/m/n7NmIiefhZ4AAAAC/sylvain-lyve-vilbrequin.gif",
+                "https://media1.tenor.com/m/p66oAFFJ2pcAAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+                "https://media1.tenor.com/m/XFUotrruCacAAAAC/vilebrequin-sylvain.gif",
+                "https://media1.tenor.com/m/pCExmpKfecgAAAAC/vilebrequin-sylvain.gif",
+                "https://media1.tenor.com/m/MkoOhxjfLeYAAAAC/vilebrequin-sylvain.gif",
+                "https://media1.tenor.com/m/q5GDY7A8aUMAAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+                "https://media1.tenor.com/m/8K7M2XtHOFsAAAAC/vilebrequin-sylvain.gif",
+                "https://media1.tenor.com/m/E3abpzYLviIAAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+                "https://media1.tenor.com/m/CH0fiUJj5psAAAAC/sylvain-lyve-sylvain-levy.gif",
+                "https://media1.tenor.com/m/VD8UmHWnJPgAAAAC/vilebrequin-vilebrequin-sylvain.gif",
+                "https://media1.tenor.com/m/UUO8TiMNDXAAAAAC/keep-pushing-race.gif",
+                "https://media1.tenor.com/m/q9PEP4AcLKkAAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+                "https://media1.tenor.com/m/aNmsYZdcuG8AAAAC/vilebrequin-vilebrequin-sylvain-levy.gif",
+                "https://media1.tenor.com/m/d9Dnn5iOeCoAAAAd/sylvain-sylvain-rire.gif"
+            ];
+            const gif = sylvainGifs[Math.floor(Math.random() * sylvainGifs.length)];
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('sylvain_again').setLabel('🐒 Singe fort ensemble').setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.reply({ files: [gif], components: [row] });
+        }
+
+        if (commandName === 'rltstate') {
+            const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
+            const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
+            return interaction.reply({ embeds: [buildRouletteStateEmbed(member)] });
+        }
+
+        // =========================
+        // LOT 3 : SALONS & VIE DU SERVEUR
+        // =========================
+
+        if (commandName === 'topchef') {
+            const critiques = [
+                "L'équilibre des textures, la brillance du jus, la gourmandise absolue... Maïté verse une larme de fierté depuis là-haut. **19.5/20**",
+                "C'est indécent tellement ça donne faim. Envoie une part en Colissimo immédiatement ou je porte plainte. **19/20**",
+                "Visuel digne d'un restaurant 4 étoiles Michelin. C'est du grand art, respect au chef ! **18.5/20**",
+                "C'est tellement beau que j'oserais même pas planter ma fourchette dedans, je mettrais l'assiette sous cadre au Louvre. **20/20**",
+                "La cuisson est millimétrée, l'assaisonnement est chirurgical, un sans-faute remarquable. **18/20**",
+                "Un chef-d'œuvre de pure gourmandise. Si tu ne m'invites pas à dîner cette semaine, je supprime ton compte Discord. **19.5/20**",
+                "C'est croustillant, c'est fondant, ça donne envie d'engloutir mon écran. **17.5/20**",
+                "Y a beaucoup trop de fromage fondu, ce qui signifie mathématiquement que c'est la perfection absolue. **18/20**",
+                "On dirait le résultat d'une expérience clandestine dans un labo abandonné de Tchernobyl... mais bizarrement ça doit se manger. **4/20**",
+                "C'est visuellement terrorisant, même un chien errant affamé ferait trois pas en arrière. Courage à ton système digestif. **2/20**",
+                "Gordon Ramsay vient de voir la photo : il a immédiatement supprimé son compte Twitter et s'est retiré dans un monastère tibétain. **1/20**",
+                "Philippe Etchebest vient de défoncer un mur rien qu'en regardant ce dressage. **3/20**",
+                "C'est carbonisé à l'extérieur et encore congelé au milieu. Une véritable prouesse thermodynamique. **5/20**",
+                "Je sais pas si ça se mange avec une fourchette ou si ça s'exorcise avec de l'eau bénite et un prêtre. **3.5/20**",
+                "Le terme « intoxication alimentaire » a été inventé spécifiquement pour anticiper ce plat. **0.5/20**",
+                "J'ai montré la photo à mon chat, il a instinctivement commencé à gratter autour de mon téléphone comme si c'était sa litière. **1.5/20**",
+                "Le dressage ressemble fidèlement à un constat d'accident de la route réalisé par la gendarmerie (mais ACAB sinon). **4/20**",
+                "Si tu survis à la digestion de ce truc sans passer 48h aux toilettes, tu deviens officiellement immortel. **6/20**",
+                "Le genre de plat que tu manges debout au-dessus de l'évier à 3h42 du matin en caleçon sans aucun regret. **14/20**",
+                "Ça ressemble à un plat cuisiné par mon daron en pleine crise de panique, mais au fond j'ai très envie de goûter. **12/20**",
+                "C'est pas de la grande cuisine, mais ça comble un vide existentiel. C'est totalement validé. **13.5/20**",
+                "On sent tout l'amour et le désespoir d'une personne qui avait une flemme monumentale d'aller faire des courses. **12/20**",
+                "C'est ultra gras, c'est lourd, ça va boucher 3 artères principales, mais on n'a qu'une seule vie après tout. **15/20**",
+                "Visuellement c'est un 4/20, mais spirituellement et caloriquement parlant c'est un coup de génie. **14.5/20**",
+                "Ça a l'air très suspect mais j'engloutirais l'assiette entière en 30 secondes chrono sans respirer. **16/20**",
+                "La présentation rappelle celle d'un étudiant fauché un dimanche soir de pluie. C'est émouvant et poétique. **11.5/20**",
+                "Ça ressemble au repas que servirait une tavernière de RPG pour restaurer 45 points de vie. **13/20**",
+                "Plat officiellement validé par le tribunal de Regaïa, mais vigoureusement condamné par le ministère de la Santé. **12.5/20**",
+                "Pour un plat improvisé à l'arrache dans le serv d'Epsys, c'est franchement honorable. **15/20**",
+                "Ce plat dégage une énergie purement chaotique mais étrangement réconfortante. **14/20**",
+                "C'est le plat officiel du seum du dimanche soir. Un grand classique de la cuisine. **16.5/20**"
+            ];
+            const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
+            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
+            const nom = cibleMember?.displayName ?? cibleUser.username;
+            const phrase = critiques[Math.floor(Math.random() * critiques.length)];
+
+            const embed = new EmbedBuilder()
+                .setColor(0xe67e22)
+                .setTitle(`👨‍🍳 Le Verdict Top Chef pour ${nom}`)
+                .setDescription(phrase)
+                .setFooter({ text: '- Cacabot Critique Gastronomique' });
+
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        if (commandName === 'question') {
+            const embed = new EmbedBuilder()
+                .setColor(0x9b59b6)
+                .setTitle("❓ Question du soir")
+                .setDescription("Choisis une catégorie pour recevoir une question aléatoire !");
+
+            const menu = new StringSelectMenuBuilder()
+                .setCustomId('question_menu')
+                .setPlaceholder('Choisis une catégorie')
+                .addOptions(
+                    { label: '🗣️ Débats / Opinions', value: 'debats' },
+                    { label: '🤫 Confession / Introspection', value: 'confession' },
+                    { label: '🤔 Hypothétiques', value: 'hypothetiques' },
+                    { label: '🏠 Spéciales Regaïa', value: 'serveur' },
+                    { label: '🧠 Philosophie de comptoir', value: 'philosophie' },
+                    { label: '🎲 Aléatoires / Chaos', value: 'aleatoires' }
+                );
+
+            const row = new ActionRowBuilder().addComponents(menu);
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'choix') {
+            const questionTexte = interaction.options.getString('question');
+            const reponse = getResponse(`!choix ${questionTexte}`);
+            return interaction.reply({ content: reponse });
+        }
+
+        if (commandName === 'suggestion') {
+            const SUGGESTION_CHANNEL_ID = '720079866199801937';
+            if (interaction.channel.id !== SUGGESTION_CHANNEL_ID) {
+                return interaction.reply({ content: `💡 Les suggestions se font uniquement dans le salon <#${SUGGESTION_CHANNEL_ID}> !`, ephemeral: true });
+            }
+
+            const texte = interaction.options.getString('proposition');
+            const data = {
+                authorId: interaction.user.id,
+                texte: texte,
+                pour: [],
+                contre: []
+            };
+
+            const embed = buildSuggestionEmbed(data, interaction.member);
+            const row = buildSuggestionRow(data);
+
+            const sent = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
+            suggestionsData.set(sent.id, data);
+            demanderSauvegarde();
+            return;
+        }
+
+        if (commandName === 'anniversaire') {
+            const sub = interaction.options.getSubcommand();
+            const guildBirthdays = getGuildBirthdays(interaction.guild.id);
+
+            if (sub === 'show') {
+                const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
+                const date = guildBirthdays[cibleUser.id];
+                const nom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
+                if (!date) return interaction.reply({ content: `🎂 **${nom}** n'a pas encore enregistré son anniversaire.`, ephemeral: true });
+                const [d, m] = date.split('/').map(Number);
+                const now = new Date(); const next = new Date(now.getFullYear(), m - 1, d);
+                if (next < now) next.setFullYear(now.getFullYear() + 1);
+                const diffDays = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
+                const joursStr = diffDays === 0 ? "c'est aujourd'hui 🎉 !" : diffDays === 1 ? "c'est demain 🎉 !" : `dans **${diffDays} jours** !`;
+                return interaction.reply(`🎂 L'anniversaire de **${nom}** est le **${date}** — ${joursStr}`);
+            }
+
+            if (sub === 'set') {
+                const date = interaction.options.getString('date');
+                if (!/^\d{2}\/\d{2}$/.test(date)) {
+                    return interaction.reply({ content: "Format invalide ! Utilise le format `JJ/MM` (ex : `24/07`).", ephemeral: true });
+                }
+                const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
+                const nom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
+                guildBirthdays[cibleUser.id] = date;
+                await saveBirthdays();
+                return interaction.reply(`🎂 L'anniversaire de **${nom}** a été enregistré le **${date}** !`);
+            }
+
+            if (sub === 'list') {
+                const entries = Object.entries(guildBirthdays);
+                if (entries.length === 0) return interaction.reply({ content: "Aucun anniversaire enregistré !", ephemeral: true });
+                const authorId = interaction.user.id;
+                const PAGE_SIZE = 10;
+
+                const sorted = [...entries].sort((a, b) => {
+                    const [da, ma] = a[1].split('/').map(Number);
+                    const [db, mb] = b[1].split('/').map(Number);
+                    return ma !== mb ? ma - mb : da - db;
+                });
+                const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
+                const slice = sorted.slice(0, PAGE_SIZE);
+                const lines = slice.map(([uid, date]) => `<@${uid}> — **${date}**`).join('\n');
+                const embed = new EmbedBuilder()
+                    .setColor(0xff69b4)
+                    .setTitle('🎂 Anniversaires du serveur')
+                    .setDescription(lines)
+                    .setFooter({ text: `Page 1/${totalPages} • 📅 Ordre classique` });
+
+                const prev = new ButtonBuilder().setCustomId(`anniv_list_classique_${authorId}_0_prev`).setLabel('⬅️ Arrière').setStyle(ButtonStyle.Secondary).setDisabled(true);
+                const next = new ButtonBuilder().setCustomId(`anniv_list_classique_${authorId}_0_next`).setLabel('Suivant ➡️').setStyle(ButtonStyle.Secondary).setDisabled(totalPages <= 1);
+                const chronoBtn = new ButtonBuilder().setCustomId(`anniv_list_chrono_${authorId}_0_switch`).setLabel('🕒 Ordre chronologique').setStyle(ButtonStyle.Secondary);
+                const classiqueBtn = new ButtonBuilder().setCustomId(`anniv_list_classique_${authorId}_0_switch`).setLabel('📅 Ordre classique').setStyle(ButtonStyle.Primary);
+                const row1 = new ActionRowBuilder().addComponents(prev, next);
+                const row2 = new ActionRowBuilder().addComponents(chronoBtn, classiqueBtn);
+                return interaction.reply({ embeds: [embed], components: [row1, row2] });
+            }
+
+            if (sub === 'next') {
+                const entries = Object.entries(guildBirthdays);
+                if (entries.length === 0) return interaction.reply({ content: "Aucun anniversaire enregistré !", ephemeral: true });
+                const now = new Date();
+                const toDate = (str) => {
+                    const [d, m] = str.split('/').map(Number);
+                    const year = (m < now.getMonth() + 1 || (m === now.getMonth() + 1 && d < now.getDate())) ? now.getFullYear() + 1 : now.getFullYear();
+                    return new Date(year, m - 1, d);
+                };
+                const next = entries.sort((a, b) => toDate(a[1]) - toDate(b[1]))[0];
+                const member = interaction.guild?.members.cache.get(next[0]);
+                const name = member?.displayName ?? `<@${next[0]}>`;
+                const nextDate = toDate(next[1]);
+                const diffMs = nextDate - now;
+                const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+                const joursStr = diffDays === 0 ? "c'est aujourd'hui 🎉" : diffDays === 1 ? "demain 🎉" : `dans **${diffDays} jours**`;
+                return interaction.reply(`🎂 Le prochain anniversaire est celui de **${name}** le **${next[1]}** — ${joursStr} !`);
+            }
+
+            if (sub === 'remove') {
+                const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
+                if (!guildBirthdays[cibleUser.id]) {
+                    return interaction.reply({ content: "Cet anniversaire n'est pas enregistré !", ephemeral: true });
+                }
+                const nom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
+                delete guildBirthdays[cibleUser.id];
+                await saveBirthdays();
+                return interaction.reply(`🗑️ L'anniversaire de **${nom}** a été supprimé !`);
+            }
+        }
+
+        // =========================
+        // LOT 4 : STATS, UTILITAIRES & YOUTUBE
+        // =========================
+
+        if (commandName === 'actif') {
+            cleanOldData();
+            const authorId = interaction.user.id;
+            const medals = ['🥇', '🥈', '🥉'];
+            const counts = dailyData[getTodayKey()] ?? {};
+            const sorted = Object.entries(counts).filter(([uid]) => uid !== '1503495713097519355').sort((a, b) => b[1] - a[1]).slice(0, 10);
+            const fields = sorted.length > 0
+                ? sorted.map(([uid, count], i) => {
+                    const member = interaction.guild?.members.cache.get(uid);
+                    const name = member?.displayName ?? 'Membre inconnu';
+                    const medal = medals[i] ?? `**${i + 1}.**`;
+                    return { name: `${medal} ${name}`, value: `${count} messages`, inline: false };
+                })
+                : [{ name: 'Aucune donnée', value: 'Pas encore de messages aujourd\'hui !', inline: false }];
+
+            const embed = new EmbedBuilder().setColor(0xffd700).setTitle("📅 Membres les plus actifs aujourd'hui").addFields(fields);
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`actif_jour_${authorId}`).setLabel('📅 Jour').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`actif_semaine_${authorId}`).setLabel('🗓️ Semaine').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`actif_mois_${authorId}`).setLabel('📆 Mois').setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
+        if (commandName === 'avatar') {
+            const cible = interaction.options.getUser('membre') ?? interaction.user;
+            const embed = new EmbedBuilder()
+                .setColor(0x5865f2)
+                .setTitle(`Avatar de ${cible.username}`)
+                .setImage(cible.displayAvatarURL({ dynamic: true, size: 1024 }));
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        if (commandName === 'serveur') {
+            const guild = interaction.guild;
+            if (!guild) return interaction.reply({ content: "Cette commande ne peut être utilisée que sur un serveur.", ephemeral: true });
+            await guild.fetch();
+            const owner = await guild.fetchOwner();
+            const createdAt = guild.createdAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+            const embed = new EmbedBuilder()
+                .setColor(0x00ebff)
+                .setTitle(guild.name)
+                .setThumbnail(guild.iconURL({ dynamic: true, size: 256 }))
+                .setDescription(guild.description || '*Aucune description*')
+                .addFields(
+                    { name: '👑 Propriétaire', value: owner.user.tag, inline: true },
+                    { name: '📅 Création', value: createdAt, inline: true },
+                    { name: '\u200b', value: '\u200b', inline: true },
+                    { name: '👥 Membres', value: `${guild.memberCount}`, inline: true },
+                    { name: '💬 Salons', value: `${guild.channels.cache.size}`, inline: true },
+                    { name: '🏷️ Rôles', value: `${guild.roles.cache.size}`, inline: true },
+                    { name: '🚀 Niveau de boost', value: `Niveau ${guild.premiumTier}`, inline: true },
+                    { name: '💫 Boosts', value: `${guild.premiumSubscriptionCount}`, inline: true },
+                    { name: '🆔 ID', value: guild.id, inline: true }
+                )
+                .addFields(
+                    { name: '\u200b', value: '[🔗 Lien d\'invitation du serveur](https://discord.com/invite/maAbUYb)', inline: false }
+                );
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        if (commandName === 'meteo') {
+            const ville = interaction.options.getString('ville');
+            await interaction.deferReply();
+            try {
+                const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(ville)}&count=1&language=fr&format=json`);
+                const geoData = await geoRes.json();
+                if (!geoData.results || geoData.results.length === 0) {
+                    return interaction.editReply(`Ville introuvable : **${ville}**`);
+                }
+                const { latitude, longitude, name, country } = geoData.results[0];
+                const meteoRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`);
+                const meteoData = await meteoRes.json();
+                const current = meteoData.current;
+                const weatherDesc = {
+                    0: '☀️ Ciel dégagé', 1: '🌤️ Plutôt dégagé', 2: '⛅ Partiellement nuageux', 3: '☁️ Couvert',
+                    45: '🌫️ Brouillard', 48: '🌫️ Brouillard givrant',
+                    51: '🌦️ Bruine légère', 53: '🌦️ Bruine', 55: '🌦️ Bruine forte',
+                    61: '🌧️ Pluie légère', 63: '🌧️ Pluie', 65: '🌧️ Pluie forte',
+                    71: '🌨️ Neige légère', 73: '🌨️ Neige', 75: '🌨️ Neige forte',
+                    80: '🌦️ Averses', 81: '🌦️ Averses fortes', 82: '⛈️ Averses violentes',
+                    95: '⛈️ Orage', 96: '⛈️ Orage avec grêle', 99: '⛈️ Orage violent avec grêle'
+                };
+                const description = weatherDesc[current.weather_code] || 'Conditions inconnues';
+                const localTime = current.time.split('T')[1];
+                const [heureLocale, minLocale] = localTime.split(':');
+                const heureFormatee = `${heureLocale}h${minLocale}`;
+
+                const embed = new EmbedBuilder()
+                    .setColor(0x3498db)
+                    .setTitle(`🌍 Météo à ${name}${country ? ', ' + country : ''}`)
+                    .setDescription(description)
+                    .addFields(
+                        { name: '🌡️ Température', value: `${current.temperature_2m}°C (ressenti ${current.apparent_temperature}°C)`, inline: true },
+                        { name: '💧 Humidité', value: `${current.relative_humidity_2m}%`, inline: true },
+                        { name: '💨 Vent', value: `${current.wind_speed_10m} km/h`, inline: true },
+                        { name: '🕒 Heure locale', value: heureFormatee, inline: true }
+                    )
+                    .setFooter({ text: 'Données via Open-Meteo' })
+                    .setTimestamp();
+                return interaction.editReply({ embeds: [embed] });
+            } catch (e) {
+                return interaction.editReply("Erreur lors de la récupération de la météo.");
+            }
+        }
+
+        if (commandName === 'pomodoro') {
+            const sub = interaction.options.getSubcommand();
+            if (sub === 'stop') {
+                if (!pomodoroSessions.has(interaction.channel.id)) {
+                    return interaction.reply({ content: "Aucun pomodoro en cours dans ce salon !", ephemeral: true });
+                }
+                const stopSession = pomodoroSessions.get(interaction.channel.id);
+                clearTimeout(stopSession.timeout);
+                clearInterval(stopSession.updateInterval);
+                if (stopSession?.message) await stopSession.message.delete().catch(() => {});
+                pomodoroSessions.delete(interaction.channel.id);
+                return interaction.reply("⏹️ Pomodoro arrêté !");
+            }
+            if (sub === 'lancer') {
+                if (pomodoroSessions.has(interaction.channel.id)) {
+                    return interaction.reply({ content: "Un pomodoro est déjà en cours dans ce salon ! Utilise `/pomodoro stop` pour l'arrêter.", ephemeral: true });
+                }
+                const workMenu = new StringSelectMenuBuilder()
+                    .setCustomId(`pomo_setup_work_${interaction.user.id}_${interaction.channel.id}`)
+                    .setPlaceholder('Durée de travail...')
+                    .addOptions([5,10,15,20,25,30,35,40,45,50,55,60].map(n => ({ label: `${n} minutes`, value: `${n}` })));
+
+                const breakMenu = new StringSelectMenuBuilder()
+                    .setCustomId(`pomo_setup_break_${interaction.user.id}_${interaction.channel.id}`)
+                    .setPlaceholder('Durée de pause...')
+                    .addOptions([5,10,15,20,25,30].map(n => ({ label: `${n} minutes`, value: `${n}` })));
+
+                const reasonMenu = new StringSelectMenuBuilder()
+                    .setCustomId(`pomo_setup_reason_${interaction.user.id}_${interaction.channel.id}`)
+                    .setPlaceholder('Raison du pomodoro...')
+                    .addOptions([
+                        { label: 'Devoirs', value: 'Devoirs', emoji: '📚' },
+                        { label: 'Montage', value: 'Montage', emoji: '🎬' },
+                        { label: 'Composition', value: 'Composition', emoji: '🎵' },
+                        { label: 'Écriture', value: 'Écriture', emoji: '✍️' },
+                        { label: 'Code', value: 'Code', emoji: '💻' },
+                    ]);
+
+                const embed = new EmbedBuilder()
+                    .setColor(0xe74c3c)
+                    .setTitle('🍅 Configurer le Pomodoro')
+                    .setDescription('Choisis la durée de travail et la durée de pause !')
+                    .addFields(
+                        { name: '⏱️ Travail', value: 'Non défini', inline: true },
+                        { name: '⏸️ Pause', value: 'Non défini', inline: true },
+                        { name: '🎯 Raison', value: 'Non défini', inline: true }
+                    );
+
+                return interaction.reply({ embeds: [embed], components: [
+                    new ActionRowBuilder().addComponents(workMenu),
+                    new ActionRowBuilder().addComponents(breakMenu),
+                    new ActionRowBuilder().addComponents(reasonMenu)
+                ]});
+            }
+        }
+
+        if (commandName === 'rappel') {
+            const sub = interaction.options.getSubcommand();
+            if (sub === 'list') {
+                const mine = [...pendingRappels.entries()].filter(([, r]) => r.targetId === interaction.user.id);
+                if (mine.length === 0) return interaction.reply({ content: "Tu n'as aucun rappel en attente !", ephemeral: true });
+                const fields = mine.sort((a, b) => a[1].triggerAt - b[1].triggerAt).map(([, r]) => {
+                    const remainingMs = r.triggerAt - Date.now();
+                    const mins = Math.max(0, Math.floor(remainingMs / 60000));
+                    const secs = Math.max(0, Math.floor((remainingMs % 60000) / 1000));
+                    const dansStr = mins > 0 ? `dans ${mins}min ${secs}s` : `dans ${secs}s`;
+                    return { name: r.texte, value: dansStr, inline: false };
+                });
+                const embed = new EmbedBuilder().setColor(0x5865f2).setTitle('⏰ Tes rappels en attente').addFields(fields);
+                return interaction.reply({ embeds: [embed] });
+            }
+            if (sub === 'remove') {
+                const query = interaction.options.getString('nom').toLowerCase();
+                const mine = [...pendingRappels.entries()].filter(([, r]) => r.targetId === interaction.user.id);
+                const match = mine.find(([, r]) => r.texte.toLowerCase() === query) ?? mine.find(([, r]) => r.texte.toLowerCase().includes(query));
+                if (!match) return interaction.reply({ content: "Aucun rappel correspondant trouvé !", ephemeral: true });
+                const [id, r] = match;
+                clearTimeout(r.timeout);
+                pendingRappels.delete(id);
+                return interaction.reply(`🗑️ Rappel supprimé : **${r.texte}**`);
+            }
+            if (sub === 'ajouter') {
+                const timeStr = interaction.options.getString('temps').toLowerCase();
+                const texte = interaction.options.getString('message');
+                let ms = 0;
+                if (timeStr.endsWith('min')) ms = parseInt(timeStr) * 60 * 1000;
+                else if (timeStr.endsWith('h')) ms = parseInt(timeStr) * 60 * 60 * 1000;
+                else if (timeStr.endsWith('s')) ms = parseInt(timeStr) * 1000;
+                else return interaction.reply({ content: "Format invalide ! Utilise `Xmin`, `Xh` ou `Xs` (ex : `15min`).", ephemeral: true });
+                if (isNaN(ms) || ms <= 0 || ms > 24 * 60 * 60 * 1000) return interaction.reply({ content: "Durée invalide (maximum 24h) !", ephemeral: true });
+
+                scheduleRappel(interaction.channel.id, interaction.user.id, texte, ms);
+                return interaction.reply(`⏰ Rappel enregistré ! Je te ping dans **${timeStr}** pour : **${texte}**.`);
+            }
+        }
+
+        if (commandName === 'aternos') {
+            return interaction.reply("L'IP actuelle du serveur Minecraft de Regaïa est : **papierprout.aternos.me**");
+        }
+
+        if (commandName === 'youtube') {
+            const query = interaction.options.getString('recherche');
+            await interaction.deferReply();
+            try {
+                const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=5&key=${process.env.YOUTUBE_API_KEY}`);
+                const searchData = await searchRes.json();
+                if (!searchData.items || searchData.items.length === 0) return interaction.editReply("Aucun résultat trouvé !");
+                const videoIds = searchData.items.map(i => i.id.videoId).join(',');
+                const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoIds}&key=${process.env.YOUTUBE_API_KEY}`);
+                const detailData = await detailRes.json();
+                const videos = detailData.items;
+
+                const buildYtEmbed = (index) => {
+                    const v = videos[index];
+                    const s = v.snippet;
+                    const st = v.statistics || {};
+                    const duration = v.contentDetails.duration.replace('PT', '').replace('H', 'h ').replace('M', 'min ').replace('S', 's');
+                    const views = st.viewCount ? parseInt(st.viewCount).toLocaleString('fr-FR') : '0';
+                    const likes = st.likeCount ? parseInt(st.likeCount).toLocaleString('fr-FR') : 'Masqué';
+                    const comments = st.commentCount ? parseInt(st.commentCount).toLocaleString('fr-FR') : 'Désactivés';
+                    const date = new Date(s.publishedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+                    const minUrl = s.thumbnails.maxres?.url ?? s.thumbnails.high?.url ?? s.thumbnails.default?.url;
+
+                    return new EmbedBuilder()
+                        .setColor(0xff0000)
+                        .setTitle(s.title)
+                        .setURL(`https://www.youtube.com/watch?v=${v.id}`)
+                        .setImage(minUrl)
+                        .addFields(
+                            { name: '📺 Chaîne', value: s.channelTitle, inline: true },
+                            { name: '⏱️ Durée', value: duration, inline: true },
+                            { name: '👁️ Vues', value: views, inline: true },
+                            { name: '👍 Likes', value: likes, inline: true },
+                            { name: '💬 Commentaires', value: comments, inline: true },
+                            { name: '📅 Publié le', value: date, inline: true }
+                        )
+                        .setFooter({ text: `Résultat ${index + 1}/${videos.length}` });
+                };
+
+                const firstVideo = videos[0];
+                const firstUrl = `https://www.youtube.com/watch?v=${firstVideo.id}`;
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`yt_prev_${interaction.user.id}_0`).setLabel('⏮️ Précédent').setStyle(ButtonStyle.Secondary).setDisabled(true),
+                    new ButtonBuilder().setCustomId(`yt_next_${interaction.user.id}_0`).setLabel('⏭️ Suivant').setStyle(ButtonStyle.Secondary).setDisabled(videos.length <= 1),
+                    new ButtonBuilder().setLabel('🔗 Ouvrir').setStyle(ButtonStyle.Link).setURL(firstUrl),
+                    new ButtonBuilder().setCustomId(`yt_close_${interaction.user.id}`).setLabel('❌ Fermer').setStyle(ButtonStyle.Danger)
+                );
+                const sent = await interaction.editReply({ embeds: [buildYtEmbed(0)], components: [row] });
+                youtubeSearches.set(sent.id, { videos, authorId: interaction.user.id });
+                setTimeout(() => youtubeSearches.delete(sent.id), 5 * 60 * 1000);
+                return;
+            } catch (e) {
+                return interaction.editReply("Erreur lors de la recherche YouTube.");
+            }
+        }
+
+        if (commandName === 'last') {
+            const query = interaction.options.getString('chaine');
+            await interaction.deferReply();
+            try {
+                let channelId = null;
+                const urlMatch = query.match(/(?:youtube\.com\/(?:channel\/|c\/|@)|@)([a-zA-Z0-9_-]+)/);
+                const handle = urlMatch ? urlMatch[1] : null;
+
+                if (query.includes('youtube.com/channel/')) {
+                    channelId = query.split('channel/')[1].split(/[/?]/)[0];
+                } else {
+                    const searchTerm = handle ?? query;
+                    const forHandleRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(searchTerm.replace('@', ''))}&key=${process.env.YOUTUBE_API_KEY}`);
+                    const forHandleData = await forHandleRes.json();
+                    if (forHandleData.items && forHandleData.items.length > 0) {
+                        channelId = forHandleData.items[0].id;
+                    } else {
+                        const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchTerm)}&type=channel&maxResults=1&key=${process.env.YOUTUBE_API_KEY}`);
+                        const searchData = await searchRes.json();
+                        if (searchData.items && searchData.items.length > 0) {
+                            channelId = searchData.items[0].snippet.channelId;
+                        }
+                    }
+                }
+                if (!channelId) return interaction.editReply("Chaîne introuvable !");
+
+                const latestRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&maxResults=1&type=video&key=${process.env.YOUTUBE_API_KEY}`);
+                const latestData = await latestRes.json();
+                if (!latestData.items || latestData.items.length === 0) return interaction.editReply("Aucune vidéo trouvée pour cette chaîne !");
+
+                const video = latestData.items[0];
+                const videoId = video.id.videoId;
+                const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoId}&key=${process.env.YOUTUBE_API_KEY}`);
+                const detailData = await detailRes.json();
+                const fullVideo = detailData.items[0];
+
+                const duration = fullVideo.contentDetails.duration.replace('PT', '').replace('H', 'h ').replace('M', 'min ').replace('S', 's');
+                const views = parseInt(fullVideo.statistics.viewCount).toLocaleString('fr-FR');
+                const date = new Date(video.snippet.publishedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+                const embed = new EmbedBuilder()
+                    .setColor(0xff0000)
+                    .setTitle(decodeHtmlEntities(video.snippet.title))
+                    .setURL(`https://www.youtube.com/watch?v=${videoId}`)
+                    .setThumbnail(video.snippet.thumbnails.high.url)
+                    .addFields(
+                        { name: '📺 Chaîne', value: video.snippet.channelTitle, inline: true },
+                        { name: '⏱️ Durée', value: duration, inline: true },
+                        { name: '👁️ Vues', value: views, inline: true },
+                        { name: '📅 Publié le', value: date, inline: true }
+                    );
+
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setLabel('🔗 Ouvrir').setStyle(ButtonStyle.Link).setURL(`https://www.youtube.com/watch?v=${videoId}`),
+                    new ButtonBuilder().setCustomId(`yt_close_${interaction.user.id}`).setLabel('❌ Fermer').setStyle(ButtonStyle.Danger)
+                );
+                return interaction.editReply({ embeds: [embed], components: [row] });
+            } catch (e) {
+                return interaction.editReply("Erreur lors de la récupération de la vidéo.");
+            }
+        }
+
+        if (commandName === 'stats') {
+            const query = interaction.options.getString('chaine');
+            await interaction.deferReply();
+            try {
+                let channelId = null;
+                const urlMatch = query.match(/(?:youtube\.com\/(?:channel\/|c\/|@)|@)([a-zA-Z0-9_-]+)/);
+                const handle = urlMatch ? urlMatch[1] : null;
+
+                if (query.includes('youtube.com/channel/')) {
+                    channelId = query.split('channel/')[1].split(/[/?]/)[0];
+                } else {
+                    const searchTerm = handle ?? query;
+                    const forHandleRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(searchTerm.replace('@', ''))}&key=${process.env.YOUTUBE_API_KEY}`);
+                    const forHandleData = await forHandleRes.json();
+                    if (forHandleData.items && forHandleData.items.length > 0) {
+                        channelId = forHandleData.items[0].id;
+                    } else {
+                        const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchTerm)}&type=channel&maxResults=1&key=${process.env.YOUTUBE_API_KEY}`);
+                        const searchData = await searchRes.json();
+                        if (searchData.items && searchData.items.length > 0) {
+                            channelId = searchData.items[0].snippet.channelId;
+                        }
+                    }
+                }
+                if (!channelId) return interaction.editReply("Chaîne introuvable !");
+
+                const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${channelId}&key=${process.env.YOUTUBE_API_KEY}`);
+                const detailData = await detailRes.json();
+                if (!detailData.items || detailData.items.length === 0) return interaction.editReply("Chaîne introuvable !");
+
+                const channel = detailData.items[0];
+                const snippet = channel.snippet;
+                const statistics = channel.statistics;
+                const createdDate = new Date(snippet.publishedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+
+                const formatNumber = (num) => {
+                    const n = parseInt(num);
+                    if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1).replace('.0', '') + ' Md';
+                    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.0', '') + ' M';
+                    if (n >= 1_000) return (n / 1_000).toFixed(1).replace('.0', '') + ' k';
+                    return n.toLocaleString('fr-FR');
+                };
+
+                const embed = new EmbedBuilder()
+                    .setColor(0xff0000)
+                    .setTitle(snippet.title)
+                    .setURL(`https://www.youtube.com/channel/${channelId}`)
+                    .setThumbnail(snippet.thumbnails.high?.url ?? snippet.thumbnails.default.url)
+                    .setDescription(snippet.description ? snippet.description.slice(0, 200) + (snippet.description.length > 200 ? '...' : '') : '*Aucune description*')
+                    .addFields(
+                        { name: '👥 Abonnés', value: statistics.hiddenSubscriberCount ? 'Caché' : formatNumber(statistics.subscriberCount), inline: true },
+                        { name: '👁️ Vues totales', value: formatNumber(statistics.viewCount), inline: true },
+                        { name: '🎬 Vidéos', value: formatNumber(statistics.videoCount), inline: true },
+                        { name: '📅 Création', value: createdDate, inline: true }
+                    )
+                    .setFooter({ text: `ID : ${channelId}` });
+
+                return interaction.editReply({ embeds: [embed] });
+            } catch (e) {
+                return interaction.editReply("Erreur lors de la récupération des stats.");
+            }
+        }
+
+        if (commandName === 'botinfo') {
+            const startDate = new Date('2026-05-14T00:00:00');
+            const now = new Date();
+            const diff = now - startDate;
+            const totalHours = Math.floor(diff / (1000 * 60 * 60));
+            const totalDays = Math.floor(totalHours / 24);
+            const months = Math.floor(totalDays / 30);
+            const days = totalDays % 30;
+            const hours = totalHours % 24;
+
+            let uptime = '';
+            if (months > 0) uptime += `${months} mois, `;
+            if (months > 0 || days > 0) uptime += `${days} jour${days > 1 ? 's' : ''}, `;
+            uptime += `${hours} heure${hours > 1 ? 's' : ''}`;
+
+            const commitCount = await getCommitCount();
+            const versionStr = commitCount ? `Version 1.${commitCount}` : 'Version inconnue';
+
+            const embed = new EmbedBuilder()
+                .setColor(0x5865f2)
+                .setTitle('🤖 Infos de Cacabot')
+                .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
+                .addFields(
+                    { name: '💻 Commandes', value: '30+', inline: true },
+                    { name: '💬 Messages envoyés', value: `${topData.messages['1503495713097519355'] ?? 0}`, inline: true },
+                    { name: '\u200b', value: '\u200b', inline: true },
+                    { name: '👑 Créatrice', value: 'Epsys', inline: true },
+                    { name: '🤝 Collaboratrice', value: '[BDN](https://bdn-fr.xyz/)', inline: true },
+                    { name: '\u200b', value: '\u200b', inline: true },
+                    { name: '📟 Version', value: versionStr, inline: true },
+                    { name: '🕒 En ligne depuis', value: uptime, inline: true },
+                    { name: '\u200b', value: '\u200b', inline: true }
+                );
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        if (commandName === 'ping') {
+            await interaction.deferReply();
+            const replyMsg = await interaction.fetchReply();
+            const latence = replyMsg.createdTimestamp - interaction.createdTimestamp;
+            const wsLatence = client.ws.ping;
+            const embed = new EmbedBuilder()
+                .setColor(latence < 100 ? 0x2ecc71 : latence < 250 ? 0xf39c12 : 0xe74c3c)
+                .setTitle('🏓 Pong !')
+                .addFields(
+                    { name: '📨 Latence', value: `${latence}ms`, inline: true },
+                    { name: '🔌 WebSocket', value: `${wsLatence}ms`, inline: true }
+                );
+            return interaction.editReply({ embeds: [embed] });
         }
     }
 
@@ -9108,13 +10251,117 @@ client.once('ready', async () => {
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre dont tu veux voir les succès')),
         new SlashCommandBuilder().setName('rltstats').setDescription('Voir les statistiques complètes d\'un·e membre sur la roulette')
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre dont tu veux voir les stats')),
-        new SlashCommandBuilder().setName('top').setDescription('Classement des membres les plus actifs sur le serveur')
+        new SlashCommandBuilder().setName('top').setDescription('Classement des membres les plus actifs sur le serveur'),
+
+        // Lot 1 : Interactions & Social
+        new SlashCommandBuilder().setName('kiss').setDescription('Embrasser un·e membre')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à embrasser').setRequired(true)),
+        new SlashCommandBuilder().setName('hug').setDescription('Faire un câlin à un·e membre')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à câliner').setRequired(true)),
+        new SlashCommandBuilder().setName('rizz').setDescription('Tenter de séduire un·e membre')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à rizz').setRequired(true)),
+        new SlashCommandBuilder().setName('punch').setDescription('Frapper un·e membre')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à frapper').setRequired(true)),
+        new SlashCommandBuilder().setName('bang').setDescription('Tirer sur un·e membre')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à viser').setRequired(true)),
+        new SlashCommandBuilder().setName('insult').setDescription('Insulter gratuitement un·e membre')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à insulter').setRequired(true)),
+        new SlashCommandBuilder().setName('bait').setDescription('Ragebait un·e membre')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à bait').setRequired(true)),
+        new SlashCommandBuilder().setName('ban').setDescription('Faussement bannir un·e membre')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à bannir').setRequired(true)),
+        new SlashCommandBuilder().setName('danse').setDescription('S\'ambiancer en solo ou inviter quelqu\'un sur le dancefloor')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre avec qui danser (optionnel)')),
+        new SlashCommandBuilder().setName('rire').setDescription('Se taper une barre de rire')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre dont tu te moques (optionnel)')),
+        new SlashCommandBuilder().setName('cry').setDescription('Pleurer en solo ou à cause de quelqu\'un')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre qui te fait pleurer (optionnel)')),
+        new SlashCommandBuilder().setName('run').setDescription('Prendre la fuite')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre que tu fuis (optionnel)')),
+        new SlashCommandBuilder().setName('explode').setDescription('Exploser sans aucune raison valable'),
+        new SlashCommandBuilder().setName('die').setDescription('Mourir dans d\'atroces souffrances')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre qui cause ta mort (optionnel)')),
+        new SlashCommandBuilder().setName('jailaref').setDescription('Affirmer fièrement que tu as la référence')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre dont tu as la ref (optionnel)')),
+        new SlashCommandBuilder().setName('palaref').setDescription('Assumer que tu n\'as absolument rien compris')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre dont tu n\'as pas la ref (optionnel)')),
+
+        // Lot 2 : Jeux, Hasard & Destin
+        new SlashCommandBuilder().setName('destin').setDescription('Prédit votre destin et les événements de votre futur'),
+        new SlashCommandBuilder().setName('horoscope').setDescription('L\'oracle cosmique du jour selon Cacabot'),
+        new SlashCommandBuilder().setName('animal').setDescription('Devine ton animal spirituel parmi plus de 7000 combinaisons')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à analyser (toi par défaut)')),
+        new SlashCommandBuilder().setName('flip').setDescription('Lancer une pièce à pile ou face (solo ou duel)'),
+        new SlashCommandBuilder().setName('blague').setDescription('Raconte une blague aléatoire')
+            .addStringOption(opt => opt.setName('type').setDescription('Catégorie de blague').addChoices(
+                { name: 'Humour soft', value: 'soft' },
+                { name: 'Humour classique', value: 'classique' },
+                { name: 'Humour noir', value: 'noir' }
+            )),
+        new SlashCommandBuilder().setName('wanted').setDescription('Affiche l\'avis de recherche du criminel du jour'),
+        new SlashCommandBuilder().setName('epsys').setDescription('Envoie un GIF aléatoire d\'Epsys'),
+        new SlashCommandBuilder().setName('sylvain').setDescription('Singe fort ensemble (GIF de Sylvain Lévy)'),
+        new SlashCommandBuilder().setName('rltstate').setDescription('Voir les effets actifs d\'un·e membre sur la roulette')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter (toi par défaut)')),
+
+        // Lot 3 : Salons & Vie du Serveur
+        new SlashCommandBuilder().setName('topchef').setDescription('Donne une note et une critique gastronomique à un plat')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le chef ou la cheffe à noter (toi par défaut)')),
+        new SlashCommandBuilder().setName('question').setDescription('Déclenche une question de débat du soir parmi 6 thématiques'),
+        new SlashCommandBuilder().setName('choix').setDescription('Laisse Cacabot trancher un dilemme')
+            .addStringOption(opt => opt.setName('question').setDescription('Ex : pizza ou burger ?').setRequired(true)),
+        new SlashCommandBuilder().setName('suggestion').setDescription('Proposer une idée pour le serveur dans le salon dédié')
+            .addStringOption(opt => opt.setName('proposition').setDescription('Ton idée ou suggestion pour le serveur').setRequired(true)),
+        new SlashCommandBuilder().setName('anniversaire').setDescription('Gestion des anniversaires du serveur')
+            .addSubcommand(sub => sub.setName('show').setDescription('Affiche un anniversaire et le compte à rebours')
+                .addUserOption(opt => opt.setName('membre').setDescription('Le membre à consulter (toi par défaut)')))
+            .addSubcommand(sub => sub.setName('set').setDescription('Enregistre un anniversaire (format JJ/MM)')
+                .addStringOption(opt => opt.setName('date').setDescription('Date au format JJ/MM (ex : 24/07)').setRequired(true))
+                .addUserOption(opt => opt.setName('membre').setDescription('Le membre à qui attribuer la date (toi par défaut)')))
+            .addSubcommand(sub => sub.setName('list').setDescription('Affiche la liste complète des anniversaires du serveur'))
+            .addSubcommand(sub => sub.setName('next').setDescription('Affiche le tout prochain anniversaire à fêter'))
+            .addSubcommand(sub => sub.setName('remove').setDescription('Supprime un anniversaire enregistré')
+                .addUserOption(opt => opt.setName('membre').setDescription('Le membre dont supprimer l\'anniversaire (toi par défaut)'))),
+
+        // Lot 4 : Stats, Utilitaires & YouTube
+        new SlashCommandBuilder().setName('actif').setDescription('Podium des membres les plus actifs (Jour, Semaine, Mois)'),
+        new SlashCommandBuilder().setName('avatar').setDescription('Affiche l\'avatar d\'un·e membre en grand format')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter (toi par défaut)')),
+        new SlashCommandBuilder().setName('serveur').setDescription('Statistiques et informations complètes sur le serveur Regaïa'),
+        new SlashCommandBuilder().setName('meteo').setDescription('Météo en direct d\'une ville')
+            .addStringOption(opt => opt.setName('ville').setDescription('La ville (ex : Paris, Tokyo, Montréal)').setRequired(true)),
+        new SlashCommandBuilder().setName('pomodoro').setDescription('Démarrer ou arrêter une session de travail Pomodoro')
+            .addSubcommand(sub => sub.setName('lancer').setDescription('Configurer et démarrer une session Pomodoro'))
+            .addSubcommand(sub => sub.setName('stop').setDescription('Arrêter le Pomodoro en cours dans ce salon')),
+        new SlashCommandBuilder().setName('rappel').setDescription('Gérer tes rappels programmés')
+            .addSubcommand(sub => sub.setName('ajouter').setDescription('Programmer un rappel')
+                .addStringOption(opt => opt.setName('temps').setDescription('Ex : 10min, 1h, 30s').setRequired(true))
+                .addStringOption(opt => opt.setName('message').setDescription('Le texte du rappel').setRequired(true)))
+            .addSubcommand(sub => sub.setName('list').setDescription('Voir tes rappels en attente'))
+            .addSubcommand(sub => sub.setName('remove').setDescription('Supprimer un rappel existant')
+                .addStringOption(opt => opt.setName('nom').setDescription('Le texte du rappel à supprimer').setRequired(true))),
+        new SlashCommandBuilder().setName('aternos').setDescription('Affiche l\'adresse IP du serveur Minecraft de Regaïa'),
+        new SlashCommandBuilder().setName('youtube').setDescription('Rechercher une vidéo sur YouTube')
+            .addStringOption(opt => opt.setName('recherche').setDescription('Titre ou mot-clé de la vidéo').setRequired(true)),
+        new SlashCommandBuilder().setName('last').setDescription('Affiche la dernière vidéo publiée sur une chaîne YouTube')
+            .addStringOption(opt => opt.setName('chaine').setDescription('Nom ou lien de la chaîne').setRequired(true)),
+        new SlashCommandBuilder().setName('stats').setDescription('Statistiques détaillées d\'une chaîne YouTube')
+            .addStringOption(opt => opt.setName('chaine').setDescription('Nom ou lien de la chaîne').setRequired(true)),
+        new SlashCommandBuilder().setName('botinfo').setDescription('Informations techniques, version et créatrices de Cacabot'),
+        new SlashCommandBuilder().setName('ping').setDescription('Vérifie la latence de Cacabot et du WebSocket')
     ].map(cmd => cmd.toJSON());
 
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+    const REGAIA_GUILD_ID = '720057528351850547';
+
     for (const guild of client.guilds.cache.values()) {
-        await rest.put(Routes.applicationGuildCommands(client.user.id, guild.id), { body: slashCommands })
-            .then(() => console.log(`✅ Commandes Slash (/) déployées sur ${guild.name}`))
+        const body = guild.id === REGAIA_GUILD_ID ? slashCommands : [];
+        await rest.put(Routes.applicationGuildCommands(client.user.id, guild.id), { body })
+            .then(() => {
+                if (guild.id === REGAIA_GUILD_ID) {
+                    console.log(`✅ Commandes Slash (/) déployées exclusivement sur ${guild.name}`);
+                }
+            })
             .catch(err => console.error(`Erreur déploiement Slash sur ${guild.name}:`, err.message));
     }
 
