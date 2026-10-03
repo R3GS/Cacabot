@@ -7084,7 +7084,6 @@ if (response?.needsRouletteAchievements) {
 
             await message.delete().catch(() => {});
             const conf = await message.channel.send(`✅ Rôle réaction configuré : ${emojiStr} donnera le rôle **${role.name}** sur le message [clique ici](${targetMsg.url}) !`);
-            setTimeout(() => conf.delete().catch(() => {}), 6000);
         } catch (err) {
             return message.reply(`❌ Erreur : ${err.message}`);
         }
@@ -7510,7 +7509,7 @@ try {
                 .setColor(0xffd700)
                 .setTitle('🏆 Classement des membres')
                 .addFields(fields)
-                .setFooter({ text: `Page 1/${totalPages} • Compté depuis l'initialisation du bot` });
+                .setFooter({ text: `Page 1/${totalPages}` });
 
             const prev = new ButtonBuilder().setCustomId(`top_prev_${interaction.user.id}_0`).setLabel('⬅️ Arrière').setStyle(ButtonStyle.Secondary).setDisabled(true);
             const next = new ButtonBuilder().setCustomId(`top_next_${interaction.user.id}_0`).setLabel('Suivant ➡️').setStyle(ButtonStyle.Secondary).setDisabled(totalPages <= 1);
@@ -10894,7 +10893,8 @@ client.on('messageDelete', async (message) => {
         client.webhookDeletedMessages.delete(message.id);
         return;
     }
-    if (!message.guild || message.author?.bot) return;
+    // Ignore les salons en MP, les messages sans auteur en cache, les webhooks, tous les bots et Cacabot lui-même
+    if (!message.guild || !message.author || message.author.bot || message.author.id === client.user.id || message.webhookId) return;
     if (message.channel.id === MOD_CHANNEL_ID) return;
 
     // Vérifie si le message a été supprimé rapidement (moins de 2 minutes après envoi)
