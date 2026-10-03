@@ -5509,32 +5509,8 @@ if (response?.needsRouletteState) {
     return message.reply({ embeds: [buildRouletteStateEmbed(cible)] });
 }
 
+// !roulettestats (publique)
 if (response?.needsRouletteStats) {
-    // !roulettesucces (publique)
-    if (response?.needsRouletteAchievements) {
-        const query = message.content.trim().split(/\s+/).slice(1).join(" ");
-        let cible = message.mentions.members.first();
-        if (!cible) {
-            if (!query) {
-                cible = message.member;
-            } else {
-                const result = findMemberByName(message.guild, query);
-                if (result.multiple) {
-                    return askDisambiguation(message, message.guild, result.candidates, async (user) => {
-                        const membre = message.guild.members.cache.get(user.id);
-                        if (membre) {
-                            const { embed, row } = buildRouletteAchievementsEmbed(membre, 0, message.author.id);
-                            message.reply({ embeds: [embed], components: [row] });
-                        }
-                    });
-                }
-                cible = result.found;
-            }
-        }
-        if (!cible) return message.reply("Membre introuvable.");
-        const { embed, row } = buildRouletteAchievementsEmbed(cible, 0, message.author.id);
-        return message.reply({ embeds: [embed], components: [row] });
-    }
     const query = message.content.trim().split(/\s+/).slice(1).join(" ");
     let cible = message.mentions.members.first();
     if (!cible) {
@@ -5561,6 +5537,32 @@ if (response?.needsRouletteStats) {
         new ButtonBuilder().setCustomId(`rlt_achs_${cible.id}_0_${message.author.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary)
     );
     return message.reply({ embeds: [buildRouletteStatsEmbed(cible)], components: [row] });
+}
+
+// !roulettesucces (publique)
+if (response?.needsRouletteAchievements) {
+    const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+    let cible = message.mentions.members.first();
+    if (!cible) {
+        if (!query) {
+            cible = message.member;
+        } else {
+            const result = findMemberByName(message.guild, query);
+            if (result.multiple) {
+                return askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                    const membre = message.guild.members.cache.get(user.id);
+                    if (membre) {
+                        const { embed, row } = buildRouletteAchievementsEmbed(membre, 0, message.author.id);
+                        message.reply({ embeds: [embed], components: [row] });
+                    }
+                });
+            }
+            cible = result.found;
+        }
+    }
+    if (!cible) return message.reply("Membre introuvable.");
+    const { embed, row } = buildRouletteAchievementsEmbed(cible, 0, message.author.id);
+    return message.reply({ embeds: [embed], components: [row] });
 }
 
 
