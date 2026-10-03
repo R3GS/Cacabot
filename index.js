@@ -867,6 +867,10 @@ if (command === "!choix") {
         return { needsSay: true };
     }
 
+    if (command === "!edit") {
+        return { needsEdit: true };
+    }
+
     if (command === "!rappel") {
         return { needsRappel: true };
     }
@@ -1841,6 +1845,7 @@ function buildHelpxCategorieEmbed(categorie) {
         return embed.setTitle('🤖 Commandes liées à Cacabot')
             .addFields(
                 { name: '📣 **!say [ID_salon] [message]**', value: 'Envoyer un message dans un salon au nom de Cacabot.' },
+                { name: '✏️ **!edit [ID_message] [texte]**', value: 'Modifier un message envoyé par Cacabot.' },
                 { name: '💾 **!save**', value: 'Forcer une sauvegarde immédiate sur JSONBin.' },
                 { name: '💾 **!lastsave**', value: 'Afficher la date et l\'heure de la dernière sauvegarde JSONBin.' }
             );
@@ -6871,6 +6876,41 @@ if (response?.needsRouletteAchievements) {
             await message.delete().catch(() => {});
         } catch (e) {
             return message.reply('Erreur : salon introuvable ou permissions insuffisantes.');
+        }
+        return;
+    }
+
+    // !edit (Epsys-only)
+    if (response?.needsEdit) {
+        if (message.author.id !== '436218312574107658') return;
+        const args = message.content.trim().split(/\s+/);
+        if (args.length < 3) return message.reply({ content: "Usage : `!edit [ID_du_message] [nouveau texte]`", ephemeral: true });
+
+        const msgId = args[1];
+        const nouveauTexte = message.content.replace(/^!edit\s+\d+\s+/i, '').trim();
+
+        try {
+            // Cherche dans le salon actuel d'abord
+            let targetMsg = await message.channel.messages.fetch(msgId).catch(() => null);
+
+            // Si introuvable ici, cherche dans les autres salons textuels du serveur
+            if (!targetMsg && message.guild) {
+                for (const ch of message.guild.channels.cache.values()) {
+                    if (ch.type === ChannelType.GuildText || ch.type === ChannelType.GuildAnnouncement) {
+                        targetMsg = await ch.messages.fetch(msgId).catch(() => null);
+                        if (targetMsg) break;
+                    }
+                }
+            }
+
+            if (!targetMsg) return message.reply("Message introuvable ! Vérifie l'ID.");
+            if (targetMsg.author.id !== client.user.id) return message.reply("Je ne peux modifier que mes propres messages !");
+
+            await targetMsg.edit({ content: nouveauTexte });
+            await message.delete().catch(() => {});
+        } catch (err) {
+            console.error("Erreur !edit :", err);
+            return message.reply("Impossible de modifier ce message.");
         }
         return;
     }
