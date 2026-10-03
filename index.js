@@ -153,6 +153,10 @@ const {
     EmbedBuilder,
     ActionRowBuilder,
     StringSelectMenuBuilder,
+    ChannelSelectMenuBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
     ButtonBuilder,
     ChannelType,
     ButtonStyle,
@@ -160,6 +164,75 @@ const {
     REST,
     Routes
 } = require('discord.js');
+
+const embedDrafts = new Map(); // userId -> { embedData }
+
+function parseEmbedColor(colorStr) {
+    if (!colorStr) return 0x5865f2;
+    const c = colorStr.trim().toLowerCase();
+    const map = {
+        bleu: 0x3498db, rouge: 0xe74c3c, vert: 0x2ecc71, or: 0xffd700, jaune: 0xf1c40f,
+        violet: 0x9b59b6, noir: 0x2c2c2c, blanc: 0xffffff, orange: 0xe67e22, rose: 0xff69b4
+    };
+    if (map[c]) return map[c];
+    if (c.startsWith('#')) {
+        const num = parseInt(c.replace('#', ''), 16);
+        if (!isNaN(num)) return num;
+    }
+    const num = parseInt(c, 16);
+    if (!isNaN(num)) return num;
+    return 0x5865f2;
+}
+
+function buildEmbedModal() {
+    const modal = new ModalBuilder()
+        .setCustomId('embed_builder_modal')
+        .setTitle("Créateur d'Embed");
+
+    const titleInput = new TextInputBuilder()
+        .setCustomId('embed_title')
+        .setLabel("Titre de l'embed")
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder("Ex : Annonce importante")
+        .setRequired(false);
+
+    const descInput = new TextInputBuilder()
+        .setCustomId('embed_desc')
+        .setLabel("Description / Contenu")
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder("Le texte principal de ton embed...")
+        .setRequired(true);
+
+    const colorInput = new TextInputBuilder()
+        .setCustomId('embed_color')
+        .setLabel("Couleur (Hex ou nom)")
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder("Ex : #ff0000 ou bleu, rouge, or, vert, rose...")
+        .setRequired(false);
+
+    const imageInput = new TextInputBuilder()
+        .setCustomId('embed_image')
+        .setLabel("Image / Bannière (URL optionnelle)")
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder("https://exemple.com/image.png")
+        .setRequired(false);
+
+    const footerInput = new TextInputBuilder()
+        .setCustomId('embed_footer')
+        .setLabel("Pied de page (Footer optionnel)")
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder("Ex : L'équipe de Regaïa")
+        .setRequired(false);
+
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(titleInput),
+        new ActionRowBuilder().addComponents(descInput),
+        new ActionRowBuilder().addComponents(colorInput),
+        new ActionRowBuilder().addComponents(imageInput),
+        new ActionRowBuilder().addComponents(footerInput)
+    );
+    return modal;
+}
 
 const { createCanvas, loadImage, registerFont } = require('canvas');
 process.env.PANGOCAIRO_BACKEND = 'fontconfig';
@@ -6915,6 +6988,18 @@ if (response?.needsRouletteAchievements) {
         return;
     }
 
+    // !embed (Epsys-only)
+    if (response?.needsEmbed) {
+        if (message.author.id !== '436218312574107658') return;
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('open_embed_modal')
+                .setLabel('📝 Ouvrir le formulaire d\'embed')
+                .setStyle(ButtonStyle.Primary)
+        );
+        return message.reply({ content: "Clique ci-dessous pour ouvrir le créateur d'embed :", components: [row] });
+    }
+
     // !rappel
     if (response?.needsRappel) {
         const args = message.content.trim().split(/\s+/);
@@ -8455,6 +8540,97 @@ try {
                 );
             return interaction.editReply({ embeds: [embed] });
         }
+
+        if (commandName === 'embed') {
+            if (interaction.user.id !== '436218312574107658') {
+                return interaction.reply({ content: "Cette commande est réservée à Epsys.", ephemeral: true });
+            }
+            return interaction.showModal(buildEmbedModal());
+        }
+    }
+
+    // Bouton ouvrant le Modal depuis !embed
+    if (interaction.isButton() && interaction.customId === 'open_embed_modal') {
+        if (interaction.user.id !== '436218312574107658') {
+            return interaction.reply({ content: "Ce bouton est réservé à Epsys.", ephemeral: true });
+        }
+        return interaction.showModal(buildEmbedModal());
+    }
+
+    // Soumission du formulaire Modal (Aperçu)
+    if (interaction.isModalSubmit() && interaction.customId === 'embed_builder_modal') {
+        if (interaction.user.id !== '436218312574107658') return;
+
+        const titre = interaction.fields.getTextInputValue('embed_title')?.trim();
+        const desc = interaction.fields.getTextInputValue('embed_desc')?.trim();
+        const couleurRaw = interaction.fields.getTextInputValue('embed_color')?.trim();
+        const image = interaction.fields.getTextInputValue('embed_image')?.trim();
+        const footer = interaction.fields.getTextInputValue('embed_footer')?.trim();
+
+        const embedPreview = new EmbedBuilder()
+            .setColor(parseEmbedColor(couleurRaw))
+            .setDescription(desc);
+
+        if (titre) embedPreview.setTitle(titre);
+        if (image && /^https?:\/\//i.test(image)) embedPreview.setImage(image);
+        if (footer) embedPreview.setFooter({ text: footer });
+
+        embedDrafts.set(interaction.user.id, embedPreview);
+
+        const channelSelect = new ChannelSelectMenuBuilder()
+            .setCustomId('embed_send_channel')
+            .setPlaceholder('Choisis le salon où envoyer cet embed...')
+            .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement);
+
+        const cancelBtn = new ButtonBuilder()
+            .setCustomId('embed_cancel_draft')
+            .setLabel('❌ Annuler')
+            .setStyle(ButtonStyle.Danger);
+
+        const rowSelect = new ActionRowBuilder().addComponents(channelSelect);
+        const rowCancel = new ActionRowBuilder().addComponents(cancelBtn);
+
+        return interaction.reply({
+            content: "👀 **Voici l'aperçu de ton embed :**\n*(Choisis le salon de destination ci-dessous pour l'envoyer au nom de Cacabot)*",
+            embeds: [embedPreview],
+            components: [rowSelect, rowCancel],
+            ephemeral: true
+        });
+    }
+
+    // Sélection du salon de destination
+    if (interaction.isChannelSelectMenu() && interaction.customId === 'embed_send_channel') {
+        if (interaction.user.id !== '436218312574107658') return;
+
+        const draft = embedDrafts.get(interaction.user.id);
+        if (!draft) {
+            return interaction.update({ content: "❌ Aucun brouillon d'embed trouvé ou il a expiré.", embeds: [], components: [] });
+        }
+
+        const channelId = interaction.values[0];
+        const targetChannel = interaction.guild?.channels.cache.get(channelId);
+
+        if (!targetChannel) {
+            return interaction.update({ content: "❌ Salon introuvable.", embeds: [], components: [] });
+        }
+
+        await targetChannel.send({ embeds: [draft] }).catch(err => {
+            return interaction.update({ content: `❌ Erreur lors de l'envoi : ${err.message}`, embeds: [], components: [] });
+        });
+
+        embedDrafts.delete(interaction.user.id);
+        return interaction.update({
+            content: `✅ **Embed envoyé avec succès dans <#${channelId}> !**`,
+            embeds: [],
+            components: []
+        });
+    }
+
+    // Annulation du brouillon
+    if (interaction.isButton() && interaction.customId === 'embed_cancel_draft') {
+        if (interaction.user.id !== '436218312574107658') return;
+        embedDrafts.delete(interaction.user.id);
+        return interaction.update({ content: "🗑️ Création de l'embed annulée.", embeds: [], components: [] });
     }
 
     // Actions de modération sur les comptes récents
@@ -10386,7 +10562,8 @@ client.once('ready', async () => {
         new SlashCommandBuilder().setName('stats').setDescription('Statistiques détaillées d\'une chaîne YouTube')
             .addStringOption(opt => opt.setName('chaine').setDescription('Nom ou lien de la chaîne').setRequired(true)),
         new SlashCommandBuilder().setName('botinfo').setDescription('Informations techniques, version et créatrices de Cacabot'),
-        new SlashCommandBuilder().setName('ping').setDescription('Vérifie la latence de Cacabot et du WebSocket')
+        new SlashCommandBuilder().setName('ping').setDescription('Vérifie la latence de Cacabot et du WebSocket'),
+        new SlashCommandBuilder().setName('embed').setDescription('Créateur d\'embed interactif avec formulaire pop-up (Epsys-only)')
     ].map(cmd => cmd.toJSON());
 
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
