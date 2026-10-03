@@ -554,6 +554,10 @@ function getResponse(raw) {
         return { needsRouletteStats: true };
     }
 
+    if (["!roulettesucces", "!rltsucces", "!roulettesuccess", "!rltsuccess"].includes(command)) {
+        return { needsRouletteAchievements: true };
+    }
+
     // =========================
     //         !CHOIX
     // =========================
@@ -1773,7 +1777,7 @@ function buildHelpxCategorieEmbed(categorie) {
                 { name: '🔄 **!reroll [membre]**', value: 'Réinitialise le cooldown d\'un·e membre.' },
                 { name: '🎉/💀 **!bonusforce / !malusforce [id] [membre]**', value: 'Impose un bonus ou un malus à un·e membre.' },
                 { name: '📋 **!rouletteID / !rltid**', value: 'Affiche tous les identifiants de bonus/malus/spécial, triés par bouton.' },
-                { name: '🎖️ **!roulettesucces / !rltsucces [id] [membre]**', value: 'Donne un succès, liste les 30 IDs ou teste l\'animation (`!rltsucces test`).' },
+                { name: '🎖️ **!rltsuccesforce [id] [membre]**', value: 'Donne un succès, liste les 30 IDs ou teste l\'animation (`!rltsuccesforce test`).' },
                 { name: '♻️ **!resetroulettestate / !resetrlt [membre]**', value: 'Réinitialise tout l\'état roulette d\'un·e membre.' },
                 { name: '🗑️ **!removestate [membre] [nom]**', value: 'Retire un seul effet actif d\'un·e membre.' }
             );
@@ -4119,8 +4123,9 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
     // =========================
     // COMMANDES ADMIN ROULETTE (Epsys uniquement)
     // =========================
+    const adminSuccesAliases = ['!roulettesuccesforce', '!rltsuccesforce', '!roulettesuccessforce', '!rltsuccessforce'];
     const rouletteAdminCommand = message.content.trim().split(" ")[0]?.toLowerCase();
-    if (['!reroll', '!bonusforce', '!malusforce', '!rouletteid', '!rltid', '!resetroulettestate', '!resetrlt', '!removestate', '!roulettesucces', '!rltsucces'].includes(rouletteAdminCommand)) {
+    if (['!reroll', '!bonusforce', '!malusforce', '!rouletteid', '!rltid', '!resetroulettestate', '!resetrlt', '!removestate', ...adminSuccesAliases].includes(rouletteAdminCommand)) {
         if (message.author.id !== EPSYS_ID) {
             return message.reply("Cette commande est réservée à Epsys.");
         }
@@ -4176,7 +4181,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
             return message.reply({ embeds: [embed] });
         }
 
-        if (rouletteAdminCommand === '!roulettesucces' || rouletteAdminCommand === '!rltsucces') {
+        if (adminSuccesAliases.includes(rouletteAdminCommand)) {
             const sub = argsBruts[0]?.toLowerCase();
 
             // 1. Simulation d'un déblocage de succès (Test)
@@ -5505,6 +5510,31 @@ if (response?.needsRouletteState) {
 }
 
 if (response?.needsRouletteStats) {
+    // !roulettesucces (publique)
+    if (response?.needsRouletteAchievements) {
+        const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+        let cible = message.mentions.members.first();
+        if (!cible) {
+            if (!query) {
+                cible = message.member;
+            } else {
+                const result = findMemberByName(message.guild, query);
+                if (result.multiple) {
+                    return askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                        const membre = message.guild.members.cache.get(user.id);
+                        if (membre) {
+                            const { embed, row } = buildRouletteAchievementsEmbed(membre, 0, message.author.id);
+                            message.reply({ embeds: [embed], components: [row] });
+                        }
+                    });
+                }
+                cible = result.found;
+            }
+        }
+        if (!cible) return message.reply("Membre introuvable.");
+        const { embed, row } = buildRouletteAchievementsEmbed(cible, 0, message.author.id);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
     const query = message.content.trim().split(/\s+/).slice(1).join(" ");
     let cible = message.mentions.members.first();
     if (!cible) {
