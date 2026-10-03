@@ -1,9 +1,4 @@
 require('dotenv').config();
-const JSONBIN_ID = '6a08f315adc21f119aaed5c7';
-const JSONBIN_KEY = process.env.JSONBIN_KEY;
-console.log('JSONBIN_KEY définie :', !!JSONBIN_KEY, '| longueur :', JSONBIN_KEY?.length);
-console.log('Variables vues par le bot :', Object.keys(process.env).filter(k => /JSON|TOKEN|GITHUB|YOUTUBE/i.test(k)));
-const JSONBIN_URL = `https://api.jsonbin.io/v3/b/${JSONBIN_ID}`;
 
 let topData = { messages: {} };
 let birthdayData = { birthdays: {}, channels: {} };
@@ -52,20 +47,7 @@ async function loadAll() {
             }
         }
 
-        // 2. Si le salon Discord est encore vide (tout premier démarrage), on récupère les données de JSONBin une dernière fois
-        if (!jsonRecord && JSONBIN_KEY) {
-            console.log('ℹ️ Salon Discord vide, import initial depuis JSONBin...');
-            try {
-                const res = await fetch(JSONBIN_URL + '/latest', { headers: { 'X-Master-Key': JSONBIN_KEY } });
-                const json = await res.json();
-                if (json.record) {
-                    jsonRecord = json.record;
-                    console.log('✅ Données importées depuis JSONBin avec succès !');
-                }
-            } catch (e) {
-                console.warn('Impossible de joindre JSONBin pour l\'import initial.');
-            }
-        }
+        // Le chargement se fait désormais à 100% depuis le salon Discord <#1553954760900608091> ou #json
 
         if (!jsonRecord) {
             console.warn('⚠️ Aucune donnée précédente trouvée, démarrage à zéro.');
@@ -1462,6 +1444,7 @@ function verifierHappyHour() {
 }
 const ROULETTE_WEBHOOK_EXCLUS = new Set([
     '1553948893354401923',
+    '1544686219223498762',
     '862253918583390238',
     '730795053563248640',
     '745115366065176598',
@@ -1559,7 +1542,7 @@ function retirerLettre(texte, lettre) {
 }
 const rouletteTimeoutUntil = new Map(); // userId -> timestamp de fin, UNIQUEMENT pour les timeouts causés par la roulette
 const rouletteWebhooks = new Map(); // channelId -> Webhook
-const rouletteNotifs = new Map();      // userId -> channelId (sauvegardé dans JSONBin)
+const rouletteNotifs = new Map();      // userId -> channelId (sauvegardé dans #json)
 const rouletteNotifTimers = new Map(); // userId -> timeout (non sauvegardé, réarmé au démarrage)
 
 function armerNotifRoulette(userId, channelId) {
@@ -2006,8 +1989,8 @@ function buildHelpxCategorieEmbed(categorie) {
             .addFields(
                 { name: '📣 **!say [ID_salon] [message]**', value: 'Envoyer un message dans un salon au nom de Cacabot.' },
                 { name: '✏️ **!edit [ID_message] [texte]**', value: 'Modifier un message envoyé par Cacabot.' },
-                { name: '💾 **!save**', value: 'Forcer une sauvegarde immédiate sur JSONBin.' },
-                { name: '💾 **!lastsave**', value: 'Afficher la date et l\'heure de la dernière sauvegarde JSONBin.' }
+                { name: '💾 **!save**', value: 'Forcer une sauvegarde immédiate.' },
+                { name: '💾 **!lastsave**', value: 'Afficher la date et l\'heure de la dernière sauvegarde.' }
             );
     }
     if (categorie === 'generateurs') {
@@ -2124,7 +2107,7 @@ function tirerRoulette(userId, guildId = null) {
     return outcomeId;
 }
 
-// Registre des états roulette sauvegardés dans JSONBin : pour en ajouter un, une seule ligne ici
+// Registre des états roulette sauvegardés dans #json : pour en ajouter un, une seule ligne ici
 const ROULETTE_ETATS = {
     cooldowns:       rouletteCooldowns,
     freeRoll:        rouletteFreeRollUntil,
@@ -3140,7 +3123,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
         }
     }
 
-    demanderSauvegarde(); // Sauvegarde immédiate sur JSONBin pour ne jamais perdre les malus actifs en cas de redémarrage
+    demanderSauvegarde(); // Sauvegarde immédiate sur #json pour ne jamais perdre les malus actifs en cas de redémarrage
     const embed = buildRouletteResultEmbed(outcomeId, prefixeRedirect + texte, authorId);
 
     const roleMaxId = ROULETTE_RANGS[ROULETTE_RANGS.length - 1].id;
