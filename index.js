@@ -32,30 +32,72 @@ let youtubeWatchData = {};
 let reactionRolesData = {}; // messageId -> { channelId, roles: { emojiKey: roleId } }
 let donneesChargees = false;
 
+const BACKUP_CHANNEL_ID = '1556005171744604161';
+
 async function loadAll() {
     try {
-        const res = await fetch(JSONBIN_URL + '/latest', {
-            headers: { 'X-Master-Key': JSONBIN_KEY }
-        });
-        const json = await res.json();
-        if (!json.record) throw new Error(`JSONBin ${res.status} : ${json.message ?? 'réponse sans record'}`);
-        topData = { messages: json.record.messages ?? {} };
-        birthdayData = { birthdays: json.record.birthdays ?? {}, channels: json.record.birthdayChannels ?? {} };
-        dailyData = json.record.daily ?? {};
-        weeklyData = json.record.weekly ?? {};
-        monthlyData = json.record.monthly ?? {};
-        youtubeWatchData = json.record.youtubeWatch ?? {};
-        reactionRolesData = json.record.reactionRoles ?? {};
+        const channel = await client.channels.fetch(BACKUP_CHANNEL_ID).catch(() => null);
+        let jsonRecord = null;
+
+        // 1. Cherche d'abord le dernier fichier de sauvegarde dans ton salon Discord
+        if (channel) {
+            const messages = await channel.messages.fetch({ limit: 10 }).catch(() => null);
+            const backupMsg = messages?.find(m => m.attachments.size > 0 && m.attachments.first().name.endsWith('.json'));
+
+            if (backupMsg) {
+                const fileUrl = backupMsg.attachments.first().url;
+                const res = await fetch(fileUrl);
+                jsonRecord = await res.json();
+                console.log('✅ Données chargées depuis le salon de backup Discord !');
+            }
+        }
+
+        // 2. Si le salon Discord est encore vide (tout premier démarrage), on récupère les données de JSONBin une dernière fois
+        if (!jsonRecord && JSONBIN_KEY) {
+            console.log('ℹ️ Salon Discord vide, import initial depuis JSONBin...');
+            try {
+                const res = await fetch(JSONBIN_URL + '/latest', { headers: { 'X-Master-Key': JSONBIN_KEY } });
+                const json = await res.json();
+                if (json.record) {
+                    jsonRecord = json.record;
+                    console.log('✅ Données importées depuis JSONBin avec succès !');
+                }
+            } catch (e) {
+                console.warn('Impossible de joindre JSONBin pour l\'import initial.');
+            }
+        }
+
+        if (!jsonRecord) {
+            console.warn('⚠️ Aucune donnée précédente trouvée, démarrage à zéro.');
+            donneesChargees = true;
+            return;
+        }
+
+        topData = { messages: jsonRecord.messages ?? {} };
+        birthdayData = { birthdays: jsonRecord.birthdays ?? {}, channels: jsonRecord.birthdayChannels ?? {} };
+        dailyData = jsonRecord.daily ?? {};
+        weeklyData = jsonRecord.weekly ?? {};
+        monthlyData = jsonRecord.monthly ?? {};
+        youtubeWatchData = jsonRecord.youtubeWatch ?? {};
+        reactionRolesData = jsonRecord.reactionRoles ?? {};
 
         for (const [nom, map] of Object.entries(ROULETTE_ETATS)) {
             map.clear();
-            for (const [k, v] of Object.entries(json.record.roulette?.[nom] ?? {})) map.set(k, v);
+            for (const [k, v] of Object.entries(jsonRecord.roulette?.[nom] ?? {})) map.set(k, v);
         }
 
         donneesChargees = true;
-        console.log('✅ Données chargées depuis JSONBin');
+        console.log('✅ Toutes les données ont été appliquées avec succès !');
+
+        // Si le salon était vide, on y dépose immédiatement le premier fichier de sauvegarde
+        if (channel) {
+            const messages = await channel.messages.fetch({ limit: 1 }).catch(() => null);
+            if (!messages || messages.size === 0) {
+                await saveAll();
+            }
+        }
     } catch (err) {
-        console.error('Erreur chargement JSONBin:', err);
+        console.error('Erreur chargement des données:', err);
     }
 }
 
@@ -65,27 +107,54 @@ let messagesSinceLastsaveSave = 0;
 async function saveAll() {
     if (!donneesChargees) { console.warn('⚠️ Sauvegarde ignorée : données non chargées'); return; }
     try {
-        const res = await fetch(JSONBIN_URL, {
-            method: 'PUT',
-            headers: { 'X-Master-Key': JSONBIN_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                messages: topData.messages, birthdays: birthdayData.birthdays, birthdayChannels: birthdayData.channels,
-                daily: dailyData, weekly: weeklyData, monthly: monthlyData, youtubeWatch: youtubeWatchData,
-                reactionRoles: reactionRolesData,
-                roulette: Object.fromEntries(
-                    Object.entries(ROULETTE_ETATS).map(([nom, map]) => [nom, Object.fromEntries(map)])
-                )
-            })
+        const channel = await client.channels.fetch(BACKUP_CHANNEL_ID).catch(() => null);
+        if (!channel) {
+            console.error('❌ Salon de sauvegarde introuvable ! Vérifie l\'ID ou les permissions de Cacabot.');
+            return;
+        }
+
+        const payload = {
+            messages: topData.messages,
+            birthdays: birthdayData.birthdays,
+            birthdayChannels: birthdayData.channels,
+            daily: dailyData,
+            weekly: weeklyData,
+            monthly: monthlyData,
+            youtubeWatch: youtubeWatchData,
+            reactionRoles: reactionRolesData,
+            roulette: Object.fromEntries(
+                Object.entries(ROULETTE_ETATS).map(([nom, map]) => [nom, Object.fromEntries(map)])
+            )
+        };
+
+        const jsonStr = JSON.stringify(payload, null, 2);
+        const buffer = Buffer.from(jsonStr, 'utf-8');
+
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }) + ' à ' + now.toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris' });
+
+        await channel.send({
+            content: `💾 **Sauvegarde Cacabot** — \`${dateStr}\``,
+            files: [{ attachment: buffer, name: 'cacabot_backup.json' }]
         });
-        const json = await res.json();
-        console.log('💾 Sauvegarde JSONBin:', res.status, json);
+
         lastsaveSaveTime = new Date();
+        console.log(`💾 Nouvelle sauvegarde postée dans #${channel.name}`);
+
+        // Nettoie automatiquement le salon pour ne garder que les 10 dernières sauvegardes
+        const messages = await channel.messages.fetch({ limit: 25 }).catch(() => null);
+        if (messages && messages.size > 10) {
+            const aSupprimer = [...messages.values()].slice(10);
+            for (const m of aSupprimer) {
+                await m.delete().catch(() => {});
+            }
+        }
     } catch (err) {
-        console.error('Erreur sauvegarde JSONBin:', err);
+        console.error('Erreur sauvegarde Discord:', err);
     }
 }
 
-setInterval(() => saveAll(), 60 * 60 * 1000);
+setInterval(() => saveAll(), 30 * 60 * 1000); // Sauvegarde automatique toutes les 30 minutes
 
 let saveEnAttente = null;
 function demanderSauvegarde() {
@@ -3071,6 +3140,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
         }
     }
 
+    demanderSauvegarde(); // Sauvegarde immédiate sur JSONBin pour ne jamais perdre les malus actifs en cas de redémarrage
     const embed = buildRouletteResultEmbed(outcomeId, prefixeRedirect + texte, authorId);
 
     const roleMaxId = ROULETTE_RANGS[ROULETTE_RANGS.length - 1].id;
@@ -3149,15 +3219,20 @@ function buildRouletteResultEmbed(outcomeId, texte, authorId = null) {
         ? `${texte}\n\n*Échec du tirage, reviens dans ${delaiTexte} !*`
         : texte;
 
+    const estContrePoison = texte.includes('Miracle !');
     const entry = ROULETTE_TABLE.find(e => e.id === outcomeId);
     const couleurs = { bonus: 0x00bf19, malus: 0x9e0000, special: 0xdb6600 };
     const prefixes = { bonus: '🎉 BONUS', malus: '💀 MALUS', special: '🌗 SPÉCIAL' };
 
-    const couleur = outcomeId === 'aucun-resultat'
+    const couleur = estContrePoison
+        ? 0x00bf19
+        : outcomeId === 'aucun-resultat'
         ? 0x20876f
         : (entry ? (couleurs[entry.type] ?? 0x503649) : 0x99aab5);
 
-    const titre = outcomeId === 'aucun-resultat'
+    const titre = estContrePoison
+        ? `✨ CONTRE-POISON ! - ${entry?.nom ?? ''} annulé !`
+        : outcomeId === 'aucun-resultat'
         ? `💨 AUCUN RÉSULTAT ! (${libelleProbaRoulette('aucun-resultat')})`
         : entry ? `${prefixes[entry.type] ?? ''} - ${entry.nom} (${libelleProbaRoulette(outcomeId)})` : null;
 
@@ -9991,7 +10066,7 @@ return interaction.update({ embeds: [embed], components: rows });
         const page = parseInt(parts[3], 10);
         const authorId = parts[4];
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Ce n'est pas ta commande, fais `!rltstats` !", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ta commande, fais `!rltsucces` !", ephemeral: true });
         }
         const cible = interaction.guild.members.cache.get(cibleId);
         if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
