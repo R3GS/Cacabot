@@ -2573,7 +2573,8 @@ function buildRouletteStateEmbed(cible, guildId = null) {
     if ((rouletteCoupTripleCharges.get(cible.id) || 0) > 0) {
         bonus.push(`🎰 ${rouletteCoupTripleCharges.get(cible.id)} tirage(s) gratuit(s) sans cooldown`);
     }
-    const nbB = rouletteBouclierActif.get(cible.id) || 0;
+    const rawB = rouletteBouclierActif.get(cible.id);
+    const nbB = typeof rawB === 'number' ? rawB : (rawB ? 1 : 0);
     if (nbB > 0) {
         bonus.push(`🛡️ ${nbB} charge${nbB > 1 ? 's' : ''} de bouclier active${nbB > 1 ? 's' : ''}`);
     }
@@ -2895,7 +2896,8 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
     }
 
     // Blocage par bouclier cumulable
-    const bCharges = rouletteBouclierActif.get(authorId) || 0;
+    const rawBCharges = rouletteBouclierActif.get(authorId);
+    const bCharges = typeof rawBCharges === 'number' ? rawBCharges : (rawBCharges ? 1 : 0);
     if (outcomeId.startsWith('malus-') && bCharges > 0) {
         const restantes = bCharges - 1;
         if (restantes <= 0) rouletteBouclierActif.delete(authorId);
