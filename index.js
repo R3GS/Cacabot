@@ -3415,7 +3415,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel) {
                     cibleNom = cible.displayName;
                     rouletteRedirectCharges.set(authorId, charges - 1);
                     prefixeRedirect = `😈 **${auteurNom}** avait un malus en réserve, redirigé vers **${cibleNom}** !\n`;
-                    pingRedirection = { id: cible.id, raison: 'il avait un malus en réserve' };
+                    pingRedirection = { id: cible.id, raison: 'il/elle avait un malus en réserve' };
                 }
             }
         }
