@@ -9363,7 +9363,7 @@ try {
             })
             .setDescription(
                 `## « ${quoteChoisie.texte} »\n\n` +
-                `- <@${quoteChoisie.authorId}> • [Aller au message](${lienMsg})`
+                `    - <@${quoteChoisie.authorId}>\n-# *[source](${lienMsg})*`
             )
             .setFooter({ text: `[${quoteChoisie.id}/${quotesData.length}] • Réponds à un message en faisant !quote pour l'enregistrer !` });
 
