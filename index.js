@@ -856,8 +856,21 @@ async function buildTwitchLivePayload() {
 
 async function verifierTwitchLive() {
     try {
-        const resUptime = await fetch(`https://decapi.me/twitch/uptime/${TWITCH_USER}`).then(r => r.text());
-        const estEnLigne = !resUptime.includes('offline') && !resUptime.includes('not found') && resUptime.trim().length > 0;
+        const res = await fetch(`https://decapi.me/twitch/uptime/${TWITCH_USER}`).catch(() => null);
+        if (!res || !res.ok) return; // Si DecAPI plante (erreur 500/502/timeout), on ignore totalement
+
+        const resUptime = (await res.text()).trim();
+
+        // Rejette si la réponse est vide, contient du HTML Cloudflare ou un message d'erreur
+        if (!resUptime || resUptime.startsWith('<') || resUptime.toLowerCase().includes('error')) return;
+
+        // Vérifie si le mot-clé hors-ligne est présent
+        const estHorsLigne = resUptime.toLowerCase().includes('offline') || resUptime.toLowerCase().includes('not found');
+
+        // Quand un live est RÉELLEMENT en cours, DecAPI renvoie obligatoirement un format de temps : "X minutes, Y seconds"
+        const aDureeValide = /\b(second|minute|hour|day)s?\b/i.test(resUptime);
+
+        const estEnLigne = !estHorsLigne && aDureeValide;
 
         if (estEnLigne && !twitchLiveEnCours) {
             twitchLiveEnCours = true;
@@ -866,10 +879,13 @@ async function verifierTwitchLive() {
 
             const payload = await buildTwitchLivePayload();
             await channel.send(payload);
+            console.log(`[Twitch] Vrai live détecté pour ${TWITCH_USER} (${resUptime}) !`);
         } else if (!estEnLigne && twitchLiveEnCours) {
             twitchLiveEnCours = false; // Réinitialise quand le live s'arrête
         }
-    } catch (e) {}
+    } catch (e) {
+        // En cas de crash réseau, ne jamais considérer que le live est lancé
+    }
 }
 
 // =========================
