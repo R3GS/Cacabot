@@ -6236,91 +6236,126 @@ if (response?.needsRouletteAchievements) {
         if (message.reference) {
             const repliedMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
             if (!repliedMsg) return message.reply("Impossible de récupérer le message cité.");
-            if (repliedMsg.author.bot) return message.reply("On ne cite pas les bots, seulement les vrais humains !");
 
-            const texteCité = repliedMsg.content?.trim();
-            if (!texteCité) return message.reply("Ce message ne contient pas de texte à citer !");
+            // Autorise les vrais humains ET les webhooks (ex: malus roulette), mais bloque les bots purs
+            const estWebhook = Boolean(repliedMsg.webhookId);
+            if (repliedMsg.author.bot && !estWebhook) {
+                return message.reply("On ne cite pas les bots, seulement les membres et les webhooks !");
+            }
+
+            const texteCité = repliedMsg.content?.trim() || '';
+            const imagePieceJointe = repliedMsg.attachments.first()?.url ?? null;
+
+            if (!texteCité && !imagePieceJointe) {
+                return message.reply("Ce message ne contient ni texte ni image à citer !");
+            }
 
             // Évite d'enregistrer deux fois exactement la même citation
-            const existeDeja = quotesData.some(q => q.texte === texteCité && q.authorId === repliedMsg.author.id);
-            if (existeDeja) return message.reply("Cette phrase est déjà enregistrée dans les archives du serveur !");
+            const existeDeja = quotesData.some(q => q.texte === texteCité && q.authorId === repliedMsg.author.id && q.imageUrl === imagePieceJointe);
+            if (existeDeja) return message.reply("Cette phrase ou image est déjà enregistrée dans les archives du serveur !");
 
             const nextId = quotesData.length > 0 ? Math.max(...quotesData.map(q => q.id)) + 1 : 1;
             const auteurNom = repliedMsg.member?.displayName ?? repliedMsg.author.username;
+            const auteurAvatar = repliedMsg.author.displayAvatarURL({ dynamic: true, size: 256 });
 
             const nouvelleCitation = {
                 id: nextId,
-                texte: texteCité,
+                texte: texteCité || '(Image)',
                 authorId: repliedMsg.author.id,
                 authorName: auteurNom,
+                avatarUrl: auteurAvatar,
+                isWebhook: estWebhook,
+                imageUrl: imagePieceJointe,
                 addedById: message.author.id,
                 timestamp: repliedMsg.createdTimestamp,
                 channelId: message.channel.id,
-                messageUrl: repliedMsg.url
+                messageUrl: repliedMsg.url ?? `https://discord.com/channels/${message.guild.id}/${message.channel.id}/${repliedMsg.id}`
             };
 
             quotesData.push(nouvelleCitation);
             demanderSauvegarde();
 
+            const descriptionConf = estWebhook
+                ? `> *« ${texteCité || 'Image'} »*\n\n— **${auteurNom}** *(Webhook)* dans <#${message.channel.id}>`
+                : `> *« ${texteCité || 'Image'} »*\n\n— <@${repliedMsg.author.id}> dans <#${message.channel.id}>`;
+
             const embedConf = new EmbedBuilder()
                 .setColor(0xf1c40f)
                 .setTitle(`📜 Citation #${nextId} enregistrée !`)
-                .setDescription(`> *« ${texteCité} »*\n\n— <@${repliedMsg.author.id}> dans <#${message.channel.id}>`)
+                .setDescription(descriptionConf)
                 .setFooter({ text: `Enregistrée par ${message.member?.displayName ?? message.author.username} • Tape !quote pour afficher une citation` });
+
+            if (imagePieceJointe) embedConf.setImage(imagePieceJointe);
 
             return message.reply({ embeds: [embedConf] });
         }
 
-        // 3. Affichage aléatoire : !quote (ou !quote @membre / pseudo / numéro)
+        // 3. Affichage aléatoire / Recherche
         if (quotesData.length === 0) {
             return message.reply("📜 Aucune citation enregistrée pour l'instant ! Réponds à un message mythique avec `!quote` pour immortaliser une phrase.");
         }
 
         let pool = quotesData;
         let cible = message.mentions.users.first();
-        const query = args.slice(1).join(" ").trim();
+        let customFilterId = 'all';
 
-        // Cas 1 : Numéro direct (ex : !quote 3)
-        const idDirect = parseInt(query);
-        if (!isNaN(idDirect) && !query.includes('@')) {
-            const quoteTrouvee = quotesData.find(q => q.id === idDirect);
-            if (!quoteTrouvee) return message.reply(`Aucune citation trouvée avec le numéro **#${idDirect}** !`);
-            pool = [quoteTrouvee];
-        } else if (!cible && query.length > 0) {
-            // Cas 2 : Pseudo sans mention (ex : !quote Epsys)
-            const result = findMemberByName(message.guild, query);
-            if (result.found) cible = result.found.user;
-        }
+        // 3.a : Recherche par mot-clé : !quote search [mot]
+        if (sub === 'search' || sub === 'find' || sub === 'chercher') {
+            const motCle = args.slice(2).join(" ").trim().toLowerCase();
+            if (!motCle) return message.reply("Usage : `!quote search [mot-clé]` (ex : `!quote search caca`)");
 
-        if (cible) {
-            pool = quotesData.filter(q => q.authorId === cible.id);
-            if (pool.length === 0) {
-                const nom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
-                return message.reply(`Aucune citation enregistrée pour **${nom}** !`);
+            const resultats = quotesData.filter(q => q.texte?.toLowerCase().includes(motCle));
+            if (resultats.length === 0) return message.reply(`🔍 Aucune citation ne contient le mot **« ${motCle} »** !`);
+            pool = resultats;
+            customFilterId = `search_${encodeURIComponent(motCle)}`;
+        } else {
+            const query = args.slice(1).join(" ").trim();
+            const idDirect = parseInt(query);
+
+            if (!isNaN(idDirect) && !query.includes('@')) {
+                const quoteTrouvee = quotesData.find(q => q.id === idDirect);
+                if (!quoteTrouvee) return message.reply(`Aucune citation trouvée avec le numéro **#${idDirect}** !`);
+                pool = [quoteTrouvee];
+            } else if (!cible && query.length > 0) {
+                const result = findMemberByName(message.guild, query);
+                if (result.found) cible = result.found.user;
+            }
+
+            if (cible) {
+                pool = quotesData.filter(q => q.authorId === cible.id);
+                if (pool.length === 0) {
+                    const nom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+                    return message.reply(`Aucune citation enregistrée pour **${nom}** !`);
+                }
+                customFilterId = cible.id;
             }
         }
 
         const quoteChoisie = pool[Math.floor(Math.random() * pool.length)];
         const auteurMembre = message.guild.members.cache.get(quoteChoisie.authorId);
-        const avatarUrl = auteurMembre?.user?.displayAvatarURL({ dynamic: true, size: 256 }) 
+        const avatarUrl = quoteChoisie.avatarUrl 
+                       ?? auteurMembre?.user?.displayAvatarURL({ dynamic: true, size: 256 }) 
                        ?? auteurMembre?.displayAvatarURL?.({ dynamic: true, size: 256 });
 
         const lienMsg = quoteChoisie.messageUrl ?? `https://discord.com/channels/${message.guild.id}/${quoteChoisie.channelId}`;
+        const auteurMention = quoteChoisie.isWebhook ? `**${quoteChoisie.authorName}** *(Webhook)*` : `<@${quoteChoisie.authorId}>`;
+
+        const texteAffiche = quoteChoisie.texte && quoteChoisie.texte !== '(Image)'
+            ? `## « ${quoteChoisie.texte} »\n\n    -${auteurMention}\n\n-# *[source](${lienMsg})*`
+            : `    -${auteurMention}\n\n-# *[source](${lienMsg})*`;
 
         const embedQuote = new EmbedBuilder()
             .setColor(0xf1c40f)
             .setTitle(`📜 Citation N°${quoteChoisie.id}`)
-            .setDescription(
-                `## « ${quoteChoisie.texte} »\n\n` +
-                `    -<@${quoteChoisie.authorId}>\n\n-# *[source](${lienMsg})*`
-            )
+            .setDescription(texteAffiche)
             .setFooter({ text: `[${quoteChoisie.id}/${quotesData.length}] • Réponds à un message en faisant !quote pour l'enregistrer !` });
 
         if (avatarUrl) embedQuote.setThumbnail(avatarUrl);
+        if (quoteChoisie.imageUrl) embedQuote.setImage(quoteChoisie.imageUrl);
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId(`quote_random_${cible ? cible.id : 'all'}`)
+                .setCustomId(`quote_random_${customFilterId}`)
                 .setLabel('🎲 Une autre citation')
                 .setStyle(ButtonStyle.Secondary)
         );
@@ -9343,7 +9378,11 @@ try {
     if (interaction.isButton() && interaction.customId.startsWith('quote_random_')) {
         const filterId = interaction.customId.replace('quote_random_', '');
         let pool = quotesData;
-        if (filterId !== 'all') {
+
+        if (filterId.startsWith('search_')) {
+            const kw = decodeURIComponent(filterId.replace('search_', ''));
+            pool = quotesData.filter(q => q.texte?.toLowerCase().includes(kw));
+        } else if (filterId !== 'all') {
             pool = quotesData.filter(q => q.authorId === filterId);
         }
 
@@ -9353,21 +9392,25 @@ try {
 
         const quoteChoisie = pool[Math.floor(Math.random() * pool.length)];
         const auteurMembre = interaction.guild.members.cache.get(quoteChoisie.authorId);
-        const avatarUrl = auteurMembre?.user?.displayAvatarURL({ dynamic: true, size: 256 }) 
+        const avatarUrl = quoteChoisie.avatarUrl 
+                       ?? auteurMembre?.user?.displayAvatarURL({ dynamic: true, size: 256 }) 
                        ?? auteurMembre?.displayAvatarURL?.({ dynamic: true, size: 256 });
 
         const lienMsg = quoteChoisie.messageUrl ?? `https://discord.com/channels/${interaction.guild.id}/${quoteChoisie.channelId}`;
+        const auteurMention = quoteChoisie.isWebhook ? `**${quoteChoisie.authorName}** *(Webhook)*` : `<@${quoteChoisie.authorId}>`;
+
+        const texteAffiche = quoteChoisie.texte && quoteChoisie.texte !== '(Image)'
+            ? `## « ${quoteChoisie.texte} »\n\n    -${auteurMention}\n\n-# *[source](${lienMsg})*`
+            : `    -${auteurMention}\n\n-# *[source](${lienMsg})*`;
 
         const embedQuote = new EmbedBuilder()
             .setColor(0xf1c40f)
             .setTitle(`📜 Citation N°${quoteChoisie.id}`)
-            .setDescription(
-                `## « ${quoteChoisie.texte} »\n\n` +
-                `    -<@${quoteChoisie.authorId}>\n\n-# *[source](${lienMsg})*`
-            )
+            .setDescription(texteAffiche)
             .setFooter({ text: `[${quoteChoisie.id}/${quotesData.length}] • Réponds à un message en faisant !quote pour l'enregistrer !` });
 
         if (avatarUrl) embedQuote.setThumbnail(avatarUrl);
+        if (quoteChoisie.imageUrl) embedQuote.setImage(quoteChoisie.imageUrl);
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
