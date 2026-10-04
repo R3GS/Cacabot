@@ -6953,31 +6953,31 @@ if (response?.needsRouletteAchievements) {
         const badges = [];
 
         // 1. Badge Créatrice
-        if (cible.id === EPSYS_ID) badges.push('👑 **Créatrice du serveur & de Cacabot**');
+        if (cible.id === EPSYS_ID) badges.push('• 👑 Créatrice du serveur et de Cacabot');
 
         // 2. Tirages Roulette
-        if (nbTirages >= 500) badges.push('🎰 **Gambling Addict** *(500+ tirages)*');
+        if (nbTirages >= 500) badges.push('🎰 Gambling Addict *(500+ tirages)*');
         else if (nbTirages >= 100) badges.push('🎰 **Habitué.e de la roulette** *(100+ tirages)*');
 
         // 3. Succès Roulette
         const nbAchs = Object.keys(userAchs).length;
-        if (nbAchs >= 15) badges.push(`🏆 **Chasseur d'Élite** *(${nbAchs}/30 succès)*`);
-        else if (nbAchs >= 5) badges.push(`🏆 **Aventurier de la Roulette** *(${nbAchs}/30 succès)*`);
+        if (nbAchs >= 15) badges.push(`• 🏆 Chasseur d'Élite *(${nbAchs}/30 succès)*`);
+        else if (nbAchs >= 5) badges.push(`• 🤠 **Aventurier.e de la roulette** *(${nbAchs}/30 succès)*`);
 
         // 4. Victoires Motus
         const mStats = motusStats[cible.id];
         const nbVictoires = mStats?.victoires ?? 0;
-        if (nbVictoires >= 10) badges.push(`🟩 **Motus Master** *(${nbVictoires} victoires)*`);
-        else if (nbVictoires >= 3) badges.push(`🟩 **Débutant.e du Motus** *(${nbVictoires} victoires)*`);
+        if (nbVictoires >= 10) badges.push(`• 🟩 Motus Master *(${nbVictoires} victoires)*`);
+        else if (nbVictoires >= 3) badges.push(`• 🟨 **Débutant.e du Motus** *(${nbVictoires} victoires)*`);
 
         // 5. Citations enregistrées
         const nbQuotes = quotesData.filter(q => q.authorId === cible.id).length;
-        if (nbQuotes >= 5) badges.push(`📜 **Légende** *(${nbQuotes} citations)*`);
+        if (nbQuotes >= 5) badges.push(`• 📜 Légende *(${nbQuotes} citations)*`);
 
         // 6. Messages envoyés sur le serveur
-        if (nbMessages >= 5000) badges.push('🗣️ **Monument de Regaïa** *(5 000+ messages)*');
-        else if (nbMessages >= 1000) badges.push('💬 **Super Bavard** *(1 000+ messages)*');
-        else if (nbMessages >= 250) badges.push('🌱 **Membre Actif** *(250+ messages)*');
+        if (nbMessages >= 5000) badges.push('• 🗣️ Monument de Regaïa *(5 000+ messages)*');
+        else if (nbMessages >= 1000) badges.push('• 💬 Membre Bavard.e *(1 000+ messages)*');
+        else if (nbMessages >= 250) badges.push('• 🌱 Jeune membre *(250+ messages)*');
 
         const embed = new EmbedBuilder()
             .setColor(0x5865f2)
