@@ -6251,7 +6251,8 @@ if (response?.needsRouletteAchievements) {
                 authorName: auteurNom,
                 addedById: message.author.id,
                 timestamp: repliedMsg.createdTimestamp,
-                channelId: message.channel.id
+                channelId: message.channel.id,
+                messageUrl: repliedMsg.url
             };
 
             quotesData.push(nouvelleCitation);
@@ -6259,7 +6260,7 @@ if (response?.needsRouletteAchievements) {
 
             const embedConf = new EmbedBuilder()
                 .setColor(0xf1c40f)
-                .setTitle(`📜 Citation #${nextId} gravée dans la roche !`)
+                .setTitle(`📜 Citation #${nextId} enregistrée !`)
                 .setDescription(`> *« ${texteCité} »*\n\n— <@${repliedMsg.author.id}> dans <#${message.channel.id}>`)
                 .setFooter({ text: `Enregistrée par ${message.member?.displayName ?? message.author.username} • Tape !quote pour afficher une citation` });
 
@@ -6300,20 +6301,19 @@ if (response?.needsRouletteAchievements) {
         const avatarUrl = auteurMembre?.user?.displayAvatarURL({ dynamic: true, size: 256 }) 
                        ?? auteurMembre?.displayAvatarURL?.({ dynamic: true, size: 256 });
 
-        const dateStr = new Date(quoteChoisie.timestamp).toLocaleDateString('fr-FR', {
-            day: 'numeric', month: 'long', year: 'numeric'
-        });
+        const lienMsg = quoteChoisie.messageUrl ?? `https://discord.com/channels/${message.guild.id}/${quoteChoisie.channelId}`;
 
         const embedQuote = new EmbedBuilder()
             .setColor(0xf1c40f)
-            .setTitle('📜 Citation')
-            .setDescription(`## *« ${quoteChoisie.texte} »*\n\n— **${quoteChoisie.authorName}** (<@${quoteChoisie.authorId}>)`)
-            .addFields(
-                { name: '📍 Contexte', value: `<#${quoteChoisie.channelId}> • \`${dateStr}\``, inline: true }
+            .setAuthor({ 
+                name: `📜 Citation N°${quoteChoisie.id}`, 
+                iconURL: avatarUrl ?? undefined 
+            })
+            .setDescription(
+                `## « ${quoteChoisie.texte} »\n\n` +
+                `- <@${quoteChoisie.authorId}> • [Aller au message](${lienMsg})`
             )
-            .setFooter({ text: `[ID = ${quoteChoisie.id}] • Réponds à un message en faisant !quote pour l'enregistrer !` });
-
-        if (avatarUrl) embedQuote.setThumbnail(avatarUrl);
+            .setFooter({ text: `[${quoteChoisie.id}/${quotesData.length}] • Réponds à un message en faisant !quote pour l'enregistrer !` });
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -9353,20 +9353,19 @@ try {
         const avatarUrl = auteurMembre?.user?.displayAvatarURL({ dynamic: true, size: 256 }) 
                        ?? auteurMembre?.displayAvatarURL?.({ dynamic: true, size: 256 });
 
-        const dateStr = new Date(quoteChoisie.timestamp).toLocaleDateString('fr-FR', {
-            day: 'numeric', month: 'long', year: 'numeric'
-        });
+        const lienMsg = quoteChoisie.messageUrl ?? `https://discord.com/channels/${interaction.guild.id}/${quoteChoisie.channelId}`;
 
         const embedQuote = new EmbedBuilder()
             .setColor(0xf1c40f)
-            .setTitle('📜 Citation')
-            .setDescription(`## *« ${quoteChoisie.texte} »*\n\n— **${quoteChoisie.authorName}** (<@${quoteChoisie.authorId}>)`)
-            .addFields(
-                { name: '📍 Contexte', value: `<#${quoteChoisie.channelId}> • \`${dateStr}\``, inline: true }
+            .setAuthor({ 
+                name: `📜 Citation N°${quoteChoisie.id}`, 
+                iconURL: avatarUrl ?? undefined 
+            })
+            .setDescription(
+                `## « ${quoteChoisie.texte} »\n\n` +
+                `- <@${quoteChoisie.authorId}> • [Aller au message](${lienMsg})`
             )
-            .setFooter({ text: `[ID = ${quoteChoisie.id}] • Réponds à un message en faisant !quote pour l'enregistrer !` });
-
-        if (avatarUrl) embedQuote.setThumbnail(avatarUrl);
+            .setFooter({ text: `[${quoteChoisie.id}/${quotesData.length}] • Réponds à un message en faisant !quote pour l'enregistrer !` });
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
