@@ -69,6 +69,7 @@ async function loadAll() {
         reactionRolesData = jsonRecord.reactionRoles ?? {};
         motusData = jsonRecord.motusData ?? { dateKey: 0, mot: '', termine: false, vainqueurId: null, tentatives: {}, messageId: null };
         motusStats = jsonRecord.motusStats ?? {};
+        rebusStats = jsonRecord.rebusStats ?? {};
         quotesData = jsonRecord.quotes ?? [];
         dernierCommitSha = jsonRecord.dernierCommitSha ?? null;
 
@@ -115,6 +116,7 @@ async function saveAll() {
             reactionRoles: reactionRolesData,
             motusData: motusData,
             motusStats: motusStats,
+            rebusStats: rebusStats,
             quotes: quotesData,
             dernierCommitSha: dernierCommitSha,
             roulette: Object.fromEntries(
@@ -625,7 +627,7 @@ function scheduleWanted(guild) {
 }
 
 // =========================
-//     LOGIQUE MOTUS (10h)
+//     LOGIQUE MOTUS (10h & 19h)
 // =========================
 
 const MOTUS_CHANNEL_ID = '1556089022718152764';
@@ -633,7 +635,7 @@ const TWITCH_CHANNEL_ID = '862253918583390238';
 const TWITCH_ROLE_ID = '862058765674741760';
 const TWITCH_USER = 'epsys_';
 
-const MOTUS_DICTIONNAIRE = [
+const MOTUS_6_LETTRES = [
     "ACTION", "AGENDA", "AIGLES", "ALBUMS", "ALERTE", "AMICAL", "ANANAS", "ANCIEN", "ANNEAU", "APPELS",
     "ARBRES", "ARCHES", "ARGENT", "ARMURE", "ARTIST", "ASPECT", "ASTUCE", "ATTACH", "AUTEUR", "AVENIR",
     "BALLES", "BALLON", "BANANE", "BANDES", "BARQUE", "BASSIN", "BATEAU", "BATTRE", "BEAUTE", "BIAISE",
@@ -691,20 +693,43 @@ const MOTUS_DICTIONNAIRE = [
     "VOLEUR", "VOYAGE", "WAGONS", "ZEBRES", "ZIGZAG"
 ].filter(w => w.length === 6);
 
+const MOTUS_7_LETTRES = [
+    "ABRICOT", "ANIMAUX", "BAGARRE", "BATEAUX", "BICYCLE", "BISTROT", "BONHEUR", "BOUTEIL", "BUREAUX", "CAPRICE",
+    "CHATEAU", "CHOCOLA", "CLAVIER", "COFFRET", "COPAINS", "COULEUR", "COURAGE", "COUTEAU", "CUISINE", "DANGERS",
+    "DESTINS", "DIAMANT", "DIPLOME", "DRAPEAU", "ECLIPSE", "ENFANTS", "ENIGMES", "ETOILES", "FAMILLE", "FANTOME",
+    "FLAMMES", "FLEUVES", "FORTUNE", "FOUDRES", "FROMAGE", "GALAXIE", "GATEAUX", "GLACONS", "GUITARE", "HORIZON",
+    "JOURNAL", "JOURNEE", "JUNGLES", "LANGAGE", "LEGENDE", "LIVRETS", "LUMIERE", "LUNETTE", "MACHINE", "MAISONS",
+    "MANIERE", "MARCHAL", "MESSAGE", "MINUTES", "MIRACLE", "MONSTRE", "MUSIQUE", "MYSTERE", "NATIONS", "NAVIGUE",
+    "NOUVEAU", "NUMEROS", "OCEANS", "OISEAUX", "ORANGES", "PANIERS", "PAQUETS", "PARFUMS", "PATRONS", "PENSEES",
+    "PIERRES", "PLANETE", "POISSON", "POLICES", "POMPIER", "PORTAIL", "POUVOIR", "PRINCES", "PROPOSE", "RACINES",
+    "RAYONS", "REGARDS", "RESEAUX", "RIDEAUX", "RIVAGES", "ROCHERS", "SAISONS", "SALADES", "SECRETS", "SERPENT",
+    "SILENCE", "SOLEILS", "SOMMETS", "SOURCES", "TABLEAU", "TALENTS", "TORTUES", "TOURNER", "TRAVAIL", "TRESORS",
+    "TROUPES", "TUNNELS", "VACANCE", "VALEURS", "VALISES", "VAPEURS", "VICTOIR", "VILLAGE", "VISAGES", "VOITURS",
+    "VOYAGES", "VOYANTS", "CIRCULE", "CONSEIL", "CONTACT", "CORRECT", "COURRIER", "CREATIF", "CRISTAL", "CULTURE",
+    "DECIDER", "DEFENSE", "DISCUTE", "ECHELLE", "EMOTION", "ENERGIE", "ESPACES", "ESSENCE", "EXEMPLE", "FACTEUR",
+    "FESTIFS", "FIDELES", "FINALES", "FLEXION", "FORMULE", "FOULEES", "GLISSES", "HABITAT", "HARMONY", "HAUTEUR",
+    "HORREUR", "HUMOURS", "IMPACTY", "INVENTE", "LECTEUR", "LOGIQUE", "LUNAIRE", "MEMOIRE", "MEMBRES", "MENSUEL",
+    "NATURES", "OPINION", "ORGANEZ", "ORIGINE", "PARFUME", "PARTAGE", "PASSION", "PENSEUR", "PISTONS", "POETIQUE",
+    "PORTIER", "POTIONS", "PRESENT", "RAPIDES", "RECOLTE", "REFLETS", "REGULER", "RELIURE", "REPOSER", "ROBOTIC",
+    "SECONDE", "SENTIER", "STATION", "TACTILE", "TEMPLES", "TERRAINS", "THEATRE", "UNIVERS", "VALIDES", "VARIETE"
+].filter(w => w.length === 7);
+
 function getMotusDateKey() {
     const now = new Date();
     const paris = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
     return paris.getFullYear() * 10000 + (paris.getMonth() + 1) * 100 + paris.getDate();
 }
 
-function getMotDuJour(dateKey) {
-    let x = Math.sin(dateKey + 42) * 10000;
+function getMotDuJour(dateKey, longueur = 6) {
+    const dico = longueur === 7 ? MOTUS_7_LETTRES : MOTUS_6_LETTRES;
+    const seedOffset = longueur === 7 ? 777 : 42;
+    let x = Math.sin(dateKey + seedOffset) * 10000;
     const rnd = x - Math.floor(x);
-    return MOTUS_DICTIONNAIRE[Math.floor(rnd * MOTUS_DICTIONNAIRE.length)];
+    return dico[Math.floor(rnd * dico.length)];
 }
 
-function evaluerMotus(guess, solution) {
-    const res = Array(6).fill('⬛');
+function evaluerMotus(guess, solution, longueur = 6) {
+    const res = Array(longueur).fill('⬛');
     const solLettres = solution.split('');
     const guessLettres = guess.split('');
     const restantes = {};
@@ -712,7 +737,7 @@ function evaluerMotus(guess, solution) {
     for (const l of solLettres) restantes[l] = (restantes[l] || 0) + 1;
 
     // 1ère passe : lettres bien placées (Vert)
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < longueur; i++) {
         if (guessLettres[i] === solLettres[i]) {
             res[i] = '🟩';
             restantes[guessLettres[i]]--;
@@ -720,7 +745,7 @@ function evaluerMotus(guess, solution) {
     }
 
     // 2ème passe : lettres mal placées (Jaune)
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < longueur; i++) {
         if (res[i] === '🟩') continue;
         const l = guessLettres[i];
         if (restantes[l] > 0) {
@@ -732,22 +757,27 @@ function evaluerMotus(guess, solution) {
     return res.join('');
 }
 
-function buildMotusEmbed(mot, dateKey) {
+function buildMotusEmbed(mot, dateKey, longueur = 6) {
     const premiereLettre = mot.charAt(0);
-    const masque = `${premiereLettre} _ _ _ _ _`;
+    const masque = `${premiereLettre} ` + '_ '.repeat(longueur - 1).trim();
+    const estDifficile = longueur === 7;
+    const titre = estDifficile ? '🟥 MOTUS DU SOIR — DIFFICILE (19h) 🟥' : '🟩 MOTUS DU MATIN (10h) 🟩';
+    const couleur = estDifficile ? 0xe74c3c : 0x00b0f4;
+
     return new EmbedBuilder()
-        .setColor(0x00b0f4)
-        .setTitle('🟩 MOTUS DU JOUR (10h) 🟩')
+        .setColor(couleur)
+        .setTitle(titre)
         .setDescription(
-            `Le Motus du jour est lancé !\n\n` +
-            `🔤 **Mot à trouver :** \`${masque}\` (6 lettres)\n` +
-            `🎯 **Règle :** Tu as **3 essais individuels** pour trouver le mot !\n\n` +
+            `Le Motus est ouvert pendant **1 heure pile** !\n\n` +
+            `🔤 **Mot à trouver :** \`${masque}\` (${longueur} lettres)\n` +
+            `🎯 **Règle :** Tu as **3 essais individuels** pour trouver le mot !\n` +
+            `⏳ **Temps limite :** 1 heure (fermeture et révélation du mot à ${estDifficile ? '20h00' : '11h00'})\n\n` +
             `🟩 **Vert** : Lettre bien placée\n` +
             `🟨 **Jaune** : Lettre présente mais mal placée\n` +
             `⬛ **Noir** : Lettre absente\n\n` +
-            `*Écris simplement un mot de 6 lettres commençant par **${premiereLettre}** dans ce salon !*`
+            `*Écris simplement un mot de ${longueur} lettres commençant par **${premiereLettre}** dans ce salon !*`
         )
-        .setFooter({ text: 'Rendez-vous tous les jours à 10h00 ! • !motus pour voir le statut' });
+        .setFooter({ text: 'Rendez-vous à 10h (6 lettres) et 19h (7 lettres) ! • !motus pour le statut' });
 }
 
 function buildMotusStatsEmbed(cible, interactionUser) {
@@ -761,27 +791,37 @@ function buildMotusStatsEmbed(cible, interactionUser) {
             { name: '🎮 Parties jouées', value: `**${s.parties}**`, inline: true },
             { name: '📈 Taux de réussite', value: `**${pct}%**`, inline: true }
         )
-        .setFooter({ text: 'Motus Quotidien de 10h • Regaïa' });
+        .setFooter({ text: 'Motus 10h & 19h • Regaïa' });
 }
 
-async function envoyerMotusQuotidien(guild) {
+async function envoyerMotusQuotidien(guild, heureSession = 10) {
     const channel = guild.channels.cache.get(MOTUS_CHANNEL_ID);
     if (!channel) return;
 
     const dateKey = getMotusDateKey();
-    const mot = getMotDuJour(dateKey);
+    const longueur = heureSession === 19 ? 7 : 6;
+    const sessionKey = `${dateKey}_${heureSession}h`;
+    const mot = getMotDuJour(dateKey + (heureSession === 19 ? 999 : 0), longueur);
+    const expireAt = Date.now() + 60 * 60 * 1000; // 1 heure de jeu pile
 
     motusData = {
-        dateKey: dateKey,
+        dateKey: sessionKey,
         mot: mot,
+        longueur: longueur,
+        expireAt: expireAt,
+        heureSession: heureSession,
         termine: false,
         vainqueurId: null,
         tentatives: {},
         messageId: null
     };
 
-    const embed = buildMotusEmbed(mot, dateKey);
-    const sent = await channel.send({ content: '# 🟩 LE MOTUS DU JOUR EST OUVERT !', embeds: [embed] });
+    const embed = buildMotusEmbed(mot, dateKey, longueur);
+    const texteAnnonce = heureSession === 19 
+        ? '# 🟥 LE MOTUS DU SOIR (7 LETTRES - 1H) EST LANCÉ !' 
+        : '# 🟩 LE MOTUS DU MATIN (6 LETTRES - 1H) EST LANCÉ !';
+
+    const sent = await channel.send({ content: texteAnnonce, embeds: [embed] });
     motusData.messageId = sent.id;
     demanderSauvegarde();
 }
@@ -789,19 +829,379 @@ async function envoyerMotusQuotidien(guild) {
 function tempsAvantProchainMotus() {
     const now = new Date();
     const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-    const cible10h = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-    cible10h.setHours(10, 0, 0, 0);
+    const h = parisNow.getHours();
 
+    let cible = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    let sessionNom = "10h00 (6 lettres)";
     let jourStr = "aujourd'hui";
-    if (cible10h <= parisNow) {
-        cible10h.setDate(cible10h.getDate() + 1);
+
+    if (h < 10) {
+        cible.setHours(10, 0, 0, 0);
+        sessionNom = "10h00 (6 lettres)";
+    } else if (h < 19) {
+        cible.setHours(19, 0, 0, 0);
+        sessionNom = "19h00 (7 lettres - Difficile)";
+    } else {
+        cible.setDate(cible.getDate() + 1);
+        cible.setHours(10, 0, 0, 0);
+        sessionNom = "10h00 (6 lettres)";
         jourStr = "demain";
     }
 
-    const diff = cible10h - parisNow;
+    const diff = cible - parisNow;
+    const heures = Math.floor(diff / 3600000);
+    const minutes = Math.floor((diff % 3600000) / 60000);
+    return { jourStr, heures, minutes, sessionNom, timestamp: Math.floor((Date.now() + diff) / 1000) };
+}
+
+// =========================
+//     DÉCODEUR D'EMOJIS (15h)
+// =========================
+
+const REBUS_FILMS = [
+    ["👨‍🍳🐀🥖", "ratatouille"], ["🚢🧊💔", "titanic"], ["🦁👑🌅", "le roi lion", "roi lion"], ["🦖🏞️🚙", "jurassic park"], ["⚡🧙‍♂️👓", "harry potter"],
+    ["🌌⚔️🪐", "star wars", "la guerre des etoiles"], ["🕶️💊🟢", "matrix"], ["🌀💤⏳", "inception"], ["🚗⚡🕒", "retour vers le futur"], ["⚔️🏛️🛡️", "gladiator"],
+    ["💍🌋🧝‍♂️", "le seigneur des anneaux", "seigneur des anneaux"], ["🕷️🕸️🏙️", "spider-man", "spiderman"], ["🦇🃏🌃", "batman"], ["🤡🃏🩸", "joker"], ["🧅💚🫏", "shrek"],
+    ["🤠🧸🚀", "toy story"], ["🐑🤫🍷", "le silence des agneaux", "silence des agneaux"], ["🏴‍☠️🧭🦜", "pirates des caraibes"], ["🏃‍♂️🍫🦐", "forrest gump"], ["🥊🧼💥", "fight club"],
+    ["🍔💃🕺", "pulp fiction"], ["🪓🏨🚪", "shining"], ["🤠🐍💎", "indiana jones"], ["👽🚀🥚", "alien"], ["🤖🕶️🏍️", "terminator"],
+    ["👉🚲🌕", "et l extraterrestre", "et"], ["🎹💃🌆", "la la land"], ["🚀⏳🕳️", "interstellar"], ["💣🎩⚛️", "oppenheimer"], ["💖👠🎀", "barbie"],
+    ["🎸💀🌺", "coco"], ["🌊⛵🌀", "vaiana", "moana"], ["🎈🏠👴", "la haut", "up"], ["🚪👧👁️", "monstres et cie", "monstres et compagnie"], ["🐠🌊🔍", "le monde de nemo", "nemo"],
+    ["🦸‍♂️👨‍👩‍👧‍👦💥", "les indestructibles", "indestructibles"], ["🏎️🏁⚡", "cars"], ["🦎💇‍♀️🏰", "raiponce"], ["❄️👭⛄", "la reine des neiges", "reine des neiges"], ["🦊🐰🚔", "zootopie"],
+    ["🧠😢😡", "vice-versa", "vice versa"], ["🐼🔴👧", "alerte rouge"], ["🌱🤖🚀", "wall-e", "walle"], ["🤠⛓️🩸", "django unchained", "django"], ["🟡🗡️🥋", "kill bill"],
+    ["🚕💨🚓", "taxi"], ["🧑‍🦽🤝🧑🏿", "intouchables"], ["🥄☕🥖", "le fabuleux destin d amelie poulain", "amelie poulain"], ["🔥🏙️💥", "la haine"], ["🏺👃👑", "asterix et obelix mission cleopatre", "mission cleopatre"],
+    ["🕵️‍♂️🇪🇬🐫", "oss 117"], ["🍟🍺🌧️", "bienvenue chez les ch tis", "bienvenue chez les chtis"], ["🦆🥪🍷", "le diner de cons", "diner de cons"], ["🏰⚔️🧙‍♂️", "les visiteurs"], ["👑🍷🥩", "kaamelott"],
+    ["👻🚫🔫", "ghostbusters", "sos fantomes"], ["🎲🦏🌿", "jumanji"], ["🕶️👽👔", "men in black", "mib"], ["🏹🔥🕊️", "hunger games"], ["🧛‍♂️🍎🐺", "twilight"],
+    ["🏃‍♂️🧱🌿", "le labyrinthe", "labyrinthe"], ["🚕👩‍🦰💥", "le cinquieme element", "cinquieme element"], ["🪴🥛🔫", "leon"], ["💊🧠🧬", "lucy"], ["🍊🍝🔫", "le parrain", "parrain"],
+    ["🏔️❄️🩸", "scarface"], ["💵🎰🔫", "casino"], ["🚗👴🔫", "gran torino"], ["🥊👩🩸", "million dollar baby"], ["🪓🪪🩸", "american psycho"], ["✂️👐🌳", "edward aux mains d argent", "edward"],
+    ["🪲🧃👻", "beetlejuice"], ["👰💀💍", "les noces funebres", "noces funebres"], ["🎃👑🐕", "l etrange noel de monsieur jack"], ["🍫🎩🏭", "charlie et la chocolaterie"], ["🐇🫖🎩", "alice au pays des merveilles"],
+    ["🎩🕊️⚡", "le prestige", "prestige"], ["⏳🔁🔄", "tenet"], ["🏖️🪖💥", "dunkerque"], ["🏝️🧠🏨", "shutter island"], ["📈🍾🐒", "le loup de wall street", "loup de wall street"],
+    ["🍸🎷🥂", "gatsby le magnifique", "gatsby"], ["📺⛵🚪", "the truman show", "truman show"], ["🎭🟢🟨", "the mask", "the mask"], ["🙏⚡🌍", "bruce tout-puissant", "bruce tout puissant"], ["🤪🚗🏨", "dumb and dumber"],
+    ["🤫📞🔪", "scream"], ["🔪🎃🩸", "halloween"], ["🏒🏕️🔪", "vendredi 13"], ["😴🧤🔪", "freddy les griffes de la nuit", "freddy"], ["🪚🩸🧩", "saw"],
+    ["👻🏚️📹", "conjuring"], ["👧👗🩸", "annabelle"], ["🎈🤡🌧️", "ca", "it"], ["📹👻🛋️", "paranormal activity"], ["☕🥄🌀", "get out"],
+    ["✂️🔴🧑‍🤝‍🧑", "us"], ["🤫👣👂", "sans un bruit"], ["🙈🐦🛶", "bird box"], ["🧟‍♂️☣️🏙️", "je suis une legende"], ["🧟‍♂️✈️🧱", "world war z"],
+    ["🧟‍♂️🏏🍻", "shaun of the dead"], ["🧟‍♂️🎢🤡", "zombieland", "bienvenue a zombieland"], ["🏺📜🧟‍♂️", "la momie", "momie"], ["🦍🏙️✈️", "king kong"], ["🦎☢️🌊", "godzilla"],
+    ["🚗🤖💥", "transformers"], ["🤖🌊👾", "pacific rim"], ["🏎️💨👨‍👩‍👧‍👦", "fast and furious"], ["🚗🎧🕶️", "baby driver"], ["🚗🔨🦂", "drive"],
+    ["🐶🔫🕶️", "john wick"], ["📞🥋🔫", "taken"], ["⚖️🔫🔨", "equalizer"], ["☂️🥃👔", "kingsman"], ["💣👓🏃‍♂️", "mission impossible"],
+    ["🍸🔫🤵", "james bond", "007"], ["🏢🦹‍♂️🦶", "die hard", "piege de cristal"], ["✈️🕶️🏍️", "top gun"], ["☄️👨‍🚀💥", "armageddon"], ["🌊❄️🗽", "le jour d apres"],
+    ["🌋🏢💥", "2012"], ["🚀👩‍🚀🌍", "gravity"], ["🥔👨‍🚀🌱", "seul sur mars"], ["🛸👽🔤", "premier contact"], ["🦐👽🏙️", "district 9"],
+    ["🤖🦿🩸", "robocop"], ["🏜️🛢️🎸", "mad max", "mad max fury road"], ["🚂❄️🥩", "snowpiercer"], ["📱❤️🤖", "her"], ["🤖💃🧬", "ex machina"],
+    ["🏜️🪱👁️", "dune"], ["🦸‍♂️🔨⚡", "thor"], ["🦸‍♂️🛡️🇺🇸", "captain america"], ["🦸‍♂️🤖❤️", "iron man"], ["🦹‍♂️🧤💎", "avengers", "avengers infinity war"],
+    ["🦝🌳🎧", "les gardiens de la galaxie", "gardiens de la galaxie"], ["🧙‍♂️👁️🌀", "doctor strange"], ["🗡️🔴🤪", "deadpool"], ["🐺🦾🩸", "wolverine", "logan"], ["🦸‍♂️🦽👨‍🦲", "x-men", "xmen"],
+    ["🔱🌊🦈", "aquaman"], ["⚔️🛡️👩", "wonder woman"], ["🦸‍♂️🔴🟦", "superman"], ["⚡🏃‍♂️⚡", "flash"], ["⚡🧒🦸‍♂️", "shazam"],
+    ["🦹‍♀️🏏💥", "suicide squad"], ["🎮🕹️👾", "pixels"], ["🕶️🕹️🏎️", "ready player one"], ["💾🏍️🔵", "tron"], ["⚔️🧙‍♂️🐺", "warcraft"],
+    ["⚡🐭🔍", "detective pikachu"], ["🦔💨💍", "sonic"], ["🍄👨🏻🔧", "super mario bros", "mario"], ["🐻🍕🎤", "five nights at freddys", "fnaf"], ["🏴‍☠️🗺️🧭", "uncharted"],
+    ["🏹🏺🧗‍♀️", "tomb raider"], ["🧟‍♀️🔫🏢", "resident evil"], ["🌫️📻🪓", "silent hill"], ["🗡️🦅🦹‍♂️", "assassins creed"], ["🦖🏹🍖", "monster hunter"],
+    ["🏎️🎮🏁", "gran turismo"], ["🗡️⏳👑", "prince of persia"], ["🥋🐉💥", "mortal kombat"], ["🚀🌕👨‍🚀", "apollo 13"], ["🐁⚡🪑", "la ligne verte", "ligne verte"],
+    ["🔨⛏️🌧️", "les evades"], ["🎹🎼🏚️", "le pianiste"], ["📋🕯️🚂", "la liste de schindler", "schindler"], ["🏖️🪖🎖️", "il faut sauver le soldat ryan", "soldat ryan"], ["🪖🏃‍♂️✉️", "1917"],
+    ["🔥🚁📻", "apocalypse now"], ["🪖🍩🪞", "full metal jacket"], ["🚂🔥💣", "le pont de la riviere kwai"], ["🔥👧🍬", "le tombeau des lucioles"], ["🐉🏯🏮", "le voyage de chihiro"],
+    ["🐺🏹🌲", "princesse mononoke"], ["🏰💨🔥", "le chateau ambulant"], ["🐱🚌☂️", "mon voisin totoro", "totoro"], ["☄️👧👦", "your name"], ["🦈🩸🏖️", "les dents de la mer", "jaws"],
+    ["🚿🔪😱", "psycho", "psychose"], ["🪟📸👀", "fenetre sur cour"], ["🐦🕊️👀", "les oiseaux"], ["🌂👜✨", "mary poppins"], ["🌈👠🌪️", "le magicien d oz"],
+    ["🐎🏟️🏛️", "ben-hur", "ben hur"], ["⚔️🏴󠁧󠁢󠁳󠁣󠁴󠁿🛡️", "braveheart"], ["🗡️🌸🇯🇵", "le dernier samourai"], ["🐎🏛️🏹", "troie"], ["🛡️🩸⚔️", "300"],
+    ["🏰⚔️🕌", "kingdom of heaven"], ["🏹🌲👑", "robin des bois"], ["🗡️🪨👑", "arthur", "excalibur"], ["🛸🌾🌽", "signes"], ["👽🚲☎️", "e.t."]
+];
+
+const REBUS_JEUX = [
+    ["🧱⛏️🧟", "minecraft"], ["🚗💰🔫", "gta", "grand theft auto"], ["🪂🔫🕺", "fortnite"], ["⚔️🧙‍♀️🛡️", "league of legends", "lol"], ["🎯🔫💣", "valorant"],
+    ["🤖🛡️🔫", "overwatch"], ["💣📦🎯", "counter strike", "csgo", "cs2"], ["🪖🔫🛩️", "call of duty", "cod"], ["🚁💥🪖", "battlefield"], ["🧱🔫🛡️", "rainbow six siege", "r6"],
+    ["🏃‍♂️💨🔫", "apex legends", "apex"], ["🍳🪂🔫", "pubg"], ["🚗⚽🚀", "rocket league"], ["⚽👟🎮", "fifa", "ea fc"], ["🏀👟⛹️", "nba 2k", "2k"],
+    ["🗡️🦅🦹‍♂️", "assassins creed"], ["🐺⚔️🧙‍♂️", "the witcher", "witcher"], ["🦾🌆🚗", "cyberpunk 2077", "cyberpunk"], ["🐲⚔️📜", "skyrim", "the elder scrolls"], ["☢️🥤🤠", "fallout"],
+    ["🔥💀⚔️", "dark souls"], ["🩸🌕🐺", "bloodborne"], ["💍🌳⚔️", "elden ring"], ["🗡️🌸🥷", "sekiro"], ["🛡️🏰👹", "demon souls", "demons souls"],
+    ["🗡️🛡️🧝", "zelda", "breath of the wild", "tears of the kingdom"], ["🍄👨🏻🧢", "mario", "super mario", "super mario odyssey"], ["🏎️🍌🍄", "mario kart"], ["🥊🍄⚔️", "super smash bros", "smash bros"], ["⚡🐭🔴", "pokemon"],
+    ["🏝️🦝🔔", "animal crossing"], ["🦑🔫🎨", "splatoon"], ["🚀👩‍🚀👾", "metroid"], ["🌸⭐🍭", "kirby"], ["🦍🍌🌴", "donkey kong"],
+    ["🦔💨💍", "sonic"], ["🧱🧩⬇️", "tetris"], ["🟡👻🍒", "pac-man", "pacman"], ["👾🚀🔫", "space invaders"], ["🥋🥊🔥", "street fighter"],
+    ["🥊🥋⚡", "tekken"], ["🩸🥋💀", "mortal kombat"], ["🐉⚡🥋", "dragon ball fighterz", "dbfz"], ["🪓🩸🏛️", "god of war"], ["🍄🧟‍♂️👧", "the last of us", "tlou"],
+    ["🏴‍☠️🧭🧗", "uncharted"], ["🕷️🕸️🏙️", "spider-man", "spiderman"], ["🏹🤖🦕", "horizon", "horizon zero dawn"], ["🗡️🌸🎭", "ghost of tsushima"], ["📦👶🌧️", "death stranding"],
+    ["📦🐍🔫", "metal gear solid", "mgs"], ["🧟‍♂️🌿🔫", "resident evil"], ["🌫️📻🪓", "silent hill"], ["🚀👨‍🚀🧟", "dead space"], ["📹😱🏃", "outlast"],
+    ["🏰🕯️😱", "amnesia"], ["🐻🍕🎤", "five nights at freddys", "fnaf"], ["🧸🏭😱", "poppy playtime"], ["🖋️😈📜", "bendy", "bendy and the ink machine"], ["🏡🕵️‍♂️🔑", "hello neighbor"],
+    ["🌲📄😱", "slender", "slenderman"], ["👻📻🔦", "phasmophobia"], ["🔩🏭👹", "lethal company"], ["🚀🔪🕵️", "among us"], ["🏃‍♂️👑🤹", "fall guys"],
+    ["🧱🎮🌍", "roblox"], ["🔧🛠️🔫", "garrys mod", "gmod"], ["🔵🟠🔫", "portal"], ["🔬👨‍🔬👽", "half-life", "half life"], ["🧟‍♂️💊🏃", "left 4 dead", "l4d"],
+    ["🎩🔫💼", "team fortress 2", "tf2"], ["🌊🏙️💉", "bioshock"], ["🗡️🐀🎭", "dishonored"], ["☕👽🌀", "prey"], ["🪓🔥👹", "doom"],
+    ["🪖🔫🏰", "wolfenstein"], ["🚀🔫👽", "halo"], ["🌌🔫👑", "destiny"], ["⚙️🪖🩸", "gears of war"], ["🏴‍☠️⛵💀", "sea of thieves"],
+    ["🏎️🇲🇽🏖️", "forza", "forza horizon"], ["🏎️🚓💨", "need for speed", "nfs"], ["🏎️🏁🏆", "gran turismo"], ["🏎️💥🔥", "burnout"], ["🏎️✈️🚤", "the crew"],
+    ["🏎️🏁🏎️", "f1", "formula 1"], ["🤠🐎💰", "red dead redemption", "rdr2"], ["🏫🎒🥊", "bully", "canis canem edit"], ["💊🔫❄️", "max payne"], ["🕵️‍♂️💼🔍", "la noire"],
+    ["🎩🔫🚗", "mafia"], ["🥋🍜🔫", "sleeping dogs"], ["📱💻🦹", "watch dogs"], ["🌴🚜💣", "far cry"], ["❄️🏙️🎒", "the division"],
+    ["🕶️🤫🔫", "splinter cell"], ["🕴️💼🔫", "hitman"], ["🏹🏺🧗", "tomb raider"], ["🦾🕶️🧬", "deus ex"], ["🚀👽🌌", "mass effect"],
+    ["🐉⚔️🏰", "dragon age"], ["🎲⚔️🧙", "baldurs gate", "baldurs gate 3"], ["👿🔥🗡️", "diablo"], ["⚔️🛡️🏰", "world of warcraft", "wow"], ["🚀🐜🤖", "starcraft"],
+    ["🃏🧝‍♂️✨", "hearthstone"], ["🗡️🧝‍♀️✨", "final fantasy"], ["🗝️🏰👑", "kingdom hearts"], ["🦖🏹🍖", "monster hunter"], ["🎭🏫🐱", "persona"],
+    ["🐉🥊🥋", "yakuza", "like a dragon"], ["🤖👗🗡️", "nier automata", "nier"], ["✨🧚‍♀️⚔️", "genshin impact", "genshin"], ["🚂✨🌌", "honkai star rail"], ["🏰⚔️🛡️", "clash of clans"],
+    ["👑🏰🃏", "clash royale"], ["🌵🔫⭐", "brawl stars"], ["🏃‍♂️🚇🛹", "subway surfers"], ["🏃‍♂️🐒💎", "temple run"], ["🍬🍭🔨", "candy crush"],
+    ["🐦🟩🚀", "flappy bird"], ["🐦🐷💥", "angry birds"], ["🌻🧟‍♂️🧠", "plants vs zombies"], ["🍉🍌🗡️", "fruit ninja"], ["🟨🎶🔺", "geometry dash"],
+    ["❤️💀🦴", "undertale"], ["👑🐐🗡️", "deltarune"], ["🪲⚔️🕸️", "hollow knight"], ["🍓🧗‍♀️🏔️", "celeste"], ["☕🎲😈", "cuphead"],
+    ["🗡️🩸🚪", "dead cells"], ["🔥🏛️🗡️", "hades"], ["🃏🧗‍♂️🗼", "slay the spire"], ["👶😢💩", "the binding of isaac", "isaac"], ["🔫🏰🗝️", "enter the gungeon"],
+    ["🌳⛏️🏰", "terraria"], ["🌾🚜🐔", "stardew valley"], ["🌲🔥🥩", "dont starve", "don't starve"], ["🌊🦈🚀", "subnautica"], ["🪵🌊🦈", "raft"],
+    ["🌲🪓🧟", "the forest"], ["🪨☢️🏠", "rust"], ["🦕🦖🍖", "ark", "ark survival evolved"], ["🧟‍♂️🥫🎒", "dayz"], ["🔪🩸🔦", "dead by daylight", "dbd"],
+    ["🎭💰🏦", "payday"], ["🤖🥷🚀", "warframe"], ["🚀🌌🪐", "no mans sky", "no man's sky"], ["🚀🐸💥", "kerbal space program"], ["🏙️🛣️🏗️", "cities skylines"],
+    ["👨‍👩‍👧‍👦🏠💚", "les sims", "sims"], ["🎢🎡🎪", "rollercoaster tycoon"], ["🏛️👑🗺️", "civilization", "civ"], ["🏰⚔️🌾", "age of empires"], ["⚔️🏰🗺️", "total war"],
+    ["👑🏰🩸", "crusader kings"], ["⚙️🏭🚂", "factorio"], ["☕🏭📦", "satisfactory"], ["🏢👮‍♂️🔑", "prison architect"], ["🍳🔥🍽️", "overcooked"],
+    ["👫🧩🔨", "it takes two"], ["🏃‍♂️🔗🏃‍♂️", "a way out"], ["💣⏰🗣️", "keep talking and nobody explodes"], ["📦🛋️✨", "unpacking"], ["🐱🎒🤖", "stray"],
+    ["🐐🤪💥", "goat simulator"], ["🍞🔥🍞", "i am bread"], ["🐙👔👨", "octodad"], ["👨‍⚕️🔪🫀", "surgeon simulator"], ["🪿🔔🧲", "untitled goose game", "goose game"],
+    ["🪓🏺🧗", "getting over it"], ["👑🧗‍♂️🏰", "jump king"], ["📦🧗‍♂️☁️", "only up"], ["👧🧥🏮", "little nightmares"], ["🕷️🌲💀", "limbo"],
+    ["🐷🧒🔴", "inside"], ["🥋👴👊", "sifu"], ["🐑👑🩸", "cult of the lamb"], ["🍣🤿🐟", "dave the diver"], ["🃏🤡♠️", "balatro"],
+    ["🔫🦙🏰", "palworld"], ["🪖🤖🐛", "helldivers", "helldivers 2"], ["🐒👑🥋", "black myth wukong", "wukong"], ["⚔️🏺🏛️", "titan quest"], ["🚗⚽🔥", "supersonic acrobatic rocket-powered battle-cars"]
+];
+
+const REBUS_SERIES = [
+    ["🧪⚗️🚐", "breaking bad"], ["⚖️👨‍💼📱", "better call saul"], ["👑🐉❄️", "game of thrones", "got"], ["🐉🏰👸", "house of the dragon"], ["🚲🧇🔦", "stranger things"],
+    ["🧟‍♂️🏕️🏹", "the walking dead", "twd"], ["🍄👧🎒", "the last of us", "tlou"], ["🥃🚬🎩", "peaky blinders"], ["🦑👧🔴", "squid game"], ["🎭🏦💰", "la casa de papel", "casa de papel"],
+    ["😈🍷🎹", "lucifer"], ["🕵️‍♂️🎻🇬🇧", "sherlock"], ["⏳🟦🚪", "doctor who"], ["📱👁️🪞", "black mirror"], ["⏳🌧️☢️", "dark"],
+    ["☕🛋️👫", "friends"], ["☂️💛🍺", "how i met your mother", "himym"], ["⚛️🛋️🤓", "the big bang theory", "tbbt"], ["👮‍♂️🍩🏢", "brooklyn nine-nine", "b99"], ["📄🏢☕", "the office"],
+    ["🌳🏞️🧇", "parks and recreation"], ["🧒📺🎳", "malcolm"], ["👨‍👩‍👧‍👦🏠🧢", "ma famille d abord"], ["🧒🏾🏫😭", "tout le monde deteste chris"], ["👑🍷🥩", "kaamelott"],
+    ["☕🏢📹", "camera cafe"], ["👴👵🛋️", "scenes de menages"], ["👨‍⚕️🏥🤪", "h"], ["⏱️⚡💨", "bref"], ["🎭💼⭐", "dix pour cent"],
+    ["🎩💎🗼", "lupin"], ["🕵️‍♂️🕶️🏢", "le bureau des legendes"], ["🗳️🏛️🇫🇷", "baron noir"], ["👮‍♀️⚖️🏢", "engrenages"], ["☀️🏢🌊", "plus belle la vie"],
+    ["👫🛋️🍷", "un gars une fille"], ["⛓️🗺️🏃‍♂️", "prison break"], ["✈️🏝️💨", "lost"], ["🧬🦸‍♂️💥", "heroes"], ["⏰💣🔫", "24 heures chrono", "24"],
+    ["🩸🔪💉", "dexter"], ["🕵️‍♀️🇺🇸💣", "homeland"], ["🍎🏘️🤫", "desperate housewives"], ["👨‍⚕️👩‍⚕️🏥", "greys anatomy", "grey's anatomy"], ["👨‍⚕️💊🦯", "dr house", "house"],
+    ["👨‍⚕️🩺🧩", "good doctor"], ["👨‍⚕️🏥🎵", "scrubs"], ["🚑🏥🩸", "urgences", "er"], ["🪓⛵🛡️", "vikings"], ["👑🇬🇧🏰", "the crown"],
+    ["🏰🎩☕", "downton abbey"], ["💌👒🐝", "la chronique des bridgerton", "bridgerton"], ["⏳🏴󠁧󠁢󠁳󠁣󠁴󠁿❤️", "outlander"], ["🕊️🔫🦸", "peacemaker"], ["🦸‍♂️🩸😈", "the boys"],
+    ["🦸‍♂️🩸🧒", "gen v"], ["🦯🔴🥋", "daredevil"], ["🥃📸👊", "jessica jones"], ["💀🔫🩸", "the punisher"], ["📺🪄❤️", "wandavision"],
+    ["⏳🟢🐊", "loki"], ["🤠👶🚀", "the mandalorian", "mandalorian"], ["🚀🪖⚙️", "andor"], ["⚔️🏜️🧙‍♂️", "obi-wan kenobi", "obi wan"], ["🐺⚔️🧙‍♂️", "the witcher"],
+    ["👧🖤✋", "mercredi", "wednesday"], ["🥋🐍🏆", "cobra kai"], ["🏫🍆🚲", "sex education"], ["💊✨😢", "euphoria"], ["💊🇬🇧🎉", "skins"],
+    ["🧢🥤🕵️", "riverdale"], ["💋👠🍸", "gossip girl"], ["🤫📱✉️", "pretty little liars"], ["🏫🍾🩸", "elite"], ["🎧📼💔", "13 reasons why"],
+    ["🧢📖🔪", "you"], ["🧡⛓️👩", "orange is the new black"], ["🌿💰🔫", "narcos"], ["💵🛶💼", "ozark"], ["🧠🔍🕵️", "mindhunter"],
+    ["❄️🩸🕵️", "fargo"], ["🏍️💀🔫", "sons of anarchy"], ["📻📦👮", "the wire"], ["🍝🔫🕶️", "les soprano", "the sopranos"], ["🚬🍸🏢", "mad men"],
+    ["💼🚁👴", "succession"], ["🏨🌺🍸", "the white lotus"], ["☢️🏭📉", "chernobyl"], ["🪖🎖️🌍", "band of brothers", "freres d armes"], ["🤠🤖🏜️", "westworld"],
+    ["🔴👗🤰", "the handmaids tale", "la servante ecarlate"], ["👻🚗🗡️", "supernatural"], ["🧛‍♂️🩸🐺", "the vampire diaries"], ["🧛‍♂️⚜️👑", "the originals"], ["🐺🏈🌕", "teen wolf"],
+    ["🏹🟢🦹", "arrow"], ["⚡🏃‍♂️🔴", "the flash", "flash"], ["🌾🦸‍♂️🚜", "smallville"], ["✨🧙‍♀️📖", "charmed"], ["🧛‍♀️🗡️⚰️", "buffy contre les vampires", "buffy"]
+];
+
+const REBUS_ANIMES = [
+    ["📓🍎✍️", "death note"], ["⚔️🧱🍖", "l attaque des titans", "snk", "attack on titan"], ["⚔️👹🐗", "demon slayer", "kimetsu no yaiba"], ["🤞👁️🥋", "jujutsu kaisen", "jjk"], ["🦸‍♂️🥦💥", "my hero academia", "mha"],
+    ["🍥🦊🍜", "naruto", "naruto shippuden"], ["🐉⚡🥋", "dragon ball", "dragon ball z", "dbz"], ["🏴‍☠️👒🍖", "one piece"], ["🎣⚡🐜", "hunter x hunter", "hxh"], ["🗡️👻👘", "bleach"],
+    ["🦾🤖⚗️", "fullmetal alchemist", "fma", "brotherhood"], ["☕👁️🩸", "tokyo ghoul"], ["⚔️🎮🏰", "sword art online", "sao"], ["🪚😈🩸", "chainsaw man"], ["🕵️‍♂️👧🥜", "spy x family"],
+    ["🛵⏳👊", "tokyo revengers"], ["🤖🩸👼", "evangelion", "neon genesis evangelion"], ["🎷🚀🚬", "cowboy bebop"], ["👁️👑♟️", "code geass"], ["🔬🍌⏳", "steins gate"],
+    ["🥦🧂👻", "mob psycho 100"], ["🥊👨‍🦲💥", "one punch man"], ["🪓⛵⚔️", "vinland saga"], ["⭐👊🧛", "jojo", "jojos bizarre adventure"], ["🍸♟️💀", "death parade"],
+    ["🦠✋🩸", "parasyte"], ["🔫🧠🏢", "psycho-pass"], ["👨‍⚕️🇩🇪💉", "monster"], ["🏐🐦💥", "haikyuu", "haikyu"], ["🏀🔴⚡", "kuroko no basket", "kuroko"],
+    ["⚽⛓️🔥", "blue lock"], ["🏀⛹️‍♂️💥", "slam dunk"], ["🏎️⛰️💨", "initial d"], ["👓💊🕵️", "detective conan"], ["⚡🐭🔴", "pokemon"],
+    ["🃏👁️🐉", "yu-gi-oh", "yugioh"], ["🌀🦁⚡", "beyblade"], ["🦖🦕🥚", "digimon"], ["🌙🎀🐱", "sailor moon"], ["🌸👧🗝️", "cardcaptor sakura", "sakura"],
+    ["🧙‍♂️🗝️🔥", "fairy tail"], ["🍺🐷⚔️", "seven deadly sins", "nanatsu no taizai"], ["🍀🗡️😈", "black clover"], ["🧪🗿⚡", "dr stone"], ["🚒🔥🧑‍🚒", "fire force"],
+    ["💀🧙‍♀️🗡️", "soul eater"], ["🐙🏫🎯", "assassination classroom"], ["⚔️🪙👘", "noragami"], ["🗡️🔥✝️", "blue exorcist", "ao no exorcist"], ["🗡️🩸🦾", "berserk"],
+    ["🩸🧛‍♂️🔫", "hellsing"], ["🏍️💊💥", "akira"], ["🤖🧠⚙️", "ghost in the shell"], ["🏹🌸🐕", "inuyasha"], ["🥋🐼♨️", "ranma 1/2", "ranma"],
+    ["⚽🥅🏃", "olive et tom", "captain tsubasa"], ["🐎🏛️✨", "les chevaliers du zodiaque", "saint seiya"], ["👊💥💀", "ken le survivant", "hokuto no ken"], ["🔫🐦🏙️", "nicky larson", "city hunter"], ["🦾🔫🚬", "cobra"],
+    ["🤖🛸🪐", "goldorak"], ["🚬🏍️👨‍🏫", "gto", "great teacher onizuka"], ["🐯🏫❤️", "toradora"], ["🎹🎻😭", "your lie in april"], ["🍞👨‍👩‍👧😭", "clannad"],
+    ["🌸👻😭", "anohana"], ["✉️🦾😭", "violet evergarden"], ["❤️🧠🔫", "kaguya-sama", "love is war"], ["⭐🎤🩸", "oshi no ko"], ["🧝‍♀️🪄⏳", "frieren"],
+    ["🏡👧👦", "the promised neverland"], ["🕳️🎈🤖", "made in abyss"], ["🔁🩸🍎", "re:zero", "rezero"], ["💥🐸🧙‍♀️", "konosuba"], ["💀👑🏰", "overlord"],
+    ["🎲👑👧", "no game no life"], ["🧙‍♂️🦯👶", "mushoku tensei"], ["🟦🗡️👑", "moi quand je me reincarne en slime", "slime"], ["🗡️🕶️📱", "solo leveling"], ["⏳🧒🩸", "erased"],
+    ["🐟🗽🔫", "banana fish"], ["🗡️🦿👹", "dororo"], ["🥊🔥🏆", "hajime no ippo"], ["🧑‍🍳🔥🍲", "food wars", "shokugeki no soma"], ["🦾🌆🔫", "cyberpunk edgerunners", "edgerunners"],
+    ["🧁🥊🔧", "arcane"], ["🧛‍♂️🩸🏛️", "castlevania"], ["📚✍️🕵️", "bungo stray dogs"], ["🍵👔😈", "black butler"], ["🐻🔪🏫", "danganronpa"],
+    ["✂️🧵🩸", "kill la kill"], ["🤖🌀🔩", "gurren lagann"], ["🎸🛵🛸", "flcl"], ["🚀🌌🕺", "space dandy"], ["🌻⚔️🎧", "samurai champloo"],
+    ["🕶️🗡️🎤", "afro samurai"], ["🤠🔴🔫", "trigun"], ["😈🩸🏃", "devilman crybaby"], ["🍡🍶🗡️", "gintama"], ["🏹👘🏯", "kiznaiver"]
+];
+
+// =========================
+//    MOTEUR RÉBUS REGAÏEN
+// =========================
+
+let rebusStats = {}; // userId -> { victoires: 0, points: 0, parties: 0 }
+let rebusSession = {
+    active: false,
+    manche: 0,
+    themeNom: '',
+    items: [],
+    currentItem: null,
+    expireAt: 0,
+    timer: null,
+    scores: {}
+};
+
+function normaliserRebus(str) {
+    if (!str) return '';
+    return str.toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/^(le|la|les|l'|un|une|des|the|a|an)\s+/i, '')
+        .replace(/[^a-z0-9]/g, "");
+}
+
+function getRebusThemeDuJour(dateKey) {
+    const themes = [
+        { id: 'films', nom: '🎬 Films', pool: REBUS_FILMS, couleur: 0xe67e22 },
+        { id: 'jeux', nom: '🎮 Jeux Vidéo', pool: REBUS_JEUX, couleur: 0x2ecc71 },
+        { id: 'series', nom: '📺 Séries TV', pool: REBUS_SERIES, couleur: 0x3498db },
+        { id: 'animes', nom: '⛩️ Animés & Mangas', pool: REBUS_ANIMES, couleur: 0xe91e63 }
+    ];
+    return themes[dateKey % themes.length];
+}
+
+function tempsAvantProchainRebus() {
+    const now = new Date();
+    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const cible15h = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    cible15h.setHours(15, 0, 0, 0);
+
+    let jourStr = "aujourd'hui";
+    if (cible15h <= parisNow) {
+        cible15h.setDate(cible15h.getDate() + 1);
+        jourStr = "demain";
+    }
+
+    const diff = cible15h - parisNow;
     const h = Math.floor(diff / 3600000);
     const m = Math.floor((diff % 3600000) / 60000);
     return { jourStr, h, m, timestamp: Math.floor((Date.now() + diff) / 1000) };
+}
+
+function buildRebusStatsEmbed(cible) {
+    const s = rebusStats[cible.id] ?? { victoires: 0, points: 0, parties: 0 };
+    return new EmbedBuilder()
+        .setColor(0xf39c12)
+        .setTitle(`🧩 Stats Rébus Regaïen de ${cible.displayName}`)
+        .addFields(
+            { name: '🏆 Victoires de session', value: `**${s.victoires}**`, inline: true },
+            { name: '⭐ Points totaux', value: `**${s.points}**`, inline: true },
+            { name: '🎮 Sessions jouées', value: `**${s.parties}**`, inline: true }
+        )
+        .setFooter({ text: 'Rébus Regaïen tous les jours à 15h00 !' });
+}
+
+async function lancerSessionRebus(guild) {
+    const channel = guild.channels.cache.get(MOTUS_CHANNEL_ID);
+    if (!channel) return;
+
+    const dateKey = getMotusDateKey();
+    const theme = getRebusThemeDuJour(dateKey);
+
+    // Tirer 5 rébus uniques au hasard dans le thème du jour
+    const shuffled = [...theme.pool].sort(() => 0.5 - Math.random());
+    const 5items = shuffled.slice(0, 5);
+
+    rebusSession = {
+        active: true,
+        manche: 0,
+        themeNom: theme.nom,
+        themeCouleur: theme.couleur,
+        items: 5items,
+        currentItem: null,
+        expireAt: 0,
+        timer: null,
+        scores: {}
+    };
+
+    await channel.send({
+        content: `# 🧩 LE RÉBUS REGAÏEN DU JOUR EST LANCÉ !\n` +
+                 `🎭 **Thème du jour :** ${theme.nom}\n` +
+                 `🎯 **5 manches au programme** • **5 minutes** par manche !\n` +
+                 `*La première manche commence dans quelques secondes...*`
+    });
+
+    setTimeout(() => passerMancheSuivanteRebus(guild), 4000);
+}
+
+async function passerMancheSuivanteRebus(guild) {
+    const channel = guild.channels.cache.get(MOTUS_CHANNEL_ID);
+    if (!channel) return;
+
+    rebusSession.manche++;
+
+    // Si les 5 manches sont terminées -> Clôture et Podium
+    if (rebusSession.manche > 5) {
+        return terminerSessionRebus(channel);
+    }
+
+    const item = rebusSession.items[rebusSession.manche - 1];
+    rebusSession.currentItem = item;
+    rebusSession.expireAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+
+    const embed = new EmbedBuilder()
+        .setColor(0xf39c12)
+        .setTitle(`🧩 Manche ${rebusSession.manche}/5`)
+        .setDescription(
+            `Devine ce que représentent ces emojis :\n\n` +
+            `# ${item[0]}\n\n` +
+            `⏳ **Temps limite :** 5 minutes (<t:${Math.floor(rebusSession.expireAt / 1000)}:R>) !\n` +
+            `💬 *Tape directement le titre dans ce salon !*`
+        )
+        .setFooter({ text: `Manche ${rebusSession.manche}/5 • Le/la premier.e qui trouve marque 1 point` });
+
+    await channel.send({ embeds: [embed] });
+
+    // Timer de 5 minutes si personne ne trouve
+    rebusSession.timer = setTimeout(async () => {
+        if (!rebusSession.active || !rebusSession.currentItem) return;
+
+        const titreReponse = item[1].charAt(0).toUpperCase() + item[1].slice(1);
+        await channel.send(`⏰ **Temps écoulé !** Personne n'a trouvé.\nLa réponse était : **${titreReponse}** !`);
+        rebusSession.currentItem = null;
+
+        setTimeout(() => passerMancheSuivanteRebus(guild), 4000);
+    }, 5 * 60 * 1000);
+}
+
+async function verifierReponseRebus(message) {
+    if (!rebusSession.active || !rebusSession.currentItem) return false;
+
+    const guessNorm = normaliserRebus(message.content);
+    if (guessNorm.length < 2) return false;
+
+    const item = rebusSession.currentItem;
+    const reponsesValides = item.slice(1).map(r => normaliserRebus(r));
+
+    // Si la proposition correspond à l'une des variantes acceptées
+    if (reponsesValides.includes(guessNorm)) {
+        clearTimeout(rebusSession.timer);
+        rebusSession.currentItem = null;
+
+        const uid = message.author.id;
+        rebusSession.scores[uid] = (rebusSession.scores[uid] || 0) + 1;
+
+        const titreReponse = item[1].charAt(0).toUpperCase() + item[1].slice(1);
+        await message.reply(`✅ **Bravo <@${uid}> !** C'était bien **${titreReponse}** ! (+1 point)`);
+
+        setTimeout(() => passerMancheSuivanteRebus(message.guild), 4000);
+        return true;
+    }
+    return false;
+}
+
+async function terminerSessionRebus(channel) {
+    clearTimeout(rebusSession.timer);
+    rebusSession.active = false;
+    rebusSession.currentItem = null;
+
+    const scoresList = Object.entries(rebusSession.scores).sort((a, b) => b[1] - a[1]);
+
+    if (scoresList.length === 0) {
+        const embedNul = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('🏁 Fin du Rébus Regaïen')
+            .setDescription(`Aucun point n'a été marqué aujourd'hui !\nRendez-vous demain à **15h00** pour une nouvelle session !`);
+        await channel.send({ embeds: [embedNul] });
+        demanderSauvegarde();
+        return;
+    }
+
+    // Mise à jour des stats globales pour tous les participants
+    const maxScore = scoresList[0][1];
+    for (const [uid, pts] of scoresList) {
+        if (!rebusStats[uid]) rebusStats[uid] = { victoires: 0, points: 0, parties: 0 };
+        rebusStats[uid].points += pts;
+        rebusStats[uid].parties++;
+        if (pts === maxScore) rebusStats[uid].victoires++;
+    }
+    demanderSauvegarde();
+
+    const medailles = ['🥇', '🥈', '🥉'];
+    const lignesPodium = scoresList.map(([uid, pts], i) => {
+        const med = medailles[i] ?? `**${i + 1}.**`;
+        return `${med} <@${uid}> — **${pts} point${pts > 1 ? 's' : ''}**`;
+    }).join('\n');
+
+    const vainqueurs = scoresList.filter(s => s[1] === maxScore).map(s => `<@${s[0]}>`).join(', ');
+
+    const embedVictoire = new EmbedBuilder()
+        .setColor(0xf1c40f)
+        .setTitle('🏆 PODIUM DU RÉBUS REGAÏEN !')
+        .setDescription(
+            `Félicitations à ${vainqueurs} pour cette victoire !\n\n` +
+            `**__Classement de la session :__**\n${lignesPodium}`
+        )
+        .setFooter({ text: 'Rendez-vous demain à 15h00 ! • !rebus pour voir le statut' });
+
+    const rowStats = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('rebus_view_stats')
+            .setLabel('📊 Mes stats Rébus')
+            .setStyle(ButtonStyle.Primary)
+    );
+
+    await channel.send({ embeds: [embedVictoire], components: [rowStats] });
 }
 
 // =========================
@@ -996,6 +1396,18 @@ function getResponse(raw) {
 
     if (command === "!motustats" || command === "!motustat") {
         return { needsMotusStats: true };
+    }
+
+    // =========================
+    //         !REBUS
+    // =========================
+
+    if (command === "!rebus" || command === "!decodeur" || command === "!emojis") {
+        return { needsRebus: true };
+    }
+
+    if (command === "!rebusstats" || command === "!rebusstat") {
+        return { needsRebusStats: true };
     }
 
     // =========================
@@ -2175,11 +2587,17 @@ function buildHelpCategoryEmbed(category) {
                 "📈 **`!rltstats`** `[membre]`\n" +
                 "-# Voir l'historique complet des tirages, ratios et pire série\n\n" +
 
-                "### 🟩 __Motus Quotidien (10h) :__\n" +
+                "### 🟩 __Motus Quotidien (10h & 19h) :__\n" +
                 "🟩 **`!motus`**\n" +
-                "-# Voir le statut du mot du jour et le temps restant jusqu'au prochain motus à 10h\n" +
+                "-# Voir le statut du mot du jour et le temps restant jusqu'au prochain motus (10h & 19h)\n" +
                 "📊 **`!motustats`** `[membre]`\n" +
                 "-# Consulter les victoires, parties jouées et statistiques Motus d'un·e membre\n\n" +
+
+                "### 🧩 __Rébus Regaïen (15h) :__\n" +
+                "🧩 **`!rebus`**\n" +
+                "-# Voir la session en cours et le temps restant jusqu'au prochain Rébus Regaïen à 15h00\n" +
+                "📊 **`!rebusstats`** `[membre]`\n" +
+                "-# Consulter les victoires, points et statistiques du Rébus Regaïen\n\n" +
 
                 "### 🔮 __Destinée & Hasard :__\n" +
                 "🔮 **`!destin`**\n" +
@@ -3121,12 +3539,20 @@ function buildRouletteStateEmbed(cible, guildId = null) {
         footerText = `⏳ Cooldown restant : ~${minsRestantes} min`;
     }
 
+    const pity = roulettePity.get(cible.id) ?? { malus: 0, nuls: 0 };
+    const jackpotBoost = Math.round((rouletteJackpotBonus.get(cible.id) || 0) * 100);
+
+    const pityTexte = `• **Malus subis :** **${pity.malus}/${ROULETTE_PITY_MALUS}** *(bonus garanti à 3)*\n` +
+                      `• **Tirages nuls :** **${pity.nuls}/${ROULETTE_PITY_NULS}** *(bonus garanti à 5)*\n` +
+                      `• **Boost accumulé :** **+${jackpotBoost}%** de chance bonus`;
+
     return new EmbedBuilder()
         .setColor(0xffd20a)
         .setTitle(`ÉTAT ROULETTE DE ${cible.displayName}`)
         .addFields(
             { name: 'BONUS :', value: (bonus.length ? bonus.join('\n') : '*Aucun bonus actif*') + '\n\u200b', inline: false },
-            { name: 'MALUS :', value: malus.length ? malus.join('\n') : '*Aucun malus actif*', inline: false }
+            { name: 'MALUS :', value: (malus.length ? malus.join('\n') : '*Aucun malus actif*') + '\n\u200b', inline: false },
+            { name: 'PROGRESSION PITY & JACKPOT 🍀', value: pityTexte, inline: false }
         )
         .setFooter({ text: footerText });
 }
@@ -4646,6 +5072,13 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
         }
 
         // =========================
+        //   SALON DÉCODEUR D'EMOJIS
+        // =========================
+        if (message.channel.id === MOTUS_CHANNEL_ID && rebusSession.active && rebusSession.currentItem && !message.content.startsWith('!')) {
+            if (await verifierReponseRebus(message)) return;
+        }
+
+        // =========================
         //     SALON MOTUS DU JOUR
         // =========================
         if (message.channel.id === MOTUS_CHANNEL_ID && !message.content.startsWith('!')) {
@@ -4653,17 +5086,33 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
                 .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                 .replace(/[^A-Z]/g, "");
 
-            // Ignore strictement les messages qui ne font pas exactement 6 lettres
-            if (rawGuess.length === 6) {
-                const dateKey = getMotusDateKey();
-                const motDuJour = motusData.mot || getMotDuJour(dateKey);
+            const longueurAttendue = motusData.longueur || 6;
 
-                if (motusData.dateKey !== dateKey) {
-                    motusData = { dateKey, mot: motDuJour, termine: false, vainqueurId: null, tentatives: {}, messageId: null };
+            // Ignore strictement les messages qui ne font pas exactement la bonne longueur (6 lettres à 10h, 7 lettres à 19h)
+            if (rawGuess.length === longueurAttendue) {
+                const now = Date.now();
+                const motDuJour = motusData.mot;
+
+                // 1. Vérification si la session d'1h est expirée ou si le mot n'est pas encore lancé
+                if (!motDuJour) {
+                    await message.reply(`⏳ Aucun Motus n'est actif pour le moment ! Prochain Motus à 10h00 (6 lettres) ou 19h00 (7 lettres).`);
+                    return;
                 }
 
                 if (motusData.termine) {
-                    await message.reply(`🔒 Le Motus d'aujourd'hui a déjà été remporté par <@${motusData.vainqueurId}> ! Rendez-vous demain à 10h00 pour le prochain.`);
+                    const motif = motusData.vainqueurId 
+                        ? `a déjà été remporté par <@${motusData.vainqueurId}>` 
+                        : `s'est terminé (temps écoulé d'une heure)`;
+                    const prochainTxt = motusData.heureSession === 10 ? 'ce soir à 19h00 (7 lettres - Difficile)' : 'demain matin à 10h00 (6 lettres)';
+                    await message.reply(`🔒 Cette session de Motus ${motif} ! Prochaine session : **${prochainTxt}**.`);
+                    return;
+                }
+
+                if (motusData.expireAt && now >= motusData.expireAt) {
+                    motusData.termine = true;
+                    demanderSauvegarde();
+                    const prochainTxt = motusData.heureSession === 10 ? 'ce soir à 19h00 (7 lettres)' : 'demain matin à 10h00 (6 lettres)';
+                    await message.reply(`⏰ **Temps écoulé !** L'heure de jeu est passée. Le mot était : **\`${motDuJour}\`** !\nRendez-vous ${prochainTxt} pour le prochain !`);
                     return;
                 }
 
@@ -4673,28 +5122,28 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
                 const userTries = motusData.tentatives[message.author.id];
                 if (userTries.length >= 3) {
-                    await message.reply(`❌ <@${message.author.id}>, tu as déjà utilisé tes **3 essais** pour aujourd'hui ! Laisse les autres tenter leur chance.`);
+                    await message.reply(`❌ <@${message.author.id}>, tu as déjà utilisé tes **3 essais** pour cette session ! Laisse les autres membres tenter leur chance.`);
                     return;
                 }
 
                 userTries.push(rawGuess);
                 const essaiNum = userTries.length;
 
-                // Mise à jour stats de participation
+                // Mise à jour des statistiques
                 if (!motusStats[message.author.id]) motusStats[message.author.id] = { victoires: 0, parties: 0 };
                 if (essaiNum === 1) motusStats[message.author.id].parties++;
 
-                const grille = evaluerMotus(rawGuess, motDuJour);
+                const grille = evaluerMotus(rawGuess, motDuJour, longueurAttendue);
                 const lettresEspacées = rawGuess.split('').join(' ');
 
                 const rowOriginal = new ActionRowBuilder().addComponents(
                     new ButtonBuilder()
                         .setCustomId(`motus_show_original_${motusData.dateKey}`)
-                        .setLabel("📜 Voir l'énoncé du jour")
+                        .setLabel("📜 Voir l'énoncé de la session")
                         .setStyle(ButtonStyle.Secondary)
                 );
 
-                // Calcul des lettres absentes testées par ce joueur
+                // Lettres absentes testées par ce joueur
                 const toutesLettresTentees = new Set(userTries.flatMap(t => t.split('')));
                 const lettresAbsentes = [...toutesLettresTentees]
                     .filter(l => !motDuJour.includes(l))
@@ -4716,15 +5165,19 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
                         components: [rowOriginal]
                     });
 
+                    const prochainRdv = motusData.heureSession === 10 
+                        ? 'Rendez-vous ce soir à 19h00 pour le Motus difficile (7 lettres) !' 
+                        : 'Rendez-vous demain à 10h00 pour le prochain Motus !';
+
                     const embedVictoire = new EmbedBuilder()
                         .setColor(0x2ecc71)
                         .setTitle('🎉 MOTUS TROUVÉ ! 🎉')
                         .setDescription(
-                            `Félicitations à <@${message.author.id}> qui a trouvé le mot du jour en **${essaiNum} essai${essaiNum > 1 ? 's' : ''}** !\n\n` +
-                            `🔤 **Le mot était :** \`${motDuJour}\`\n` +
+                            `Félicitations à <@${message.author.id}> qui a trouvé le mot en **${essaiNum} essai${essaiNum > 1 ? 's' : ''}** !\n\n` +
+                            `🔤 **Le mot était :** \`${motDuJour}\` (${longueurAttendue} lettres)\n` +
                             `🏆 **Total de victoires :** **${motusStats[message.author.id].victoires}**`
                         )
-                        .setFooter({ text: 'Rendez-vous demain à 10h00 pour un nouveau Motus !' });
+                        .setFooter({ text: prochainRdv });
 
                     const rowStats = new ActionRowBuilder().addComponents(
                         new ButtonBuilder()
@@ -4738,7 +5191,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
                 } else {
                     demanderSauvegarde();
                     const infoReste = essaiNum === 3 
-                        ? `\n-# *Tu as épuisé tes 3 essais pour aujourd'hui !*`
+                        ? `\n-# *Tu as épuisé tes 3 essais pour cette session !*`
                         : `\n-# *Il te reste ${3 - essaiNum} essai${(3 - essaiNum) > 1 ? 's' : ''} !*`;
 
                     await message.reply({
@@ -6310,20 +6763,26 @@ if (response?.needsRouletteAchievements) {
 
     // !motus
     if (response?.needsMotus) {
-        const { jourStr, h, m, timestamp } = tempsAvantProchainMotus();
-        const dateKey = getMotusDateKey();
-        const dejaFait = motusData.dateKey === dateKey && motusData.termine;
+        const { jourStr, heures, minutes, sessionNom, timestamp } = tempsAvantProchainMotus();
+        const now = Date.now();
+        const enCours = motusData.mot && !motusData.termine && motusData.expireAt && now < motusData.expireAt;
 
-        let desc = `Le prochain Motus aura lieu **${jourStr} à 10h00** (dans **${h}h ${m}min**, <t:${timestamp}:R>) !`;
-        if (!dejaFait && motusData.dateKey === dateKey && motusData.mot) {
-            desc = `🟩 **Le Motus du jour est en cours dans <#${MOTUS_CHANNEL_ID}> !**\n\nTu as **3 essais** pour deviner le mot de 6 lettres.\nProchain motus : **${jourStr} à 10h00** (<t:${timestamp}:R>)`;
+        let desc = `Le prochain Motus aura lieu **${jourStr} à ${sessionNom}** (dans **${heures}h ${minutes}min**, <t:${timestamp}:R>) !\n\n-# *Sessions tous les jours : 10h00 (6 lettres) et 19h00 (7 lettres - Difficile).*`;
+
+        if (enCours) {
+            const expireTimestamp = Math.floor(motusData.expireAt / 1000);
+            const titreType = motusData.longueur === 7 ? '🟥 Motus du soir (7 lettres - Difficile)' : '🟩 Motus du matin (6 lettres)';
+            desc = `🎮 **${titreType} est EN COURS dans <#${MOTUS_CHANNEL_ID}> !**\n\n` +
+                   `Tu as **3 essais individuels** pour deviner le mot.\n` +
+                   `⏳ **Fin de la session :** <t:${expireTimestamp}:R> (fermeture à <t:${expireTimestamp}:t>) !\n\n` +
+                   `Prochaine session : **${jourStr} à ${sessionNom}** (<t:${timestamp}:R>).`;
         }
 
         const embed = new EmbedBuilder()
-            .setColor(0x00b0f4)
-            .setTitle('🟩 Le Motus Quotidien de 10h')
+            .setColor(enCours && motusData.longueur === 7 ? 0xe74c3c : 0x00b0f4)
+            .setTitle(enCours ? '🟩 MOTUS EN COURS !' : '🟩 Motus Quotidien de Regaïa')
             .setDescription(desc)
-            .setFooter({ text: 'Salon dédié : #motus • 3 essais individuels par personne' });
+            .setFooter({ text: 'Salon dédié : <#1556089022718152764> • 3 essais individuels • 1 heure de jeu par session' });
 
         return message.reply({ embeds: [embed] });
     }
@@ -6338,6 +6797,42 @@ if (response?.needsRouletteAchievements) {
         if (!cible) cible = message.member;
 
         const embed = buildMotusStatsEmbed(cible, message.author);
+        return message.reply({ embeds: [embed] });
+    }
+
+    // !rebus
+    if (response?.needsRebus) {
+        const { jourStr, h, m, timestamp } = tempsAvantProchainRebus();
+
+        let desc = `Le prochain Rébus Regaïen aura lieu **${jourStr} à 15h00** (dans **${h}h ${m}min**, <t:${timestamp}:R>) !\n-# *Thème mystère révélé au début de la partie.*`;
+
+        if (rebusSession.active && rebusSession.currentItem) {
+            const expireTimestamp = Math.floor(rebusSession.expireAt / 1000);
+            desc = `🎮 **Le Rébus Regaïen est EN COURS dans <#${MOTUS_CHANNEL_ID}> !**\n\n` +
+                   `📍 **Manche en cours :** ${rebusSession.manche}/5\n` +
+                   `⏳ **Fin de la manche :** <t:${expireTimestamp}:R> !\n\n` +
+                   `Prochaine session complète : **${jourStr} à 15h00** (<t:${timestamp}:R>).`;
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(0xf39c12)
+            .setTitle(rebusSession.active ? '🧩 RÉBUS REGAÏEN EN COURS !' : '🧩 Rébus Regaïen Quotidien (15h00)')
+            .setDescription(desc)
+            .setFooter({ text: 'Salon dédié : <#1556089022718152764> • 5 manches de 5 minutes chaque jour à 15h00' });
+
+        return message.reply({ embeds: [embed] });
+    }
+
+    // !rebusstats
+    if (response?.needsRebusStats) {
+        let cible = message.mentions.members.first();
+        if (!cible) {
+            const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (query) cible = findMemberByName(message.guild, query).found;
+        }
+        if (!cible) cible = message.member;
+
+        const embed = buildRebusStatsEmbed(cible);
         return message.reply({ embeds: [embed] });
     }
 
@@ -6986,7 +7481,14 @@ if (response?.needsRouletteAchievements) {
         if (nbVictoires >= 10) badges.push(`• 🟩 Motus Master (${nbVictoires} victoires)`);
         else if (nbVictoires >= 3) badges.push(`• 🟨 Débutant.e du Motus (${nbVictoires} victoires)`);
 
-        // 5. Citations enregistrées
+        // 5. Médailles d'or du Rébus Regaïen (Top 1 de session)
+        const rRebus = rebusStats[cible.id];
+        const nbTop1 = rRebus?.victoires ?? 0;
+        if (nbTop1 >= 10) badges.push(`• 🥇 Maître du Rébus (10 médailles d'or)`);
+        else if (nbTop1 >= 5) badges.push(`• 🥇 Expert.e du Rébus (5 médailles d'or)`);
+        else if (nbTop1 >= 3) badges.push(`• 🥇 As du Rébus (3 médailles d'or)`);
+
+        // 6. Citations enregistrées
         const nbQuotes = quotesData.filter(q => q.authorId === cible.id).length;
         if (nbQuotes >= 5) badges.push(`• 📜 Légende (${nbQuotes} citations)`);
 
@@ -8318,7 +8820,201 @@ try {
             return interaction.reply({ content: "Les commandes slash de Cacabot sont exclusivement réservées au serveur Regaïa !", ephemeral: true });
         }
 
-        const { commandName } = interaction;
+        const aliasMap = {
+            rlt: 'roulette',
+            roulettestats: 'rltstats',
+            roulettestate: 'rltstate',
+            roulettesucces: 'rltsucces',
+            roulettetop: 'rlttop',
+            bisou: 'kiss',
+            calin: 'hug',
+            court: 'run',
+            dance: 'danse',
+            frappe: 'punch',
+            tir: 'bang',
+            pan: 'bang',
+            pleure: 'cry',
+            explose: 'explode',
+            citation: 'quote',
+            decodeur: 'rebus',
+            rebusstat: 'rebusstats',
+            motustat: 'motustats',
+            about: 'botinfo',
+            sugg: 'suggestion',
+            profile: 'profil'
+        };
+
+        const commandName = aliasMap[interaction.commandName] || interaction.commandName;
+
+        // Commandes Motus
+        if (commandName === 'motus') {
+            const { jourStr, heures, minutes, sessionNom, timestamp } = tempsAvantProchainMotus();
+            const now = Date.now();
+            const enCours = motusData.mot && !motusData.termine && motusData.expireAt && now < motusData.expireAt;
+
+            let desc = `Le prochain Motus aura lieu **${jourStr} à ${sessionNom}** (dans **${heures}h ${minutes}min**, <t:${timestamp}:R>) !\n\n-# *Sessions tous les jours : 10h00 (6 lettres) et 19h00 (7 lettres - Difficile).*`;
+
+            if (enCours) {
+                const expireTimestamp = Math.floor(motusData.expireAt / 1000);
+                const titreType = motusData.longueur === 7 ? '🟥 Motus du soir (7 lettres - Difficile)' : '🟩 Motus du matin (6 lettres)';
+                desc = `🎮 **${titreType} est EN COURS dans <#${MOTUS_CHANNEL_ID}> !**\n\n` +
+                       `Tu as **3 essais individuels** pour deviner le mot.\n` +
+                       `⏳ **Fin de la session :** <t:${expireTimestamp}:R> (fermeture à <t:${expireTimestamp}:t>) !\n\n` +
+                       `Prochaine session : **${jourStr} à ${sessionNom}** (<t:${timestamp}:R>).`;
+            }
+
+            const embed = new EmbedBuilder()
+                .setColor(enCours && motusData.longueur === 7 ? 0xe74c3c : 0x00b0f4)
+                .setTitle(enCours ? '🟩 MOTUS EN COURS !' : '🟩 Motus Quotidien de Regaïa')
+                .setDescription(desc)
+                .setFooter({ text: 'Salon dédié : <#1556089022718152764> • 3 essais individuels • 1 heure de jeu par session' });
+
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        if (commandName === 'motustats') {
+            const cible = interaction.options.getUser('membre') ?? interaction.user;
+            const member = interaction.guild?.members.cache.get(cible.id) ?? interaction.member;
+            return interaction.reply({ embeds: [buildMotusStatsEmbed(member, interaction.user)] });
+        }
+
+        // Commandes Rébus Regaïen
+        if (commandName === 'rebus') {
+            const { jourStr, h, m, timestamp } = tempsAvantProchainRebus();
+
+            let desc = `Le prochain Rébus Regaïen aura lieu **${jourStr} à 15h00** (dans **${h}h ${m}min**, <t:${timestamp}:R>) !\n-# *Thème mystère révélé au début de la partie.*`;
+
+            if (rebusSession.active && rebusSession.currentItem) {
+                const expireTimestamp = Math.floor(rebusSession.expireAt / 1000);
+                desc = `🎮 **Le Rébus Regaïen est EN COURS dans <#${MOTUS_CHANNEL_ID}> !**\n\n` +
+                       `📍 **Manche en cours :** ${rebusSession.manche}/5\n` +
+                       `⏳ **Fin de la manche :** <t:${expireTimestamp}:R> !\n\n` +
+                       `Prochaine session complète : **${jourStr} à 15h00** (<t:${timestamp}:R>).`;
+            }
+
+            const embed = new EmbedBuilder()
+                .setColor(0xf39c12)
+                .setTitle(rebusSession.active ? '🧩 RÉBUS REGAÏEN EN COURS !' : '🧩 Rébus Regaïen Quotidien (15h00)')
+                .setDescription(desc)
+                .setFooter({ text: 'Salon dédié : <#1556089022718152764> • 5 manches de 5 minutes chaque jour à 15h00' });
+
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        if (commandName === 'rebusstats') {
+            const cible = interaction.options.getUser('membre') ?? interaction.user;
+            const member = interaction.guild?.members.cache.get(cible.id) ?? interaction.member;
+            return interaction.reply({ embeds: [buildRebusStatsEmbed(member)] });
+        }
+
+        // Commande Quote
+        if (commandName === 'quote') {
+            if (quotesData.length === 0) return interaction.reply({ content: "📜 Aucune citation enregistrée pour l'instant !", ephemeral: true });
+            const query = interaction.options.getString('recherche')?.trim().toLowerCase();
+            let pool = quotesData;
+            let customFilterId = 'all';
+
+            if (query) {
+                const idDirect = parseInt(query);
+                if (!isNaN(idDirect)) {
+                    const q = quotesData.find(x => x.id === idDirect);
+                    if (q) pool = [q];
+                } else {
+                    const parMot = quotesData.filter(x => x.texte?.toLowerCase().includes(query) || x.authorName?.toLowerCase().includes(query));
+                    if (parMot.length > 0) {
+                        pool = parMot;
+                        customFilterId = `search_${encodeURIComponent(query)}`;
+                    }
+                }
+            }
+
+            const quoteChoisie = pool[Math.floor(Math.random() * pool.length)];
+            const auteurMembre = interaction.guild.members.cache.get(quoteChoisie.authorId);
+            const avatarUrl = quoteChoisie.avatarUrl ?? auteurMembre?.user?.displayAvatarURL({ dynamic: true, size: 256 });
+            const lienMsg = quoteChoisie.messageUrl ?? `https://discord.com/channels/${interaction.guild.id}/${quoteChoisie.channelId}`;
+            const auteurMention = quoteChoisie.isWebhook ? `**${quoteChoisie.authorName}** *(Webhook)*` : `<@${quoteChoisie.authorId}>`;
+
+            const texteAffiche = quoteChoisie.texte && quoteChoisie.texte !== '(Image)'
+                ? `## « ${quoteChoisie.texte} »\n\n    -${auteurMention}\n\n-# *[source](${lienMsg})*`
+                : `    -${auteurMention}\n\n-# *[source](${lienMsg})*`;
+
+            const embedQuote = new EmbedBuilder()
+                .setColor(0xf1c40f)
+                .setTitle(`📜 Citation N°${quoteChoisie.id}`)
+                .setDescription(texteAffiche)
+                .setFooter({ text: `[${quoteChoisie.id}/${quotesData.length}] • Réponds à un message en faisant !quote pour l'enregistrer !` });
+
+            if (avatarUrl) embedQuote.setThumbnail(avatarUrl);
+            if (quoteChoisie.imageUrl) embedQuote.setImage(quoteChoisie.imageUrl);
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`quote_random_${customFilterId}`).setLabel('🎲 Une autre citation').setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.reply({ embeds: [embedQuote], components: [row] });
+        }
+
+        // Commande Lovecalc
+        if (commandName === 'lovecalc') {
+            await interaction.deferReply();
+            const user1 = interaction.options.getUser('membre1');
+            const user2 = interaction.options.getUser('membre2');
+
+            const ids = [user1.id, user2.id].sort();
+            const seed = parseInt(ids[0].slice(-4)) + parseInt(ids[1].slice(-4));
+            const percent = (seed * 7 + 13) % 101;
+
+            const nom1 = interaction.guild?.members.cache.get(user1.id)?.displayName ?? user1.username;
+            const nom2 = interaction.guild?.members.cache.get(user2.id)?.displayName ?? user2.username;
+
+            try {
+                const av1 = user1.displayAvatarURL({ extension: 'png', size: 256 });
+                const av2 = user2.displayAvatarURL({ extension: 'png', size: 256 });
+                const buffer = await generateLovecalcImage(av1, av2, percent);
+
+                const embed = new EmbedBuilder()
+                    .setColor(0xe91e63)
+                    .setDescription(`💕 **${nom1}** et **${nom2}** sont compatibles à **${percent}%** !`)
+                    .setImage('attachment://lovecalc.png');
+
+                return interaction.editReply({ embeds: [embed], files: [{ attachment: buffer, name: 'lovecalc.png' }] });
+            } catch (e) {
+                return interaction.editReply({ content: `💕 **${nom1}** et **${nom2}** sont compatibles à **${percent}%** !` });
+            }
+        }
+
+        // Commande Prune
+        if (commandName === 'prune') {
+            if (!interaction.member.permissions.has('KickMembers')) {
+                return interaction.reply({ content: "Tu n'as pas les permissions nécessaires !", ephemeral: true });
+            }
+            const count = interaction.options.getInteger('nombre');
+            if (count > 100) {
+                const embed = new EmbedBuilder()
+                    .setColor(0xe74c3c)
+                    .setTitle('⚠️ Limite dépassée')
+                    .setDescription(`Discord ne permet pas de supprimer plus de **100 messages** à la fois.\n\nChoisis l'option ci-dessous :`);
+
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`prune_auto_${interaction.user.id}_${count}_${interaction.channel.id}`).setLabel('🤖 Laisser Cacabot gérer').setStyle(ButtonStyle.Danger),
+                    new ButtonBuilder().setCustomId(`prune_manual_${interaction.user.id}`).setLabel('✋ Annuler').setStyle(ButtonStyle.Secondary)
+                );
+                return interaction.reply({ embeds: [embed], components: [row] });
+            }
+            try {
+                const messages = await interaction.channel.messages.fetch({ limit: count });
+                const toDelete = messages.filter(m => (Date.now() - m.createdTimestamp) < 14 * 24 * 60 * 60 * 1000);
+                await interaction.channel.bulkDelete(toDelete, true);
+                return interaction.reply({ content: `🗑️ **${toDelete.size}** messages supprimés !`, ephemeral: true });
+            } catch (e) {
+                return interaction.reply({ content: "Erreur lors de la suppression.", ephemeral: true });
+            }
+        }
+
+        // Commande Rlttop
+        if (commandName === 'rlttop') {
+            const { embed, row } = buildRouletteTopEmbed(interaction.guild, interaction.user.id);
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
 
         if (commandName === 'help') {
             const embed = buildHelpHomeEmbed();
@@ -8383,18 +9079,50 @@ try {
                 birthdayStr = `${j} ${moisNoms[m - 1]}`;
             }
 
+            // Calcul des Succès du serveur
+            let userAchs = rouletteAchievements.get(cibleUser.id) ?? {};
+            const rStats = rouletteStats.get(cibleUser.id);
+            const nbTirages = rStats?.tirages ?? 0;
+
+            const badges = [];
+            if (cibleUser.id === EPSYS_ID) badges.push('• 👑 Créatrice du serveur et de Cacabot');
+            if (nbTirages >= 500) badges.push('• 🎰 Gambling Addict (500+ tirages)');
+            else if (nbTirages >= 100) badges.push('• 🎰 Habitué.e de la Roulette (100+ tirages)');
+
+            const nbAchs = Object.keys(userAchs).length;
+            if (nbAchs >= 15) badges.push(`• 🏆 Trophy Hunter (${nbAchs}/30 succès)`);
+            else if (nbAchs >= 5) badges.push(`• 🤠 Aventurier.e de la Roulette (${nbAchs}/30 succès)`);
+
+            const mStats = motusStats[cibleUser.id];
+            const nbVictoires = mStats?.victoires ?? 0;
+            if (nbVictoires >= 10) badges.push(`• 🟩 Motus Master (${nbVictoires} victoires)`);
+            else if (nbVictoires >= 3) badges.push(`• 🟨 Débutant.e du Motus (${nbVictoires} victoires)`);
+
+            const rRebus = rebusStats[cibleUser.id];
+            const nbTop1 = rRebus?.victoires ?? 0;
+            if (nbTop1 >= 10) badges.push(`• 🥇 Maître du Rébus (10 médailles d'or)`);
+            else if (nbTop1 >= 5) badges.push(`• 🥇 Expert.e du Rébus (5 médailles d'or)`);
+            else if (nbTop1 >= 3) badges.push(`• 🥇 As du Rébus (3 médailles d'or)`);
+
+            const nbQuotes = quotesData.filter(q => q.authorId === cibleUser.id).length;
+            if (nbQuotes >= 5) badges.push(`• 📜 Légende (${nbQuotes} citations)`);
+
+            if (nbMessages >= 5000) badges.push('• 🗣️ Monument de Regaïa (5 000+ messages)');
+            else if (nbMessages >= 1000) badges.push('• 💬 Membre Bavard.e (1 000+ messages)');
+            else if (nbMessages >= 250) badges.push('• 🌱 Jeune membre (250+ messages)');
+
             const embed = new EmbedBuilder()
                 .setColor(0x5865f2)
                 .setTitle(member?.displayName ?? cibleUser.username)
                 .setThumbnail(cibleUser.displayAvatarURL({ dynamic: true, size: 256 }))
                 .addFields(
                     { name: '👤 Pseudo', value: `@${cibleUser.username}`, inline: true },
-                    { name: '💬 Messages envoyés', value: `${nbMessages}`, inline: true },
+                    { name: '💬 Messages envoyés', value: `${nbMessages.toLocaleString('fr-FR')}`, inline: true },
                     { name: '\u200b', value: '\u200b', inline: true },
                     { name: '📅 Arrivée sur le serveur', value: joinedAt, inline: true },
-                    { name: '🕒 Compte créé le', value: createdAt, inline: true },
+                    { name: '🎂 Anniversaire', value: birthdayStr, inline: true },
                     { name: '\u200b', value: '\u200b', inline: true },
-                    { name: '🎂 Anniversaire', value: birthdayStr, inline: false },
+                    { name: '🏆 Succès du serveur', value: badges.length > 0 ? badges.join('\n') : '*Aucun succès débloqué pour l\'instant.*', inline: false },
                     { name: '🏷️ Rôles', value: roles, inline: false }
                 )
                 .setFooter({ text: `ID : ${cibleUser.id}` });
@@ -9614,11 +10342,12 @@ try {
         return interaction.update({ embeds: [embedQuote], components: [row] });
     }
 
-    // Bouton pour afficher l'énoncé du motus du jour
+    // Bouton pour afficher l'énoncé du motus de la session
     if (interaction.isButton() && interaction.customId.startsWith('motus_show_original_')) {
         const dateKey = getMotusDateKey();
-        const mot = motusData.mot || getMotDuJour(dateKey);
-        const embed = buildMotusEmbed(mot, dateKey);
+        const longueur = motusData.longueur || 6;
+        const mot = motusData.mot || getMotDuJour(dateKey, longueur);
+        const embed = buildMotusEmbed(mot, dateKey, longueur);
         return interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
@@ -9626,6 +10355,13 @@ try {
     if (interaction.isButton() && interaction.customId.startsWith('motus_view_stats_')) {
         const member = interaction.member;
         const embed = buildMotusStatsEmbed(member, interaction.user);
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+
+    // Bouton pour voir ses propres stats Rébus Regaïen
+    if (interaction.isButton() && interaction.customId === 'rebus_view_stats') {
+        const member = interaction.member;
+        const embed = buildRebusStatsEmbed(member);
         return interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
@@ -11565,27 +12301,98 @@ client.once('ready', async () => {
 
     // Enregistrement des commandes Slash (/)
     const slashCommands = [
+        // Général & Aide
         new SlashCommandBuilder().setName('help').setDescription('Ouvre le guide d\'utilisation officiel de Cacabot'),
-        new SlashCommandBuilder().setName('roulette').setDescription('Tenter sa chance sur la Roulette Regaïenne')
-            .addBooleanOption(opt => opt.setName('lancer').setDescription('Lancer immédiatement le tirage sans afficher l\'accueil')),
-        new SlashCommandBuilder().setName('profil').setDescription('Affiche la fiche d\'un·e membre (messages, rôles, etc.)')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter (toi par défaut)')),
-        new SlashCommandBuilder().setName('rltsucces').setDescription('Consulter la liste et la progression des 30 succès roulette')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre dont tu veux voir les succès')),
-        new SlashCommandBuilder().setName('rltstats').setDescription('Voir les statistiques complètes d\'un·e membre sur la roulette')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre dont tu veux voir les stats')),
-        new SlashCommandBuilder().setName('top').setDescription('Classement des membres les plus actifs sur le serveur'),
 
-        // Lot 1 : Interactions & Social
+        // Roulette & Raccourcis
+        new SlashCommandBuilder().setName('roulette').setDescription('Tenter sa chance sur la Roulette Regaïenne')
+            .addBooleanOption(opt => opt.setName('lancer').setDescription('Lancer immédiatement sans afficher l\'accueil')),
+        new SlashCommandBuilder().setName('rlt').setDescription('Tenter sa chance sur la Roulette (raccourci)')
+            .addBooleanOption(opt => opt.setName('lancer').setDescription('Lancer immédiatement sans afficher l\'accueil')),
+        new SlashCommandBuilder().setName('rltsucces').setDescription('Consulter les 30 succès de la roulette')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
+        new SlashCommandBuilder().setName('roulettesucces').setDescription('Consulter les 30 succès de la roulette')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
+        new SlashCommandBuilder().setName('rltstats').setDescription('Voir les statistiques complètes de la roulette')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
+        new SlashCommandBuilder().setName('roulettestats').setDescription('Voir les statistiques complètes de la roulette')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
+        new SlashCommandBuilder().setName('rltstate').setDescription('Voir les bonus et malus actifs sur la roulette')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
+        new SlashCommandBuilder().setName('roulettestate').setDescription('Voir les bonus et malus actifs sur la roulette')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
+        new SlashCommandBuilder().setName('rlttop').setDescription('Classement des membres avec le plus de succès roulette'),
+        new SlashCommandBuilder().setName('roulettetop').setDescription('Classement des membres avec le plus de succès roulette'),
+
+        // Motus & Rébus Regaïen
+        new SlashCommandBuilder().setName('motus').setDescription('Statut du Motus du jour (10h et 19h) et compte à rebours'),
+        new SlashCommandBuilder().setName('motustats').setDescription('Consulter les victoires et parties au Motus')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
+        new SlashCommandBuilder().setName('rebus').setDescription('Statut du Rébus Regaïen du jour (15h00) et compte à rebours'),
+        new SlashCommandBuilder().setName('decodeur').setDescription('Statut du Rébus Regaïen (raccourci)'),
+        new SlashCommandBuilder().setName('rebusstats').setDescription('Consulter les victoires et points au Rébus Regaïen')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
+
+        // Citations & Profils
+        new SlashCommandBuilder().setName('quote').setDescription('Afficher une citation culte du serveur')
+            .addStringOption(opt => opt.setName('recherche').setDescription('Numéro, mot-clé ou membre')),
+        new SlashCommandBuilder().setName('citation').setDescription('Afficher une citation culte (raccourci)')
+            .addStringOption(opt => opt.setName('recherche').setDescription('Numéro, mot-clé ou membre')),
+        new SlashCommandBuilder().setName('profil').setDescription('Fiche détaillée d\'un·e membre (messages, badges, etc.)')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
+        new SlashCommandBuilder().setName('profile').setDescription('Fiche détaillée d\'un·e membre (raccourci)')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
+        new SlashCommandBuilder().setName('avatar').setDescription('Affiche l\'avatar d\'un·e membre en grand format')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
+        new SlashCommandBuilder().setName('top').setDescription('Classement général des membres les plus actifs'),
+        new SlashCommandBuilder().setName('actif').setDescription('Podium des membres les plus actifs (Jour, Semaine, Mois)'),
+
+        // Jeux & Social
+        new SlashCommandBuilder().setName('lovecalc').setDescription('Calculer la compatibilité amoureuse entre deux membres')
+            .addUserOption(opt => opt.setName('membre1').setDescription('Premier membre').setRequired(true))
+            .addUserOption(opt => opt.setName('membre2').setDescription('Deuxième membre').setRequired(true)),
+        new SlashCommandBuilder().setName('flip').setDescription('Lancer une pièce à pile ou face (solo ou duel)'),
+        new SlashCommandBuilder().setName('destin').setDescription('Prédit votre destin cosmique'),
+        new SlashCommandBuilder().setName('horoscope').setDescription('L\'oracle cosmique du jour'),
+        new SlashCommandBuilder().setName('animal').setDescription('Devine ton animal spirituel')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à analyser')),
+        new SlashCommandBuilder().setName('blague').setDescription('Raconte une blague aléatoire')
+            .addStringOption(opt => opt.setName('type').setDescription('Catégorie').addChoices(
+                { name: 'Humour soft', value: 'soft' },
+                { name: 'Humour classique', value: 'classique' },
+                { name: 'Humour noir', value: 'noir' }
+            )),
+        new SlashCommandBuilder().setName('topchef').setDescription('Critique et note gastronomique d\'un plat')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à noter')),
+        new SlashCommandBuilder().setName('wanted').setDescription('Affiche le criminel du jour'),
+        new SlashCommandBuilder().setName('epsys').setDescription('Envoie un GIF aléatoire d\'Epsys'),
+        new SlashCommandBuilder().setName('sylvain').setDescription('Singe fort ensemble (Sylvain Lévy)'),
+        new SlashCommandBuilder().setName('question').setDescription('Question de débat du soir'),
+        new SlashCommandBuilder().setName('choix').setDescription('Laisse Cacabot trancher un dilemme')
+            .addStringOption(opt => opt.setName('question').setDescription('Ex : pizza ou burger ?').setRequired(true)),
+        new SlashCommandBuilder().setName('suggestion').setDescription('Proposer une idée pour le serveur')
+            .addStringOption(opt => opt.setName('proposition').setDescription('Ton idée').setRequired(true)),
+        new SlashCommandBuilder().setName('sugg').setDescription('Proposer une idée pour le serveur (raccourci)')
+            .addStringOption(opt => opt.setName('proposition').setDescription('Ton idée').setRequired(true)),
+
+        // Interactions (et leurs raccourcis français)
         new SlashCommandBuilder().setName('kiss').setDescription('Embrasser un·e membre')
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre à embrasser').setRequired(true)),
+        new SlashCommandBuilder().setName('bisou').setDescription('Embrasser un·e membre (raccourci)')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à embrasser').setRequired(true)),
         new SlashCommandBuilder().setName('hug').setDescription('Faire un câlin à un·e membre')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à câliner').setRequired(true)),
+        new SlashCommandBuilder().setName('calin').setDescription('Faire un câlin à un·e membre (raccourci)')
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre à câliner').setRequired(true)),
         new SlashCommandBuilder().setName('rizz').setDescription('Tenter de séduire un·e membre')
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre à rizz').setRequired(true)),
         new SlashCommandBuilder().setName('punch').setDescription('Frapper un·e membre')
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre à frapper').setRequired(true)),
+        new SlashCommandBuilder().setName('frappe').setDescription('Frapper un·e membre (raccourci)')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à frapper').setRequired(true)),
         new SlashCommandBuilder().setName('bang').setDescription('Tirer sur un·e membre')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à viser').setRequired(true)),
+        new SlashCommandBuilder().setName('tir').setDescription('Tirer sur un·e membre (raccourci)')
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre à viser').setRequired(true)),
         new SlashCommandBuilder().setName('insult').setDescription('Insulter gratuitement un·e membre')
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre à insulter').setRequired(true)),
@@ -11593,86 +12400,68 @@ client.once('ready', async () => {
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre à bait').setRequired(true)),
         new SlashCommandBuilder().setName('ban').setDescription('Faussement bannir un·e membre')
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre à bannir').setRequired(true)),
-        new SlashCommandBuilder().setName('danse').setDescription('S\'ambiancer en solo ou inviter quelqu\'un sur le dancefloor')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre avec qui danser (optionnel)')),
+        new SlashCommandBuilder().setName('danse').setDescription('S\'ambiancer sur le dancefloor')
+            .addUserOption(opt => opt.setName('membre').setDescription('Avec qui danser')),
+        new SlashCommandBuilder().setName('dance').setDescription('S\'ambiancer sur le dancefloor (raccourci)')
+            .addUserOption(opt => opt.setName('membre').setDescription('Avec qui danser')),
         new SlashCommandBuilder().setName('rire').setDescription('Se taper une barre de rire')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre dont tu te moques (optionnel)')),
+            .addUserOption(opt => opt.setName('membre').setDescription('De qui rire')),
         new SlashCommandBuilder().setName('cry').setDescription('Pleurer en solo ou à cause de quelqu\'un')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre qui te fait pleurer (optionnel)')),
+            .addUserOption(opt => opt.setName('membre').setDescription('Qui te fait pleurer')),
+        new SlashCommandBuilder().setName('pleure').setDescription('Pleurer en solo ou à cause de quelqu\'un (raccourci)')
+            .addUserOption(opt => opt.setName('membre').setDescription('Qui te fait pleurer')),
         new SlashCommandBuilder().setName('run').setDescription('Prendre la fuite')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre que tu fuis (optionnel)')),
-        new SlashCommandBuilder().setName('explode').setDescription('Exploser sans aucune raison valable'),
+            .addUserOption(opt => opt.setName('membre').setDescription('Qui fuir')),
+        new SlashCommandBuilder().setName('court').setDescription('Prendre la fuite (raccourci)')
+            .addUserOption(opt => opt.setName('membre').setDescription('Qui fuir')),
+        new SlashCommandBuilder().setName('explode').setDescription('Exploser sans aucune raison'),
+        new SlashCommandBuilder().setName('explose').setDescription('Exploser sans aucune raison (raccourci)'),
         new SlashCommandBuilder().setName('die').setDescription('Mourir dans d\'atroces souffrances')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre qui cause ta mort (optionnel)')),
+            .addUserOption(opt => opt.setName('membre').setDescription('Qui cause ta mort')),
         new SlashCommandBuilder().setName('jailaref').setDescription('Affirmer fièrement que tu as la référence')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre dont tu as la ref (optionnel)')),
-        new SlashCommandBuilder().setName('palaref').setDescription('Assumer que tu n\'as absolument rien compris')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre dont tu n\'as pas la ref (optionnel)')),
+            .addUserOption(opt => opt.setName('membre').setDescription('De qui')),
+        new SlashCommandBuilder().setName('palaref').setDescription('Assumer que tu n\'as rien compris')
+            .addUserOption(opt => opt.setName('membre').setDescription('De qui')),
 
-        // Lot 2 : Jeux, Hasard & Destin
-        new SlashCommandBuilder().setName('destin').setDescription('Prédit votre destin et les événements de votre futur'),
-        new SlashCommandBuilder().setName('horoscope').setDescription('L\'oracle cosmique du jour selon Cacabot'),
-        new SlashCommandBuilder().setName('animal').setDescription('Devine ton animal spirituel parmi plus de 7000 combinaisons')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à analyser (toi par défaut)')),
-        new SlashCommandBuilder().setName('flip').setDescription('Lancer une pièce à pile ou face (solo ou duel)'),
-        new SlashCommandBuilder().setName('blague').setDescription('Raconte une blague aléatoire')
-            .addStringOption(opt => opt.setName('type').setDescription('Catégorie de blague').addChoices(
-                { name: 'Humour soft', value: 'soft' },
-                { name: 'Humour classique', value: 'classique' },
-                { name: 'Humour noir', value: 'noir' }
-            )),
-        new SlashCommandBuilder().setName('wanted').setDescription('Affiche l\'avis de recherche du criminel du jour'),
-        new SlashCommandBuilder().setName('epsys').setDescription('Envoie un GIF aléatoire d\'Epsys'),
-        new SlashCommandBuilder().setName('sylvain').setDescription('Singe fort ensemble (GIF de Sylvain Lévy)'),
-        new SlashCommandBuilder().setName('rltstate').setDescription('Voir les effets actifs d\'un·e membre sur la roulette')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter (toi par défaut)')),
-
-        // Lot 3 : Salons & Vie du Serveur
-        new SlashCommandBuilder().setName('topchef').setDescription('Donne une note et une critique gastronomique à un plat')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le chef ou la cheffe à noter (toi par défaut)')),
-        new SlashCommandBuilder().setName('question').setDescription('Déclenche une question de débat du soir parmi 6 thématiques'),
-        new SlashCommandBuilder().setName('choix').setDescription('Laisse Cacabot trancher un dilemme')
-            .addStringOption(opt => opt.setName('question').setDescription('Ex : pizza ou burger ?').setRequired(true)),
-        new SlashCommandBuilder().setName('suggestion').setDescription('Proposer une idée pour le serveur dans le salon dédié')
-            .addStringOption(opt => opt.setName('proposition').setDescription('Ton idée ou suggestion pour le serveur').setRequired(true)),
+        // Anniversaires
         new SlashCommandBuilder().setName('anniversaire').setDescription('Gestion des anniversaires du serveur')
             .addSubcommand(sub => sub.setName('show').setDescription('Affiche un anniversaire et le compte à rebours')
-                .addUserOption(opt => opt.setName('membre').setDescription('Le membre à consulter (toi par défaut)')))
+                .addUserOption(opt => opt.setName('membre').setDescription('Le membre')))
             .addSubcommand(sub => sub.setName('set').setDescription('Enregistre un anniversaire (format JJ/MM)')
-                .addStringOption(opt => opt.setName('date').setDescription('Date au format JJ/MM (ex : 24/07)').setRequired(true))
-                .addUserOption(opt => opt.setName('membre').setDescription('Le membre à qui attribuer la date (toi par défaut)')))
-            .addSubcommand(sub => sub.setName('list').setDescription('Affiche la liste complète des anniversaires du serveur'))
-            .addSubcommand(sub => sub.setName('next').setDescription('Affiche le tout prochain anniversaire à fêter'))
-            .addSubcommand(sub => sub.setName('remove').setDescription('Supprime un anniversaire enregistré')
-                .addUserOption(opt => opt.setName('membre').setDescription('Le membre dont supprimer l\'anniversaire (toi par défaut)'))),
+                .addStringOption(opt => opt.setName('date').setDescription('Format JJ/MM (ex : 24/07)').setRequired(true))
+                .addUserOption(opt => opt.setName('membre').setDescription('Attribuer à')))
+            .addSubcommand(sub => sub.setName('list').setDescription('Liste complète des anniversaires'))
+            .addSubcommand(sub => sub.setName('next').setDescription('Prochain anniversaire à fêter'))
+            .addSubcommand(sub => sub.setName('remove').setDescription('Supprimer un anniversaire')
+                .addUserOption(opt => opt.setName('membre').setDescription('Le membre'))),
 
-        // Lot 4 : Stats, Utilitaires & YouTube
-        new SlashCommandBuilder().setName('actif').setDescription('Podium des membres les plus actifs (Jour, Semaine, Mois)'),
-        new SlashCommandBuilder().setName('avatar').setDescription('Affiche l\'avatar d\'un·e membre en grand format')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter (toi par défaut)')),
-        new SlashCommandBuilder().setName('serveur').setDescription('Statistiques et informations complètes sur le serveur Regaïa'),
+        // Utilitaires & YouTube
+        new SlashCommandBuilder().setName('serveur').setDescription('Informations complètes sur le serveur Regaïa'),
         new SlashCommandBuilder().setName('meteo').setDescription('Météo en direct d\'une ville')
-            .addStringOption(opt => opt.setName('ville').setDescription('La ville (ex : Paris, Tokyo, Montréal)').setRequired(true)),
-        new SlashCommandBuilder().setName('pomodoro').setDescription('Démarrer ou arrêter une session de travail Pomodoro')
-            .addSubcommand(sub => sub.setName('lancer').setDescription('Configurer et démarrer une session Pomodoro'))
-            .addSubcommand(sub => sub.setName('stop').setDescription('Arrêter le Pomodoro en cours dans ce salon')),
-        new SlashCommandBuilder().setName('rappel').setDescription('Gérer tes rappels programmés')
+            .addStringOption(opt => opt.setName('ville').setDescription('La ville').setRequired(true)),
+        new SlashCommandBuilder().setName('pomodoro').setDescription('Session de travail Pomodoro')
+            .addSubcommand(sub => sub.setName('lancer').setDescription('Démarrer un Pomodoro'))
+            .addSubcommand(sub => sub.setName('stop').setDescription('Arrêter le Pomodoro')),
+        new SlashCommandBuilder().setName('rappel').setDescription('Gérer tes rappels')
             .addSubcommand(sub => sub.setName('ajouter').setDescription('Programmer un rappel')
-                .addStringOption(opt => opt.setName('temps').setDescription('Ex : 10min, 1h, 30s').setRequired(true))
-                .addStringOption(opt => opt.setName('message').setDescription('Le texte du rappel').setRequired(true)))
+                .addStringOption(opt => opt.setName('temps').setDescription('Ex : 10min, 1h').setRequired(true))
+                .addStringOption(opt => opt.setName('message').setDescription('Texte du rappel').setRequired(true)))
             .addSubcommand(sub => sub.setName('list').setDescription('Voir tes rappels en attente'))
-            .addSubcommand(sub => sub.setName('remove').setDescription('Supprimer un rappel existant')
-                .addStringOption(opt => opt.setName('nom').setDescription('Le texte du rappel à supprimer').setRequired(true))),
-        new SlashCommandBuilder().setName('aternos').setDescription('Affiche l\'adresse IP du serveur Minecraft de Regaïa'),
+            .addSubcommand(sub => sub.setName('remove').setDescription('Supprimer un rappel')
+                .addStringOption(opt => opt.setName('nom').setDescription('Nom du rappel').setRequired(true))),
+        new SlashCommandBuilder().setName('aternos').setDescription('IP du serveur Minecraft'),
         new SlashCommandBuilder().setName('youtube').setDescription('Rechercher une vidéo sur YouTube')
-            .addStringOption(opt => opt.setName('recherche').setDescription('Titre ou mot-clé de la vidéo').setRequired(true)),
-        new SlashCommandBuilder().setName('last').setDescription('Affiche la dernière vidéo publiée sur une chaîne YouTube')
-            .addStringOption(opt => opt.setName('chaine').setDescription('Nom ou lien de la chaîne').setRequired(true)),
-        new SlashCommandBuilder().setName('stats').setDescription('Statistiques détaillées d\'une chaîne YouTube')
-            .addStringOption(opt => opt.setName('chaine').setDescription('Nom ou lien de la chaîne').setRequired(true)),
-        new SlashCommandBuilder().setName('botinfo').setDescription('Informations techniques, version et créatrices de Cacabot'),
-        new SlashCommandBuilder().setName('ping').setDescription('Vérifie la latence de Cacabot et du WebSocket'),
-        new SlashCommandBuilder().setName('embed').setDescription('Créateur d\'embed interactif avec formulaire pop-up (Epsys-only)')
+            .addStringOption(opt => opt.setName('recherche').setDescription('Titre ou mot-clé').setRequired(true)),
+        new SlashCommandBuilder().setName('last').setDescription('Dernière vidéo publiée d\'une chaîne')
+            .addStringOption(opt => opt.setName('chaine').setDescription('Nom de la chaîne').setRequired(true)),
+        new SlashCommandBuilder().setName('stats').setDescription('Statistiques d\'une chaîne YouTube')
+            .addStringOption(opt => opt.setName('chaine').setDescription('Nom de la chaîne').setRequired(true)),
+        new SlashCommandBuilder().setName('botinfo').setDescription('Infos techniques et version de Cacabot'),
+        new SlashCommandBuilder().setName('about').setDescription('Infos techniques (raccourci)'),
+        new SlashCommandBuilder().setName('ping').setDescription('Latence du bot et WebSocket'),
+        new SlashCommandBuilder().setName('prune').setDescription('Supprimer les derniers messages')
+            .addIntegerOption(opt => opt.setName('nombre').setDescription('Nombre de messages à supprimer').setRequired(true)),
+        new SlashCommandBuilder().setName('embed').setDescription('Créateur d\'embed (Epsys-only)')
     ].map(cmd => cmd.toJSON());
 
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -11744,19 +12533,59 @@ client.once('ready', async () => {
     setInterval(verifierHappyHour, 30 * 1000);
     setInterval(verifierTwitchLive, 60 * 1000);
 
-    // Lancement et vérification quotidienne du Motus à 10h00
-    let dernierMotusDateKey = null;
-    const verifierMotus10h = async () => {
+    // Lancement et vérification automatique des Motus (10h et 19h) + arrêt après 1 heure
+    let derniereSessionLancee = null;
+    const verifierMotusAutomatique = async () => {
         const now = new Date();
         const paris = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
         const dateKey = paris.getFullYear() * 10000 + (paris.getMonth() + 1) * 100 + paris.getDate();
-        if (paris.getHours() === 10 && paris.getMinutes() === 0 && dernierMotusDateKey !== dateKey) {
-            dernierMotusDateKey = dateKey;
-            const guildRegaia = client.guilds.cache.get('720057528351850547');
-            if (guildRegaia) await envoyerMotusQuotidien(guildRegaia);
+        const h = paris.getHours();
+        const m = paris.getMinutes();
+        const guildRegaia = client.guilds.cache.get('720057528351850547');
+
+        // 1. Lancement du Motus du matin à 10h00 (6 lettres)
+        if (h === 10 && m === 0 && derniereSessionLancee !== `${dateKey}_10h`) {
+            derniereSessionLancee = `${dateKey}_10h`;
+            if (guildRegaia) await envoyerMotusQuotidien(guildRegaia, 10);
+        }
+
+        // 2. Lancement du Rébus Regaïen à 15h00 (5 manches de 5 minutes)
+        if (h === 15 && m === 0 && derniereSessionLancee !== `${dateKey}_15h`) {
+            derniereSessionLancee = `${dateKey}_15h`;
+            if (guildRegaia) await lancerSessionRebus(guildRegaia);
+        }
+
+        // 3. Lancement du Motus du soir à 19h00 (7 lettres - Difficile)
+        if (h === 19 && m === 0 && derniereSessionLancee !== `${dateKey}_19h`) {
+            derniereSessionLancee = `${dateKey}_19h`;
+            if (guildRegaia) await envoyerMotusQuotidien(guildRegaia, 19);
+        }
+
+        // 3. Arrêt automatique après 1h de jeu si le mot n'a pas été trouvé
+        if (motusData.mot && !motusData.termine && motusData.expireAt && Date.now() >= motusData.expireAt) {
+            motusData.termine = true;
+            const salon = client.channels.cache.get(MOTUS_CHANNEL_ID);
+            if (salon) {
+                const prochainTxt = motusData.heureSession === 10 
+                    ? 'ce soir à **19h00 (7 lettres - Difficile)**' 
+                    : 'demain matin à **10h00 (6 lettres)**';
+
+                const embedFin = new EmbedBuilder()
+                    .setColor(0xe74c3c)
+                    .setTitle('⏰ TEMPS ÉCOULÉ ! (Fin du Motus)')
+                    .setDescription(
+                        `L'heure de jeu est terminée et personne n'a trouvé le mot !\n\n` +
+                        `🔤 **Le mot était :** \`${motusData.mot}\`\n\n` +
+                        `Rendez-vous ${prochainTxt} pour une nouvelle session !`
+                    )
+                    .setFooter({ text: 'Motus Quotidien • 1 heure de jeu par session' });
+
+                await salon.send({ embeds: [embedFin] }).catch(() => {});
+            }
+            demanderSauvegarde();
         }
     };
-    setInterval(verifierMotus10h, 30 * 1000);
+    setInterval(verifierMotusAutomatique, 30 * 1000);
 
     // Tâches de fond sans bloquer l'état du bot
     for (const guild of client.guilds.cache.values()) {
