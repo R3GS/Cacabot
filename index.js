@@ -25,6 +25,9 @@ let weeklyData = {};
 let monthlyData = {};
 let youtubeWatchData = {};
 let reactionRolesData = {}; // messageId -> { channelId, roles: { emojiKey: roleId } }
+let motusData = { dateKey: 0, mot: '', termine: false, vainqueurId: null, tentatives: {}, messageId: null };
+let motusStats = {}; // userId -> { victoires: number, parties: number }
+let twitchLiveEnCours = false;
 let donneesChargees = false;
 
 const BACKUP_CHANNEL_ID = '1556005171744604161';
@@ -62,6 +65,8 @@ async function loadAll() {
         monthlyData = jsonRecord.monthly ?? {};
         youtubeWatchData = jsonRecord.youtubeWatch ?? {};
         reactionRolesData = jsonRecord.reactionRoles ?? {};
+        motusData = jsonRecord.motusData ?? { dateKey: 0, mot: '', termine: false, vainqueurId: null, tentatives: {}, messageId: null };
+        motusStats = jsonRecord.motusStats ?? {};
 
         for (const [nom, map] of Object.entries(ROULETTE_ETATS)) {
             map.clear();
@@ -104,6 +109,8 @@ async function saveAll() {
             monthly: monthlyData,
             youtubeWatch: youtubeWatchData,
             reactionRoles: reactionRolesData,
+            motusData: motusData,
+            motusStats: motusStats,
             roulette: Object.fromEntries(
                 Object.entries(ROULETTE_ETATS).map(([nom, map]) => [nom, Object.fromEntries(map)])
             )
@@ -612,6 +619,210 @@ function scheduleWanted(guild) {
 }
 
 // =========================
+//     LOGIQUE MOTUS (10h)
+// =========================
+
+const MOTUS_CHANNEL_ID = '1556089022718152764';
+const TWITCH_CHANNEL_ID = '862253918583390238';
+const TWITCH_ROLE_ID = '862058765674741760';
+const TWITCH_USER = 'epsys_';
+
+const MOTUS_DICTIONNAIRE = [
+    "BANANE", "BATEAU", "CANARD", "CHANCE", "CHEVAL", "CLIMAT", "DANGER", "DEVOIR", "DOUBLE", "ETOILE",
+    "FALAISE", "FLEUVE", "FORETS", "GLACON", "GRAINE", "GUITARE", "HASARD", "HEUREUX", "HIVER", "JARDIN",
+    "JOURNAL", "JUNGLE", "LUMIERE", "MAISON", "MANEGE", "MINUTE", "MONTAG", "MOTEUR", "NATURE", "NAVIGU",
+    "NUAGES", "OISEAU", "ORANGE", "PAPIER", "PARDON", "PARFUM", "PATRIE", "PILOTE", "PLANET", "POESIE",
+    "POISSO", "POULET", "PRINCE", "PRISON", "RACINE", "RAISIN", "RAYONS", "REFLET", "RIDEAU", "ROCHER",
+    "ROUGE", "SAISON", "SAPINS", "SOLEIL", "SOURIS", "TABLES", "TEMPET", "TRESOR", "VALISE", "VICTOR",
+    "VILLAG", "VOYAGE", "ZEBRES", "AMOURS", "ARGENT", "AVENIR", "BALLON", "BOUCLE", "BRIQUE", "BUREAU",
+    "CAHIER", "CAMION", "CARTON", "CASQUE", "CHAINE", "CHALEU", "CHEMIN", "CIRQUE", "CITRON", "COFFRE",
+    "COLLIN", "COMBAT", "CORPS", "COUSIN", "CRAYON", "CUISIN", "DESERT", "DESSIN", "DISQUE", "DOCTEU",
+    "ECLAIR", "EMPIRE", "ENFANT", "ENIGME", "EQUIPE", "ESPOIR", "ESPACE", "FARINE", "FLACON", "FOUDRE"
+].filter(w => w.length === 6);
+
+function getMotusDateKey() {
+    const now = new Date();
+    const paris = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    return paris.getFullYear() * 10000 + (paris.getMonth() + 1) * 100 + paris.getDate();
+}
+
+function getMotDuJour(dateKey) {
+    let x = Math.sin(dateKey + 42) * 10000;
+    const rnd = x - Math.floor(x);
+    return MOTUS_DICTIONNAIRE[Math.floor(rnd * MOTUS_DICTIONNAIRE.length)];
+}
+
+function evaluerMotus(guess, solution) {
+    const res = Array(6).fill('⬛');
+    const solLettres = solution.split('');
+    const guessLettres = guess.split('');
+    const restantes = {};
+
+    for (const l of solLettres) restantes[l] = (restantes[l] || 0) + 1;
+
+    // 1ère passe : lettres bien placées (Vert)
+    for (let i = 0; i < 6; i++) {
+        if (guessLettres[i] === solLettres[i]) {
+            res[i] = '🟩';
+            restantes[guessLettres[i]]--;
+        }
+    }
+
+    // 2ème passe : lettres mal placées (Jaune)
+    for (let i = 0; i < 6; i++) {
+        if (res[i] === '🟩') continue;
+        const l = guessLettres[i];
+        if (restantes[l] > 0) {
+            res[i] = '🟨';
+            restantes[l]--;
+        }
+    }
+
+    return res.join('');
+}
+
+function buildMotusEmbed(mot, dateKey) {
+    const premiereLettre = mot.charAt(0);
+    const masque = `${premiereLettre} _ _ _ _ _`;
+    return new EmbedBuilder()
+        .setColor(0x00b0f4)
+        .setTitle('🟩 MOTUS DU JOUR (10h) 🟩')
+        .setDescription(
+            `Le Motus du jour est lancé !\n\n` +
+            `🔤 **Mot à trouver :** \`${masque}\` (6 lettres)\n` +
+            `🎯 **Règle :** Tu as **3 essais individuels** pour trouver le mot !\n\n` +
+            `🟩 **Vert** : Lettre bien placée\n` +
+            `🟨 **Jaune** : Lettre présente mais mal placée\n` +
+            `⬛ **Noir** : Lettre absente\n\n` +
+            `*Écris simplement un mot de 6 lettres commençant par **${premiereLettre}** dans ce salon !*`
+        )
+        .setFooter({ text: 'Rendez-vous tous les jours à 10h00 ! • !motus pour voir le statut' });
+}
+
+function buildMotusStatsEmbed(cible, interactionUser) {
+    const s = motusStats[cible.id] ?? { victoires: 0, parties: 0 };
+    const pct = s.parties > 0 ? Math.round((s.victoires / s.parties) * 100) : 0;
+    return new EmbedBuilder()
+        .setColor(0x00b0f4)
+        .setTitle(`📊 Statistiques Motus de ${cible.displayName}`)
+        .addFields(
+            { name: '🏆 Victoires', value: `**${s.victoires}**`, inline: true },
+            { name: '🎮 Parties jouées', value: `**${s.parties}**`, inline: true },
+            { name: '📈 Taux de réussite', value: `**${pct}%**`, inline: true }
+        )
+        .setFooter({ text: 'Motus Quotidien de 10h • Regaïa' });
+}
+
+async function envoyerMotusQuotidien(guild) {
+    const channel = guild.channels.cache.get(MOTUS_CHANNEL_ID);
+    if (!channel) return;
+
+    const dateKey = getMotusDateKey();
+    const mot = getMotDuJour(dateKey);
+
+    motusData = {
+        dateKey: dateKey,
+        mot: mot,
+        termine: false,
+        vainqueurId: null,
+        tentatives: {},
+        messageId: null
+    };
+
+    const embed = buildMotusEmbed(mot, dateKey);
+    const sent = await channel.send({ content: '# 🟩 LE MOTUS DU JOUR EST OUVERT !', embeds: [embed] });
+    motusData.messageId = sent.id;
+    demanderSauvegarde();
+}
+
+function tempsAvantProchainMotus() {
+    const now = new Date();
+    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const cible10h = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    cible10h.setHours(10, 0, 0, 0);
+
+    let jourStr = "aujourd'hui";
+    if (cible10h <= parisNow) {
+        cible10h.setDate(cible10h.getDate() + 1);
+        jourStr = "demain";
+    }
+
+    const diff = cible10h - parisNow;
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    return { jourStr, h, m, timestamp: Math.floor((Date.now() + diff) / 1000) };
+}
+
+// =========================
+//    SURVEILLANCE TWITCH
+// =========================
+
+async function buildTwitchLivePayload() {
+    const liveUrl = `https://twitch.tv/${TWITCH_USER}`;
+    const previewUrl = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${TWITCH_USER}-1280x720.jpg?t=${Date.now()}`;
+
+    const [titreRaw, jeuRaw, avatarRaw] = await Promise.all([
+        fetch(`https://decapi.me/twitch/title/${TWITCH_USER}`).then(r => r.text()).catch(() => 'Live Twitch !'),
+        fetch(`https://decapi.me/twitch/game/${TWITCH_USER}`).then(r => r.text()).catch(() => 'Just Chatting'),
+        fetch(`https://decapi.me/twitch/avatar/${TWITCH_USER}`).then(r => r.text()).catch(() => null)
+    ]);
+
+    const titre = titreRaw.trim() || 'En direct sur Twitch !';
+    const jeu = jeuRaw.trim() || 'Just Chatting';
+    const avatar = (avatarRaw && avatarRaw.startsWith('http')) ? avatarRaw.trim() : null;
+
+    const embed = new EmbedBuilder()
+        .setColor(0x9146ff)
+        .setAuthor({ 
+            name: `${TWITCH_USER} est en direct sur Twitch !`, 
+            iconURL: avatar ?? 'https://cdn.discordapp.com/emojis/1505457903585198151.png', 
+            url: liveUrl 
+        })
+        .setTitle(titre)
+        .setURL(liveUrl)
+        .addFields(
+            { name: '🎮 Jeu / Catégorie', value: `\`${jeu}\``, inline: true },
+            { name: '📺 Chaîne', value: `[twitch.tv/${TWITCH_USER}](${liveUrl})`, inline: true }
+        )
+        .setImage(previewUrl)
+        .setFooter({ text: '🔴 Live Twitch • Notification automatique' })
+        .setTimestamp();
+
+    if (avatar) embed.setThumbnail(avatar);
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setLabel('🟣 Rejoindre le stream')
+            .setStyle(ButtonStyle.Link)
+            .setURL(liveUrl)
+    );
+
+    return {
+        content: `📢 Hey <@&${TWITCH_ROLE_ID}> ! **${TWITCH_USER}** vient de lancer un live !`,
+        embeds: [embed],
+        components: [row]
+    };
+}
+
+async function verifierTwitchLive() {
+    try {
+        const resUptime = await fetch(`https://decapi.me/twitch/uptime/${TWITCH_USER}`).then(r => r.text());
+        const estEnLigne = !resUptime.includes('offline') && !resUptime.includes('not found') && resUptime.trim().length > 0;
+
+        if (estEnLigne && !twitchLiveEnCours) {
+            twitchLiveEnCours = true;
+            const channel = client.channels.cache.get(TWITCH_CHANNEL_ID);
+            if (!channel) return;
+
+            const payload = await buildTwitchLivePayload();
+            await channel.send(payload);
+        } else if (!estEnLigne && twitchLiveEnCours) {
+            twitchLiveEnCours = false; // Réinitialise quand le live s'arrête
+        }
+    } catch (e) {}
+}
+
+// =========================
 //     FONCTION PRINCIPALE
 // =========================
 
@@ -703,6 +914,18 @@ function getResponse(raw) {
 
     if (["!roulettesucces", "!rltsucces", "!roulettesuccess", "!rltsuccess"].includes(command)) {
         return { needsRouletteAchievements: true };
+    }
+
+    // =========================
+    //         !MOTUS
+    // =========================
+
+    if (command === "!motus") {
+        return { needsMotus: true };
+    }
+
+    if (command === "!motustats" || command === "!motustat") {
+        return { needsMotusStats: true };
     }
 
     // =========================
@@ -1854,6 +2077,12 @@ function buildHelpCategoryEmbed(category) {
                 "📈 **`!rltstats`** `[membre]`\n" +
                 "-# Voir l'historique complet des tirages, ratios et pire série\n\n" +
 
+                "### 🟩 __Motus Quotidien (10h) :__\n" +
+                "🟩 **`!motus`**\n" +
+                "-# Voir le statut du mot du jour et le temps restant jusqu'au prochain motus à 10h\n" +
+                "📊 **`!motustats`** `[membre]`\n" +
+                "-# Consulter les victoires, parties jouées et statistiques Motus d'un·e membre\n\n" +
+
                 "### 🔮 __Destinée & Hasard :__\n" +
                 "🔮 **`!destin`**\n" +
                 "-# Découvrir ta prophétie...\n" +
@@ -1993,6 +2222,7 @@ function buildHelpxCategorieEmbed(categorie) {
             .addFields(
                 { name: '📣 **!say [ID_salon] [message]**', value: 'Envoyer un message dans un salon au nom de Cacabot.' },
                 { name: '✏️ **!edit [ID_message] [texte]**', value: 'Modifier un message envoyé par Cacabot.' },
+                { name: '🟣 **!streamtest**', value: 'Tester et envoyer immédiatement l\'alerte live Twitch dans le salon dédié.' },
                 { name: '💾 **!save**', value: 'Forcer une sauvegarde immédiate.' },
                 { name: '💾 **!lastsave**', value: 'Afficher la date et l\'heure de la dernière sauvegarde.' }
             );
@@ -2144,7 +2374,10 @@ const ROULETTE_ETATS = {
     notifs:             rouletteNotifs,
     malusConsecutifs:   rouletteMalusConsecutifs,
     antiFeurDodges:     rouletteAntiFeurDodges,
-    malusDifferents:    rouletteMalusDifferents
+    malusDifferents:    rouletteMalusDifferents,
+    papayouDaily:       roulettePapayouDaily,
+    coupTripleScore:    rouletteCoupTripleScore,
+    happyHourCompteur:  rouletteHappyHourCompteur
 };
 
 const ROULETTE_FAILS = [
@@ -4311,11 +4544,101 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
         // Ping automatique du rôle quand un utilisateur spécifique poste dans un salon spécifique
         if (message.channel.id === '1460051840015269908' && message.author.id === '1525026449768321098') {
             await message.channel.send(`<@&1504492103194120273>`);
-    }
+        }
 
-    if (message.author.bot) return;
+        // =========================
+        //     SALON MOTUS DU JOUR
+        // =========================
+        if (message.channel.id === MOTUS_CHANNEL_ID && !message.content.startsWith('!')) {
+            const rawGuess = message.content.trim().toUpperCase()
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^A-Z]/g, "");
 
-        if (message.author.bot) return;
+            // Ignore strictement les messages qui ne font pas exactement 6 lettres
+            if (rawGuess.length === 6) {
+                const dateKey = getMotusDateKey();
+                const motDuJour = motusData.mot || getMotDuJour(dateKey);
+
+                if (motusData.dateKey !== dateKey) {
+                    motusData = { dateKey, mot: motDuJour, termine: false, vainqueurId: null, tentatives: {}, messageId: null };
+                }
+
+                if (motusData.termine) {
+                    await message.reply(`🔒 Le Motus d'aujourd'hui a déjà été remporté par <@${motusData.vainqueurId}> ! Rendez-vous demain à 10h00 pour le prochain.`);
+                    return;
+                }
+
+                if (!motusData.tentatives[message.author.id]) {
+                    motusData.tentatives[message.author.id] = [];
+                }
+
+                const userTries = motusData.tentatives[message.author.id];
+                if (userTries.length >= 3) {
+                    await message.reply(`❌ <@${message.author.id}>, tu as déjà utilisé tes **3 essais** pour aujourd'hui ! Laisse les autres tenter leur chance.`);
+                    return;
+                }
+
+                userTries.push(rawGuess);
+                const essaiNum = userTries.length;
+
+                // Mise à jour stats de participation
+                if (!motusStats[message.author.id]) motusStats[message.author.id] = { victoires: 0, parties: 0 };
+                if (essaiNum === 1) motusStats[message.author.id].parties++;
+
+                const grille = evaluerMotus(rawGuess, motDuJour);
+                const lettresEspacées = rawGuess.split('').join(' ');
+
+                const rowOriginal = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`motus_show_original_${motusData.dateKey}`)
+                        .setLabel("📜 Voir l'énoncé du jour")
+                        .setStyle(ButtonStyle.Secondary)
+                );
+
+                if (rawGuess === motDuJour) {
+                    motusData.termine = true;
+                    motusData.vainqueurId = message.author.id;
+                    motusStats[message.author.id].victoires++;
+                    demanderSauvegarde();
+
+                    await message.reply({
+                        content: `**${lettresEspacées}**\n${grille}\n*(Essai ${essaiNum}/3)*`,
+                        components: [rowOriginal]
+                    });
+
+                    const embedVictoire = new EmbedBuilder()
+                        .setColor(0x2ecc71)
+                        .setTitle('🎉 MOTUS TROUVÉ ! 🎉')
+                        .setDescription(
+                            `Félicitations à <@${message.author.id}> qui a trouvé le mot du jour en **${essaiNum} essai${essaiNum > 1 ? 's' : ''}** !\n\n` +
+                            `🔤 **Le mot était :** \`${motDuJour}\`\n` +
+                            `🏆 **Total de victoires :** **${motusStats[message.author.id].victoires}**`
+                        )
+                        .setFooter({ text: 'Rendez-vous demain à 10h00 pour un nouveau Motus !' });
+
+                    const rowStats = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`motus_view_stats_${message.author.id}`)
+                            .setLabel('📊 Mes stats Motus')
+                            .setStyle(ButtonStyle.Primary)
+                    );
+
+                    await message.channel.send({ embeds: [embedVictoire], components: [rowStats] });
+                    return;
+                } else {
+                    demanderSauvegarde();
+                    const infoReste = essaiNum === 3 
+                        ? `\n-# *Tu as épuisé tes 3 essais pour aujourd'hui !*`
+                        : `\n-# *Il te reste ${3 - essaiNum} essai${(3 - essaiNum) > 1 ? 's' : ''} !*`;
+
+                    await message.reply({
+                        content: `**${lettresEspacées}**\n${grille} *(Essai ${essaiNum}/3)*${infoReste}`,
+                        components: [rowOriginal]
+                    });
+                    return;
+                }
+            }
+        }
 
     // Supprimer le message précédent si Shin poste sa pub Twitch dans le salon #Promo
     const REPOST_WATCH_USER = '1070742213635625050';
@@ -5830,6 +6153,39 @@ if (response?.needsRouletteAchievements) {
 }
 
 
+    // !motus
+    if (response?.needsMotus) {
+        const { jourStr, h, m, timestamp } = tempsAvantProchainMotus();
+        const dateKey = getMotusDateKey();
+        const dejaFait = motusData.dateKey === dateKey && motusData.termine;
+
+        let desc = `Le prochain Motus aura lieu **${jourStr} à 10h00** (dans **${h}h ${m}min**, <t:${timestamp}:R>) !`;
+        if (!dejaFait && motusData.dateKey === dateKey && motusData.mot) {
+            desc = `🟩 **Le Motus du jour est en cours dans <#${MOTUS_CHANNEL_ID}> !**\n\nTu as **3 essais** pour deviner le mot de 6 lettres.\nProchain motus : **${jourStr} à 10h00** (<t:${timestamp}:R>)`;
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(0x00b0f4)
+            .setTitle('🟩 Le Motus Quotidien de 10h')
+            .setDescription(desc)
+            .setFooter({ text: 'Salon dédié : #motus • 3 essais individuels par personne' });
+
+        return message.reply({ embeds: [embed] });
+    }
+
+    // !motustats
+    if (response?.needsMotusStats) {
+        let cible = message.mentions.members.first();
+        if (!cible) {
+            const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (query) cible = findMemberByName(message.guild, query).found;
+        }
+        if (!cible) cible = message.member;
+
+        const embed = buildMotusStatsEmbed(cible, message.author);
+        return message.reply({ embeds: [embed] });
+    }
+
     // !roulette
     if (response?.needsRoulette) {
         if (response.direct) {
@@ -7034,6 +7390,15 @@ if (response?.needsRouletteAchievements) {
             return message.reply('Erreur : salon introuvable ou permissions insuffisantes.');
         }
         return;
+    }
+
+    // !streamtest (Epsys-only)
+    if (message.content.trim().toLowerCase() === '!streamtest') {
+        if (message.author.id !== '436218312574107658') return;
+        const targetChannel = client.channels.cache.get(TWITCH_CHANNEL_ID) ?? message.channel;
+        const payload = await buildTwitchLivePayload();
+        await targetChannel.send(payload);
+        return message.react('🟣');
     }
 
     // !edit (Epsys-only)
@@ -8822,6 +9187,21 @@ try {
             }
             return interaction.showModal(buildEmbedModal());
         }
+    }
+
+    // Bouton pour afficher l'énoncé du motus du jour
+    if (interaction.isButton() && interaction.customId.startsWith('motus_show_original_')) {
+        const dateKey = getMotusDateKey();
+        const mot = motusData.mot || getMotDuJour(dateKey);
+        const embed = buildMotusEmbed(mot, dateKey);
+        return interaction.reply({ embeds: [embed], ephemeral: true });
+    }
+
+    // Bouton pour voir ses propres stats Motus
+    if (interaction.isButton() && interaction.customId.startsWith('motus_view_stats_')) {
+        const member = interaction.member;
+        const embed = buildMotusStatsEmbed(member, interaction.user);
+        return interaction.reply({ embeds: [embed], ephemeral: true });
     }
 
     // Bouton ouvrant le Modal depuis !embed
@@ -10874,6 +11254,22 @@ client.once('ready', async () => {
     for (const [uid, chId] of rouletteNotifs) armerNotifRoulette(uid, chId);
     cleanOldData();
     setInterval(verifierHappyHour, 30 * 1000); // Vérifie toutes les 30 secondes pour les alertes 20h00, 20h30 et 21h00
+    setInterval(verifierTwitchLive, 60 * 1000); // Surveillance du live Twitch toutes les minutes
+
+    // Lancement et vérification quotidienne du Motus à 10h00
+    let dernierMotusDateKey = null;
+    const verifierMotus10h = async () => {
+        const now = new Date();
+        const paris = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+        const dateKey = paris.getFullYear() * 10000 + (paris.getMonth() + 1) * 100 + paris.getDate();
+        if (paris.getHours() === 10 && paris.getMinutes() === 0 && dernierMotusDateKey !== dateKey) {
+            dernierMotusDateKey = dateKey;
+            const guildRegaia = client.guilds.cache.get('720057528351850547');
+            if (guildRegaia) await envoyerMotusQuotidien(guildRegaia);
+        }
+    };
+    setInterval(verifierMotus10h, 30 * 1000);
+
     for (const guild of client.guilds.cache.values()) {
         await guild.members.fetch().catch(() => {});
     }
@@ -11091,48 +11487,6 @@ client.on('messageCreate', async (message) => {
         setTimeout(() => client.webhookDeletedMessages?.delete(message.id), 15000);
         await message.delete().catch(() => {});
     } catch (e) {}
-});
-
-// Détection des Ghost Pings
-client.on('messageDelete', async (message) => {
-    if (client.webhookDeletedMessages?.has(message.id)) {
-        client.webhookDeletedMessages.delete(message.id);
-        return;
-    }
-    // Ignore les salons en MP, les messages sans auteur en cache, les webhooks, tous les bots et Cacabot lui-même
-    if (!message.guild || !message.author || message.author.bot || message.author.id === client.user.id || message.webhookId) return;
-    if (message.channel.id === MOD_CHANNEL_ID) return;
-
-    // Vérifie si le message a été supprimé rapidement (moins de 2 minutes après envoi)
-    const ageMs = Date.now() - message.createdTimestamp;
-    if (ageMs > 2 * 60 * 1000) return;
-
-    // Filtre les mentions d'humains réels (hors bots et hors auteur du message)
-    const ciblesHumaines = message.mentions.users.filter(u => !u.bot && u.id !== message.author.id);
-    const rolesMentionnes = message.mentions.roles;
-
-    if (ciblesHumaines.size === 0 && rolesMentionnes.size === 0) return;
-
-    const modChannel = message.guild.channels.cache.get(MOD_CHANNEL_ID);
-    if (!modChannel) return;
-
-    const mentionsStr = [
-        ...ciblesHumaines.map(u => `<@${u.id}>`),
-        ...rolesMentionnes.map(r => `<@&${r.id}>`)
-    ].join(', ');
-
-    const embedGhost = new EmbedBuilder()
-        .setColor(0xe74c3c)
-        .setTitle('👻 Ghost Ping détecté !')
-        .setDescription(`Un message contenant des mentions a été supprimé rapidement dans <#${message.channel.id}>.`)
-        .addFields(
-            { name: '👤 Auteur', value: `<@${message.author.id}> (${message.author.tag})`, inline: true },
-            { name: '🎯 Cible(s)', value: mentionsStr, inline: true },
-            { name: '💬 Contenu supprimé', value: message.content ? `\`\`\`${message.content.slice(0, 1000)}\`\`\`` : '*Contenu média ou vide*', inline: false }
-        )
-        .setTimestamp();
-
-    await modChannel.send({ embeds: [embedGhost] }).catch(() => {});
 });
 
 // Verrouillage de pseudo roulette : remet le pseudo imposé si quelqu'un essaie de le changer
