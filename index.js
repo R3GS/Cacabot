@@ -29,6 +29,7 @@ let motusData = { dateKey: 0, mot: '', termine: false, vainqueurId: null, tentat
 let motusStats = {}; // userId -> { victoires: number, parties: number }
 let twitchLiveEnCours = false;
 let quotesData = []; // [{ id, texte, authorId, authorName, addedById, timestamp, channelId }]
+let dernierCommitSha = null;
 let donneesChargees = false;
 
 const BACKUP_CHANNEL_ID = '1556005171744604161';
@@ -69,6 +70,7 @@ async function loadAll() {
         motusData = jsonRecord.motusData ?? { dateKey: 0, mot: '', termine: false, vainqueurId: null, tentatives: {}, messageId: null };
         motusStats = jsonRecord.motusStats ?? {};
         quotesData = jsonRecord.quotes ?? [];
+        dernierCommitSha = jsonRecord.dernierCommitSha ?? null;
 
         for (const [nom, map] of Object.entries(ROULETTE_ETATS)) {
             map.clear();
@@ -114,6 +116,7 @@ async function saveAll() {
             motusData: motusData,
             motusStats: motusStats,
             quotes: quotesData,
+            dernierCommitSha: dernierCommitSha,
             roulette: Object.fromEntries(
                 Object.entries(ROULETTE_ETATS).map(([nom, map]) => [nom, Object.fromEntries(map)])
             )
@@ -157,14 +160,25 @@ function demanderSauvegarde() {
     }, 10000);
 }
 
+async function notifierArretMiseAJour() {
+    try {
+        const channel = await client.channels.fetch('1480756332373213275').catch(() => null);
+        if (channel) {
+            await channel.send("🎛️ Mise à jour en cours, j'arrive tout de suite :)");
+        }
+    } catch (e) {}
+}
+
 process.on('SIGTERM', async () => {
-    console.log('🛑 SIGTERM reçu, sauvegarde avant arrêt...');
+    console.log('🛑 SIGTERM reçu, notification et sauvegarde avant arrêt...');
+    await notifierArretMiseAJour();
     await saveAll();
     process.exit(0);
 });
 
 process.on('SIGINT', async () => {
-    console.log('🛑 SIGINT reçu, sauvegarde avant arrêt...');
+    console.log('🛑 SIGINT reçu, notification et sauvegarde avant arrêt...');
+    await notifierArretMiseAJour();
     await saveAll();
     process.exit(0);
 });
@@ -11482,6 +11496,37 @@ client.once('ready', async () => {
         }, delay);
     }
     scheduleBirthdayCheck();
+
+    // Notification automatique dès que le bot a fini de démarrer après un nouveau commit
+    try {
+        const salonNotif = await client.channels.fetch('1480756332373213275').catch(() => null);
+        if (salonNotif) {
+            let nouveauCommitDetecte = false;
+            if (process.env.GITHUB_TOKEN) {
+                const resCommits = await fetch('https://api.github.com/repos/R3GS/Cacabot/commits?per_page=1', {
+                    headers: {
+                        'Authorization': `token ${process.env.GITHUB_TOKEN}`,
+                        'Accept': 'application/vnd.github.v3+json'
+                    }
+                }).then(r => r.json()).catch(() => null);
+
+                const shaActuel = Array.isArray(resCommits) && resCommits[0]?.sha ? resCommits[0].sha : null;
+                if (shaActuel && shaActuel !== dernierCommitSha) {
+                    dernierCommitSha = shaActuel;
+                    nouveauCommitDetecte = true;
+                    demanderSauvegarde();
+                }
+            } else {
+                nouveauCommitDetecte = true;
+            }
+
+            if (nouveauCommitDetecte) {
+                await salonNotif.send("✅ Mise à jour faite, je suis de retour !");
+            }
+        }
+    } catch (err) {
+        console.error("Erreur notification de mise à jour :", err.message);
+    }
 });
 
 // =========================
