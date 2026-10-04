@@ -6988,9 +6988,8 @@ if (response?.needsRouletteAchievements) {
                 { name: '💬 Messages envoyés', value: `${nbMessages.toLocaleString('fr-FR')}`, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
                 { name: '📅 Arrivée sur le serveur', value: joinedAt, inline: true },
-                { name: '🕒 Compte créé le', value: createdAt, inline: true },
+                { name: '🎂 Anniversaire', value: birthdayStr, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
-                { name: '🎂 Anniversaire', value: birthdayStr, inline: false },
                 { name: '🏆 Succès du serveur', value: badges.length > 0 ? badges.join('\n') : '*Aucun succès débloqué pour l\'instant.*', inline: false },
                 { name: '🏷️ Rôles', value: roles, inline: false }
             )
