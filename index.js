@@ -2260,6 +2260,7 @@ function buildHelpxCategorieEmbed(categorie) {
                 { name: '🔘 **!rolebtn add [ID] [@rôle] [couleur] [Texte]**', value: 'Ajouter un bouton cliquable de rôle sur un message de Cacabot.' },
                 { name: '🗑️ **!rolebtn remove [ID] [@rôle]**', value: 'Retirer un bouton de rôle d\'un message.' },
                 { name: '🎭 **!rolereac [ID] [emoji] [@rôle]**', value: 'Ajouter un rôle réaction classique par emoji (ou `!rolereac list/remove`).' },
+                { name: '📜 **!quote remove [ID]**', value: 'Supprimer définitivement une citation des archives.' },
                 { name: '⏰ **!rappel [ID] Xmin/h [message]**', value: 'Envoyer un rappel à un membre spécifique par son ID.' },
                 { name: '📝 **!setmessages @Membre [nombre]**', value: 'Définir manuellement le nombre de messages d\'un membre.' }
             );
