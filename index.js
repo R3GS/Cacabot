@@ -11691,7 +11691,9 @@ client.once('ready', async () => {
                 }
 
                 if (nouveauCommitDetecte) {
-                    await salonNotif.send("✅ Mise à jour faite, je suis de retour !");
+                    const commitCount = await getCommitCount();
+                    const versionTexte = commitCount ? ` *(Version 1.${commitCount})*` : '';
+                    await salonNotif.send(`✅ Mise à jour faite, je suis de retour !${versionTexte}`);
                 }
             }
         } catch (err) {
