@@ -11704,6 +11704,18 @@ client.once('ready', async () => {
                     const commitCount = await getCommitCount();
                     const versionTexte = commitCount ? ` *(Version 1.${commitCount})*` : '';
                     await salonNotif.send(`✅ Mise à jour faite, je suis de retour !${versionTexte}`);
+
+                    // Envoi automatique du fichier index.js dans le salon d'archives de code
+                    const salonCode = await client.channels.fetch('1556184304848085114').catch(() => null);
+                    if (salonCode) {
+                        const versionNom = commitCount ? `1.${commitCount}` : 'actuelle';
+                        const dateStr = new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }) + ' à ' + new Date().toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris' });
+
+                        await salonCode.send({
+                            content: `📦 **Code source — Version ${versionNom}**\n-# *Déployé le ${dateStr}*`,
+                            files: [{ attachment: './index.js', name: `index_v${versionNom}.js` }]
+                        }).catch(err => console.error("Erreur envoi index.js :", err.message));
+                    }
                 }
             }
         } catch (err) {
