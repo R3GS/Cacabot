@@ -634,16 +634,61 @@ const TWITCH_ROLE_ID = '862058765674741760';
 const TWITCH_USER = 'epsys_';
 
 const MOTUS_DICTIONNAIRE = [
-    "BANANE", "BATEAU", "CANARD", "CHANCE", "CHEVAL", "CLIMAT", "DANGER", "DEVOIR", "DOUBLE", "ETOILE",
-    "FALAISE", "FLEUVE", "FORETS", "GLACON", "GRAINE", "GUITARE", "HASARD", "HEUREUX", "HIVER", "JARDIN",
-    "JOURNAL", "JUNGLE", "LUMIERE", "MAISON", "MANEGE", "MINUTE", "MONTAG", "MOTEUR", "NATURE", "NAVIGU",
-    "NUAGES", "OISEAU", "ORANGE", "PAPIER", "PARDON", "PARFUM", "PATRIE", "PILOTE", "PLANET", "POESIE",
-    "POISSO", "POULET", "PRINCE", "PRISON", "RACINE", "RAISIN", "RAYONS", "REFLET", "RIDEAU", "ROCHER",
-    "ROUGE", "SAISON", "SAPINS", "SOLEIL", "SOURIS", "TABLES", "TEMPET", "TRESOR", "VALISE", "VICTOR",
-    "VILLAG", "VOYAGE", "ZEBRES", "AMOURS", "ARGENT", "AVENIR", "BALLON", "BOUCLE", "BRIQUE", "BUREAU",
-    "CAHIER", "CAMION", "CARTON", "CASQUE", "CHAINE", "CHALEU", "CHEMIN", "CIRQUE", "CITRON", "COFFRE",
-    "COLLIN", "COMBAT", "CORPS", "COUSIN", "CRAYON", "CUISIN", "DESERT", "DESSIN", "DISQUE", "DOCTEU",
-    "ECLAIR", "EMPIRE", "ENFANT", "ENIGME", "EQUIPE", "ESPOIR", "ESPACE", "FARINE", "FLACON", "FOUDRE"
+    "ACTION", "AGENDA", "AIGLES", "ALBUMS", "ALERTE", "AMICAL", "ANANAS", "ANCIEN", "ANNEAU", "APPELS",
+    "ARBRES", "ARCHES", "ARGENT", "ARMURE", "ARTIST", "ASPECT", "ASTUCE", "ATTACH", "AUTEUR", "AVENIR",
+    "BALLES", "BALLON", "BANANE", "BANDES", "BARQUE", "BASSIN", "BATEAU", "BATTRE", "BEAUTE", "BIAISE",
+    "BISTRO", "BLAGUE", "BLASON", "BLESSE", "BLONDE", "BONBON", "BORDEL", "BOTTES", "BOUCLE", "BOUGER",
+    "BOUGIE", "BOULES", "BOURSE", "BOUTON", "BRAVES", "BRIQUE", "BRISER", "BRUMES", "BUDGET", "BUFFET",
+    "BUREAU", "CABANE", "CADEAU", "CAHIER", "CALCUL", "CAMION", "CANAPE", "CANARD", "CANONS", "CARNET",
+    "CARTON", "CASINO", "CASQUE", "CASTEL", "CENTRE", "CERCLE", "CHAINE", "CHAMPS", "CHANCE", "CHAQUE",
+    "CHASSE", "CHAUVE", "CHEMIN", "CHEQUE", "CHEVAL", "CHIENS", "CHIMIE", "CHROME", "CHUTES", "CIMENT",
+    "CIRQUE", "CITRON", "CLASSE", "CLIENT", "CLIMAT", "CLOWNS", "COFFRE", "COLERE", "COMBAT", "COMETE",
+    "COMPTE", "CORDES", "CORONA", "COUSIN", "COTONS", "COUCOU", "COUDES", "COUPLE", "COURIR", "COURTE",
+    "CRAYON", "CREPES", "CRIMES", "CRISES", "CROIRE", "CUISIN", "CUIVRE", "DANGER", "DANSER", "DEBATS",
+    "DEBOUT", "DEBUTS", "DECHET", "DECIDE", "DECLIC", "DEFAUT", "DEFEND", "DELICE", "DEMAIN", "DEPART",
+    "DESSIN", "DESTIN", "DEVANT", "DEVOIR", "DIABLE", "DICTEE", "DIRECT", "DISQUE", "DOUBLE", "DOUCHE",
+    "DRAGON", "DRAMES", "DROITE", "ECHECS", "ECLAIR", "ECOLES", "ECORCE", "ECRANS", "ECRIRE", "EFFETS",
+    "EFFORT", "EGLISE", "ELANCE", "ENCLOS", "ENFANT", "ENIGME", "ENGINS", "ENTREE", "EPAULE", "EPICES",
+    "EPOQUE", "EQUIPE", "ERREUR", "ESPACE", "ESPOIR", "ESPRIT", "ESTIME", "ETAPES", "ETOILE", "EVITER",
+    "EXAMEN", "EXPERT", "FACILE", "FARCES", "FARINE", "FAUCON", "FAVEUR", "FEMMES", "FENTES", "FIEVRE",
+    "FIGUES", "FIGURE", "FILLES", "FLACON", "FLAMME", "FLECHE", "FLEURS", "FLEUVE", "FORCES", "FORMAT",
+    "FOUDRE", "FRANCE", "FRERES", "FROIDE", "FUMEES", "FUSEES", "FUSION", "GAGNER", "GARAGE", "GARCON",
+    "GARDES", "GATEAU", "GEANTS", "GENIES", "GENOUX", "GESTES", "GIBIER", "GIRAFE", "GLACES", "GLACON",
+    "GLISSE", "GLOBAL", "GOUTER", "GRADES", "GRAINE", "GRAINS", "GRANDE", "GRAPHE", "GROTTE", "GROUPE",
+    "GUITARE", "HABITS", "HACHIS", "HALLES", "HAMACS", "HANGAR", "HASARD", "HAUTES", "HERBES", "HEUREUX",
+    "HEURES", "HIBOUX", "HIVER", "HOMMES", "HOTELS", "HUILER", "HUMAIN", "HUMOUR", "HYMNES", "ICONES",
+    "IDEALS", "IDIOTS", "IMAGES", "IMPACT", "INDICE", "INVITE", "ISOLER", "JAMBES", "JARDIN", "JAUNES",
+    "JETONS", "JOCKEY", "JOUETS", "JOURNAL", "JOYEUX", "JUGES", "JUMEAU", "JUNGLE", "JUPES", "JUSTES",
+    "LACETS", "LAINES", "LANCER", "LAPINS", "LARGES", "LARMES", "LAVAGE", "LETTRE", "LEVEES", "LIBRES",
+    "LIGNES", "LIMITS", "LIONS", "LIVRES", "LOISIR", "LOUVES", "LOYERS", "LUTTES", "MACHIN", "MADAME",
+    "MAGIES", "MAIRES", "MAISON", "MALADE", "MANCHE", "MANEGE", "MANGER", "MARAIS", "MARCHE", "MARRON",
+    "MASQUE", "MASSES", "MATCHS", "MATINS", "MAUDIT", "MELONS", "MENACE", "MERITE", "MEUBLE", "MICROS",
+    "MILIEU", "MINCES", "MINUTE", "MIROIR", "MISERE", "MIXEUR", "MODELE", "MOMENT", "MONDES", "MONTRE",
+    "MORDRE", "MOTEUR", "MOTIFS", "MOUCHE", "MOULES", "MOYENS", "MUSEES", "NATION", "NATURE", "NAVIRE",
+    "NEIGES", "NOBLES", "NOIRES", "NOTICE", "NOTION", "NUAGES", "NUANCE", "NUMERO", "OBJETS", "OBSCUR",
+    "ODEURS", "OEUVRE", "OFFRES", "OIGNON", "OISEAU", "OMBRES", "ONGLES", "ONGLET", "ORAGES", "ORANGE",
+    "ORDRES", "ORGANE", "OUVRIR", "PAGNES", "PALAIS", "PANIER", "PANNES", "PAPIER", "PAQUET", "PARADE",
+    "PARDON", "PARFUM", "PARLER", "PAROIS", "PARTIR", "PASSER", "PASTEL", "PATRIE", "PATRON", "PAUVRE",
+    "PAYSAN", "PECHES", "PELOTE", "PENSEE", "PENTES", "PERLES", "PERMIS", "PETALE", "PHARES", "PHOTOS",
+    "PHRASE", "PIGEON", "PILIER", "PILOTE", "PIQUER", "PIRATE", "PISTES", "PLAGES", "PLAINE", "PLANTE",
+    "PLAQUE", "PLATRE", "PLEURS", "PLUMES", "POCHES", "POEMES", "POESIE", "POINTS", "POISON", "POULET",
+    "POLICE", "POMMES", "PORTES", "POSTES", "POTION", "POUDRE", "POULES", "POUSSE", "PREUVE", "PRIERE",
+    "PRINCE", "PRISON", "PRISES", "PROCES", "PROFIL", "PROJET", "PROMET", "PROPRE", "QUATRE", "RACINE",
+    "RADARS", "RADIOS", "RAISIN", "RAMPES", "RANGES", "RAPIDE", "RAYONS", "REBORD", "RECITS", "RECORD",
+    "REFLET", "REFUGE", "REGARD", "REGLES", "REGRET", "REINES", "RELAIS", "REMEDE", "REMISE", "RENARD",
+    "REPOND", "REPOS", "RESEAU", "RESINE", "RESTES", "RETOUR", "REVUES", "RIDEAU", "RISQUE", "RIVAGE",
+    "ROCHER", "ROMANS", "ROSACE", "ROUGES", "ROULES", "ROUTES", "RUBANS", "RUINES", "SABLES", "SABRES",
+    "SACHET", "SAISON", "SALADE", "SALLES", "SALONS", "SAPINS", "SAUTER", "SAVANT", "SAVEUR", "SAVONS",
+    "SCEAUX", "SCENES", "SEJOUR", "SENTIR", "SERVI", "SIECLE", "SIGNAL", "SIGNES", "SIMPLE", "SINGES",
+    "SIRENE", "SOEURS", "SOLDAT", "SOLEIL", "SOMMET", "SONGES", "SORTIE", "SOUCIS", "SOUPES", "SOURCE",
+    "SOURIS", "SPORTS", "STAGES", "STATUE", "STATUT", "STRESS", "STYLES", "SUCRES", "SUITES", "TABLES",
+    "TACHES", "TAILLE", "TALENT", "TALONS", "TAPIS", "TARIFS", "TARTES", "TEINTE", "TEMPLE", "TENDRE",
+    "TENUES", "TERMES", "TERRES", "TIGRES", "TISSUS", "TITRES", "TOILES", "TOMBES", "TONNER", "TORDRE",
+    "TORTUE", "TOUCHE", "TOURNE", "TOURS", "TRACES", "TRAINS", "TRAITE", "TRAMES", "TRESOR", "TRIBUS",
+    "TRICOT", "TRONCS", "TROUPE", "TUBES", "TUMEUR", "TUNNEL", "USINES", "VAGUES", "VALEUR", "VALISE",
+    "VALLEE", "VAPEUR", "VEINES", "VENINS", "VENTRE", "VERRES", "VERROU", "VERSES", "VERTUS", "VIANDE",
+    "VIBRER", "VICTOR", "VILLES", "VIOLON", "VIRAGE", "VISAGE", "VISITE", "VIVANT", "VOILES", "VOISIN",
+    "VOLEUR", "VOYAGE", "WAGONS", "ZEBRES", "ZIGZAG"
 ].filter(w => w.length === 6);
 
 function getMotusDateKey() {
@@ -919,6 +964,10 @@ function getResponse(raw) {
 
     if (["!roulettesucces", "!rltsucces", "!roulettesuccess", "!rltsuccess"].includes(command)) {
         return { needsRouletteAchievements: true };
+    }
+
+    if (["!rlttop", "!roulettetop", "!rltleaderboard"].includes(command)) {
+        return { needsRouletteTop: true };
     }
 
     // =========================
@@ -1799,7 +1848,19 @@ function armerNotifRoulette(userId, channelId) {
         if (Date.now() < finActuelle) return armerNotifRoulette(userId, channelId); // cooldown rallongé entre-temps
         rouletteNotifs.delete(userId);
         const salon = await client.channels.fetch(channelId).catch(() => null);
-        await salon?.send(`🎰 <@${userId}>, ton cooldown roulette est terminé ! Tape \`!rlt\` pour retenter ta chance.`).catch(() => {});
+        if (!salon) return;
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`roulette_tenter_${userId}`)
+                .setLabel('🎰 Tenter sa chance')
+                .setStyle(ButtonStyle.Primary)
+        );
+
+        await salon.send({
+            content: `🎰 <@${userId}>, ton cooldown roulette est terminé ! Clique ci-dessous pour relancer immédiatement :`,
+            components: [row]
+        }).catch(() => {});
     }, Math.min(delai, 2 ** 31 - 1));
     rouletteNotifTimers.set(userId, timer);
 }
@@ -2089,6 +2150,8 @@ function buildHelpCategoryEmbed(category) {
                 "### 🎰 __Roulette Regaïenne :__\n" +
                 "🎲 **`!roulette`** | **`!rlt`** `(ou !rlt go)`\n" +
                 "-# Tenter sa chance sur la roulette !\n" +
+                "🏆 **`!rlttop`**\n" +
+                "-# Classement des membres ayant débloqué le plus de succès sur la roulette\n" +
                 "🎖️ **`!rltsucces`** `[membre]`\n" +
                 "-# Consulter tes 30 succès débloqués et ta progression\n" +
                 "📊 **`!rltstate`** `[membre]`\n" +
@@ -4615,6 +4678,17 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
                         .setStyle(ButtonStyle.Secondary)
                 );
 
+                // Calcul des lettres absentes testées par ce joueur
+                const toutesLettresTentees = new Set(userTries.flatMap(t => t.split('')));
+                const lettresAbsentes = [...toutesLettresTentees]
+                    .filter(l => !motDuJour.includes(l))
+                    .sort()
+                    .join(' ');
+
+                const ligneAbsentes = lettresAbsentes.length > 0 
+                    ? `\n> ❌ **Lettres absentes :** \`${lettresAbsentes}\`` 
+                    : '';
+
                 if (rawGuess === motDuJour) {
                     motusData.termine = true;
                     motusData.vainqueurId = message.author.id;
@@ -4622,7 +4696,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
                     demanderSauvegarde();
 
                     await message.reply({
-                        content: `**${lettresEspacées}**\n${grille}\n*(Essai ${essaiNum}/3)*`,
+                        content: `**${lettresEspacées}**\n${grille} *(Essai ${essaiNum}/3)*`,
                         components: [rowOriginal]
                     });
 
@@ -4652,7 +4726,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
                         : `\n-# *Il te reste ${3 - essaiNum} essai${(3 - essaiNum) > 1 ? 's' : ''} !*`;
 
                     await message.reply({
-                        content: `**${lettresEspacées}**\n${grille} *(Essai ${essaiNum}/3)*${infoReste}`,
+                        content: `**${lettresEspacées}**\n${grille} *(Essai ${essaiNum}/3)*${ligneAbsentes}${infoReste}`,
                         components: [rowOriginal]
                     });
                     return;
@@ -6146,6 +6220,51 @@ if (response?.needsRouletteStats) {
     return message.reply({ embeds: [buildRouletteStatsEmbed(cible)], components: [row] });
 }
 
+function buildRouletteTopEmbed(guild, authorId) {
+    const totalAchs = ROULETTE_ACHIEVEMENTS.length;
+    const entries = [...rouletteAchievements.entries()]
+        .map(([uid, achs]) => ({ uid, count: Object.keys(achs || {}).length }))
+        .filter(e => e.count > 0)
+        .sort((a, b) => b.count - a.count);
+
+    const medals = ['🥇', '🥈', '🥉'];
+    const top10 = entries.slice(0, 10);
+    const lignes = top10.map((e, i) => {
+        const m = guild.members.cache.get(e.uid);
+        const nom = m?.displayName ?? 'Ancien membre';
+        const med = i < 3 ? medals[i] : `**${i + 1}.**`;
+        return `${med} **${nom}** — **${e.count}/${totalAchs}** succès`;
+    });
+
+    const embed = new EmbedBuilder()
+        .setColor(0xffd700)
+        .setTitle('🏆 Panthéon des Chasseurs de Succès (Roulette)')
+        .setDescription(lignes.length > 0 ? lignes.join('\n\n') : '*Aucun succès débloqué pour l\'instant.*');
+
+    const userRankIndex = entries.findIndex(e => e.uid === authorId);
+    if (userRankIndex !== -1) {
+        const userEntry = entries[userRankIndex];
+        embed.setFooter({ text: `Ta position : #${userRankIndex + 1} avec ${userEntry.count}/${totalAchs} succès` });
+    } else {
+        embed.setFooter({ text: `Tu n'as pas encore de succès débloqué. Tape !rlt pour tenter ta chance !` });
+    }
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`rlt_achs_${authorId}_0_${authorId}`)
+            .setLabel('🎖️ Mes succès')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    return { embed, row };
+}
+
+// !rlttop (Classement des succès roulette)
+if (response?.needsRouletteTop) {
+    const { embed, row } = buildRouletteTopEmbed(message.guild, message.author.id);
+    return message.reply({ embeds: [embed], components: [row] });
+}
+
 // !roulettesucces (publique)
 if (response?.needsRouletteAchievements) {
     const query = message.content.trim().split(/\s+/).slice(1).join(" ");
@@ -6819,19 +6938,50 @@ if (response?.needsRouletteAchievements) {
             birthdayStr = `${j} ${moisNoms[m - 1]}`;
 }
 
+        // Calcul automatique des Badges & Titres du membre
+        const badges = [];
+
+        // 1. Badge Créatrice
+        if (cible.id === EPSYS_ID) badges.push('👑 **Créatrice du serveur & de Cacabot**');
+
+        // 2. Badges Roulette
+        const rStats = rouletteStats.get(cible.id);
+        if (rStats && rStats.tirages >= 500) badges.push(`🎰 **Gambling Addict** *(500+ tirages)*`);
+        else if (rStats && rStats.tirages >= 100) badges.push(`🎲 **Joueur Régulier** *(100+ tirages)*`);
+
+        const nbAchs = Object.keys(rouletteAchievements.get(cible.id) || {}).length;
+        if (nbAchs >= 15) badges.push(`🏆 **Chasseur d'Élite** *(${nbAchs}/30 succès)*`);
+        else if (nbAchs >= 5) badges.push(`🎖️ **Aventurier de la Roulette** *(${nbAchs}/30 succès)*`);
+
+        // 3. Badges Motus
+        const mStats = motusStats[cible.id];
+        if (mStats && mStats.victoires >= 10) badges.push(`🟩 **Maître du Motus** *(${mStats.victoires} victoires)*`);
+        else if (mStats && mStats.victoires >= 3) badges.push(`🔤 **Amateur de Mots** *(${mStats.victoires} victoires)*`);
+
+        // 4. Badges Citations
+        const nbQuotes = quotesData.filter(q => q.authorId === cible.id).length;
+        if (nbQuotes >= 5) badges.push(`📜 **Légende Citée** *(${nbQuotes} citations)*`);
+        else if (nbQuotes >= 1) badges.push(`✍️ **Punchlineur Cité** *(${nbQuotes} citation${nbQuotes > 1 ? 's' : ''})*`);
+
+        // 5. Badges Messages
+        if (nbMessages >= 5000) badges.push('🗣️ **Monument de Regaïa** *(5 000+ messages)*');
+        else if (nbMessages >= 1000) badges.push('💬 **Super Bavard** *(1 000+ messages)*');
+        else if (nbMessages >= 250) badges.push('🌱 **Membre Actif** *(250+ messages)*');
+
         const embed = new EmbedBuilder()
             .setColor(0x5865f2)
             .setTitle(member?.displayName ?? cible.username)
             .setThumbnail(cible.displayAvatarURL({ dynamic: true, size: 256 }))
             .addFields(
-                { name: '\ud83d\udc64 Pseudo', value: `@${cible.username}`, inline: true },
-                { name: '\ud83d\udcac Messages envoy\u00e9s', value: `${nbMessages}`, inline: true },
+                { name: '👤 Pseudo', value: `@${cible.username}`, inline: true },
+                { name: '💬 Messages envoyés', value: `${nbMessages}`, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
-                { name: '\ud83d\udcc5 Arriv\u00e9e sur le serveur', value: joinedAt, inline: true },
-                { name: '🕒 Compte cr\u00e9\u00e9 le', value: createdAt, inline: true },
+                { name: '📅 Arrivée sur le serveur', value: joinedAt, inline: true },
+                { name: '🕒 Compte créé le', value: createdAt, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
                 { name: '🎂 Anniversaire', value: birthdayStr, inline: false },
-                { name: '\ud83c\udff7\ufe0f R\u00f4les', value: roles, inline: false }
+                { name: '🎖️ Badges & Titres', value: badges.length > 0 ? badges.join('\n') : '*Aucun badge débloqué pour l\'instant.*', inline: false },
+                { name: '🏷️ Rôles', value: roles, inline: false }
             )
             .setFooter({ text: `ID : ${cible.id}` });
 
@@ -7278,7 +7428,7 @@ if (response?.needsRouletteAchievements) {
         const allSorted = Object.entries(topData.messages)
             .sort((a, b) => b[1] - a[1]);
 
-        if (allSorted.length === 0) return message.reply("Pas encore de donn\u00e9es !");
+        if (allSorted.length === 0) return message.reply("Pas encore de données !");
 
         const PAGE_SIZE = 10;
         const totalPages = Math.ceil(allSorted.length / PAGE_SIZE);
@@ -7287,7 +7437,7 @@ if (response?.needsRouletteAchievements) {
         const buildTopEmbed = (page) => {
             const start = page * PAGE_SIZE;
             const slice = allSorted.slice(start, start + PAGE_SIZE);
-            const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
+            const medals = ['🥇', '🥈', '🥉'];
             const fields = slice.map(([uid, count], i) => {
                 const member = message.guild.members.cache.get(uid);
                 const name = member ? member.displayName : null;
@@ -7296,11 +7446,27 @@ if (response?.needsRouletteAchievements) {
                 const medal = rank < 3 ? medals[rank] : `**${rank + 1}.**`;
                 return { name: `${medal} ${name}`, value: `${count} messages`, inline: false };
             }).filter(Boolean);
+
+            const userRank = allSorted.findIndex(([uid]) => uid === authorId);
+            const userCount = topData.messages[authorId] || 0;
+            let infoPerso = '';
+
+            if (userRank !== -1) {
+                const position = userRank + 1;
+                if (userRank >= 10 && allSorted[9]) {
+                    const diff = (allSorted[9][1] - userCount) + 1;
+                    infoPerso = `> 👤 **Ta position :** **#${position}** avec **${userCount} messages** *(à ${diff} message${diff > 1 ? 's' : ''} du Top 10 !)*\n\n`;
+                } else {
+                    infoPerso = `> 👤 **Ta position :** **#${position}** avec **${userCount} messages** *(Tu es dans le Top 10 ! 🔥)*\n\n`;
+                }
+            }
+
             return new EmbedBuilder()
                 .setColor(0xffd700)
-                .setTitle('\ud83c\udfc6 Classement des membres')
+                .setTitle('🏆 Classement des membres')
+                .setDescription(infoPerso)
                 .addFields(fields)
-                .setFooter({ text: `Page ${page + 1}/${totalPages} \u2022 Compt\u00e9 depuis l'initialisation du bot` });
+                .setFooter({ text: `Page ${page + 1}/${totalPages} • Compté depuis l'initialisation du bot` });
         };
 
         const buildTopRow = (page) => {
@@ -10083,11 +10249,26 @@ return interaction.update({ embeds: [embed], components: rows });
             return { name: `${medal} ${member.displayName}`, value: `${count} messages`, inline: false };
         }).filter(Boolean);
 
+        const userRank = allSorted.findIndex(([uid]) => uid === authorId);
+        const userCount = topData.messages[authorId] || 0;
+        let infoPerso = '';
+
+        if (userRank !== -1) {
+            const position = userRank + 1;
+            if (userRank >= 10 && allSorted[9]) {
+                const diff = (allSorted[9][1] - userCount) + 1;
+                infoPerso = `> 👤 **Ta position :** **#${position}** avec **${userCount} messages** *(à ${diff} message${diff > 1 ? 's' : ''} du Top 10 !)*\n\n`;
+            } else {
+                infoPerso = `> 👤 **Ta position :** **#${position}** avec **${userCount} messages** *(Tu es dans le Top 10 ! 🔥)*\n\n`;
+            }
+        }
+
         const embed = new EmbedBuilder()
             .setColor(0xffd700)
-            .setTitle('\ud83c\udfc6 Classement des membres')
+            .setTitle('🏆 Classement des membres')
+            .setDescription(infoPerso)
             .addFields(fields)
-            .setFooter({ text: `Page ${newPage + 1}/${totalPages} \u2022 Compt\u00e9 depuis l'initialisation du bot` });
+            .setFooter({ text: `Page ${newPage + 1}/${totalPages} • Compté depuis l'initialisation du bot` });
 
         const prev = new ButtonBuilder()
             .setCustomId(`top_prev_${authorId}_${newPage}`)
