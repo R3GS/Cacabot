@@ -1060,14 +1060,14 @@ async function lancerSessionRebus(guild) {
 
     // Tirer 5 rébus uniques au hasard dans le thème du jour
     const shuffled = [...theme.pool].sort(() => 0.5 - Math.random());
-    const 5items = shuffled.slice(0, 5);
+    const cinqItems = shuffled.slice(0, 5);
 
     rebusSession = {
         active: true,
         manche: 0,
         themeNom: theme.nom,
         themeCouleur: theme.couleur,
-        items: 5items,
+        items: cinqItems,
         currentItem: null,
         expireAt: 0,
         timer: null,
