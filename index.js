@@ -7400,15 +7400,16 @@ if (response?.needsRouletteAchievements) {
     if (response?.needsStreamTest) {
         if (message.author.id !== '436218312574107658') return;
         try {
-            const targetChannel = client.channels.cache.get(TWITCH_CHANNEL_ID) 
-                ?? await client.channels.fetch(TWITCH_CHANNEL_ID).catch(() => null) 
-                ?? message.channel;
             const payload = await buildTwitchLivePayload();
-            await targetChannel.send(payload);
+            // Répond directement à ton message dans le salon actuel, sans ping le rôle pour garder le test secret
+            await message.reply({
+                ...payload,
+                allowedMentions: { repliedUser: false, parse: [] }
+            });
             return message.react('🟣').catch(() => {});
         } catch (err) {
             console.error('Erreur !streamtest :', err);
-            return message.reply(`❌ Erreur lors de l'envoi du test : \`${err.message}\``);
+            return message.reply(`❌ Erreur lors du test : \`${err.message}\``);
         }
     }
 
