@@ -11449,12 +11449,46 @@ client.once('ready', async () => {
             .catch(err => console.error(`Erreur déploiement Slash sur ${guild.name}:`, err.message));
     }
 
-    await new Promise(r => setTimeout(r, 15000)); // laisse le temps à l'ancien conteneur de finir sa sauvegarde
+    // Chargement immédiat des données sans attendre
     await loadAll();
+
+    // Envoi immédiat du message de retour à la seconde où les commandes sont opérationnelles
+    (async () => {
+        try {
+            const salonNotif = await client.channels.fetch('1480756332373213275').catch(() => null);
+            if (salonNotif) {
+                let nouveauCommitDetecte = false;
+                if (process.env.GITHUB_TOKEN) {
+                    const resCommits = await fetch('https://api.github.com/repos/R3GS/Cacabot/commits?per_page=1', {
+                        headers: {
+                            'Authorization': `token ${process.env.GITHUB_TOKEN}`,
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    }).then(r => r.json()).catch(() => null);
+
+                    const shaActuel = Array.isArray(resCommits) && resCommits[0]?.sha ? resCommits[0].sha : null;
+                    if (shaActuel && shaActuel !== dernierCommitSha) {
+                        dernierCommitSha = shaActuel;
+                        nouveauCommitDetecte = true;
+                        demanderSauvegarde();
+                    }
+                } else {
+                    nouveauCommitDetecte = true;
+                }
+
+                if (nouveauCommitDetecte) {
+                    await salonNotif.send("✅ Mise à jour faite, je suis de retour !");
+                }
+            }
+        } catch (err) {
+            console.error("Erreur notification de mise à jour :", err.message);
+        }
+    })();
+
     for (const [uid, chId] of rouletteNotifs) armerNotifRoulette(uid, chId);
     cleanOldData();
-    setInterval(verifierHappyHour, 30 * 1000); // Vérifie toutes les 30 secondes pour les alertes 20h00, 20h30 et 21h00
-    setInterval(verifierTwitchLive, 60 * 1000); // Surveillance du live Twitch toutes les minutes
+    setInterval(verifierHappyHour, 30 * 1000);
+    setInterval(verifierTwitchLive, 60 * 1000);
 
     // Lancement et vérification quotidienne du Motus à 10h00
     let dernierMotusDateKey = null;
@@ -11470,11 +11504,11 @@ client.once('ready', async () => {
     };
     setInterval(verifierMotus10h, 30 * 1000);
 
+    // Tâches de fond sans bloquer l'état du bot
     for (const guild of client.guilds.cache.values()) {
         await guild.members.fetch().catch(() => {});
     }
-    // for (const guild of client.guilds.cache.values()) { scheduleWanted(guild); }
-    console.log(`✅ Membres fetchés`)
+    console.log(`✅ Membres fetchés`);
 
     for (const guild of client.guilds.cache.values()) {
         await initialiserWebhooksRoulette(guild);
@@ -11496,37 +11530,6 @@ client.once('ready', async () => {
         }, delay);
     }
     scheduleBirthdayCheck();
-
-    // Notification automatique dès que le bot a fini de démarrer après un nouveau commit
-    try {
-        const salonNotif = await client.channels.fetch('1480756332373213275').catch(() => null);
-        if (salonNotif) {
-            let nouveauCommitDetecte = false;
-            if (process.env.GITHUB_TOKEN) {
-                const resCommits = await fetch('https://api.github.com/repos/R3GS/Cacabot/commits?per_page=1', {
-                    headers: {
-                        'Authorization': `token ${process.env.GITHUB_TOKEN}`,
-                        'Accept': 'application/vnd.github.v3+json'
-                    }
-                }).then(r => r.json()).catch(() => null);
-
-                const shaActuel = Array.isArray(resCommits) && resCommits[0]?.sha ? resCommits[0].sha : null;
-                if (shaActuel && shaActuel !== dernierCommitSha) {
-                    dernierCommitSha = shaActuel;
-                    nouveauCommitDetecte = true;
-                    demanderSauvegarde();
-                }
-            } else {
-                nouveauCommitDetecte = true;
-            }
-
-            if (nouveauCommitDetecte) {
-                await salonNotif.send("✅ Mise à jour faite, je suis de retour !");
-            }
-        }
-    } catch (err) {
-        console.error("Erreur notification de mise à jour :", err.message);
-    }
 });
 
 // =========================
