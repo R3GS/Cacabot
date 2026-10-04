@@ -1216,6 +1216,10 @@ if (command === "!choix") {
         return { needsHelpx: true };
     }
 
+    if (command === "!streamtest") {
+        return { needsStreamTest: true };
+    }
+
     if (command === "!lastsave") {
         return { needsLastsave: true };
     }
@@ -7393,12 +7397,19 @@ if (response?.needsRouletteAchievements) {
     }
 
     // !streamtest (Epsys-only)
-    if (message.content.trim().toLowerCase() === '!streamtest') {
+    if (response?.needsStreamTest) {
         if (message.author.id !== '436218312574107658') return;
-        const targetChannel = client.channels.cache.get(TWITCH_CHANNEL_ID) ?? message.channel;
-        const payload = await buildTwitchLivePayload();
-        await targetChannel.send(payload);
-        return message.react('🟣');
+        try {
+            const targetChannel = client.channels.cache.get(TWITCH_CHANNEL_ID) 
+                ?? await client.channels.fetch(TWITCH_CHANNEL_ID).catch(() => null) 
+                ?? message.channel;
+            const payload = await buildTwitchLivePayload();
+            await targetChannel.send(payload);
+            return message.react('🟣').catch(() => {});
+        } catch (err) {
+            console.error('Erreur !streamtest :', err);
+            return message.reply(`❌ Erreur lors de l'envoi du test : \`${err.message}\``);
+        }
     }
 
     // !edit (Epsys-only)
