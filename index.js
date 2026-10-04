@@ -160,25 +160,14 @@ function demanderSauvegarde() {
     }, 10000);
 }
 
-async function notifierArretMiseAJour() {
-    try {
-        const channel = await client.channels.fetch('1480756332373213275').catch(() => null);
-        if (channel) {
-            await channel.send("🎛️ Mise à jour en cours, j'arrive tout de suite :)");
-        }
-    } catch (e) {}
-}
-
 process.on('SIGTERM', async () => {
-    console.log('🛑 SIGTERM reçu, notification et sauvegarde avant arrêt...');
-    await notifierArretMiseAJour();
+    console.log('🛑 SIGTERM reçu, sauvegarde avant arrêt...');
     await saveAll();
     process.exit(0);
 });
 
 process.on('SIGINT', async () => {
-    console.log('🛑 SIGINT reçu, notification et sauvegarde avant arrêt...');
-    await notifierArretMiseAJour();
+    console.log('🛑 SIGINT reçu, sauvegarde avant arrêt...');
     await saveAll();
     process.exit(0);
 });
