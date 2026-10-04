@@ -774,8 +774,7 @@ async function buildTwitchLivePayload() {
     const embed = new EmbedBuilder()
         .setColor(0x9146ff)
         .setAuthor({ 
-            name: `${TWITCH_USER} est en direct sur Twitch !`, 
-            iconURL: avatar ?? 'https://cdn.discordapp.com/emojis/1505457903585198151.png', 
+            name: `En direct sur Twitch !`, 
             url: liveUrl 
         })
         .setTitle(titre)
@@ -792,13 +791,13 @@ async function buildTwitchLivePayload() {
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setLabel('🟣 Rejoindre le stream')
+            .setLabel('▶️ Rejoindre le stream')
             .setStyle(ButtonStyle.Link)
             .setURL(liveUrl)
     );
 
     return {
-        content: `📢 Hey <@&${TWITCH_ROLE_ID}> ! **${TWITCH_USER}** vient de lancer un live !`,
+        content: `📢 Hey <@&${TWITCH_ROLE_ID}> !\n**Epsys** vient de lancer un live !`,
         embeds: [embed],
         components: [row]
     };
