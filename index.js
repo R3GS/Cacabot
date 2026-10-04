@@ -6305,15 +6305,14 @@ if (response?.needsRouletteAchievements) {
 
         const embedQuote = new EmbedBuilder()
             .setColor(0xf1c40f)
-            .setAuthor({ 
-                name: `📜 Citation N°${quoteChoisie.id}`, 
-                iconURL: avatarUrl ?? undefined 
-            })
+            .setTitle(`📜 Citation N°${quoteChoisie.id}`)
             .setDescription(
                 `## « ${quoteChoisie.texte} »\n\n` +
-                `    -<@${quoteChoisie.authorId}>\n-# *[source](${lienMsg})*`
+                `    -<@${quoteChoisie.authorId}>\n\n-# *[source](${lienMsg})*`
             )
             .setFooter({ text: `[${quoteChoisie.id}/${quotesData.length}] • Réponds à un message en faisant !quote pour l'enregistrer !` });
+
+        if (avatarUrl) embedQuote.setThumbnail(avatarUrl);
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -9357,15 +9356,14 @@ try {
 
         const embedQuote = new EmbedBuilder()
             .setColor(0xf1c40f)
-            .setAuthor({ 
-                name: `📜 Citation N°${quoteChoisie.id}`, 
-                iconURL: avatarUrl ?? undefined 
-            })
+            .setTitle(`📜 Citation N°${quoteChoisie.id}`)
             .setDescription(
                 `## « ${quoteChoisie.texte} »\n\n` +
-                `    -<@${quoteChoisie.authorId}>\n-# *[source](${lienMsg})*`
+                `    -<@${quoteChoisie.authorId}>\n\n-# *[source](${lienMsg})*`
             )
             .setFooter({ text: `[${quoteChoisie.id}/${quotesData.length}] • Réponds à un message en faisant !quote pour l'enregistrer !` });
+
+        if (avatarUrl) embedQuote.setThumbnail(avatarUrl);
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
