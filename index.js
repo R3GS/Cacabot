@@ -1206,7 +1206,7 @@ if (command === "!choix") {
     //         !PROFIL
     // =========================
 
-    if (command === "!info") {
+    if (command === "!profil" || command === "!profile" || command === "!info") {
         return { needsProfil: true };
     }
 
@@ -6936,32 +6936,48 @@ if (response?.needsRouletteAchievements) {
         if (birthdayRaw) {
             const [j, m] = birthdayRaw.split('/').map(Number);
             birthdayStr = `${j} ${moisNoms[m - 1]}`;
-}
+        }
 
-        // Calcul automatique des Succès du membre
+        // Vérification rétroactive des succès roulette
+        let userAchs = rouletteAchievements.get(cible.id);
+        if (!userAchs) {
+            userAchs = {};
+            rouletteAchievements.set(cible.id, userAchs);
+        }
+        const rStats = rouletteStats.get(cible.id);
+        const nbTirages = rStats?.tirages ?? 0;
+        if (nbTirages >= 250 && !userAchs['veteran-250']) userAchs['veteran-250'] = Date.now();
+        if (nbTirages >= 500 && !userAchs['centurion-500']) userAchs['centurion-500'] = Date.now();
+
+        // Calcul des Succès du serveur
         const badges = [];
 
         // 1. Badge Créatrice
         if (cible.id === EPSYS_ID) badges.push('👑 **Créatrice du serveur & de Cacabot**');
 
         // 2. Tirages Roulette
-        const rStats = rouletteStats.get(cible.id);
-        if (rStats && rStats.tirages >= 500) badges.push('🎰 **Gambling Addict** *(500+ tirages)*');
-        else if (rStats && rStats.tirages >= 100) badges.push('🎰 **Habitué.e de la roulette** *(100+ tirages)*');
+        if (nbTirages >= 500) badges.push('🎰 **Gambling Addict** *(500+ tirages)*');
+        else if (nbTirages >= 100) badges.push('🎰 **Habitué.e de la roulette** *(100+ tirages)*');
 
         // 3. Succès Roulette
-        const nbAchs = Object.keys(rouletteAchievements.get(cible.id) || {}).length;
+        const nbAchs = Object.keys(userAchs).length;
         if (nbAchs >= 15) badges.push(`🏆 **Chasseur d'Élite** *(${nbAchs}/30 succès)*`);
         else if (nbAchs >= 5) badges.push(`🏆 **Aventurier de la Roulette** *(${nbAchs}/30 succès)*`);
 
         // 4. Victoires Motus
         const mStats = motusStats[cible.id];
-        if (mStats && mStats.victoires >= 10) badges.push(`🟩 **Motus Master** *(${mStats.victoires} victoires)*`);
-        else if (mStats && mStats.victoires >= 3) badges.push(`🟩 **Débutant.e du Motus** *(${mStats.victoires} victoires)*`);
+        const nbVictoires = mStats?.victoires ?? 0;
+        if (nbVictoires >= 10) badges.push(`🟩 **Motus Master** *(${nbVictoires} victoires)*`);
+        else if (nbVictoires >= 3) badges.push(`🟩 **Débutant.e du Motus** *(${nbVictoires} victoires)*`);
 
         // 5. Citations enregistrées
         const nbQuotes = quotesData.filter(q => q.authorId === cible.id).length;
         if (nbQuotes >= 5) badges.push(`📜 **Légende** *(${nbQuotes} citations)*`);
+
+        // 6. Messages envoyés sur le serveur
+        if (nbMessages >= 5000) badges.push('🗣️ **Monument de Regaïa** *(5 000+ messages)*');
+        else if (nbMessages >= 1000) badges.push('💬 **Super Bavard** *(1 000+ messages)*');
+        else if (nbMessages >= 250) badges.push('🌱 **Membre Actif** *(250+ messages)*');
 
         const embed = new EmbedBuilder()
             .setColor(0x5865f2)
@@ -6969,7 +6985,7 @@ if (response?.needsRouletteAchievements) {
             .setThumbnail(cible.displayAvatarURL({ dynamic: true, size: 256 }))
             .addFields(
                 { name: '👤 Pseudo', value: `@${cible.username}`, inline: true },
-                { name: '💬 Messages envoyés', value: `${nbMessages}`, inline: true },
+                { name: '💬 Messages envoyés', value: `${nbMessages.toLocaleString('fr-FR')}`, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
                 { name: '📅 Arrivée sur le serveur', value: joinedAt, inline: true },
                 { name: '🕒 Compte créé le', value: createdAt, inline: true },
