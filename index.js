@@ -28,6 +28,7 @@ let reactionRolesData = {}; // messageId -> { channelId, roles: { emojiKey: role
 let motusData = { dateKey: 0, mot: '', termine: false, vainqueurId: null, tentatives: {}, messageId: null };
 let motusStats = {}; // userId -> { victoires: number, parties: number }
 let twitchLiveEnCours = false;
+let quotesData = []; // [{ id, texte, authorId, authorName, addedById, timestamp, channelId }]
 let donneesChargees = false;
 
 const BACKUP_CHANNEL_ID = '1556005171744604161';
@@ -67,6 +68,7 @@ async function loadAll() {
         reactionRolesData = jsonRecord.reactionRoles ?? {};
         motusData = jsonRecord.motusData ?? { dateKey: 0, mot: '', termine: false, vainqueurId: null, tentatives: {}, messageId: null };
         motusStats = jsonRecord.motusStats ?? {};
+        quotesData = jsonRecord.quotes ?? [];
 
         for (const [nom, map] of Object.entries(ROULETTE_ETATS)) {
             map.clear();
@@ -111,6 +113,7 @@ async function saveAll() {
             reactionRoles: reactionRolesData,
             motusData: motusData,
             motusStats: motusStats,
+            quotes: quotesData,
             roulette: Object.fromEntries(
                 Object.entries(ROULETTE_ETATS).map(([nom, map]) => [nom, Object.fromEntries(map)])
             )
@@ -925,6 +928,14 @@ function getResponse(raw) {
 
     if (command === "!motustats" || command === "!motustat") {
         return { needsMotusStats: true };
+    }
+
+    // =========================
+    //         !QUOTE
+    // =========================
+
+    if (command === "!quote" || command === "!citation") {
+        return { needsQuote: true };
     }
 
     // =========================
@@ -2059,6 +2070,8 @@ function buildHelpCategoryEmbed(category) {
                 "-# Mourir dans d'atroces souffrances (ou faire mourir un membre)\n\n" +
 
                 "### 🧠 __Culture & Références :__\n" +
+                "📜 **`!quote`** `[membre / ID]`\n" +
+                "-# Ressortir une phrase culte du serveur hors-contexte (ou réponds à un message avec !quote pour l'enregistrer)\n" +
                 "😎 **`!jailaref`** `[membre]`\n" +
                 "-# Flexer parce que tu as la référence\n" +
                 "😐 **`!palaref`** `[membre]`\n" +
@@ -6189,6 +6202,129 @@ if (response?.needsRouletteAchievements) {
         return message.reply({ embeds: [embed] });
     }
 
+    // !quote
+    if (response?.needsQuote) {
+        const args = message.content.trim().split(/\s+/);
+        const sub = args[1]?.toLowerCase();
+
+        // 1. Suppression : !quote remove [ID]
+        if (sub === 'remove' || sub === 'delete' || sub === 'del') {
+            const idToRemove = parseInt(args[2]);
+            if (isNaN(idToRemove)) return message.reply("Usage : `!quote remove [ID_citation]` (ex : `!quote remove 3`)");
+
+            const index = quotesData.findIndex(q => q.id === idToRemove);
+            if (index === -1) return message.reply(`Aucune citation trouvée avec l'identifiant **#${idToRemove}** !`);
+
+            const q = quotesData[index];
+            const estAuteur = q.authorId === message.author.id || q.addedById === message.author.id;
+            const estAdmin = message.author.id === EPSYS_ID || estModo(message.member);
+
+            if (!estAuteur && !estAdmin) {
+                return message.reply("Tu ne peux supprimer que les citations que tu as enregistrées ou dont tu es l'auteur !");
+            }
+
+            quotesData.splice(index, 1);
+            demanderSauvegarde();
+            return message.reply(`🗑️ La citation **#${idToRemove}** a été supprimée des archives.`);
+        }
+
+        // 2. Enregistrement par réponse à un message : réponds à un message + !quote
+        if (message.reference) {
+            const repliedMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+            if (!repliedMsg) return message.reply("Impossible de récupérer le message cité.");
+            if (repliedMsg.author.bot) return message.reply("On ne cite pas les bots, seulement les vrais humains !");
+
+            const texteCité = repliedMsg.content?.trim();
+            if (!texteCité) return message.reply("Ce message ne contient pas de texte à citer !");
+
+            // Évite d'enregistrer deux fois exactement la même citation
+            const existeDeja = quotesData.some(q => q.texte === texteCité && q.authorId === repliedMsg.author.id);
+            if (existeDeja) return message.reply("Cette phrase est déjà enregistrée dans les archives du serveur !");
+
+            const nextId = quotesData.length > 0 ? Math.max(...quotesData.map(q => q.id)) + 1 : 1;
+            const auteurNom = repliedMsg.member?.displayName ?? repliedMsg.author.username;
+
+            const nouvelleCitation = {
+                id: nextId,
+                texte: texteCité,
+                authorId: repliedMsg.author.id,
+                authorName: auteurNom,
+                addedById: message.author.id,
+                timestamp: repliedMsg.createdTimestamp,
+                channelId: message.channel.id
+            };
+
+            quotesData.push(nouvelleCitation);
+            demanderSauvegarde();
+
+            const embedConf = new EmbedBuilder()
+                .setColor(0xf1c40f)
+                .setTitle(`📜 Citation #${nextId} gravée dans la roche !`)
+                .setDescription(`> *« ${texteCité} »*\n\n— <@${repliedMsg.author.id}> dans <#${message.channel.id}>`)
+                .setFooter({ text: `Enregistrée par ${message.member?.displayName ?? message.author.username} • Tape !quote pour afficher une citation` });
+
+            return message.reply({ embeds: [embedConf] });
+        }
+
+        // 3. Affichage aléatoire : !quote (ou !quote @membre / pseudo / numéro)
+        if (quotesData.length === 0) {
+            return message.reply("📜 Aucune citation enregistrée pour l'instant ! Réponds à un message mythique avec `!quote` pour immortaliser une phrase.");
+        }
+
+        let pool = quotesData;
+        let cible = message.mentions.users.first();
+        const query = args.slice(1).join(" ").trim();
+
+        // Cas 1 : Numéro direct (ex : !quote 3)
+        const idDirect = parseInt(query);
+        if (!isNaN(idDirect) && !query.includes('@')) {
+            const quoteTrouvee = quotesData.find(q => q.id === idDirect);
+            if (!quoteTrouvee) return message.reply(`Aucune citation trouvée avec le numéro **#${idDirect}** !`);
+            pool = [quoteTrouvee];
+        } else if (!cible && query.length > 0) {
+            // Cas 2 : Pseudo sans mention (ex : !quote Epsys)
+            const result = findMemberByName(message.guild, query);
+            if (result.found) cible = result.found.user;
+        }
+
+        if (cible) {
+            pool = quotesData.filter(q => q.authorId === cible.id);
+            if (pool.length === 0) {
+                const nom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+                return message.reply(`Aucune citation enregistrée pour **${nom}** !`);
+            }
+        }
+
+        const quoteChoisie = pool[Math.floor(Math.random() * pool.length)];
+        const auteurMembre = message.guild.members.cache.get(quoteChoisie.authorId);
+        const avatarUrl = auteurMembre?.user?.displayAvatarURL({ dynamic: true, size: 256 }) 
+                       ?? auteurMembre?.displayAvatarURL?.({ dynamic: true, size: 256 });
+
+        const dateStr = new Date(quoteChoisie.timestamp).toLocaleDateString('fr-FR', {
+            day: 'numeric', month: 'long', year: 'numeric'
+        });
+
+        const embedQuote = new EmbedBuilder()
+            .setColor(0xf1c40f)
+            .setTitle('📜 Citation')
+            .setDescription(`## *« ${quoteChoisie.texte} »*\n\n— **${quoteChoisie.authorName}** (<@${quoteChoisie.authorId}>)`)
+            .addFields(
+                { name: '📍 Contexte', value: `<#${quoteChoisie.channelId}> • \`${dateStr}\``, inline: true }
+            )
+            .setFooter({ text: `[ID = ${quoteChoisie.id}] • Réponds à un message en faisant !quote pour l'enregistrer !` });
+
+        if (avatarUrl) embedQuote.setThumbnail(avatarUrl);
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`quote_random_${cible ? cible.id : 'all'}`)
+                .setLabel('🎲 Une autre citation')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        return message.reply({ embeds: [embedQuote], components: [row] });
+    }
+
     // !roulette
     if (response?.needsRoulette) {
         if (response.direct) {
@@ -9198,6 +9334,48 @@ try {
             }
             return interaction.showModal(buildEmbedModal());
         }
+    }
+
+    // Bouton pour tirer une autre citation au hasard
+    if (interaction.isButton() && interaction.customId.startsWith('quote_random_')) {
+        const filterId = interaction.customId.replace('quote_random_', '');
+        let pool = quotesData;
+        if (filterId !== 'all') {
+            pool = quotesData.filter(q => q.authorId === filterId);
+        }
+
+        if (pool.length === 0) {
+            return interaction.reply({ content: "Aucune citation trouvée !", ephemeral: true });
+        }
+
+        const quoteChoisie = pool[Math.floor(Math.random() * pool.length)];
+        const auteurMembre = interaction.guild.members.cache.get(quoteChoisie.authorId);
+        const avatarUrl = auteurMembre?.user?.displayAvatarURL({ dynamic: true, size: 256 }) 
+                       ?? auteurMembre?.displayAvatarURL?.({ dynamic: true, size: 256 });
+
+        const dateStr = new Date(quoteChoisie.timestamp).toLocaleDateString('fr-FR', {
+            day: 'numeric', month: 'long', year: 'numeric'
+        });
+
+        const embedQuote = new EmbedBuilder()
+            .setColor(0xf1c40f)
+            .setTitle('📜 Citation')
+            .setDescription(`## *« ${quoteChoisie.texte} »*\n\n— **${quoteChoisie.authorName}** (<@${quoteChoisie.authorId}>)`)
+            .addFields(
+                { name: '📍 Contexte', value: `<#${quoteChoisie.channelId}> • \`${dateStr}\``, inline: true }
+            )
+            .setFooter({ text: `[ID = ${quoteChoisie.id}] • Réponds à un message en faisant !quote pour l'enregistrer !` });
+
+        if (avatarUrl) embedQuote.setThumbnail(avatarUrl);
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`quote_random_${filterId}`)
+                .setLabel('🎲 Une autre citation')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        return interaction.update({ embeds: [embedQuote], components: [row] });
     }
 
     // Bouton pour afficher l'énoncé du motus du jour
