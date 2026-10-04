@@ -6938,35 +6938,30 @@ if (response?.needsRouletteAchievements) {
             birthdayStr = `${j} ${moisNoms[m - 1]}`;
 }
 
-        // Calcul automatique des Badges & Titres du membre
+        // Calcul automatique des Succès du membre
         const badges = [];
 
         // 1. Badge Créatrice
         if (cible.id === EPSYS_ID) badges.push('👑 **Créatrice du serveur & de Cacabot**');
 
-        // 2. Badges Roulette
+        // 2. Tirages Roulette
         const rStats = rouletteStats.get(cible.id);
-        if (rStats && rStats.tirages >= 500) badges.push(`🎰 **Gambling Addict** *(500+ tirages)*`);
-        else if (rStats && rStats.tirages >= 100) badges.push(`🎲 **Joueur Régulier** *(100+ tirages)*`);
+        if (rStats && rStats.tirages >= 500) badges.push('🎰 **Gambling Addict** *(500+ tirages)*');
+        else if (rStats && rStats.tirages >= 100) badges.push('🎰 **Habitué.e de la roulette** *(100+ tirages)*');
 
+        // 3. Succès Roulette
         const nbAchs = Object.keys(rouletteAchievements.get(cible.id) || {}).length;
         if (nbAchs >= 15) badges.push(`🏆 **Chasseur d'Élite** *(${nbAchs}/30 succès)*`);
-        else if (nbAchs >= 5) badges.push(`🎖️ **Aventurier de la Roulette** *(${nbAchs}/30 succès)*`);
+        else if (nbAchs >= 5) badges.push(`🏆 **Aventurier de la Roulette** *(${nbAchs}/30 succès)*`);
 
-        // 3. Badges Motus
+        // 4. Victoires Motus
         const mStats = motusStats[cible.id];
-        if (mStats && mStats.victoires >= 10) badges.push(`🟩 **Maître du Motus** *(${mStats.victoires} victoires)*`);
-        else if (mStats && mStats.victoires >= 3) badges.push(`🔤 **Amateur de Mots** *(${mStats.victoires} victoires)*`);
+        if (mStats && mStats.victoires >= 10) badges.push(`🟩 **Motus Master** *(${mStats.victoires} victoires)*`);
+        else if (mStats && mStats.victoires >= 3) badges.push(`🟩 **Débutant.e du Motus** *(${mStats.victoires} victoires)*`);
 
-        // 4. Badges Citations
+        // 5. Citations enregistrées
         const nbQuotes = quotesData.filter(q => q.authorId === cible.id).length;
-        if (nbQuotes >= 5) badges.push(`📜 **Légende Citée** *(${nbQuotes} citations)*`);
-        else if (nbQuotes >= 1) badges.push(`✍️ **Punchlineur Cité** *(${nbQuotes} citation${nbQuotes > 1 ? 's' : ''})*`);
-
-        // 5. Badges Messages
-        if (nbMessages >= 5000) badges.push('🗣️ **Monument de Regaïa** *(5 000+ messages)*');
-        else if (nbMessages >= 1000) badges.push('💬 **Super Bavard** *(1 000+ messages)*');
-        else if (nbMessages >= 250) badges.push('🌱 **Membre Actif** *(250+ messages)*');
+        if (nbQuotes >= 5) badges.push(`📜 **Légende** *(${nbQuotes} citations)*`);
 
         const embed = new EmbedBuilder()
             .setColor(0x5865f2)
@@ -6980,7 +6975,7 @@ if (response?.needsRouletteAchievements) {
                 { name: '🕒 Compte créé le', value: createdAt, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
                 { name: '🎂 Anniversaire', value: birthdayStr, inline: false },
-                { name: '🎖️ Badges & Titres', value: badges.length > 0 ? badges.join('\n') : '*Aucun badge débloqué pour l\'instant.*', inline: false },
+                { name: '🏆 Succès du serveur', value: badges.length > 0 ? badges.join('\n') : '*Aucun succès débloqué pour l\'instant.*', inline: false },
                 { name: '🏷️ Rôles', value: roles, inline: false }
             )
             .setFooter({ text: `ID : ${cible.id}` });
