@@ -890,7 +890,7 @@ const REBUS_FILMS = [
     ["🔱🌊🦈", "aquaman"], ["⚔️🛡️👩", "wonder woman"], ["🦸‍♂️🔴🟦", "superman"], ["⚡🏃‍♂️⚡", "flash"], ["⚡🧒🦸‍♂️", "shazam"],
     ["🦹‍♀️🏏💥", "suicide squad"], ["🎮🕹️👾", "pixels"], ["🕶️🕹️🏎️", "ready player one"], ["💾🏍️🔵", "tron"], ["⚔️🧙‍♂️🐺", "warcraft"],
     ["⚡🐭🔍", "detective pikachu"], ["🦔💨💍", "sonic"], ["🍄👨🏻🔧", "super mario bros", "mario"], ["🐻🍕🎤", "five nights at freddys", "fnaf"], ["🏴‍☠️🗺️🧭", "uncharted"],
-    ["🏹🏺🧗‍♀️", "tomb raider"], ["🧟‍♀️🔫🏢", "resident evil"], ["🌫️📻🪓", "silent hill"], ["🗡️🦅🦹‍♂️", "assassins creed"], ["🦖🏹🍖", "monster hunter"],
+    ["🏹🏺🧗‍♀️", "tomb raider"], ["🧟‍♀️🔫🏢", "resident evil"], ["🌫️📻🪓", "silent hill"], ["🗡️🦅🥷", "assassins creed"], ["🦖🏹🍖", "monster hunter"],
     ["🏎️🎮🏁", "gran turismo"], ["🗡️⏳👑", "prince of persia"], ["🥋🐉💥", "mortal kombat"], ["🚀🌕👨‍🚀", "apollo 13"], ["🐁⚡🪑", "la ligne verte", "ligne verte"],
     ["🔨⛏️🌧️", "les evades"], ["🎹🎼🏚️", "le pianiste"], ["📋🕯️🚂", "la liste de schindler", "schindler"], ["🏖️🪖🎖️", "il faut sauver le soldat ryan", "soldat ryan"], ["🪖🏃‍♂️✉️", "1917"],
     ["🔥🚁📻", "apocalypse now"], ["🪖🍩🪞", "full metal jacket"], ["🚂🔥💣", "le pont de la riviere kwai"], ["🔥👧🍬", "le tombeau des lucioles"], ["🐉🏯🏮", "le voyage de chihiro"],
@@ -904,7 +904,7 @@ const REBUS_JEUX = [
     ["🧱⛏️🧟", "minecraft"], ["🚗💰🔫", "gta", "grand theft auto"], ["🪂🔫🕺", "fortnite"], ["⚔️🧙‍♀️🛡️", "league of legends", "lol"], ["🎯🔫💣", "valorant"],
     ["🤖🛡️🔫", "overwatch"], ["💣📦🎯", "counter strike", "csgo", "cs2"], ["🪖🔫🛩️", "call of duty", "cod"], ["🚁💥🪖", "battlefield"], ["🧱🔫🛡️", "rainbow six siege", "r6"],
     ["🏃‍♂️💨🔫", "apex legends", "apex"], ["🍳🪂🔫", "pubg"], ["🚗⚽🚀", "rocket league"], ["⚽👟🎮", "fifa", "ea fc"], ["🏀👟⛹️", "nba 2k", "2k"],
-    ["🗡️🦅🦹‍♂️", "assassins creed"], ["🐺⚔️🧙‍♂️", "the witcher", "witcher"], ["🦾🌆🚗", "cyberpunk 2077", "cyberpunk"], ["🐲⚔️📜", "skyrim", "the elder scrolls"], ["☢️🥤🤠", "fallout"],
+    ["🗡️🦅🦹🥷", "assassins creed"], ["🐺⚔️🧙‍♂️", "the witcher", "witcher"], ["🦾🌆🚗", "cyberpunk 2077", "cyberpunk"], ["🐲⚔️📜", "skyrim", "the elder scrolls"], ["☢️🥤🤠", "fallout"],
     ["🔥💀⚔️", "dark souls"], ["🩸🌕🐺", "bloodborne"], ["💍🌳⚔️", "elden ring"], ["🗡️🌸🥷", "sekiro"], ["🛡️🏰👹", "demon souls", "demons souls"],
     ["🗡️🛡️🧝", "zelda", "breath of the wild", "tears of the kingdom"], ["🍄👨🏻🧢", "mario", "super mario", "super mario odyssey"], ["🏎️🍌🍄", "mario kart"], ["🥊🍄⚔️", "super smash bros", "smash bros"], ["⚡🐭🔴", "pokemon"],
     ["🏝️🦝🔔", "animal crossing"], ["🦑🔫🎨", "splatoon"], ["🚀👩‍🚀👾", "metroid"], ["🌸⭐🍭", "kirby"], ["🦍🍌🌴", "donkey kong"],
@@ -5076,12 +5076,31 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
         // =========================
         if (message.channel.id === MOTUS_CHANNEL_ID && rebusSession.active && rebusSession.currentItem && !message.content.startsWith('!')) {
             if (await verifierReponseRebus(message)) return;
+
+            // Renvoie l'embed original tous les 15 messages sans bonne réponse
+            rebusSession.compteurMessages = (rebusSession.compteurMessages || 0) + 1;
+            if (rebusSession.compteurMessages >= 15) {
+                rebusSession.compteurMessages = 0;
+                const embedRappel = buildRebusEmbed(rebusSession.manche, rebusSession.currentItem, rebusSession.expireAt);
+                await message.channel.send({ content: '🔔 **Rappel du rébus à deviner :**', embeds: [embedRappel] });
+            }
         }
 
         // =========================
         //     SALON MOTUS DU JOUR
         // =========================
         if (message.channel.id === MOTUS_CHANNEL_ID && !message.content.startsWith('!')) {
+            const now = Date.now();
+
+            // Si aucune session n'est en cours, qu'elle est déjà finie ou expirée : on ignore totalement le message
+            if (!motusData.mot || motusData.termine || (motusData.expireAt && now >= motusData.expireAt)) {
+                if (!motusData.termine && motusData.expireAt && now >= motusData.expireAt) {
+                    motusData.termine = true;
+                    demanderSauvegarde();
+                }
+                return;
+            }
+
             const rawGuess = message.content.trim().toUpperCase()
                 .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                 .replace(/[^A-Z]/g, "");
@@ -5090,31 +5109,7 @@ async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
             // Ignore strictement les messages qui ne font pas exactement la bonne longueur (6 lettres à 10h, 7 lettres à 19h)
             if (rawGuess.length === longueurAttendue) {
-                const now = Date.now();
                 const motDuJour = motusData.mot;
-
-                // 1. Vérification si la session d'1h est expirée ou si le mot n'est pas encore lancé
-                if (!motDuJour) {
-                    await message.reply(`⏳ Aucun Motus n'est actif pour le moment ! Prochain Motus à 10h00 (6 lettres) ou 19h00 (7 lettres).`);
-                    return;
-                }
-
-                if (motusData.termine) {
-                    const motif = motusData.vainqueurId 
-                        ? `a déjà été remporté par <@${motusData.vainqueurId}>` 
-                        : `s'est terminé (temps écoulé d'une heure)`;
-                    const prochainTxt = motusData.heureSession === 10 ? 'ce soir à 19h00 (7 lettres - Difficile)' : 'demain matin à 10h00 (6 lettres)';
-                    await message.reply(`🔒 Cette session de Motus ${motif} ! Prochaine session : **${prochainTxt}**.`);
-                    return;
-                }
-
-                if (motusData.expireAt && now >= motusData.expireAt) {
-                    motusData.termine = true;
-                    demanderSauvegarde();
-                    const prochainTxt = motusData.heureSession === 10 ? 'ce soir à 19h00 (7 lettres)' : 'demain matin à 10h00 (6 lettres)';
-                    await message.reply(`⏰ **Temps écoulé !** L'heure de jeu est passée. Le mot était : **\`${motDuJour}\`** !\nRendez-vous ${prochainTxt} pour le prochain !`);
-                    return;
-                }
 
                 if (!motusData.tentatives[message.author.id]) {
                     motusData.tentatives[message.author.id] = [];
