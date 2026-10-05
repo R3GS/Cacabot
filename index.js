@@ -8819,7 +8819,9 @@ if (response?.needsRouletteAchievements) {
     if (typeof response === "string") {
         if (response.trim().length === 0) return;
         const finAntiFeur = rouletteAntiFeurUntil.get(message.author.id);
-        if (finAntiFeur && Date.now() < finAntiFeur) {
+
+        // Le bouclier Anti-Feur ne s'active que sur les répliques réflexes (quoi, qui, oui, non...), jamais sur les commandes avec !
+        if (!isExplicitCommand && finAntiFeur && Date.now() < finAntiFeur) {
             const d = (rouletteAntiFeurDodges.get(message.author.id) || 0) + 1;
             rouletteAntiFeurDodges.set(message.author.id, d);
             if (d >= 5) deverrouillerSucces(message.author.id, 'tete-dure', message.channel);
