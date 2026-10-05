@@ -1332,6 +1332,14 @@ function getResponse(raw) {
     }
 
     // =========================
+    //        !BOUGETOI
+    // =========================
+
+    if (command === "!bougetoi" || command === "!montage" || command === "!video" || command === "!lavideo") {
+        return { needsBougetoi: true };
+    }
+
+    // =========================
     //         !EPSYS
     // =========================
 
@@ -1875,6 +1883,12 @@ if (command === "!choix") {
     }
     if (cleaned.includes("ou quoi")) return reply("Ou feur");
     if (cleaned.includes("avec quoi")) return reply("Avec feur");
+
+    const motsOui = cleaned.replace(/!/g, '').trim().split(/\s+/);
+    if (motsOui.length > 0 && motsOui.every(m => m === 'oui')) {
+        const texteStiti = Array(motsOui.length).fill("stiti").join(" ");
+        return reply(texteStiti.charAt(0).toUpperCase() + texteStiti.slice(1));
+    }
     if (cleaned.endsWith("oui")) return reply("Stiti");
     if (
         (cleaned.includes("cacabot") || cleaned.includes("caca bot") || raw.includes("1503495713097519355")) &&
@@ -1916,11 +1930,16 @@ if (command === "!choix") {
         cleaned.startsWith("monster ") ||
         cleaned.endsWith("monster")
     ) return "https://cdn.discordapp.com/attachments/1480756332373213275/1504649546045718758/pape_monster.png";
+    const motsNon = cleaned.replace(/!/g, '').trim().split(/\s+/);
+    if (motsNon.length > 0 && motsNon.every(m => m === 'non')) {
+        const texteBril = Array(motsNon.length).fill("bril").join(" ");
+        return reply(texteBril.charAt(0).toUpperCase() + texteBril.slice(1));
+    }
     if (cleaned.endsWith("non")) return reply("Bril");
     if (cleaned.endsWith("bite")) return reply("Quoicoubite");
     if (cleaned.includes("cest quoi")) return reply("C'est feur");
     if (cleaned.includes("de quoi")) return reply("De feur");
-    if (cleaned.includes("de qui")) return reply("De quette");
+    if (cleaned === "de qui") return reply("De quette");
     if (cleaned.endsWith("quoi")) return reply("Feur");
     const voleurMots = ['feur', 'quette', 'stiti', 'pfeur', 'stitient', 'feurent', 'bril'];
     for (const mot of voleurMots) {
@@ -2068,7 +2087,7 @@ const suggestionsData = new Map();     // messageId -> { authorId, texte, pour: 
 
 const ROULETTE_ACHIEVEMENTS = [
     // ───────── LES 15 PREMIERS ─────────
-    { id: 'desert-cosmique',   nom: 'Désert absolu',              emoji: '🌵', desc: 'Enchaîner une série de 10 résultats « Rien » consécutifs' },
+    { id: 'forteresse',        nom: 'Forteresse impénétrable',     emoji: '🏰', desc: 'Accumuler un total de 10 boucliers dans sa réserve' },
     { id: 'chat-noir',         nom: 'Victime du Destin',          emoji: '🐈‍⬛', desc: 'Subir la Malédiction du Chat Noir avec +5% de bonus boosté ou plus' },
     { id: 'malus-prime',       nom: 'La totale',                  emoji: '💥', desc: 'Décrocher et subir le MALUS PRIME' },
     { id: 'double-peine',      nom: 'La Double Peine',            emoji: '⏳', desc: 'Tomber sur Cooldown 45 min alors qu\'il reste des charges actives' },
@@ -2616,6 +2635,8 @@ function buildHelpCategoryEmbed(category) {
                 "-# Menu interactif de blagues (Soft, Classique ou Humour Noir)\n" +
                 "👔 **`!epsys`**\n" +
                 "-# Envoie un GIF aléatoire d'Epsys\n" +
+                "🎬 **`!bougetoi`** | **`!montage`**\n" +
+                "-# Rappelle (vigoureusement) à Epsys d'aller monter sa prochaine vidéo\n" +
                 "🐒 **`!sylvain`**\n" +
                 "-# Singes forts ensemble"
             );
@@ -3115,6 +3136,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             const actuelles = rouletteBouclierActif.get(message.member.id) || 0;
             const total = actuelles + 3;
             rouletteBouclierActif.set(message.member.id, total);
+            if (total >= 10) deverrouillerSucces(message.member.id, 'forteresse', message.channel);
             return `🔰 **${auteurNom}** décroche le **SUPER BOUCLIER** ! **+3 charges de bouclier** ajoutées (${total} en réserve) !`;
         }
         case 'malus-ban':
@@ -3262,6 +3284,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             const actuelles = rouletteBouclierActif.get(message.member.id) || 0;
             const total = actuelles + 1;
             rouletteBouclierActif.set(message.member.id, total);
+            if (total >= 10) deverrouillerSucces(message.member.id, 'forteresse', message.channel);
             return `🛡️ **${auteurNom}** gagne **1 charge de bouclier** (${total} en réserve) : son prochain malus sera annulé !`;
         }
         case 'bonus-redirect-choix': {
@@ -3625,7 +3648,6 @@ function updateRouletteStats(userId, outcomeId, entry) {
     stats.tirages++;
     if (stats.tirages >= 250) deverrouillerSucces(userId, 'veteran-250', client.channels.cache.get(ROULETTE_SALON_ID));
     if (stats.tirages >= 500) deverrouillerSucces(userId, 'centurion-500', client.channels.cache.get(ROULETTE_SALON_ID));
-    if (outcomeId === 'aucun-resultat' && stats.serieActuelle >= 10) deverrouillerSucces(userId, 'desert-cosmique', client.channels.cache.get(ROULETTE_SALON_ID));
     if (entry?.type === 'bonus') {
         stats.bonus++;
         stats.serieActuelle = 0;
@@ -6601,6 +6623,17 @@ if (response?.needsWanted) {
         return message.reply({ embeds: [embed], components: [row] });
     }
 
+    // !bougetoi
+    if (response?.needsBougetoi) {
+        const phrases = [
+            `<@${EPSYS_ID}>, faudrait te bouger, on attend ta vidéo ! Alors tu nous sors un logiciel de montage et tu t'y mets **__MAINTENANT__** stp`,
+            `<@${EPSYS_ID}>, ON T'ATTEND ! Ouvre ton logiciel de montage et commence à travailler **__TOUT DE SUITE__** ! 🎬`,
+            `<@${EPSYS_ID}>, t'as cru que la vidéo allait se monter toute seule ? Allez hop, on taffe sur le projet et plus vite que ça ! 😤`
+        ];
+        const phraseChoisie = phrases[Math.floor(Math.random() * phrases.length)];
+        return message.channel.send({ content: phraseChoisie });
+    }
+
     // !sylvain
     if (response?.needsSylvain) {
         const sylvainGifs = [
@@ -7454,6 +7487,8 @@ if (response?.needsRouletteAchievements) {
         const nbTirages = rStats?.tirages ?? 0;
         if (nbTirages >= 250 && !userAchs['veteran-250']) userAchs['veteran-250'] = Date.now();
         if (nbTirages >= 500 && !userAchs['centurion-500']) userAchs['centurion-500'] = Date.now();
+        const nbBoucliersRes = rouletteBouclierActif.get(cible.id) || 0;
+        if (nbBoucliersRes >= 10 && !userAchs['forteresse']) userAchs['forteresse'] = Date.now();
 
         // Calcul des Succès du serveur
         const badges = [];
@@ -8835,6 +8870,9 @@ try {
             rebusstat: 'rebusstats',
             motustat: 'motustats',
             about: 'botinfo',
+            montage: 'bougetoi',
+            video: 'bougetoi',
+            lavideo: 'bougetoi',
             sugg: 'suggestion',
             profile: 'profil'
         };
@@ -9612,6 +9650,16 @@ try {
         if (commandName === 'epsys') {
             const gif = getResponse("!epsys");
             return interaction.reply({ content: gif });
+        }
+
+        if (commandName === 'bougetoi') {
+            const phrases = [
+                `<@${EPSYS_ID}>, faudrait te bouger, on attend ta vidéo ! Alors tu nous sors un logiciel de montage et tu t'y mets **__MAINTENANT__** stp`,
+                `<@${EPSYS_ID}>, ON T'ATTEND ! Ouvre ton logiciel de montage et commence à travailler **__TOUT DE SUITE__** ! 🎬`,
+                `<@${EPSYS_ID}>, t'as cru que la vidéo allait se monter toute seule ? Allez hop, on taffe sur le projet et plus vite que ça ! 😤`
+            ];
+            const phraseChoisie = phrases[Math.floor(Math.random() * phrases.length)];
+            return interaction.reply({ content: phraseChoisie });
         }
 
         if (commandName === 'sylvain') {
@@ -12361,6 +12409,7 @@ client.once('ready', async () => {
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre à noter')),
         new SlashCommandBuilder().setName('wanted').setDescription('Affiche le criminel du jour'),
         new SlashCommandBuilder().setName('epsys').setDescription('Envoie un GIF aléatoire d\'Epsys'),
+        new SlashCommandBuilder().setName('bougetoi').setDescription('Rappelle (vigoureusement) à Epsys d\'aller monter sa vidéo'),
         new SlashCommandBuilder().setName('sylvain').setDescription('Singe fort ensemble (Sylvain Lévy)'),
         new SlashCommandBuilder().setName('question').setDescription('Question de débat du soir'),
         new SlashCommandBuilder().setName('choix').setDescription('Laisse Cacabot trancher un dilemme')
