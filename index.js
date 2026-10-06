@@ -412,10 +412,51 @@ function buildEmbedFromDraft(draft) {
     return embed;
 }
 
+async function trouverMessageCacabot(guild, salonActuel, messageId) {
+    let target = await salonActuel.messages.fetch(messageId).catch(() => null);
+    if (!target && guild) {
+        for (const salon of guild.channels.cache.values()) {
+            if (salon.isTextBased()) {
+                target = await salon.messages.fetch(messageId).catch(() => null);
+                if (target) break;
+            }
+        }
+    }
+    return target;
+}
+
+function rehydraterEmbedDepuisMessage(targetMsg) {
+    const exEmbed = targetMsg.embeds[0];
+    let couleurHex = '';
+    if (exEmbed.color !== null && exEmbed.color !== undefined) {
+        couleurHex = '#' + exEmbed.color.toString(16).padStart(6, '0');
+    }
+
+    const estSpacer = exEmbed.image?.url === TRANSPARENT_SPACER_URL;
+
+    return {
+        titre: exEmbed.title || '',
+        desc: exEmbed.description || '',
+        couleurRaw: couleurHex,
+        footer: exEmbed.footer?.text || '',
+        authorName: exEmbed.author?.name || '',
+        authorIcon: exEmbed.author?.iconURL || '',
+        thumbnail: exEmbed.thumbnail?.url || '',
+        image: estSpacer ? '' : (exEmbed.image?.url || ''),
+        alignerLargeur: estSpacer,
+        fields: exEmbed.fields ? exEmbed.fields.map(f => ({ name: f.name, value: f.value, inline: f.inline ?? false })) : [],
+        hasTimestamp: Boolean(exEmbed.timestamp),
+        editingMessage: {
+            channelId: targetMsg.channel.id,
+            messageId: targetMsg.id
+        }
+    };
+}
+
 function buildEmbedControlRows(draft) {
     const channelSelect = new ChannelSelectMenuBuilder()
         .setCustomId('embed_send_channel')
-        .setPlaceholder('Choisis le salon où envoyer cet embed...')
+        .setPlaceholder(draft.editingMessage ? 'Envoyer une copie dans un autre salon...' : 'Choisis le salon où envoyer cet embed...')
         .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement);
 
     const editMainBtn = new ButtonBuilder()
@@ -431,7 +472,7 @@ function buildEmbedControlRows(draft) {
     const addFieldBtn = new ButtonBuilder()
         .setCustomId('embed_add_field')
         .setLabel('➕ Ajouter un champ')
-        .setStyle(ButtonStyle.Primary);
+        .setStyle(ButtonStyle.Success);
 
     const toggleTimeBtn = new ButtonBuilder()
         .setCustomId('embed_toggle_time')
@@ -451,6 +492,15 @@ function buildEmbedControlRows(draft) {
     const row1 = new ActionRowBuilder().addComponents(channelSelect);
     const row2 = new ActionRowBuilder().addComponents(editMainBtn, editImagesBtn, addFieldBtn, toggleTimeBtn, toggleAlignBtn);
     const row3 = new ActionRowBuilder();
+
+    if (draft.editingMessage) {
+        row3.addComponents(
+            new ButtonBuilder()
+                .setCustomId('embed_save_edit')
+                .setLabel('💾 Mettre à jour le message')
+                .setStyle(ButtonStyle.Success)
+        );
+    }
 
     if (draft.fields && draft.fields.length > 0) {
         row3.addComponents(
@@ -8508,6 +8558,30 @@ if (response?.needsRouletteAchievements) {
     // !embed (Epsys-only)
     if (response?.needsEmbed) {
         if (message.author.id !== '436218312574107658') return;
+        const argsEmbed = message.content.trim().split(/\s+/);
+        const subEmbed = argsEmbed[1]?.toLowerCase();
+
+        // Cas modification : !embed modify [ID] ou !embed edit [ID]
+        if (subEmbed === 'modify' || subEmbed === 'edit') {
+            const msgId = argsEmbed[2];
+            if (!msgId) return message.reply("Usage : `!embed modify [ID_du_message]`");
+
+            const targetMsg = await trouverMessageCacabot(message.guild, message.channel, msgId);
+            if (!targetMsg) return message.reply("Message introuvable ! Vérifie l'ID.");
+            if (targetMsg.author.id !== client.user.id) return message.reply("Ce message n'a pas été envoyé par Cacabot !");
+            if (!targetMsg.embeds || targetMsg.embeds.length === 0) return message.reply("Ce message ne contient aucun embed !");
+
+            const draft = rehydraterEmbedDepuisMessage(targetMsg);
+            embedDrafts.set(message.author.id, draft);
+
+            const embedPreview = buildEmbedFromDraft(draft);
+            return message.reply({
+                content: `✏️ **Mode modification actif pour le message [${targetMsg.id}](${targetMsg.url}) !**\n*(Ajuste les éléments puis clique sur « 💾 Mettre à jour le message »)*`,
+                embeds: [embedPreview],
+                components: buildEmbedControlRows(draft)
+            });
+        }
+
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('open_embed_modal')
@@ -10495,6 +10569,24 @@ try {
             if (interaction.user.id !== '436218312574107658') {
                 return interaction.reply({ content: "Cette commande est réservée à Epsys.", ephemeral: true });
             }
+            const msgIdOption = interaction.options.getString('modifier')?.trim();
+            if (msgIdOption) {
+                const targetMsg = await trouverMessageCacabot(interaction.guild, interaction.channel, msgIdOption);
+                if (!targetMsg) return interaction.reply({ content: "Message introuvable ! Vérifie l'ID.", ephemeral: true });
+                if (targetMsg.author.id !== client.user.id) return interaction.reply({ content: "Ce message n'a pas été envoyé par Cacabot !", ephemeral: true });
+                if (!targetMsg.embeds || targetMsg.embeds.length === 0) return interaction.reply({ content: "Ce message ne contient aucun embed !", ephemeral: true });
+
+                const draft = rehydraterEmbedDepuisMessage(targetMsg);
+                embedDrafts.set(interaction.user.id, draft);
+
+                const embedPreview = buildEmbedFromDraft(draft);
+                return interaction.reply({
+                    content: `✏️ **Mode modification actif pour le message [${targetMsg.id}](${targetMsg.url}) !**\n*(Ajuste les éléments puis clique sur « 💾 Mettre à jour le message »)*`,
+                    embeds: [embedPreview],
+                    components: buildEmbedControlRows(draft)
+                });
+            }
+
             const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
             return interaction.showModal(buildEmbedMainModal(draft));
         }
@@ -10784,6 +10876,34 @@ try {
         embedDrafts.delete(interaction.user.id);
         return interaction.update({
             content: `✅ **Embed complet envoyé avec succès dans <#${channelId}> !**`,
+            embeds: [],
+            components: []
+        });
+    }
+
+    // Sauvegarde et mise à jour directe sur le message original
+    if (interaction.isButton() && interaction.customId === 'embed_save_edit') {
+        if (interaction.user.id !== '436218312574107658') return;
+        const draft = embedDrafts.get(interaction.user.id);
+        if (!draft || !draft.editingMessage) {
+            return interaction.reply({ content: "❌ Aucun message original lié à ce brouillon !", ephemeral: true });
+        }
+
+        const { channelId, messageId } = draft.editingMessage;
+        const targetChannel = interaction.guild?.channels.cache.get(channelId);
+        if (!targetChannel) return interaction.reply({ content: "❌ Salon introuvable !", ephemeral: true });
+
+        const targetMsg = await targetChannel.messages.fetch(messageId).catch(() => null);
+        if (!targetMsg) return interaction.reply({ content: "❌ Message introuvable !", ephemeral: true });
+
+        const embedFinal = buildEmbedFromDraft(draft);
+        await targetMsg.edit({ embeds: [embedFinal] }).catch(err => {
+            return interaction.reply({ content: `❌ Erreur : ${err.message}`, ephemeral: true });
+        });
+
+        embedDrafts.delete(interaction.user.id);
+        return interaction.update({
+            content: `✅ **L'embed a été mis à jour avec succès sur [le message original](${targetMsg.url}) !**`,
             embeds: [],
             components: []
         });
@@ -12795,7 +12915,8 @@ client.once('ready', async () => {
         new SlashCommandBuilder().setName('ping').setDescription('Latence du bot et WebSocket'),
         new SlashCommandBuilder().setName('prune').setDescription('Supprimer les derniers messages')
             .addIntegerOption(opt => opt.setName('nombre').setDescription('Nombre de messages à supprimer').setRequired(true)),
-        new SlashCommandBuilder().setName('embed').setDescription('Créateur d\'embed (Epsys-only)')
+        new SlashCommandBuilder().setName('embed').setDescription('Créateur ou modificateur d\'embed (Epsys-only)')
+            .addStringOption(opt => opt.setName('modifier').setDescription('ID du message contenant l\'embed à modifier'))
     ].map(cmd => cmd.toJSON());
 
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
