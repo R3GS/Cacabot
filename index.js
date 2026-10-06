@@ -10873,6 +10873,69 @@ try {
         return interaction.reply({ ...data, ephemeral: true });
     }
 
+    // Choix de l'embed à modifier parmi plusieurs dans le même message
+    if (interaction.isButton() && interaction.customId.startsWith('embed_pick_idx_')) {
+        if (interaction.user.id !== '436218312574107658') return;
+        const parts = interaction.customId.split('_');
+        const channelId = parts[3];
+        const messageId = parts[4];
+        const idx = parseInt(parts[5], 10);
+
+        const channel = interaction.guild?.channels.cache.get(channelId);
+        const targetMsg = await channel?.messages.fetch(messageId).catch(() => null);
+        if (!targetMsg) return interaction.reply({ content: "❌ Message introuvable !", ephemeral: true });
+
+        const draft = rehydraterEmbedDepuisMessage(targetMsg, idx);
+        embedDrafts.set(interaction.user.id, draft);
+
+        const embedPreview = buildEmbedFromDraft(draft);
+        return interaction.update({
+            content: `✏️ **Mode modification actif pour l'embed #${idx + 1} du message [${targetMsg.id}](${targetMsg.url}) !**\n*(Ajuste les éléments puis clique sur « 💾 Mettre à jour le message »)*`,
+            embeds: [embedPreview],
+            components: buildEmbedControlRows(draft)
+        });
+    }
+
+    // Soumission : Texte principal & Couleur
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('embed_main_modal')) {
+        if (interaction.user.id !== '436218312574107658') return;
+
+        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
+        draft.titre = interaction.fields.getTextInputValue('embed_title')?.trim();
+        draft.desc = interaction.fields.getTextInputValue('embed_desc')?.trim();
+        draft.couleurRaw = interaction.fields.getTextInputValue('embed_color')?.trim();
+        draft.footer = interaction.fields.getTextInputValue('embed_footer')?.trim();
+        embedDrafts.set(interaction.user.id, draft);
+
+        const embedPreview = buildEmbedFromDraft(draft);
+        const data = {
+            content: "👀 **Aperçu en direct de ton embed :**\n*(Utilise les boutons ci-dessous pour ajouter images, champs ou choisir le salon d'envoi)*",
+            embeds: [embedPreview],
+            components: buildEmbedControlRows(draft)
+        };
+        if (interaction.isFromMessage()) return interaction.update(data);
+        return interaction.reply({ ...data, ephemeral: true });
+    }
+
+    // Soumission : Images & Icônes
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('embed_images_modal')) {
+        if (interaction.user.id !== '436218312574107658') return;
+
+        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
+        draft.image = interaction.fields.getTextInputValue('embed_image')?.trim();
+        draft.thumbnail = interaction.fields.getTextInputValue('embed_thumbnail')?.trim();
+        draft.authorName = interaction.fields.getTextInputValue('embed_author_name')?.trim();
+        draft.authorIcon = interaction.fields.getTextInputValue('embed_author_icon')?.trim();
+        embedDrafts.set(interaction.user.id, draft);
+
+        const embedPreview = buildEmbedFromDraft(draft);
+        return interaction.update({
+            content: "👀 **Aperçu en direct de ton embed :**",
+            embeds: [embedPreview],
+            components: buildEmbedControlRows(draft)
+        });
+    }
+
     // Sélection du salon de destination
     if (interaction.isChannelSelectMenu() && interaction.customId === 'embed_send_channel') {
         if (interaction.user.id !== '436218312574107658') return;
