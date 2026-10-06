@@ -29,6 +29,7 @@ let motusData = { dateKey: 0, mot: '', termine: false, vainqueurId: null, tentat
 let motusStats = {}; // userId -> { victoires: number, parties: number }
 let twitchLiveEnCours = false;
 let quotesData = []; // [{ id, texte, authorId, authorName, addedById, timestamp, channelId }]
+let welcomeData = { channelId: null, actif: true };
 let dernierCommitSha = null;
 let donneesChargees = false;
 
@@ -71,6 +72,7 @@ async function loadAll() {
         motusStats = jsonRecord.motusStats ?? {};
         rebusStats = jsonRecord.rebusStats ?? {};
         quotesData = jsonRecord.quotes ?? [];
+        welcomeData = jsonRecord.welcomeData ?? { channelId: null, actif: true };
         dernierCommitSha = jsonRecord.dernierCommitSha ?? null;
 
         for (const [nom, map] of Object.entries(ROULETTE_ETATS)) {
@@ -118,6 +120,7 @@ async function saveAll() {
             motusStats: motusStats,
             rebusStats: rebusStats,
             quotes: quotesData,
+            welcomeData: welcomeData,
             dernierCommitSha: dernierCommitSha,
             roulette: Object.fromEntries(
                 Object.entries(ROULETTE_ETATS).map(([nom, map]) => [nom, Object.fromEntries(map)])
@@ -1533,6 +1536,10 @@ function getResponse(raw) {
     // =========================
     //         !HELP
     // =========================
+
+    if (command === "!welcome" || command === "!bienvenue") {
+        return { needsWelcome: true };
+    }
 
     if (command === "!suggestion" || command === "!suggest" || command === "!sugg") {
         return { needsSuggestion: true };
@@ -5244,6 +5251,122 @@ async function startPomodoro(channel, participantsMention, workMin, breakMin, cy
     });
 }
 
+const WELCOME_BACKGROUNDS = [
+    './DHMISWelcome.png',
+    './EndacopiaWelcome.png',
+    './FNAFWelcome.png',
+    './KinitoPETWelcome.png',
+    './MouthwashingWelcome.png',
+    './PoppyWelcome.png',
+    './UndertaleWelcome.png'
+];
+
+async function generateWelcomeImage(avatarUrl, memberName) {
+    // 1. Charger le calque de premier plan pour connaître les dimensions exactes
+    const overlay = await loadImage('./Bienvenue.png');
+    const w = overlay.width;
+    const h = overlay.height;
+
+    const canvas = createCanvas(w, h);
+    const ctx = canvas.getContext('2d');
+
+    // 2. Tirer au sort un fond parmi les 7 thèmes
+    const bgPath = WELCOME_BACKGROUNDS[Math.floor(Math.random() * WELCOME_BACKGROUNDS.length)];
+    try {
+        const bgImg = await loadImage(bgPath);
+        ctx.drawImage(bgImg, 0, 0, w, h);
+    } catch (e) {
+        ctx.fillStyle = '#111111';
+        ctx.fillRect(0, 0, w, h);
+    }
+
+    // 3. Découper et dessiner l'avatar du membre au centre du cercle
+    const centerX = w * 0.5;
+    const centerY = h * 0.355;
+    const radius = h * 0.27;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2, true);
+    ctx.closePath();
+    ctx.clip();
+
+    try {
+        const avatarImg = await loadImage(avatarUrl);
+        ctx.drawImage(avatarImg, centerX - radius, centerY - radius, radius * 2, radius * 2);
+    } catch (err) {
+        ctx.fillStyle = '#2c2f33';
+        ctx.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
+    }
+    ctx.restore();
+
+    // 4. Poser le calque Bienvenue.png par-dessus (recouvre les bords du cercle avec le contour blanc)
+    ctx.drawImage(overlay, 0, 0, w, h);
+
+    // 5. Écrire le pseudo du membre entre "BIENVENUE" et "MERCI D'AVOIR REJOINT LE SERVEUR !"
+    const cleanName = memberName.toUpperCase();
+    let fontSize = Math.round(h * 0.075); // ~37px sur 500h
+
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 4;
+
+    ctx.font = `bold ${fontSize}px "LemonMilk"`;
+    while (ctx.measureText(cleanName).width > (w * 0.5) && fontSize > 16) {
+        fontSize -= 2;
+        ctx.font = `bold ${fontSize}px "LemonMilk"`;
+    }
+
+    ctx.fillText(cleanName, centerX, h * 0.825);
+    ctx.restore();
+
+    return canvas.toBuffer('image/png');
+}
+
+function buildWelcomeConfigEmbed() {
+    const salonStr = welcomeData.channelId ? `<#${welcomeData.channelId}>` : '*Aucun salon configuré*';
+    const statutStr = welcomeData.actif ? '🟢 **Actif**' : '🔴 **Désactivé**';
+
+    return new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle("⚙️ Configuration des messages d'accueil")
+        .setDescription(
+            `Configure ici l'envoi automatique de l'affiche de bienvenue lors de l'arrivée d'un nouveau membre.\n\n` +
+            `📍 **Salon d'envoi :** ${salonStr}\n` +
+            `⚡ **Statut :** ${statutStr}\n\n` +
+            `🎨 **Fonds aléatoires actifs (7) :**\n` +
+            `• DHMIS • Endacopia • FNAF • KinitoPET • Mouthwashing • Poppy • Undertale`
+        )
+        .setFooter({ text: "Commandes : !welcome config • !welcome test" });
+}
+
+function buildWelcomeConfigRows() {
+    const channelSelect = new ChannelSelectMenuBuilder()
+        .setCustomId('welcome_select_channel')
+        .setPlaceholder("Choisir le salon où envoyer l'affiche...")
+        .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement);
+
+    const toggleBtn = new ButtonBuilder()
+        .setCustomId('welcome_toggle_active')
+        .setLabel(welcomeData.actif ? 'Désactiver' : 'Activer')
+        .setStyle(welcomeData.actif ? ButtonStyle.Danger : ButtonStyle.Success);
+
+    const testBtn = new ButtonBuilder()
+        .setCustomId('welcome_test_btn')
+        .setLabel("🧪 Tester l'affiche")
+        .setStyle(ButtonStyle.Primary);
+
+    return [
+        new ActionRowBuilder().addComponents(channelSelect),
+        new ActionRowBuilder().addComponents(toggleBtn, testBtn)
+    ];
+}
+
 async function generateWantedImage(avatarUrl, displayName, primeAmount) {
 
     const canvas = createCanvas(977, 1273);
@@ -6067,6 +6190,26 @@ return message.reply({ embeds: [embed], components: [row] });
             }
         }
         return message.reply(getAnimalResponse(message));
+    }
+
+    // !welcome / !bienvenue (Epsys-only)
+    if (response?.needsWelcome) {
+        if (message.author.id !== EPSYS_ID) {
+            return message.reply("Cette commande est réservée à Epsys.");
+        }
+        const subCmd = message.content.trim().split(/\s+/)[1]?.toLowerCase();
+
+        if (subCmd === 'test') {
+            const avatarUrl = message.author.displayAvatarURL({ extension: 'png', size: 512 });
+            const cardBuffer = await generateWelcomeImage(avatarUrl, message.member?.displayName ?? message.author.username);
+            return message.reply({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
+        }
+
+        // !welcome ou !welcome config : ouvre le panneau de configuration
+        return message.reply({
+            embeds: [buildWelcomeConfigEmbed()],
+            components: buildWelcomeConfigRows()
+        });
     }
 
     // !suggestion
@@ -10042,6 +10185,24 @@ try {
             return interaction.reply({ content: reponse });
         }
 
+        if (commandName === 'welcome') {
+            if (interaction.user.id !== EPSYS_ID) {
+                return interaction.reply({ content: "Cette commande est réservée à Epsys.", ephemeral: true });
+            }
+            const sub = interaction.options.getSubcommand();
+            if (sub === 'test') {
+                await interaction.deferReply();
+                const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 512 });
+                const cardBuffer = await generateWelcomeImage(avatarUrl, interaction.member?.displayName ?? interaction.user.username);
+                return interaction.editReply({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
+            }
+            return interaction.reply({
+                embeds: [buildWelcomeConfigEmbed()],
+                components: buildWelcomeConfigRows(),
+                ephemeral: true
+            });
+        }
+
         if (commandName === 'suggestion') {
             const SUGGESTION_CHANNEL_ID = '720079866199801937';
             if (interaction.channel.id !== SUGGESTION_CHANNEL_ID) {
@@ -10994,6 +11155,37 @@ try {
             embeds: [],
             components: []
         });
+    }
+
+    // Configuration du salon d'accueil
+    if (interaction.isChannelSelectMenu() && interaction.customId === 'welcome_select_channel') {
+        if (interaction.user.id !== EPSYS_ID) return;
+        welcomeData.channelId = interaction.values[0];
+        demanderSauvegarde();
+        return interaction.update({
+            embeds: [buildWelcomeConfigEmbed()],
+            components: buildWelcomeConfigRows()
+        });
+    }
+
+    // Activer / Désactiver les messages d'accueil
+    if (interaction.isButton() && interaction.customId === 'welcome_toggle_active') {
+        if (interaction.user.id !== EPSYS_ID) return;
+        welcomeData.actif = !welcomeData.actif;
+        demanderSauvegarde();
+        return interaction.update({
+            embeds: [buildWelcomeConfigEmbed()],
+            components: buildWelcomeConfigRows()
+        });
+    }
+
+    // Tester l'affiche depuis le panneau
+    if (interaction.isButton() && interaction.customId === 'welcome_test_btn') {
+        if (interaction.user.id !== EPSYS_ID) return;
+        await interaction.deferReply({ ephemeral: true });
+        const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 512 });
+        const cardBuffer = await generateWelcomeImage(avatarUrl, interaction.member?.displayName ?? interaction.user.username);
+        return interaction.editReply({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
     }
 
     // Annulation du brouillon
@@ -12911,6 +13103,9 @@ client.once('ready', async () => {
         new SlashCommandBuilder().setName('question').setDescription('Question de débat du soir'),
         new SlashCommandBuilder().setName('choix').setDescription('Laisse Cacabot trancher un dilemme')
             .addStringOption(opt => opt.setName('question').setDescription('Ex : pizza ou burger ?').setRequired(true)),
+        new SlashCommandBuilder().setName('welcome').setDescription("Configurer ou tester l'accueil (Epsys-only)")
+            .addSubcommand(sub => sub.setName('config').setDescription('Ouvrir le panneau de configuration'))
+            .addSubcommand(sub => sub.setName('test').setDescription("Tester l'affiche avec ta photo")),
         new SlashCommandBuilder().setName('suggestion').setDescription('Proposer une idée pour le serveur')
             .addStringOption(opt => opt.setName('proposition').setDescription('Ton idée').setRequired(true)),
         new SlashCommandBuilder().setName('sugg').setDescription('Proposer une idée pour le serveur (raccourci)')
@@ -13372,6 +13567,20 @@ client.on('guildMemberAdd', async (member) => {
         topData.messages[member.id] = 0;
         saveAll();
         console.log(`✅ Nouveau membre : ${member.displayName} ajouté au top`);
+    }
+
+    // Affiche de bienvenue automatique (sans texte)
+    if (member.guild.id === '720057528351850547' && !member.user.bot && welcomeData.actif && welcomeData.channelId) {
+        const targetChan = member.guild.channels.cache.get(welcomeData.channelId);
+        if (targetChan) {
+            try {
+                const avatarUrl = member.user.displayAvatarURL({ extension: 'png', size: 512 });
+                const cardBuffer = await generateWelcomeImage(avatarUrl, member.displayName);
+                await targetChan.send({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
+            } catch (err) {
+                console.error("Erreur envoi bienvenue :", err.message);
+            }
+        }
     }
 
     if (member.guild.id === '720057528351850547') {
