@@ -5290,175 +5290,100 @@ async function chargerImageSecurisee(variantes) {
 }
 
 async function generateWelcomeImage(avatarUrl, memberName) {
-    // 1. Charger le calque de premier plan (chemins locaux + sous-dossiers)
-    const overlay = await chargerImageSecurisee([
-        './Bienvenue.png',
-        './bienvenue.png',
-        './assets/Bienvenue.png',
-        './assets/bienvenue.png'
-    ]);
-    if (!overlay) {
-        throw new Error("L'image 'Bienvenue.png' est introuvable à la racine de ton bot ! Vérifie qu'elle a bien été envoyée.");
-    }
-    const w = overlay.width;
-    const h = overlay.height;
-
-    const canvas = createCanvas(w, h);
-    const ctx = canvas.getContext('2d');
-
-    // 2. Tirer au sort un fond parmi les 7 thèmes
-    const bgVariantes = WELCOME_BACKGROUNDS[Math.floor(Math.random() * WELCOME_BACKGROUNDS.length)];
-    const bgImg = await chargerImageSecurisee(bgVariantes);
-    if (bgImg) {
-        ctx.drawImage(bgImg, 0, 0, w, h);
-    } else {
-        // Fallback dégradé si le fond choisi n'a pas été trouvé
-        const grad = ctx.createLinearGradient(0, 0, w, h);
-        grad.addColorStop(0, '#750000');
-        grad.addColorStop(0.5, '#400000');
-        grad.addColorStop(1, '#111111');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, w, h);
-    }
-
-    // 3. Découper et dessiner l'avatar du membre au centre du cercle (ajusté pile à l'anneau blanc)
-    const centerX = w * 0.5;
-    const centerY = h * 0.346;
-    const radius = h * 0.240;
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2, true);
-    ctx.closePath();
-    ctx.clip();
+    // Désactiver temporairement fontconfig pour libérer LemonMilk (comme dans lovecalc)
+    const oldBackend = process.env.PANGOCAIRO_BACKEND;
+    delete process.env.PANGOCAIRO_BACKEND;
 
     try {
-        const avatarImg = await loadImage(avatarUrl);
-        ctx.drawImage(avatarImg, centerX - radius, centerY - radius, radius * 2, radius * 2);
+        // 1. Charger le calque de premier plan
+        const overlay = await chargerImageSecurisee([
+            './Bienvenue.png',
+            './bienvenue.png',
+            './assets/Bienvenue.png',
+            './assets/bienvenue.png'
+        ]);
+        if (!overlay) {
+            throw new Error("L'image 'Bienvenue.png' est introuvable à la racine de ton bot ! Vérifie qu'elle a bien été envoyée.");
+        }
+        const w = overlay.width;
+        const h = overlay.height;
+
+        const canvas = createCanvas(w, h);
+        const ctx = canvas.getContext('2d');
+
+        // 2. Tirer au sort un fond parmi les 7 thèmes
+        const bgVariantes = WELCOME_BACKGROUNDS[Math.floor(Math.random() * WELCOME_BACKGROUNDS.length)];
+        const bgImg = await chargerImageSecurisee(bgVariantes);
+        if (bgImg) {
+            ctx.drawImage(bgImg, 0, 0, w, h);
+        } else {
+            // Fallback dégradé si le fond choisi n'a pas été trouvé
+            const grad = ctx.createLinearGradient(0, 0, w, h);
+            grad.addColorStop(0, '#750000');
+            grad.addColorStop(0.5, '#400000');
+            grad.addColorStop(1, '#111111');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+        }
+
+        // 3. Découper et dessiner l'avatar du membre au centre exact du cercle
+        // Mensurations fournies : x = 1024, y = 349.5, rayon = 255px (pour anneau de 531px de diamètre)
+        const centerX = 1024;
+        const centerY = 349.5;
+        const radius = 255;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2, true);
+        ctx.closePath();
+        ctx.clip();
+
+        try {
+            const avatarImg = await loadImage(avatarUrl);
+            ctx.drawImage(avatarImg, centerX - radius, centerY - radius, radius * 2, radius * 2);
+        } catch (err) {
+            ctx.fillStyle = '#2c2f33';
+            ctx.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
+        }
+        ctx.restore();
+
+        // 4. Poser le calque Bienvenue.png par-dessus
+        ctx.drawImage(overlay, 0, 0, w, h);
+
+        // 5. Écrire le pseudo du membre entre "BIENVENUE" et "MERCI D'AVOIR REJOINT LE SERVEUR !"
+        const cleanName = (memberName || 'NOUVEAU MEMBRE').toUpperCase();
+        let fontSize = 75; // Taille imposante et nette
+
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        ctx.font = `bold ${fontSize}px "LemonMilk"`;
+        const maxTextWidth = 1350;
+        while (ctx.measureText(cleanName).width > maxTextWidth && fontSize > 36) {
+            fontSize -= 2;
+            ctx.font = `bold ${fontSize}px "LemonMilk"`;
+        }
+
+        // Contour noir franc pour faire ressortir les lettres
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = Math.max(6, Math.round(fontSize * 0.14));
+        ctx.lineJoin = 'round';
+        ctx.miterLimit = 2;
+        ctx.strokeText(cleanName, centerX, 825);
+
+        // Remplissage blanc pur éclatant
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText(cleanName, centerX, 825);
+        ctx.restore();
+
+        const buffer = canvas.toBuffer('image/png');
+        if (oldBackend) process.env.PANGOCAIRO_BACKEND = oldBackend;
+        return buffer;
     } catch (err) {
-        ctx.fillStyle = '#2c2f33';
-        ctx.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
+        if (oldBackend) process.env.PANGOCAIRO_BACKEND = oldBackend;
+        throw err;
     }
-    ctx.restore();
-
-    // 4. Poser le calque Bienvenue.png par-dessus
-    ctx.drawImage(overlay, 0, 0, w, h);
-
-    // 5. Écrire le pseudo du membre entre "BIENVENUE" et "MERCI D'AVOIR REJOINT LE SERVEUR !"
-    const cleanName = (memberName || 'NOUVEAU MEMBRE').toUpperCase();
-    let fontSize = Math.round(h * 0.065); // ~66px, bien visible et proportionné
-
-    ctx.save();
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 3;
-
-    // Fallbacks sans-serif gras et modernes (évite CowboyMovie si LemonMilk est absent)
-    ctx.font = `bold ${fontSize}px "LemonMilk", "Arial Black", "Impact", sans-serif`;
-    const maxTextWidth = w * 0.55;
-    while (ctx.measureText(cleanName).width > maxTextWidth && fontSize > 36) {
-        fontSize -= 2;
-        ctx.font = `bold ${fontSize}px "LemonMilk", "Arial Black", "Impact", sans-serif`;
-    }
-
-    ctx.fillText(cleanName, centerX, h * 0.825);
-    ctx.restore();
-
-    return canvas.toBuffer('image/png');
-}
-
-function buildWelcomeConfigEmbed() {
-    const salonStr = welcomeData.channelId ? `<#${welcomeData.channelId}>` : '*Aucun salon configuré*';
-    const statutStr = welcomeData.actif ? '🟢 **Actif**' : '🔴 **Désactivé**';
-
-    return new EmbedBuilder()
-        .setColor(0x5865f2)
-        .setTitle("⚙️ Configuration des messages d'accueil")
-        .setDescription(
-            `Configure ici l'envoi automatique de l'affiche de bienvenue lors de l'arrivée d'un nouveau membre.\n\n` +
-            `📍 **Salon d'envoi :** ${salonStr}\n` +
-            `⚡ **Statut :** ${statutStr}\n\n` +
-            `🎨 **Fonds aléatoires actifs (7) :**\n` +
-            `• DHMIS • Endacopia • FNAF • KinitoPET • Mouthwashing • Poppy • Undertale`
-        )
-        .setFooter({ text: "Commandes : !welcome config • !welcome test" });
-}
-
-function buildWelcomeConfigRows() {
-    const channelSelect = new ChannelSelectMenuBuilder()
-        .setCustomId('welcome_select_channel')
-        .setPlaceholder("Choisir le salon où envoyer l'affiche...")
-        .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement);
-
-    const toggleBtn = new ButtonBuilder()
-        .setCustomId('welcome_toggle_active')
-        .setLabel(welcomeData.actif ? 'Désactiver' : 'Activer')
-        .setStyle(welcomeData.actif ? ButtonStyle.Danger : ButtonStyle.Success);
-
-    const testBtn = new ButtonBuilder()
-        .setCustomId('welcome_test_btn')
-        .setLabel("🧪 Tester l'affiche")
-        .setStyle(ButtonStyle.Primary);
-
-    return [
-        new ActionRowBuilder().addComponents(channelSelect),
-        new ActionRowBuilder().addComponents(toggleBtn, testBtn)
-    ];
-}
-
-async function generateWantedImage(avatarUrl, displayName, primeAmount) {
-
-    const canvas = createCanvas(977, 1273);
-    const ctx = canvas.getContext('2d');
-
-    // Charger le template
-    const template = await loadImage('./wanted.png');
-    ctx.drawImage(template, 0, 0, 977, 1273);
-
-    // Charger et coller la photo de profil
-    const avatar = await loadImage(avatarUrl);
-    ctx.drawImage(avatar, 217, 447, 542, 542);
-
-    // Après ctx.drawImage(avatar, 217, 447, 542, 542);
-
-    const frame = await loadImage('./wanted-cadre.png'); // ton image de cadre
-    ctx.drawImage(frame, 0, 0, 977, 1273);
-
-    // Pseudo
-    ctx.fillStyle = '#1a0a00';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    const centerX = 977 / 2;
-    const pseudoY = 447 + 542 + 65;
-    const primeY = pseudoY + 100;
-
-    ctx.save();
-    ctx.translate(centerX, pseudoY + 20);
-    ctx.scale(8, 8);
-    ctx.textAlign = 'left';
-    ctx.font = '17px "CowboyMovie"';
-    const cleanName = displayName.toUpperCase().replace(/[^A-Z0-9+\"\+\*\/\.,; ]/g, '').trim();
-    const tw = ctx.measureText(cleanName).width;
-    ctx.fillText(cleanName, -(tw / 2), 0);
-    ctx.restore();
-
-    // Prime
-    ctx.save();
-    ctx.translate(centerX, primeY - 20);
-    ctx.scale(5, 5);
-    ctx.textAlign = 'left';
-    ctx.font = '13px "CowboyMovie"';
-    const primeClean = 'PRIME : ' + String(primeAmount).replace(/\s/g, '') + '$';
-    const pw = ctx.measureText(primeClean).width;
-    ctx.fillText(primeClean, -(pw / 2), 0);
-    ctx.restore();
-
-    return canvas.toBuffer('image/png');
 }
 
 // =========================
