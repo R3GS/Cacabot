@@ -242,7 +242,7 @@ function parseEmbedColor(colorStr) {
     if (!colorStr) return 0x5865f2;
     const c = colorStr.trim().toLowerCase();
     const map = {
-        bleu: 0x3498db, rouge: 0xe74c3c, vert: 0x2ecc71, or: 0xffd700, jaune: 0xf1c40f,
+        bleu: 0x3498db, rouge: 0xeb0000, vert: 0x2ecc71, or: 0xffd700, jaune: 0xf1c40f,
         violet: 0x9b59b6, noir: 0x2c2c2c, blanc: 0xffffff, orange: 0xe67e22, rose: 0xff69b4
     };
     if (map[c]) return map[c];
@@ -347,24 +347,27 @@ function buildEmbedImagesModal(existingData = null) {
     return modal;
 }
 
-function buildEmbedFieldModal() {
+function buildEmbedFieldModal(existingData = null, index = null) {
+    const isEdit = index !== null && existingData !== null;
     const modal = new ModalBuilder()
-        .setCustomId('embed_field_modal')
-        .setTitle("Ajouter un champ à l'Embed");
+        .setCustomId(isEdit ? `embed_field_modal_${index}` : 'embed_field_modal')
+        .setTitle(isEdit ? `Modifier le champ #${index + 1}` : "Ajouter un champ à l'Embed");
 
     const nameInput = new TextInputBuilder()
         .setCustomId('field_name')
-        .setLabel("Titre du champ")
+        .setLabel(isEdit ? "Titre (laisse vide pour supprimer)" : "Titre du champ")
         .setStyle(TextInputStyle.Short)
         .setPlaceholder("Ex : Règlement / Date de l'événement")
-        .setRequired(true);
+        .setRequired(!isEdit);
+    if (existingData?.name) nameInput.setValue(existingData.name);
 
     const valueInput = new TextInputBuilder()
         .setCustomId('field_value')
         .setLabel("Contenu / Sous-texte du champ")
         .setStyle(TextInputStyle.Paragraph)
         .setPlaceholder("Le texte qui s'affiche sous le titre du champ...")
-        .setRequired(true);
+        .setRequired(!isEdit);
+    if (existingData?.value) valueInput.setValue(existingData.value);
 
     const inlineInput = new TextInputBuilder()
         .setCustomId('field_inline')
@@ -372,6 +375,7 @@ function buildEmbedFieldModal() {
         .setStyle(TextInputStyle.Short)
         .setPlaceholder("non (par défaut) ou oui")
         .setRequired(false);
+    if (existingData) inlineInput.setValue(existingData.inline ? 'oui' : 'non');
 
     modal.addComponents(
         new ActionRowBuilder().addComponents(nameInput),
@@ -427,7 +431,7 @@ function buildEmbedControlRows(draft) {
     const addFieldBtn = new ButtonBuilder()
         .setCustomId('embed_add_field')
         .setLabel('➕ Ajouter un champ')
-        .setStyle(ButtonStyle.Success);
+        .setStyle(ButtonStyle.Primary);
 
     const toggleTimeBtn = new ButtonBuilder()
         .setCustomId('embed_toggle_time')
@@ -450,6 +454,10 @@ function buildEmbedControlRows(draft) {
 
     if (draft.fields && draft.fields.length > 0) {
         row3.addComponents(
+            new ButtonBuilder()
+                .setCustomId('embed_edit_field')
+                .setLabel('✏️ Modifier un champ')
+                .setStyle(ButtonStyle.Primary),
             new ButtonBuilder()
                 .setCustomId('embed_clear_fields')
                 .setLabel(`🗑️ Vider les champs (${draft.fields.length})`)
@@ -10677,8 +10685,48 @@ try {
         });
     }
 
-    // Soumission : Champ supplémentaire
-    if (interaction.isModalSubmit() && interaction.customId === 'embed_field_modal') {
+    // Bouton Modifier un champ
+    if (interaction.isButton() && interaction.customId === 'embed_edit_field') {
+        if (interaction.user.id !== '436218312574107658') return;
+        const draft = embedDrafts.get(interaction.user.id);
+        if (!draft || !draft.fields || draft.fields.length === 0) {
+            return interaction.reply({ content: "❌ Aucun champ à modifier !", ephemeral: true });
+        }
+        if (draft.fields.length === 1) {
+            return interaction.showModal(buildEmbedFieldModal(draft.fields[0], 0));
+        }
+
+        const menu = new StringSelectMenuBuilder()
+            .setCustomId('embed_select_field_to_edit')
+            .setPlaceholder('Choisis le champ à modifier...')
+            .addOptions(
+                draft.fields.slice(0, 25).map((f, i) => ({
+                    label: `Champ #${i + 1} : ${f.name.slice(0, 40)}`,
+                    description: f.value.slice(0, 50) || 'Sans contenu',
+                    value: String(i)
+                }))
+            );
+
+        return interaction.reply({
+            content: "📝 **Quel champ souhaites-tu modifier ?**",
+            components: [new ActionRowBuilder().addComponents(menu)],
+            ephemeral: true
+        });
+    }
+
+    // Sélection du champ à modifier depuis le menu
+    if (interaction.isStringSelectMenu() && interaction.customId === 'embed_select_field_to_edit') {
+        if (interaction.user.id !== '436218312574107658') return;
+        const draft = embedDrafts.get(interaction.user.id);
+        const index = parseInt(interaction.values[0], 10);
+        if (!draft || !draft.fields || !draft.fields[index]) {
+            return interaction.reply({ content: "❌ Champ introuvable !", ephemeral: true });
+        }
+        return interaction.showModal(buildEmbedFieldModal(draft.fields[index], index));
+    }
+
+    // Soumission : Ajout ou Modification d'un champ
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('embed_field_modal')) {
         if (interaction.user.id !== '436218312574107658') return;
 
         const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
@@ -10688,17 +10736,28 @@ try {
         const fValue = interaction.fields.getTextInputValue('field_value')?.trim();
         const fInline = interaction.fields.getTextInputValue('field_inline')?.trim().toLowerCase() === 'oui';
 
-        if (fName && fValue) {
+        const isEditMatch = interaction.customId.match(/^embed_field_modal_(\d+)$/);
+        if (isEditMatch) {
+            const index = parseInt(isEditMatch[1], 10);
+            if (!fName) {
+                // Titre vidé = suppression du champ
+                draft.fields.splice(index, 1);
+            } else {
+                draft.fields[index] = { name: fName, value: fValue, inline: fInline };
+            }
+        } else if (fName && fValue) {
             draft.fields.push({ name: fName, value: fValue, inline: fInline });
         }
         embedDrafts.set(interaction.user.id, draft);
 
         const embedPreview = buildEmbedFromDraft(draft);
-        return interaction.update({
-            content: "👀 **Aperçu en direct de ton embed (nouveau champ ajouté !) :**",
+        const data = {
+            content: "👀 **Aperçu en direct de ton embed :**",
             embeds: [embedPreview],
             components: buildEmbedControlRows(draft)
-        });
+        };
+        if (interaction.isFromMessage()) return interaction.update(data);
+        return interaction.reply({ ...data, ephemeral: true });
     }
 
     // Sélection du salon de destination
