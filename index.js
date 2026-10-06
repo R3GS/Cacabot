@@ -532,6 +532,7 @@ function buildEmbedControlRows(draft) {
 }
 
 const { createCanvas, loadImage, registerFont } = require('canvas');
+
 process.env.PANGOCAIRO_BACKEND = 'fontconfig';
 const fs = require('fs');
 try { registerFont('./Cowboy Movie.ttf', { family: 'CowboyMovie' }); } catch(e) { console.error('Font non trouvée:', e.message); }
@@ -1539,7 +1540,7 @@ async function verifierTwitchLive() {
 //     FONCTION PRINCIPALE
 // =========================
 
-function getResponse(raw) {
+async function getResponse(raw) {
     const cleaned = raw
         .toLowerCase()
         .normalize("NFD")
@@ -6000,7 +6001,7 @@ async function generateWelcomeImage(avatarUrl, memberName) {
         monthlyData[monthKey][uid]++;
     }
 
-    const response = FEUR_IMMUNE.includes(message.author.id) ? null : getResponse(message.content);
+    const response = FEUR_IMMUNE.includes(message.author.id) ? null : await getResponse(message.content);
 
     const isExplicitCommand = message.content.trim().startsWith('!');
     if (isChannelMuted(message.channel.id) && !isExplicitCommand) {
