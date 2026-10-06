@@ -13077,7 +13077,7 @@ client.once('ready', async () => {
 //     LISTENER REACTIONS
 // =========================
 
-// Boutons de rôles interactifs (Ajout / Retrait au clic)
+// Boutons de rôles interactifs (Attribution unique)
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isButton() || !interaction.customId.startsWith('rolebtn_')) return;
 
@@ -13090,8 +13090,7 @@ client.on('interactionCreate', async (interaction) => {
 
     const member = interaction.member;
     if (member.roles.cache.has(roleId)) {
-        await member.roles.remove(roleId).catch(err => console.error("Erreur retrait rôle bouton:", err.message));
-        return interaction.reply({ content: `❌ Le rôle **${role.name}** t'a été retiré !`, ephemeral: true });
+        return interaction.reply({ content: `Tu as déjà le rôle **${role.name}** !`, ephemeral: true });
     } else {
         await member.roles.add(roleId).catch(err => console.error("Erreur ajout rôle bouton:", err.message));
         return interaction.reply({ content: `✅ Tu as reçu le rôle **${role.name}** !`, ephemeral: true });
