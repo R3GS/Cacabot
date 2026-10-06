@@ -257,7 +257,7 @@ function parseEmbedColor(colorStr) {
 
 function buildEmbedMainModal(existingData = null) {
     const modal = new ModalBuilder()
-        .setCustomId('embed_main_modal')
+        .setCustomId(`embed_main_modal_${Date.now()}`)
         .setTitle("Texte principal & Couleur");
 
     const titleInput = new TextInputBuilder()
@@ -266,7 +266,9 @@ function buildEmbedMainModal(existingData = null) {
         .setStyle(TextInputStyle.Short)
         .setPlaceholder("Ex : Annonce importante")
         .setRequired(false);
-    if (existingData?.titre) titleInput.setValue(existingData.titre);
+    if (existingData?.titre && existingData.titre.trim().length > 0) {
+        titleInput.setValue(existingData.titre);
+    }
 
     const descInput = new TextInputBuilder()
         .setCustomId('embed_desc')
@@ -274,7 +276,9 @@ function buildEmbedMainModal(existingData = null) {
         .setStyle(TextInputStyle.Paragraph)
         .setPlaceholder("Le texte principal de ton embed...")
         .setRequired(false);
-    if (existingData?.desc) descInput.setValue(existingData.desc);
+    if (existingData?.desc && existingData.desc.trim().length > 0) {
+        descInput.setValue(existingData.desc);
+    }
 
     const colorInput = new TextInputBuilder()
         .setCustomId('embed_color')
@@ -282,7 +286,9 @@ function buildEmbedMainModal(existingData = null) {
         .setStyle(TextInputStyle.Short)
         .setPlaceholder("Ex : #eb0000 ou bleu, rouge, or, vert, rose...")
         .setRequired(false);
-    if (existingData?.couleurRaw) colorInput.setValue(existingData.couleurRaw);
+    if (existingData?.couleurRaw && existingData.couleurRaw.trim().length > 0) {
+        colorInput.setValue(existingData.couleurRaw);
+    }
 
     const footerInput = new TextInputBuilder()
         .setCustomId('embed_footer')
@@ -290,7 +296,9 @@ function buildEmbedMainModal(existingData = null) {
         .setStyle(TextInputStyle.Short)
         .setPlaceholder("Ex : L'équipe de Regaïa")
         .setRequired(false);
-    if (existingData?.footer) footerInput.setValue(existingData.footer);
+    if (existingData?.footer && existingData.footer.trim().length > 0) {
+        footerInput.setValue(existingData.footer);
+    }
 
     modal.addComponents(
         new ActionRowBuilder().addComponents(titleInput),
@@ -303,7 +311,7 @@ function buildEmbedMainModal(existingData = null) {
 
 function buildEmbedImagesModal(existingData = null) {
     const modal = new ModalBuilder()
-        .setCustomId('embed_images_modal')
+        .setCustomId(`embed_images_modal_${Date.now()}`)
         .setTitle("Images & Icônes de l'Embed");
 
     const imageInput = new TextInputBuilder()
@@ -425,8 +433,8 @@ async function trouverMessageCacabot(guild, salonActuel, messageId) {
     return target;
 }
 
-function rehydraterEmbedDepuisMessage(targetMsg) {
-    const exEmbed = targetMsg.embeds[0];
+function rehydraterEmbedDepuisMessage(targetMsg, embedIndex = 0) {
+    const exEmbed = targetMsg.embeds[embedIndex] ?? targetMsg.embeds[0];
     let couleurHex = '';
     if (exEmbed.color !== null && exEmbed.color !== undefined) {
         couleurHex = '#' + exEmbed.color.toString(16).padStart(6, '0');
@@ -448,7 +456,8 @@ function rehydraterEmbedDepuisMessage(targetMsg) {
         hasTimestamp: Boolean(exEmbed.timestamp),
         editingMessage: {
             channelId: targetMsg.channel.id,
-            messageId: targetMsg.id
+            messageId: targetMsg.id,
+            embedIndex: embedIndex
         }
     };
 }
@@ -8563,25 +8572,48 @@ if (response?.needsRouletteAchievements) {
 
         // Cas modification : !embed modify [ID] ou !embed edit [ID]
         if (subEmbed === 'modify' || subEmbed === 'edit') {
-            const msgId = argsEmbed[2];
-            if (!msgId) return message.reply("Usage : `!embed modify [ID_du_message]`");
+            const rawId = argsEmbed[2];
+            if (!rawId) return message.reply("Usage : `!embed modify [ID_du_message] [numéro optionnel]`");
+            const msgId = rawId.replace(/^.*\/([0-9]+)$/, '$1'); // extrait l'ID même si c'est un lien copié
 
             const targetMsg = await trouverMessageCacabot(message.guild, message.channel, msgId);
             if (!targetMsg) return message.reply("Message introuvable ! Vérifie l'ID.");
             if (targetMsg.author.id !== client.user.id) return message.reply("Ce message n'a pas été envoyé par Cacabot !");
             if (!targetMsg.embeds || targetMsg.embeds.length === 0) return message.reply("Ce message ne contient aucun embed !");
 
-            const draft = rehydraterEmbedDepuisMessage(targetMsg);
+            let indexChoisi = 0;
+            if (argsEmbed[3] && !isNaN(parseInt(argsEmbed[3], 10))) {
+                indexChoisi = Math.max(0, parseInt(argsEmbed[3], 10) - 1);
+            }
+
+            // Si le message a plusieurs embeds et qu'aucun numéro n'a été spécifié en argument
+            if (targetMsg.embeds.length > 1 && !argsEmbed[3]) {
+                const boutonsEmbeds = targetMsg.embeds.slice(0, 5).map((emb, idx) => {
+                    const labelNom = emb.title ? emb.title.slice(0, 25) : (emb.description ? emb.description.slice(0, 25) : `Embed #${idx + 1}`);
+                    return new ButtonBuilder()
+                        .setCustomId(`embed_pick_idx_${targetMsg.channel.id}_${targetMsg.id}_${idx}`)
+                        .setLabel(`Embed #${idx + 1} : ${labelNom}`)
+                        .setStyle(ButtonStyle.Primary);
+                });
+
+                return message.reply({
+                    content: `📋 **Ce message contient ${targetMsg.embeds.length} embeds.** Lequel souhaites-tu modifier ?`,
+                    components: [new ActionRowBuilder().addComponents(boutonsEmbeds)]
+                });
+            }
+
+            const draft = rehydraterEmbedDepuisMessage(targetMsg, indexChoisi);
             embedDrafts.set(message.author.id, draft);
 
             const embedPreview = buildEmbedFromDraft(draft);
             return message.reply({
-                content: `✏️ **Mode modification actif pour le message [${targetMsg.id}](${targetMsg.url}) !**\n*(Ajuste les éléments puis clique sur « 💾 Mettre à jour le message »)*`,
+                content: `✏️ **Mode modification actif pour l'embed #${indexChoisi + 1} du message [${targetMsg.id}](${targetMsg.url}) !**\n*(Ajuste les éléments puis clique sur « 💾 Mettre à jour le message »)*`,
                 embeds: [embedPreview],
                 components: buildEmbedControlRows(draft)
             });
         }
 
+        embedDrafts.delete(message.author.id); // Nouveau départ sans les restes du précédent !
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId('open_embed_modal')
@@ -10737,45 +10769,34 @@ try {
         });
     }
 
-    // Soumission : Texte principal
-    if (interaction.isModalSubmit() && interaction.customId === 'embed_main_modal') {
-        if (interaction.user.id !== '436218312574107658') return;
-
-        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
-        draft.titre = interaction.fields.getTextInputValue('embed_title')?.trim();
-        draft.desc = interaction.fields.getTextInputValue('embed_desc')?.trim();
-        draft.couleurRaw = interaction.fields.getTextInputValue('embed_color')?.trim();
-        draft.footer = interaction.fields.getTextInputValue('embed_footer')?.trim();
-        embedDrafts.set(interaction.user.id, draft);
-
-        const embedPreview = buildEmbedFromDraft(draft);
-        const data = {
-            content: "👀 **Aperçu en direct de ton embed :**\n*(Utilise les boutons ci-dessous pour ajouter images, champs ou choisir le salon d'envoi)*",
-            embeds: [embedPreview],
-            components: buildEmbedControlRows(draft)
-        };
-        if (interaction.isFromMessage()) return interaction.update(data);
-        return interaction.reply({ ...data, ephemeral: true });
+    function rehydraterEmbedDepuisMessage(targetMsg, embedIndex = 0) {
+    const exEmbed = targetMsg.embeds[embedIndex] ?? targetMsg.embeds[0];
+    let couleurHex = '';
+    if (exEmbed.color !== null && exEmbed.color !== undefined) {
+        couleurHex = '#' + exEmbed.color.toString(16).padStart(6, '0');
     }
 
-    // Soumission : Images & Icônes
-    if (interaction.isModalSubmit() && interaction.customId === 'embed_images_modal') {
-        if (interaction.user.id !== '436218312574107658') return;
+    const estSpacer = exEmbed.image?.url === TRANSPARENT_SPACER_URL;
 
-        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
-        draft.image = interaction.fields.getTextInputValue('embed_image')?.trim();
-        draft.thumbnail = interaction.fields.getTextInputValue('embed_thumbnail')?.trim();
-        draft.authorName = interaction.fields.getTextInputValue('embed_author_name')?.trim();
-        draft.authorIcon = interaction.fields.getTextInputValue('embed_author_icon')?.trim();
-        embedDrafts.set(interaction.user.id, draft);
-
-        const embedPreview = buildEmbedFromDraft(draft);
-        return interaction.update({
-            content: "👀 **Aperçu en direct de ton embed :**",
-            embeds: [embedPreview],
-            components: buildEmbedControlRows(draft)
-        });
-    }
+    return {
+        titre: exEmbed.title || '',
+        desc: exEmbed.description || '',
+        couleurRaw: couleurHex,
+        footer: exEmbed.footer?.text || '',
+        authorName: exEmbed.author?.name || '',
+        authorIcon: exEmbed.author?.iconURL || '',
+        thumbnail: exEmbed.thumbnail?.url || '',
+        image: estSpacer ? '' : (exEmbed.image?.url || ''),
+        alignerLargeur: estSpacer,
+        fields: exEmbed.fields ? exEmbed.fields.map(f => ({ name: f.name, value: f.value, inline: f.inline ?? false })) : [],
+        hasTimestamp: Boolean(exEmbed.timestamp),
+        editingMessage: {
+            channelId: targetMsg.channel.id,
+            messageId: targetMsg.id,
+            embedIndex: embedIndex
+        }
+    };
+}
 
     // Bouton Modifier un champ
     if (interaction.isButton() && interaction.customId === 'embed_edit_field') {
@@ -10881,7 +10902,7 @@ try {
         });
     }
 
-    // Sauvegarde et mise à jour directe sur le message original
+    // Sauvegarde et mise à jour directe sur le message original (préserve les autres embeds du message)
     if (interaction.isButton() && interaction.customId === 'embed_save_edit') {
         if (interaction.user.id !== '436218312574107658') return;
         const draft = embedDrafts.get(interaction.user.id);
@@ -10889,7 +10910,7 @@ try {
             return interaction.reply({ content: "❌ Aucun message original lié à ce brouillon !", ephemeral: true });
         }
 
-        const { channelId, messageId } = draft.editingMessage;
+        const { channelId, messageId, embedIndex = 0 } = draft.editingMessage;
         const targetChannel = interaction.guild?.channels.cache.get(channelId);
         if (!targetChannel) return interaction.reply({ content: "❌ Salon introuvable !", ephemeral: true });
 
@@ -10897,13 +10918,16 @@ try {
         if (!targetMsg) return interaction.reply({ content: "❌ Message introuvable !", ephemeral: true });
 
         const embedFinal = buildEmbedFromDraft(draft);
-        await targetMsg.edit({ embeds: [embedFinal] }).catch(err => {
+        const tousLesEmbeds = [...targetMsg.embeds];
+        tousLesEmbeds[embedIndex] = embedFinal;
+
+        await targetMsg.edit({ embeds: tousLesEmbeds }).catch(err => {
             return interaction.reply({ content: `❌ Erreur : ${err.message}`, ephemeral: true });
         });
 
         embedDrafts.delete(interaction.user.id);
         return interaction.update({
-            content: `✅ **L'embed a été mis à jour avec succès sur [le message original](${targetMsg.url}) !**`,
+            content: `✅ **L'embed #${embedIndex + 1} a été mis à jour avec succès sur [le message original](${targetMsg.url}) !**`,
             embeds: [],
             components: []
         });
