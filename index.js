@@ -5252,18 +5252,30 @@ async function startPomodoro(channel, participantsMention, workMin, breakMin, cy
 }
 
 const WELCOME_BACKGROUNDS = [
-    './DHMISWelcome.png',
-    './EndacopiaWelcome.png',
-    './FNAFWelcome.png',
-    './KinitoPETWelcome.png',
-    './MouthwashingWelcome.png',
-    './PoppyWelcome.png',
-    './UndertaleWelcome.png'
+    ['./DHMISWelcome.png', './dhmiswelcome.png'],
+    ['./EndacopiaWelcome.png', './endacopiawelcome.png'],
+    ['./FNAFWelcome.png', './fnafwelcome.png'],
+    ['./KinitoPETWelcome.png', './kinitopetwelcome.png'],
+    ['./MouthwashingWelcome.png', './mouthwashingwelcome.png'],
+    ['./PoppyWelcome.png', './poppywelcome.png'],
+    ['./UndertaleWelcome.png', './undertalewelcome.png']
 ];
 
+async function chargerImageSecurisee(variantes) {
+    for (const v of variantes) {
+        try {
+            return await loadImage(v);
+        } catch (e) {}
+    }
+    return null;
+}
+
 async function generateWelcomeImage(avatarUrl, memberName) {
-    // 1. Charger le calque de premier plan pour connaître les dimensions exactes
-    const overlay = await loadImage('./Bienvenue.png');
+    // 1. Charger le calque de premier plan
+    const overlay = await chargerImageSecurisee(['./Bienvenue.png', './bienvenue.png']);
+    if (!overlay) {
+        throw new Error("L'image 'Bienvenue.png' est introuvable à la racine de ton bot ! Vérifie qu'elle a bien été envoyée.");
+    }
     const w = overlay.width;
     const h = overlay.height;
 
@@ -5271,12 +5283,17 @@ async function generateWelcomeImage(avatarUrl, memberName) {
     const ctx = canvas.getContext('2d');
 
     // 2. Tirer au sort un fond parmi les 7 thèmes
-    const bgPath = WELCOME_BACKGROUNDS[Math.floor(Math.random() * WELCOME_BACKGROUNDS.length)];
-    try {
-        const bgImg = await loadImage(bgPath);
+    const bgVariantes = WELCOME_BACKGROUNDS[Math.floor(Math.random() * WELCOME_BACKGROUNDS.length)];
+    const bgImg = await chargerImageSecurisee(bgVariantes);
+    if (bgImg) {
         ctx.drawImage(bgImg, 0, 0, w, h);
-    } catch (e) {
-        ctx.fillStyle = '#111111';
+    } else {
+        // Fallback dégradé si le fond choisi n'a pas été trouvé
+        const grad = ctx.createLinearGradient(0, 0, w, h);
+        grad.addColorStop(0, '#750000');
+        grad.addColorStop(0.5, '#400000');
+        grad.addColorStop(1, '#111111');
+        ctx.fillStyle = grad;
         ctx.fillRect(0, 0, w, h);
     }
 
@@ -5300,12 +5317,12 @@ async function generateWelcomeImage(avatarUrl, memberName) {
     }
     ctx.restore();
 
-    // 4. Poser le calque Bienvenue.png par-dessus (recouvre les bords du cercle avec le contour blanc)
+    // 4. Poser le calque Bienvenue.png par-dessus
     ctx.drawImage(overlay, 0, 0, w, h);
 
     // 5. Écrire le pseudo du membre entre "BIENVENUE" et "MERCI D'AVOIR REJOINT LE SERVEUR !"
-    const cleanName = memberName.toUpperCase();
-    let fontSize = Math.round(h * 0.075); // ~37px sur 500h
+    const cleanName = (memberName || 'NOUVEAU MEMBRE').toUpperCase();
+    let fontSize = Math.round(h * 0.075);
 
     ctx.save();
     ctx.fillStyle = '#ffffff';
@@ -6200,10 +6217,21 @@ return message.reply({ embeds: [embed], components: [row] });
         const subCmd = message.content.trim().split(/\s+/)[1]?.toLowerCase();
 
         if (subCmd === 'test') {
-            const avatarUrl = message.author.displayAvatarURL({ extension: 'png', size: 512 });
-            const cardBuffer = await generateWelcomeImage(avatarUrl, message.member?.displayName ?? message.author.username);
-            return message.reply({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
+            try {
+                const avatarUrl = message.author.displayAvatarURL({ extension: 'png', size: 512 });
+                const cardBuffer = await ge// Tester l'affiche depuis le panneau
+    if (interaction.isButton() && interaction.customId === 'welcome_test_btn') {
+        if (interaction.user.id !== EPSYS_ID) return;
+        await interaction.deferReply({ ephemeral: true });
+        try {
+            const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 512 });
+            const cardBuffer = await generateWelcomeImage(avatarUrl, interaction.member?.displayName ?? interaction.user.username);
+            return interaction.editReply({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
+        } catch (err) {
+            console.error("Erreur bouton welcome test :", err);
+            return interaction.editReply({ content: `❌ **Erreur d'affiche :** \`${err.message}\`` });
         }
+    }
 
         // !welcome ou !welcome config : ouvre le panneau de configuration
         return message.reply({
