@@ -6219,19 +6219,13 @@ return message.reply({ embeds: [embed], components: [row] });
         if (subCmd === 'test') {
             try {
                 const avatarUrl = message.author.displayAvatarURL({ extension: 'png', size: 512 });
-                const cardBuffer = await ge// Tester l'affiche depuis le panneau
-    if (interaction.isButton() && interaction.customId === 'welcome_test_btn') {
-        if (interaction.user.id !== EPSYS_ID) return;
-        await interaction.deferReply({ ephemeral: true });
-        try {
-            const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 512 });
-            const cardBuffer = await generateWelcomeImage(avatarUrl, interaction.member?.displayName ?? interaction.user.username);
-            return interaction.editReply({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
-        } catch (err) {
-            console.error("Erreur bouton welcome test :", err);
-            return interaction.editReply({ content: `❌ **Erreur d'affiche :** \`${err.message}\`` });
+                const cardBuffer = await generateWelcomeImage(avatarUrl, message.member?.displayName ?? message.author.username);
+                return message.reply({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
+            } catch (err) {
+                console.error("Erreur welcome test :", err);
+                return message.reply(`❌ **Erreur d'affiche :** \`${err.message}\``);
+            }
         }
-    }
 
         // !welcome ou !welcome config : ouvre le panneau de configuration
         return message.reply({
