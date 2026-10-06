@@ -7716,8 +7716,8 @@ if (response?.needsRouletteAchievements) {
         if (cible.id === EPSYS_ID) badges.push('• 👑 Créatrice du serveur et de Cacabot');
 
         // 2. Tirages Roulette
-        if (nbTirages >= 500) badges.push('🎰 Gambling Addict (500+ tirages)');
-        else if (nbTirages >= 100) badges.push('🎰 Habitué.e de la Roulette (100+ tirages)');
+        if (nbTirages >= 500) badges.push('• 🎰 Gambling Addict (500+ tirages)');
+        else if (nbTirages >= 100) badges.push('• 🎰 Habitué.e de la Roulette (100+ tirages)');
 
         // 3. Succès Roulette
         const nbAchs = Object.keys(userAchs).length;
