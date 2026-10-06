@@ -269,10 +269,10 @@ function buildEmbedModal(existingData = null) {
 
     const descInput = new TextInputBuilder()
         .setCustomId('embed_desc')
-        .setLabel("Description / Contenu")
+        .setLabel("Description / Contenu (optionnel)")
         .setStyle(TextInputStyle.Paragraph)
         .setPlaceholder("Le texte principal de ton embed...")
-        .setRequired(true);
+        .setRequired(false);
     if (existingData?.desc) descInput.setValue(existingData.desc);
 
     const colorInput = new TextInputBuilder()
@@ -10435,11 +10435,15 @@ try {
         const image = interaction.fields.getTextInputValue('embed_image')?.trim();
         const footer = interaction.fields.getTextInputValue('embed_footer')?.trim();
 
+        if (!titre && !desc && !image && !footer) {
+            return interaction.reply({ content: "❌ Ton embed doit au moins contenir une image, un titre ou du texte !", ephemeral: true });
+        }
+
         const embedPreview = new EmbedBuilder()
-            .setColor(parseEmbedColor(couleurRaw))
-            .setDescription(desc);
+            .setColor(parseEmbedColor(couleurRaw));
 
         if (titre) embedPreview.setTitle(titre);
+        if (desc) embedPreview.setDescription(desc);
         if (image && /^https?:\/\//i.test(image)) embedPreview.setImage(image);
         if (footer) embedPreview.setFooter({ text: footer });
 
