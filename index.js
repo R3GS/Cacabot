@@ -235,6 +235,7 @@ const {
     Routes
 } = require('discord.js');
 
+const TRANSPARENT_SPACER_URL = 'https://cdn.discordapp.com/attachments/1480756332373213275/1556870914334007427/Blank.png';
 const embedDrafts = new Map(); // userId -> { embedData }
 
 function parseEmbedColor(colorStr) {
@@ -254,10 +255,10 @@ function parseEmbedColor(colorStr) {
     return 0x5865f2;
 }
 
-function buildEmbedModal(existingData = null) {
+function buildEmbedMainModal(existingData = null) {
     const modal = new ModalBuilder()
-        .setCustomId('embed_builder_modal')
-        .setTitle("Créateur d'Embed");
+        .setCustomId('embed_main_modal')
+        .setTitle("Texte principal & Couleur");
 
     const titleInput = new TextInputBuilder()
         .setCustomId('embed_title')
@@ -279,21 +280,13 @@ function buildEmbedModal(existingData = null) {
         .setCustomId('embed_color')
         .setLabel("Couleur (Hex ou nom)")
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder("Ex : #ff0000 ou bleu, rouge, or, vert, rose...")
+        .setPlaceholder("Ex : #eb0000 ou bleu, rouge, or, vert, rose...")
         .setRequired(false);
     if (existingData?.couleurRaw) colorInput.setValue(existingData.couleurRaw);
 
-    const imageInput = new TextInputBuilder()
-        .setCustomId('embed_image')
-        .setLabel("Image / Bannière (URL optionnelle)")
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder("https://exemple.com/image.png")
-        .setRequired(false);
-    if (existingData?.image) imageInput.setValue(existingData.image);
-
     const footerInput = new TextInputBuilder()
         .setCustomId('embed_footer')
-        .setLabel("Pied de page (Footer optionnel)")
+        .setLabel("Pied de page (Footer en bas)")
         .setStyle(TextInputStyle.Short)
         .setPlaceholder("Ex : L'équipe de Regaïa")
         .setRequired(false);
@@ -303,10 +296,169 @@ function buildEmbedModal(existingData = null) {
         new ActionRowBuilder().addComponents(titleInput),
         new ActionRowBuilder().addComponents(descInput),
         new ActionRowBuilder().addComponents(colorInput),
-        new ActionRowBuilder().addComponents(imageInput),
         new ActionRowBuilder().addComponents(footerInput)
     );
     return modal;
+}
+
+function buildEmbedImagesModal(existingData = null) {
+    const modal = new ModalBuilder()
+        .setCustomId('embed_images_modal')
+        .setTitle("Images & Icônes de l'Embed");
+
+    const imageInput = new TextInputBuilder()
+        .setCustomId('embed_image')
+        .setLabel("Grande image (Bannière du bas - URL)")
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder("https://exemple.com/image.png")
+        .setRequired(false);
+    if (existingData?.image) imageInput.setValue(existingData.image);
+
+    const thumbnailInput = new TextInputBuilder()
+        .setCustomId('embed_thumbnail')
+        .setLabel("Miniature (Haut à droite - URL)")
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder("https://exemple.com/logo.png")
+        .setRequired(false);
+    if (existingData?.thumbnail) thumbnailInput.setValue(existingData.thumbnail);
+
+    const authorNameInput = new TextInputBuilder()
+        .setCustomId('embed_author_name')
+        .setLabel("Auteur (Texte en haut à gauche)")
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder("Ex : Epsys")
+        .setRequired(false);
+    if (existingData?.authorName) authorNameInput.setValue(existingData.authorName);
+
+    const authorIconInput = new TextInputBuilder()
+        .setCustomId('embed_author_icon')
+        .setLabel("Icône Auteur (Haut à gauche - URL)")
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder("https://exemple.com/avatar.png")
+        .setRequired(false);
+    if (existingData?.authorIcon) authorIconInput.setValue(existingData.authorIcon);
+
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(imageInput),
+        new ActionRowBuilder().addComponents(thumbnailInput),
+        new ActionRowBuilder().addComponents(authorNameInput),
+        new ActionRowBuilder().addComponents(authorIconInput)
+    );
+    return modal;
+}
+
+function buildEmbedFieldModal() {
+    const modal = new ModalBuilder()
+        .setCustomId('embed_field_modal')
+        .setTitle("Ajouter un champ à l'Embed");
+
+    const nameInput = new TextInputBuilder()
+        .setCustomId('field_name')
+        .setLabel("Titre du champ")
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder("Ex : Règlement / Date de l'événement")
+        .setRequired(true);
+
+    const valueInput = new TextInputBuilder()
+        .setCustomId('field_value')
+        .setLabel("Contenu / Sous-texte du champ")
+        .setStyle(TextInputStyle.Paragraph)
+        .setPlaceholder("Le texte qui s'affiche sous le titre du champ...")
+        .setRequired(true);
+
+    const inlineInput = new TextInputBuilder()
+        .setCustomId('field_inline')
+        .setLabel("Aligné côte-à-côte ? (oui / non)")
+        .setStyle(TextInputStyle.Short)
+        .setPlaceholder("non (par défaut) ou oui")
+        .setRequired(false);
+
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(nameInput),
+        new ActionRowBuilder().addComponents(valueInput),
+        new ActionRowBuilder().addComponents(inlineInput)
+    );
+    return modal;
+}
+
+function buildEmbedFromDraft(draft) {
+    const embed = new EmbedBuilder()
+        .setColor(parseEmbedColor(draft.couleurRaw));
+
+    if (draft.titre) embed.setTitle(draft.titre);
+    if (draft.desc) embed.setDescription(draft.desc);
+    if (draft.authorName) {
+        embed.setAuthor({
+            name: draft.authorName,
+            iconURL: (draft.authorIcon && /^https?:\/\//i.test(draft.authorIcon)) ? draft.authorIcon : undefined
+        });
+    }
+    if (draft.thumbnail && /^https?:\/\//i.test(draft.thumbnail)) embed.setThumbnail(draft.thumbnail);
+    if (draft.image && /^https?:\/\//i.test(draft.image)) {
+        embed.setImage(draft.image);
+    } else if (draft.alignerLargeur) {
+        embed.setImage(TRANSPARENT_SPACER_URL);
+    }
+    if (draft.fields && draft.fields.length > 0) {
+        embed.addFields(draft.fields.map(f => ({ name: f.name, value: f.value, inline: f.inline ?? false })));
+    }
+    if (draft.footer) embed.setFooter({ text: draft.footer });
+    if (draft.hasTimestamp) embed.setTimestamp();
+
+    return embed;
+}
+
+function buildEmbedControlRows(draft) {
+    const channelSelect = new ChannelSelectMenuBuilder()
+        .setCustomId('embed_send_channel')
+        .setPlaceholder('Choisis le salon où envoyer cet embed...')
+        .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement);
+
+    const editMainBtn = new ButtonBuilder()
+        .setCustomId('embed_edit_main')
+        .setLabel('✏️ Texte & Couleur')
+        .setStyle(ButtonStyle.Primary);
+
+    const editImagesBtn = new ButtonBuilder()
+        .setCustomId('embed_edit_images')
+        .setLabel('🖼️ Images & Icônes')
+        .setStyle(ButtonStyle.Secondary);
+
+    const addFieldBtn = new ButtonBuilder()
+        .setCustomId('embed_add_field')
+        .setLabel('➕ Ajouter un champ')
+        .setStyle(ButtonStyle.Success);
+
+    const toggleTimeBtn = new ButtonBuilder()
+        .setCustomId('embed_toggle_time')
+        .setLabel(draft.hasTimestamp ? '🕒 Retirer Date/Heure' : '🕒 Ajouter Date/Heure')
+        .setStyle(draft.hasTimestamp ? ButtonStyle.Primary : ButtonStyle.Secondary);
+
+    const toggleAlignBtn = new ButtonBuilder()
+        .setCustomId('embed_toggle_align')
+        .setLabel(draft.alignerLargeur ? '📏 Plein format : OUI' : '📏 Plein format : NON')
+        .setStyle(draft.alignerLargeur ? ButtonStyle.Primary : ButtonStyle.Secondary);
+
+    const cancelBtn = new ButtonBuilder()
+        .setCustomId('embed_cancel_draft')
+        .setLabel('❌ Annuler')
+        .setStyle(ButtonStyle.Danger);
+
+    const row1 = new ActionRowBuilder().addComponents(channelSelect);
+    const row2 = new ActionRowBuilder().addComponents(editMainBtn, editImagesBtn, addFieldBtn, toggleTimeBtn, toggleAlignBtn);
+    const row3 = new ActionRowBuilder();
+
+    if (draft.fields && draft.fields.length > 0) {
+        row3.addComponents(
+            new ButtonBuilder()
+                .setCustomId('embed_clear_fields')
+                .setLabel(`🗑️ Vider les champs (${draft.fields.length})`)
+                .setStyle(ButtonStyle.Secondary)
+        );
+    }
+    row3.addComponents(cancelBtn);
+
+    return [row1, row2, row3];
 }
 
 const { createCanvas, loadImage, registerFont } = require('canvas');
@@ -10335,7 +10487,8 @@ try {
             if (interaction.user.id !== '436218312574107658') {
                 return interaction.reply({ content: "Cette commande est réservée à Epsys.", ephemeral: true });
             }
-            return interaction.showModal(buildEmbedModal());
+            const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
+            return interaction.showModal(buildEmbedMainModal(draft));
         }
     }
 
@@ -10415,66 +10568,137 @@ try {
         if (interaction.user.id !== '436218312574107658') {
             return interaction.reply({ content: "Ce bouton est réservé à Epsys.", ephemeral: true });
         }
-        return interaction.showModal(buildEmbedModal());
+        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
+        return interaction.showModal(buildEmbedMainModal(draft));
     }
 
-    // Bouton pour retoucher l'embed pré-rempli
-    if (interaction.isButton() && interaction.customId === 'embed_edit_draft') {
+    // Bouton Texte principal & Couleur
+    if (interaction.isButton() && interaction.customId === 'embed_edit_main') {
         if (interaction.user.id !== '436218312574107658') return;
-        const draft = embedDrafts.get(interaction.user.id);
-        return interaction.showModal(buildEmbedModal(draft));
+        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
+        return interaction.showModal(buildEmbedMainModal(draft));
     }
 
-    // Soumission du formulaire Modal (Aperçu)
-    if (interaction.isModalSubmit() && interaction.customId === 'embed_builder_modal') {
+    // Bouton Images & Icônes
+    if (interaction.isButton() && interaction.customId === 'embed_edit_images') {
         if (interaction.user.id !== '436218312574107658') return;
+        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
+        return interaction.showModal(buildEmbedImagesModal(draft));
+    }
 
-        const titre = interaction.fields.getTextInputValue('embed_title')?.trim();
-        const desc = interaction.fields.getTextInputValue('embed_desc')?.trim();
-        const couleurRaw = interaction.fields.getTextInputValue('embed_color')?.trim();
-        const image = interaction.fields.getTextInputValue('embed_image')?.trim();
-        const footer = interaction.fields.getTextInputValue('embed_footer')?.trim();
+    // Bouton Ajouter un champ
+    if (interaction.isButton() && interaction.customId === 'embed_add_field') {
+        if (interaction.user.id !== '436218312574107658') return;
+        return interaction.showModal(buildEmbedFieldModal());
+    }
 
-        if (!titre && !desc && !image && !footer) {
-            return interaction.reply({ content: "❌ Ton embed doit au moins contenir une image, un titre ou du texte !", ephemeral: true });
-        }
+    // Bouton Horodatage (On/Off)
+    if (interaction.isButton() && interaction.customId === 'embed_toggle_time') {
+        if (interaction.user.id !== '436218312574107658') return;
+        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
+        draft.hasTimestamp = !draft.hasTimestamp;
+        embedDrafts.set(interaction.user.id, draft);
 
-        const embedPreview = new EmbedBuilder()
-            .setColor(parseEmbedColor(couleurRaw));
-
-        if (titre) embedPreview.setTitle(titre);
-        if (desc) embedPreview.setDescription(desc);
-        if (image && /^https?:\/\//i.test(image)) embedPreview.setImage(image);
-        if (footer) embedPreview.setFooter({ text: footer });
-
-        embedDrafts.set(interaction.user.id, { titre, desc, couleurRaw, image, footer, embed: embedPreview });
-
-        const channelSelect = new ChannelSelectMenuBuilder()
-            .setCustomId('embed_send_channel')
-            .setPlaceholder('Choisis le salon où envoyer cet embed...')
-            .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement);
-
-        const editBtn = new ButtonBuilder()
-            .setCustomId('embed_edit_draft')
-            .setLabel('✏️ Modifier l\'embed')
-            .setStyle(ButtonStyle.Secondary);
-
-        const cancelBtn = new ButtonBuilder()
-            .setCustomId('embed_cancel_draft')
-            .setLabel('❌ Annuler')
-            .setStyle(ButtonStyle.Danger);
-
-        const rowSelect = new ActionRowBuilder().addComponents(channelSelect);
-        const rowButtons = new ActionRowBuilder().addComponents(editBtn, cancelBtn);
-
-        const previewData = {
-            content: "👀 **Voici l'aperçu de ton embed :**\n*(Choisis le salon ci-dessous, ou clique sur Modifier pour retoucher)*",
+        const embedPreview = buildEmbedFromDraft(draft);
+        return interaction.update({
+            content: "👀 **Aperçu en direct de ton embed :**",
             embeds: [embedPreview],
-            components: [rowSelect, rowButtons]
-        };
+            components: buildEmbedControlRows(draft)
+        });
+    }
 
-        if (interaction.isFromMessage()) return interaction.update(previewData);
-        return interaction.reply({ ...previewData, ephemeral: true });
+    // Bouton Plein format / Aligner la largeur (On/Off)
+    if (interaction.isButton() && interaction.customId === 'embed_toggle_align') {
+        if (interaction.user.id !== '436218312574107658') return;
+        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
+        draft.alignerLargeur = !draft.alignerLargeur;
+        embedDrafts.set(interaction.user.id, draft);
+
+        const embedPreview = buildEmbedFromDraft(draft);
+        return interaction.update({
+            content: "👀 **Aperçu en direct de ton embed :**",
+            embeds: [embedPreview],
+            components: buildEmbedControlRows(draft)
+        });
+    }
+
+    // Bouton Vider les champs
+    if (interaction.isButton() && interaction.customId === 'embed_clear_fields') {
+        if (interaction.user.id !== '436218312574107658') return;
+        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
+        draft.fields = [];
+        embedDrafts.set(interaction.user.id, draft);
+
+        const embedPreview = buildEmbedFromDraft(draft);
+        return interaction.update({
+            content: "👀 **Aperçu en direct de ton embed (champs réinitialisés) :**",
+            embeds: [embedPreview],
+            components: buildEmbedControlRows(draft)
+        });
+    }
+
+    // Soumission : Texte principal
+    if (interaction.isModalSubmit() && interaction.customId === 'embed_main_modal') {
+        if (interaction.user.id !== '436218312574107658') return;
+
+        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
+        draft.titre = interaction.fields.getTextInputValue('embed_title')?.trim();
+        draft.desc = interaction.fields.getTextInputValue('embed_desc')?.trim();
+        draft.couleurRaw = interaction.fields.getTextInputValue('embed_color')?.trim();
+        draft.footer = interaction.fields.getTextInputValue('embed_footer')?.trim();
+        embedDrafts.set(interaction.user.id, draft);
+
+        const embedPreview = buildEmbedFromDraft(draft);
+        const data = {
+            content: "👀 **Aperçu en direct de ton embed :**\n*(Utilise les boutons ci-dessous pour ajouter images, champs ou choisir le salon d'envoi)*",
+            embeds: [embedPreview],
+            components: buildEmbedControlRows(draft)
+        };
+        if (interaction.isFromMessage()) return interaction.update(data);
+        return interaction.reply({ ...data, ephemeral: true });
+    }
+
+    // Soumission : Images & Icônes
+    if (interaction.isModalSubmit() && interaction.customId === 'embed_images_modal') {
+        if (interaction.user.id !== '436218312574107658') return;
+
+        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
+        draft.image = interaction.fields.getTextInputValue('embed_image')?.trim();
+        draft.thumbnail = interaction.fields.getTextInputValue('embed_thumbnail')?.trim();
+        draft.authorName = interaction.fields.getTextInputValue('embed_author_name')?.trim();
+        draft.authorIcon = interaction.fields.getTextInputValue('embed_author_icon')?.trim();
+        embedDrafts.set(interaction.user.id, draft);
+
+        const embedPreview = buildEmbedFromDraft(draft);
+        return interaction.update({
+            content: "👀 **Aperçu en direct de ton embed :**",
+            embeds: [embedPreview],
+            components: buildEmbedControlRows(draft)
+        });
+    }
+
+    // Soumission : Champ supplémentaire
+    if (interaction.isModalSubmit() && interaction.customId === 'embed_field_modal') {
+        if (interaction.user.id !== '436218312574107658') return;
+
+        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
+        if (!draft.fields) draft.fields = [];
+
+        const fName = interaction.fields.getTextInputValue('field_name')?.trim();
+        const fValue = interaction.fields.getTextInputValue('field_value')?.trim();
+        const fInline = interaction.fields.getTextInputValue('field_inline')?.trim().toLowerCase() === 'oui';
+
+        if (fName && fValue) {
+            draft.fields.push({ name: fName, value: fValue, inline: fInline });
+        }
+        embedDrafts.set(interaction.user.id, draft);
+
+        const embedPreview = buildEmbedFromDraft(draft);
+        return interaction.update({
+            content: "👀 **Aperçu en direct de ton embed (nouveau champ ajouté !) :**",
+            embeds: [embedPreview],
+            components: buildEmbedControlRows(draft)
+        });
     }
 
     // Sélection du salon de destination
@@ -10493,13 +10717,14 @@ try {
             return interaction.update({ content: "❌ Salon introuvable.", embeds: [], components: [] });
         }
 
-        await targetChannel.send({ embeds: [draft.embed ?? draft] }).catch(err => {
+        const embedFinal = buildEmbedFromDraft(draft);
+        await targetChannel.send({ embeds: [embedFinal] }).catch(err => {
             return interaction.update({ content: `❌ Erreur lors de l'envoi : ${err.message}`, embeds: [], components: [] });
         });
 
         embedDrafts.delete(interaction.user.id);
         return interaction.update({
-            content: `✅ **Embed envoyé avec succès dans <#${channelId}> !**`,
+            content: `✅ **Embed complet envoyé avec succès dans <#${channelId}> !**`,
             embeds: [],
             components: []
         });
@@ -12558,7 +12783,10 @@ client.once('ready', async () => {
                 if (nouveauCommitDetecte) {
                     const commitCount = await getCommitCount();
                     const versionTexte = commitCount ? ` *(Version 1.${commitCount})*` : '';
-                    await salonNotif.send(`✅ Mise à jour faite, je suis de retour !${versionTexte}`);
+                    const msgRetour = await salonNotif.send(`✅ Mise à jour faite, je suis de retour !${versionTexte}\nLaisse-moi encore 10 secondes et tu pourras exéctuer des commandes...`);
+                    setTimeout(async () => {
+                        await msgRetour.edit(`✅ Mise à jour faite, je suis de retour !${versionTexte}\nTout est prêt :)`).catch(() => {});
+                    }, 10000);
 
                     // Envoi automatique du fichier index.js dans le salon d'archives de code
                     const salonCode = await client.channels.fetch('1556184304848085114').catch(() => null);
