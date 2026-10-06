@@ -533,8 +533,27 @@ function buildEmbedControlRows(draft) {
 
 const { createCanvas, loadImage, registerFont } = require('canvas');
 process.env.PANGOCAIRO_BACKEND = 'fontconfig';
+const fs = require('fs');
 try { registerFont('./Cowboy Movie.ttf', { family: 'CowboyMovie' }); } catch(e) { console.error('Font non trouvée:', e.message); }
-try { registerFont('./LEMONMILK-Bold.otf', { family: 'LemonMilk' }); } catch(e) { console.error('Font LemonMilk non trouvée:', e.message); }
+
+const lemonMilkPaths = [
+    './LEMONMILK-Bold.otf',
+    './LemonMilk-Bold.otf',
+    './lemonmilk-bold.otf',
+    './LemonMilk.otf',
+    './LEMONMILK.otf',
+    './assets/LEMONMILK-Bold.otf',
+    './assets/LemonMilk-Bold.otf'
+];
+for (const p of lemonMilkPaths) {
+    if (fs.existsSync(p)) {
+        try {
+            registerFont(p, { family: 'LemonMilk', weight: 'bold' });
+            registerFont(p, { family: 'LemonMilk', weight: 'normal' });
+            break;
+        } catch(e) {}
+    }
+}
 
 const client = new Client({
     intents: [
@@ -5271,8 +5290,13 @@ async function chargerImageSecurisee(variantes) {
 }
 
 async function generateWelcomeImage(avatarUrl, memberName) {
-    // 1. Charger le calque de premier plan
-    const overlay = await chargerImageSecurisee(['./Bienvenue.png', './bienvenue.png']);
+    // 1. Charger le calque de premier plan (chemins locaux + sous-dossiers)
+    const overlay = await chargerImageSecurisee([
+        './Bienvenue.png',
+        './bienvenue.png',
+        './assets/Bienvenue.png',
+        './assets/bienvenue.png'
+    ]);
     if (!overlay) {
         throw new Error("L'image 'Bienvenue.png' est introuvable à la racine de ton bot ! Vérifie qu'elle a bien été envoyée.");
     }
@@ -5297,10 +5321,10 @@ async function generateWelcomeImage(avatarUrl, memberName) {
         ctx.fillRect(0, 0, w, h);
     }
 
-    // 3. Découper et dessiner l'avatar du membre au centre du cercle
+    // 3. Découper et dessiner l'avatar du membre au centre du cercle (ajusté pile à l'anneau blanc)
     const centerX = w * 0.5;
-    const centerY = h * 0.355;
-    const radius = h * 0.27;
+    const centerY = h * 0.346;
+    const radius = h * 0.240;
 
     ctx.save();
     ctx.beginPath();
@@ -5322,21 +5346,23 @@ async function generateWelcomeImage(avatarUrl, memberName) {
 
     // 5. Écrire le pseudo du membre entre "BIENVENUE" et "MERCI D'AVOIR REJOINT LE SERVEUR !"
     const cleanName = (memberName || 'NOUVEAU MEMBRE').toUpperCase();
-    let fontSize = Math.round(h * 0.075);
+    let fontSize = Math.round(h * 0.065); // ~66px, bien visible et proportionné
 
     ctx.save();
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-    ctx.shadowBlur = 12;
+    ctx.shadowBlur = 10;
     ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 4;
+    ctx.shadowOffsetY = 3;
 
-    ctx.font = `bold ${fontSize}px "LemonMilk"`;
-    while (ctx.measureText(cleanName).width > (w * 0.5) && fontSize > 16) {
+    // Fallbacks sans-serif gras et modernes (évite CowboyMovie si LemonMilk est absent)
+    ctx.font = `bold ${fontSize}px "LemonMilk", "Arial Black", "Impact", sans-serif`;
+    const maxTextWidth = w * 0.55;
+    while (ctx.measureText(cleanName).width > maxTextWidth && fontSize > 36) {
         fontSize -= 2;
-        ctx.font = `bold ${fontSize}px "LemonMilk"`;
+        ctx.font = `bold ${fontSize}px "LemonMilk", "Arial Black", "Impact", sans-serif`;
     }
 
     ctx.fillText(cleanName, centerX, h * 0.825);
@@ -11205,9 +11231,14 @@ try {
     if (interaction.isButton() && interaction.customId === 'welcome_test_btn') {
         if (interaction.user.id !== EPSYS_ID) return;
         await interaction.deferReply({ ephemeral: true });
-        const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 512 });
-        const cardBuffer = await generateWelcomeImage(avatarUrl, interaction.member?.displayName ?? interaction.user.username);
-        return interaction.editReply({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
+        try {
+            const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 512 });
+            const cardBuffer = await generateWelcomeImage(avatarUrl, interaction.member?.displayName ?? interaction.user.username);
+            return interaction.editReply({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
+        } catch (err) {
+            console.error("Erreur bouton welcome test :", err);
+            return interaction.editReply({ content: `❌ **Erreur d'affiche :** \`${err.message}\`` });
+        }
     }
 
     // Annulation du brouillon
