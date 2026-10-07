@@ -6,8 +6,9 @@ function seedRandom(seed) {
 }
 
 function getHoroscopeForSign(signIndex, dateKey) {
-    const horoscopes = [
-        ["Tu vas perdre une chaussette aujourd'hui. L'autre sera retrouvée en 2031.", "Mercure est en rétrograde dans ta salle de bain. Évite les miroirs.",
+    const horoscopes =
+        [
+        "Tu vas perdre une chaussette aujourd'hui. L'autre sera retrouvée en 2031.", "Mercure est en rétrograde dans ta salle de bain. Évite les miroirs.",
         "Un pigeon te regarde. Il sait.", "Ton destin est écrit sur un ticket de caisse Lidl froissé.", "Tu vas dire \"ah ouais\" à quelque chose d'important sans vraiment écouter.",
         "Quelqu'un pense à toi en ce moment. C'est flippant.", "Les astres disent : mange tes légumes. Les astres ont tort.",
         "Tu vas rater un truc important parce que t'étais sur TikTok.", "Venus est en opposition avec ta flemme. La flemme gagne.",
