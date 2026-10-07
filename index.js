@@ -537,11 +537,18 @@ process.env.PANGOCAIRO_BACKEND = 'fontconfig';
 const fs = require('fs');
 try { registerFont('./Cowboy Movie.ttf', { family: 'CowboyMovie' }); } catch(e) { console.error('Font non trouvée:', e.message); }
 
+// =========================
+//      INTERSECTIONS
+// =========================
+
 ///!destin
 const { getDestinReponse } = require('./destin.js');
 
 ///!horoscope
 const { getHoroscopeForSign, buildHoroscopeEmbed, execute: executeHoroscope } = require('./horoscope.js');
+
+///!animal
+const { getAnimalResponse } = require('./animal.js');
 
 const lemonMilkPaths = [
     './LEMONMILK-Bold.otf',
@@ -4230,72 +4237,6 @@ function checkCooldown(userId, cmd, seconds = 3) {
 const CHEH_GIF = 'https://cdn.discordapp.com/attachments/1128032964924670053/1505363865137840180/cheh.gif';
 
 // =========================
-//     LOGIQUE !ANIMAL
-// =========================
-
-function getAnimalResponse(message, cibleUser) {
-    const cible = cibleUser ?? message.mentions.users.first();
-
-    const cibleNom = cible
-        ? (message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username)
-        : null;
-
-    const base = cible
-        ? (cible.id === client.user.id
-            ? "Mon animal spirituel est..."
-            : `Hmmm, l'animal spirituel de **${cibleNom}** est...`)
-        : "Hmmm, ton animal spirituel est...";
-
-    const animauxMasc = [
-        "Un rat de RER", "Un pigeon", "Un chat errant", "Un renard", "Un dauphin", "Un corbeau", "Un hamster", "Un chien", "Un crapaud", "Un panda",
-        "Un h\u00e9risson", "Un taureau", "Un papillon", "Un putain de moustique", "Un axolotl", "Un raton laveur", "Un perroquet", "Un singe",
-        "Un poisson", "Un li\u00e8vre", "Un scarab\u00e9e", "Un suricate", "Un \u00e9l\u00e9phant", "Un rhinoc\u00e9ros", "Un toucan", "Un capybara", "Un cheval",
-        "Un bousier", "Un pingouin", "Un Pikachu", "Un mulot", "Un cochon", "Un lion", "Un moucheron", "Un chevreuil", "Un castor", "Un chacal",
-        "Un aigle", "Un dromadaire", "Un gorille", "Un gu\u00e9pard", "Un hibou", "Un hippopotame", "Un jaguar", "Un kangourou", "Un koala",
-        "Un l\u00e9opard", "Un lynx", "Un phoque", "Un serpent", "Un z\u00e8bre", "Un \u00e2ne", "Un canard", "Un cerf", "Un chameau", "Un coq", "Un dindon",
-        "Un lapin", "Un loup", "Un mouton", "Un ours", "Un sanglier", "Un tigre", "Un accarien", "Un crocodile", "Un alligator", "Un cochon dinde",
-        "Un furet", "Un alpaga", "Un mille-pattes", "Un ver de terre", "Un bandicoot", "Un blaireau", "Un bonobo", "Un morse"
-    ];
-
-    const animauxFem = [
-        "Une girafe", "Une loutre", "Une mouette", "Une hy\u00e8ne", "Une mouche", "Une fourmi", "Une horrible araign\u00e9e", "Une mouche \u00e0 merde", "Une chouette",
-        "Une baleine", "Une hirondelle", "Une lionne", "Une louve", "Une jument", "Une ch\u00e8vre", "Une chauve-souris", "Une gazelle", "Une vache",
-        "Une grenouille", "Une biche", "Une gu\u00eape", "Une brebis", "Une marmotte", "Une souris", "Une dinde", "Une oie", "Une poule", "Une taupe",
-        "Une musaraigne", "Une abeille", "Une chienne", "Une chatte", "Une truie", "Une larve", "Une tortue", "Une pieuvre", "Une crevette",
-        "Une autruche", "Une coccinelle", "Une belette", "Une sardine", "Une otarie", "Une panth\u00e8re", "Une hu\u00eetre", "Une moule", "Une antilope"
-    ];
-
-    const etatsMasc = [
-        "recherch\u00e9 pour le meurtre de 6 enfants.", "v\u00e9t\u00e9ran de la Seconde Guerre Mondiale.", "d\u00e9pressif.", "gay.", "compl\u00e8tement con.", "bourr\u00e9.",
-        "perdu dans sa vie.", "plombier, mais aussi docteur, ing\u00e9nieur, professeur, livreur de pizza, m\u00e9chanicien, soldat, policier et astronaute.",
-    ];
-
-    const etatsFem = [
-        "recherch\u00e9e pour le meurtre de 6 enfants.", "d\u00e9pressive.", "lesbienne.", "compl\u00e8tement conne.", "bourr\u00e9e.", "perdue dans sa vie."
-    ];
-
-    const etatsNeutres = [
-        "en burn-out.", "sous coke.", "qui a la diarr\u00e9e.", "alcoolique.", "casse-couilles.", "qui collectionne les bouchons de li\u00e8ge.", "qui fuit l'URSSAF.",
-        "asthmatique.", "qui pue du cul.", "de merde.", "transgenre \ud83c\udff3\ufe0f\u200d\u26a7\ufe0f", "sataniste.", "fan de Feldup.", "rockstar.", "addict \u00e0 TikTok.",
-        "avec un fort accent belge.", "qui vote RN.", "fan de Norman.", "avec 2 de QI.", "SDF.", "sous k\u00e9tamine.", "qui s'est chi\u00e9 dessus.",
-        "addict \u00e0 l'Oasis Tropical.", "DJ en Teknival.", "de la mafia italienne.", "adepte du fameux \u00abje ne suis pas raciste, j'ai un ami noir\u00bb.",
-        "coprophage.", "\u00e0 la recherche du gros JDG.", "qui se l\u00e8ve \u00e0 4h du mat pour aller au taf.", "sous traitement hormonal.",
-        "en manifestation LGBT.", "qui pleure sur un exercice de maths devant son p\u00e8re qui lui gueule dessus.", "genderfluid.",
-        "en 4K Ultra HD IMAX Surround Dolby Digital.", "devant une s\u00e9rie Netflix de merde.", "qui utilise la commande !destin.", "trisomique.",
-        "qui \u00e9tale son caca sur les murs.", "nostalgique des ann\u00e9es 2000.", "transphobe.", "raciste.", "qui a rat\u00e9 6 fois son bac.", "qui adore McFly & Calito."
-    ];
-
-    const isFem = Math.random() < 0.5;
-    const animalList = isFem ? animauxFem : animauxMasc;
-    const etatList = isFem ? [...etatsFem, ...etatsNeutres] : [...etatsMasc, ...etatsNeutres];
-
-    const animal = animalList[Math.floor(Math.random() * animalList.length)];
-    const etat = etatList[Math.floor(Math.random() * etatList.length)];
-
-    return `${base}\n**${animal} ${etat}**`;
-}
-
-// =========================
 //     LOGIQUE !KISS
 // =========================
 
@@ -6060,15 +6001,15 @@ return message.reply({ embeds: [embed], components: [row] });
             const result = findMemberByName(message.guild, args);
             if (result.multiple) {
                 askDisambiguation(message, message.guild, result.candidates, (user) => {
-                    message.reply(getAnimalResponse(message, user));
+                    message.reply(getAnimalResponse(message, user, client.user.id));
                 });
                 return;
             }
             if (result.found) {
-                return message.reply(getAnimalResponse(message, result.found.user));
+                return message.reply(getAnimalResponse(message, result.found.user, client.user.id));
             }
         }
-        return message.reply(getAnimalResponse(message));
+        return message.reply(getAnimalResponse(message, null, client.user.id));
     }
 
     // !welcome / !bienvenue (Epsys-only)
