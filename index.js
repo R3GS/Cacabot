@@ -541,7 +541,7 @@ try { registerFont('./Cowboy Movie.ttf', { family: 'CowboyMovie' }); } catch(e) 
 const { getDestinReponse } = require('./destin.js');
 
 ///!horoscope
-const { getHoroscopeForSign, buildHoroscopeEmbed } = require('./horoscope.js');
+const { getHoroscopeForSign, buildHoroscopeEmbed, execute: executeHoroscope } = require('./horoscope.js');
 
 const lemonMilkPaths = [
     './LEMONMILK-Bold.otf',
@@ -5020,42 +5020,6 @@ async function sendBlague(interaction, cat, authorId) {
 
         return interaction.update({ embeds: [embed], components: [row] });
 }
-
-// =========================
-//     LOGIQUE !HOROSCOPE
-// =========================
-
-    if (response?.needsHoroscope) {
-        const args = message.content.trim().split(/\s+/);
-        const forcedChannelId = args[1] && message.author.id === '436218312574107658' ? args[1] : null;
-        let targetChannel = message.channel;
-        if (forcedChannelId) {
-            try {
-                targetChannel = await client.channels.fetch(forcedChannelId);
-                if (!targetChannel) return message.reply('Salon introuvable.');
-            } catch (e) {
-                return message.reply('Salon introuvable.');
-            }
-        }
-
-        const embed = buildHoroscopeEmbed();
-
-        if (forcedChannelId) {
-            const titres = [
-                '# HOROSCOPE DU JOUR 🔮',
-                "# L'ORACLE A PARLÉ 🔮",
-                '# LES ASTRES ONT PARLÉ 🔮',
-                '# LES ÉTOILES ONT PARLÉ 🔮',
-                "# L'UNIVERS NOUS ENVOIE SES SIGNES 🔮",
-            ];
-            const titre = titres[Math.floor(Math.random() * titres.length)];
-            await targetChannel.send(titre);
-            await targetChannel.send({ embeds: [embed] });
-            return message.react('✅');
-        }
-        return message.reply({ embeds: [embed] });
-    }
-
 
 // Désactiver tous les boutons d'un message
 async function disableButtons(interaction) {

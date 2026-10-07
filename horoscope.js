@@ -336,4 +336,38 @@ function buildHoroscopeEmbed() {
         .setFooter({ text: `📅 ${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}` });
 }
 
-module.exports = { getHoroscopeForSign, buildHoroscopeEmbed };
+async function execute(message, client, response) {
+    if (!response?.needsHoroscope) return;
+
+    const args = message.content.trim().split(/\s+/);
+    const forcedChannelId = args[1] && message.author.id === '436218312574107658' ? args[1] : null;
+    let targetChannel = message.channel;
+
+    if (forcedChannelId) {
+        try {
+            targetChannel = await client.channels.fetch(forcedChannelId);
+            if (!targetChannel) return message.reply('Salon introuvable.');
+        } catch (e) {
+            return message.reply('Salon introuvable.');
+        }
+    }
+
+    const embed = buildHoroscopeEmbed();
+
+    // On gère ici l'envoi selon si c'est un salon forcé ou non
+    if (forcedChannelId) {
+        const titres = [
+            '# HOROSCOPE DU JOUR 🔮',
+            "# L'ORACLE A PARLÉ 🔮",
+            '# LES ASTRES ONT PARLÉ 🔮',
+            '# LES ÉTOILES ONT PARLÉ 🔮',
+            "# L'UNIVERS NOUS ENVOIE SES SIGNES 🔮",
+        ];
+        const titre = titres[Math.floor(Math.random() * titres.length)];
+        await targetChannel.send({ content: titre, embeds: [embed] });
+    } else {
+        await targetChannel.send({ embeds: [embed] });
+    }
+}
+
+module.exports = { getHoroscopeForSign, buildHoroscopeEmbed, execute };
