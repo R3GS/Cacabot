@@ -307,7 +307,7 @@ function getHoroscopeForSign(signIndex, dateKey) {
     "<@511929490964742144> a résumé ton destin en un tweet mal écrit en anglais. Il a raison sur tout.", "Les astres révèlent que <@511929490964742144> pense à toi en ce moment. Il va poster quelque chose. En anglais. Avec des fautes. Sur toi.",
     "<@511929490964742144> a lu ton horoscope et a répondu \"gg ez\". Les étoiles sont d'accord.", "Les planètes révèlent que <@511929490964742144> a une opinion sur toi. Elle tient en 4 mots anglais mal orthographiés. Elle est juste."
 
-    ]
+    ];
     const seed = dateKey * 100 + signIndex;
     const idx = Math.floor(seedRandom(seed) * horoscopes.length);
     return horoscopes[idx];
