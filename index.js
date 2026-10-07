@@ -547,11 +547,14 @@ const { getDestinReponse } = require('./destin.js');
 ///!horoscope
 const { getHoroscopeForSign, buildHoroscopeEmbed, execute: executeHoroscope } = require('./horoscope.js');
 
-///!animal
+///animal.js
 const { getAnimalResponse } = require('./animal.js');
 
-///Interactions
+///interaction.js
 const { handleInteractionMessage, handleInteractionButton } = require('./interaction.js');
+
+///help.js
+const { getHelpResponse, handleHelpMessage, handleHelpInteraction } = require('./help.js');
 
 const lemonMilkPaths = [
     './LEMONMILK-Bold.otf',
@@ -1569,20 +1572,12 @@ async function getResponse(raw) {
     const reply = (normal, upper = normal.toUpperCase()) =>
         isUpper ? upper : normal;
 
-    // =========================
-    //         !HELP
-    // =========================
-
     if (command === "!welcome" || command === "!bienvenue") {
         return { needsWelcome: true };
     }
 
     if (command === "!suggestion" || command === "!suggest" || command === "!sugg") {
         return { needsSuggestion: true };
-    }
-
-    if (command === "!help") {
-        return { needsHelp: true };
     }
 
     // =========================
@@ -1970,10 +1965,6 @@ if (command === "!choix") {
 
     if (command === "!save") {
         return { needsSave: true };
-    }
-
-    if (command === "!helpx") {
-        return { needsHelpx: true };
     }
 
     if (command === "!streamtest") {
@@ -7221,14 +7212,7 @@ if (response?.needsRouletteAchievements) {
     }
 
     // !helpx
-    if (response?.needsHelpx) {
-        if (message.author.id !== '436218312574107658') {
-            return message.reply("Tu n'es pas autoris\u00e9(e) \u00e0 faire cette commande.");
-        }
-        const embed = buildHelpxPresentationEmbed();
-        const row = new ActionRowBuilder().addComponents(buildHelpxMenu(message.author.id));
-        return message.reply({ embeds: [embed], components: [row] });
-    }
+    if (await handleHelpMessage(message, response)) return;
 
     /// !prune
 
@@ -7925,12 +7909,8 @@ if (response?.needsRouletteAchievements) {
     }
 
     // !help
-    if (response?.needsHelp) {
-        const embed = buildHelpHomeEmbed();
-        const menuRow = buildHelpMenu(message.author.id, message.id);
-        const navRow = buildHelpNavRow(message.author.id, message.id);
-        return message.reply({ embeds: [embed], components: [menuRow, navRow] });
-    }
+    const helpResponse = getHelpResponse(command);
+    if (helpResponse) return helpResponse;
 
     // Réponse texte simple
     if (response && typeof response === "object" && response.files) {
@@ -10888,33 +10868,7 @@ return interaction.update({ embeds: [embed], components: rows });
         return interaction.update({ embeds: [buildRouletteTypeEmbed(type)] });
     }
 
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('helpx_menu_')) {
-        const authorId = interaction.customId.split('_')[2];
-        if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
-        }
-        const embed = buildHelpxCategorieEmbed(interaction.values[0]);
-        const row = new ActionRowBuilder().addComponents(buildHelpxMenu(authorId));
-        return interaction.update({ embeds: [embed], components: [row] });
-    }
-
-    if (interaction.isButton() && interaction.customId.startsWith('helpx_roulette_')) {
-        const authorId = interaction.customId.split('_')[2];
-        if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
-        }
-        const embed = new EmbedBuilder()
-            .setColor(0xffd20a)
-            .setTitle('🎰 Commandes admin roulette')
-            .setDescription(
-                "`!reroll [membre]` — réinitialise le cooldown d'un.e membre\n" +
-                "`!bonusforce`/`!malusforce [ID bonus/malus] [membre]` — impose un bonus/malus à un.e membre\n" +
-                "`!rouletteID`/`!rltID` — affiche les ID des bonus/malus\n" +
-                "`!resetroulettestate`/`!resetrlt [membre]` — reset tout l'état roulette d'un.e membre\n" +
-                "`!removestate [membre] [nom]` — retire un seul effet actif d'un.e membre"
-            );
-        return interaction.reply({ embeds: [embed], ephemeral: true });
-    }
+    if (await handleHelpInteraction(interaction)) return;
 
     if (interaction.isButton() && interaction.customId.startsWith('roulette_probas_pres_')) {
         const authorId = interaction.customId.split('_')[3];

@@ -1201,7 +1201,6 @@ async function runInteractionButton(interaction) {
         return interaction.reply({ embeds: [embed] });
     }
 
-
     // =========================
     // BOUTON KISS BACK
     // =========================
