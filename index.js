@@ -197,7 +197,11 @@ const { createCanvas, loadImage, registerFont } = require('canvas');
 
 process.env.PANGOCAIRO_BACKEND = 'fontconfig';
 const fs = require('fs');
-try { registerFont('./Cowboy Movie.ttf', { family: 'CowboyMovie' }); } catch(e) { console.error('Font non trouvée:', e.message); }
+try { 
+    registerFont('./LEMONMILK-Bold.otf', { family: 'LEMONMILK' }); 
+} catch(e) { 
+    console.error('Font non trouvée:', e.message); 
+}
 
 // =========================
 //      INTERSECTIONS
@@ -217,9 +221,6 @@ const { handleInteractionMessage, handleInteractionButton } = require('./interac
 
 ///help.js
 const { getHelpResponse, handleHelpMessage, handleHelpInteraction } = require('./help.js');
-
-///wanted.js
-const { handleWantedMessage, handleWantedButton, handleWantedSlash, scheduleWanted } = require('./wanted.js');
 
 ///minijeux.js
 const {
@@ -686,14 +687,8 @@ async function getResponse(raw) {
     }
 
     // =========================
-    //         !DIE
+    //       INTERACTIONS
     // =========================
-
-    if (command === "!wanted") {
-    const args = raw.trim().split(/\s+/);
-    if (args[1]?.toLowerCase() === 'set') return { needsWantedSet: true };
-    return { needsWanted: true };
-}
 
     if (command === "!cry" || command === "!pleure") {
         return { needsCry: true };
@@ -1352,9 +1347,6 @@ async function disableButtons(interaction) {
 
     if (await handleInteractionMessage(message, response, client, { findMemberByName, askDisambiguation })) return;
 
-    // !wanted
-    if (await handleWantedMessage(message, response, { topData, findMemberByName, askDisambiguation })) return;
-
     // !cry
     if (response?.needsCry) {
         const cryGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505906480916725791/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906486872768522/wwe.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487413964941/cry2.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487656972359/hamster.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487959093359/interstellar.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906869598814310/cry.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488625856622/powder.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488932176034/vi.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489271779449/gangle.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489657790466/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489947324589/fred.gif"];
@@ -2000,10 +1992,6 @@ try {
 
         // flip et blague sont pris en charge par handleSocialSlash
 
-        if (commandName === 'wanted') {
-            return await handleWantedSlash(interaction, topData);
-        }
-
         // epsys, bougetoi et sylvain sont pris en charge par handleSocialSlash
 
         if (commandName === 'rltstate') {
@@ -2074,11 +2062,6 @@ try {
     //     BOUTONS YOUTUBE
     // =========================
     if (await handleYoutubeButton(interaction)) return;
-
-    // =========================
-    //     BOUTONS WANTED
-    // =========================
-    if (await handleWantedButton(interaction, topData)) return;
 
     if (await handleInteractionButton(interaction)) return;
 
@@ -2329,7 +2312,6 @@ client.once('ready', async () => {
             )),
         new SlashCommandBuilder().setName('topchef').setDescription('Critique et note gastronomique d\'un plat')
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre à noter')),
-        new SlashCommandBuilder().setName('wanted').setDescription('Affiche le criminel du jour'),
         new SlashCommandBuilder().setName('epsys').setDescription('Envoie un GIF aléatoire d\'Epsys'),
         new SlashCommandBuilder().setName('bougetoi').setDescription('Rappelle (vigoureusement) à Epsys d\'aller monter sa vidéo'),
         new SlashCommandBuilder().setName('sylvain').setDescription('Singe fort ensemble (Sylvain Lévy)'),
