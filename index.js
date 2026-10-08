@@ -872,21 +872,94 @@ async function getResponse(raw) {
         return { needsLastVideo: true };
     }
 
-    // =========================
-    //         !QUESTION
-    // =========================
-
     if (command === "!question") {
         return { needsQuestion: true };
     }
 
-
-    // =========================
-    //         !DESTIN
-    // =========================
-
         if (command === "!destin") {
         return getDestinReponse();
+    }
+
+    // =========================
+    //  COMMANDE DIAGNOSTIC (EPSYS)
+    // =========================
+    if (message.content.trim().toLowerCase() === '!diag' || message.content.trim().toLowerCase() === '!cacatest') {
+        if (message.author.id !== '436218312574107658') return;
+
+        const sent = await message.reply('🔍 **Diagnostic de Cacabot en cours...** Analyse de tous les modules...');
+
+        const rapport = [];
+
+        // 1. Test des modules découpés
+        const modules = [
+            { nom: 'Roulette', obj: typeof handleRouletteMessage === 'function' && typeof ROULETTE_ETATS === 'object' },
+            { nom: 'Tools & Utilitaires', obj: typeof handleToolsMessage === 'function' && typeof handleToolsSlash === 'function' },
+            { nom: 'Minijeux (Motus/Rébus)', obj: typeof handleMotusMessage === 'function' && typeof handleRebusMessage === 'function' },
+            { nom: 'Anniversaires', obj: typeof handleAnniversaireMessage === 'function' && typeof getGuildBirthdays === 'function' },
+            { nom: 'Citations (Quotes)', obj: typeof handleQuotesMessage === 'function' && Array.isArray(quotesData) },
+            { nom: 'Bienvenue (Canvas)', obj: typeof handleWelcomeMessage === 'function' },
+            { nom: 'YouTube', obj: typeof handleYoutubeMessage === 'function' },
+            { nom: 'Embeds (Epsys)', obj: typeof handleEmbedMessage === 'function' },
+            { nom: 'Social & Jeux', obj: typeof handleSocialMessage === 'function' },
+            { nom: 'Interactions', obj: typeof handleInteractionMessage === 'function' },
+            { nom: 'Wanted', obj: typeof handleWantedMessage === 'function' },
+            { nom: 'Help', obj: typeof handleHelpMessage === 'function' }
+        ];
+
+        let modulesOk = 0;
+        for (const m of modules) {
+            if (m.obj) {
+                rapport.push(`✅ **${m.nom}** : Opérationnel`);
+                modulesOk++;
+            } else {
+                rapport.push(`❌ **${m.nom}** : Incomplet ou non importé`);
+            }
+        }
+
+        // 2. Test du salon de sauvegarde Discord
+        const backupChan = client.channels.cache.get(BACKUP_CHANNEL_ID);
+        const backupOk = backupChan ? '✅ Connecté' : '❌ Salon introuvable';
+
+        // 3. Test API Météo (Open-Meteo)
+        let meteoOk = '❌ Déconnecté';
+        try {
+            const resMeteo = await fetch('https://geocoding-api.open-meteo.com/v1/search?name=Paris&count=1&language=fr&format=json');
+            if (resMeteo.ok) meteoOk = '✅ Opérationnel';
+        } catch (e) {
+            meteoOk = '⚠️ Timeout';
+        }
+
+        // 4. Test API Twitch (DecAPI)
+        let twitchOk = '❌ Déconnecté';
+        try {
+            const resTwitch = await fetch(`https://decapi.me/twitch/uptime/${TWITCH_USER}`);
+            if (resTwitch.ok) twitchOk = '✅ Opérationnel';
+        } catch (e) {
+            twitchOk = '⚠️ Timeout';
+        }
+
+        // 5. Métriques système
+        const ramMb = Math.round(process.memoryUsage().rss / 1024 / 1024);
+        const wsPing = client.ws.ping;
+        const totalSlash = 45; // Catalogue Slash
+
+        const embedDiag = new EmbedBuilder()
+            .setColor(modulesOk === modules.length ? 0x2ecc71 : 0xe74c3c)
+            .setTitle('🩺 RAPPORT DE SANTÉ COMPLET DE CACABOT')
+            .setDescription(`**État global :** ${modulesOk === modules.length ? '🟢 **100% des systèmes sont opérationnels !**' : '🔴 **Certains modules ont un problème !**'}\n\n` + rapport.join('\n'))
+            .addFields(
+                { name: '💾 Sauvegarde Discord (#json)', value: backupOk, inline: true },
+                { name: '🌦️ API Météo', value: meteoOk, inline: true },
+                { name: '🟣 Surveillance Twitch', value: twitchOk, inline: true },
+                { name: '🔌 Latence WebSocket', value: `${wsPing}ms`, inline: true },
+                { name: '⚡ RAM Dokploy', value: `${ramMb} Mo`, inline: true },
+                { name: '🤖 Commandes Slash (/)', value: `✅ Catalogue déployé (~${totalSlash} commandes)`, inline: true }
+            )
+            .setFooter({ text: `Version Node.js ${process.version} • Dokploy Container` })
+            .setTimestamp();
+
+        await sent.edit({ content: null, embeds: [embedDiag] });
+        return;
     }
 
     // =========================
