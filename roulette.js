@@ -933,8 +933,15 @@ function consommerInventaireRoulette(userId, itemKey) {
 function buildInventaireEmbed(membre) {
     const inv = rouletteInventaire.get(membre.id) ?? {};
     const items = [];
-    if (inv.freeRoll1Min) {
+    const options = [];
+
+    if (inv.freeRoll1Min && inv.freeRoll1Min > 0) {
         items.push(`🎰 **Tirage à volonté (1 min)** : x${inv.freeRoll1Min}`);
+        options.push({
+            label: '🎰 Tirage à volonté (1 min)',
+            description: `Activer 1 session d'1 min (en réserve : x${inv.freeRoll1Min})`,
+            value: 'freeRoll1Min'
+        });
     }
 
     const embed = new EmbedBuilder()
@@ -942,20 +949,20 @@ function buildInventaireEmbed(membre) {
         .setTitle(`🎒 Inventaire de récompenses — ${membre.displayName}`)
         .setDescription(
             items.length > 0
-                ? items.join('\n') + "\n\n*Clique sur le bouton ci-dessous pour activer ta récompense quand tu es prêt.e !*"
+                ? items.join('\n') + "\n\n*Choisis la récompense à activer dans le menu déroulant ci-dessous :*"
                 : "*Ton inventaire est vide pour le moment.*"
         );
 
-    const row = new ActionRowBuilder();
-    if (inv.freeRoll1Min && inv.freeRoll1Min > 0) {
-        row.addComponents(
-            new ButtonBuilder()
-                .setCustomId(`rlt_claim_freeroll_${membre.id}`)
-                .setLabel('🎰 Activer le tirage (1 min)')
-                .setStyle(ButtonStyle.Success)
-        );
+    let row = null;
+    if (options.length > 0) {
+        const menu = new StringSelectMenuBuilder()
+            .setCustomId(`rlt_claim_menu_${membre.id}`)
+            .setPlaceholder('Sélectionne une récompense à activer...')
+            .addOptions(options);
+        row = new ActionRowBuilder().addComponents(menu);
     }
-    return { embed, row: row.components.length > 0 ? row : null };
+
+    return { embed, row };
 }
 
 function buildVoteRouletteEmbed(membre) {
@@ -1863,17 +1870,17 @@ async function handleRouletteSlash(interaction, client) {
     };
     const cmd = aliasMap[interaction.commandName] || interaction.commandName;
 
-    // Gestion via option `action` dans /roulette ou /rlt
-    const action = cmd === 'roulette' ? interaction.options.getString('action') : null;
+    // Récupère la sous-commande (ex: /roulette go, /roulette claim, etc.) ou l'ancienne option action
+    const subCommand = interaction.options.getSubcommand?.(false) || (cmd === 'roulette' ? interaction.options.getString('action') : null);
 
-    if (cmd === 'rltclaim' || action === 'claim') {
+    if (cmd === 'rltclaim' || subCommand === 'claim') {
         const member = interaction.guild?.members.cache.get(interaction.user.id) ?? interaction.member;
         const { embed, row } = buildInventaireEmbed(member);
         await interaction.reply({ embeds: [embed], components: row ? [row] : [] });
         return true;
     }
 
-    if (cmd === 'rltstats' || action === 'stats') {
+    if (cmd === 'rltstats' || subCommand === 'stats') {
         const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
         const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
         const row = new ActionRowBuilder().addComponents(
@@ -1883,20 +1890,20 @@ async function handleRouletteSlash(interaction, client) {
         return true;
     }
 
-    if (cmd === 'rltstate' || action === 'state') {
+    if (cmd === 'rltstate' || subCommand === 'state') {
         const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
         const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
         await interaction.reply({ embeds: [buildRouletteStateEmbed(member, interaction.guildId)] });
         return true;
     }
 
-    if (cmd === 'rlttop' || action === 'top') {
+    if (cmd === 'rlttop' || subCommand === 'top') {
         const { embed, row } = buildRouletteTopEmbed(interaction.guild, interaction.user.id);
         await interaction.reply({ embeds: [embed], components: [row] });
         return true;
     }
 
-    if (cmd === 'rltsucces' || action === 'succes') {
+    if (cmd === 'rltsucces' || subCommand === 'succes') {
         const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
         const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
         const { embed, row } = buildRouletteAchievementsEmbed(member, 0, interaction.user.id);
@@ -1905,7 +1912,7 @@ async function handleRouletteSlash(interaction, client) {
     }
 
     if (cmd === 'roulette') {
-        const veutLancer = action === 'go' || interaction.options.getBoolean('lancer');
+        const veutLancer = subCommand === 'go' || interaction.options.getBoolean('lancer');
         if (veutLancer) {
             await interaction.deferReply();
             const res = await tirerEtConstruireResultatRoulette(interaction.user.id, interaction.guild, interaction.channel, client);
@@ -1943,6 +1950,38 @@ async function handleRouletteSlash(interaction, client) {
 
 async function handleRouletteButton(interaction, client) {
     const customId = interaction.customId;
+
+    if (customId.startsWith('rlt_claim_menu_')) {
+        const targetUserId = customId.split('_')[3];
+        if (interaction.user.id !== targetUserId) {
+            return interaction.reply({ content: "Ce n'est pas ton inventaire 😌", ephemeral: true });
+        }
+
+        const itemChoisi = interaction.values[0];
+        const consomme = consommerInventaireRoulette(targetUserId, itemChoisi);
+        if (!consomme) {
+            return interaction.reply({ content: "Tu n'as plus cette récompense en réserve ou elle a déjà été activée !", ephemeral: true });
+        }
+
+        if (itemChoisi === 'freeRoll1Min') {
+            rouletteFreeRollUntil.set(targetUserId, Date.now() + 60 * 1000);
+            rouletteImmuniteUntil.set(targetUserId, Date.now() + 60 * 1000);
+            bridge.demanderSauvegarde();
+
+            // Met à jour l'embed d'inventaire après consommation
+            const member = interaction.guild?.members.cache.get(targetUserId) ?? interaction.member;
+            const majInv = buildInventaireEmbed(member);
+            await interaction.update({ embeds: [majInv.embed], components: majInv.row ? [majInv.row] : [] }).catch(() => {});
+
+            await interaction.followUp({
+                content: `⚡ **C'EST PARTI !** <@${targetUserId}>, ton **tirage à volonté (1 min)** est activé ! Aucun cooldown et immunité aux mutes pendant 60 secondes ! Fais péter \`!rlt go\` ! 🎰`,
+                ephemeral: false
+            });
+            return true;
+        }
+
+        return true;
+    }
 
     if (customId.startsWith('rlt_claim_freeroll_')) {
         const targetUserId = customId.split('_')[3];
