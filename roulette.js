@@ -1869,18 +1869,16 @@ async function handleRouletteSlash(interaction, client) {
         claim: 'rltclaim'
     };
     const cmd = aliasMap[interaction.commandName] || interaction.commandName;
+    const action = cmd === 'roulette' ? interaction.options.getString('action') : null;
 
-    // Récupère la sous-commande (ex: /roulette go, /roulette claim, etc.) ou l'ancienne option action
-    const subCommand = interaction.options.getSubcommand?.(false) || (cmd === 'roulette' ? interaction.options.getString('action') : null);
-
-    if (cmd === 'rltclaim' || subCommand === 'claim') {
+    if (cmd === 'rltclaim' || action === 'claim') {
         const member = interaction.guild?.members.cache.get(interaction.user.id) ?? interaction.member;
         const { embed, row } = buildInventaireEmbed(member);
         await interaction.reply({ embeds: [embed], components: row ? [row] : [] });
         return true;
     }
 
-    if (cmd === 'rltstats' || subCommand === 'stats') {
+    if (cmd === 'rltstats' || action === 'stats') {
         const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
         const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
         const row = new ActionRowBuilder().addComponents(
@@ -1890,20 +1888,20 @@ async function handleRouletteSlash(interaction, client) {
         return true;
     }
 
-    if (cmd === 'rltstate' || subCommand === 'state') {
+    if (cmd === 'rltstate' || action === 'state') {
         const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
         const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
         await interaction.reply({ embeds: [buildRouletteStateEmbed(member, interaction.guildId)] });
         return true;
     }
 
-    if (cmd === 'rlttop' || subCommand === 'top') {
+    if (cmd === 'rlttop' || action === 'top') {
         const { embed, row } = buildRouletteTopEmbed(interaction.guild, interaction.user.id);
         await interaction.reply({ embeds: [embed], components: [row] });
         return true;
     }
 
-    if (cmd === 'rltsucces' || subCommand === 'succes') {
+    if (cmd === 'rltsucces' || action === 'succes') {
         const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
         const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
         const { embed, row } = buildRouletteAchievementsEmbed(member, 0, interaction.user.id);
@@ -1912,8 +1910,7 @@ async function handleRouletteSlash(interaction, client) {
     }
 
     if (cmd === 'roulette') {
-        const veutLancer = subCommand === 'go' || interaction.options.getBoolean('lancer');
-        if (veutLancer) {
+        if (action === 'go') {
             await interaction.deferReply();
             const res = await tirerEtConstruireResultatRoulette(interaction.user.id, interaction.guild, interaction.channel, client);
             if (res.cooldown) {
