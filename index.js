@@ -2255,33 +2255,19 @@ client.once('ready', async () => {
         // Roulette & Raccourcis
         new SlashCommandBuilder()
             .setName('roulette')
-            .setDescription('🎰 Roulette Regaïenne')
-            .addSubcommand(sub =>
-                sub.setName('go')
-                    .setDescription('🎲 Lancer immédiatement le tirage de la roulette')
-            )
-            .addSubcommand(sub =>
-                sub.setName('claim')
-                    .setDescription('🎁 Ouvrir son inventaire et activer ses récompenses')
-            )
-            .addSubcommand(sub =>
-                sub.setName('top')
-                    .setDescription('🏆 Voir le panthéon des chasseurs de succès')
-            )
-            .addSubcommand(sub =>
-                sub.setName('state')
-                    .setDescription('📊 Voir les effets, bonus et malus actifs')
-                    .addUserOption(opt => opt.setName('membre').setDescription('Membre à inspecter (optionnel)'))
-            )
-            .addSubcommand(sub =>
-                sub.setName('stats')
-                    .setDescription('📈 Voir les statistiques de tirage')
-                    .addUserOption(opt => opt.setName('membre').setDescription('Membre à inspecter (optionnel)'))
-            )
-            .addSubcommand(sub =>
-                sub.setName('succes')
-                    .setDescription('🎖️ Voir les succès débloqués')
-                    .addUserOption(opt => opt.setName('membre').setDescription('Membre à inspecter (optionnel)'))
+            .setDescription('🎰 Roulette Regaïenne (jeu, inventaire, stats, état, classement)')
+            .addStringOption(option =>
+                option.setName('action')
+                    .setDescription('Action à effectuer')
+                    .setRequired(false)
+                    .addChoices(
+                        { name: '🎲 go — Lancer le tirage', value: 'go' },
+                        { name: '🎁 claim — Inventaire de récompenses', value: 'claim' },
+                        { name: '📊 state — Effets et malus actifs', value: 'state' },
+                        { name: '📈 stats — Statistiques de tirage', value: 'stats' },
+                        { name: '🎖️ succes — Succès débloqués', value: 'succes' },
+                        { name: '🏆 top — Panthéon des succès', value: 'top' }
+                    )
             ),
 
         // Motus & Rébus Regaïen
