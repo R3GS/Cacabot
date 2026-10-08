@@ -164,11 +164,11 @@ async function handleWatcherMessage(message) {
     if (tiktokMatches) {
         const auteurNom = message.member?.displayName ?? message.author.username;
         const convertUrl = (url) => url.replace(/(?:vm\.|vt\.|www\.|m\.)?tiktok\.com/i, (match) => {
-            if (/^vm\./i.test(match)) return 'vm.kktiktok.com';
-            if (/^vt\./i.test(match)) return 'vt.kktiktok.com';
-            if (/^m\./i.test(match)) return 'm.kktiktok.com';
-            if (/^www\./i.test(match)) return 'www.kktiktok.com';
-            return 'kktiktok.com';
+            if (/^vm\./i.test(match)) return 'vm.kkclip.com';
+            if (/^vt\./i.test(match)) return 'vt.kkclip.com';
+            if (/^m\./i.test(match)) return 'm.kkclip.com';
+            if (/^www\./i.test(match)) return 'www.kkclip.com';
+            return 'kkclip.com';
         });
         const liensConvertis = tiktokMatches.map(convertUrl);
 

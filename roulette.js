@@ -128,7 +128,7 @@ const ROULETTE_TABLE = [
     { id: 'malus-prime', type: 'malus', poids: 1/800, nom: 'MALUS PRIME', desc: 'Cumule TOUS les malus de texte/pseudo en même temps' },
     { id: 'malus-exclu-semaine', type: 'malus', poids: 1/1200, nom: 'Exclusion de 1 semaine', desc: 'Exclusion de 1 semaine' },
     { id: 'malus-ban', type: 'malus', poids: 1/15000, nom: 'Ban définitif', desc: 'Ban définitif' },
-    { id: 'special-vote-immunite-exclusion', type: 'special', poids: 1/125, nom: 'Vote public', desc: 'Vote public : tirage à volonté pendant 3min ou exclusion 1 jour' },
+    { id: 'special-vote-immunite-exclusion', type: 'special', poids: 1/125, nom: 'Vote public', desc: 'Vote public : tirage à volonté pendant 1min ou exclusion 1 jour' },
     { id: 'special-tournee-generale', type: 'special', poids: 1/600, nom: 'Tournée générale', desc: 'Tournée générale ! Les cooldowns sont éteints pendant 1 minute' }
 ];
 
@@ -914,43 +914,60 @@ function buildVoteRouletteEmbed(membre) {
     return new EmbedBuilder()
         .setColor(0xffd20a)
         .setTitle(`🗳️ VOTE PUBLIC ! (${libelleProbaRoulette('special-vote-immunite-exclusion')})`)
-        .setDescription(`Que mérite **${membre.displayName}** ?\n\n✅ Tirage à volonté pendant 3min (immunité au mute)\n❌ Exclusion pendant 1 jour\n\nVote ouvert pendant **2h**.`);
+        .setDescription(`Que mérite **${membre.displayName}** ?\n\n✅ Tirage à volonté pendant 1min (immunité au mute)\n❌ Exclusion pendant 1 jour\n\nVote ouvert pendant **2h**.`);
 }
 
 async function demarrerVoteRoulette(msg, membre) {
-    await msg.react('✅');
-    await msg.react('❌');
+    await msg.react('✅').catch(() => {});
+    await msg.react('❌').catch(() => {});
 
     const rappels = setInterval(() => { msg.reply('🆙').catch(() => {}); }, 55 * 60 * 1000);
 
     setTimeout(async () => {
         clearInterval(rappels);
         try {
-            const fresh = await msg.channel.messages.fetch(msg.id);
-            const reagirOui = await fresh.reactions.cache.get('✅')?.users.fetch() ?? new Map();
-            const reagirNon = await fresh.reactions.cache.get('❌')?.users.fetch() ?? new Map();
-            const idsOui = [...reagirOui.values()].filter(u => !u.bot).map(u => u.id);
-            const idsNon = [...reagirNon.values()].filter(u => !u.bot).map(u => u.id);
+            const fresh = await msg.channel.messages.fetch(msg.id).catch(() => null);
+            const targetMsg = fresh || msg;
+
+            const reactionOui = targetMsg.reactions.cache.find(r => r.emoji.name?.includes('✅'));
+            const reactionNon = targetMsg.reactions.cache.find(r => r.emoji.name?.includes('❌'));
+
+            const usersOui = reactionOui ? await reactionOui.users.fetch().catch(() => new Map()) : new Map();
+            const usersNon = reactionNon ? await reactionNon.users.fetch().catch(() => new Map()) : new Map();
+
+            const idsOui = [...usersOui.values()].filter(u => !u.bot).map(u => u.id);
+            const idsNon = [...usersNon.values()].filter(u => !u.bot).map(u => u.id);
             const doubles = new Set(idsOui.filter(id => idsNon.includes(id)));
             const oui = idsOui.filter(id => !doubles.has(id)).length;
             const non = idsNon.filter(id => !doubles.has(id)).length;
+
+            const posterReponse = async (texte) => {
+                const envoye = await targetMsg.reply(texte).catch(() => null);
+                if (!envoye) await targetMsg.channel.send(texte).catch(() => {});
+            };
+
             if (oui >= non) {
-                rouletteFreeRollUntil.set(membre.id, Date.now() + 3 * 60 * 1000);
-                rouletteImmuniteUntil.set(membre.id, Date.now() + 3 * 60 * 1000);
-                deverrouillerSucces(membre.id, 'innocente', msg.channel);
-                await msg.reply(`✅ Le vote a tranché : **${membre.displayName}** gagne un tirage à volonté pendant 3 minutes !`);
+                // 1 minute de tirage à volonté et d'immunité (au lieu de 3 min)
+                rouletteFreeRollUntil.set(membre.id, Date.now() + 60 * 1000);
+                rouletteImmuniteUntil.set(membre.id, Date.now() + 60 * 1000);
+                deverrouillerSucces(membre.id, 'innocente', targetMsg.channel);
+                await posterReponse(`✅ Le vote a tranché (${oui} pour vs ${non} contre) : **${membre.displayName}** gagne un tirage à volonté pendant 1 minute !`);
             } else {
-                deverrouillerSucces(membre.id, 'condamne-plebe', msg.channel);
+                deverrouillerSucces(membre.id, 'condamne-plebe', targetMsg.channel);
                 if (bridge.estModo(membre)) {
                     rouletteCooldowns.set(membre.id, Date.now() + 24 * 60 * 60 * 1000);
-                    await msg.reply(`❌ Le vote a tranché : **${membre.displayName}** est Modo, exclusion changée en cooldown de **1 jour**.`);
+                    await posterReponse(`❌ Le vote a tranché (${non} contre vs ${oui} pour) : **${membre.displayName}** est Modo, exclusion changée en cooldown de **1 jour**.`);
                 } else {
                     await membre.timeout(24 * 60 * 60 * 1000, 'Roulette - vote').catch(() => {});
                     rouletteTimeoutUntil.set(membre.id, Date.now() + 24 * 60 * 60 * 1000);
-                    await msg.reply(`❌ Le vote a tranché : **${membre.displayName}** est exclu.e pendant 1 jour.`);
+                    await posterReponse(`❌ Le vote a tranché (${non} contre vs ${oui} pour) : **${membre.displayName}** est exclu.e pendant 1 jour.`);
                 }
             }
-        } catch (e) {}
+            bridge.demanderSauvegarde();
+        } catch (e) {
+            console.error('Erreur lors de la conclusion du vote roulette :', e);
+            await msg.channel.send(`⚠️ Une erreur est survenue lors du dépouillement du vote pour <@${membre.id}>.`).catch(() => {});
+        }
     }, 2 * 60 * 60 * 1000);
 }
 
