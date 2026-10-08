@@ -442,18 +442,6 @@ initActivityState({
     EPSYS_ID: '436218312574107658'
 });
 
-///security.js
-const {
-    initSecurityState,
-    estModo,
-    isChannelMuted,
-    handleSecurityMessage,
-    handleSecurityInteraction,
-    handleSecurityMemberAdd,
-    handleSecurityReactionAdd,
-    handleSecurityReactionRemove
-} = require('./security.js');
-
 initSecurityState({
     getReactionRolesData: () => reactionRolesData,
     demanderSauvegarde,
