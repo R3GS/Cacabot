@@ -28,9 +28,10 @@ function buildHelpxCategorieEmbed(categorie) {
     if (categorie === 'cacabot') {
         return embed.setTitle('🤖 Commandes liées à Cacabot')
             .addFields(
+                { name: '🩺 **!diag / !cacatest**', value: 'Lancer un diagnostic complet de l\'état de santé et de tous les modules de Cacabot.' },
                 { name: '📣 **!say [ID_salon] [message]**', value: 'Envoyer un message dans un salon au nom de Cacabot.' },
-                { name: '💾 **!save**', value: 'Forcer une sauvegarde immédiate sur JSONBin.' },
-                { name: '💾 **!lastsave**', value: 'Afficher la date et l\'heure de la dernière sauvegarde JSONBin.' }
+                { name: '💾 **!save**', value: 'Forcer une sauvegarde immédiate dans le salon de backup Discord.' },
+                { name: '💾 **!lastsave**', value: 'Afficher la date et l\'heure de la dernière sauvegarde Discord.' }
             );
     }
     if (categorie === 'generateurs') {

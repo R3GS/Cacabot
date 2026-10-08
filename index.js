@@ -398,6 +398,64 @@ initToolsState({
     topData
 });
 
+///activity.js
+const {
+    initActivityState,
+    handleActivityMessage,
+    handleActivitySlash,
+    handleActivityButton,
+    cleanOldData,
+    getTodayKey,
+    getWeekKey,
+    getMonthKey
+} = require('./activity.js');
+
+initActivityState({
+    topData,
+    dailyData,
+    weeklyData,
+    monthlyData,
+    getGuildBirthdays,
+    rouletteAchievements,
+    rouletteStats,
+    rouletteBouclierActif,
+    getMotusStats: () => motusStats,
+    getRebusStats: () => rebusStats,
+    getQuotesData: () => quotesData,
+    demanderSauvegarde,
+    saveAll,
+    findMemberByName,
+    askDisambiguation,
+    client,
+    EPSYS_ID: '436218312574107658'
+});
+
+///security.js
+const {
+    initSecurityState,
+    estModo,
+    isChannelMuted,
+    handleSecurityMessage,
+    handleSecurityInteraction,
+    handleSecurityMemberAdd,
+    handleSecurityReactionAdd,
+    handleSecurityReactionRemove
+} = require('./security.js');
+
+initSecurityState({
+    getReactionRolesData: () => reactionRolesData,
+    demanderSauvegarde,
+    client,
+    EPSYS_ID: '436218312574107658'
+});
+
+///watcher.js
+const {
+    verifierTwitchLive,
+    handleWatcherMessage,
+    handleVoiceStateUpdate
+} = require('./watcher.js');
+
 // =========================
 //     DONNÉES WANTED
 // =========================
@@ -409,94 +467,6 @@ const FEUR_IMMUNE = ['1503495713097519355'];
 //     LOGIQUE MOTUS (10h & 19h)
 // =========================
 // Déporté dans ./minijeux.js
-
-const TWITCH_CHANNEL_ID = '862253918583390238';
-const TWITCH_ROLE_ID = '862058765674741760';
-const TWITCH_USER = 'epsys_';
-
-// =========================
-//    SURVEILLANCE TWITCH
-// =========================
-
-async function buildTwitchLivePayload() {
-    const liveUrl = `https://twitch.tv/${TWITCH_USER}`;
-    const previewUrl = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${TWITCH_USER}-1280x720.jpg?t=${Date.now()}`;
-
-    const [titreRaw, jeuRaw, avatarRaw] = await Promise.all([
-        fetch(`https://decapi.me/twitch/title/${TWITCH_USER}`).then(r => r.text()).catch(() => 'Live Twitch !'),
-        fetch(`https://decapi.me/twitch/game/${TWITCH_USER}`).then(r => r.text()).catch(() => 'Just Chatting'),
-        fetch(`https://decapi.me/twitch/avatar/${TWITCH_USER}`).then(r => r.text()).catch(() => null)
-    ]);
-
-    const titre = titreRaw.trim() || 'En direct sur Twitch !';
-    const jeu = jeuRaw.trim() || 'Just Chatting';
-    const avatar = (avatarRaw && avatarRaw.startsWith('http')) ? avatarRaw.trim() : null;
-
-    const embed = new EmbedBuilder()
-        .setColor(0x9146ff)
-        .setAuthor({ 
-            name: `En direct sur Twitch !`, 
-            url: liveUrl 
-        })
-        .setTitle(titre)
-        .setURL(liveUrl)
-        .addFields(
-            { name: '🎮 Jeu / Catégorie', value: `\`${jeu}\``, inline: true },
-            { name: '📺 Chaîne', value: `[twitch.tv/${TWITCH_USER}](${liveUrl})`, inline: true }
-        )
-        .setImage(previewUrl)
-        .setFooter({ text: '🔴 Live Twitch • Notification automatique' })
-        .setTimestamp();
-
-    if (avatar) embed.setThumbnail(avatar);
-
-    const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setLabel('▶️ Rejoindre le stream')
-            .setStyle(ButtonStyle.Link)
-            .setURL(liveUrl)
-    );
-
-    return {
-        content: `📢 Hey <@&${TWITCH_ROLE_ID}> !\n**Epsys** vient de lancer un live !`,
-        embeds: [embed],
-        components: [row]
-    };
-}
-
-async function verifierTwitchLive() {
-    try {
-        const res = await fetch(`https://decapi.me/twitch/uptime/${TWITCH_USER}`).catch(() => null);
-        if (!res || !res.ok) return; // Si DecAPI plante (erreur 500/502/timeout), on ignore totalement
-
-        const resUptime = (await res.text()).trim();
-
-        // Rejette si la réponse est vide, contient du HTML Cloudflare ou un message d'erreur
-        if (!resUptime || resUptime.startsWith('<') || resUptime.toLowerCase().includes('error')) return;
-
-        // Vérifie si le mot-clé hors-ligne est présent
-        const estHorsLigne = resUptime.toLowerCase().includes('offline') || resUptime.toLowerCase().includes('not found');
-
-        // Quand un live est RÉELLEMENT en cours, DecAPI renvoie obligatoirement un format de temps : "X minutes, Y seconds"
-        const aDureeValide = /\b(second|minute|hour|day)s?\b/i.test(resUptime);
-
-        const estEnLigne = !estHorsLigne && aDureeValide;
-
-        if (estEnLigne && !twitchLiveEnCours) {
-            twitchLiveEnCours = true;
-            const channel = client.channels.cache.get(TWITCH_CHANNEL_ID);
-            if (!channel) return;
-
-            const payload = await buildTwitchLivePayload();
-            await channel.send(payload);
-            console.log(`[Twitch] Vrai live détecté pour ${TWITCH_USER} (${resUptime}) !`);
-        } else if (!estEnLigne && twitchLiveEnCours) {
-            twitchLiveEnCours = false; // Réinitialise quand le live s'arrête
-        }
-    } catch (e) {
-        // En cas de crash réseau, ne jamais considérer que le live est lancé
-    }
-}
 
 // =========================
 //     FONCTION PRINCIPALE
@@ -1013,39 +983,7 @@ const cooldowns = new Map();
 
 const vocalMessages = new Map();
 const dernierMessageParUtilisateur = new Map();
-const MOD_CHANNEL_ID = '1555402748193669192';
-
-// --- Anti-phishing ---
-const PHISHING_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:discor(?:d(?:app)?|cl|cb|ct|cl-app|d-nitro|d-gift|dapp|dstatus)?[-_.]+(?:gift|nitro|giveaway|drop|claim|steam|promo|boost|vip|com\.ru|xyz|tk|ga|ml|cf|gq|club|top|click|link)|steamcommuni(?:i|l)ty\.[a-z]+)\b/i;
-
-// --- Slowmode d'urgence ---
-const slowmodeTrackers = new Map(); // channelId -> [{ userId, timestamp }]
-const slowmodeActifs = new Set();   // channelIds actuellement en slowmode d'urgence
-
-// --- Anti-spam ---
-const spamTracker = new Map(); // userId -> timestamps[]
-const SPAM_WINDOW_MS = 5000;
-const SPAM_THRESHOLD = 5;
-const SPAM_TIMEOUT_MS = 5 * 60 * 1000;
-const SPAM_EXEMPT_CHANNELS = ['1553954760900608091'];
-const SPAM_EXEMPT_REGEX = /^!(rlt|roulette)(\s+go)?\s*$/i;
-
-// --- Anti-raid ---
-const raidJoinTracker = new Map();   // guildId -> [{ userId, timestamp }]
-const raidFlaggedUsers = new Map();  // userId -> true (en attente de son 1er message)
-const raidMuteRecord = new Map();    // userId -> timestamp de fin du timeout raid
-const RAID_ACCOUNT_AGE_MS = 14 * 24 * 60 * 60 * 1000; // 2 semaines
-const RAID_WINDOW_MS = 60 * 1000;    // 60s
-const RAID_THRESHOLD = 3;
-const RAID_TIMEOUT_MS = 5 * 60 * 1000;
-const RAID_ESCALATION_WINDOW_MS = 15 * 60 * 1000; // 15min après la fin du mute
-
-// --- Roulette ---
 const EPSYS_ID = '436218312574107658';
-const MODO_ROLE_ID = '720081311716606004';
-function estModo(member) {
-    return member?.roles?.cache?.has(MODO_ROLE_ID) ?? false;
-}
 
 function buildSuggestionEmbed(data, authorMember) {
     const pourCount = data.pour.length;
@@ -1097,14 +1035,6 @@ function buildSuggestionRow(data) {
             .setStyle(ButtonStyle.Danger)
     );
 }
-
-const mutedChannels = new Map();
-    function isChannelMuted(channelId) {
-        const entry = mutedChannels.get(channelId);
-        if (!entry) return false;
-        if (Date.now() >= entry.until) { mutedChannels.delete(channelId); return false; }
-        return true;
-    }
 
 // =========================
 //           CHEH
@@ -1181,38 +1111,6 @@ async function askDisambiguation(message, guild, candidates, callback) {
                 setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 3000)
             );
         }
-    });
-}
-
-function getMonthKey() {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function getTodayKey() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-
-function getWeekKey() {
-    const d = new Date();
-    const startOfYear = new Date(d.getFullYear(), 0, 1);
-    const week = Math.ceil(((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
-    return `${d.getFullYear()}-W${String(week).padStart(2,'0')}`;
-}
-
-function cleanOldData() {
-    const now = new Date();
-    Object.keys(dailyData).forEach(key => {
-        const d = new Date(key);
-        if ((now - d) / 86400000 > 7) delete dailyData[key];
-    });
-    const currentWeek = getWeekKey();
-    const [cy, cw] = currentWeek.split('-W').map(Number);
-    Object.keys(weeklyData).forEach(key => {
-        const [wy, ww] = key.split('-W').map(Number);
-        const diff = (cy - wy) * 52 + (cw - ww);
-        if (diff > 4) delete weeklyData[key];
     });
 }
 
@@ -1315,10 +1213,8 @@ async function disableButtons(interaction) {
             return;
         }
 
-        // Ping automatique du rôle quand un utilisateur spécifique poste dans un salon spécifique
-        if (message.channel.id === '1460051840015269908' && message.author.id === '1525026449768321098') {
-            await message.channel.send(`<@&1504492103194120273>`);
-        }
+        // Sentinelles, conversion de liens & surveillance
+        if (await handleWatcherMessage(message)) return;
 
         // =========================
         //   COMMANDES ROULETTE
@@ -1335,203 +1231,10 @@ async function disableButtons(interaction) {
         // =========================
         if (await handleMotusMessage(message, null, client, { findMemberByName })) return;
 
-    // Supprimer le message précédent si Shin poste sa pub Twitch dans le salon #Promo
-    const REPOST_WATCH_USER = '1070742213635625050';
-    const REPOST_WATCH_CHANNEL = '1230637295649034240';
-
-        if (message.author.id === REPOST_WATCH_USER && message.channel.id === REPOST_WATCH_CHANNEL) {
-        const contientLien = message.content.includes('https://www.twitch.tv/belrose_shin');
-
-        if (contientLien) {
-            const cle = `${message.channel.id}-${message.author.id}`;
-            const precedent = dernierMessageParUtilisateur.get(cle);
-
-            if (precedent) {
-                await precedent.delete().catch(() => {});
-            }
-
-            dernierMessageParUtilisateur.set(cle, message);
-        }
-    }
-
-    // !chut / !unchut
-    const CHUT_AUTHORIZED = ['738191002187202630', '436218312574107658', '1070742213635625050', '899733709173948487', '375746968737021962', '116682911314345993'];
-    const chutCommand = message.content.trim().split(/\s+/)[0]?.toLowerCase();
-
-    if (chutCommand === '!chut') {
-        if (!CHUT_AUTHORIZED.includes(message.author.id)) {
-            return message.reply("Tu n'es pas autorisé.e à faire cette commande.");
-        }
-        const args = message.content.trim().split(/\s+/);
-        const timeStr = args[1]?.toLowerCase();
-        let ms = 0;
-        if (timeStr?.endsWith('min')) ms = parseInt(timeStr) * 60 * 1000;
-        else if (timeStr?.endsWith('h')) ms = parseInt(timeStr) * 60 * 60 * 1000;
-        else return message.reply('Format invalide ! Utilise `!chut Xmin` ou `!chut Xh`. Ex : `!chut 10min`');
-        if (isNaN(ms) || ms <= 0) return message.reply('Durée invalide !');
-        if (ms > 24 * 60 * 60 * 1000) return message.reply('Maximum 24h !');
-
-        const ancien = mutedChannels.get(message.channel.id);
-        if (ancien) clearTimeout(ancien.timeout);
-
-        const until = Date.now() + ms;
-        const timeout = setTimeout(() => mutedChannels.delete(message.channel.id), ms);
-        mutedChannels.set(message.channel.id, { until, timeout });
-        return message.react('🤐').catch(() => {});
-    }
-
-    if (chutCommand === '!unchut') {
-        if (!CHUT_AUTHORIZED.includes(message.author.id)) {
-            return message.reply("Tu n'es pas autorisé.e à faire cette commande.");
-        }
-        const ancien = mutedChannels.get(message.channel.id);
-        if (ancien) clearTimeout(ancien.timeout);
-        mutedChannels.delete(message.channel.id);
-        return message.react('👋').catch(() => {});
-    }
-
-        // !stop / !unstop / "Cacabot stop" / "Cacabot reviens" (accessible à tout le monde, 1h fixe)
-    const STOP_DURATION_MS = 60 * 60 * 1000;
-    const stopCommand = message.content.trim().split(/\s+/)[0]?.toLowerCase();
-    const stopCleaned = message.content
-        .toLowerCase()
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .trim();
-
-    const isStopTrigger = stopCommand === '!stop' || /\bcacabot\s+stop\b/.test(stopCleaned);
-    const isUnstopTrigger = stopCommand === '!unstop' || /\bcacabot\s+reviens\b/.test(stopCleaned);
-
-    if (isStopTrigger) {
-        const ancien = mutedChannels.get(message.channel.id);
-        if (ancien) clearTimeout(ancien.timeout);
-
-        const until = Date.now() + STOP_DURATION_MS;
-        const timeout = setTimeout(() => mutedChannels.delete(message.channel.id), STOP_DURATION_MS);
-        mutedChannels.set(message.channel.id, { until, timeout });
-        return message.react('🤐').catch(() => {});
-    }
-
-    if (isUnstopTrigger) {
-        const ancien = mutedChannels.get(message.channel.id);
-        if (ancien) clearTimeout(ancien.timeout);
-        mutedChannels.delete(message.channel.id);
-        return message.react('👋').catch(() => {});
-    }
-
-        // Anti-phishing (Faux Nitro / Liens de vol de compte)
-    if (message.guild && message.member && !estModo(message.member) && PHISHING_REGEX.test(message.content)) {
-        await message.delete().catch(() => {});
-        await message.member.timeout(24 * 60 * 60 * 1000, 'Anti-phishing automatique (lien frauduleux)').catch(() => {});
-        
-        await message.channel.send(`🛡️ **${message.member.displayName}** a envoyé un lien frauduleux (compte probablement piraté). Il a été mis en pause 24h.`);
-
-        const modChan = message.guild.channels.cache.get(MOD_CHANNEL_ID);
-        if (modChan) {
-            const embedPhish = new EmbedBuilder()
-                .setColor(0xff0000)
-                .setTitle('🚨 ALERTE PHISHING / FAUX NITRO')
-                .setDescription(`Un lien malveillant a été stoppé net dans <#${message.channel.id}>.`)
-                .addFields(
-                    { name: '👤 Auteur', value: `<@${message.author.id}> (\`${message.author.id}\`)`, inline: true },
-                    { name: '🔗 Contenu bloqué', value: `\`\`\`${message.content.slice(0, 500)}\`\`\``, inline: false }
-                )
-                .setTimestamp();
-
-            const banBtn = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`antiphish_ban_${message.author.id}`)
-                    .setLabel('🔨 Bannir le compte piraté')
-                    .setStyle(ButtonStyle.Danger)
-            );
-            await modChan.send({ embeds: [embedPhish], components: [banBtn] });
-        }
-        return;
-    }
-
-    // Slowmode d'urgence automatique (anti-débordement)
-    if (message.guild && !message.author.bot && message.channel.type === ChannelType.GuildText && !slowmodeActifs.has(message.channel.id)) {
-        const now = Date.now();
-        const logs = (slowmodeTrackers.get(message.channel.id) || []).filter(e => now - e.timestamp < 8000);
-        logs.push({ userId: message.author.id, timestamp: now });
-        slowmodeTrackers.set(message.channel.id, logs);
-
-        const auteursUniques = new Set(logs.map(e => e.userId));
-        // Si 15 messages ou plus en 8 secondes par au moins 3 personnes différentes
-        if (logs.length >= 15 && auteursUniques.size >= 3) {
-            slowmodeActifs.add(message.channel.id);
-            slowmodeTrackers.delete(message.channel.id);
-
-            const ancienSlowmode = message.channel.rateLimitPerUser || 0;
-            await message.channel.setRateLimitPerUser(10, 'Slowmode d\'urgence automatique').catch(() => {});
-
-            await message.channel.send('🛑 **Oula, le salon s\'emballe !** Slowmode temporaire de **10 secondes** activé pendant **3 minutes** pour apaiser les esprits.');
-
-            setTimeout(async () => {
-                await message.channel.setRateLimitPerUser(ancienSlowmode, 'Fin du slowmode d\'urgence').catch(() => {});
-                slowmodeActifs.delete(message.channel.id);
-                await message.channel.send('✅ **Fin du slowmode d\'urgence**, retour au rythme normal !').catch(() => {});
-            }, 3 * 60 * 1000);
-        }
-    }
-
-        // Anti-spam
-    if (
-        message.guild && message.member &&
-        !CHUT_AUTHORIZED.includes(message.author.id) &&
-        !SPAM_EXEMPT_CHANNELS.includes(message.channel.id) &&
-        !SPAM_EXEMPT_REGEX.test(message.content.trim())
-    ) {
-        const now = Date.now();
-        const spamTimestamps = (spamTracker.get(message.author.id) || []).filter(t => now - t < SPAM_WINDOW_MS);
-        spamTimestamps.push(now);
-        spamTracker.set(message.author.id, spamTimestamps);
-
-        if (spamTimestamps.length >= SPAM_THRESHOLD) {
-            spamTracker.delete(message.author.id);
-            try {
-                await message.member.timeout(SPAM_TIMEOUT_MS, 'Anti-spam automatique');
-                await message.channel.send(`🔇 **${message.member.displayName}** a été mis en pause **5 minutes** pour spam.`);
-            } catch (err) {
-                console.error('Erreur timeout anti-spam:', err);
-            }
-        }
-    }
-
-    // Anti-raid : timeout au 1er message d'un compte flaggé pendant une rafale
-    if (message.guild && message.member && raidFlaggedUsers.has(message.author.id)) {
-        raidFlaggedUsers.delete(message.author.id);
-        try {
-            await message.member.timeout(RAID_TIMEOUT_MS, 'Anti-raid automatique').catch(() => {});
-            raidMuteRecord.set(message.author.id, Date.now() + RAID_TIMEOUT_MS);
-            await message.channel.send(`🚨 **${message.member.displayName}** fait partie d'une vague d'arrivées suspectes et a été mis en pause **5 minutes**.`);
-            await message.member.send("Ton compte a été repéré dans une vague d'arrivées suspectes sur le serveur, tu as été mis.e en pause 5 minutes. Si tu quittes et reviens dans les 15 minutes qui suivent la fin de cette pause, tu seras automatiquement exclu.e du serveur.").catch(() => {});
-
-    const modLogChan = message.guild.channels.cache.get(MOD_CHANNEL_ID);
-            if (modLogChan) {
-                const raidEmbed = new EmbedBuilder()
-                    .setColor(0xff0033)
-                    .setTitle('🚨 ALERTE ANTI-RAID')
-                    .setDescription(`Un compte suspect a tenté d'écrire pendant une vague d'arrivées et a été mis en pause 5 min.`)
-                    .addFields(
-                        { name: '👤 Suspect', value: `<@${message.author.id}> (\`${message.author.id}\`)`, inline: true },
-                        { name: '📍 Salon ciblé', value: `<#${message.channel.id}>`, inline: true },
-                        { name: '💬 Premier message', value: `\`\`\`${message.content.slice(0, 500) || '*Vide / Média*'}\`\`\``, inline: false }
-                    )
-                    .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
-                    .setTimestamp();
-
-                const raidButtons = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`mod_action_kick_${message.author.id}`).setLabel('👢 Expulser').setStyle(ButtonStyle.Secondary),
-                    new ButtonBuilder().setCustomId(`mod_action_ban_${message.author.id}`).setLabel('🔨 Bannir').setStyle(ButtonStyle.Danger),
-                    new ButtonBuilder().setCustomId(`mod_action_dismiss_${message.author.id}`).setLabel('✅ Ignorer').setStyle(ButtonStyle.Success)
-                );
-                await modLogChan.send({ embeds: [raidEmbed], components: [raidButtons] });
-            }
-        } catch (err) {
-            console.error('Erreur timeout anti-raid:', err);
-        }
-    }
+    // =========================
+    //   SÉCURITÉ & MODÉRATION
+    // =========================
+    if (await handleSecurityMessage(message)) return;
 
     // Ping Cacabot seul -> "Quoi ? (Feur)"
     const strippedMsg = message.content.replace(/<@!?1503495713097519355>/g, '').trim();
@@ -1550,51 +1253,6 @@ async function disableButtons(interaction) {
     if (!isChannelMuted(message.channel.id) && pendingCheh.has(message.channel.id) && (cleanedCheh.includes('ntm') || cleanedCheh.includes('tg') || cleanedCheh.includes('nique ta') || cleanedCheh.includes('ta gueule') || cleanedCheh.includes('jte bz') || cleanedCheh.includes('bztmr') || cleanedCheh.includes('va te faire enculer') || cleanedCheh.includes('la ferme') || cleanedCheh.includes('tais-toi') || cleanedCheh.includes('mange tes'))) {
         pendingCheh.delete(message.channel.id);
         return message.reply(CHEH_GIF);
-    }
-
-    // Remplacement liens Instagram (Reels + Posts)
-    const instaRegex = /https?:\/\/(?:www\.)?instagram\.com\/(?:reel|p)\/[^\s]+/gi;
-    const instaMatches = message.content.match(instaRegex);
-    if (instaMatches) {
-        const auteurNom = message.member?.displayName ?? message.author.username;
-        const liensConvertis = instaMatches.map(url => url.replace('instagram.com', 'kkinstagram.com'));
-
-        const row = new ActionRowBuilder().addComponents(
-            instaMatches.slice(0, 5).map((url, i) =>
-                new ButtonBuilder()
-                    .setLabel(instaMatches.length > 1 ? `🔗 Lien original ${i + 1}` : '🔗 Lien original')
-                    .setStyle(ButtonStyle.Link)
-                    .setURL(url)
-            )
-        );
-
-        await message.delete().catch(() => {});
-        await message.channel.send(`**${auteurNom}** a reposté cette publication Instagram !\n-# *(je change juste le lien pour que tout le monde y ait accès)*`);
-        setTimeout(() => {
-            message.channel.send({ content: liensConvertis.join('\n'), components: [row] }).catch(() => {});
-        }, 300);
-        return;
-    }
-
-    // Remplacement liens TikTok
-    const tiktokRegex = /https?:\/\/(?:vm\.|vt\.|www\.|m\.)?tiktok\.com\/[^\s]+/gi;
-    const tiktokMatches = message.content.match(tiktokRegex);
-    if (tiktokMatches) {
-        const auteurNom = message.member?.displayName ?? message.author.username;
-        const convertUrl = (url) => url.replace(/(?:vm\.|vt\.|www\.|m\.)?tiktok\.com/i, (match) => {
-            if (/^vm\./i.test(match)) return 'vm.kktiktok.com';
-            if (/^vt\./i.test(match)) return 'vt.kktiktok.com';
-            if (/^m\./i.test(match)) return 'm.kktiktok.com';
-            if (/^www\./i.test(match)) return 'www.kktiktok.com';
-            return 'kktiktok.com';
-        });
-        const liensConvertis = tiktokMatches.map(convertUrl);
-        await message.delete().catch(() => {});
-        await message.channel.send(`**${auteurNom}** a reposté ce TikTok !\n-# *(je change juste le lien pour que tout le monde y ait accès)*`);
-        setTimeout(() => {
-            message.channel.send(liensConvertis.join('\n')).catch(() => {});
-        }, 300);
-        return;
     }
 
     // Comptage messages pour !top
@@ -1767,280 +1425,11 @@ async function disableButtons(interaction) {
     // Commandes Quotes (!quote, !citation)
     if (await handleQuotesMessage(message, response)) return;
 
-    // !profil
-    if (response?.needsProfil) {
-        let cible = message.mentions.users.first();
-        const auteurNom = message.member?.displayName ?? message.author.username;
-
-        if (!cible) {
-            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
-            if (args.length > 0) {
-                const result = findMemberByName(message.guild, args);
-                if (result.multiple) {
-                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
-                    return;
-                }
-                if (result.found) cible = result.found.user;
-            }
-        }
-
-        if (!cible) cible = message.author;
-
-        const member = message.guild?.members.cache.get(cible.id);
-        const joinedAt = member?.joinedAt
-            ? member.joinedAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
-            : 'Inconnue';
-        const createdAt = cible.createdAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-        const roles = member?.roles.cache
-            .filter(r => r.id !== message.guild.id)
-            .sort((a, b) => b.position - a.position)
-            .map(r => `<@&${r.id}>`)
-            .slice(0, 5)
-            .join(' ') || 'Aucun';
-
-        const nbMessages = topData.messages[cible.id] ?? 0;
-
-        const birthdayRaw = getGuildBirthdays(message.guild.id)[cible.id];
-        const moisNoms = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-        let birthdayStr = 'Inconnu';
-        if (birthdayRaw) {
-            const [j, m] = birthdayRaw.split('/').map(Number);
-            birthdayStr = `${j} ${moisNoms[m - 1]}`;
-        }
-
-        // Vérification rétroactive des succès roulette
-        let userAchs = rouletteAchievements.get(cible.id);
-        if (!userAchs) {
-            userAchs = {};
-            rouletteAchievements.set(cible.id, userAchs);
-        }
-        const rStats = rouletteStats.get(cible.id);
-        const nbTirages = rStats?.tirages ?? 0;
-        if (nbTirages >= 250 && !userAchs['veteran-250']) userAchs['veteran-250'] = Date.now();
-        if (nbTirages >= 500 && !userAchs['centurion-500']) userAchs['centurion-500'] = Date.now();
-        const nbBoucliersRes = rouletteBouclierActif.get(cible.id) || 0;
-        if (nbBoucliersRes >= 10 && !userAchs['forteresse']) userAchs['forteresse'] = Date.now();
-
-        // Calcul des Succès du serveur
-        const badges = [];
-
-        // 1. Badge Créatrice
-        if (cible.id === EPSYS_ID) badges.push('• 👑 Créatrice du serveur et de Cacabot');
-
-        // 2. Tirages Roulette
-        if (nbTirages >= 500) badges.push('• 🎰 Gambling Addict (500+ tirages)');
-        else if (nbTirages >= 100) badges.push('• 🎰 Habitué.e de la Roulette (100+ tirages)');
-
-        // 3. Succès Roulette
-        const nbAchs = Object.keys(userAchs).length;
-        if (nbAchs >= 15) badges.push(`• 🏆 Trophy Hunter (${nbAchs}/30 succès)`);
-        else if (nbAchs >= 5) badges.push(`• 🤠 Aventurier.e de la Roulette (${nbAchs}/30 succès)`);
-
-        // 4. Victoires Motus
-        const mStats = motusStats[cible.id];
-        const nbVictoires = mStats?.victoires ?? 0;
-        if (nbVictoires >= 10) badges.push(`• 🟩 Motus Master (${nbVictoires} victoires)`);
-        else if (nbVictoires >= 3) badges.push(`• 🟨 Débutant.e du Motus (${nbVictoires} victoires)`);
-
-        // 5. Médailles d'or du Rébus Regaïen (Top 1 de session)
-        const rRebus = rebusStats[cible.id];
-        const nbTop1 = rRebus?.victoires ?? 0;
-        if (nbTop1 >= 10) badges.push(`• 🥇 Maître du Rébus (10 médailles d'or)`);
-        else if (nbTop1 >= 5) badges.push(`• 🥇 Expert.e du Rébus (5 médailles d'or)`);
-        else if (nbTop1 >= 3) badges.push(`• 🥇 As du Rébus (3 médailles d'or)`);
-
-        // 6. Citations enregistrées
-        const nbQuotes = quotesData.filter(q => q.authorId === cible.id).length;
-        if (nbQuotes >= 5) badges.push(`• 📜 Légende (${nbQuotes} citations)`);
-
-        // 6. Messages envoyés sur le serveur
-        if (nbMessages >= 5000) badges.push('• 🗣️ Monument de Regaïa (5 000+ messages)');
-        else if (nbMessages >= 1000) badges.push('• 💬 Membre Bavard.e (1 000+ messages)');
-        else if (nbMessages >= 250) badges.push('• 🌱 Jeune membre (250+ messages)');
-
-        const embed = new EmbedBuilder()
-            .setColor(0x5865f2)
-            .setTitle(member?.displayName ?? cible.username)
-            .setThumbnail(cible.displayAvatarURL({ dynamic: true, size: 256 }))
-            .addFields(
-                { name: '👤 Pseudo', value: `${cible.username}`, inline: true },
-                { name: '💬 Messages envoyés', value: `${nbMessages.toLocaleString('fr-FR')}`, inline: true },
-                { name: '\u200b', value: '\u200b', inline: true },
-                { name: '📅 Arrivée sur le serveur', value: joinedAt, inline: true },
-                { name: '🎂 Anniversaire', value: birthdayStr, inline: true },
-                { name: '\u200b', value: '\u200b', inline: true },
-                { name: '🏆 Succès du serveur', value: badges.length > 0 ? badges.join('\n') : '*Aucun succès débloqué pour l\'instant.*', inline: false },
-                { name: '🏷️ Rôles', value: roles, inline: false }
-            )
-            .setFooter({ text: `ID : ${cible.id}` });
-
-        return message.reply({ embeds: [embed] });
-    }
-
-    // !avatar
-    if (response?.needsAvatar) {
-        let cible = message.mentions.users.first();
-
-        if (!cible) {
-            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
-            if (args.length > 0) {
-                const result = findMemberByName(message.guild, args);
-                if (result.multiple) {
-                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
-                    return;
-                }
-                if (result.found) cible = result.found.user;
-            }
-        }
-
-        if (!cible) cible = message.author;
-
-        const embed = new EmbedBuilder()
-            .setColor(0x5865f2)
-            .setImage(cible.displayAvatarURL({ dynamic: true, size: 1024 }));
-
-        return message.reply({ embeds: [embed] });
-    }
-
-    // !flip est pris en charge par handleSocialMessage
-
     // Commandes Anniversaire (!anniversaire, !anniversairetest)
     if (await handleAnniversaireMessage(message, response)) return;
 
-    // !topchef et !blague sont pris en charge par handleSocialMessage
-
-    // !actif
-    if (response?.needsActif) {
-        cleanOldData();
-        const authorId = message.author.id;
-
-        const buildActifEmbed = (periode) => {
-            const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
-            let counts, titre;
-            if (periode === 'jour') {
-                counts = dailyData[getTodayKey()] ?? {};
-                titre = "\ud83d\udcc5 Membres les plus actifs aujourd'hui";
-            } else if (periode === 'semaine') {
-                counts = weeklyData[getWeekKey()] ?? {};
-                titre = '\ud83d\udcc6 Membres les plus actifs cette semaine';
-            } else {
-                counts = monthlyData[getMonthKey()] ?? {};
-                titre = '\ud83d\udcc6 Membres les plus actifs ce mois-ci';
-            }
-            const sorted = Object.entries(counts).filter(([uid]) => uid !== '1503495713097519355').sort((a, b) => b[1] - a[1]).slice(0, 10);
-            const fields = sorted.length > 0
-                ? sorted.map(([uid, count], i) => {
-                    const member = message.guild.members.cache.get(uid);
-                    const name = member?.displayName ?? 'Membre inconnu';
-                    const medal = medals[i] ?? `**${i + 1}.**`;
-                    return { name: `${medal} ${name}`, value: `${count} messages`, inline: false };
-                })
-                : [{ name: 'Aucune donn\u00e9e', value: 'Pas encore de messages !', inline: false }];
-            return new EmbedBuilder().setColor(0xffd700).setTitle(titre).addFields(fields);
-        };
-
-        const buildActifRow = (periode) => {
-            const jourBtn = new ButtonBuilder()
-                .setCustomId(`actif_jour_${authorId}`)
-                .setLabel('\ud83d\udcc5 Jour')
-                .setStyle(periode === 'jour' ? ButtonStyle.Primary : ButtonStyle.Secondary);
-            const semaineBtn = new ButtonBuilder()
-                .setCustomId(`actif_semaine_${authorId}`)
-                .setLabel('\ud83d\uddd3\ufe0f Semaine')
-                .setStyle(periode === 'semaine' ? ButtonStyle.Primary : ButtonStyle.Secondary);
-            const moisBtn = new ButtonBuilder()
-                .setCustomId(`actif_mois_${authorId}`)
-                .setLabel('\ud83d\udcc6 Mois')
-                .setStyle(periode === 'mois' ? ButtonStyle.Primary : ButtonStyle.Secondary);
-            return new ActionRowBuilder().addComponents(jourBtn, semaineBtn, moisBtn);
-        };
-
-        return message.reply({ embeds: [buildActifEmbed('jour')], components: [buildActifRow('jour')] });
-    }
-
-    // !top
-    if (response?.needsTop) {
-        const allSorted = Object.entries(topData.messages)
-            .sort((a, b) => b[1] - a[1]);
-
-        if (allSorted.length === 0) return message.reply("Pas encore de données !");
-
-        const PAGE_SIZE = 10;
-        const totalPages = Math.ceil(allSorted.length / PAGE_SIZE);
-        const authorId = message.author.id;
-
-        const buildTopEmbed = (page) => {
-            const start = page * PAGE_SIZE;
-            const slice = allSorted.slice(start, start + PAGE_SIZE);
-            const medals = ['🥇', '🥈', '🥉'];
-            const fields = slice.map(([uid, count], i) => {
-                const member = message.guild.members.cache.get(uid);
-                const name = member ? member.displayName : null;
-                if (!name) return null;
-                const rank = start + i;
-                const medal = rank < 3 ? medals[rank] : `**${rank + 1}.**`;
-                return { name: `${medal} ${name}`, value: `${count} messages`, inline: false };
-            }).filter(Boolean);
-
-            const userRank = allSorted.findIndex(([uid]) => uid === authorId);
-            const userCount = topData.messages[authorId] || 0;
-            let infoPerso = '';
-
-            if (userRank !== -1) {
-                const position = userRank + 1;
-                if (userRank >= 10 && allSorted[9]) {
-                    const diff = (allSorted[9][1] - userCount) + 1;
-                    infoPerso = `> 👤 **Ta position :** **#${position}** avec **${userCount} messages** *(à ${diff} message${diff > 1 ? 's' : ''} du Top 10 !)*\n\n`;
-                } else {
-                    infoPerso = `> 👤 **Ta position :** **#${position}** avec **${userCount} messages** *(Tu es dans le Top 10 ! 🔥)*\n\n`;
-                }
-            }
-
-            return new EmbedBuilder()
-                .setColor(0xffd700)
-                .setTitle('🏆 Classement des membres')
-                .setDescription(infoPerso)
-                .addFields(fields)
-                .setFooter({ text: `Page ${page + 1}/${totalPages} • Compté depuis l'initialisation du bot` });
-        };
-
-        const buildTopRow = (page) => {
-            const prev = new ButtonBuilder()
-                .setCustomId(`top_prev_${authorId}_${page}`)
-                .setLabel('\u2b05\ufe0f Arrière')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(page === 0);
-            const next = new ButtonBuilder()
-                .setCustomId(`top_next_${authorId}_${page}`)
-                .setLabel('Suivant \u27a1\ufe0f')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(page >= totalPages - 1);
-            return new ActionRowBuilder().addComponents(prev, next);
-        };
-
-        return message.reply({ embeds: [buildTopEmbed(0)], components: totalPages > 1 ? [buildTopRow(0)] : [] });
-    }
-
-    // !setmessages
-    if (response?.needsSetMessages) {
-        const args = message.content.trim().split(/\s+/);
-        const count = parseInt(args[args.length - 1]);
-
-        // Accepte soit un @mention soit un ID brut
-        const cible = message.mentions.users.first();
-        const targetId = cible ? cible.id : args[1];
-
-        if (!targetId || isNaN(count)) {
-            return message.reply("Usage : `!setmessages @Membre NombreDeMessages` ou `!setmessages ID NombreDeMessages`");
-        }
-
-        topData.messages[targetId] = count;
-        saveAll();
-
-        const member = message.guild?.members.cache.get(targetId);
-        const nom = member?.displayName ?? targetId;
-        return message.reply(`\u2705 **${nom}** : ${count} messages enregistr\u00e9s !`);
-    }
+    // Commandes Activité (!profil, !avatar, !actif, !top, !setmessages)
+    if (await handleActivityMessage(message, response)) return;
 
     // hé petit
     if (response?.needsHePetit) {
@@ -2140,218 +1529,8 @@ async function disableButtons(interaction) {
         return message.reply(`\ud83d\udcbe Derni\u00e8re sauvegarde : **${dateStr}** (il y a ${mins}min ${secs}s)`);
     }
 
-    // !streamtest (Epsys-only)
-    if (response?.needsStreamTest) {
-        if (message.author.id !== '436218312574107658') return;
-        try {
-            const payload = await buildTwitchLivePayload();
-            await message.reply({
-                ...payload,
-                allowedMentions: { repliedUser: false, parse: [] }
-            });
-            return message.react('🟣').catch(() => {});
-        } catch (err) {
-            console.error('Erreur !streamtest :', err);
-            return message.reply(`❌ Erreur lors du test : \`${err.message}\``);
-        }
-    }
-
     // !embed (Epsys-only)
     if (await handleEmbedMessage(message, response, client)) return;
-
-    // !rolereac (Epsys-only)
-    if (response?.needsRoleReac) {
-        if (message.author.id !== '436218312574107658') return;
-        const args = message.content.trim().split(/\s+/);
-
-        if (args[1]?.toLowerCase() === 'list') {
-            const listMsg = Object.entries(reactionRolesData);
-            if (listMsg.length === 0) return message.reply("Aucun rôle réaction n'est configuré.");
-            const lignes = listMsg.map(([mId, data]) => {
-                const rolesLignes = Object.entries(data.roles).map(([em, rId]) => `• ${em} ➔ <@&${rId}>`).join('\n');
-                return `📍 Message: \`${mId}\` (dans <#${data.channelId}>) :\n${rolesLignes}`;
-            });
-            const embed = new EmbedBuilder().setColor(0x5865f2).setTitle('🎭 Rôles Réaction Actifs').setDescription(lignes.join('\n\n'));
-            return message.reply({ embeds: [embed] });
-        }
-
-        if (args[1]?.toLowerCase() === 'remove') {
-            const msgId = args[2];
-            const emojiStr = args[3];
-            if (!msgId || !emojiStr) return message.reply("Usage : `!rolereac remove [ID_message] [emoji]`");
-            if (!reactionRolesData[msgId] || !reactionRolesData[msgId].roles[emojiStr]) {
-                return message.reply("Ce rôle réaction n'existe pas sur ce message.");
-            }
-            delete reactionRolesData[msgId].roles[emojiStr];
-            if (Object.keys(reactionRolesData[msgId].roles).length === 0) delete reactionRolesData[msgId];
-            demanderSauvegarde();
-            return message.reply(`🗑️ Rôle réaction supprimé pour l'emoji ${emojiStr} sur le message \`${msgId}\`.`);
-        }
-
-        if (args.length < 4) {
-            return message.reply("Usage :\n• Ajouter : `!rolereac [ID_message] [emoji] [@rôle / ID_rôle]`\n• Retirer : `!rolereac remove [ID_message] [emoji]`\n• Liste : `!rolereac list`");
-        }
-
-        const msgId = args[1];
-        const emojiStr = args[2];
-        const roleArg = args[3];
-        const roleId = roleArg.replace(/<@&|>/g, '');
-        const role = message.guild?.roles.cache.get(roleId);
-        if (!role) return message.reply("Rôle introuvable ! Vérifie la mention ou l'ID.");
-
-        try {
-            let targetMsg = await message.channel.messages.fetch(msgId).catch(() => null);
-            let targetChannel = message.channel;
-
-            if (!targetMsg && message.guild) {
-                for (const ch of message.guild.channels.cache.values()) {
-                    if (ch.isTextBased()) {
-                        targetMsg = await ch.messages.fetch(msgId).catch(() => null);
-                        if (targetMsg) { targetChannel = ch; break; }
-                    }
-                }
-            }
-
-            if (!targetMsg) return message.reply("Message introuvable sur le serveur ! Vérifie l'ID.");
-
-            // Le bot réagit sous le message
-            await targetMsg.react(emojiStr).catch(() => {});
-
-            if (!reactionRolesData[msgId]) {
-                reactionRolesData[msgId] = { channelId: targetChannel.id, roles: {} };
-            }
-            reactionRolesData[msgId].roles[emojiStr] = role.id;
-            demanderSauvegarde();
-
-            await message.delete().catch(() => {});
-            const conf = await message.channel.send(`✅ Rôle réaction configuré : ${emojiStr} donnera le rôle **${role.name}** sur le message [clique ici](${targetMsg.url}) !`);
-        } catch (err) {
-            return message.reply(`❌ Erreur : ${err.message}`);
-        }
-        return;
-    }
-
-    // !rolebtn (Epsys-only)
-    if (response?.needsRoleBtn) {
-        if (message.author.id !== '436218312574107658') return;
-        const args = message.content.trim().split(/\s+/);
-        const sub = args[1]?.toLowerCase();
-
-        if (sub !== 'add' && sub !== 'remove') {
-            return message.reply(
-                "**Usage :**\n" +
-                "• **Ajouter un bouton :** `!rolebtn add [ID_message] [@rôle] [couleur optionnelle] [Texte avec ou sans emoji]`\n" +
-                "• **Supprimer un bouton :** `!rolebtn remove [ID_message] [@rôle]`\n\n" +
-                "*Couleurs disponibles : bleu, mauve, vert, rouge, rose, orange, gris, blanc, jaune...*"
-            );
-        }
-
-        const msgId = args[2];
-        const roleArg = args[3];
-        if (!msgId || !roleArg) return message.reply("Paramètres manquants ! Vérifie l'ID du message et le rôle.");
-
-        const roleId = roleArg.replace(/<@&|>/g, '');
-        const role = message.guild?.roles.cache.get(roleId);
-        if (!role) return message.reply("Rôle introuvable ! Vérifie la mention ou l'ID.");
-
-        // Recherche du message envoyé par Cacabot
-        let targetMsg = await message.channel.messages.fetch(msgId).catch(() => null);
-        if (!targetMsg && message.guild) {
-            for (const ch of message.guild.channels.cache.values()) {
-                if (ch.isTextBased()) {
-                    targetMsg = await ch.messages.fetch(msgId).catch(() => null);
-                    if (targetMsg) break;
-                }
-            }
-        }
-
-        if (!targetMsg) return message.reply("Message introuvable ! Vérifie l'ID.");
-        if (targetMsg.author.id !== client.user.id) {
-            return message.reply("Je ne peux ajouter des boutons que sur mes **propres messages** (par exemple créés avec `/embed` ou `!say`) !");
-        }
-
-        // --- Cas de suppression ---
-        if (sub === 'remove') {
-            const rows = targetMsg.components.map(row => {
-                const newRow = ActionRowBuilder.from(row);
-                newRow.setComponents(row.components.filter(c => c.customId !== `rolebtn_${role.id}`));
-                return newRow;
-            }).filter(row => row.components.length > 0);
-
-            await targetMsg.edit({ components: rows }).catch(err => message.reply(`Erreur : ${err.message}`));
-            await message.delete().catch(() => {});
-            return message.channel.send(`🗑️ Bouton de rôle pour **${role.name}** retiré du message !`);
-        }
-
-        // --- Cas d'ajout ---
-        let resteArgs = args.slice(4);
-        let style = ButtonStyle.Secondary; // Gris par défaut
-
-        const couleurMap = {
-            bleu: ButtonStyle.Primary, mauve: ButtonStyle.Primary, violet: ButtonStyle.Primary, primary: ButtonStyle.Primary,
-            vert: ButtonStyle.Success, success: ButtonStyle.Success,
-            rouge: ButtonStyle.Danger, rose: ButtonStyle.Danger, danger: ButtonStyle.Danger,
-            gris: ButtonStyle.Secondary, blanc: ButtonStyle.Secondary, noir: ButtonStyle.Secondary, secondary: ButtonStyle.Secondary,
-            jaune: ButtonStyle.Secondary, orange: ButtonStyle.Danger, marron: ButtonStyle.Secondary
-        };
-
-        const premierMot = resteArgs[0]?.toLowerCase();
-        if (premierMot && couleurMap[premierMot]) {
-            style = couleurMap[premierMot];
-            resteArgs.shift(); // On retire le mot de couleur pour ne garder que le texte
-        }
-
-        let texteBrut = resteArgs.join(' ').trim();
-        if (!texteBrut) texteBrut = role.name;
-
-        // Détection automatique d'un emoji en début de texte (ex: "🎮 Gamer" -> emoji: 🎮, label: "Gamer")
-        let emoji = null;
-        let label = texteBrut;
-        const emojiMatch = texteBrut.match(/^((?:<a?:\w+:\d+>|\p{Extended_Pictographic}\uFE0F?))\s*(.*)$/u);
-        if (emojiMatch) {
-            emoji = emojiMatch[1];
-            label = emojiMatch[2].trim() || role.name;
-        }
-
-        const newBtn = new ButtonBuilder()
-            .setCustomId(`rolebtn_${role.id}`)
-            .setStyle(style);
-
-        if (label) newBtn.setLabel(label);
-        if (emoji) newBtn.setEmoji(emoji);
-
-        // Reconstruction des lignes de boutons (max 5 par ligne, max 25 au total)
-        const rows = targetMsg.components.map(r => ActionRowBuilder.from(r));
-        let placeTrouvee = false;
-
-        // Vérifie si le bouton existe déjà pour le mettre à jour
-        for (const row of rows) {
-            const index = row.components.findIndex(c => c.data.custom_id === `rolebtn_${role.id}`);
-            if (index !== -1) {
-                row.components[index] = newBtn;
-                placeTrouvee = true;
-                break;
-            }
-        }
-
-        // Sinon l'ajouter à la dernière ligne ou en créer une nouvelle
-        if (!placeTrouvee) {
-            let derniereLigne = rows[rows.length - 1];
-            if (derniereLigne && derniereLigne.components.length < 5) {
-                derniereLigne.addComponents(newBtn);
-            } else if (rows.length < 5) {
-                rows.push(new ActionRowBuilder().addComponents(newBtn));
-            } else {
-                return message.reply("Limite atteinte : ce message a déjà le maximum de 25 boutons !");
-            }
-        }
-
-        await targetMsg.edit({ components: rows }).catch(err => message.reply(`Erreur : ${err.message}`));
-        await message.delete().catch(() => {});
-        return message.channel.send(`✅ Bouton de rôle pour **${role.name}** ajouté avec succès sur le message !`);
-    }
-
-    
 
     // !question est pris en charge par handleSocialMessage
 
@@ -2464,106 +1643,8 @@ try {
             return await handleHelpInteraction(interaction);
         }
 
-        if (commandName === 'profil') {
-            const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
-            const member = interaction.guild?.members.cache.get(cibleUser.id);
-            const joinedAt = member?.joinedAt
-                ? member.joinedAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
-                : 'Inconnue';
-            const createdAt = cibleUser.createdAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-            const roles = member?.roles.cache
-                .filter(r => r.id !== interaction.guild.id)
-                .sort((a, b) => b.position - a.position)
-                .map(r => `<@&${r.id}>`)
-                .slice(0, 5)
-                .join(' ') || 'Aucun';
-
-            const nbMessages = topData.messages[cibleUser.id] ?? 0;
-            const birthdayRaw = getGuildBirthdays(interaction.guild.id)[cibleUser.id];
-            const moisNoms = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-            let birthdayStr = 'Inconnu';
-            if (birthdayRaw) {
-                const [j, m] = birthdayRaw.split('/').map(Number);
-                birthdayStr = `${j} ${moisNoms[m - 1]}`;
-            }
-
-            // Calcul des Succès du serveur
-            let userAchs = rouletteAchievements.get(cibleUser.id) ?? {};
-            const rStats = rouletteStats.get(cibleUser.id);
-            const nbTirages = rStats?.tirages ?? 0;
-
-            const badges = [];
-            if (cibleUser.id === EPSYS_ID) badges.push('• 👑 Créatrice du serveur et de Cacabot');
-            if (nbTirages >= 500) badges.push('• 🎰 Gambling Addict (500+ tirages)');
-            else if (nbTirages >= 100) badges.push('• 🎰 Habitué.e de la Roulette (100+ tirages)');
-
-            const nbAchs = Object.keys(userAchs).length;
-            if (nbAchs >= 15) badges.push(`• 🏆 Trophy Hunter (${nbAchs}/30 succès)`);
-            else if (nbAchs >= 5) badges.push(`• 🤠 Aventurier.e de la Roulette (${nbAchs}/30 succès)`);
-
-            const mStats = motusStats[cibleUser.id];
-            const nbVictoires = mStats?.victoires ?? 0;
-            if (nbVictoires >= 10) badges.push(`• 🟩 Motus Master (${nbVictoires} victoires)`);
-            else if (nbVictoires >= 3) badges.push(`• 🟨 Débutant.e du Motus (${nbVictoires} victoires)`);
-
-            const rRebus = rebusStats[cibleUser.id];
-            const nbTop1 = rRebus?.victoires ?? 0;
-            if (nbTop1 >= 10) badges.push(`• 🥇 Maître du Rébus (10 médailles d'or)`);
-            else if (nbTop1 >= 5) badges.push(`• 🥇 Expert.e du Rébus (5 médailles d'or)`);
-            else if (nbTop1 >= 3) badges.push(`• 🥇 As du Rébus (3 médailles d'or)`);
-
-            const nbQuotes = quotesData.filter(q => q.authorId === cibleUser.id).length;
-            if (nbQuotes >= 5) badges.push(`• 📜 Légende (${nbQuotes} citations)`);
-
-            if (nbMessages >= 5000) badges.push('• 🗣️ Monument de Regaïa (5 000+ messages)');
-            else if (nbMessages >= 1000) badges.push('• 💬 Membre Bavard.e (1 000+ messages)');
-            else if (nbMessages >= 250) badges.push('• 🌱 Jeune membre (250+ messages)');
-
-            const embed = new EmbedBuilder()
-                .setColor(0x5865f2)
-                .setTitle(member?.displayName ?? cibleUser.username)
-                .setThumbnail(cibleUser.displayAvatarURL({ dynamic: true, size: 256 }))
-                .addFields(
-                    { name: '👤 Pseudo', value: `@${cibleUser.username}`, inline: true },
-                    { name: '💬 Messages envoyés', value: `${nbMessages.toLocaleString('fr-FR')}`, inline: true },
-                    { name: '\u200b', value: '\u200b', inline: true },
-                    { name: '📅 Arrivée sur le serveur', value: joinedAt, inline: true },
-                    { name: '🎂 Anniversaire', value: birthdayStr, inline: true },
-                    { name: '\u200b', value: '\u200b', inline: true },
-                    { name: '🏆 Succès du serveur', value: badges.length > 0 ? badges.join('\n') : '*Aucun succès débloqué pour l\'instant.*', inline: false },
-                    { name: '🏷️ Rôles', value: roles, inline: false }
-                )
-                .setFooter({ text: `ID : ${cibleUser.id}` });
-
-            return interaction.reply({ embeds: [embed] });
-        }
-
-        if (commandName === 'top') {
-            const allSorted = Object.entries(topData.messages).sort((a, b) => b[1] - a[1]);
-            if (allSorted.length === 0) return interaction.reply({ content: "Pas encore de données !", ephemeral: true });
-
-            const PAGE_SIZE = 10;
-            const totalPages = Math.ceil(allSorted.length / PAGE_SIZE);
-            const medals = ['🥇', '🥈', '🥉'];
-            const fields = allSorted.slice(0, PAGE_SIZE).map(([uid, count], i) => {
-                const member = interaction.guild?.members.cache.get(uid);
-                if (!member) return null;
-                const medal = i < 3 ? medals[i] : `**${i + 1}.**`;
-                return { name: `${medal} ${member.displayName}`, value: `${count} messages`, inline: false };
-            }).filter(Boolean);
-
-            const embed = new EmbedBuilder()
-                .setColor(0xffd700)
-                .setTitle('🏆 Classement des membres')
-                .addFields(fields)
-                .setFooter({ text: `Page 1/${totalPages}` });
-
-            const prev = new ButtonBuilder().setCustomId(`top_prev_${interaction.user.id}_0`).setLabel('⬅️ Arrière').setStyle(ButtonStyle.Secondary).setDisabled(true);
-            const next = new ButtonBuilder().setCustomId(`top_next_${interaction.user.id}_0`).setLabel('Suivant ➡️').setStyle(ButtonStyle.Secondary).setDisabled(totalPages <= 1);
-            const row = new ActionRowBuilder().addComponents(prev, next);
-
-            return interaction.reply({ embeds: [embed], components: totalPages > 1 ? [row] : [] });
-        }
+        // Commandes Activité (/profil, /top)
+        if (await handleActivitySlash(interaction)) return;
 
         const auteurNom = interaction.member?.displayName ?? interaction.user.username;
         const auteurId = interaction.user.id;
@@ -2962,44 +2043,7 @@ try {
             return;
         }
 
-        if (await handleAnniversaireSlash(interaction)) return;
-
-        // =========================
-        // LOT 4 : STATS, UTILITAIRES & YOUTUBE
-        // =========================
-
-        if (commandName === 'actif') {
-            cleanOldData();
-            const authorId = interaction.user.id;
-            const medals = ['🥇', '🥈', '🥉'];
-            const counts = dailyData[getTodayKey()] ?? {};
-            const sorted = Object.entries(counts).filter(([uid]) => uid !== '1503495713097519355').sort((a, b) => b[1] - a[1]).slice(0, 10);
-            const fields = sorted.length > 0
-                ? sorted.map(([uid, count], i) => {
-                    const member = interaction.guild?.members.cache.get(uid);
-                    const name = member?.displayName ?? 'Membre inconnu';
-                    const medal = medals[i] ?? `**${i + 1}.**`;
-                    return { name: `${medal} ${name}`, value: `${count} messages`, inline: false };
-                })
-                : [{ name: 'Aucune donnée', value: 'Pas encore de messages aujourd\'hui !', inline: false }];
-
-            const embed = new EmbedBuilder().setColor(0xffd700).setTitle("📅 Membres les plus actifs aujourd'hui").addFields(fields);
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`actif_jour_${authorId}`).setLabel('📅 Jour').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId(`actif_semaine_${authorId}`).setLabel('🗓️ Semaine').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId(`actif_mois_${authorId}`).setLabel('📆 Mois').setStyle(ButtonStyle.Secondary)
-            );
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
-
-        if (commandName === 'avatar') {
-            const cible = interaction.options.getUser('membre') ?? interaction.user;
-            const embed = new EmbedBuilder()
-                .setColor(0x5865f2)
-                .setTitle(`Avatar de ${cible.username}`)
-                .setImage(cible.displayAvatarURL({ dynamic: true, size: 1024 }));
-            return interaction.reply({ embeds: [embed] });
-        }
+    if (await handleAnniversaireSlash(interaction)) return;
 
         if (await handleYoutubeSlash(interaction)) return;
 
@@ -3023,57 +2067,8 @@ try {
         return interaction.update({ content: "🗑️ Création de l'embed annulée.", embeds: [], components: [] });
     }
 
-    // Actions de modération sur les comptes récents
-    if (interaction.isButton() && interaction.customId.startsWith('mod_action_')) {
-        if (!estModo(interaction.member) && !interaction.member.permissions.has('KickMembers')) {
-            return interaction.reply({ content: "Tu n'as pas la permission d'effectuer cette action.", ephemeral: true });
-        }
-
-        const parts = interaction.customId.split('_');
-        const action = parts[2]; // kick, ban ou dismiss
-        const targetId = parts[3];
-
-        if (action === 'dismiss') {
-            await interaction.message.edit({ components: [] }).catch(() => {});
-            return interaction.reply(`✅ Alerte classée sans suite pour <@${targetId}> par <@${interaction.user.id}>.`);
-        }
-
-        if (action === 'kick') {
-            const cible = await interaction.guild.members.fetch(targetId).catch(() => null);
-            if (!cible) {
-                return interaction.reply({ content: "Ce membre a déjà quitté le serveur.", ephemeral: true });
-            }
-            await cible.kick(`Expulsé par ${interaction.user.tag} (compte récent suspect)`)
-                .then(async () => {
-                    await interaction.message.edit({ components: [] }).catch(() => {});
-                    interaction.reply(`👢 <@${targetId}> a été expulsé.e du serveur par <@${interaction.user.id}>.`);
-                })
-                .catch(() => interaction.reply({ content: "Impossible d'expulser ce membre (permissions insuffisantes).", ephemeral: true }));
-            return;
-        }
-
-        if (action === 'ban') {
-            await interaction.guild.members.ban(targetId, { reason: `Banni par ${interaction.user.tag} (compte récent suspect)` })
-                .then(async () => {
-                    await interaction.message.edit({ components: [] }).catch(() => {});
-                    interaction.reply(`🔨 <@${targetId}> a été banni.e définitivement par <@${interaction.user.id}>.`);
-                })
-                .catch(() => interaction.reply({ content: "Impossible de bannir ce membre (permissions insuffisantes).", ephemeral: true }));
-            return;
-        }
-    }
-
-    // Bouton de bannissement rapide anti-phishing
-    if (interaction.isButton() && interaction.customId.startsWith('antiphish_ban_')) {
-        if (!estModo(interaction.member) && !interaction.member.permissions.has('BanMembers')) {
-            return interaction.reply({ content: "Tu n'as pas la permission d'utiliser ce bouton !", ephemeral: true });
-        }
-        const targetId = interaction.customId.replace('antiphish_ban_', '');
-        await interaction.guild.members.ban(targetId, { reason: 'Compte piraté / Phishing détecté par Cacabot' })
-            .then(() => interaction.reply(`✅ Le compte <@${targetId}> a été définitivement banni par <@${interaction.user.id}>.`))
-            .catch(() => interaction.reply({ content: "Impossible de bannir ce membre (permissions insuffisantes ou membre déjà parti).", ephemeral: true }));
-        return;
-    }
+    // Boutons de Sécurité & Rôles
+    if (await handleSecurityInteraction(interaction)) return;
 
     // =========================
     //     BOUTONS YOUTUBE
@@ -3087,126 +2082,8 @@ try {
 
     if (await handleInteractionButton(interaction)) return;
 
-    // =========================
-    // BOUTONS ACTIF
-    // =========================
-
-    if (interaction.isButton() && (interaction.customId.startsWith('actif_jour_') || interaction.customId.startsWith('actif_semaine_') || interaction.customId.startsWith('actif_mois_'))) {
-        const parts = interaction.customId.split('_');
-        const periode = parts[1];
-        const authorId = parts[2];
-
-        if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
-        }
-
-        const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
-        let counts, titre;
-        if (periode === 'jour') {
-            counts = dailyData[getTodayKey()] ?? {};
-            titre = "\ud83d\udcc5 Membres les plus actifs aujourd'hui";
-        } else if (periode === 'semaine') {
-            counts = weeklyData[getWeekKey()] ?? {};
-            titre = '\ud83d\uddd3\ufe0f Membres les plus actifs cette semaine';
-        } else {
-            counts = monthlyData[getMonthKey()] ?? {};
-            titre = '\ud83d\udcc6 Membres les plus actifs ce mois-ci';
-        }
-
-        const sorted = Object.entries(counts).filter(([uid]) => uid !== '1503495713097519355').sort((a, b) => b[1] - a[1]).slice(0, 10);
-        const fields = sorted.length > 0
-            ? sorted.map(([uid, count], i) => {
-                const member = interaction.guild.members.cache.get(uid);
-                const name = member?.displayName ?? 'Membre inconnu';
-                const medal = medals[i] ?? `**${i + 1}.**`;
-                return { name: `${medal} ${name}`, value: `${count} messages`, inline: false };
-            })
-            : [{ name: 'Aucune donn\u00e9e', value: 'Pas encore de messages !', inline: false }];
-
-        const embed = new EmbedBuilder().setColor(0xffd700).setTitle(titre).addFields(fields);
-
-        const jourBtn = new ButtonBuilder()
-            .setCustomId(`actif_jour_${authorId}`)
-            .setLabel('\ud83d\udcc5 Jour')
-            .setStyle(periode === 'jour' ? ButtonStyle.Primary : ButtonStyle.Secondary);
-        const semaineBtn = new ButtonBuilder()
-            .setCustomId(`actif_semaine_${authorId}`)
-            .setLabel('\ud83d\uddd3\ufe0f Semaine')
-            .setStyle(periode === 'semaine' ? ButtonStyle.Primary : ButtonStyle.Secondary);
-        const moisBtn = new ButtonBuilder()
-            .setCustomId(`actif_mois_${authorId}`)
-            .setLabel('\ud83d\udcc6 Mois')
-            .setStyle(periode === 'mois' ? ButtonStyle.Primary : ButtonStyle.Secondary);
-        const row = new ActionRowBuilder().addComponents(jourBtn, semaineBtn, moisBtn);
-
-        return interaction.update({ embeds: [embed], components: [row] });
-    }
-
-    // =========================
-    // BOUTONS TOP
-    // =========================
-
-    if (interaction.isButton() && (interaction.customId.startsWith('top_prev_') || interaction.customId.startsWith('top_next_'))) {
-        const parts = interaction.customId.split('_');
-        const direction = parts[1]; // prev ou next
-        const authorId = parts[2];
-        const currentPage = parseInt(parts[3]);
-
-        if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
-        }
-
-        const newPage = direction === 'next' ? currentPage + 1 : currentPage - 1;
-        const PAGE_SIZE = 10;
-        const allSorted = Object.entries(topData.messages).sort((a, b) => b[1] - a[1]);
-        const totalPages = Math.ceil(allSorted.length / PAGE_SIZE);
-
-        const start = newPage * PAGE_SIZE;
-        const slice = allSorted.slice(start, start + PAGE_SIZE);
-        const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49'];
-        const fields = slice.map(([uid, count], i) => {
-            const member = interaction.guild.members.cache.get(uid);
-            if (!member) return null;
-            const rank = start + i;
-            const medal = rank < 3 ? medals[rank] : `**${rank + 1}.**`;
-            return { name: `${medal} ${member.displayName}`, value: `${count} messages`, inline: false };
-        }).filter(Boolean);
-
-        const userRank = allSorted.findIndex(([uid]) => uid === authorId);
-        const userCount = topData.messages[authorId] || 0;
-        let infoPerso = '';
-
-        if (userRank !== -1) {
-            const position = userRank + 1;
-            if (userRank >= 10 && allSorted[9]) {
-                const diff = (allSorted[9][1] - userCount) + 1;
-                infoPerso = `> 👤 **Ta position :** **#${position}** avec **${userCount} messages** *(à ${diff} message${diff > 1 ? 's' : ''} du Top 10 !)*\n\n`;
-            } else {
-                infoPerso = `> 👤 **Ta position :** **#${position}** avec **${userCount} messages** *(Tu es dans le Top 10 ! 🔥)*\n\n`;
-            }
-        }
-
-        const embed = new EmbedBuilder()
-            .setColor(0xffd700)
-            .setTitle('🏆 Classement des membres')
-            .setDescription(infoPerso)
-            .addFields(fields)
-            .setFooter({ text: `Page ${newPage + 1}/${totalPages} • Compté depuis l'initialisation du bot` });
-
-        const prev = new ButtonBuilder()
-            .setCustomId(`top_prev_${authorId}_${newPage}`)
-            .setLabel('\u2b05\ufe0f Arrière')
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(newPage === 0);
-        const next = new ButtonBuilder()
-            .setCustomId(`top_next_${authorId}_${newPage}`)
-            .setLabel('Suivant \u27a1\ufe0f')
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(newPage >= totalPages - 1);
-        const row = new ActionRowBuilder().addComponents(prev, next);
-
-        return interaction.update({ embeds: [embed], components: [row] });
-    }
+    // Boutons Activité (actif jour/semaine/mois & pagination top)
+    if (await handleActivityButton(interaction)) return;
 
     // =========================
     // BOUTONS ANNIVERSAIRE LIST
@@ -3627,7 +2504,7 @@ client.once('ready', async () => {
     for (const [uid, chId] of rouletteNotifs) armerNotifRoulette(uid, chId, client);
     cleanOldData();
     setInterval(() => verifierHappyHour(client), 30 * 1000);
-    setInterval(verifierTwitchLive, 60 * 1000);
+    setInterval(() => verifierTwitchLive(client), 60 * 1000);
 
     // Lancement et vérification automatique des Motus (10h et 19h) + arrêt après 1 heure
     let derniereSessionLancee = null;
@@ -3700,76 +2577,17 @@ client.once('ready', async () => {
 //     LISTENER REACTIONS
 // =========================
 
-// Boutons de rôles interactifs (Attribution unique)
-client.on('interactionCreate', async (interaction) => {
-    if (!interaction.isButton() || !interaction.customId.startsWith('rolebtn_')) return;
-
-    const roleId = interaction.customId.replace('rolebtn_', '');
-    const role = interaction.guild?.roles.cache.get(roleId);
-
-    if (!role) {
-        return interaction.reply({ content: "❌ Ce rôle n'existe plus sur le serveur !", ephemeral: true });
-    }
-
-    const member = interaction.member;
-    if (member.roles.cache.has(roleId)) {
-        return interaction.reply({ content: `Tu as déjà le rôle **${role.name}** !`, ephemeral: true });
-    } else {
-        await member.roles.add(roleId).catch(err => console.error("Erreur ajout rôle bouton:", err.message));
-        return interaction.reply({ content: `✅ Tu as reçu le rôle **${role.name}** !`, ephemeral: true });
-    }
-});
-
-// Rôles réaction automatiques (Ajout du rôle)
 client.on('messageReactionAdd', async (reaction, user) => {
-    if (user.bot) return;
-    if (reaction.partial) await reaction.fetch().catch(() => {});
-    if (reaction.message.partial) await reaction.message.fetch().catch(() => {});
+    await handleSecurityReactionAdd(reaction, user);
 
-    const msgConfig = reactionRolesData[reaction.message.id];
-    if (!msgConfig) return;
-
-    const emojiKey = reaction.emoji.id ? `<:${reaction.emoji.name}:${reaction.emoji.id}>` : reaction.emoji.name;
-    const roleId = msgConfig.roles[emojiKey] || msgConfig.roles[reaction.emoji.name] || (reaction.emoji.id && msgConfig.roles[reaction.emoji.id]);
-
-    if (roleId) {
-        const member = reaction.message.guild?.members.cache.get(user.id) ?? await reaction.message.guild?.members.fetch(user.id).catch(() => null);
-        if (member && !member.roles.cache.has(roleId)) {
-            await member.roles.add(roleId).catch(err => console.error(`Erreur ajout rôle réaction:`, err.message));
-        }
-    }
-});
-
-// Rôles réaction automatiques (Retrait du rôle)
-client.on('messageReactionRemove', async (reaction, user) => {
-    if (user.bot) return;
-    if (reaction.partial) await reaction.fetch().catch(() => {});
-    if (reaction.message.partial) await reaction.message.fetch().catch(() => {});
-
-    const msgConfig = reactionRolesData[reaction.message.id];
-    if (!msgConfig) return;
-
-    const emojiKey = reaction.emoji.id ? `<:${reaction.emoji.name}:${reaction.emoji.id}>` : reaction.emoji.name;
-    const roleId = msgConfig.roles[emojiKey] || msgConfig.roles[reaction.emoji.name] || (reaction.emoji.id && msgConfig.roles[reaction.emoji.id]);
-
-    if (roleId) {
-        const member = reaction.message.guild?.members.cache.get(user.id) ?? await reaction.message.guild?.members.fetch(user.id).catch(() => null);
-        if (member && member.roles.cache.has(roleId)) {
-            await member.roles.remove(roleId).catch(err => console.error(`Erreur retrait rôle réaction:`, err.message));
-        }
-    }
-});
-
-client.on('messageReactionAdd', async (reaction, user) => {
     if (user.bot) return;
     if (reaction.emoji.name !== '🖕' && reaction.emoji.name !== 'middle_finger') return;
 
     const msg = reaction.message;
     if (msg.author.id !== client.user.id) return;
 
-    // Vérifier que c'est la première réaction de ce type
     const emojiReaction = msg.reactions.cache.find(r =>
-        r.emoji.name === '\uD83D\uDD95' || r.emoji.name === 'middle_finger'
+        r.emoji.name === '🖕' || r.emoji.name === 'middle_finger'
     );
     if (emojiReaction && emojiReaction.count > 1) return;
 
@@ -3777,22 +2595,8 @@ client.on('messageReactionAdd', async (reaction, user) => {
     await msg.channel.send(`Bah alors, **${memberNom}**, on m'envoie un doigt d'honneur ?`);
 });
 
-client.on('messageReactionAdd', async (reaction, user) => {
-    if (user.bot) return;
-    if (!['🛑', '❌', '👎', '🤫', '🔇'].includes(reaction.emoji.name)) return;
-
-    const msg = reaction.message;
-    if (msg.author.id !== client.user.id) return;
-    if (!/feur|bril|quoicoubeh/i.test(msg.content)) return;
-
-    const ancien = mutedChannels.get(msg.channel.id);
-    if (ancien) clearTimeout(ancien.timeout);
-
-    const until = Date.now() + STOP_DURATION_MS;
-    const timeout = setTimeout(() => mutedChannels.delete(msg.channel.id), STOP_DURATION_MS);
-    mutedChannels.set(msg.channel.id, { until, timeout });
-
-    await msg.react('🆗').catch(() => {});
+client.on('messageReactionRemove', async (reaction, user) => {
+    await handleSecurityReactionRemove(reaction, user);
 });
 
 const dernierAuteurParSalon = new Map();
@@ -3817,148 +2621,11 @@ client.on('guildMemberAdd', async (member) => {
     }
 
     await handleWelcomeMemberAdd(member);
-
-    if (member.guild.id === '720057528351850547') {
-        const accountAge = Date.now() - member.user.createdTimestamp;
-        const oneMonth = 30 * 24 * 60 * 60 * 1000;
-                // --- Escalade anti-raid : kick si retour trop rapide après un timeout raid ---
-        const previousRaidMuteEnd = raidMuteRecord.get(member.id);
-        if (previousRaidMuteEnd && Date.now() - previousRaidMuteEnd < RAID_ESCALATION_WINDOW_MS) {
-            raidMuteRecord.delete(member.id);
-            await member.kick('Anti-raid : retour trop rapide après un timeout raid').catch(() => {});
-            return;
-        }
-
-        // --- Détection anti-raid : rafale de comptes très récents ---
-        if (accountAge < RAID_ACCOUNT_AGE_MS) {
-            const joins = (raidJoinTracker.get(member.guild.id) || []).filter(j => Date.now() - j.timestamp < RAID_WINDOW_MS);
-            joins.push({ userId: member.id, timestamp: Date.now() });
-            raidJoinTracker.set(member.guild.id, joins);
-
-            if (joins.length >= RAID_THRESHOLD) {
-                for (const j of joins) raidFlaggedUsers.set(j.userId, true);
-                raidJoinTracker.delete(member.guild.id);
-            }
-        }
-        if (accountAge < oneMonth) {
-            const modChannel = member.guild.channels.cache.get(MOD_CHANNEL_ID);
-            if (!modChannel) return;
-            const jours = Math.floor(accountAge / (24 * 60 * 60 * 1000));
-            const embed = new EmbedBuilder()
-                .setColor(0xff9900)
-                .setTitle('⚠️ Compte récent détecté')
-                .setDescription(`<@${member.id}> vient de rejoindre le serveur, mais son compte n'a été créé qu'il y a **${jours} jour${jours > 1 ? 's' : ''}**.\n\nC'est peut-être un bot ou un compte secondaire. Que souhaitez-vous faire ?`)
-                .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-                .setFooter({ text: `ID : ${member.id}` })
-                .setTimestamp();
-
-            const actionRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`mod_action_kick_${member.id}`)
-                    .setLabel('👢 Expulser')
-                    .setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder()
-                    .setCustomId(`mod_action_ban_${member.id}`)
-                    .setLabel('🔨 Bannir')
-                    .setStyle(ButtonStyle.Danger),
-                new ButtonBuilder()
-                    .setCustomId(`mod_action_dismiss_${member.id}`)
-                    .setLabel('✅ Fausse alerte')
-                    .setStyle(ButtonStyle.Success)
-            );
-
-            await modChannel.send({ embeds: [embed], components: [actionRow] });
-        }
-    }
+    await handleSecurityMemberAdd(member);
 });
-
-const VOICE_WATCH_CONFIGS = [
-    {
-        guildId: '1515767395036172469',
-        textChannelId: '1515767396407705762',
-        vocalIds: [
-            '1515767396407705763',
-            '1515768236443173105',
-            '1515768324892655720'
-        ]
-    },
-    {
-        guildId: '720057528351850547',
-        textChannelId: '720080025130369115',
-        vocalIds: [
-            '720057528867618910',
-            '1465882952251736165',
-            '1514586546014261278',
-            '1542345188385619988'
-        ]
-    }
-];
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
-    const config = VOICE_WATCH_CONFIGS.find(c => c.guildId === newState.guild.id);
-    if (!config) return;
-    const { guildId: GUILD_ID, textChannelId: TEXT_CHANNEL_ID, vocalIds: VOCAL_IDS } = config;
-
-    const textChannel = newState.guild.channels.cache.get(TEXT_CHANNEL_ID);
-    if (!textChannel) return;
-
-    // Supprimer l'ancien message et annuler ses timers quoi qu'il arrive
-    const supprimerAncien = async () => {
-        const ancien = vocalMessages.get(GUILD_ID);
-        if (!ancien) return;
-        ancien.timeouts.forEach(t => clearTimeout(t));
-        await ancien.message.delete().catch(() => {});
-        vocalMessages.delete(GUILD_ID);
-    };
-
-    // Quelqu'un quitte un vocal surveillé sans rejoindre un autre vocal surveillé
-    if (
-        oldState.channelId && VOCAL_IDS.includes(oldState.channelId) &&
-        (!newState.channelId || !VOCAL_IDS.includes(newState.channelId))
-    ) {
-        const ancien = vocalMessages.get(GUILD_ID);
-        if (ancien?.memberId === newState.member?.id) {
-            await supprimerAncien();
-        }
-        return;
-    }
-
-    // Quelqu'un rejoint un vocal surveillé
-    if (!newState.channelId || !VOCAL_IDS.includes(newState.channelId)) return;
-    if (oldState.channelId === newState.channelId) return;
-
-    const channel = newState.channel;
-    if (!channel || channel.members.size >= 2) return;
-
-    const memberNom = newState.member?.displayName ?? newState.member?.user.username ?? 'Quelqu\'un';
-    const memberId = newState.member?.id;
-    const channelName = channel.name;
-
-    // Supprimer l'ancien message avant d'envoyer le nouveau
-    await supprimerAncien();
-
-    const msg = await textChannel.send(`**${memberNom}** a rejoint **${channelName}** ! On se fait un ptit voc ? 👀`);
-
-    const t1 = setTimeout(async () => {
-        await newState.guild.members.fetch(memberId).catch(() => {});
-        const member = newState.guild.members.cache.get(memberId);
-        if (!member?.voice.channelId || !VOCAL_IDS.includes(member.voice.channelId)) return;
-        await msg.edit(`**${memberNom}** attend depuis **30 minutes** en vocal... Quelqu'un ? 👀`).catch(() => {});
-    }, 30 * 60 * 1000);
-
-    const t2 = setTimeout(async () => {
-        const member = newState.guild.members.cache.get(memberId);
-        if (!member?.voice.channelId || !VOCAL_IDS.includes(member.voice.channelId)) return;
-        await msg.edit(`**${memberNom}** attend depuis **1 heure** en vocal... C'est long quand même. 👀`).catch(() => {});
-    }, 60 * 60 * 1000);
-
-    const t3 = setTimeout(async () => {
-        const member = newState.guild.members.cache.get(memberId);
-        if (!member?.voice.channelId || !VOCAL_IDS.includes(member.voice.channelId)) return;
-        await msg.edit(`**${memberNom}** attend depuis **2 heures** en vocal. Y a vraiment personne là ? 👀`).catch(() => {});
-    }, 120 * 60 * 1000);
-
-    vocalMessages.set(GUILD_ID, { message: msg, memberId, channelName, timeouts: [t1, t2, t3] });
+    await handleVoiceStateUpdate(oldState, newState);
 });
 
-client.login(process.env.TOKEN)
+client.login(process.env.TOKEN);
