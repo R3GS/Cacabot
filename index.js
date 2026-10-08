@@ -2255,24 +2255,33 @@ client.once('ready', async () => {
         // Roulette & Raccourcis
         new SlashCommandBuilder()
             .setName('roulette')
-            .setDescription('Roulette Regaïenne (tirages, inventaire, stats, état, classement)')
-            .addStringOption(option =>
-                option.setName('action')
-                    .setDescription('Choisis ce que tu veux faire')
-                    .setRequired(false)
-                    .addChoices(
-                        { name: '🎲 go — Lancer immédiatement le tirage', value: 'go' },
-                        { name: '🎁 claim — Ouvrir mon inventaire de récompenses', value: 'claim' },
-                        { name: '📊 state — Voir les effets et malus actifs', value: 'state' },
-                        { name: '📈 stats — Voir les statistiques de tirage', value: 'stats' },
-                        { name: '🏆 top — Voir le panthéon des succès', value: 'top' },
-                        { name: '🎖️ succes — Voir les succès débloqués', value: 'succes' }
-                    )
+            .setDescription('🎰 Roulette Regaïenne')
+            .addSubcommand(sub =>
+                sub.setName('go')
+                    .setDescription('🎲 Lancer immédiatement le tirage de la roulette')
             )
-            .addUserOption(option =>
-                option.setName('membre')
-                    .setDescription('Membre à inspecter (uniquement pour state, stats ou succes)')
-                    .setRequired(false)
+            .addSubcommand(sub =>
+                sub.setName('claim')
+                    .setDescription('🎁 Ouvrir son inventaire et activer ses récompenses')
+            )
+            .addSubcommand(sub =>
+                sub.setName('top')
+                    .setDescription('🏆 Voir le panthéon des chasseurs de succès')
+            )
+            .addSubcommand(sub =>
+                sub.setName('state')
+                    .setDescription('📊 Voir les effets, bonus et malus actifs')
+                    .addUserOption(opt => opt.setName('membre').setDescription('Membre à inspecter (optionnel)'))
+            )
+            .addSubcommand(sub =>
+                sub.setName('stats')
+                    .setDescription('📈 Voir les statistiques de tirage')
+                    .addUserOption(opt => opt.setName('membre').setDescription('Membre à inspecter (optionnel)'))
+            )
+            .addSubcommand(sub =>
+                sub.setName('succes')
+                    .setDescription('🎖️ Voir les succès débloqués')
+                    .addUserOption(opt => opt.setName('membre').setDescription('Membre à inspecter (optionnel)'))
             ),
 
         // Motus & Rébus Regaïen
