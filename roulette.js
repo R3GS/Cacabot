@@ -212,6 +212,7 @@ const rouletteLettreInterdite = new Map();
 const rouletteEmojiUntil = new Map();
 const rouletteLeetUntil = new Map();
 const rouletteTransfos = new Map();
+const rouletteInventaire = new Map();
 let rouletteTourneeJusquA = 0;
 const rouletteCooldown45Charges = new Map();
 const rouletteCooldownCourtCharges = new Map();
@@ -260,7 +261,8 @@ const ROULETTE_ETATS = {
     malusDifferents: rouletteMalusDifferents,
     papayouDaily: roulettePapayouDaily,
     coupTripleScore: rouletteCoupTripleScore,
-    happyHourCompteur: rouletteHappyHourCompteur
+    happyHourCompteur: rouletteHappyHourCompteur,
+    inventaire: rouletteInventaire
 };
 
 let bridge = {
@@ -910,6 +912,52 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
     }
 }
 
+function crediterInventaireRoulette(userId, itemKey, quantite = 1) {
+    const inv = rouletteInventaire.get(userId) ?? {};
+    inv[itemKey] = (inv[itemKey] || 0) + quantite;
+    rouletteInventaire.set(userId, inv);
+    bridge.demanderSauvegarde();
+}
+
+function consommerInventaireRoulette(userId, itemKey) {
+    const inv = rouletteInventaire.get(userId) ?? {};
+    if (!inv[itemKey] || inv[itemKey] <= 0) return false;
+    inv[itemKey]--;
+    if (inv[itemKey] <= 0) delete inv[itemKey];
+    if (Object.keys(inv).length === 0) rouletteInventaire.delete(userId);
+    else rouletteInventaire.set(userId, inv);
+    bridge.demanderSauvegarde();
+    return true;
+}
+
+function buildInventaireEmbed(membre) {
+    const inv = rouletteInventaire.get(membre.id) ?? {};
+    const items = [];
+    if (inv.freeRoll1Min) {
+        items.push(`🎰 **Tirage à volonté (1 min)** : x${inv.freeRoll1Min}`);
+    }
+
+    const embed = new EmbedBuilder()
+        .setColor(0xffd20a)
+        .setTitle(`🎒 Inventaire de récompenses — ${membre.displayName}`)
+        .setDescription(
+            items.length > 0
+                ? items.join('\n') + "\n\n*Clique sur le bouton ci-dessous pour activer ta récompense quand tu es prêt.e !*"
+                : "*Ton inventaire est vide pour le moment.*"
+        );
+
+    const row = new ActionRowBuilder();
+    if (inv.freeRoll1Min && inv.freeRoll1Min > 0) {
+        row.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`rlt_claim_freeroll_${membre.id}`)
+                .setLabel('🎰 Activer le tirage (1 min)')
+                .setStyle(ButtonStyle.Success)
+        );
+    }
+    return { embed, row: row.components.length > 0 ? row : null };
+}
+
 function buildVoteRouletteEmbed(membre) {
     return new EmbedBuilder()
         .setColor(0xffd20a)
@@ -947,11 +995,30 @@ async function demarrerVoteRoulette(msg, membre) {
             };
 
             if (oui >= non) {
-                // 1 minute de tirage à volonté et d'immunité (au lieu de 3 min)
-                rouletteFreeRollUntil.set(membre.id, Date.now() + 60 * 1000);
-                rouletteImmuniteUntil.set(membre.id, Date.now() + 60 * 1000);
+                crediterInventaireRoulette(membre.id, 'freeRoll1Min', 1);
                 deverrouillerSucces(membre.id, 'innocente', targetMsg.channel);
-                await posterReponse(`✅ Le vote a tranché (${oui} pour vs ${non} contre) : **${membre.displayName}** gagne un tirage à volonté pendant 1 minute !`);
+
+                const embedVictoire = new EmbedBuilder()
+                    .setColor(0x00bf19)
+                    .setTitle(`🕊️ JUGEMENT POPULAIRE : INNOCENTÉ.E !`)
+                    .setDescription(
+                        `La plèbe a parlé avec sagesse (${oui} pour vs ${non} contre) !\n\n` +
+                        `🎉 <@${membre.id}>, tu remportes **1 minute de tirage à volonté** (sans cooldown et immunisé aux mutes) !\n\n` +
+                        `🎁 **Si tu ne l'utilises pas tout de suite, ton cadeau sera stocké dans ton inventaire.**\nTape \`!roulette claim\` ou \`!rlt claim\` afin de l'activer !`
+                    );
+
+                const rowVictoire = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`rlt_claim_freeroll_${membre.id}`)
+                        .setLabel('🎰 Activer mon tirage (1 min)')
+                        .setStyle(ButtonStyle.Success)
+                );
+
+                await targetMsg.channel.send({
+                    content: `🔔 <@${membre.id}>, le vote est terminé !`,
+                    embeds: [embedVictoire],
+                    components: [rowVictoire]
+                }).catch(() => {});
             } else {
                 deverrouillerSucces(membre.id, 'condamne-plebe', targetMsg.channel);
                 if (bridge.estModo(membre)) {
@@ -1039,6 +1106,10 @@ function buildRouletteStateEmbed(cible, guildId = null) {
     }
     if (rouletteImmuniteUntil.has(cible.id) && now < rouletteImmuniteUntil.get(cible.id)) {
         bonus.push(`🛡️ Immunité au timeout (fin ${tstamp(rouletteImmuniteUntil.get(cible.id))})`);
+    }
+    const invCible = rouletteInventaire.get(cible.id) ?? {};
+    if (invCible.freeRoll1Min && invCible.freeRoll1Min > 0) {
+        bonus.push(`🎁 **${invCible.freeRoll1Min} tirage(s) à volonté (1 min) en inventaire** (\`!rlt claim\`)`);
     }
     if ((rouletteCoupTripleCharges.get(cible.id) || 0) > 0) {
         bonus.push(`🎰 ${rouletteCoupTripleCharges.get(cible.id)} tirage(s) gratuit(s) sans cooldown`);
@@ -1738,6 +1809,12 @@ async function handleRouletteMessage(message, response, client) {
         return true;
     }
 
+    if (['!rouletteclaim', '!rltclaim', '!claim'].includes(command) || ((command === '!roulette' || command === '!rlt') && raw.split(" ")[1]?.toLowerCase() === 'claim')) {
+        const { embed, row } = buildInventaireEmbed(message.member);
+        await message.reply({ embeds: [embed], components: row ? [row] : [] });
+        return true;
+    }
+
     if (command === '!roulette' || command === '!rlt') {
         const direct = raw.split(" ")[1]?.toLowerCase() === 'go';
         if (direct) {
@@ -1775,11 +1852,61 @@ async function handleRouletteMessage(message, response, client) {
 }
 
 async function handleRouletteSlash(interaction, client) {
-    const aliasMap = { rlt: 'roulette', roulettestats: 'rltstats', roulettestate: 'rltstate', roulettesucces: 'rltsucces', roulettetop: 'rlttop' };
+    const aliasMap = {
+        rlt: 'roulette',
+        roulettestats: 'rltstats',
+        roulettestate: 'rltstate',
+        roulettesucces: 'rltsucces',
+        roulettetop: 'rlttop',
+        rouletteclaim: 'rltclaim',
+        claim: 'rltclaim'
+    };
     const cmd = aliasMap[interaction.commandName] || interaction.commandName;
 
+    // Gestion via option `action` dans /roulette ou /rlt
+    const action = cmd === 'roulette' ? interaction.options.getString('action') : null;
+
+    if (cmd === 'rltclaim' || action === 'claim') {
+        const member = interaction.guild?.members.cache.get(interaction.user.id) ?? interaction.member;
+        const { embed, row } = buildInventaireEmbed(member);
+        await interaction.reply({ embeds: [embed], components: row ? [row] : [] });
+        return true;
+    }
+
+    if (cmd === 'rltstats' || action === 'stats') {
+        const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
+        const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`rlt_achs_${member.id}_0_${interaction.user.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary)
+        );
+        await interaction.reply({ embeds: [buildRouletteStatsEmbed(member)], components: [row] });
+        return true;
+    }
+
+    if (cmd === 'rltstate' || action === 'state') {
+        const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
+        const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
+        await interaction.reply({ embeds: [buildRouletteStateEmbed(member, interaction.guildId)] });
+        return true;
+    }
+
+    if (cmd === 'rlttop' || action === 'top') {
+        const { embed, row } = buildRouletteTopEmbed(interaction.guild, interaction.user.id);
+        await interaction.reply({ embeds: [embed], components: [row] });
+        return true;
+    }
+
+    if (cmd === 'rltsucces' || action === 'succes') {
+        const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
+        const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
+        const { embed, row } = buildRouletteAchievementsEmbed(member, 0, interaction.user.id);
+        await interaction.reply({ embeds: [embed], components: [row] });
+        return true;
+    }
+
     if (cmd === 'roulette') {
-        if (interaction.options.getBoolean('lancer')) {
+        const veutLancer = action === 'go' || interaction.options.getBoolean('lancer');
+        if (veutLancer) {
             await interaction.deferReply();
             const res = await tirerEtConstruireResultatRoulette(interaction.user.id, interaction.guild, interaction.channel, client);
             if (res.cooldown) {
@@ -1801,6 +1928,7 @@ async function handleRouletteSlash(interaction, client) {
             }
             return true;
         }
+
         const embed = buildRoulettePresentationEmbed(interaction.user.id, interaction.guildId);
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`roulette_probas_pres_${interaction.user.id}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
@@ -1809,36 +1937,46 @@ async function handleRouletteSlash(interaction, client) {
         await interaction.reply({ embeds: [embed], components: [row] });
         return true;
     }
-    if (cmd === 'rlttop') {
-        const { embed, row } = buildRouletteTopEmbed(interaction.guild, interaction.user.id);
-        await interaction.reply({ embeds: [embed], components: [row] });
-        return true;
-    }
-    if (cmd === 'rltstate') {
-        const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
-        const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
-        await interaction.reply({ embeds: [buildRouletteStateEmbed(member, interaction.guildId)] });
-        return true;
-    }
-    if (cmd === 'rltsucces') {
-        const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
-        const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
-        const { embed, row } = buildRouletteAchievementsEmbed(member, 0, interaction.user.id);
-        await interaction.reply({ embeds: [embed], components: [row] });
-        return true;
-    }
-    if (cmd === 'rltstats') {
-        const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
-        const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
-        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`rlt_achs_${member.id}_0_${interaction.user.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary));
-        await interaction.reply({ embeds: [buildRouletteStatsEmbed(member)], components: [row] });
-        return true;
-    }
+
     return false;
 }
 
 async function handleRouletteButton(interaction, client) {
     const customId = interaction.customId;
+
+    if (customId.startsWith('rlt_claim_freeroll_')) {
+        const targetUserId = customId.split('_')[3];
+        if (interaction.user.id !== targetUserId) {
+            return interaction.reply({ content: "Ce n'est pas ton cadeau 😌", ephemeral: true });
+        }
+
+        const consomme = consommerInventaireRoulette(targetUserId, 'freeRoll1Min');
+        if (!consomme) {
+            return interaction.reply({ content: "Tu n'as plus ce bonus en réserve ou il a déjà été activé !", ephemeral: true });
+        }
+
+        rouletteFreeRollUntil.set(targetUserId, Date.now() + 60 * 1000);
+        rouletteImmuniteUntil.set(targetUserId, Date.now() + 60 * 1000);
+        bridge.demanderSauvegarde();
+
+        const rowDesactive = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('rlt_claim_desactive')
+                .setLabel('✅ Bonus activé !')
+                .setStyle(ButtonStyle.Success)
+                .setDisabled(true)
+        );
+
+        if (interaction.message?.editable) {
+            await interaction.message.edit({ components: [rowDesactive] }).catch(() => {});
+        }
+
+        await interaction.reply({
+            content: `⚡ **C'EST PARTI !** <@${targetUserId}>, tu as **1 minute chrono** de tirages à volonté et sans aucun cooldown ! Fais péter \`!rlt go\` ou les boutons ! 🎰`,
+            ephemeral: false
+        });
+        return true;
+    }
 
     if (customId.startsWith('rlt_achs_')) {
         const [, , cibleId, pageStr, authorId] = customId.split('_');
@@ -2068,6 +2206,7 @@ module.exports = {
     rouletteAchievements,
     rouletteStats,
     rouletteBouclierActif,
+    rouletteInventaire,
     handleRouletteMessage,
     handleRouletteSlash,
     handleRouletteButton,

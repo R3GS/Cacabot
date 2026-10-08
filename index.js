@@ -2253,24 +2253,32 @@ client.once('ready', async () => {
         new SlashCommandBuilder().setName('help').setDescription('Ouvre le guide d\'utilisation officiel de Cacabot'),
 
         // Roulette & Raccourcis
-        new SlashCommandBuilder().setName('roulette').setDescription('Tenter sa chance sur la Roulette Regaïenne')
-            .addBooleanOption(opt => opt.setName('lancer').setDescription('Lancer immédiatement sans afficher l\'accueil')),
-        new SlashCommandBuilder().setName('rlt').setDescription('Tenter sa chance sur la Roulette (raccourci)')
-            .addBooleanOption(opt => opt.setName('lancer').setDescription('Lancer immédiatement sans afficher l\'accueil')),
-        new SlashCommandBuilder().setName('rltsucces').setDescription('Consulter les 30 succès de la roulette')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
-        new SlashCommandBuilder().setName('roulettesucces').setDescription('Consulter les 30 succès de la roulette')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
-        new SlashCommandBuilder().setName('rltstats').setDescription('Voir les statistiques complètes de la roulette')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
-        new SlashCommandBuilder().setName('roulettestats').setDescription('Voir les statistiques complètes de la roulette')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
-        new SlashCommandBuilder().setName('rltstate').setDescription('Voir les bonus et malus actifs sur la roulette')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
-        new SlashCommandBuilder().setName('roulettestate').setDescription('Voir les bonus et malus actifs sur la roulette')
-            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
-        new SlashCommandBuilder().setName('rlttop').setDescription('Classement des membres avec le plus de succès roulette'),
-        new SlashCommandBuilder().setName('roulettetop').setDescription('Classement des membres avec le plus de succès roulette'),
+        new SlashCommandBuilder()
+    .setName('roulette')
+    .setDescription('Roulette Regaïenne (tirages, inventaire, stats, état, classement)')
+    .addStringOption(option =>
+        option.setName('action')
+            .setDescription('Action spécifique à effectuer')
+            .setRequired(false)
+            .addChoices(
+                { name: '🎁 claim — Ouvrir mon inventaire de récompenses', value: 'claim' },
+                { name: '🎲 go — Lancer immédiatement le tirage', value: 'go' },
+                { name: '📊 state — Voir les effets et malus actifs', value: 'state' },
+                { name: '📈 stats — Voir les statistiques de tirage', value: 'stats' },
+                { name: '🏆 top — Voir le panthéon des succès', value: 'top' },
+                { name: '🎖️ succes — Voir les succès débloqués', value: 'succes' }
+            )
+    )
+    .addUserOption(option =>
+        option.setName('membre')
+            .setDescription('Membre ciblé (pour state, stats ou succes)')
+            .setRequired(false)
+    )
+    .addBooleanOption(option =>
+        option.setName('lancer')
+            .setDescription('Lancer immédiatement le tirage (raccourci)')
+            .setRequired(false)
+    ),
 
         // Motus & Rébus Regaïen
         new SlashCommandBuilder().setName('motus').setDescription('Statut du Motus du jour (10h et 19h) et compte à rebours'),
