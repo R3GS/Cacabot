@@ -1185,7 +1185,7 @@ async function disableButtons(interaction) {
 
             let twitchOk = '❌ Déconnecté';
             try {
-                const resTwitch = await fetch(`https://decapi.me/twitch/uptime/${TWITCH_USER}`);
+                const resTwitch = await fetch('https://decapi.me/twitch/uptime/epsys_');
                 if (resTwitch.ok) twitchOk = '✅ Opérationnel';
             } catch (e) {
                 twitchOk = '⚠️ Timeout';
