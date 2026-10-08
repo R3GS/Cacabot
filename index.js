@@ -322,6 +322,14 @@ initWelcomeState({
     EPSYS_ID: '436218312574107658'
 });
 
+///tools.js
+const {
+    initToolsState,
+    handleToolsMessage,
+    handleToolsSlash,
+    handleToolsInteraction
+} = require('./tools.js');
+
 initMinijeuxState({
     getMotusData: () => motusData,
     setMotusData: (d) => { motusData = d; },
@@ -374,6 +382,11 @@ const client = new Client({
         GatewayIntentBits.GuildMessageReactions
     ],
     partials: [Partials.Message, Partials.Channel, Partials.Reaction]
+});
+
+initToolsState({
+    client,
+    topData
 });
 
 // =========================
@@ -998,13 +1011,6 @@ async function getResponse(raw) {
 const pendingCheh = new Map();
 const cooldowns = new Map();
 
-const rappelReports = new Map();
-const pendingRappels = new Map();
-function generateRappelId() {
-    return `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-}
-
-const pomodoroSessions = new Map();
 const vocalMessages = new Map();
 const dernierMessageParUtilisateur = new Map();
 const MOD_CHANNEL_ID = '1555402748193669192';
@@ -1121,7 +1127,6 @@ function findMemberByName(guild, query) {
     if (!guild) return { found: null, multiple: false, candidates: [] };
     const q = query.toLowerCase();
 
-    // Recherche exacte d'abord
     const exact = guild.members.cache.filter(m =>
         (m.displayName && m.displayName.toLowerCase() === q) ||
         (m.user.username && m.user.username.toLowerCase() === q)
@@ -1132,7 +1137,6 @@ function findMemberByName(guild, query) {
         return { found: null, multiple: true, candidates };
     }
 
-    // Recherche partielle
     const partial = guild.members.cache.filter(m =>
         (m.displayName && m.displayName.toLowerCase().includes(q)) ||
         (m.user.username && m.user.username.toLowerCase().includes(q))
@@ -1180,45 +1184,6 @@ async function askDisambiguation(message, guild, candidates, callback) {
     });
 }
 
-
-// Logique !flip déportée dans ./social.js
-
-function decodeHtmlEntities(text) {
-    if (!text) return text;
-    return text
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&apos;/g, "'")
-        .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(code));
-}
-
-async function scheduleRappel(channelId, targetId, texte, ms) {
-    const rappelId = generateRappelId();
-    const triggerAt = Date.now() + ms;
-
-    const timeout = setTimeout(async () => {
-        pendingRappels.delete(rappelId);
-        try {
-            const channel = await client.channels.fetch(channelId);
-            const reportButton = new ButtonBuilder()
-                .setCustomId(`rappel_report_${targetId}`)
-                .setLabel('🔁 Reporter')
-                .setStyle(ButtonStyle.Secondary);
-            const reportRow = new ActionRowBuilder().addComponents(reportButton);
-            const sentReminder = await channel.send({ content: `🔔 <@${targetId}> Rappel : **${texte}**`, components: [reportRow] });
-            rappelReports.set(sentReminder.id, { targetId, texte, channelId });
-        } catch (e) {
-            console.error('Erreur scheduleRappel:', e);
-        }
-    }, ms);
-
-    pendingRappels.set(rappelId, { targetId, texte, channelId, triggerAt, timeout });
-    return rappelId;
-}
-
 function getMonthKey() {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -1238,12 +1203,10 @@ function getWeekKey() {
 
 function cleanOldData() {
     const now = new Date();
-    // Garder seulement les 7 derniers jours
     Object.keys(dailyData).forEach(key => {
         const d = new Date(key);
         if ((now - d) / 86400000 > 7) delete dailyData[key];
     });
-    // Garder seulement les 4 dernières semaines
     const currentWeek = getWeekKey();
     const [cy, cw] = currentWeek.split('-W').map(Number);
     Object.keys(weeklyData).forEach(key => {
@@ -1253,119 +1216,16 @@ function cleanOldData() {
     });
 }
 
-// Logique blagues et lovecalc déportée dans ./social.js
-
-// Désactiver tous les boutons d'un message
 async function disableButtons(interaction) {
     try {
         const msg = interaction.message;
         const newRows = msg.components.map(row => {
             const newRow = new ActionRowBuilder();
-            newRow.addComponents(row.components.map(btn => {
-                return ButtonBuilder.from(btn).setDisabled(true);
-            }));
+            newRow.addComponents(row.components.map(btn => ButtonBuilder.from(btn).setDisabled(true)));
             return newRow;
         });
         await msg.edit({ components: newRows });
     } catch (e) {}
-}
-
-async function getCommitCount() {
-    try {
-        let page = 1;
-        let total = 0;
-        while (true) {
-            const res = await fetch(`https://api.github.com/repos/R3GS/Cacabot/commits?path=index.js&per_page=100&page=${page}`, {
-                headers: {
-                    'Authorization': `token ${process.env.GITHUB_TOKEN}`,
-                    'Accept': 'application/vnd.github.v3+json'
-                }
-            });
-            const data = await res.json();
-            if (!Array.isArray(data) || data.length === 0) break;
-            total += data.length;
-            if (data.length < 100) break;
-            page++;
-        }
-        return total;
-    } catch (e) {
-        return null;
-    }
-}
-
-async function startPomodoro(channel, participantsMention, workMin, breakMin, cycle, phase, reason = 'Session de travail') {
-    const isWork = phase === 'work';
-    const longBreak = cycle % 4 === 0 && !isWork;
-    const breakDuration = longBreak ? 15 : breakMin;
-    const totalMs = (isWork ? workMin : breakDuration) * 60 * 1000;
-    const endTime = Date.now() + totalMs;
-
-    const buildEmbed = (remainingMs) => {
-        const mins = Math.floor(remainingMs / 60000);
-        const secs = Math.floor((remainingMs % 60000) / 1000);
-        const totalDuration = isWork ? workMin : breakDuration;
-        const elapsed = totalDuration - Math.ceil(remainingMs / 60000);
-        const barLength = 20;
-        const filled = Math.round((Math.max(0, elapsed) / totalDuration) * barLength);
-        const bar = '█'.repeat(Math.max(0, filled)) + '░'.repeat(Math.max(0, barLength - filled));
-
-        return new EmbedBuilder()
-            .setColor(isWork ? 0xe74c3c : 0x2ecc71)
-            .setTitle(isWork ? `🍅 ${reason}` : (longBreak ? '☕ Grande pause !' : '⏸️ Pause'))
-            .setDescription(participantsMention)
-            .addFields(
-                { name: 'Cycle', value: `${cycle}`, inline: true },
-                { name: 'Phase', value: isWork ? `Travail (${workMin} min)` : `Pause (${breakDuration} min)`, inline: true },
-                { name: 'Temps restant', value: `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`, inline: true },
-                { name: 'Progression', value: `\`${bar}\``, inline: false }
-            )
-            .setFooter({ text: '!pomodoro stop pour arrêter' });
-    };
-
-    const sentMsg = await channel.send({
-        content: isWork
-            ? `${participantsMention} 🍅 C'est parti pour ${workMin} minutes de travail !`
-            : `${participantsMention} ${longBreak ? '☕ Grande pause de 15 minutes !' : `⏸️ Pause de ${breakDuration} minutes !`}`,
-        embeds: [buildEmbed(totalMs)],
-        components: [new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`pomo_skip_${channel.id}`)
-                .setLabel('⏭️ Skip')
-                .setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId(`pomo_stop_${channel.id}`)
-                .setLabel('⏹️ Stop')
-                .setStyle(ButtonStyle.Danger)
-        )]
-    });
-
-    const updateInterval = setInterval(async () => {
-        const remainingMs = endTime - Date.now();
-        if (remainingMs <= 0) { clearInterval(updateInterval); return; }
-        await sentMsg.edit({ embeds: [buildEmbed(remainingMs)] }).catch(() => {});
-    }, 5000);
-
-    const nextPhase = () => {
-        clearInterval(updateInterval);
-        pomodoroSessions.delete(channel.id);
-        sentMsg.delete().catch(() => {});
-        if (isWork) {
-            startPomodoro(channel, participantsMention, workMin, breakMin, cycle, 'break');
-        } else {
-            startPomodoro(channel, participantsMention, workMin, breakMin, cycle + 1, 'work');
-        }
-    };
-
-    const timeout = setTimeout(nextPhase, totalMs);
-
-    pomodoroSessions.set(channel.id, {
-        timeout,
-        updateInterval,
-        skip: nextPhase,
-        message: sentMsg,
-        cycle,
-        phase
-    });
 }
 
 // =========================
@@ -1570,9 +1430,9 @@ async function startPomodoro(channel, participantsMention, workMin, breakMin, cy
             await message.member.timeout(RAID_TIMEOUT_MS, 'Anti-raid automatique').catch(() => {});
             raidMuteRecord.set(message.author.id, Date.now() + RAID_TIMEOUT_MS);
             await message.channel.send(`🚨 **${message.member.displayName}** fait partie d'une vague d'arrivées suspectes et a été mis en pause **5 minutes**.`);
-            await message.member.send("Ton compte a été repéré dans une vague d'arrivées suspectes sur le serveur, tu as été mis en pause 5 minutes. Si tu quittes et reviens dans les 15 minutes qui suivent la fin de cette pause, tu seras automatiquement exclu du serveur.").catch(() => {});
+            await message.member.send("Ton compte a été repéré dans une vague d'arrivées suspectes sur le serveur, tu as été mis.e en pause 5 minutes. Si tu quittes et reviens dans les 15 minutes qui suivent la fin de cette pause, tu seras automatiquement exclu.e du serveur.").catch(() => {});
 
-            const modLogChan = message.guild.channels.cache.get(MOD_CHANNEL_ID);
+    const modLogChan = message.guild.channels.cache.get(MOD_CHANNEL_ID);
             if (modLogChan) {
                 const raidEmbed = new EmbedBuilder()
                     .setColor(0xff0033)
@@ -2191,113 +2051,8 @@ async function startPomodoro(channel, participantsMention, workMin, breakMin, cy
     // !helpx
     if (await handleHelpMessage(message, response)) return;
 
-    /// !prune
-
-    if (response?.needsPrune) {
-    const member = message.guild.members.cache.get(message.author.id);
-    const canKick = member?.permissions.has('KickMembers');
-    if (!canKick) return message.reply("Tu n'as pas les permissions nécessaires pour faire ça !");
-
-    const args = message.content.trim().split(/\s+/);
-    const count = parseInt(args[1]);
-
-    if (!count || count <= 0) return message.reply("Usage : `!prune X` — supprime les X derniers messages.");
-
-    if (count > 100) {
-        const embed = new EmbedBuilder()
-            .setColor(0xe74c3c)
-            .setTitle('⚠️ Limite dépassée')
-            .setDescription(`Discord ne permet pas de supprimer plus de **100 messages** à la fois.\n\nTu veux supprimer **${count} messages** — il faudra donc **${Math.ceil(count / 100)} suppressions** successives.\n\n**Je gère** : Cacabot enchaîne les suppressions automatiquement.\n**Je gère moi-même** : Cacabot s'arrête là, tu refais \`!prune 100\` autant de fois que nécessaire.`);
-
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`prune_auto_${message.author.id}_${count}_${message.channel.id}`)
-                .setLabel('🤖 Laisser Cacabot gérer')
-                .setStyle(ButtonStyle.Danger),
-            new ButtonBuilder()
-                .setCustomId(`prune_manual_${message.author.id}`)
-                .setLabel('✋ Je gère')
-                .setStyle(ButtonStyle.Secondary)
-        );
-
-        return message.reply({ embeds: [embed], components: [row] });
-    }
-
-    try {
-        const messages = await message.channel.messages.fetch({ limit: count + 1 });
-        const toDelete = messages.filter(m => {
-            const age = Date.now() - m.createdTimestamp;
-            return age < 14 * 24 * 60 * 60 * 1000;
-        });
-        await message.channel.bulkDelete(toDelete, true);
-        await message.delete().catch(() => {});
-    } catch (e) {
-        return message.channel.send("Erreur lors de la suppression. Les messages de plus de 14 jours ne peuvent pas être supprimés en bulk.");
-    }
-    return;
-}
-
-    // !pomodoro
-    if (response?.needsPomodoro) {
-    const args = message.content.trim().split(/\s+/);
-
-    if (args[1]?.toLowerCase() === 'stop') {
-        if (!pomodoroSessions.has(message.channel.id)) {
-            return message.reply("Aucun pomodoro en cours dans ce salon !");
-        }
-        const stopSession = pomodoroSessions.get(message.channel.id);
-        clearTimeout(stopSession.timeout);
-        clearInterval(stopSession.updateInterval);
-        if (stopSession?.message) await stopSession.message.delete().catch(() => {});
-        pomodoroSessions.delete(message.channel.id);
-        return message.reply("🍅 Pomodoro arrêté !");
-    }
-
-    if (pomodoroSessions.has(message.channel.id)) {
-        return message.reply("Un pomodoro est déjà en cours dans ce salon ! Utilise `!pomodoro stop` pour l'arrêter.");
-    }
-
-    const workMenu = new StringSelectMenuBuilder()
-        .setCustomId(`pomo_setup_work_${message.author.id}_${message.channel.id}`)
-        .setPlaceholder('Durée de travail...')
-        .addOptions([5,10,15,20,25,30,35,40,45,50,55,60].map(n => ({
-            label: `${n} minutes`, value: `${n}`
-        })));
-
-    const breakMenu = new StringSelectMenuBuilder()
-        .setCustomId(`pomo_setup_break_${message.author.id}_${message.channel.id}`)
-        .setPlaceholder('Durée de pause...')
-        .addOptions([5,10,15,20,25,30].map(n => ({
-            label: `${n} minutes`, value: `${n}`
-        })));
-
-        const reasonMenu = new StringSelectMenuBuilder()
-        .setCustomId(`pomo_setup_reason_${message.author.id}_${message.channel.id}`)
-        .setPlaceholder('Raison du pomodoro...')
-        .addOptions([
-            { label: 'Devoirs', value: 'Devoirs', emoji: '📚' },
-            { label: 'Montage', value: 'Montage', emoji: '🎬' },
-            { label: 'Composition', value: 'Composition', emoji: '🎵' },
-            { label: 'Écriture', value: 'Écriture', emoji: '✍️' },
-            { label: 'Code', value: 'Code', emoji: '💻' },
-        ]);
-
-    const embed = new EmbedBuilder()
-        .setColor(0xe74c3c)
-        .setTitle('🍅 Configurer le Pomodoro')
-        .setDescription('Choisis la durée de travail et la durée de pause !')
-        .addFields(
-            { name: '⏱️ Travail', value: 'Non défini', inline: true },
-            { name: '⏸️ Pause', value: 'Non défini', inline: true },
-            { name: '🎯 Raison', value: 'Non défini', inline: true }
-        );
-
-    return message.reply({ embeds: [embed], components: [
-        new ActionRowBuilder().addComponents(workMenu),
-        new ActionRowBuilder().addComponents(breakMenu),
-        new ActionRowBuilder().addComponents(reasonMenu)
-    ]});
-}
+    // Commandes Utilitaires (!pomodoro, !rappel, !prune, !ping, !meteo, !botinfo, !serveur, !say, !edit, !aternos)
+    if (await handleToolsMessage(message, response, client)) return;
 
     // !lastsave
     if (response?.needsLastsave) {
@@ -2310,30 +2065,11 @@ async function startPomodoro(channel, participantsMention, workMin, breakMin, cy
         return message.reply(`\ud83d\udcbe Derni\u00e8re sauvegarde : **${dateStr}** (il y a ${mins}min ${secs}s)`);
     }
 
-    // !say
-    if (response?.needsSay) {
-        if (message.author.id !== '436218312574107658') return;
-        const args = message.content.trim().split(/\s+/);
-        if (args.length < 3) return message.reply({ content: "Usage : `!say [ID_salon] [message]`", ephemeral: true });
-        const channelId = args[1];
-        const texte = args.slice(2).join(' ');
-        try {
-            const target = await client.channels.fetch(channelId);
-            if (!target) return message.reply('Salon introuvable.');
-            await target.send(texte);
-            await message.delete().catch(() => {});
-        } catch (e) {
-            return message.reply('Erreur : salon introuvable ou permissions insuffisantes.');
-        }
-        return;
-    }
-
     // !streamtest (Epsys-only)
     if (response?.needsStreamTest) {
         if (message.author.id !== '436218312574107658') return;
         try {
             const payload = await buildTwitchLivePayload();
-            // Répond directement à ton message dans le salon actuel, sans ping le rôle pour garder le test secret
             await message.reply({
                 ...payload,
                 allowedMentions: { repliedUser: false, parse: [] }
@@ -2343,41 +2079,6 @@ async function startPomodoro(channel, participantsMention, workMin, breakMin, cy
             console.error('Erreur !streamtest :', err);
             return message.reply(`❌ Erreur lors du test : \`${err.message}\``);
         }
-    }
-
-    // !edit (Epsys-only)
-    if (response?.needsEdit) {
-        if (message.author.id !== '436218312574107658') return;
-        const args = message.content.trim().split(/\s+/);
-        if (args.length < 3) return message.reply({ content: "Usage : `!edit [ID_du_message] [nouveau texte]`", ephemeral: true });
-
-        const msgId = args[1];
-        const nouveauTexte = message.content.replace(/^!edit\s+\d+\s+/i, '').trim();
-
-        try {
-            // Cherche dans le salon actuel d'abord
-            let targetMsg = await message.channel.messages.fetch(msgId).catch(() => null);
-
-            // Si introuvable ici, cherche dans les autres salons textuels du serveur
-            if (!targetMsg && message.guild) {
-                for (const ch of message.guild.channels.cache.values()) {
-                    if (ch.type === ChannelType.GuildText || ch.type === ChannelType.GuildAnnouncement) {
-                        targetMsg = await ch.messages.fetch(msgId).catch(() => null);
-                        if (targetMsg) break;
-                    }
-                }
-            }
-
-            if (!targetMsg) return message.reply("Message introuvable ! Vérifie l'ID.");
-            if (targetMsg.author.id !== client.user.id) return message.reply("Je ne peux modifier que mes propres messages !");
-
-            await targetMsg.edit({ content: nouveauTexte });
-            await message.delete().catch(() => {});
-        } catch (err) {
-            console.error("Erreur !edit :", err);
-            return message.reply("Impossible de modifier ce message.");
-        }
-        return;
     }
 
     // !embed (Epsys-only)
@@ -2575,236 +2276,7 @@ async function startPomodoro(channel, participantsMention, workMin, breakMin, cy
         return message.channel.send(`✅ Bouton de rôle pour **${role.name}** ajouté avec succès sur le message !`);
     }
 
-    // !rappel
-    if (response?.needsRappel) {
-        const args = message.content.trim().split(/\s+/);
-        const isEpsys = message.author.id === '436218312574107658';
-
-        const sub = args[1]?.toLowerCase();
-
-        if (sub === 'list') {
-            const mine = [...pendingRappels.entries()].filter(([, r]) => r.targetId === message.author.id);
-            if (mine.length === 0) return message.reply("Tu n'as aucun rappel en attente !");
-
-            const fields = mine
-                .sort((a, b) => a[1].triggerAt - b[1].triggerAt)
-                .map(([id, r]) => {
-                    const remainingMs = r.triggerAt - Date.now();
-                    const mins = Math.max(0, Math.floor(remainingMs / 60000));
-                    const secs = Math.max(0, Math.floor((remainingMs % 60000) / 1000));
-                    const dansStr = mins > 0 ? `dans ${mins}min ${secs}s` : `dans ${secs}s`;
-                    return { name: r.texte, value: dansStr, inline: false };
-                });
-
-            const embed = new EmbedBuilder()
-                .setColor(0x5865f2)
-                .setTitle('⏰ Tes rappels en attente')
-                .addFields(fields);
-            return message.reply({ embeds: [embed] });
-        }
-
-        if (sub === 'remove') {
-            const query = args.slice(2).join(' ').toLowerCase();
-            if (!query) return message.reply('Usage : `!rappel remove [nom du rappel]`');
-
-            const mine = [...pendingRappels.entries()].filter(([, r]) => r.targetId === message.author.id);
-            const match = mine.find(([, r]) => r.texte.toLowerCase() === query)
-                ?? mine.find(([, r]) => r.texte.toLowerCase().includes(query));
-
-            if (!match) return message.reply("Aucun rappel correspondant trouvé !");
-
-            const [id, r] = match;
-            clearTimeout(r.timeout);
-            pendingRappels.delete(id);
-            return message.reply(`🗑️ Rappel supprimé : **${r.texte}**`);
-        }
-
-        // Détecter si c'est !rappel [ID] Xmin/h [message] (Epsys only)
-        const looksLikeId = args[1] && /^\d{17,19}$/.test(args[1]);
-
-        if (looksLikeId && !isEpsys) {
-            return message.reply("Tu n'es pas autoris\u00e9(e) \u00e0 utiliser cette variante de la commande.");
-        }
-
-        let targetId, timeStr, texte;
-
-        if (looksLikeId && isEpsys) {
-            // !rappel [ID] Xmin [message]
-            if (args.length < 4) return message.reply('Usage : `!rappel [ID] Xmin/h [message]`');
-            targetId = args[1];
-            timeStr = args[2].toLowerCase();
-            texte = args.slice(3).join(' ');
-        } else {
-            // !rappel Xmin [message]
-            if (args.length < 3) return message.reply('Usage : `!rappel Xmin message` ou `!rappel Xh message`');
-            targetId = message.author.id;
-            timeStr = args[1].toLowerCase();
-            texte = args.slice(2).join(' ');
-        }
-
-        let ms = 0;
-        if (timeStr.endsWith('min')) ms = parseInt(timeStr) * 60 * 1000;
-        else if (timeStr.endsWith('h')) ms = parseInt(timeStr) * 60 * 60 * 1000;
-        else if (timeStr.endsWith('s')) ms = parseInt(timeStr) * 1000;
-        else return message.reply('Format invalide ! Utilise `Xmin`, `Xh` ou `Xs`. Ex: `!rappel 10min acheter du pain`');
-        if (isNaN(ms) || ms <= 0) return message.reply('Dur\u00e9e invalide !');
-        if (ms > 24 * 60 * 60 * 1000) return message.reply('Maximum 24h !');
-
-        await message.reply(`\u23f0 Rappel enregistr\u00e9 ! Je ping <@${targetId}> dans **${timeStr}**.`);
-        scheduleRappel(message.channel.id, targetId, texte, ms);
-        return;
-    }
-
-    // !ping
-    if (response?.needsPing) {
-        const sent = await message.reply('\ud83c\udfd3 Pong !');
-        const latence = sent.createdTimestamp - message.createdTimestamp;
-        const wsLatence = client.ws.ping;
-        const embed = new EmbedBuilder()
-            .setColor(latence < 100 ? 0x2ecc71 : latence < 250 ? 0xf39c12 : 0xe74c3c)
-            .setTitle('\ud83c\udfd3 Pong !')
-            .addFields(
-                { name: '\ud83d\udce8 Latence', value: `${latence}ms`, inline: true },
-                { name: '\ud83d\udd0c WebSocket', value: `${wsLatence}ms`, inline: true }
-            );
-        return sent.edit({ content: null, embeds: [embed] });
-    }
-
-    // !météo
-    if (response?.needsMeteo) {
-        const args = message.content.trim().split(/\s+/);
-        const ville = args.slice(1).join(' ');
-        if (!ville) return message.reply('Usage : `!météo [ville]`\nEx : `!météo Paris`');
-
-        try {
-            const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(ville)}&count=1&language=fr&format=json`);
-            const geoData = await geoRes.json();
-
-            if (!geoData.results || geoData.results.length === 0) {
-                return message.reply(`Ville introuvable : **${ville}**`);
-            }
-
-            const { latitude, longitude, name, country } = geoData.results[0];
-
-            const meteoRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`);
-            const meteoData = await meteoRes.json();
-            const current = meteoData.current;
-
-            const weatherDesc = {
-                0: '☀️ Ciel dégagé', 1: '🌤️ Plutôt dégagé', 2: '⛅ Partiellement nuageux', 3: '☁️ Couvert',
-                45: '🌫️ Brouillard', 48: '🌫️ Brouillard givrant',
-                51: '🌦️ Bruine légère', 53: '🌦️ Bruine', 55: '🌦️ Bruine forte',
-                61: '🌧️ Pluie légère', 63: '🌧️ Pluie', 65: '🌧️ Pluie forte',
-                71: '🌨️ Neige légère', 73: '🌨️ Neige', 75: '🌨️ Neige forte',
-                80: '🌦️ Averses', 81: '🌦️ Averses fortes', 82: '⛈️ Averses violentes',
-                95: '⛈️ Orage', 96: '⛈️ Orage avec grêle', 99: '⛈️ Orage violent avec grêle'
-            };
-            const description = weatherDesc[current.weather_code] || 'Conditions inconnues';
-
-            // Heure locale sur place (format HHhMM)
-            const localTime = current.time.split('T')[1]; // "18:59"
-            const [heureLocale, minLocale] = localTime.split(':');
-            const heureFormatee = `${heureLocale}h${minLocale}`;
-
-            const embed = new EmbedBuilder()
-                .setColor(0x3498db)
-                .setTitle(`🌍 Météo à ${name}${country ? ', ' + country : ''}`)
-                .setDescription(description)
-                .addFields(
-                    { name: '🌡️ Température', value: `${current.temperature_2m}°C (ressenti ${current.apparent_temperature}°C)`, inline: true },
-                    { name: '💧 Humidité', value: `${current.relative_humidity_2m}%`, inline: true },
-                    { name: '💨 Vent', value: `${current.wind_speed_10m} km/h`, inline: true },
-                    { name: '🕒 Heure locale', value: heureFormatee, inline: true }
-                )
-                .setFooter({ text: 'Données via Open-Meteo' })
-                .setTimestamp();
-
-            return message.reply({ embeds: [embed] });
-        } catch (e) {
-            console.error('Erreur !meteo :', e);
-            return message.reply("Erreur lors de la récupération de la météo. Réessaie plus tard.");
-        }
-    }
-
-    // !info
-    if (response?.needsInfo) {
-        const startDate = new Date('2026-05-14T00:00:00');
-        const now = new Date();
-        const diff = now - startDate;
-
-        const totalSeconds = Math.floor(diff / 1000);
-        const totalMinutes = Math.floor(totalSeconds / 60);
-        const totalHours = Math.floor(totalMinutes / 60);
-        const totalDays = Math.floor(totalHours / 24);
-
-        const months = Math.floor(totalDays / 30);
-        const days = totalDays % 30;
-        const hours = totalHours % 24;
-
-        let uptime = '';
-        if (months > 0) uptime += `${months} mois, `;
-        if (months > 0 || days > 0) uptime += `${days} jour${days > 1 ? 's' : ''}, `;
-        uptime += `${hours} heure${hours > 1 ? 's' : ''}`;
-
-        const nbMembres = Object.keys(topData.messages).length;
-        const nbCommandes = 30;
-
-        const commitCount = await getCommitCount();
-        const versionStr = commitCount ? `Version 1.${commitCount}` : 'Version inconnue';
-
-        const embed = new EmbedBuilder()
-            .setColor(0x5865f2)
-            .setTitle('\ud83e\udd16 Infos de Cacabot')
-            .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
-            .addFields(
-                { name: '\ud83d\udcbb Commandes', value: `${nbCommandes}`, inline: true },
-                { name: '\ud83d\udcac Messages envoy\u00e9s', value: `${topData.messages['1503495713097519355']}`, inline: true },
-                { name: '\u200b', value: '\u200b', inline: true },
-                { name: '\ud83d\udc51 Cr\u00e9atrice', value: 'Epsys', inline: true },
-                { name: '\ud83e\udd1d Collaboratrice', value: '[BDN](https://bdn-fr.xyz/)', inline: true },
-                { name: '\u200b', value: '\u200b', inline: true },
-                { name: '\ud83d\udcdf Version', value: versionStr, inline: true },
-                { name: '\ud83d\udd52 En ligne depuis', value: uptime, inline: true },
-                { name: '\u200b', value: '\u200b', inline: true }
-            );
-
-        return message.reply({ embeds: [embed] });
-    }
-
-    // !serveur
-    if (response?.needsServeur) {
-        const guild = message.guild;
-        if (!guild) return;
-
-        await guild.fetch();
-        const owner = await guild.fetchOwner();
-
-        const createdAt = guild.createdAt.toLocaleDateString('fr-FR', {
-            day: 'numeric', month: 'long', year: 'numeric'
-        });
-
-        const embed = new EmbedBuilder()
-            .setColor(0x00ebff)
-            .setTitle(guild.name)
-            .setThumbnail(guild.iconURL({ dynamic: true, size: 256 }))
-            .setDescription(guild.description || '*Aucune description*')
-            .addFields(
-                { name: '\ud83d\udc51 Propri\u00e9taire', value: owner.user.tag, inline: true },
-                { name: '\ud83d\udcc5 Cr\u00e9ation', value: createdAt, inline: true },
-                { name: '\u200b', value: '\u200b', inline: true },
-                { name: '\ud83d\udc65 Membres', value: `${guild.memberCount}`, inline: true },
-                { name: '\ud83d\udcac Salons', value: `${guild.channels.cache.size}`, inline: true },
-                { name: '\ud83c\udff7\ufe0f R\u00f4les', value: `${guild.roles.cache.size}`, inline: true },
-                { name: '\ud83d\ude80 Niveau de boost', value: `Niveau ${guild.premiumTier}`, inline: true },
-                { name: '\ud83d\udcab Boosts', value: `${guild.premiumSubscriptionCount}`, inline: true },
-                { name: '\ud83c\udd94 ID', value: guild.id, inline: true }
-            )
-            .addFields(
-                { name: '\u200b', value: '[\ud83d\udd17 Lien d\'invitation du serveur](https://discord.com/invite/maAbUYb)', inline: false }
-            );
-
-        return message.reply({ embeds: [embed] });
-    }
+    
 
     // !question est pris en charge par handleSocialMessage
 
@@ -2907,33 +2379,8 @@ try {
             return await handleSocialSlash(interaction);
         }
 
-        // Commande Prune
-        if (commandName === 'prune') {
-            if (!interaction.member.permissions.has('KickMembers')) {
-                return interaction.reply({ content: "Tu n'as pas les permissions nécessaires !", ephemeral: true });
-            }
-            const count = interaction.options.getInteger('nombre');
-            if (count > 100) {
-                const embed = new EmbedBuilder()
-                    .setColor(0xe74c3c)
-                    .setTitle('⚠️ Limite dépassée')
-                    .setDescription(`Discord ne permet pas de supprimer plus de **100 messages** à la fois.\n\nChoisis l'option ci-dessous :`);
-
-                const row = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`prune_auto_${interaction.user.id}_${count}_${interaction.channel.id}`).setLabel('🤖 Laisser Cacabot gérer').setStyle(ButtonStyle.Danger),
-                    new ButtonBuilder().setCustomId(`prune_manual_${interaction.user.id}`).setLabel('✋ Annuler').setStyle(ButtonStyle.Secondary)
-                );
-                return interaction.reply({ embeds: [embed], components: [row] });
-            }
-            try {
-                const messages = await interaction.channel.messages.fetch({ limit: count });
-                const toDelete = messages.filter(m => (Date.now() - m.createdTimestamp) < 14 * 24 * 60 * 60 * 1000);
-                await interaction.channel.bulkDelete(toDelete, true);
-                return interaction.reply({ content: `🗑️ **${toDelete.size}** messages supprimés !`, ephemeral: true });
-            } catch (e) {
-                return interaction.reply({ content: "Erreur lors de la suppression.", ephemeral: true });
-            }
-        }
+        // Commandes Utilitaires Slash (/ping, /prune, /serveur, /meteo, /pomodoro, /rappel, /botinfo, /aternos)
+        if (await handleToolsSlash(interaction, client)) return;
 
         // Commande Rlttop
         if (await handleRouletteSlash(interaction, client)) return;
@@ -3479,196 +2926,7 @@ try {
             return interaction.reply({ embeds: [embed] });
         }
 
-        if (commandName === 'serveur') {
-            const guild = interaction.guild;
-            if (!guild) return interaction.reply({ content: "Cette commande ne peut être utilisée que sur un serveur.", ephemeral: true });
-            await guild.fetch();
-            const owner = await guild.fetchOwner();
-            const createdAt = guild.createdAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-
-            const embed = new EmbedBuilder()
-                .setColor(0x00ebff)
-                .setTitle(guild.name)
-                .setThumbnail(guild.iconURL({ dynamic: true, size: 256 }))
-                .setDescription(guild.description || '*Aucune description*')
-                .addFields(
-                    { name: '👑 Propriétaire', value: owner.user.tag, inline: true },
-                    { name: '📅 Création', value: createdAt, inline: true },
-                    { name: '\u200b', value: '\u200b', inline: true },
-                    { name: '👥 Membres', value: `${guild.memberCount}`, inline: true },
-                    { name: '💬 Salons', value: `${guild.channels.cache.size}`, inline: true },
-                    { name: '🏷️ Rôles', value: `${guild.roles.cache.size}`, inline: true },
-                    { name: '🚀 Niveau de boost', value: `Niveau ${guild.premiumTier}`, inline: true },
-                    { name: '💫 Boosts', value: `${guild.premiumSubscriptionCount}`, inline: true },
-                    { name: '🆔 ID', value: guild.id, inline: true }
-                )
-                .addFields(
-                    { name: '\u200b', value: '[🔗 Lien d\'invitation du serveur](https://discord.com/invite/maAbUYb)', inline: false }
-                );
-            return interaction.reply({ embeds: [embed] });
-        }
-
-        if (commandName === 'meteo') {
-            const ville = interaction.options.getString('ville');
-            await interaction.deferReply();
-            try {
-                const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(ville)}&count=1&language=fr&format=json`);
-                const geoData = await geoRes.json();
-                if (!geoData.results || geoData.results.length === 0) {
-                    return interaction.editReply(`Ville introuvable : **${ville}**`);
-                }
-                const { latitude, longitude, name, country } = geoData.results[0];
-                const meteoRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&timezone=auto`);
-                const meteoData = await meteoRes.json();
-                const current = meteoData.current;
-                const weatherDesc = {
-                    0: '☀️ Ciel dégagé', 1: '🌤️ Plutôt dégagé', 2: '⛅ Partiellement nuageux', 3: '☁️ Couvert',
-                    45: '🌫️ Brouillard', 48: '🌫️ Brouillard givrant',
-                    51: '🌦️ Bruine légère', 53: '🌦️ Bruine', 55: '🌦️ Bruine forte',
-                    61: '🌧️ Pluie légère', 63: '🌧️ Pluie', 65: '🌧️ Pluie forte',
-                    71: '🌨️ Neige légère', 73: '🌨️ Neige', 75: '🌨️ Neige forte',
-                    80: '🌦️ Averses', 81: '🌦️ Averses fortes', 82: '⛈️ Averses violentes',
-                    95: '⛈️ Orage', 96: '⛈️ Orage avec grêle', 99: '⛈️ Orage violent avec grêle'
-                };
-                const description = weatherDesc[current.weather_code] || 'Conditions inconnues';
-                const localTime = current.time.split('T')[1];
-                const [heureLocale, minLocale] = localTime.split(':');
-                const heureFormatee = `${heureLocale}h${minLocale}`;
-
-                const embed = new EmbedBuilder()
-                    .setColor(0x3498db)
-                    .setTitle(`🌍 Météo à ${name}${country ? ', ' + country : ''}`)
-                    .setDescription(description)
-                    .addFields(
-                        { name: '🌡️ Température', value: `${current.temperature_2m}°C (ressenti ${current.apparent_temperature}°C)`, inline: true },
-                        { name: '💧 Humidité', value: `${current.relative_humidity_2m}%`, inline: true },
-                        { name: '💨 Vent', value: `${current.wind_speed_10m} km/h`, inline: true },
-                        { name: '🕒 Heure locale', value: heureFormatee, inline: true }
-                    )
-                    .setFooter({ text: 'Données via Open-Meteo' })
-                    .setTimestamp();
-                return interaction.editReply({ embeds: [embed] });
-            } catch (e) {
-                return interaction.editReply("Erreur lors de la récupération de la météo.");
-            }
-        }
-
-        if (commandName === 'pomodoro') {
-            const sub = interaction.options.getSubcommand();
-            if (sub === 'stop') {
-                if (!pomodoroSessions.has(interaction.channel.id)) {
-                    return interaction.reply({ content: "Aucun pomodoro en cours dans ce salon !", ephemeral: true });
-                }
-                const stopSession = pomodoroSessions.get(interaction.channel.id);
-                clearTimeout(stopSession.timeout);
-                clearInterval(stopSession.updateInterval);
-                if (stopSession?.message) await stopSession.message.delete().catch(() => {});
-                pomodoroSessions.delete(interaction.channel.id);
-                return interaction.reply("⏹️ Pomodoro arrêté !");
-            }
-            if (sub === 'lancer') {
-                if (pomodoroSessions.has(interaction.channel.id)) {
-                    return interaction.reply({ content: "Un pomodoro est déjà en cours dans ce salon ! Utilise `/pomodoro stop` pour l'arrêter.", ephemeral: true });
-                }
-                const workMenu = new StringSelectMenuBuilder()
-                    .setCustomId(`pomo_setup_work_${interaction.user.id}_${interaction.channel.id}`)
-                    .setPlaceholder('Durée de travail...')
-                    .addOptions([5,10,15,20,25,30,35,40,45,50,55,60].map(n => ({ label: `${n} minutes`, value: `${n}` })));
-
-                const breakMenu = new StringSelectMenuBuilder()
-                    .setCustomId(`pomo_setup_break_${interaction.user.id}_${interaction.channel.id}`)
-                    .setPlaceholder('Durée de pause...')
-                    .addOptions([5,10,15,20,25,30].map(n => ({ label: `${n} minutes`, value: `${n}` })));
-
-                const reasonMenu = new StringSelectMenuBuilder()
-                    .setCustomId(`pomo_setup_reason_${interaction.user.id}_${interaction.channel.id}`)
-                    .setPlaceholder('Raison du pomodoro...')
-                    .addOptions([
-                        { label: 'Devoirs', value: 'Devoirs', emoji: '📚' },
-                        { label: 'Montage', value: 'Montage', emoji: '🎬' },
-                        { label: 'Composition', value: 'Composition', emoji: '🎵' },
-                        { label: 'Écriture', value: 'Écriture', emoji: '✍️' },
-                        { label: 'Code', value: 'Code', emoji: '💻' },
-                    ]);
-
-                const embed = new EmbedBuilder()
-                    .setColor(0xe74c3c)
-                    .setTitle('🍅 Configurer le Pomodoro')
-                    .setDescription('Choisis la durée de travail et la durée de pause !')
-                    .addFields(
-                        { name: '⏱️ Travail', value: 'Non défini', inline: true },
-                        { name: '⏸️ Pause', value: 'Non défini', inline: true },
-                        { name: '🎯 Raison', value: 'Non défini', inline: true }
-                    );
-
-                return interaction.reply({ embeds: [embed], components: [
-                    new ActionRowBuilder().addComponents(workMenu),
-                    new ActionRowBuilder().addComponents(breakMenu),
-                    new ActionRowBuilder().addComponents(reasonMenu)
-                ]});
-            }
-        }
-
-        if (commandName === 'rappel') {
-            const sub = interaction.options.getSubcommand();
-            if (sub === 'list') {
-                const mine = [...pendingRappels.entries()].filter(([, r]) => r.targetId === interaction.user.id);
-                if (mine.length === 0) return interaction.reply({ content: "Tu n'as aucun rappel en attente !", ephemeral: true });
-                const fields = mine.sort((a, b) => a[1].triggerAt - b[1].triggerAt).map(([, r]) => {
-                    const remainingMs = r.triggerAt - Date.now();
-                    const mins = Math.max(0, Math.floor(remainingMs / 60000));
-                    const secs = Math.max(0, Math.floor((remainingMs % 60000) / 1000));
-                    const dansStr = mins > 0 ? `dans ${mins}min ${secs}s` : `dans ${secs}s`;
-                    return { name: r.texte, value: dansStr, inline: false };
-                });
-                const embed = new EmbedBuilder().setColor(0x5865f2).setTitle('⏰ Tes rappels en attente').addFields(fields);
-                return interaction.reply({ embeds: [embed] });
-            }
-            if (sub === 'remove') {
-                const query = interaction.options.getString('nom').toLowerCase();
-                const mine = [...pendingRappels.entries()].filter(([, r]) => r.targetId === interaction.user.id);
-                const match = mine.find(([, r]) => r.texte.toLowerCase() === query) ?? mine.find(([, r]) => r.texte.toLowerCase().includes(query));
-                if (!match) return interaction.reply({ content: "Aucun rappel correspondant trouvé !", ephemeral: true });
-                const [id, r] = match;
-                clearTimeout(r.timeout);
-                pendingRappels.delete(id);
-                return interaction.reply(`🗑️ Rappel supprimé : **${r.texte}**`);
-            }
-            if (sub === 'ajouter') {
-                const timeStr = interaction.options.getString('temps').toLowerCase();
-                const texte = interaction.options.getString('message');
-                let ms = 0;
-                if (timeStr.endsWith('min')) ms = parseInt(timeStr) * 60 * 1000;
-                else if (timeStr.endsWith('h')) ms = parseInt(timeStr) * 60 * 60 * 1000;
-                else if (timeStr.endsWith('s')) ms = parseInt(timeStr) * 1000;
-                else return interaction.reply({ content: "Format invalide ! Utilise `Xmin`, `Xh` ou `Xs` (ex : `15min`).", ephemeral: true });
-                if (isNaN(ms) || ms <= 0 || ms > 24 * 60 * 60 * 1000) return interaction.reply({ content: "Durée invalide (maximum 24h) !", ephemeral: true });
-
-                scheduleRappel(interaction.channel.id, interaction.user.id, texte, ms);
-                return interaction.reply(`⏰ Rappel enregistré ! Je te ping dans **${timeStr}** pour : **${texte}**.`);
-            }
-        }
-
-        if (commandName === 'aternos') {
-            return interaction.reply("L'IP actuelle du serveur Minecraft de Regaïa est : **papierprout.aternos.me**");
-        }
-
         if (await handleYoutubeSlash(interaction)) return;
-
-        if (commandName === 'ping') {
-            await interaction.deferReply();
-            const replyMsg = await interaction.fetchReply();
-            const latence = replyMsg.createdTimestamp - interaction.createdTimestamp;
-            const wsLatence = client.ws.ping;
-            const embed = new EmbedBuilder()
-                .setColor(latence < 100 ? 0x2ecc71 : latence < 250 ? 0xf39c12 : 0xe74c3c)
-                .setTitle('🏓 Pong !')
-                .addFields(
-                    { name: '📨 Latence', value: `${latence}ms`, inline: true },
-                    { name: '🔌 WebSocket', value: `${wsLatence}ms`, inline: true }
-                );
-            return interaction.editReply({ embeds: [embed] });
-        }
 
         if (await handleEmbedSlash(interaction, client)) return;
     }
@@ -3743,86 +3001,6 @@ try {
     }
 
     // =========================
-    // BOUTON RAPPEL REPORTER
-    // =========================
-
-    if (interaction.isButton() && interaction.customId.startsWith('rappel_report_')) {
-        const targetId = interaction.customId.replace('rappel_report_', '');
-        if (interaction.user.id !== targetId) {
-            return interaction.reply({ content: "Ce rappel n'est pas pour toi !", ephemeral: true });
-        }
-        const data = rappelReports.get(interaction.message.id);
-        if (!data) return interaction.reply({ content: "Ce rappel a expir\u00e9 !", ephemeral: true });
-
-        const delayMenu = new StringSelectMenuBuilder()
-            .setCustomId(`rappel_delay_${targetId}`)
-            .setPlaceholder('Choisis un d\u00e9lai...')
-            .addOptions(
-                { label: '15 minutes', value: '15min' },
-                { label: '30 minutes', value: '30min' },
-                { label: '1 heure', value: '1h' },
-                { label: '2 heures', value: '2h' },
-                { label: '\u00c0 d\u00e9terminer', value: 'custom' }
-            );
-        const row = new ActionRowBuilder().addComponents(delayMenu);
-        return interaction.update({ content: 'Choisis quand est-ce que tu veux que le rappel soit renvoy\u00e9 :', components: [row] });
-    }
-
-    // =========================
-    // MENU DELAI RAPPEL
-    // =========================
-
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('rappel_delay_')) {
-        const targetId = interaction.customId.replace('rappel_delay_', '');
-        if (interaction.user.id !== targetId) {
-            return interaction.reply({ content: "Ce rappel n'est pas pour toi !", ephemeral: true });
-        }
-        const data = rappelReports.get(interaction.message.id);
-        if (!data) return interaction.reply({ content: "Ce rappel a expir\u00e9 !", ephemeral: true });
-
-        const value = interaction.values[0];
-
-        if (value === 'custom') {
-            await interaction.update({ content: 'Choisis un d\u00e9lai (ex : `10min`, `2h`) :', components: [] });
-
-            const filter = m => m.author.id === targetId;
-            const collector = interaction.channel.createMessageCollector({ filter, time: 5 * 60 * 1000, max: 1 });
-
-            collector.on('collect', async (m) => {
-                const timeStr = m.content.trim().toLowerCase();
-                let ms = 0;
-                if (timeStr.endsWith('min')) ms = parseInt(timeStr) * 60 * 1000;
-                else if (timeStr.endsWith('h')) ms = parseInt(timeStr) * 60 * 60 * 1000;
-                else if (timeStr.endsWith('s')) ms = parseInt(timeStr) * 1000;
-
-                m.delete().catch(() => {});
-
-                if (isNaN(ms) || ms <= 0 || ms > 24 * 60 * 60 * 1000) {
-                    await interaction.editReply({ content: 'D\u00e9lai invalide ! Le report a \u00e9t\u00e9 annul\u00e9.', components: [] }).catch(() => {});
-                    return;
-                }
-
-                await interaction.editReply({ content: `\u23f0 Rappel report\u00e9 ! Je ping <@${targetId}> dans **${timeStr}**.`, components: [] }).catch(() => {});
-                scheduleRappel(data.channelId, targetId, data.texte, ms);
-            });
-
-            collector.on('end', (collected) => {
-                if (collected.size === 0) {
-                    interaction.editReply({ content: '\u23f1\ufe0f Temps \u00e9coul\u00e9, report annul\u00e9.', components: [] }).catch(() => {});
-                }
-            });
-            return;
-        }
-
-        let ms = 0;
-        if (value.endsWith('min')) ms = parseInt(value) * 60 * 1000;
-        else if (value.endsWith('h')) ms = parseInt(value) * 60 * 60 * 1000;
-
-        await interaction.update({ content: `\u23f0 Rappel report\u00e9 ! Je ping <@${targetId}> dans **${value}**.`, components: [] });
-        scheduleRappel(data.channelId, targetId, data.texte, ms);
-    }
-
-    // =========================
     //     BOUTONS YOUTUBE
     // =========================
     if (await handleYoutubeButton(interaction)) return;
@@ -3831,129 +3009,6 @@ try {
     //     BOUTONS WANTED
     // =========================
     if (await handleWantedButton(interaction, topData)) return;
-
-
-    // =========================
-    //     BOUTON POMODORO
-    // =========================
-
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('pomo_setup_')) {
-    const parts = interaction.customId.split('_');
-    const type = parts[2];
-    const authorId = parts[3];
-    const channelId = parts[4];
-
-    if (interaction.user.id !== authorId) {
-        return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
-    }
-
-    const value = interaction.values[0];
-    const fields = interaction.message.embeds[0].fields;
-    const workVal = type === 'work' ? `${value} min` : fields[0].value;
-    const breakVal = type === 'break' ? `${value} min` : fields[1].value;
-    const reasonVal = type === 'reason' ? value : (fields[2]?.value ?? 'Non défini');
-    const ready = workVal !== 'Non défini' && breakVal !== 'Non défini' && reasonVal !== 'Non défini';
-
-    const embed = new EmbedBuilder()
-        .setColor(0xe74c3c)
-        .setTitle('🍅 Configurer le Pomodoro')
-        .setDescription(ready ? 'Prêt à lancer !' : 'Choisis la durée de travail et la durée de pause !')
-        .addFields(
-            { name: '⏱️ Travail', value: workVal, inline: true },
-            { name: '⏸️ Pause', value: breakVal, inline: true },
-            { name: '🎯 Raison', value: reasonVal, inline: true }
-        );
-
-    const rows = [
-    new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-            .setCustomId(`pomo_setup_work_${authorId}_${channelId}`)
-            .setPlaceholder('Durée de travail...')
-            .addOptions([5,10,15,20,25,30,35,40,45,50,55,60].map(n => ({
-                label: `${n} minutes`, value: `${n}`
-            })))
-    ),
-    new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-            .setCustomId(`pomo_setup_break_${authorId}_${channelId}`)
-            .setPlaceholder('Durée de pause...')
-            .addOptions([5,10,15,20,25,30].map(n => ({
-                label: `${n} minutes`, value: `${n}`
-            })))
-    ),
-    new ActionRowBuilder().addComponents(
-        new StringSelectMenuBuilder()
-            .setCustomId(`pomo_setup_reason_${authorId}_${channelId}`)
-            .setPlaceholder('Raison du pomodoro...')
-            .addOptions([
-                { label: 'Devoirs', value: 'Devoirs', emoji: '📚' },
-                { label: 'Montage', value: 'Montage', emoji: '🎬' },
-                { label: 'Composition', value: 'Composition', emoji: '🎵' },
-                { label: 'Écriture', value: 'Écriture', emoji: '✍️' },
-                { label: 'Code', value: 'Code', emoji: '💻' },
-            ])
-    )
-];
-
-if (ready) {
-    rows.push(new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId(`pomo_start_${authorId}_${channelId}_${parseInt(workVal)}_${parseInt(breakVal)}_${encodeURIComponent(reasonVal)}`)
-            .setLabel('🍅 Lancer !')
-            .setStyle(ButtonStyle.Danger)
-    ));
-}
-
-return interaction.update({ embeds: [embed], components: rows });
-}
-
-    if (interaction.isButton() && interaction.customId.startsWith('pomo_')) {
-    const parts = interaction.customId.split('_');
-    const action = parts[1];
-
-    if (action === 'start') {
-        const authorId = parts[2];
-        const channelId = parts[3];
-        const workMin = parseInt(parts[4]);
-        const breakMin = parseInt(parts[5]);
-        const reason = decodeURIComponent(parts[6] ?? 'Session de travail');
-
-        if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "C'est pas ton pomodoro !", ephemeral: true });
-        }
-
-        if (pomodoroSessions.has(channelId)) {
-            return interaction.reply({ content: "Un pomodoro est déjà en cours dans ce salon !", ephemeral: true });
-        }
-
-        const participantsMention = `<@${authorId}>`;
-        await interaction.message.delete().catch(() => {});
-        const channel = interaction.guild.channels.cache.get(channelId);
-        if (!channel) return;
-
-        await startPomodoro(channel, participantsMention, workMin, breakMin, 1, 'work', reason);
-        return;
-    }
-
-    const channelId = parts[2];
-    const session = pomodoroSessions.get(channelId);
-    if (!session) return interaction.reply({ content: "Ce pomodoro n'existe plus !", ephemeral: true });
-
-    if (action === 'stop') {
-        clearTimeout(session.timeout);
-        clearInterval(session.updateInterval);
-        pomodoroSessions.delete(channelId);
-        await session.message.delete().catch(() => {});
-        return interaction.reply("⏹️ Pomodoro arrêté !");
-    }
-
-    if (action === 'skip') {
-        clearTimeout(session.timeout);
-        clearInterval(session.updateInterval);
-        session.skip();
-        return interaction.reply({ content: "⏭️ Phase skippée !", ephemeral: true });
-    }
-}
 
     if (await handleInteractionButton(interaction)) return;
 
@@ -4128,6 +3183,11 @@ return interaction.update({ embeds: [embed], components: rows });
     // INTERACTIONS EMBEDS (EPSYS)
     // =========================
     if (await handleEmbedInteraction(interaction, client)) return;
+
+    // =========================
+    // INTERACTIONS TOOLS
+    // =========================
+    if (await handleToolsInteraction(interaction, client)) return;
 
     // =========================
     // BOUTONS SUGGESTIONS
