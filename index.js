@@ -292,6 +292,18 @@ const {
     handleAnniversaireButton
 } = require('./anniversaire.js');
 
+///security.js
+const {
+    initSecurityState,
+    estModo,
+    isChannelMuted,
+    handleSecurityMessage,
+    handleSecurityInteraction,
+    handleSecurityMemberAdd,
+    handleSecurityReactionAdd,
+    handleSecurityReactionRemove
+} = require('./security.js');
+
 ///quotes.js
 const {
     initQuotesState,
