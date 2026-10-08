@@ -2,24 +2,6 @@ require('dotenv').config();
 
 let topData = { messages: {} };
 let birthdayData = { birthdays: {}, channels: {} };
-    function getGuildBirthdays(guildId) {
-        if (!birthdayData.birthdays[guildId]) birthdayData.birthdays[guildId] = {};
-        return birthdayData.birthdays[guildId];
-    }
-
-    function getBirthdayChannelId(guildId) {
-        return birthdayData.channels[guildId] ?? BIRTHDAY_CHANNEL_ID;
-    }
-
-    function estAnniversaireAujourdhui(guildId, userId) {
-        if (!guildId || !userId) return false;
-        const dateAnniv = birthdayData.birthdays[guildId]?.[userId];
-        if (!dateAnniv) return false;
-        const now = new Date();
-        const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-        const today = `${String(parisNow.getDate()).padStart(2, '0')}/${String(parisNow.getMonth() + 1).padStart(2, '0')}`;
-        return dateAnniv === today;
-    }
 let dailyData = {};
 let weeklyData = {};
 let monthlyData = {};
@@ -183,44 +165,6 @@ process.on('SIGINT', async () => {
 const saveTop = saveAll;
 const saveBirthdays = saveAll;
 
-const BIRTHDAY_CHANNEL_ID = '720057528867618909';
-const BIRTHDAY_GIF = 'https://cdn.discordapp.com/attachments/1128032964924670053/1505358556851863583/jdg-joueur-du-grenier.gif';
-
-async function checkBirthdays() {
-    const now = new Date();
-    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-    const today = `${String(parisNow.getDate()).padStart(2, '0')}/${String(parisNow.getMonth() + 1).padStart(2, '0')}`;
-
-    for (const guild of client.guilds.cache.values()) {
-        const guildBirthdays = birthdayData.birthdays[guild.id] ?? {};
-        for (const [userId, date] of Object.entries(guildBirthdays)) {
-            if (date !== today) continue;
-
-            const channel = guild.channels.cache.get(getBirthdayChannelId(guild.id));
-            if (!channel) continue;
-
-            // Anniversaire de Cacabot lui-même
-            if (userId === client.user.id) {
-                await channel.send('JOYEUX ANNIVERSAIRE À MOI !! 🎉🎉🎉');
-                await channel.send('https://cdn.discordapp.com/attachments/1480756332373213275/1506635925126512790/dance.gif');
-                continue;
-            }
-
-            // Vérifier si c'est un bot
-            const member = guild.members.cache.get(userId);
-            if (member?.user.bot) {
-                await channel.send(`JOYEUX ANNIVERSAIRE, COLLÈGUE <@${userId}> ! 🎉\nTu fais partie des bots qui rendent ce serveur encore meilleur, alors, que ta vie reste longue et belle <3`);
-                await channel.send('https://cdn.discordapp.com/attachments/1480756332373213275/1506636764771778660/cyclops-ryu.gif');
-                continue;
-            }
-
-            // Membre normal
-            await channel.send(`<@${userId}> JOYEUX ANNIVERSAIRE !!! 🎉🎉🎉`);
-            await channel.send(BIRTHDAY_GIF);
-        }
-    }
-}
-
 const {
     Client,
     GatewayIntentBits,
@@ -239,299 +183,6 @@ const {
     REST,
     Routes
 } = require('discord.js');
-
-const TRANSPARENT_SPACER_URL = 'https://cdn.discordapp.com/attachments/1480756332373213275/1556870914334007427/Blank.png';
-const embedDrafts = new Map(); // userId -> { embedData }
-
-function parseEmbedColor(colorStr) {
-    if (!colorStr) return 0x5865f2;
-    const c = colorStr.trim().toLowerCase();
-    const map = {
-        bleu: 0x3498db, rouge: 0xeb0000, vert: 0x2ecc71, or: 0xffd700, jaune: 0xf1c40f,
-        violet: 0x9b59b6, noir: 0x2c2c2c, blanc: 0xffffff, orange: 0xe67e22, rose: 0xff69b4
-    };
-    if (map[c]) return map[c];
-    if (c.startsWith('#')) {
-        const num = parseInt(c.replace('#', ''), 16);
-        if (!isNaN(num)) return num;
-    }
-    const num = parseInt(c, 16);
-    if (!isNaN(num)) return num;
-    return 0x5865f2;
-}
-
-function buildEmbedMainModal(existingData = null) {
-    const modal = new ModalBuilder()
-        .setCustomId(`embed_main_modal_${Date.now()}`)
-        .setTitle("Texte principal & Couleur");
-
-    const titleInput = new TextInputBuilder()
-        .setCustomId('embed_title')
-        .setLabel("Titre de l'embed")
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder("Ex : Annonce importante")
-        .setRequired(false);
-    if (existingData?.titre && existingData.titre.trim().length > 0) {
-        titleInput.setValue(existingData.titre);
-    }
-
-    const descInput = new TextInputBuilder()
-        .setCustomId('embed_desc')
-        .setLabel("Description / Contenu (optionnel)")
-        .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder("Le texte principal de ton embed...")
-        .setRequired(false);
-    if (existingData?.desc && existingData.desc.trim().length > 0) {
-        descInput.setValue(existingData.desc);
-    }
-
-    const colorInput = new TextInputBuilder()
-        .setCustomId('embed_color')
-        .setLabel("Couleur (Hex ou nom)")
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder("Ex : #eb0000 ou bleu, rouge, or, vert, rose...")
-        .setRequired(false);
-    if (existingData?.couleurRaw && existingData.couleurRaw.trim().length > 0) {
-        colorInput.setValue(existingData.couleurRaw);
-    }
-
-    const footerInput = new TextInputBuilder()
-        .setCustomId('embed_footer')
-        .setLabel("Pied de page (Footer en bas)")
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder("Ex : L'équipe de Regaïa")
-        .setRequired(false);
-    if (existingData?.footer && existingData.footer.trim().length > 0) {
-        footerInput.setValue(existingData.footer);
-    }
-
-    modal.addComponents(
-        new ActionRowBuilder().addComponents(titleInput),
-        new ActionRowBuilder().addComponents(descInput),
-        new ActionRowBuilder().addComponents(colorInput),
-        new ActionRowBuilder().addComponents(footerInput)
-    );
-    return modal;
-}
-
-function buildEmbedImagesModal(existingData = null) {
-    const modal = new ModalBuilder()
-        .setCustomId(`embed_images_modal_${Date.now()}`)
-        .setTitle("Images & Icônes de l'Embed");
-
-    const imageInput = new TextInputBuilder()
-        .setCustomId('embed_image')
-        .setLabel("Grande image (Bannière du bas - URL)")
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder("https://exemple.com/image.png")
-        .setRequired(false);
-    if (existingData?.image) imageInput.setValue(existingData.image);
-
-    const thumbnailInput = new TextInputBuilder()
-        .setCustomId('embed_thumbnail')
-        .setLabel("Miniature (Haut à droite - URL)")
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder("https://exemple.com/logo.png")
-        .setRequired(false);
-    if (existingData?.thumbnail) thumbnailInput.setValue(existingData.thumbnail);
-
-    const authorNameInput = new TextInputBuilder()
-        .setCustomId('embed_author_name')
-        .setLabel("Auteur (Texte en haut à gauche)")
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder("Ex : Epsys")
-        .setRequired(false);
-    if (existingData?.authorName) authorNameInput.setValue(existingData.authorName);
-
-    const authorIconInput = new TextInputBuilder()
-        .setCustomId('embed_author_icon')
-        .setLabel("Icône Auteur (Haut à gauche - URL)")
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder("https://exemple.com/avatar.png")
-        .setRequired(false);
-    if (existingData?.authorIcon) authorIconInput.setValue(existingData.authorIcon);
-
-    modal.addComponents(
-        new ActionRowBuilder().addComponents(imageInput),
-        new ActionRowBuilder().addComponents(thumbnailInput),
-        new ActionRowBuilder().addComponents(authorNameInput),
-        new ActionRowBuilder().addComponents(authorIconInput)
-    );
-    return modal;
-}
-
-function buildEmbedFieldModal(existingData = null, index = null) {
-    const isEdit = index !== null && existingData !== null;
-    const modal = new ModalBuilder()
-        .setCustomId(isEdit ? `embed_field_modal_${index}` : 'embed_field_modal')
-        .setTitle(isEdit ? `Modifier le champ #${index + 1}` : "Ajouter un champ à l'Embed");
-
-    const nameInput = new TextInputBuilder()
-        .setCustomId('field_name')
-        .setLabel(isEdit ? "Titre (laisse vide pour supprimer)" : "Titre du champ")
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder("Ex : Règlement / Date de l'événement")
-        .setRequired(!isEdit);
-    if (existingData?.name) nameInput.setValue(existingData.name);
-
-    const valueInput = new TextInputBuilder()
-        .setCustomId('field_value')
-        .setLabel("Contenu / Sous-texte du champ")
-        .setStyle(TextInputStyle.Paragraph)
-        .setPlaceholder("Le texte qui s'affiche sous le titre du champ...")
-        .setRequired(!isEdit);
-    if (existingData?.value) valueInput.setValue(existingData.value);
-
-    const inlineInput = new TextInputBuilder()
-        .setCustomId('field_inline')
-        .setLabel("Aligné côte-à-côte ? (oui / non)")
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder("non (par défaut) ou oui")
-        .setRequired(false);
-    if (existingData) inlineInput.setValue(existingData.inline ? 'oui' : 'non');
-
-    modal.addComponents(
-        new ActionRowBuilder().addComponents(nameInput),
-        new ActionRowBuilder().addComponents(valueInput),
-        new ActionRowBuilder().addComponents(inlineInput)
-    );
-    return modal;
-}
-
-function buildEmbedFromDraft(draft) {
-    const embed = new EmbedBuilder()
-        .setColor(parseEmbedColor(draft.couleurRaw));
-
-    if (draft.titre) embed.setTitle(draft.titre);
-    if (draft.desc) embed.setDescription(draft.desc);
-    if (draft.authorName) {
-        embed.setAuthor({
-            name: draft.authorName,
-            iconURL: (draft.authorIcon && /^https?:\/\//i.test(draft.authorIcon)) ? draft.authorIcon : undefined
-        });
-    }
-    if (draft.thumbnail && /^https?:\/\//i.test(draft.thumbnail)) embed.setThumbnail(draft.thumbnail);
-    if (draft.image && /^https?:\/\//i.test(draft.image)) {
-        embed.setImage(draft.image);
-    } else if (draft.alignerLargeur) {
-        embed.setImage(TRANSPARENT_SPACER_URL);
-    }
-    if (draft.fields && draft.fields.length > 0) {
-        embed.addFields(draft.fields.map(f => ({ name: f.name, value: f.value, inline: f.inline ?? false })));
-    }
-    if (draft.footer) embed.setFooter({ text: draft.footer });
-    if (draft.hasTimestamp) embed.setTimestamp();
-
-    return embed;
-}
-
-async function trouverMessageCacabot(guild, salonActuel, messageId) {
-    let target = await salonActuel.messages.fetch(messageId).catch(() => null);
-    if (!target && guild) {
-        for (const salon of guild.channels.cache.values()) {
-            if (salon.isTextBased()) {
-                target = await salon.messages.fetch(messageId).catch(() => null);
-                if (target) break;
-            }
-        }
-    }
-    return target;
-}
-
-function rehydraterEmbedDepuisMessage(targetMsg, embedIndex = 0) {
-    const exEmbed = targetMsg.embeds[embedIndex] ?? targetMsg.embeds[0];
-    let couleurHex = '';
-    if (exEmbed.color !== null && exEmbed.color !== undefined) {
-        couleurHex = '#' + exEmbed.color.toString(16).padStart(6, '0');
-    }
-
-    const estSpacer = exEmbed.image?.url === TRANSPARENT_SPACER_URL;
-
-    return {
-        titre: exEmbed.title || '',
-        desc: exEmbed.description || '',
-        couleurRaw: couleurHex,
-        footer: exEmbed.footer?.text || '',
-        authorName: exEmbed.author?.name || '',
-        authorIcon: exEmbed.author?.iconURL || '',
-        thumbnail: exEmbed.thumbnail?.url || '',
-        image: estSpacer ? '' : (exEmbed.image?.url || ''),
-        alignerLargeur: estSpacer,
-        fields: exEmbed.fields ? exEmbed.fields.map(f => ({ name: f.name, value: f.value, inline: f.inline ?? false })) : [],
-        hasTimestamp: Boolean(exEmbed.timestamp),
-        editingMessage: {
-            channelId: targetMsg.channel.id,
-            messageId: targetMsg.id,
-            embedIndex: embedIndex
-        }
-    };
-}
-
-function buildEmbedControlRows(draft) {
-    const channelSelect = new ChannelSelectMenuBuilder()
-        .setCustomId('embed_send_channel')
-        .setPlaceholder(draft.editingMessage ? 'Envoyer une copie dans un autre salon...' : 'Choisis le salon où envoyer cet embed...')
-        .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement);
-
-    const editMainBtn = new ButtonBuilder()
-        .setCustomId('embed_edit_main')
-        .setLabel('✏️ Texte & Couleur')
-        .setStyle(ButtonStyle.Primary);
-
-    const editImagesBtn = new ButtonBuilder()
-        .setCustomId('embed_edit_images')
-        .setLabel('🖼️ Images & Icônes')
-        .setStyle(ButtonStyle.Secondary);
-
-    const addFieldBtn = new ButtonBuilder()
-        .setCustomId('embed_add_field')
-        .setLabel('➕ Ajouter un champ')
-        .setStyle(ButtonStyle.Success);
-
-    const toggleTimeBtn = new ButtonBuilder()
-        .setCustomId('embed_toggle_time')
-        .setLabel(draft.hasTimestamp ? '🕒 Retirer Date/Heure' : '🕒 Ajouter Date/Heure')
-        .setStyle(draft.hasTimestamp ? ButtonStyle.Primary : ButtonStyle.Secondary);
-
-    const toggleAlignBtn = new ButtonBuilder()
-        .setCustomId('embed_toggle_align')
-        .setLabel(draft.alignerLargeur ? '📏 Plein format : OUI' : '📏 Plein format : NON')
-        .setStyle(draft.alignerLargeur ? ButtonStyle.Primary : ButtonStyle.Secondary);
-
-    const cancelBtn = new ButtonBuilder()
-        .setCustomId('embed_cancel_draft')
-        .setLabel('❌ Annuler')
-        .setStyle(ButtonStyle.Danger);
-
-    const row1 = new ActionRowBuilder().addComponents(channelSelect);
-    const row2 = new ActionRowBuilder().addComponents(editMainBtn, editImagesBtn, addFieldBtn, toggleTimeBtn, toggleAlignBtn);
-    const row3 = new ActionRowBuilder();
-
-    if (draft.editingMessage) {
-        row3.addComponents(
-            new ButtonBuilder()
-                .setCustomId('embed_save_edit')
-                .setLabel('💾 Mettre à jour le message')
-                .setStyle(ButtonStyle.Success)
-        );
-    }
-
-    if (draft.fields && draft.fields.length > 0) {
-        row3.addComponents(
-            new ButtonBuilder()
-                .setCustomId('embed_edit_field')
-                .setLabel('✏️ Modifier un champ')
-                .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
-                .setCustomId('embed_clear_fields')
-                .setLabel(`🗑️ Vider les champs (${draft.fields.length})`)
-                .setStyle(ButtonStyle.Secondary)
-        );
-    }
-    row3.addComponents(cancelBtn);
-
-    return [row1, row2, row3];
-}
 
 const { createCanvas, loadImage, registerFont } = require('canvas');
 
@@ -605,6 +256,71 @@ const {
     handleRouletteTransfoMessage,
     handleRoulettePseudoLock
 } = require('./roulette.js');
+
+///embeds.js
+const {
+    handleEmbedMessage,
+    handleEmbedSlash,
+    handleEmbedInteraction
+} = require('./embeds.js');
+
+///youtube.js
+const {
+    handleYoutubeMessage,
+    handleYoutubeSlash,
+    handleYoutubeButton
+} = require('./youtube.js');
+
+///anniversaire.js
+const {
+    initBirthdayState,
+    getGuildBirthdays,
+    getBirthdayChannelId,
+    estAnniversaireAujourdhui,
+    scheduleBirthdayCheck,
+    handleAnniversaireMessage,
+    handleAnniversaireSlash,
+    handleAnniversaireButton
+} = require('./anniversaire.js');
+
+///quotes.js
+const {
+    initQuotesState,
+    handleQuotesMessage,
+    handleQuotesSlash,
+    handleQuotesButton
+} = require('./quotes.js');
+
+initBirthdayState({
+    getBirthdayData: () => birthdayData,
+    saveBirthdays: async () => saveAll(),
+    findMemberByName,
+    askDisambiguation,
+    EPSYS_ID: '436218312574107658'
+});
+
+initQuotesState({
+    getQuotesData: () => quotesData,
+    demanderSauvegarde,
+    findMemberByName,
+    estModo,
+    EPSYS_ID: '436218312574107658'
+});
+
+///welcome.js
+const {
+    initWelcomeState,
+    handleWelcomeMessage,
+    handleWelcomeSlash,
+    handleWelcomeInteraction,
+    handleWelcomeMemberAdd
+} = require('./welcome.js');
+
+initWelcomeState({
+    getWelcomeData: () => welcomeData,
+    demanderSauvegarde,
+    EPSYS_ID: '436218312574107658'
+});
 
 initMinijeuxState({
     getMotusData: () => motusData,
@@ -1289,7 +1005,6 @@ function generateRappelId() {
 }
 
 const pomodoroSessions = new Map();
-const youtubeSearches = new Map();
 const vocalMessages = new Map();
 const dernierMessageParUtilisateur = new Map();
 const MOD_CHANNEL_ID = '1555402748193669192';
@@ -1653,122 +1368,6 @@ async function startPomodoro(channel, participantsMention, workMin, breakMin, cy
     });
 }
 
-const WELCOME_BACKGROUNDS = [
-    ['./DHMISWelcome.png', './dhmiswelcome.png'],
-    ['./EndacopiaWelcome.png', './endacopiawelcome.png'],
-    ['./FNAFWelcome.png', './fnafwelcome.png'],
-    ['./KinitoPETWelcome.png', './kinitopetwelcome.png'],
-    ['./MouthwashingWelcome.png', './mouthwashingwelcome.png'],
-    ['./PoppyWelcome.png', './poppywelcome.png'],
-    ['./UndertaleWelcome.png', './undertalewelcome.png']
-];
-
-async function chargerImageSecurisee(variantes) {
-    for (const v of variantes) {
-        try {
-            return await loadImage(v);
-        } catch (e) {}
-    }
-    return null;
-}
-
-async function generateWelcomeImage(avatarUrl, memberName) {
-    // Désactiver temporairement fontconfig pour libérer LemonMilk (comme dans lovecalc)
-    const oldBackend = process.env.PANGOCAIRO_BACKEND;
-    delete process.env.PANGOCAIRO_BACKEND;
-
-    try {
-        // 1. Charger le calque de premier plan
-        const overlay = await chargerImageSecurisee([
-            './Bienvenue.png',
-            './bienvenue.png',
-            './assets/Bienvenue.png',
-            './assets/bienvenue.png'
-        ]);
-        if (!overlay) {
-            throw new Error("L'image 'Bienvenue.png' est introuvable à la racine de ton bot ! Vérifie qu'elle a bien été envoyée.");
-        }
-        const w = overlay.width;
-        const h = overlay.height;
-
-        const canvas = createCanvas(w, h);
-        const ctx = canvas.getContext('2d');
-
-        // 2. Tirer au sort un fond parmi les 7 thèmes
-        const bgVariantes = WELCOME_BACKGROUNDS[Math.floor(Math.random() * WELCOME_BACKGROUNDS.length)];
-        const bgImg = await chargerImageSecurisee(bgVariantes);
-        if (bgImg) {
-            ctx.drawImage(bgImg, 0, 0, w, h);
-        } else {
-            // Fallback dégradé si le fond choisi n'a pas été trouvé
-            const grad = ctx.createLinearGradient(0, 0, w, h);
-            grad.addColorStop(0, '#750000');
-            grad.addColorStop(0.5, '#400000');
-            grad.addColorStop(1, '#111111');
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, w, h);
-        }
-
-        // 3. Découper et dessiner l'avatar du membre au centre exact du cercle
-        // Mensurations fournies : x = 1024, y = 349.5, rayon = 255px (pour anneau de 531px de diamètre)
-        const centerX = 1024;
-        const centerY = 349.5;
-        const radius = 255;
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, Math.PI * 2, true);
-        ctx.closePath();
-        ctx.clip();
-
-        try {
-            const avatarImg = await loadImage(avatarUrl);
-            ctx.drawImage(avatarImg, centerX - radius, centerY - radius, radius * 2, radius * 2);
-        } catch (err) {
-            ctx.fillStyle = '#2c2f33';
-            ctx.fillRect(centerX - radius, centerY - radius, radius * 2, radius * 2);
-        }
-        ctx.restore();
-
-        // 4. Poser le calque Bienvenue.png par-dessus
-        ctx.drawImage(overlay, 0, 0, w, h);
-
-        // 5. Écrire le pseudo du membre entre "BIENVENUE" et "MERCI D'AVOIR REJOINT LE SERVEUR !"
-        const cleanName = (memberName || 'NOUVEAU MEMBRE').toUpperCase();
-        let fontSize = 75; // Taille imposante et nette
-
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-
-        ctx.font = `bold ${fontSize}px "LemonMilk"`;
-        const maxTextWidth = 1350;
-        while (ctx.measureText(cleanName).width > maxTextWidth && fontSize > 36) {
-            fontSize -= 2;
-            ctx.font = `bold ${fontSize}px "LemonMilk"`;
-        }
-
-        // Contour noir franc pour faire ressortir les lettres
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = Math.max(6, Math.round(fontSize * 0.14));
-        ctx.lineJoin = 'round';
-        ctx.miterLimit = 2;
-        ctx.strokeText(cleanName, centerX, 825);
-
-        // Remplissage blanc pur éclatant
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText(cleanName, centerX, 825);
-        ctx.restore();
-
-        const buffer = canvas.toBuffer('image/png');
-        if (oldBackend) process.env.PANGOCAIRO_BACKEND = oldBackend;
-        return buffer;
-    } catch (err) {
-        if (oldBackend) process.env.PANGOCAIRO_BACKEND = oldBackend;
-        throw err;
-    }
-}
-
 // =========================
 //     LISTENER MESSAGES
 // =========================
@@ -2101,84 +1700,8 @@ async function generateWelcomeImage(avatarUrl, memberName) {
 
     if (response === null || response === undefined) return;
 
-if (response?.needsLastVideo) {
-    const query = message.content.trim().split(/\s+/).slice(1).join(' ');
-    if (!query) return message.reply("Usage : `!last [nom ou URL de la chaîne]`");
-
-    try {
-        let channelId = null;
-        const urlMatch = query.match(/(?:youtube\.com\/(?:channel\/|c\/|@)|@)([a-zA-Z0-9_-]+)/);
-        const handle = urlMatch ? urlMatch[1] : null;
-
-        if (query.includes('youtube.com/channel/')) {
-            channelId = query.split('channel/')[1].split(/[/?]/)[0];
-        } else {
-            const searchTerm = handle ?? query;
-            const forHandleRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(searchTerm.replace('@', ''))}&key=${process.env.YOUTUBE_API_KEY}`);
-            const forHandleData = await forHandleRes.json();
-
-            if (forHandleData.items && forHandleData.items.length > 0) {
-                channelId = forHandleData.items[0].id;
-            } else {
-                const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchTerm)}&type=channel&maxResults=1&key=${process.env.YOUTUBE_API_KEY}`);
-                const searchData = await searchRes.json();
-                if (searchData.items && searchData.items.length > 0) {
-                    channelId = searchData.items[0].snippet.channelId;
-                }
-            }
-        }
-
-        if (!channelId) return message.reply("Chaîne introuvable !");
-
-        const latestRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&maxResults=1&type=video&key=${process.env.YOUTUBE_API_KEY}`);
-        const latestData = await latestRes.json();
-
-        if (!latestData.items || latestData.items.length === 0) return message.reply("Aucune vidéo trouvée pour cette chaîne !");
-
-        const video = latestData.items[0];
-        const videoId = video.id.videoId;
-
-        const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoId}&key=${process.env.YOUTUBE_API_KEY}`);
-        const detailData = await detailRes.json();
-        const fullVideo = detailData.items[0];
-
-        const duration = fullVideo.contentDetails.duration
-            .replace('PT', '').replace('H', 'h ').replace('M', 'min ').replace('S', 's');
-        const views = parseInt(fullVideo.statistics.viewCount).toLocaleString('fr-FR');
-        const date = new Date(video.snippet.publishedAt).toLocaleDateString('fr-FR', {
-            day: 'numeric', month: 'long', year: 'numeric'
-        });
-
-        const embed = new EmbedBuilder()
-            .setColor(0xff0000)
-            .setTitle(decodeHtmlEntities(video.snippet.title))
-            .setURL(`https://www.youtube.com/watch?v=${videoId}`)
-            .setThumbnail(video.snippet.thumbnails.high.url)
-            .addFields(
-                { name: '📺 Chaîne', value: video.snippet.channelTitle, inline: true },
-                { name: '⏱️ Durée', value: duration, inline: true },
-                { name: '👁️ Vues', value: views, inline: true },
-                { name: '📅 Publié le', value: date, inline: true }
-            )
-
-        const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-        .setLabel('🔗 Ouvrir')
-        .setStyle(ButtonStyle.Link)
-        .setURL(`https://www.youtube.com/watch?v=${videoId}`),
-    new ButtonBuilder()
-        .setCustomId(`yt_close_${message.author.id}`)
-        .setLabel('❌ Fermer')
-        .setStyle(ButtonStyle.Danger)
-);
-
-return message.reply({ embeds: [embed], components: [row] });
-
-    } catch (e) {
-        console.error('Erreur !last:', e);
-        return message.reply("Erreur lors de la récupération.");
-    }
-}
+// Commandes YouTube (!youtube, !last, !stats)
+    if (await handleYoutubeMessage(message, response)) return;
 
     // !animal
     if (response?.needsMention) {
@@ -2198,30 +1721,8 @@ return message.reply({ embeds: [embed], components: [row] });
         return message.reply(getAnimalResponse(message, null, client.user.id));
     }
 
-    // !welcome / !bienvenue (Epsys-only)
-    if (response?.needsWelcome) {
-        if (message.author.id !== EPSYS_ID) {
-            return message.reply("Cette commande est réservée à Epsys.");
-        }
-        const subCmd = message.content.trim().split(/\s+/)[1]?.toLowerCase();
-
-        if (subCmd === 'test') {
-            try {
-                const avatarUrl = message.author.displayAvatarURL({ extension: 'png', size: 512 });
-                const cardBuffer = await generateWelcomeImage(avatarUrl, message.member?.displayName ?? message.author.username);
-                return message.reply({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
-            } catch (err) {
-                console.error("Erreur welcome test :", err);
-                return message.reply(`❌ **Erreur d'affiche :** \`${err.message}\``);
-            }
-        }
-
-        // !welcome ou !welcome config : ouvre le panneau de configuration
-        return message.reply({
-            embeds: [buildWelcomeConfigEmbed()],
-            components: buildWelcomeConfigRows()
-        });
-    }
+    // Commandes Bienvenue (!welcome, !bienvenue)
+    if (await handleWelcomeMessage(message, response)) return;
 
     // !suggestion
     if (response?.needsSuggestion) {
@@ -2252,182 +1753,6 @@ return message.reply({ embeds: [embed], components: [row] });
         demanderSauvegarde();
         return;
     }
-
-    // !stats
-    if (response?.needsStats) {
-    const query = message.content.trim().split(/\s+/).slice(1).join(' ');
-    if (!query) return message.reply("Usage : `!stats [nom ou URL de la chaîne]`");
-
-    const formatNumber = (num) => {
-        const n = parseInt(num);
-        if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1).replace('.0', '') + ' Md';
-        if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.0', '') + ' M';
-        if (n >= 1_000) return (n / 1_000).toFixed(1).replace('.0', '') + ' k';
-        return n.toLocaleString('fr-FR');
-    };
-
-    try {
-        let channelId = null;
-
-        // Détection d'une URL/handle YouTube
-        const urlMatch = query.match(/(?:youtube\.com\/(?:channel\/|c\/|@)|@)([a-zA-Z0-9_-]+)/);
-        const handle = urlMatch ? urlMatch[1] : null;
-
-        if (query.includes('youtube.com/channel/')) {
-            channelId = query.split('channel/')[1].split(/[/?]/)[0];
-        } else {
-            // Recherche par handle ou nom approximatif
-            const searchTerm = handle ?? query;
-            const forHandleRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(searchTerm.replace('@', ''))}&key=${process.env.YOUTUBE_API_KEY}`);
-            const forHandleData = await forHandleRes.json();
-
-            if (forHandleData.items && forHandleData.items.length > 0) {
-                channelId = forHandleData.items[0].id;
-            } else {
-                const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchTerm)}&type=channel&maxResults=1&key=${process.env.YOUTUBE_API_KEY}`);
-                const searchData = await searchRes.json();
-                if (searchData.items && searchData.items.length > 0) {
-                    channelId = searchData.items[0].snippet.channelId;
-                }
-            }
-        }
-
-        if (!channelId) return message.reply("Chaîne introuvable !");
-
-        const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${channelId}&key=${process.env.YOUTUBE_API_KEY}`);
-        const detailData = await detailRes.json();
-
-        if (!detailData.items || detailData.items.length === 0) return message.reply("Chaîne introuvable !");
-
-        const channel = detailData.items[0];
-        const snippet = channel.snippet;
-        const stats = channel.statistics;
-
-        const createdDate = new Date(snippet.publishedAt).toLocaleDateString('fr-FR', {
-            day: 'numeric', month: 'long', year: 'numeric'
-        });
-
-        const embed = new EmbedBuilder()
-            .setColor(0xff0000)
-            .setTitle(snippet.title)
-            .setURL(`https://www.youtube.com/channel/${channelId}`)
-            .setThumbnail(snippet.thumbnails.high?.url ?? snippet.thumbnails.default.url)
-            .setDescription(snippet.description ? snippet.description.slice(0, 200) + (snippet.description.length > 200 ? '...' : '') : '*Aucune description*')
-            .addFields(
-                { name: '👥 Abonnés', value: stats.hiddenSubscriberCount ? 'Caché' : formatNumber(stats.subscriberCount), inline: true },
-                { name: '👁️ Vues totales', value: formatNumber(stats.viewCount), inline: true },
-                { name: '🎬 Vidéos', value: formatNumber(stats.videoCount), inline: true },
-                { name: '📅 Création', value: createdDate, inline: true }
-            )
-            .setFooter({ text: `ID : ${channelId}` });
-
-        return message.reply({ embeds: [embed] });
-
-    } catch (e) {
-        console.error('Erreur stats YouTube:', e);
-        return message.reply("Erreur lors de la récupération des stats.");
-    }
-}
-
-    // !youtube
-    if (response?.needsYoutube) {
-    const query = message.content.trim().split(/\s+/).slice(1).join(' ');
-    if (!query) return message.reply("Usage : `!youtube [recherche]`");
-
-    try {
-        const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=5&key=${process.env.YOUTUBE_API_KEY}`);
-        const searchData = await searchRes.json();
-        console.log('YouTube API response:', JSON.stringify(searchData));
-
-        if (!searchData.items || searchData.items.length === 0) {
-            return message.reply("Aucun résultat trouvé !");
-        }
-
-        const videoIds = searchData.items.map(i => i.id.videoId).join(',');
-        const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoIds}&key=${process.env.YOUTUBE_API_KEY}`);
-        const detailData = await detailRes.json();
-
-        const videos = detailData.items;
-
-        const buildYoutubeEmbed = (index) => {
-            const video = videos[index];
-            const snippet = video.snippet;
-            const stats = video.statistics || {};
-
-            const duration = video.contentDetails.duration
-                .replace('PT', '')
-                .replace('H', 'h ')
-                .replace('M', 'min ')
-                .replace('S', 's');
-
-            const views = stats.viewCount ? parseInt(stats.viewCount).toLocaleString('fr-FR') : '0';
-            const likes = stats.likeCount ? parseInt(stats.likeCount).toLocaleString('fr-FR') : 'Masqué';
-            const comments = stats.commentCount ? parseInt(stats.commentCount).toLocaleString('fr-FR') : 'Désactivés';
-            const date = new Date(snippet.publishedAt).toLocaleDateString('fr-FR', {
-                day: 'numeric', month: 'long', year: 'numeric'
-            });
-
-            const miniatureUrl = snippet.thumbnails.maxres?.url ?? snippet.thumbnails.high?.url ?? snippet.thumbnails.default?.url;
-
-            return new EmbedBuilder()
-                .setColor(0xff0000)
-                .setTitle(snippet.title)
-                .setURL(`https://www.youtube.com/watch?v=${video.id}`)
-                .setImage(miniatureUrl)
-                .addFields(
-                    { name: '📺 Chaîne', value: snippet.channelTitle, inline: true },
-                    { name: '⏱️ Durée', value: duration, inline: true },
-                    { name: '👁️ Vues', value: views, inline: true },
-                    { name: '👍 Likes', value: likes, inline: true },
-                    { name: '💬 Commentaires', value: comments, inline: true },
-                    { name: '📅 Publié le', value: date, inline: true }
-                )
-                .setFooter({ text: `Résultat ${index + 1}/${videos.length}` });
-        };
-
-        const buildYoutubeRow = (index, authorId, videoUrl) => {
-            return new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`yt_prev_${authorId}_${index}`)
-                    .setLabel('⏮️ Précédent')
-                    .setStyle(ButtonStyle.Secondary)
-                    .setDisabled(index === 0),
-                new ButtonBuilder()
-                    .setCustomId(`yt_next_${authorId}_${index}`)
-                    .setLabel('⏭️ Suivant')
-                    .setStyle(ButtonStyle.Secondary)
-                    .setDisabled(index >= videos.length - 1),
-                new ButtonBuilder()
-                    .setLabel('🔗 Ouvrir')
-                    .setStyle(ButtonStyle.Link)
-                    .setURL(videoUrl),
-                new ButtonBuilder()
-                    .setCustomId(`yt_close_${authorId}`)
-                    .setLabel('❌ Fermer')
-                    .setStyle(ButtonStyle.Danger)
-            );
-        };
-
-        const firstVideo = videos[0];
-        const firstUrl = `https://www.youtube.com/watch?v=${firstVideo.id}`;
-
-        const sent = await message.reply({
-            embeds: [buildYoutubeEmbed(0)],
-            components: [buildYoutubeRow(0, message.author.id, firstUrl)]
-        });
-
-        // Stocker les vidéos pour les boutons
-        youtubeSearches.set(sent.id, { videos, authorId: message.author.id });
-
-        // Supprimer après 5 minutes
-        setTimeout(() => youtubeSearches.delete(sent.id), 5 * 60 * 1000);
-
-    } catch (e) {
-        console.error('Erreur YouTube:', e);
-        return message.reply("Erreur lors de la recherche YouTube.");
-    }
-    return;
-}
 
     // Commandes sociales (!lovecalc, !topchef, !flip, !blague, !question, !sylvain, !bougetoi)
     if (await handleSocialMessage(message, response, client, { findMemberByName, askDisambiguation })) return;
@@ -2504,162 +1829,8 @@ return message.reply({ embeds: [embed], components: [row] });
 
     // !rebus & !rebusstats sont pris en charge par handleRebusMessage ci-dessus
 
-    // !quote
-    if (response?.needsQuote) {
-        const args = message.content.trim().split(/\s+/);
-        const sub = args[1]?.toLowerCase();
-
-        // 1. Suppression : !quote remove [ID]
-        if (sub === 'remove' || sub === 'delete' || sub === 'del') {
-            const idToRemove = parseInt(args[2]);
-            if (isNaN(idToRemove)) return message.reply("Usage : `!quote remove [ID_citation]` (ex : `!quote remove 3`)");
-
-            const index = quotesData.findIndex(q => q.id === idToRemove);
-            if (index === -1) return message.reply(`Aucune citation trouvée avec l'identifiant **#${idToRemove}** !`);
-
-            const q = quotesData[index];
-            const estAuteur = q.authorId === message.author.id || q.addedById === message.author.id;
-            const estAdmin = message.author.id === EPSYS_ID || estModo(message.member);
-
-            if (!estAuteur && !estAdmin) {
-                return message.reply("Tu ne peux supprimer que les citations que tu as enregistrées ou dont tu es l'auteur !");
-            }
-
-            quotesData.splice(index, 1);
-            demanderSauvegarde();
-            return message.reply(`🗑️ La citation **#${idToRemove}** a été supprimée des archives.`);
-        }
-
-        // 2. Enregistrement par réponse à un message : réponds à un message + !quote
-        if (message.reference) {
-            const repliedMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
-            if (!repliedMsg) return message.reply("Impossible de récupérer le message cité.");
-
-            // Autorise les vrais humains ET les webhooks (ex: malus roulette), mais bloque les bots purs
-            const estWebhook = Boolean(repliedMsg.webhookId);
-            if (repliedMsg.author.bot && !estWebhook) {
-                return message.reply("On ne cite pas les bots, seulement les membres et les webhooks !");
-            }
-
-            const texteCité = repliedMsg.content?.trim() || '';
-            const imagePieceJointe = repliedMsg.attachments.first()?.url ?? null;
-
-            if (!texteCité && !imagePieceJointe) {
-                return message.reply("Ce message ne contient ni texte ni image à citer !");
-            }
-
-            // Évite d'enregistrer deux fois exactement la même citation
-            const existeDeja = quotesData.some(q => q.texte === texteCité && q.authorId === repliedMsg.author.id && q.imageUrl === imagePieceJointe);
-            if (existeDeja) return message.reply("Cette phrase ou image est déjà enregistrée dans les archives du serveur !");
-
-            const nextId = quotesData.length > 0 ? Math.max(...quotesData.map(q => q.id)) + 1 : 1;
-            const auteurNom = repliedMsg.member?.displayName ?? repliedMsg.author.username;
-            const auteurAvatar = repliedMsg.author.displayAvatarURL({ dynamic: true, size: 256 });
-
-            const nouvelleCitation = {
-                id: nextId,
-                texte: texteCité || '(Image)',
-                authorId: repliedMsg.author.id,
-                authorName: auteurNom,
-                avatarUrl: auteurAvatar,
-                isWebhook: estWebhook,
-                imageUrl: imagePieceJointe,
-                addedById: message.author.id,
-                timestamp: repliedMsg.createdTimestamp,
-                channelId: message.channel.id,
-                messageUrl: repliedMsg.url ?? `https://discord.com/channels/${message.guild.id}/${message.channel.id}/${repliedMsg.id}`
-            };
-
-            quotesData.push(nouvelleCitation);
-            demanderSauvegarde();
-
-            const descriptionConf = estWebhook
-                ? `> *« ${texteCité || 'Image'} »*\n\n— **${auteurNom}** *(Webhook)* dans <#${message.channel.id}>`
-                : `> *« ${texteCité || 'Image'} »*\n\n— <@${repliedMsg.author.id}> dans <#${message.channel.id}>`;
-
-            const embedConf = new EmbedBuilder()
-                .setColor(0xf1c40f)
-                .setTitle(`📜 Citation #${nextId} enregistrée !`)
-                .setDescription(descriptionConf)
-                .setFooter({ text: `Enregistrée par ${message.member?.displayName ?? message.author.username} • Tape !quote pour afficher une citation` });
-
-            if (imagePieceJointe) embedConf.setImage(imagePieceJointe);
-
-            return message.reply({ embeds: [embedConf] });
-        }
-
-        // 3. Affichage aléatoire / Recherche
-        if (quotesData.length === 0) {
-            return message.reply("📜 Aucune citation enregistrée pour l'instant ! Réponds à un message mythique avec `!quote` pour immortaliser une phrase.");
-        }
-
-        let pool = quotesData;
-        let cible = message.mentions.users.first();
-        let customFilterId = 'all';
-
-        // 3.a : Recherche par mot-clé : !quote search [mot]
-        if (sub === 'search' || sub === 'find' || sub === 'chercher') {
-            const motCle = args.slice(2).join(" ").trim().toLowerCase();
-            if (!motCle) return message.reply("Usage : `!quote search [mot-clé]` (ex : `!quote search caca`)");
-
-            const resultats = quotesData.filter(q => q.texte?.toLowerCase().includes(motCle));
-            if (resultats.length === 0) return message.reply(`🔍 Aucune citation ne contient le mot **« ${motCle} »** !`);
-            pool = resultats;
-            customFilterId = `search_${encodeURIComponent(motCle)}`;
-        } else {
-            const query = args.slice(1).join(" ").trim();
-            const idDirect = parseInt(query);
-
-            if (!isNaN(idDirect) && !query.includes('@')) {
-                const quoteTrouvee = quotesData.find(q => q.id === idDirect);
-                if (!quoteTrouvee) return message.reply(`Aucune citation trouvée avec le numéro **#${idDirect}** !`);
-                pool = [quoteTrouvee];
-            } else if (!cible && query.length > 0) {
-                const result = findMemberByName(message.guild, query);
-                if (result.found) cible = result.found.user;
-            }
-
-            if (cible) {
-                pool = quotesData.filter(q => q.authorId === cible.id);
-                if (pool.length === 0) {
-                    const nom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
-                    return message.reply(`Aucune citation enregistrée pour **${nom}** !`);
-                }
-                customFilterId = cible.id;
-            }
-        }
-
-        const quoteChoisie = pool[Math.floor(Math.random() * pool.length)];
-        const auteurMembre = message.guild.members.cache.get(quoteChoisie.authorId);
-        const avatarUrl = quoteChoisie.avatarUrl 
-                       ?? auteurMembre?.user?.displayAvatarURL({ dynamic: true, size: 256 }) 
-                       ?? auteurMembre?.displayAvatarURL?.({ dynamic: true, size: 256 });
-
-        const lienMsg = quoteChoisie.messageUrl ?? `https://discord.com/channels/${message.guild.id}/${quoteChoisie.channelId}`;
-        const auteurMention = quoteChoisie.isWebhook ? `**${quoteChoisie.authorName}** *(Webhook)*` : `<@${quoteChoisie.authorId}>`;
-
-        const texteAffiche = quoteChoisie.texte && quoteChoisie.texte !== '(Image)'
-            ? `## « ${quoteChoisie.texte} »\n\n    -${auteurMention}\n\n-# *[source](${lienMsg})*`
-            : `    -${auteurMention}\n\n-# *[source](${lienMsg})*`;
-
-        const embedQuote = new EmbedBuilder()
-            .setColor(0xf1c40f)
-            .setTitle(`📜 Citation N°${quoteChoisie.id}`)
-            .setDescription(texteAffiche)
-            .setFooter({ text: `[${quoteChoisie.id}/${quotesData.length}] • Réponds à un message en faisant !quote pour l'enregistrer !` });
-
-        if (avatarUrl) embedQuote.setThumbnail(avatarUrl);
-        if (quoteChoisie.imageUrl) embedQuote.setImage(quoteChoisie.imageUrl);
-
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`quote_random_${customFilterId}`)
-                .setLabel('🎲 Une autre citation')
-                .setStyle(ButtonStyle.Secondary)
-        );
-
-        return message.reply({ embeds: [embedQuote], components: [row] });
-    }
+    // Commandes Quotes (!quote, !citation)
+    if (await handleQuotesMessage(message, response)) return;
 
     // !profil
     if (response?.needsProfil) {
@@ -2798,269 +1969,8 @@ return message.reply({ embeds: [embed], components: [row] });
 
     // !flip est pris en charge par handleSocialMessage
 
-    // !anniversaire
-    if (response?.needsAnniversaire) {
-        const isTest = message.content.trim().split(/\s+/)[0].toLowerCase() === '!anniversairetest';
-        const args = message.content.trim().split(/\s+/);
-        const sub = args[1]?.toLowerCase();
-
-        if (isTest) {
-            const channel = message.guild?.channels.cache.get(getBirthdayChannelId(message.guild.id));
-            if (!channel) return message.reply("Salon introuvable !");
-            await channel.send(`<@${message.author.id}> JOYEUX ANNIVERSAIRE !!! \ud83c\udf89\ud83c\udf89\ud83c\udf89`);
-            await channel.send(BIRTHDAY_GIF);
-            return;
-        }
-
-        if (sub === 'room') {
-            if (message.author.id !== '436218312574107658') {
-                return message.reply("Tu n'es pas autoris\u00e9(e) \u00e0 faire cette commande.");
-            }
-            const channelId = args[2];
-            if (!channelId || !/^\d{17,19}$/.test(channelId)) {
-                return message.reply("Usage : `!anniversaire room [ID_SALON]`");
-            }
-            const targetChannel = message.guild.channels.cache.get(channelId);
-            if (!targetChannel) {
-                return message.reply("Salon introuvable sur ce serveur !");
-            }
-            birthdayData.channels[message.guild.id] = channelId;
-            await saveBirthdays();
-            return message.reply(`\ud83c\udf82 Les messages d'anniversaire de ce serveur seront d\u00e9sormais envoy\u00e9s dans <#${channelId}> !`);
-        }
-
-        if (sub === 'set') {
-            const lastArg = args[args.length - 1];
-            const isDate = /^\d{2}\/\d{2}$/.test(lastArg);
-
-            if (!isDate) {
-                return message.reply("Format invalide ! Utilise `!anniversaire set JJ/MM` ou `!anniversaire set Pseudo JJ/MM`");
-            }
-
-            const date = lastArg;
-
-            if (args.length > 3) {
-                const query = args.slice(2, args.length - 1).join(" ");
-                const result = findMemberByName(message.guild, query);
-                if (result.multiple) {
-                    askDisambiguation(message, message.guild, result.candidates, async (user) => {
-                        getGuildBirthdays(message.guild.id)[user.id] = date;
-                        await saveBirthdays();
-                        const nom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
-                        message.reply(`\ud83c\udf82 L'anniversaire de **${nom}** a \u00e9t\u00e9 enregistr\u00e9 le **${date}** !`);
-                    });
-                    return;
-                }
-                if (!result.found) {
-                    return message.reply("Membre introuvable !");
-                }
-                const targetUser = result.found.user;
-                const nom = message.guild?.members.cache.get(targetUser.id)?.displayName ?? targetUser.username;
-                getGuildBirthdays(message.guild.id)[targetUser.id] = date;
-                await saveBirthdays();
-                return message.reply(`\ud83c\udf82 L'anniversaire de **${nom}** a \u00e9t\u00e9 enregistr\u00e9 le **${date}** !`);
-            }
-
-            getGuildBirthdays(message.guild.id)[message.author.id] = date;
-            await saveBirthdays();
-            return message.reply(`\ud83c\udf82 Ton anniversaire a \u00e9t\u00e9 enregistr\u00e9 le **${date}** !`);
-        }
-
-        if (sub === 'remove') {
-            const query = args.slice(2).join(" ");
-            const guildBirthdays = getGuildBirthdays(message.guild.id);
-
-            // Sans argument = supprimer le sien
-            if (!query) {
-                if (!guildBirthdays[message.author.id]) {
-                    return message.reply("Tu n'as pas d'anniversaire enregistr\u00e9 !");
-                }
-                delete guildBirthdays[message.author.id];
-                await saveBirthdays();
-                return message.reply("\ud83d\uddd1\ufe0f Ton anniversaire a \u00e9t\u00e9 supprim\u00e9 !");
-            }
-
-            // Avec argument = supprimer celui de quelqu'un
-            const result = findMemberByName(message.guild, query);
-            if (result.multiple) {
-                askDisambiguation(message, message.guild, result.candidates, async (user) => {
-                    if (!guildBirthdays[user.id]) {
-                        message.reply("Ce membre n'a pas d'anniversaire enregistr\u00e9 !");
-                        return;
-                    }
-                    delete guildBirthdays[user.id];
-                    await saveBirthdays();
-                    const nom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
-                    message.reply(`\ud83d\uddd1\ufe0f L'anniversaire de **${nom}** a \u00e9t\u00e9 supprim\u00e9 !`);
-                });
-                return;
-            }
-            if (!result.found) {
-                return message.reply("Membre introuvable !");
-            }
-            const targetUser = result.found.user;
-            if (!guildBirthdays[targetUser.id]) {
-                return message.reply("Ce membre n'a pas d'anniversaire enregistr\u00e9 !");
-            }
-            const nom = message.guild?.members.cache.get(targetUser.id)?.displayName ?? targetUser.username;
-            delete guildBirthdays[targetUser.id];
-            await saveBirthdays();
-            return message.reply(`\ud83d\uddd1\ufe0f L'anniversaire de **${nom}** a \u00e9t\u00e9 supprim\u00e9 !`);
-        }
-
-        if (sub === 'show') {
-            let cible = message.mentions.users.first();
-            if (!cible) {
-                const query = args.slice(1).join(' ');
-                if (query) {
-                    if (/^\d{17,19}$/.test(query)) {
-                        cible = { id: query };
-                    } else {
-                        const result = findMemberByName(message.guild, query);
-                        if (result.multiple) {
-                            askDisambiguation(message, message.guild, result.candidates, async (user) => {
-                                const date = getGuildBirthdays(message.guild.id)[user.id];
-                                const nom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
-                                if (!date) return message.reply(`\ud83c\udf82 **${nom}** n'a pas encore enregistr\u00e9 son anniversaire.`);
-                                const [d, m] = date.split('/').map(Number);
-                                const now = new Date(); const next = new Date(now.getFullYear(), m - 1, d);
-                                if (next < now) next.setFullYear(now.getFullYear() + 1);
-                                const diffDays = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
-                                const joursStr = diffDays === 0 ? "c'est aujourd'hui \ud83c\udf89 !" : diffDays === 1 ? "c'est demain \ud83c\udf89 !" : `dans **${diffDays} jours** !`;
-                                return message.reply(`\ud83c\udf82 L'anniversaire de **${nom}** est le **${date}** — ${joursStr}`);
-                            });
-                            return;
-                        }
-                        if (result.found) cible = result.found.user;
-                    }
-                }
-            }
-            if (cible && cible.id !== message.author.id) {
-                const date = getGuildBirthdays(message.guild.id)[cible.id];
-                const nom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username ?? cible.id;
-                if (!date) return message.reply(`\ud83c\udf82 **${nom}** n'a pas encore enregistr\u00e9 son anniversaire.`);
-                const [d, m] = date.split('/').map(Number);
-                const now = new Date(); const next = new Date(now.getFullYear(), m - 1, d);
-                if (next < now) next.setFullYear(now.getFullYear() + 1);
-                const diffDays = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
-                const joursStr = diffDays === 0 ? "c'est aujourd'hui \ud83c\udf89 !" : diffDays === 1 ? "c'est demain \ud83c\udf89 !" : `dans **${diffDays} jours** !`;
-                return message.reply(`\ud83c\udf82 L'anniversaire de **${nom}** est le **${date}** — ${joursStr}`);
-            }
-            const date = getGuildBirthdays(message.guild.id)[message.author.id];
-            if (!date) return message.reply("Tu n'as pas encore enregistr\u00e9 ton anniversaire ! Utilise `!anniversaire set JJ/MM`.");
-            const [d, m] = date.split('/').map(Number);
-            const now = new Date(); const next = new Date(now.getFullYear(), m - 1, d);
-            if (next < now) next.setFullYear(now.getFullYear() + 1);
-            const diffDays = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
-            const joursStr = diffDays === 0 ? "c'est aujourd'hui \ud83c\udf89 !" : diffDays === 1 ? "c'est demain \ud83c\udf89 !" : `dans **${diffDays} jours** !`;
-            return message.reply(`\ud83c\udf82 Ton anniversaire est le **${date}** — ${joursStr}`);
-        }
-
-        if (sub === 'list') {
-            const entries = Object.entries(getGuildBirthdays(message.guild.id));
-            if (entries.length === 0) return message.reply("Aucun anniversaire enregistr\u00e9 !");
-            const authorId = message.author.id;
-            const PAGE_SIZE = 10;
-
-            const sortEntries = (ordre) => {
-                if (ordre === 'chrono') {
-                    const now = new Date();
-                    return [...entries].sort((a, b) => {
-                        const [da, ma] = a[1].split('/').map(Number);
-                        const [db, mb] = b[1].split('/').map(Number);
-                        const dateA = new Date(now.getFullYear(), ma - 1, da);
-                        const dateB = new Date(now.getFullYear(), mb - 1, db);
-                        if (dateA < now) dateA.setFullYear(now.getFullYear() + 1);
-                        if (dateB < now) dateB.setFullYear(now.getFullYear() + 1);
-                        return dateA - dateB;
-                    });
-                } else {
-                    return [...entries].sort((a, b) => {
-                        const [da, ma] = a[1].split('/').map(Number);
-                        const [db, mb] = b[1].split('/').map(Number);
-                        return ma !== mb ? ma - mb : da - db;
-                    });
-                }
-            };
-
-            const buildAnnivEmbed = (sorted, page, ordre) => {
-                const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
-                const slice = sorted.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-                const lines = slice.map(([uid, date]) => `<@${uid}> \u2014 **${date}**`).join('\n');
-                return new EmbedBuilder()
-                    .setColor(0xff69b4)
-                    .setTitle('\ud83c\udf82 Anniversaires du serveur')
-                    .setDescription(lines)
-                    .setFooter({ text: `Page ${page + 1}/${totalPages} \u2022 ${ordre === 'chrono' ? '\ud83d\udd52 Ordre chronologique' : '\ud83d\udcc5 Ordre classique'}` });
-            };
-
-            const buildAnnivRow = (sorted, page, ordre) => {
-                const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
-                const prev = new ButtonBuilder()
-                    .setCustomId(`anniv_list_${ordre}_${authorId}_${page}_prev`)
-                    .setLabel('\u2b05\ufe0f Arri\u00e8re')
-                    .setStyle(ButtonStyle.Secondary)
-                    .setDisabled(page === 0);
-                const next = new ButtonBuilder()
-                    .setCustomId(`anniv_list_${ordre}_${authorId}_${page}_next`)
-                    .setLabel('Suivant \u27a1\ufe0f')
-                    .setStyle(ButtonStyle.Secondary)
-                    .setDisabled(page >= totalPages - 1);
-                const chronoBtn = new ButtonBuilder()
-                    .setCustomId(`anniv_list_chrono_${authorId}_${page}_switch`)
-                    .setLabel('\ud83d\udd52 Ordre chronologique')
-                    .setStyle(ordre === 'chrono' ? ButtonStyle.Primary : ButtonStyle.Secondary);
-                const classiqueBtn = new ButtonBuilder()
-                    .setCustomId(`anniv_list_classique_${authorId}_${page}_switch`)
-                    .setLabel('\ud83d\udcc5 Ordre classique')
-                    .setStyle(ordre === 'classique' ? ButtonStyle.Primary : ButtonStyle.Secondary);
-                const row1 = new ActionRowBuilder().addComponents(prev, next);
-                const row2 = new ActionRowBuilder().addComponents(chronoBtn, classiqueBtn);
-                return [row1, row2];
-            };
-
-            const sorted = sortEntries('classique');
-            const embed = buildAnnivEmbed(sorted, 0, 'classique');
-            const rows = buildAnnivRow(sorted, 0, 'classique');
-            return message.reply({ embeds: [embed], components: sorted.length > 0 ? rows : [] });
-        }
-
-        if (sub === 'next') {
-            const entries = Object.entries(getGuildBirthdays(message.guild.id));
-            if (entries.length === 0) return message.reply("Aucun anniversaire enregistr\u00e9 !");
-            const now = new Date();
-            const toDate = (str) => {
-                const [d, m] = str.split('/').map(Number);
-                const year = (m < now.getMonth() + 1 || (m === now.getMonth() + 1 && d < now.getDate())) ? now.getFullYear() + 1 : now.getFullYear();
-                return new Date(year, m - 1, d);
-            };
-            const next = entries.sort((a, b) => toDate(a[1]) - toDate(b[1]))[0];
-            const member = message.guild?.members.cache.get(next[0]);
-            const name = member?.displayName ?? `<@${next[0]}>`;
-            const nextDate = toDate(next[1]);
-            const diffMs = nextDate - now;
-            const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-            const joursStr = diffDays === 0 ? "c'est aujourd'hui \ud83c\udf89" : diffDays === 1 ? "demain \ud83c\udf89" : `dans **${diffDays} jours**`;
-            return message.reply(`\ud83c\udf82 Le prochain anniversaire est celui de **${name}** le **${next[1]}** — ${joursStr} !`);
-        }
-
-        const anniversaireFields = [
-            { name: '!anniversaire set JJ/MM', value: 'Enregistre ton anniversaire.', inline: false },
-            { name: '!anniversaire set Pseudo JJ/MM', value: "Enregistre l'anniversaire de quelqu'un.", inline: false },
-            { name: '!anniversaire show', value: 'Affiche ton anniversaire enregistr\u00e9.', inline: false },
-            { name: '!anniversaire list', value: 'Liste tous les anniversaires du serveur.', inline: false },
-            { name: '!anniversaire next', value: 'Affiche le prochain anniversaire du serveur.', inline: false },
-            { name: '!anniversaire remove', value: 'Supprime ton anniversaire enregistr\u00e9.', inline: false }
-        ];
-        if (message.author.id === '436218312574107658') {
-            anniversaireFields.push({ name: '!anniversaire room [ID_SALON]', value: 'D\u00e9finit le salon d\'annonce des anniversaires pour ce serveur. (Toi uniquement)', inline: false });
-        }
-        const anniversaireEmbed = new EmbedBuilder()
-            .setColor(0xff69b4)
-            .setTitle('\ud83c\udf82 Anniversaire')
-            .addFields(...anniversaireFields);
-        return message.reply({ embeds: [anniversaireEmbed] });
-    }
+    // Commandes Anniversaire (!anniversaire, !anniversairetest)
+    if (await handleAnniversaireMessage(message, response)) return;
 
     // !topchef et !blague sont pris en charge par handleSocialMessage
 
@@ -3471,63 +2381,7 @@ return message.reply({ embeds: [embed], components: [row] });
     }
 
     // !embed (Epsys-only)
-    if (response?.needsEmbed) {
-        if (message.author.id !== '436218312574107658') return;
-        const argsEmbed = message.content.trim().split(/\s+/);
-        const subEmbed = argsEmbed[1]?.toLowerCase();
-
-        // Cas modification : !embed modify [ID] ou !embed edit [ID]
-        if (subEmbed === 'modify' || subEmbed === 'edit') {
-            const rawId = argsEmbed[2];
-            if (!rawId) return message.reply("Usage : `!embed modify [ID_du_message] [numéro optionnel]`");
-            const msgId = rawId.replace(/^.*\/([0-9]+)$/, '$1'); // extrait l'ID même si c'est un lien copié
-
-            const targetMsg = await trouverMessageCacabot(message.guild, message.channel, msgId);
-            if (!targetMsg) return message.reply("Message introuvable ! Vérifie l'ID.");
-            if (targetMsg.author.id !== client.user.id) return message.reply("Ce message n'a pas été envoyé par Cacabot !");
-            if (!targetMsg.embeds || targetMsg.embeds.length === 0) return message.reply("Ce message ne contient aucun embed !");
-
-            let indexChoisi = 0;
-            if (argsEmbed[3] && !isNaN(parseInt(argsEmbed[3], 10))) {
-                indexChoisi = Math.max(0, parseInt(argsEmbed[3], 10) - 1);
-            }
-
-            // Si le message a plusieurs embeds et qu'aucun numéro n'a été spécifié en argument
-            if (targetMsg.embeds.length > 1 && !argsEmbed[3]) {
-                const boutonsEmbeds = targetMsg.embeds.slice(0, 5).map((emb, idx) => {
-                    const labelNom = emb.title ? emb.title.slice(0, 25) : (emb.description ? emb.description.slice(0, 25) : `Embed #${idx + 1}`);
-                    return new ButtonBuilder()
-                        .setCustomId(`embed_pick_idx_${targetMsg.channel.id}_${targetMsg.id}_${idx}`)
-                        .setLabel(`Embed #${idx + 1} : ${labelNom}`)
-                        .setStyle(ButtonStyle.Primary);
-                });
-
-                return message.reply({
-                    content: `📋 **Ce message contient ${targetMsg.embeds.length} embeds.** Lequel souhaites-tu modifier ?`,
-                    components: [new ActionRowBuilder().addComponents(boutonsEmbeds)]
-                });
-            }
-
-            const draft = rehydraterEmbedDepuisMessage(targetMsg, indexChoisi);
-            embedDrafts.set(message.author.id, draft);
-
-            const embedPreview = buildEmbedFromDraft(draft);
-            return message.reply({
-                content: `✏️ **Mode modification actif pour l'embed #${indexChoisi + 1} du message [${targetMsg.id}](${targetMsg.url}) !**\n*(Ajuste les éléments puis clique sur « 💾 Mettre à jour le message »)*`,
-                embeds: [embedPreview],
-                components: buildEmbedControlRows(draft)
-            });
-        }
-
-        embedDrafts.delete(message.author.id); // Nouveau départ sans les restes du précédent !
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('open_embed_modal')
-                .setLabel('📝 Ouvrir le formulaire d\'embed')
-                .setStyle(ButtonStyle.Primary)
-        );
-        return message.reply({ content: "Clique ci-dessous pour ouvrir le créateur d'embed :", components: [row] });
-    }
+    if (await handleEmbedMessage(message, response, client)) return;
 
     // !rolereac (Epsys-only)
     if (response?.needsRoleReac) {
@@ -4045,51 +2899,8 @@ try {
             return await handleRebusSlash(interaction);
         }
 
-        // Commande Quote
-        if (commandName === 'quote') {
-            if (quotesData.length === 0) return interaction.reply({ content: "📜 Aucune citation enregistrée pour l'instant !", ephemeral: true });
-            const query = interaction.options.getString('recherche')?.trim().toLowerCase();
-            let pool = quotesData;
-            let customFilterId = 'all';
-
-            if (query) {
-                const idDirect = parseInt(query);
-                if (!isNaN(idDirect)) {
-                    const q = quotesData.find(x => x.id === idDirect);
-                    if (q) pool = [q];
-                } else {
-                    const parMot = quotesData.filter(x => x.texte?.toLowerCase().includes(query) || x.authorName?.toLowerCase().includes(query));
-                    if (parMot.length > 0) {
-                        pool = parMot;
-                        customFilterId = `search_${encodeURIComponent(query)}`;
-                    }
-                }
-            }
-
-            const quoteChoisie = pool[Math.floor(Math.random() * pool.length)];
-            const auteurMembre = interaction.guild.members.cache.get(quoteChoisie.authorId);
-            const avatarUrl = quoteChoisie.avatarUrl ?? auteurMembre?.user?.displayAvatarURL({ dynamic: true, size: 256 });
-            const lienMsg = quoteChoisie.messageUrl ?? `https://discord.com/channels/${interaction.guild.id}/${quoteChoisie.channelId}`;
-            const auteurMention = quoteChoisie.isWebhook ? `**${quoteChoisie.authorName}** *(Webhook)*` : `<@${quoteChoisie.authorId}>`;
-
-            const texteAffiche = quoteChoisie.texte && quoteChoisie.texte !== '(Image)'
-                ? `## « ${quoteChoisie.texte} »\n\n    -${auteurMention}\n\n-# *[source](${lienMsg})*`
-                : `    -${auteurMention}\n\n-# *[source](${lienMsg})*`;
-
-            const embedQuote = new EmbedBuilder()
-                .setColor(0xf1c40f)
-                .setTitle(`📜 Citation N°${quoteChoisie.id}`)
-                .setDescription(texteAffiche)
-                .setFooter({ text: `[${quoteChoisie.id}/${quotesData.length}] • Réponds à un message en faisant !quote pour l'enregistrer !` });
-
-            if (avatarUrl) embedQuote.setThumbnail(avatarUrl);
-            if (quoteChoisie.imageUrl) embedQuote.setImage(quoteChoisie.imageUrl);
-
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`quote_random_${customFilterId}`).setLabel('🎲 Une autre citation').setStyle(ButtonStyle.Secondary)
-            );
-            return interaction.reply({ embeds: [embedQuote], components: [row] });
-        }
+        // Commande Quote (/quote, /citation)
+        if (await handleQuotesSlash(interaction)) return;
 
         // Commandes sociales
         if (['lovecalc', 'flip', 'blague', 'topchef', 'choix', 'question', 'sylvain', 'epsys', 'bougetoi'].includes(commandName)) {
@@ -4604,23 +3415,7 @@ try {
 
         // topchef, question et choix sont pris en charge par handleSocialSlash
 
-        if (commandName === 'welcome') {
-            if (interaction.user.id !== EPSYS_ID) {
-                return interaction.reply({ content: "Cette commande est réservée à Epsys.", ephemeral: true });
-            }
-            const sub = interaction.options.getSubcommand();
-            if (sub === 'test') {
-                await interaction.deferReply();
-                const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 512 });
-                const cardBuffer = await generateWelcomeImage(avatarUrl, interaction.member?.displayName ?? interaction.user.username);
-                return interaction.editReply({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
-            }
-            return interaction.reply({
-                embeds: [buildWelcomeConfigEmbed()],
-                components: buildWelcomeConfigRows(),
-                ephemeral: true
-            });
-        }
+        if (await handleWelcomeSlash(interaction)) return;
 
         if (commandName === 'suggestion') {
             const SUGGESTION_CHANNEL_ID = '720079866199801937';
@@ -4645,94 +3440,7 @@ try {
             return;
         }
 
-        if (commandName === 'anniversaire') {
-            const sub = interaction.options.getSubcommand();
-            const guildBirthdays = getGuildBirthdays(interaction.guild.id);
-
-            if (sub === 'show') {
-                const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
-                const date = guildBirthdays[cibleUser.id];
-                const nom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
-                if (!date) return interaction.reply({ content: `🎂 **${nom}** n'a pas encore enregistré son anniversaire.`, ephemeral: true });
-                const [d, m] = date.split('/').map(Number);
-                const now = new Date(); const next = new Date(now.getFullYear(), m - 1, d);
-                if (next < now) next.setFullYear(now.getFullYear() + 1);
-                const diffDays = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
-                const joursStr = diffDays === 0 ? "c'est aujourd'hui 🎉 !" : diffDays === 1 ? "c'est demain 🎉 !" : `dans **${diffDays} jours** !`;
-                return interaction.reply(`🎂 L'anniversaire de **${nom}** est le **${date}** — ${joursStr}`);
-            }
-
-            if (sub === 'set') {
-                const date = interaction.options.getString('date');
-                if (!/^\d{2}\/\d{2}$/.test(date)) {
-                    return interaction.reply({ content: "Format invalide ! Utilise le format `JJ/MM` (ex : `24/07`).", ephemeral: true });
-                }
-                const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
-                const nom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
-                guildBirthdays[cibleUser.id] = date;
-                await saveBirthdays();
-                return interaction.reply(`🎂 L'anniversaire de **${nom}** a été enregistré le **${date}** !`);
-            }
-
-            if (sub === 'list') {
-                const entries = Object.entries(guildBirthdays);
-                if (entries.length === 0) return interaction.reply({ content: "Aucun anniversaire enregistré !", ephemeral: true });
-                const authorId = interaction.user.id;
-                const PAGE_SIZE = 10;
-
-                const sorted = [...entries].sort((a, b) => {
-                    const [da, ma] = a[1].split('/').map(Number);
-                    const [db, mb] = b[1].split('/').map(Number);
-                    return ma !== mb ? ma - mb : da - db;
-                });
-                const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
-                const slice = sorted.slice(0, PAGE_SIZE);
-                const lines = slice.map(([uid, date]) => `<@${uid}> — **${date}**`).join('\n');
-                const embed = new EmbedBuilder()
-                    .setColor(0xff69b4)
-                    .setTitle('🎂 Anniversaires du serveur')
-                    .setDescription(lines)
-                    .setFooter({ text: `Page 1/${totalPages} • 📅 Ordre classique` });
-
-                const prev = new ButtonBuilder().setCustomId(`anniv_list_classique_${authorId}_0_prev`).setLabel('⬅️ Arrière').setStyle(ButtonStyle.Secondary).setDisabled(true);
-                const next = new ButtonBuilder().setCustomId(`anniv_list_classique_${authorId}_0_next`).setLabel('Suivant ➡️').setStyle(ButtonStyle.Secondary).setDisabled(totalPages <= 1);
-                const chronoBtn = new ButtonBuilder().setCustomId(`anniv_list_chrono_${authorId}_0_switch`).setLabel('🕒 Ordre chronologique').setStyle(ButtonStyle.Secondary);
-                const classiqueBtn = new ButtonBuilder().setCustomId(`anniv_list_classique_${authorId}_0_switch`).setLabel('📅 Ordre classique').setStyle(ButtonStyle.Primary);
-                const row1 = new ActionRowBuilder().addComponents(prev, next);
-                const row2 = new ActionRowBuilder().addComponents(chronoBtn, classiqueBtn);
-                return interaction.reply({ embeds: [embed], components: [row1, row2] });
-            }
-
-            if (sub === 'next') {
-                const entries = Object.entries(guildBirthdays);
-                if (entries.length === 0) return interaction.reply({ content: "Aucun anniversaire enregistré !", ephemeral: true });
-                const now = new Date();
-                const toDate = (str) => {
-                    const [d, m] = str.split('/').map(Number);
-                    const year = (m < now.getMonth() + 1 || (m === now.getMonth() + 1 && d < now.getDate())) ? now.getFullYear() + 1 : now.getFullYear();
-                    return new Date(year, m - 1, d);
-                };
-                const next = entries.sort((a, b) => toDate(a[1]) - toDate(b[1]))[0];
-                const member = interaction.guild?.members.cache.get(next[0]);
-                const name = member?.displayName ?? `<@${next[0]}>`;
-                const nextDate = toDate(next[1]);
-                const diffMs = nextDate - now;
-                const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-                const joursStr = diffDays === 0 ? "c'est aujourd'hui 🎉" : diffDays === 1 ? "demain 🎉" : `dans **${diffDays} jours**`;
-                return interaction.reply(`🎂 Le prochain anniversaire est celui de **${name}** le **${next[1]}** — ${joursStr} !`);
-            }
-
-            if (sub === 'remove') {
-                const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
-                if (!guildBirthdays[cibleUser.id]) {
-                    return interaction.reply({ content: "Cet anniversaire n'est pas enregistré !", ephemeral: true });
-                }
-                const nom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
-                delete guildBirthdays[cibleUser.id];
-                await saveBirthdays();
-                return interaction.reply(`🗑️ L'anniversaire de **${nom}** a été supprimé !`);
-            }
-        }
+        if (await handleAnniversaireSlash(interaction)) return;
 
         // =========================
         // LOT 4 : STATS, UTILITAIRES & YOUTUBE
@@ -4945,222 +3653,7 @@ try {
             return interaction.reply("L'IP actuelle du serveur Minecraft de Regaïa est : **papierprout.aternos.me**");
         }
 
-        if (commandName === 'youtube') {
-            const query = interaction.options.getString('recherche');
-            await interaction.deferReply();
-            try {
-                const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=5&key=${process.env.YOUTUBE_API_KEY}`);
-                const searchData = await searchRes.json();
-                if (!searchData.items || searchData.items.length === 0) return interaction.editReply("Aucun résultat trouvé !");
-                const videoIds = searchData.items.map(i => i.id.videoId).join(',');
-                const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoIds}&key=${process.env.YOUTUBE_API_KEY}`);
-                const detailData = await detailRes.json();
-                const videos = detailData.items;
-
-                const buildYtEmbed = (index) => {
-                    const v = videos[index];
-                    const s = v.snippet;
-                    const st = v.statistics || {};
-                    const duration = v.contentDetails.duration.replace('PT', '').replace('H', 'h ').replace('M', 'min ').replace('S', 's');
-                    const views = st.viewCount ? parseInt(st.viewCount).toLocaleString('fr-FR') : '0';
-                    const likes = st.likeCount ? parseInt(st.likeCount).toLocaleString('fr-FR') : 'Masqué';
-                    const comments = st.commentCount ? parseInt(st.commentCount).toLocaleString('fr-FR') : 'Désactivés';
-                    const date = new Date(s.publishedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-                    const minUrl = s.thumbnails.maxres?.url ?? s.thumbnails.high?.url ?? s.thumbnails.default?.url;
-
-                    return new EmbedBuilder()
-                        .setColor(0xff0000)
-                        .setTitle(s.title)
-                        .setURL(`https://www.youtube.com/watch?v=${v.id}`)
-                        .setImage(minUrl)
-                        .addFields(
-                            { name: '📺 Chaîne', value: s.channelTitle, inline: true },
-                            { name: '⏱️ Durée', value: duration, inline: true },
-                            { name: '👁️ Vues', value: views, inline: true },
-                            { name: '👍 Likes', value: likes, inline: true },
-                            { name: '💬 Commentaires', value: comments, inline: true },
-                            { name: '📅 Publié le', value: date, inline: true }
-                        )
-                        .setFooter({ text: `Résultat ${index + 1}/${videos.length}` });
-                };
-
-                const firstVideo = videos[0];
-                const firstUrl = `https://www.youtube.com/watch?v=${firstVideo.id}`;
-                const row = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`yt_prev_${interaction.user.id}_0`).setLabel('⏮️ Précédent').setStyle(ButtonStyle.Secondary).setDisabled(true),
-                    new ButtonBuilder().setCustomId(`yt_next_${interaction.user.id}_0`).setLabel('⏭️ Suivant').setStyle(ButtonStyle.Secondary).setDisabled(videos.length <= 1),
-                    new ButtonBuilder().setLabel('🔗 Ouvrir').setStyle(ButtonStyle.Link).setURL(firstUrl),
-                    new ButtonBuilder().setCustomId(`yt_close_${interaction.user.id}`).setLabel('❌ Fermer').setStyle(ButtonStyle.Danger)
-                );
-                const sent = await interaction.editReply({ embeds: [buildYtEmbed(0)], components: [row] });
-                youtubeSearches.set(sent.id, { videos, authorId: interaction.user.id });
-                setTimeout(() => youtubeSearches.delete(sent.id), 5 * 60 * 1000);
-                return;
-            } catch (e) {
-                return interaction.editReply("Erreur lors de la recherche YouTube.");
-            }
-        }
-
-        if (commandName === 'last') {
-            const query = interaction.options.getString('chaine');
-            await interaction.deferReply();
-            try {
-                let channelId = null;
-                const urlMatch = query.match(/(?:youtube\.com\/(?:channel\/|c\/|@)|@)([a-zA-Z0-9_-]+)/);
-                const handle = urlMatch ? urlMatch[1] : null;
-
-                if (query.includes('youtube.com/channel/')) {
-                    channelId = query.split('channel/')[1].split(/[/?]/)[0];
-                } else {
-                    const searchTerm = handle ?? query;
-                    const forHandleRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(searchTerm.replace('@', ''))}&key=${process.env.YOUTUBE_API_KEY}`);
-                    const forHandleData = await forHandleRes.json();
-                    if (forHandleData.items && forHandleData.items.length > 0) {
-                        channelId = forHandleData.items[0].id;
-                    } else {
-                        const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchTerm)}&type=channel&maxResults=1&key=${process.env.YOUTUBE_API_KEY}`);
-                        const searchData = await searchRes.json();
-                        if (searchData.items && searchData.items.length > 0) {
-                            channelId = searchData.items[0].snippet.channelId;
-                        }
-                    }
-                }
-                if (!channelId) return interaction.editReply("Chaîne introuvable !");
-
-                const latestRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&maxResults=1&type=video&key=${process.env.YOUTUBE_API_KEY}`);
-                const latestData = await latestRes.json();
-                if (!latestData.items || latestData.items.length === 0) return interaction.editReply("Aucune vidéo trouvée pour cette chaîne !");
-
-                const video = latestData.items[0];
-                const videoId = video.id.videoId;
-                const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoId}&key=${process.env.YOUTUBE_API_KEY}`);
-                const detailData = await detailRes.json();
-                const fullVideo = detailData.items[0];
-
-                const duration = fullVideo.contentDetails.duration.replace('PT', '').replace('H', 'h ').replace('M', 'min ').replace('S', 's');
-                const views = parseInt(fullVideo.statistics.viewCount).toLocaleString('fr-FR');
-                const date = new Date(video.snippet.publishedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-
-                const embed = new EmbedBuilder()
-                    .setColor(0xff0000)
-                    .setTitle(decodeHtmlEntities(video.snippet.title))
-                    .setURL(`https://www.youtube.com/watch?v=${videoId}`)
-                    .setThumbnail(video.snippet.thumbnails.high.url)
-                    .addFields(
-                        { name: '📺 Chaîne', value: video.snippet.channelTitle, inline: true },
-                        { name: '⏱️ Durée', value: duration, inline: true },
-                        { name: '👁️ Vues', value: views, inline: true },
-                        { name: '📅 Publié le', value: date, inline: true }
-                    );
-
-                const row = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setLabel('🔗 Ouvrir').setStyle(ButtonStyle.Link).setURL(`https://www.youtube.com/watch?v=${videoId}`),
-                    new ButtonBuilder().setCustomId(`yt_close_${interaction.user.id}`).setLabel('❌ Fermer').setStyle(ButtonStyle.Danger)
-                );
-                return interaction.editReply({ embeds: [embed], components: [row] });
-            } catch (e) {
-                return interaction.editReply("Erreur lors de la récupération de la vidéo.");
-            }
-        }
-
-        if (commandName === 'stats') {
-            const query = interaction.options.getString('chaine');
-            await interaction.deferReply();
-            try {
-                let channelId = null;
-                const urlMatch = query.match(/(?:youtube\.com\/(?:channel\/|c\/|@)|@)([a-zA-Z0-9_-]+)/);
-                const handle = urlMatch ? urlMatch[1] : null;
-
-                if (query.includes('youtube.com/channel/')) {
-                    channelId = query.split('channel/')[1].split(/[/?]/)[0];
-                } else {
-                    const searchTerm = handle ?? query;
-                    const forHandleRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(searchTerm.replace('@', ''))}&key=${process.env.YOUTUBE_API_KEY}`);
-                    const forHandleData = await forHandleRes.json();
-                    if (forHandleData.items && forHandleData.items.length > 0) {
-                        channelId = forHandleData.items[0].id;
-                    } else {
-                        const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchTerm)}&type=channel&maxResults=1&key=${process.env.YOUTUBE_API_KEY}`);
-                        const searchData = await searchRes.json();
-                        if (searchData.items && searchData.items.length > 0) {
-                            channelId = searchData.items[0].snippet.channelId;
-                        }
-                    }
-                }
-                if (!channelId) return interaction.editReply("Chaîne introuvable !");
-
-                const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${channelId}&key=${process.env.YOUTUBE_API_KEY}`);
-                const detailData = await detailRes.json();
-                if (!detailData.items || detailData.items.length === 0) return interaction.editReply("Chaîne introuvable !");
-
-                const channel = detailData.items[0];
-                const snippet = channel.snippet;
-                const statistics = channel.statistics;
-                const createdDate = new Date(snippet.publishedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
-
-                const formatNumber = (num) => {
-                    const n = parseInt(num);
-                    if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1).replace('.0', '') + ' Md';
-                    if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace('.0', '') + ' M';
-                    if (n >= 1_000) return (n / 1_000).toFixed(1).replace('.0', '') + ' k';
-                    return n.toLocaleString('fr-FR');
-                };
-
-                const embed = new EmbedBuilder()
-                    .setColor(0xff0000)
-                    .setTitle(snippet.title)
-                    .setURL(`https://www.youtube.com/channel/${channelId}`)
-                    .setThumbnail(snippet.thumbnails.high?.url ?? snippet.thumbnails.default.url)
-                    .setDescription(snippet.description ? snippet.description.slice(0, 200) + (snippet.description.length > 200 ? '...' : '') : '*Aucune description*')
-                    .addFields(
-                        { name: '👥 Abonnés', value: statistics.hiddenSubscriberCount ? 'Caché' : formatNumber(statistics.subscriberCount), inline: true },
-                        { name: '👁️ Vues totales', value: formatNumber(statistics.viewCount), inline: true },
-                        { name: '🎬 Vidéos', value: formatNumber(statistics.videoCount), inline: true },
-                        { name: '📅 Création', value: createdDate, inline: true }
-                    )
-                    .setFooter({ text: `ID : ${channelId}` });
-
-                return interaction.editReply({ embeds: [embed] });
-            } catch (e) {
-                return interaction.editReply("Erreur lors de la récupération des stats.");
-            }
-        }
-
-        if (commandName === 'botinfo') {
-            const startDate = new Date('2026-05-14T00:00:00');
-            const now = new Date();
-            const diff = now - startDate;
-            const totalHours = Math.floor(diff / (1000 * 60 * 60));
-            const totalDays = Math.floor(totalHours / 24);
-            const months = Math.floor(totalDays / 30);
-            const days = totalDays % 30;
-            const hours = totalHours % 24;
-
-            let uptime = '';
-            if (months > 0) uptime += `${months} mois, `;
-            if (months > 0 || days > 0) uptime += `${days} jour${days > 1 ? 's' : ''}, `;
-            uptime += `${hours} heure${hours > 1 ? 's' : ''}`;
-
-            const commitCount = await getCommitCount();
-            const versionStr = commitCount ? `Version 1.${commitCount}` : 'Version inconnue';
-
-            const embed = new EmbedBuilder()
-                .setColor(0x5865f2)
-                .setTitle('🤖 Infos de Cacabot')
-                .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
-                .addFields(
-                    { name: '💻 Commandes', value: '30+', inline: true },
-                    { name: '💬 Messages envoyés', value: `${topData.messages['1503495713097519355'] ?? 0}`, inline: true },
-                    { name: '\u200b', value: '\u200b', inline: true },
-                    { name: '👑 Créatrice', value: 'Epsys', inline: true },
-                    { name: '🤝 Collaboratrice', value: '[BDN](https://bdn-fr.xyz/)', inline: true },
-                    { name: '\u200b', value: '\u200b', inline: true },
-                    { name: '📟 Version', value: versionStr, inline: true },
-                    { name: '🕒 En ligne depuis', value: uptime, inline: true },
-                    { name: '\u200b', value: '\u200b', inline: true }
-                );
-            return interaction.reply({ embeds: [embed] });
-        }
+        if (await handleYoutubeSlash(interaction)) return;
 
         if (commandName === 'ping') {
             await interaction.deferReply();
@@ -5177,392 +3670,18 @@ try {
             return interaction.editReply({ embeds: [embed] });
         }
 
-        if (commandName === 'embed') {
-            if (interaction.user.id !== '436218312574107658') {
-                return interaction.reply({ content: "Cette commande est réservée à Epsys.", ephemeral: true });
-            }
-            const msgIdOption = interaction.options.getString('modifier')?.trim();
-            if (msgIdOption) {
-                const targetMsg = await trouverMessageCacabot(interaction.guild, interaction.channel, msgIdOption);
-                if (!targetMsg) return interaction.reply({ content: "Message introuvable ! Vérifie l'ID.", ephemeral: true });
-                if (targetMsg.author.id !== client.user.id) return interaction.reply({ content: "Ce message n'a pas été envoyé par Cacabot !", ephemeral: true });
-                if (!targetMsg.embeds || targetMsg.embeds.length === 0) return interaction.reply({ content: "Ce message ne contient aucun embed !", ephemeral: true });
-
-                const draft = rehydraterEmbedDepuisMessage(targetMsg);
-                embedDrafts.set(interaction.user.id, draft);
-
-                const embedPreview = buildEmbedFromDraft(draft);
-                return interaction.reply({
-                    content: `✏️ **Mode modification actif pour le message [${targetMsg.id}](${targetMsg.url}) !**\n*(Ajuste les éléments puis clique sur « 💾 Mettre à jour le message »)*`,
-                    embeds: [embedPreview],
-                    components: buildEmbedControlRows(draft)
-                });
-            }
-
-            const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
-            return interaction.showModal(buildEmbedMainModal(draft));
-        }
+        if (await handleEmbedSlash(interaction, client)) return;
     }
 
     // Bouton pour tirer une autre citation au hasard
-    if (interaction.isButton() && interaction.customId.startsWith('quote_random_')) {
-        const filterId = interaction.customId.replace('quote_random_', '');
-        let pool = quotesData;
-
-        if (filterId.startsWith('search_')) {
-            const kw = decodeURIComponent(filterId.replace('search_', ''));
-            pool = quotesData.filter(q => q.texte?.toLowerCase().includes(kw));
-        } else if (filterId !== 'all') {
-            pool = quotesData.filter(q => q.authorId === filterId);
-        }
-
-        if (pool.length === 0) {
-            return interaction.reply({ content: "Aucune citation trouvée !", ephemeral: true });
-        }
-
-        const quoteChoisie = pool[Math.floor(Math.random() * pool.length)];
-        const auteurMembre = interaction.guild.members.cache.get(quoteChoisie.authorId);
-        const avatarUrl = quoteChoisie.avatarUrl 
-                       ?? auteurMembre?.user?.displayAvatarURL({ dynamic: true, size: 256 }) 
-                       ?? auteurMembre?.displayAvatarURL?.({ dynamic: true, size: 256 });
-
-        const lienMsg = quoteChoisie.messageUrl ?? `https://discord.com/channels/${interaction.guild.id}/${quoteChoisie.channelId}`;
-        const auteurMention = quoteChoisie.isWebhook ? `**${quoteChoisie.authorName}** *(Webhook)*` : `<@${quoteChoisie.authorId}>`;
-
-        const texteAffiche = quoteChoisie.texte && quoteChoisie.texte !== '(Image)'
-            ? `## « ${quoteChoisie.texte} »\n\n    -${auteurMention}\n\n-# *[source](${lienMsg})*`
-            : `    -${auteurMention}\n\n-# *[source](${lienMsg})*`;
-
-        const embedQuote = new EmbedBuilder()
-            .setColor(0xf1c40f)
-            .setTitle(`📜 Citation N°${quoteChoisie.id}`)
-            .setDescription(texteAffiche)
-            .setFooter({ text: `[${quoteChoisie.id}/${quotesData.length}] • Réponds à un message en faisant !quote pour l'enregistrer !` });
-
-        if (avatarUrl) embedQuote.setThumbnail(avatarUrl);
-        if (quoteChoisie.imageUrl) embedQuote.setImage(quoteChoisie.imageUrl);
-
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`quote_random_${filterId}`)
-                .setLabel('🎲 Une autre citation')
-                .setStyle(ButtonStyle.Secondary)
-        );
-
-        return interaction.update({ embeds: [embedQuote], components: [row] });
-    }
+    if (await handleQuotesButton(interaction)) return;
 
     if (await handleMotusButton(interaction)) return;
 
     if (await handleRebusButton(interaction)) return;
 
-    // Bouton ouvrant le Modal depuis !embed
-    if (interaction.isButton() && interaction.customId === 'open_embed_modal') {
-        if (interaction.user.id !== '436218312574107658') {
-            return interaction.reply({ content: "Ce bouton est réservé à Epsys.", ephemeral: true });
-        }
-        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
-        return interaction.showModal(buildEmbedMainModal(draft));
-    }
-
-    // Bouton Texte principal & Couleur
-    if (interaction.isButton() && interaction.customId === 'embed_edit_main') {
-        if (interaction.user.id !== '436218312574107658') return;
-        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
-        return interaction.showModal(buildEmbedMainModal(draft));
-    }
-
-    // Bouton Images & Icônes
-    if (interaction.isButton() && interaction.customId === 'embed_edit_images') {
-        if (interaction.user.id !== '436218312574107658') return;
-        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
-        return interaction.showModal(buildEmbedImagesModal(draft));
-    }
-
-    // Bouton Ajouter un champ
-    if (interaction.isButton() && interaction.customId === 'embed_add_field') {
-        if (interaction.user.id !== '436218312574107658') return;
-        return interaction.showModal(buildEmbedFieldModal());
-    }
-
-    // Bouton Horodatage (On/Off)
-    if (interaction.isButton() && interaction.customId === 'embed_toggle_time') {
-        if (interaction.user.id !== '436218312574107658') return;
-        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
-        draft.hasTimestamp = !draft.hasTimestamp;
-        embedDrafts.set(interaction.user.id, draft);
-
-        const embedPreview = buildEmbedFromDraft(draft);
-        return interaction.update({
-            content: "👀 **Aperçu en direct de ton embed :**",
-            embeds: [embedPreview],
-            components: buildEmbedControlRows(draft)
-        });
-    }
-
-    // Bouton Plein format / Aligner la largeur (On/Off)
-    if (interaction.isButton() && interaction.customId === 'embed_toggle_align') {
-        if (interaction.user.id !== '436218312574107658') return;
-        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
-        draft.alignerLargeur = !draft.alignerLargeur;
-        embedDrafts.set(interaction.user.id, draft);
-
-        const embedPreview = buildEmbedFromDraft(draft);
-        return interaction.update({
-            content: "👀 **Aperçu en direct de ton embed :**",
-            embeds: [embedPreview],
-            components: buildEmbedControlRows(draft)
-        });
-    }
-
-    // Bouton Vider les champs
-    if (interaction.isButton() && interaction.customId === 'embed_clear_fields') {
-        if (interaction.user.id !== '436218312574107658') return;
-        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
-        draft.fields = [];
-        embedDrafts.set(interaction.user.id, draft);
-
-        const embedPreview = buildEmbedFromDraft(draft);
-        return interaction.update({
-            content: "👀 **Aperçu en direct de ton embed (champs réinitialisés) :**",
-            embeds: [embedPreview],
-            components: buildEmbedControlRows(draft)
-        });
-    }
-
-    // Bouton Modifier un champ
-    if (interaction.isButton() && interaction.customId === 'embed_edit_field') {
-        if (interaction.user.id !== '436218312574107658') return;
-        const draft = embedDrafts.get(interaction.user.id);
-        if (!draft || !draft.fields || draft.fields.length === 0) {
-            return interaction.reply({ content: "❌ Aucun champ à modifier !", ephemeral: true });
-        }
-        if (draft.fields.length === 1) {
-            return interaction.showModal(buildEmbedFieldModal(draft.fields[0], 0));
-        }
-
-        const menu = new StringSelectMenuBuilder()
-            .setCustomId('embed_select_field_to_edit')
-            .setPlaceholder('Choisis le champ à modifier...')
-            .addOptions(
-                draft.fields.slice(0, 25).map((f, i) => ({
-                    label: `Champ #${i + 1} : ${f.name.slice(0, 40)}`,
-                    description: f.value.slice(0, 50) || 'Sans contenu',
-                    value: String(i)
-                }))
-            );
-
-        return interaction.reply({
-            content: "📝 **Quel champ souhaites-tu modifier ?**",
-            components: [new ActionRowBuilder().addComponents(menu)],
-            ephemeral: true
-        });
-    }
-
-    // Sélection du champ à modifier depuis le menu
-    if (interaction.isStringSelectMenu() && interaction.customId === 'embed_select_field_to_edit') {
-        if (interaction.user.id !== '436218312574107658') return;
-        const draft = embedDrafts.get(interaction.user.id);
-        const index = parseInt(interaction.values[0], 10);
-        if (!draft || !draft.fields || !draft.fields[index]) {
-            return interaction.reply({ content: "❌ Champ introuvable !", ephemeral: true });
-        }
-        return interaction.showModal(buildEmbedFieldModal(draft.fields[index], index));
-    }
-
-    // Soumission : Ajout ou Modification d'un champ
-    if (interaction.isModalSubmit() && interaction.customId.startsWith('embed_field_modal')) {
-        if (interaction.user.id !== '436218312574107658') return;
-
-        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
-        if (!draft.fields) draft.fields = [];
-
-        const fName = interaction.fields.getTextInputValue('field_name')?.trim();
-        const fValue = interaction.fields.getTextInputValue('field_value')?.trim();
-        const fInline = interaction.fields.getTextInputValue('field_inline')?.trim().toLowerCase() === 'oui';
-
-        const isEditMatch = interaction.customId.match(/^embed_field_modal_(\d+)$/);
-        if (isEditMatch) {
-            const index = parseInt(isEditMatch[1], 10);
-            if (!fName) {
-                // Titre vidé = suppression du champ
-                draft.fields.splice(index, 1);
-            } else {
-                draft.fields[index] = { name: fName, value: fValue, inline: fInline };
-            }
-        } else if (fName && fValue) {
-            draft.fields.push({ name: fName, value: fValue, inline: fInline });
-        }
-        embedDrafts.set(interaction.user.id, draft);
-
-        const embedPreview = buildEmbedFromDraft(draft);
-        const data = {
-            content: "👀 **Aperçu en direct de ton embed :**",
-            embeds: [embedPreview],
-            components: buildEmbedControlRows(draft)
-        };
-        if (interaction.isFromMessage()) return interaction.update(data);
-        return interaction.reply({ ...data, ephemeral: true });
-    }
-
-    // Choix de l'embed à modifier parmi plusieurs dans le même message
-    if (interaction.isButton() && interaction.customId.startsWith('embed_pick_idx_')) {
-        if (interaction.user.id !== '436218312574107658') return;
-        const parts = interaction.customId.split('_');
-        const channelId = parts[3];
-        const messageId = parts[4];
-        const idx = parseInt(parts[5], 10);
-
-        const channel = interaction.guild?.channels.cache.get(channelId);
-        const targetMsg = await channel?.messages.fetch(messageId).catch(() => null);
-        if (!targetMsg) return interaction.reply({ content: "❌ Message introuvable !", ephemeral: true });
-
-        const draft = rehydraterEmbedDepuisMessage(targetMsg, idx);
-        embedDrafts.set(interaction.user.id, draft);
-
-        const embedPreview = buildEmbedFromDraft(draft);
-        return interaction.update({
-            content: `✏️ **Mode modification actif pour l'embed #${idx + 1} du message [${targetMsg.id}](${targetMsg.url}) !**\n*(Ajuste les éléments puis clique sur « 💾 Mettre à jour le message »)*`,
-            embeds: [embedPreview],
-            components: buildEmbedControlRows(draft)
-        });
-    }
-
-    // Soumission : Texte principal & Couleur
-    if (interaction.isModalSubmit() && interaction.customId.startsWith('embed_main_modal')) {
-        if (interaction.user.id !== '436218312574107658') return;
-
-        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
-        draft.titre = interaction.fields.getTextInputValue('embed_title')?.trim();
-        draft.desc = interaction.fields.getTextInputValue('embed_desc')?.trim();
-        draft.couleurRaw = interaction.fields.getTextInputValue('embed_color')?.trim();
-        draft.footer = interaction.fields.getTextInputValue('embed_footer')?.trim();
-        embedDrafts.set(interaction.user.id, draft);
-
-        const embedPreview = buildEmbedFromDraft(draft);
-        const data = {
-            content: "👀 **Aperçu en direct de ton embed :**\n*(Utilise les boutons ci-dessous pour ajouter images, champs ou choisir le salon d'envoi)*",
-            embeds: [embedPreview],
-            components: buildEmbedControlRows(draft)
-        };
-        if (interaction.isFromMessage()) return interaction.update(data);
-        return interaction.reply({ ...data, ephemeral: true });
-    }
-
-    // Soumission : Images & Icônes
-    if (interaction.isModalSubmit() && interaction.customId.startsWith('embed_images_modal')) {
-        if (interaction.user.id !== '436218312574107658') return;
-
-        const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
-        draft.image = interaction.fields.getTextInputValue('embed_image')?.trim();
-        draft.thumbnail = interaction.fields.getTextInputValue('embed_thumbnail')?.trim();
-        draft.authorName = interaction.fields.getTextInputValue('embed_author_name')?.trim();
-        draft.authorIcon = interaction.fields.getTextInputValue('embed_author_icon')?.trim();
-        embedDrafts.set(interaction.user.id, draft);
-
-        const embedPreview = buildEmbedFromDraft(draft);
-        return interaction.update({
-            content: "👀 **Aperçu en direct de ton embed :**",
-            embeds: [embedPreview],
-            components: buildEmbedControlRows(draft)
-        });
-    }
-
-    // Sélection du salon de destination
-    if (interaction.isChannelSelectMenu() && interaction.customId === 'embed_send_channel') {
-        if (interaction.user.id !== '436218312574107658') return;
-
-        const draft = embedDrafts.get(interaction.user.id);
-        if (!draft) {
-            return interaction.update({ content: "❌ Aucun brouillon d'embed trouvé ou il a expiré.", embeds: [], components: [] });
-        }
-
-        const channelId = interaction.values[0];
-        const targetChannel = interaction.guild?.channels.cache.get(channelId);
-
-        if (!targetChannel) {
-            return interaction.update({ content: "❌ Salon introuvable.", embeds: [], components: [] });
-        }
-
-        const embedFinal = buildEmbedFromDraft(draft);
-        await targetChannel.send({ embeds: [embedFinal] }).catch(err => {
-            return interaction.update({ content: `❌ Erreur lors de l'envoi : ${err.message}`, embeds: [], components: [] });
-        });
-
-        embedDrafts.delete(interaction.user.id);
-        return interaction.update({
-            content: `✅ **Embed complet envoyé avec succès dans <#${channelId}> !**`,
-            embeds: [],
-            components: []
-        });
-    }
-
-    // Sauvegarde et mise à jour directe sur le message original (préserve les autres embeds du message)
-    if (interaction.isButton() && interaction.customId === 'embed_save_edit') {
-        if (interaction.user.id !== '436218312574107658') return;
-        const draft = embedDrafts.get(interaction.user.id);
-        if (!draft || !draft.editingMessage) {
-            return interaction.reply({ content: "❌ Aucun message original lié à ce brouillon !", ephemeral: true });
-        }
-
-        const { channelId, messageId, embedIndex = 0 } = draft.editingMessage;
-        const targetChannel = interaction.guild?.channels.cache.get(channelId);
-        if (!targetChannel) return interaction.reply({ content: "❌ Salon introuvable !", ephemeral: true });
-
-        const targetMsg = await targetChannel.messages.fetch(messageId).catch(() => null);
-        if (!targetMsg) return interaction.reply({ content: "❌ Message introuvable !", ephemeral: true });
-
-        const embedFinal = buildEmbedFromDraft(draft);
-        const tousLesEmbeds = [...targetMsg.embeds];
-        tousLesEmbeds[embedIndex] = embedFinal;
-
-        await targetMsg.edit({ embeds: tousLesEmbeds }).catch(err => {
-            return interaction.reply({ content: `❌ Erreur : ${err.message}`, ephemeral: true });
-        });
-
-        embedDrafts.delete(interaction.user.id);
-        return interaction.update({
-            content: `✅ **L'embed #${embedIndex + 1} a été mis à jour avec succès sur [le message original](${targetMsg.url}) !**`,
-            embeds: [],
-            components: []
-        });
-    }
-
-    // Configuration du salon d'accueil
-    if (interaction.isChannelSelectMenu() && interaction.customId === 'welcome_select_channel') {
-        if (interaction.user.id !== EPSYS_ID) return;
-        welcomeData.channelId = interaction.values[0];
-        demanderSauvegarde();
-        return interaction.update({
-            embeds: [buildWelcomeConfigEmbed()],
-            components: buildWelcomeConfigRows()
-        });
-    }
-
-    // Activer / Désactiver les messages d'accueil
-    if (interaction.isButton() && interaction.customId === 'welcome_toggle_active') {
-        if (interaction.user.id !== EPSYS_ID) return;
-        welcomeData.actif = !welcomeData.actif;
-        demanderSauvegarde();
-        return interaction.update({
-            embeds: [buildWelcomeConfigEmbed()],
-            components: buildWelcomeConfigRows()
-        });
-    }
-
-    // Tester l'affiche depuis le panneau
-    if (interaction.isButton() && interaction.customId === 'welcome_test_btn') {
-        if (interaction.user.id !== EPSYS_ID) return;
-        await interaction.deferReply({ ephemeral: true });
-        try {
-            const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 512 });
-            const cardBuffer = await generateWelcomeImage(avatarUrl, interaction.member?.displayName ?? interaction.user.username);
-            return interaction.editReply({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
-        } catch (err) {
-            console.error("Erreur bouton welcome test :", err);
-            return interaction.editReply({ content: `❌ **Erreur d'affiche :** \`${err.message}\`` });
-        }
-    }
+    // Interactions Panneau Bienvenue
+    if (await handleWelcomeInteraction(interaction)) return;
 
     // Annulation du brouillon
     if (interaction.isButton() && interaction.customId === 'embed_cancel_draft') {
@@ -5706,151 +3825,7 @@ try {
     // =========================
     //     BOUTONS YOUTUBE
     // =========================
-
-    if (interaction.isButton() && interaction.customId.startsWith('yt_')) {
-    const parts = interaction.customId.split('_');
-    const action = parts[1];
-    const authorId = parts[2];
-
-    if (interaction.user.id !== authorId) {
-        return interaction.reply({ content: "C'est pas ta recherche !", ephemeral: true });
-    }
-
-    if (action === 'close') {
-        youtubeSearches.delete(interaction.message.id);
-        await interaction.message.delete().catch(() => {});
-        return;
-    }
-
-    const search = youtubeSearches.get(interaction.message.id);
-    if (!search) return interaction.reply({ content: "Cette recherche a expiré !", ephemeral: true });
-
-    const currentIndex = parseInt(parts[3]);
-    const newIndex = action === 'next' ? currentIndex + 1 : currentIndex - 1;
-    const { videos } = search;
-    const video = videos[newIndex];
-    const videoUrl = `https://www.youtube.com/watch?v=${video.id}`;
-
-    const buildYoutubeEmbed = (index) => {
-        const v = videos[index];
-        const snippet = v.snippet;
-        const stats = v.statistics || {};
-
-        const duration = v.contentDetails.duration
-            .replace('PT', '')
-            .replace('H', 'h ')
-            .replace('M', 'min ')
-            .replace('S', 's');
-
-        const views = stats.viewCount ? parseInt(stats.viewCount).toLocaleString('fr-FR') : '0';
-        const likes = stats.likeCount ? parseInt(stats.likeCount).toLocaleString('fr-FR') : 'Masqué';
-        const comments = stats.commentCount ? parseInt(stats.commentCount).toLocaleString('fr-FR') : 'Désactivés';
-        const date = new Date(snippet.publishedAt).toLocaleDateString('fr-FR', {
-            day: 'numeric', month: 'long', year: 'numeric'
-        });
-
-        const miniatureUrl = snippet.thumbnails.maxres?.url ?? snippet.thumbnails.high?.url ?? snippet.thumbnails.default?.url;
-
-        return new EmbedBuilder()
-            .setColor(0xff0000)
-            .setTitle(snippet.title)
-            .setURL(`https://www.youtube.com/watch?v=${v.id}`)
-            .setImage(miniatureUrl)
-            .addFields(
-                { name: '📺 Chaîne', value: snippet.channelTitle, inline: true },
-                { name: '⏱️ Durée', value: duration, inline: true },
-                { name: '👁️ Vues', value: views, inline: true },
-                { name: '👍 Likes', value: likes, inline: true },
-                { name: '💬 Commentaires', value: comments, inline: true },
-                { name: '📅 Publié le', value: date, inline: true }
-            )
-            .setFooter({ text: `Résultat ${index + 1}/${videos.length}` });
-    };
-
-    const buildYoutubeRow = (index) => {
-        return new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`yt_prev_${authorId}_${index}`)
-                .setLabel('⏮️ Précédent')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(index === 0),
-            new ButtonBuilder()
-                .setCustomId(`yt_next_${authorId}_${index}`)
-                .setLabel('⏭️ Suivant')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(index >= videos.length - 1),
-            new ButtonBuilder()
-                .setLabel('🔗 Ouvrir')
-                .setStyle(ButtonStyle.Link)
-                .setURL(videoUrl),
-            new ButtonBuilder()
-                .setCustomId(`yt_close_${authorId}`)
-                .setLabel('❌ Fermer')
-                .setStyle(ButtonStyle.Danger)
-        );
-    };
-
-    return interaction.update({
-        embeds: [buildYoutubeEmbed(newIndex)],
-        components: [buildYoutubeRow(newIndex)]
-    });
-}
-
-    // =========================
-    //      BOUTONS PRUNE
-    // =========================
-
-    if (interaction.isButton() && interaction.customId.startsWith('prune_')) {
-    const parts = interaction.customId.split('_');
-    const action = parts[1];
-    const authorId = parts[2];
-
-    if (interaction.user.id !== authorId) {
-        return interaction.reply({ content: "C'est pas ta commande !", ephemeral: true });
-    }
-
-    const member = interaction.guild.members.cache.get(authorId);
-    if (!member?.permissions.has('KickMembers')) {
-        return interaction.reply({ content: "Tu n'as plus les permissions nécessaires !", ephemeral: true });
-    }
-
-    if (action === 'manual') {
-        await interaction.message.delete().catch(() => {});
-        return interaction.reply({ content: "OK ! Utilise `!prune 100` autant de fois que nécessaire.", ephemeral: true });
-    }
-
-    if (action === 'auto') {
-        const total = parseInt(parts[3]);
-        const channelId = parts[4];
-        const channel = interaction.guild.channels.cache.get(channelId);
-        if (!channel) return interaction.reply({ content: "Salon introuvable !", ephemeral: true });
-
-        await interaction.message.delete().catch(() => {});
-        await interaction.reply({ content: `🗑️ Suppression en cours...`, ephemeral: true });
-
-        let remaining = total;
-        let totalDeleted = 0;
-
-        while (remaining > 0) {
-            const limit = Math.min(remaining, 100);
-            try {
-                const messages = await channel.messages.fetch({ limit: limit + 1 });
-                const toDelete = messages.filter(m => {
-                    const age = Date.now() - m.createdTimestamp;
-                    return age < 14 * 24 * 60 * 60 * 1000;
-                });
-                if (toDelete.size === 0) break;
-                await channel.bulkDelete(toDelete, true);
-                totalDeleted += toDelete.size;
-                remaining -= limit;
-                if (remaining > 0) await new Promise(r => setTimeout(r, 1500));
-            } catch (e) {
-                break;
-            }
-        }
-        return;
-    }
-}
+    if (await handleYoutubeButton(interaction)) return;
 
     // =========================
     //     BOUTONS WANTED
@@ -6106,82 +4081,7 @@ return interaction.update({ embeds: [embed], components: rows });
     // =========================
     // BOUTONS ANNIVERSAIRE LIST
     // =========================
-
-    if (interaction.isButton() && interaction.customId.startsWith('anniv_list_')) {
-    const parts = interaction.customId.split('_');
-    const ordre = parts[2];
-    const authorId = parts[3];
-    const currentPage = parseInt(parts[4]) || 0;
-    const action = parts[5]; // prev, next, ou switch
-
-    if (interaction.user.id !== authorId) {
-        return interaction.reply({ content: "Ce bouton ne t'est pas destin\u00e9 !", ephemeral: true });
-    }
-
-    const entries = Object.entries(getGuildBirthdays(interaction.guild.id));
-    const PAGE_SIZE = 10;
-
-    const sortEntries = (o) => {
-        if (o === 'chrono') {
-            const now = new Date();
-            return [...entries].sort((a, b) => {
-                const [da, ma] = a[1].split('/').map(Number);
-                const [db, mb] = b[1].split('/').map(Number);
-                const dateA = new Date(now.getFullYear(), ma - 1, da);
-                const dateB = new Date(now.getFullYear(), mb - 1, db);
-                if (dateA < now) dateA.setFullYear(now.getFullYear() + 1);
-                if (dateB < now) dateB.setFullYear(now.getFullYear() + 1);
-                return dateA - dateB;
-            });
-        } else {
-            return [...entries].sort((a, b) => {
-                const [da, ma] = a[1].split('/').map(Number);
-                const [db, mb] = b[1].split('/').map(Number);
-                return ma !== mb ? ma - mb : da - db;
-            });
-        }
-    };
-
-    let newOrdre = ordre;
-    let newPage = currentPage;
-    if (action === 'prev') newPage = currentPage - 1;
-    else if (action === 'next') newPage = currentPage + 1;
-    else if (action === 'switch') { newOrdre = ordre === 'chrono' ? 'classique' : 'chrono'; newPage = 0; }
-
-    const sorted = sortEntries(newOrdre);
-    const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
-    const slice = sorted.slice(newPage * PAGE_SIZE, (newPage + 1) * PAGE_SIZE);
-    const lines = slice.map(([uid, date]) => `<@${uid}> \u2014 **${date}**`).join('\n');
-
-    const prev = new ButtonBuilder()
-        .setCustomId(`anniv_list_${newOrdre}_${authorId}_${newPage}_prev`)
-        .setLabel('\u2b05\ufe0f Arri\u00e8re')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(newPage === 0);
-    const next = new ButtonBuilder()
-        .setCustomId(`anniv_list_${newOrdre}_${authorId}_${newPage}_next`)
-        .setLabel('Suivant \u27a1\ufe0f')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(newPage >= totalPages - 1);
-    const chronoBtn = new ButtonBuilder()
-        .setCustomId(`anniv_list_chrono_${authorId}_${newPage}_switch`)
-        .setLabel('\ud83d\udd52 Ordre chronologique')
-        .setStyle(newOrdre === 'chrono' ? ButtonStyle.Primary : ButtonStyle.Secondary);
-    const classiqueBtn = new ButtonBuilder()
-        .setCustomId(`anniv_list_classique_${authorId}_${newPage}_switch`)
-        .setLabel('\ud83d\udcc5 Ordre classique')
-        .setStyle(newOrdre === 'classique' ? ButtonStyle.Primary : ButtonStyle.Secondary);
-    const row1 = new ActionRowBuilder().addComponents(prev, next);
-    const row2 = new ActionRowBuilder().addComponents(chronoBtn, classiqueBtn);
-
-    const embed = new EmbedBuilder()
-        .setColor(0xff69b4)
-        .setTitle('\ud83c\udf82 Anniversaires du serveur')
-        .setDescription(lines)
-        .setFooter({ text: `Page ${newPage + 1}/${totalPages} \u2022 ${newOrdre === 'chrono' ? '\ud83d\udd52 Ordre chronologique' : '\ud83d\udcc5 Ordre classique'}` });
-
-    return interaction.update({ embeds: [embed], components: [row1, row2] });
-}
+    if (await handleAnniversaireButton(interaction)) return;
 
     // Boutons et menus sociaux (flip, sylvain, blagues, questions)
     if (await handleSocialInteraction(interaction)) return;
@@ -6223,6 +4123,11 @@ return interaction.update({ embeds: [embed], components: rows });
     // BOUTONS ROULETTE
     // =========================
     if (await handleRouletteButton(interaction, client)) return;
+
+    // =========================
+    // INTERACTIONS EMBEDS (EPSYS)
+    // =========================
+    if (await handleEmbedInteraction(interaction, client)) return;
 
     // =========================
     // BOUTONS SUGGESTIONS
@@ -6653,22 +4558,7 @@ client.once('ready', async () => {
         await initialiserWebhooksRoulette(guild);
     }
 
-    const msUntilMidnightParis = () => {
-        const now = new Date();
-        const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-        const parisMidnight = new Date(parisNow);
-        parisMidnight.setHours(24, 0, 0, 0);
-        return parisMidnight - parisNow;
-    };
-
-    function scheduleBirthdayCheck() {
-        const delay = msUntilMidnightParis();
-        setTimeout(async () => {
-            await checkBirthdays();
-            scheduleBirthdayCheck();
-        }, delay);
-    }
-    scheduleBirthdayCheck();
+    scheduleBirthdayCheck(client);
 });
 
 // =========================
@@ -6791,19 +4681,7 @@ client.on('guildMemberAdd', async (member) => {
         console.log(`✅ Nouveau membre : ${member.displayName} ajouté au top`);
     }
 
-    // Affiche de bienvenue automatique (sans texte)
-    if (member.guild.id === '720057528351850547' && !member.user.bot && welcomeData.actif && welcomeData.channelId) {
-        const targetChan = member.guild.channels.cache.get(welcomeData.channelId);
-        if (targetChan) {
-            try {
-                const avatarUrl = member.user.displayAvatarURL({ extension: 'png', size: 512 });
-                const cardBuffer = await generateWelcomeImage(avatarUrl, member.displayName);
-                await targetChan.send({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
-            } catch (err) {
-                console.error("Erreur envoi bienvenue :", err.message);
-            }
-        }
-    }
+    await handleWelcomeMemberAdd(member);
 
     if (member.guild.id === '720057528351850547') {
         const accountAge = Date.now() - member.user.createdTimestamp;
