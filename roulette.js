@@ -77,7 +77,8 @@ const ROULETTE_NOMS_COMMANDES = {
     caps: 'malus-caps', emojionly: 'malus-emoji-only', censure: 'malus-censure', mots: 'malus-mots-melanges',
     lettres: 'malus-lettres-melangees', limite100: 'malus-limite-100', limite30: 'malus-limite-30',
     tournee: 'special-tournee-generale', bebe: 'malus-bebe',
-    vote: 'special-vote-immunite-exclusion'
+    vote: 'special-vote-immunite-exclusion',
+    votepublic: 'bonus-vote-gagnant', votegagnant: 'bonus-vote-gagnant'
 };
 
 const ROULETTE_TABLE = [
@@ -1664,6 +1665,34 @@ async function handleRouletteMessage(message, response, client) {
             if (!estSpecial && !attendBonus && !outcomeId.startsWith('malus-')) { await message.reply("Ce nom correspond à un bonus. Utilise `!bonusforce`."); return true; }
             const cible = message.mentions.members.first() ?? bridge.findMemberByName(message.guild, query).found;
             if (!cible) { await message.reply("Membre introuvable."); return true; }
+
+            if (outcomeId === 'bonus-vote-gagnant') {
+                crediterInventaireRoulette(cible.id, 'freeRoll1Min', 1);
+                deverrouillerSucces(cible.id, 'innocente', message.channel);
+
+                const embedVictoire = new EmbedBuilder()
+                    .setColor(0x00bf19)
+                    .setTitle(`🕊️ JUGEMENT POPULAIRE : INNOCENTÉ.E ! (FORCÉ)`)
+                    .setDescription(
+                        `Epsys a accordé la grâce présidentielle !\n\n` +
+                        `🎉 <@${cible.id}>, tu remportes **1 minute de tirage à volonté** (sans cooldown et immunisé aux mutes) !\n\n` +
+                        `🎁 **Si tu ne l'utilises pas tout de suite, ton cadeau sera stocké dans ton inventaire.**\nTape \`!roulette claim\` ou \`!rlt claim\` afin de l'activer !`
+                    );
+
+                const rowVictoire = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`rlt_claim_freeroll_${cible.id}`)
+                        .setLabel('🎰 Activer mon tirage (1 min)')
+                        .setStyle(ButtonStyle.Success)
+                );
+
+                await message.channel.send({
+                    content: `🔔 <@${cible.id}>, tu as reçu un bonus de vote public !`,
+                    embeds: [embedVictoire],
+                    components: [rowVictoire]
+                });
+                return true;
+            }
 
             const proxy = { member: cible, channel: message.channel, guild: message.guild };
             const texte = await appliquerEtDecrireResultat(outcomeId, proxy, cible.displayName, 0);
