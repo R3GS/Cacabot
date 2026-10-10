@@ -280,10 +280,18 @@ const {
 
 ///youtube.js
 const {
+    initYoutubeState,
     handleYoutubeMessage,
     handleYoutubeSlash,
-    handleYoutubeButton
+    handleYoutubeButton,
+    verifierNouvellesVideosYouTube
 } = require('./youtube.js');
+
+initYoutubeState({
+    client,
+    getYoutubeWatchData: () => youtubeWatchData,
+    demanderSauvegarde
+});
 
 ///anniversaire.js
 const {
@@ -2480,6 +2488,7 @@ client.once('ready', async () => {
     cleanOldData();
     setInterval(() => verifierHappyHour(client), 30 * 1000);
     setInterval(() => verifierTwitchLive(client), 60 * 1000);
+    setInterval(() => verifierNouvellesVideosYouTube(), 3 * 60 * 1000); // Vérifie les vidéos YouTube toutes les 3 minutes
 
     // Lancement et vérification automatique des Motus (10h et 19h) + arrêt après 1 heure
     let derniereSessionLancee = null;

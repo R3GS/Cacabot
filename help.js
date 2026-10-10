@@ -29,6 +29,7 @@ function buildHelpxCategorieEmbed(categorie) {
         return embed.setTitle('🤖 Commandes liées à Cacabot')
             .addFields(
                 { name: '🩺 **!diag / !cacatest**', value: 'Lancer un diagnostic complet de l\'état de santé et de tous les modules de Cacabot.' },
+                { name: '📺 **!ytabo config**', value: 'Panneau interactif de gestion des abonnements et notifications YouTube automatiques.' },
                 { name: '📣 **!say [ID_salon] [message]**', value: 'Envoyer un message dans un salon au nom de Cacabot.' },
                 { name: '💾 **!save**', value: 'Forcer une sauvegarde immédiate dans le salon de backup Discord.' },
                 { name: '💾 **!lastsave**', value: 'Afficher la date et l\'heure de la dernière sauvegarde Discord.' }

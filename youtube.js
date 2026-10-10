@@ -1,16 +1,33 @@
 /**
  * Module YouTube pour Cacabot
- * Commandes : !youtube, !last, !stats et leurs équivalents Slash
+ * Commandes : !youtube, !last, !stats, !ytabo config et leurs équivalents Slash
  */
 
 const {
     EmbedBuilder,
     ActionRowBuilder,
     ButtonBuilder,
+    StringSelectMenuBuilder,
+    ChannelSelectMenuBuilder,
+    ChannelType,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
     ButtonStyle
 } = require('discord.js');
 
+const EPSYS_ID = '436218312574107658';
 const youtubeSearches = new Map(); // messageId -> { videos, authorId }
+
+let ytState = {
+    client: null,
+    getYoutubeWatchData: () => ({}),
+    demanderSauvegarde: () => {}
+};
+
+function initYoutubeState(bridge) {
+    ytState = { ...ytState, ...bridge };
+}
 
 function decodeHtmlEntities(text) {
     if (!text) return text;
@@ -101,20 +118,142 @@ async function resolveChannelId(query) {
     }
 
     const searchTerm = handle ?? query;
-    const forHandleRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(searchTerm.replace('@', ''))}&key=${process.env.YOUTUBE_API_KEY}`);
-    const forHandleData = await forHandleRes.json();
+    try {
+        const forHandleRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forHandle=${encodeURIComponent(searchTerm.replace('@', ''))}&key=${process.env.YOUTUBE_API_KEY}`);
+        const forHandleData = await forHandleRes.json();
+        if (forHandleData.items && forHandleData.items.length > 0) {
+            return { id: forHandleData.items[0].id, title: forHandleData.items[0].snippet.title };
+        }
 
-    if (forHandleData.items && forHandleData.items.length > 0) {
-        return forHandleData.items[0].id;
-    }
-
-    const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchTerm)}&type=channel&maxResults=1&key=${process.env.YOUTUBE_API_KEY}`);
-    const searchData = await searchRes.json();
-    if (searchData.items && searchData.items.length > 0) {
-        return searchData.items[0].snippet.channelId;
-    }
+        const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(searchTerm)}&type=channel&maxResults=1&key=${process.env.YOUTUBE_API_KEY}`);
+        const searchData = await searchRes.json();
+        if (searchData.items && searchData.items.length > 0) {
+            return { id: searchData.items[0].snippet.channelId, title: searchData.items[0].snippet.channelTitle };
+        }
+    } catch (e) {}
 
     return null;
+}
+
+// ==========================================
+//  PANNEAU DE CONFIGURATION !YTABO CONFIG
+// ==========================================
+
+function buildYtAboEmbed() {
+    const watchData = ytState.getYoutubeWatchData();
+    const channels = Object.values(watchData);
+
+    const embed = new EmbedBuilder()
+        .setColor(0xff0000)
+        .setTitle('📺 Gestion des abonnements YouTube de Cacabot')
+        .setDescription(
+            `Configure les chaînes que Cacabot surveille. Dès qu'une vidéo sort, il l'envoie automatiquement dans le salon prévu !\n\n` +
+            `**Chaînes suivies (${channels.length}) :**`
+        )
+        .setFooter({ text: 'Panneau réservé à Epsys • Sauvegardé dans #json' });
+
+    if (channels.length === 0) {
+        embed.addFields({ name: 'Aucun abonnement', value: 'Clique sur **Ajouter une chaîne** ci-dessous pour commencer !' });
+    } else {
+        for (const ch of channels) {
+            embed.addFields({
+                name: `🔴 ${ch.title || ch.channelId}`,
+                value: `• Salon : <#${ch.discordChannelId}>\n• Message : \`${ch.customMessage || 'Nouvelle vidéo de {chaine} !'}\``,
+                inline: false
+            });
+        }
+    }
+
+    return embed;
+}
+
+function buildYtAboComponents() {
+    const watchData = ytState.getYoutubeWatchData();
+    const channels = Object.values(watchData);
+
+    const rowButtons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('ytabo_add_btn')
+            .setLabel('➕ Ajouter une chaîne')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId('ytabo_test_btn')
+            .setLabel('🔔 Tester les alertes')
+            .setStyle(ButtonStyle.Primary)
+    );
+
+    const rows = [rowButtons];
+
+    if (channels.length > 0) {
+        const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId('ytabo_remove_select')
+            .setPlaceholder('🗑️ Supprimer une chaîne...')
+            .addOptions(
+                channels.slice(0, 25).map(ch => ({
+                    label: (ch.title || ch.channelId).slice(0, 50),
+                    description: `Salon : #${ch.discordChannelId}`,
+                    value: ch.channelId
+                }))
+            );
+        rows.push(new ActionRowBuilder().addComponents(selectMenu));
+    }
+
+    return rows;
+}
+
+// ==========================================
+//  SURVEILLANCE ET ENVOI AUTOMATIQUE
+// ==========================================
+
+async function verifierNouvellesVideosYouTube() {
+    const watchData = ytState.getYoutubeWatchData();
+    const client = ytState.client;
+    if (!client || Object.keys(watchData).length === 0) return;
+
+    for (const [channelId, config] of Object.entries(watchData)) {
+        try {
+            // Utilisation du flux RSS officiel (gratuit, 0 quota API consommé)
+            const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+            const res = await fetch(rssUrl);
+            if (!res.ok) continue;
+            const xml = await res.text();
+
+            const videoIdMatch = xml.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
+            const titleMatch = xml.match(/<title>([^<]+)<\/title>/g); // Le 1er est le nom de la chaîne, le 2e est la vidéo
+            const videoTitle = titleMatch && titleMatch[1] ? titleMatch[1].replace(/<\/?title>/g, '') : 'Nouvelle vidéo';
+
+            if (!videoIdMatch) continue;
+            const latestVideoId = videoIdMatch[1];
+
+            // Si c'est la toute première fois qu'on ajoute la chaîne, on note l'ID sans spammer
+            if (!config.lastVideoId) {
+                config.lastVideoId = latestVideoId;
+                ytState.demanderSauvegarde();
+                continue;
+            }
+
+            // Nouvelle vidéo détectée !
+            if (config.lastVideoId !== latestVideoId) {
+                config.lastVideoId = latestVideoId;
+                ytState.demanderSauvegarde();
+
+                const targetChannel = client.channels.cache.get(config.discordChannelId);
+                if (targetChannel) {
+                    const videoUrl = `https://www.youtube.com/watch?v=${latestVideoId}`;
+                    const messageTemplate = config.customMessage || "📢 **Nouvelle vidéo de {chaine} !**\n{url}";
+                    const messageFinal = messageTemplate
+                        .replace('{chaine}', config.title || 'YouTube')
+                        .replace('{titre}', decodeHtmlEntities(videoTitle))
+                        .replace('{url}', videoUrl);
+
+                    await targetChannel.send(messageFinal);
+                    console.log(`[YouTube] 📢 Nouvelle vidéo envoyée pour ${config.title} : ${latestVideoId}`);
+                }
+            }
+        } catch (e) {
+            console.error(`[YouTube] Erreur check chaîne ${channelId}:`, e.message);
+        }
+    }
 }
 
 // =========================
@@ -123,6 +262,20 @@ async function resolveChannelId(query) {
 async function handleYoutubeMessage(message, response) {
     const raw = message.content.trim();
     const command = raw.split(/\s+/)[0]?.toLowerCase();
+
+    // 0. Commande !ytabo (Epsys-only)
+    if (command === '!ytabo' || command === '!ytwatch') {
+        if (message.author.id !== EPSYS_ID) {
+            await message.reply("Cette commande est réservée à Epsys.");
+            return true;
+        }
+
+        await message.reply({
+            embeds: [buildYtAboEmbed()],
+            components: buildYtAboComponents()
+        });
+        return true;
+    }
 
     // 1. Commande !last
     if (command === '!last' || response?.needsLastVideo) {
@@ -133,13 +286,13 @@ async function handleYoutubeMessage(message, response) {
         }
 
         try {
-            const channelId = await resolveChannelId(query);
-            if (!channelId) {
+            const channelInfo = await resolveChannelId(query);
+            if (!channelInfo) {
                 await message.reply("Chaîne introuvable !");
                 return true;
             }
 
-            const latestRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&maxResults=1&type=video&key=${process.env.YOUTUBE_API_KEY}`);
+            const latestRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelInfo.id}&order=date&maxResults=1&type=video&key=${process.env.YOUTUBE_API_KEY}`);
             const latestData = await latestRes.json();
 
             if (!latestData.items || latestData.items.length === 0) {
@@ -202,13 +355,13 @@ async function handleYoutubeMessage(message, response) {
         }
 
         try {
-            const channelId = await resolveChannelId(query);
-            if (!channelId) {
+            const channelInfo = await resolveChannelId(query);
+            if (!channelInfo) {
                 await message.reply("Chaîne introuvable !");
                 return true;
             }
 
-            const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${channelId}&key=${process.env.YOUTUBE_API_KEY}`);
+            const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${channelInfo.id}&key=${process.env.YOUTUBE_API_KEY}`);
             const detailData = await detailRes.json();
 
             if (!detailData.items || detailData.items.length === 0) {
@@ -227,7 +380,7 @@ async function handleYoutubeMessage(message, response) {
             const embed = new EmbedBuilder()
                 .setColor(0xff0000)
                 .setTitle(snippet.title)
-                .setURL(`https://www.youtube.com/channel/${channelId}`)
+                .setURL(`https://www.youtube.com/channel/${channelInfo.id}`)
                 .setThumbnail(snippet.thumbnails.high?.url ?? snippet.thumbnails.default.url)
                 .setDescription(snippet.description ? snippet.description.slice(0, 200) + (snippet.description.length > 200 ? '...' : '') : '*Aucune description*')
                 .addFields(
@@ -236,7 +389,7 @@ async function handleYoutubeMessage(message, response) {
                     { name: '🎬 Vidéos', value: formatNumber(stats.videoCount), inline: true },
                     { name: '📅 Création', value: createdDate, inline: true }
                 )
-                .setFooter({ text: `ID : ${channelId}` });
+                .setFooter({ text: `ID : ${channelInfo.id}` });
 
             await message.reply({ embeds: [embed] });
             return true;
@@ -296,6 +449,19 @@ async function handleYoutubeMessage(message, response) {
 async function handleYoutubeSlash(interaction) {
     const cmd = interaction.commandName;
 
+    if (cmd === 'ytabo' || cmd === 'ytwatch') {
+        if (interaction.user.id !== EPSYS_ID) {
+            await interaction.reply({ content: "Cette commande est réservée à Epsys.", ephemeral: true });
+            return true;
+        }
+        await interaction.reply({
+            embeds: [buildYtAboEmbed()],
+            components: buildYtAboComponents(),
+            ephemeral: true
+        });
+        return true;
+    }
+
     if (cmd === 'youtube') {
         const query = interaction.options.getString('recherche');
         await interaction.deferReply();
@@ -332,13 +498,13 @@ async function handleYoutubeSlash(interaction) {
         const query = interaction.options.getString('chaine');
         await interaction.deferReply();
         try {
-            const channelId = await resolveChannelId(query);
-            if (!channelId) {
+            const channelInfo = await resolveChannelId(query);
+            if (!channelInfo) {
                 await interaction.editReply("Chaîne introuvable !");
                 return true;
             }
 
-            const latestRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&maxResults=1&type=video&key=${process.env.YOUTUBE_API_KEY}`);
+            const latestRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelInfo.id}&order=date&maxResults=1&type=video&key=${process.env.YOUTUBE_API_KEY}`);
             const latestData = await latestRes.json();
 
             if (!latestData.items || latestData.items.length === 0) {
@@ -388,13 +554,13 @@ async function handleYoutubeSlash(interaction) {
         const query = interaction.options.getString('chaine');
         await interaction.deferReply();
         try {
-            const channelId = await resolveChannelId(query);
-            if (!channelId) {
+            const channelInfo = await resolveChannelId(query);
+            if (!channelInfo) {
                 await interaction.editReply("Chaîne introuvable !");
                 return true;
             }
 
-            const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${channelId}&key=${process.env.YOUTUBE_API_KEY}`);
+            const detailRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${channelInfo.id}&key=${process.env.YOUTUBE_API_KEY}`);
             const detailData = await detailRes.json();
 
             if (!detailData.items || detailData.items.length === 0) {
@@ -412,7 +578,7 @@ async function handleYoutubeSlash(interaction) {
             const embed = new EmbedBuilder()
                 .setColor(0xff0000)
                 .setTitle(snippet.title)
-                .setURL(`https://www.youtube.com/channel/${channelId}`)
+                .setURL(`https://www.youtube.com/channel/${channelInfo.id}`)
                 .setThumbnail(snippet.thumbnails.high?.url ?? snippet.thumbnails.default.url)
                 .setDescription(snippet.description ? snippet.description.slice(0, 200) + (snippet.description.length > 200 ? '...' : '') : '*Aucune description*')
                 .addFields(
@@ -421,7 +587,7 @@ async function handleYoutubeSlash(interaction) {
                     { name: '🎬 Vidéos', value: formatNumber(statistics.videoCount), inline: true },
                     { name: '📅 Création', value: createdDate, inline: true }
                 )
-                .setFooter({ text: `ID : ${channelId}` });
+                .setFooter({ text: `ID : ${channelInfo.id}` });
 
             await interaction.editReply({ embeds: [embed] });
             return true;
@@ -434,48 +600,155 @@ async function handleYoutubeSlash(interaction) {
     return false;
 }
 
-// =========================
-//  GESTION DES BOUTONS (yt_)
-// =========================
-async function handleYoutubeButton(interaction) {
-    if (!interaction.isButton() || !interaction.customId.startsWith('yt_')) return false;
+// ==========================================
+//  INTERACTIONS (Boutons, Menus, Modals)
+// ==========================================
+async function handleYoutubeInteraction(interaction) {
+    // 1. Boutons du lecteur de recherche (yt_prev, yt_next, yt_close)
+    if (interaction.isButton() && interaction.customId.startsWith('yt_')) {
+        const parts = interaction.customId.split('_');
+        const action = parts[1];
+        const authorId = parts[2];
 
-    const parts = interaction.customId.split('_');
-    const action = parts[1];
-    const authorId = parts[2];
+        if (interaction.user.id !== authorId) {
+            await interaction.reply({ content: "C'est pas ta recherche !", ephemeral: true });
+            return true;
+        }
 
-    if (interaction.user.id !== authorId) {
-        await interaction.reply({ content: "C'est pas ta recherche !", ephemeral: true });
+        if (action === 'close') {
+            youtubeSearches.delete(interaction.message.id);
+            await interaction.message.delete().catch(() => {});
+            return true;
+        }
+
+        const search = youtubeSearches.get(interaction.message.id);
+        if (!search) {
+            await interaction.reply({ content: "Cette recherche a expiré !", ephemeral: true });
+            return true;
+        }
+
+        const currentIndex = parseInt(parts[3], 10);
+        const newIndex = action === 'next' ? currentIndex + 1 : currentIndex - 1;
+        const { videos } = search;
+        const video = videos[newIndex];
+        const videoUrl = `https://www.youtube.com/watch?v=${video.id}`;
+
+        await interaction.update({
+            embeds: [buildYoutubeEmbed(videos, newIndex)],
+            components: [buildYoutubeRow(newIndex, authorId, videoUrl, videos.length)]
+        });
         return true;
     }
 
-    if (action === 'close') {
-        youtubeSearches.delete(interaction.message.id);
-        await interaction.message.delete().catch(() => {});
+    // 2. Boutons du panneau !ytabo config
+    if (interaction.isButton() && interaction.customId === 'ytabo_add_btn') {
+        if (interaction.user.id !== EPSYS_ID) {
+            await interaction.reply({ content: "Réservé à Epsys.", ephemeral: true });
+            return true;
+        }
+
+        const modal = new ModalBuilder()
+            .setCustomId('ytabo_modal_add')
+            .setTitle('Ajouter une chaîne YouTube')
+            .addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('ytabo_input_chaine')
+                        .setLabel('Nom, lien ou @handle de la chaîne')
+                        .setPlaceholder('Ex : @Epsys ou https://youtube.com/@Epsys')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('ytabo_input_channel_id')
+                        .setLabel('ID du salon Discord de destination')
+                        .setPlaceholder('Ex : 720057528867618909')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('ytabo_input_msg')
+                        .setLabel('Message personnalisé (facultatif)')
+                        .setPlaceholder('Ex : 📢 Nouvelle vidéo de {chaine} ! {url}')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setRequired(false)
+                )
+            );
+
+        await interaction.showModal(modal);
         return true;
     }
 
-    const search = youtubeSearches.get(interaction.message.id);
-    if (!search) {
-        await interaction.reply({ content: "Cette recherche a expiré !", ephemeral: true });
+    // Modal Soumission
+    if (interaction.isModalSubmit() && interaction.customId === 'ytabo_modal_add') {
+        if (interaction.user.id !== EPSYS_ID) return true;
+
+        await interaction.deferUpdate();
+        const rawChaine = interaction.fields.getTextInputValue('ytabo_input_chaine').trim();
+        const salonId = interaction.fields.getTextInputValue('ytabo_input_channel_id').trim().replace(/[<#>]/g, '');
+        const customMsg = interaction.fields.getTextInputValue('ytabo_input_msg').trim();
+
+        const channelInfo = await resolveChannelId(rawChaine);
+        if (!channelInfo) {
+            await interaction.followUp({ content: `❌ Impossible de trouver la chaîne YouTube : \`${rawChaine}\``, ephemeral: true });
+            return true;
+        }
+
+        const watchData = ytState.getYoutubeWatchData();
+        watchData[channelInfo.id] = {
+            channelId: channelInfo.id,
+            title: channelInfo.title,
+            discordChannelId: salonId,
+            customMessage: customMsg || "📢 **Nouvelle vidéo de {chaine} !**\n{url}",
+            lastVideoId: null
+        };
+
+        ytState.demanderSauvegarde();
+
+        await interaction.editReply({
+            embeds: [buildYtAboEmbed()],
+            components: buildYtAboComponents()
+        });
+        await interaction.followUp({ content: `✅ Abonnement ajouté pour **${channelInfo.title}** dans <#${salonId}> !`, ephemeral: true });
         return true;
     }
 
-    const currentIndex = parseInt(parts[3], 10);
-    const newIndex = action === 'next' ? currentIndex + 1 : currentIndex - 1;
-    const { videos } = search;
-    const video = videos[newIndex];
-    const videoUrl = `https://www.youtube.com/watch?v=${video.id}`;
+    // Menu suppression d'une chaîne
+    if (interaction.isStringSelectMenu() && interaction.customId === 'ytabo_remove_select') {
+        if (interaction.user.id !== EPSYS_ID) return true;
 
-    await interaction.update({
-        embeds: [buildYoutubeEmbed(videos, newIndex)],
-        components: [buildYoutubeRow(newIndex, authorId, videoUrl, videos.length)]
-    });
-    return true;
+        const targetChannelId = interaction.values[0];
+        const watchData = ytState.getYoutubeWatchData();
+        const removedTitle = watchData[targetChannelId]?.title || targetChannelId;
+
+        delete watchData[targetChannelId];
+        ytState.demanderSauvegarde();
+
+        await interaction.update({
+            embeds: [buildYtAboEmbed()],
+            components: buildYtAboComponents()
+        });
+        await interaction.followUp({ content: `🗑️ Abonnement supprimé pour **${removedTitle}**.`, ephemeral: true });
+        return true;
+    }
+
+    // Bouton de test manuel
+    if (interaction.isButton() && interaction.customId === 'ytabo_test_btn') {
+        if (interaction.user.id !== EPSYS_ID) return true;
+        await interaction.reply({ content: "🔄 Vérification des flux YouTube lancée...", ephemeral: true });
+        await verifierNouvellesVideosYouTube();
+        return true;
+    }
+
+    return false;
 }
 
 module.exports = {
+    initYoutubeState,
     handleYoutubeMessage,
     handleYoutubeSlash,
-    handleYoutubeButton
+    handleYoutubeButton: handleYoutubeInteraction,
+    verifierNouvellesVideosYouTube
 };
