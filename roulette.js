@@ -142,9 +142,9 @@ const ROULETTE_TABLE = [
     { id: 'malus-caps', type: 'malus', poids: 1/70, nom: 'MAJUSCULES pendant 2h', desc: 'Doit parler en MAJUSCULES pendant 2h' },
     { id: 'malus-boomer', type: 'malus', poids: 1/75, nom: 'Mode Boomer pendant 2h', desc: 'Parle comme un boomer sur Facebook pendant 2h' },
     { id: 'malus-brise-bouclier', type: 'malus', poids: 1/30, nom: 'Brise-Bouclier', desc: 'Détruit instantanément toutes tes charges de bouclier' },
-    { id: 'malus-echo', type: 'malus', poids: 1/40, nom: 'Écho condescendant pendant 1h', desc: 'Cacabot te lâche des remarques cassantes sous tes messages pendant 1h' },
-    { id: 'malus-existentiel', type: 'malus', poids: 1/60, nom: 'Crise existentielle pendant 2h', desc: 'Finit chaque phrase par une conclusion sombre pendant 2h' },
-    { id: 'malus-linkedin', type: 'malus', poids: 1/65, nom: 'Gourou LinkedIn pendant 2h', desc: 'Finit chaque phrase par un cliché de gourou corporate pendant 2h' },
+    { id: 'malus-echo', type: 'malus', poids: 1/40, nom: 'Écho condescendant pendant 3h', desc: 'Cacabot te lâche des remarques cassantes sous tes messages pendant 3h' },
+    { id: 'malus-existentiel', type: 'malus', poids: 1/60, nom: 'Crise existentielle pendant 3h', desc: 'Finit chaque phrase par une conclusion sombre pendant 3h' },
+    { id: 'malus-linkedin', type: 'malus', poids: 1/65, nom: 'Gourou LinkedIn pendant 3h', desc: 'Finit chaque phrase par un cliché de gourou corporate pendant 3h' },
     { id: 'malus-censure', type: 'malus', poids: 1/85, nom: 'Censure pendant 2h', desc: 'Un mot sur 3 est censuré (▇▇) pendant 2h' },
     { id: 'malus-exclu-heure', type: 'malus', poids: 1/100, nom: 'Exclusion de 1 heure', desc: 'Exclusion de 1 heure' },
     { id: 'malus-mots-melanges', type: 'malus', poids: 1/120, nom: 'Mots mélangés pendant 2h', desc: 'Les mots de chaque message sont mélangés pendant 2h' },
@@ -838,19 +838,19 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             return `🪓 **${auteurNom}** subit le **BRISE-BOUCLIER** ! Heureusement, il/elle n'avait aucun bouclier en réserve... mais la menace était bien réelle !`;
         }
         case 'malus-existentiel':
-            if (basculerTransfo(member.id, 'existentiel', 2 * 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur la **crise existentielle** : le malus est **annulé** !`;
-            return `🥀 **${auteurNom}** entre en pleine **remise en question existentielle** pendant **2h**... à quoi bon ?`;
+            if (basculerTransfo(member.id, 'existentiel', 3 * 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur la **crise existentielle** : le malus est **annulé** !`;
+            return `🥀 **${auteurNom}** entre en pleine **remise en question existentielle** pendant **3h**... à quoi bon ?`;
         case 'malus-linkedin':
-            if (basculerTransfo(member.id, 'linkedin', 2 * 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur le **gourou LinkedIn** : le malus est **annulé** !`;
-            return `👔 **${auteurNom}** se transforme en **gourou LinkedIn** pendant **2h** ! Soyons agile 🚀`;
+            if (basculerTransfo(member.id, 'linkedin', 3 * 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur le **gourou LinkedIn** : le malus est **annulé** !`;
+            return `👔 **${auteurNom}** se transforme en **gourou LinkedIn** pendant **3h** ! Soyons agile 🚀`;
         case 'malus-echo': {
             const finEcho = rouletteEchoUntil.get(member.id);
             if (finEcho && Date.now() < finEcho) {
                 rouletteEchoUntil.delete(member.id);
                 return `✨ **Miracle !** **${auteurNom}** retombe sur l'**écho condescendant** : Cacabot arrête de le/la clasher !`;
             }
-            rouletteEchoUntil.set(member.id, Date.now() + 60 * 60 * 1000);
-            return `🪞 **${auteurNom}** subit l'**Écho Condescendant** pendant **1h** : Cacabot va lui lâcher ses meilleures remarques cassantes !`;
+            rouletteEchoUntil.set(member.id, Date.now() + 3 * 60 * 60 * 1000);
+            return `🪞 **${auteurNom}** subit l'**Écho Condescendant** pendant **3h** : Cacabot va lui lâcher ses meilleures remarques cassantes !`;
         }
         case 'malus-emoji-only':
             if (basculerTransfo(member.id, 'emojiOnly', 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur l'**emoji only** alors qu'il était encore actif : le malus est **annulé** !`;
@@ -1217,12 +1217,16 @@ function buildRouletteStateEmbed(cible, guildId = null) {
     if ((rouletteCooldown45Charges.get(cible.id) || 0) > 0) {
         malus.push(`⏳ ${rouletteCooldown45Charges.get(cible.id)} tirage(s) à cooldown 45 min`);
     }
+    if (rouletteEchoUntil.has(cible.id) && now < rouletteEchoUntil.get(cible.id)) {
+        malus.push(`🪞 Écho condescendant (fin ${tstamp(rouletteEchoUntil.get(cible.id))})`);
+    }
 
     const tf = rouletteTransfos.get(cible.id) ?? {};
     const libTf = {
         caps: '🔠 Majuscules obligatoires', emojiOnly: '🙂 Emoji only', limite100: '✂️ Limite 100 caractères',
         limite30: '✂️ Limite 30 caractères', mots: '🔀 Mots mélangés', lettres: '🔤 Lettres mélangées',
-        censure: '▇ Mots censurés', bebe: '🍼 Parler bébé', boomer: '🧓 Mode Boomer'
+        censure: '▇ Mots censurés', bebe: '🍼 Parler bébé', boomer: '🧓 Mode Boomer',
+        existentiel: '🥀 Crise existentielle', linkedin: '👔 Gourou LinkedIn'
     };
     for (const [k, fin] of Object.entries(tf)) {
         if (now < fin && libTf[k]) malus.push(`${libTf[k]} (fin ${tstamp(fin)})`);

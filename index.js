@@ -15,6 +15,7 @@ let quotesData = []; // [{ id, texte, authorId, authorName, addedById, timestamp
 let welcomeData = { channelId: null, actif: true };
 let dernierCommitSha = null;
 let numeroBuild = 1;
+let battlePassData = {};
 let donneesChargees = false;
 
 function getVersionString() {
@@ -67,6 +68,7 @@ async function loadAll() {
         welcomeData = jsonRecord.welcomeData ?? { channelId: null, actif: true };
         dernierCommitSha = jsonRecord.dernierCommitSha ?? null;
         if (jsonRecord.numeroBuild) numeroBuild = jsonRecord.numeroBuild;
+        if (jsonRecord.battlePassData) battlePassData = jsonRecord.battlePassData;
 
         for (const [nom, map] of Object.entries(ROULETTE_ETATS)) {
             map.clear();
@@ -117,6 +119,7 @@ async function saveAll() {
             welcomeData: welcomeData,
             dernierCommitSha: dernierCommitSha,
             numeroBuild: numeroBuild,
+            battlePassData: battlePassData,
             roulette: Object.fromEntries(
                 Object.entries(ROULETTE_ETATS).map(([nom, map]) => [nom, Object.fromEntries(map)])
             )
@@ -421,6 +424,24 @@ initYoutubeState({
     client,
     getYoutubeWatchData: () => youtubeWatchData,
     demanderSauvegarde
+});
+
+///battlepass.js
+const {
+    initBattlePassState,
+    trackBattlePassProgress,
+    handleBattlePassMessage,
+    handleBattlePassSlash,
+    handleBattlePassInteraction
+} = require('./battlepass.js');
+
+initBattlePassState({
+    getBattlePassData: () => battlePassData,
+    demanderSauvegarde,
+    crediterInventaireRoulette,
+    rouletteBouclierActif,
+    rouletteRedirectCharges,
+    EPSYS_ID: '436218312574107658'
 });
 
 ///activity.js
@@ -1279,6 +1300,54 @@ async function disableButtons(interaction) {
         const uid = message.author.id;
         if (!topData.messages[uid]) topData.messages[uid] = 0;
         topData.messages[uid]++;
+        if (message.content.trim().length >= 4 && !message.content.startsWith('!')) {
+            trackBattlePassProgress(uid, 'message', 1);
+        }
+
+        // ==========================================
+        //  CAPTEUR CENTRAL DU BATTLE PASS
+        // ==========================================
+        const rawLower = message.content.trim().toLowerCase();
+        const cmdPass = rawLower.split(/\s+/)[0];
+
+        // Quêtes Roulette
+        if (cmdPass === '!rlt' || cmdPass === '!roulette') {
+            if (rawLower.includes('go')) {
+                trackBattlePassProgress(uid, 'roulette_roll', 1);
+                const parisH = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' })).getHours();
+                if (parisH === 20) {
+                    trackBattlePassProgress(uid, 'happy_hour_roll', 1);
+                }
+            }
+        }
+        // Quêtes Interactions Bienveillantes
+        else if (['!kiss', '!hug', '!danse', '!dance', '!bisou', '!calin'].includes(cmdPass)) {
+            trackBattlePassProgress(uid, 'interact_gentil', 1);
+        }
+        // Quêtes Interactions Combat
+        else if (['!punch', '!bang', '!insult', '!frappe', '!tir', '!pan'].includes(cmdPass)) {
+            trackBattlePassProgress(uid, 'interact_combat', 1);
+        }
+        // Quêtes Oracle & Astres
+        else if (['!horoscope', '!destin'].includes(cmdPass)) {
+            trackBattlePassProgress(uid, 'oracle', 1);
+        }
+        // Quêtes Dévotion Epsys
+        else if (['!epsys', '!bougetoi', '!montage', '!video', '!lavideo'].includes(cmdPass)) {
+            trackBattlePassProgress(uid, 'epsys_cmd', 1);
+        }
+        // Quêtes Citations
+        else if (['!quote', '!citation'].includes(cmdPass)) {
+            trackBattlePassProgress(uid, 'quote', 1);
+        }
+        // Quêtes Références
+        else if (['!jailaref', '!palaref', '!glaref', '!gref', '!pref'].includes(cmdPass)) {
+            trackBattlePassProgress(uid, 'ref', 1);
+        }
+        // Quête Essai Mini-jeux (dans le salon Motus)
+        else if (message.channel.id === MOTUS_CHANNEL_ID && rawLower.length >= 5 && rawLower.length <= 8) {
+            trackBattlePassProgress(uid, 'minijeu_essai', 1);
+        }
 
         // Sauvegarde tous les 75 messages
         messagesSinceLastsaveSave++;
@@ -1313,7 +1382,10 @@ async function disableButtons(interaction) {
     // Si ce n'est pas une réplique réflexe ET que ce n'est pas une commande commençant par !, on ignore
     if (!response && !isExplicitCommand) return;
 
-// Commandes YouTube (!youtube, !last, !stats)
+// Commandes Battle Pass (!bp, !pass)
+    if (await handleBattlePassMessage(message)) return;
+
+    // Commandes YouTube (!youtube, !last, !stats)
     if (await handleYoutubeMessage(message, response)) return;
 
     // !animal
@@ -1659,6 +1731,8 @@ try {
         if (commandName === 'help') {
             return await handleHelpInteraction(interaction);
         }
+
+        if (await handleBattlePassSlash(interaction)) return;
 
         // Commandes Activité (/profil, /top)
         if (await handleActivitySlash(interaction)) return;
@@ -2098,6 +2172,9 @@ try {
     // =========================
     if (await handleAnniversaireButton(interaction)) return;
 
+    // Boutons du Battle Pass
+    if (await handleBattlePassInteraction(interaction)) return;
+
     // Menus et boutons de !help et !helpx
     if (await handleHelpInteraction(interaction)) return;
 
@@ -2227,6 +2304,8 @@ client.once('ready', async () => {
     const slashCommands = [
         // Général & Aide
         new SlashCommandBuilder().setName('help').setDescription('Ouvre le guide d\'utilisation officiel de Cacabot'),
+        new SlashCommandBuilder().setName('pass').setDescription('Ouvre le Battle Pass de la saison (quêtes, niveaux, échelle)'),
+        new SlashCommandBuilder().setName('bp').setDescription('Ouvre le Battle Pass de la saison (raccourci)'),
 
         // Roulette & Raccourcis
         new SlashCommandBuilder()
