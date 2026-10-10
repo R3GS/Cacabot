@@ -141,29 +141,29 @@ async function generateWelcomeImage(avatarUrl, memberName) {
 
         // Texte du pseudo
         const cleanName = (memberName || 'NOUVEAU MEMBRE').toUpperCase();
-        let fontSize = 110;
+        let fontSize = 95;
 
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Police LemonMilk avec fallback DejaVu Sans
-        ctx.font = `bold ${fontSize}px LemonMilk, "DejaVu Sans", sans-serif`;
+        // Lemon Milk Bold pur (nom officiel du fichier OTF)
+        ctx.font = `${fontSize}px "LEMON MILK", LemonMilk`;
 
-        // Réduction dynamique si le pseudo dépasse
+        // Réduction automatique si le pseudo est trop long
         const maxTextWidth = 1350;
         while (ctx.measureText(cleanName).width > maxTextWidth && fontSize > 40) {
             fontSize -= 5;
-            ctx.font = `bold ${fontSize}px LemonMilk, "DejaVu Sans", sans-serif`;
+            ctx.font = `${fontSize}px "LEMON MILK", LemonMilk`;
         }
 
-        const posY = 825;
+        const posY = 845;
 
-        // Ombre portée sombre et nette
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-        ctx.shadowBlur = 10;
-        ctx.shadowOffsetX = 4;
-        ctx.shadowOffsetY = 4;
+        // Ombre portée puissante à distance 0 (halo noir intense centré)
+        ctx.shadowColor = '#000000';
+        ctx.shadowBlur = 22;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
 
         // Texte blanc pur
         ctx.fillStyle = '#ffffff';
