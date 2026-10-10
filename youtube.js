@@ -263,8 +263,8 @@ async function handleYoutubeMessage(message, response) {
     const raw = message.content.trim();
     const command = raw.split(/\s+/)[0]?.toLowerCase();
 
-    // 0. Commande !ytabo (Epsys-only)
-    if (command === '!ytabo' || command === '!ytwatch') {
+    // 0. Commande !ytabo (Epsys-only, avec ou sans espace)
+    if (command === '!ytabo' || command === '!ytaboconfig' || command === '!ytwatch' || command === '!ytconfig') {
         if (message.author.id !== EPSYS_ID) {
             await message.reply("Cette commande est réservée à Epsys.");
             return true;

@@ -508,6 +508,10 @@ async function getResponse(raw) {
         return { needsHelpx: true };
     }
 
+    if (command === "!ytabo" || command === "!ytaboconfig" || command === "!ytwatch") {
+        return { needsYtabo: true };
+    }
+
     if (command === "!suggestion" || command === "!suggest" || command === "!sugg") {
         return { needsSuggestion: true };
     }
@@ -2086,6 +2090,9 @@ try {
     // =========================
     if (await handleAnniversaireButton(interaction)) return;
 
+    // Menus et boutons de !help et !helpx
+    if (await handleHelpInteraction(interaction)) return;
+
     // Boutons et menus sociaux (flip, sylvain, blagues, questions)
     if (await handleSocialInteraction(interaction)) return;
 
@@ -2183,58 +2190,6 @@ try {
     }
 
     // blagues et questions sont gérées par handleSocialInteraction
-
-    // =========================
-    // INTERACTIONS !HELP OPTIMISÉ
-    // =========================
-
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_select_')) {
-        const parts = interaction.customId.split('_');
-        const authorId = parts[2];
-        const messageId = parts[3] ?? null;
-
-        if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Ce menu d'aide ne t'est pas destiné !", ephemeral: true });
-        }
-
-        const category = interaction.values[0];
-        const embed = buildHelpCategoryEmbed(category);
-        const menuRow = buildHelpMenu(authorId, messageId);
-        const navRow = buildHelpNavRow(authorId, messageId);
-        return interaction.update({ embeds: [embed], components: [menuRow, navRow] });
-    }
-
-    if (interaction.isButton() && interaction.customId.startsWith('help_home_')) {
-        const parts = interaction.customId.split('_');
-        const authorId = parts[2];
-        const messageId = parts[3] ?? null;
-
-        if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Ce bouton ne t'est pas destiné !", ephemeral: true });
-        }
-
-        const embed = buildHelpHomeEmbed();
-        const menuRow = buildHelpMenu(authorId, messageId);
-        const navRow = buildHelpNavRow(authorId, messageId);
-        return interaction.update({ embeds: [embed], components: [menuRow, navRow] });
-    }
-
-    if (interaction.isButton() && interaction.customId.startsWith('help_delete_')) {
-        const parts = interaction.customId.split('_');
-        const authorId = parts[2];
-        const messageId = parts[3] ?? null;
-
-        if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Tu ne peux pas supprimer ce message !", ephemeral: true });
-        }
-
-        await interaction.message.delete().catch(() => {});
-        if (messageId && messageId !== '') {
-            const originalMsg = await interaction.channel.messages.fetch(messageId).catch(() => null);
-            if (originalMsg) await originalMsg.delete().catch(() => {});
-        }
-        return;
-    }
 
     // question_new_ est géré par handleSocialInteraction
 } catch (err) {
