@@ -287,12 +287,6 @@ const {
     verifierNouvellesVideosYouTube
 } = require('./youtube.js');
 
-initYoutubeState({
-    client,
-    getYoutubeWatchData: () => youtubeWatchData,
-    demanderSauvegarde
-});
-
 ///anniversaire.js
 const {
     initBirthdayState,
@@ -413,6 +407,12 @@ initToolsState({
     client,
     getTopData: () => topData,
     getVersionString
+});
+
+initYoutubeState({
+    client,
+    getYoutubeWatchData: () => youtubeWatchData,
+    demanderSauvegarde
 });
 
 ///activity.js
