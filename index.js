@@ -19,15 +19,6 @@ const suggestionsData = new Map();
 
 const BACKUP_CHANNEL_ID = '1556005171744604161';
 
-function getCommitCount() {
-    try {
-        const { execSync } = require('child_process');
-        return execSync('git rev-list --count HEAD').toString().trim();
-    } catch (e) {
-        return null;
-    }
-}
-
 async function loadAll() {
     try {
         const channel = await client.channels.fetch(BACKUP_CHANNEL_ID).catch(() => null);

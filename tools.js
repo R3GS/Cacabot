@@ -600,6 +600,15 @@ async function handleToolsSlash(interaction, client) {
         if (months > 0 || days > 0) uptime += `${days} jour${days > 1 ? 's' : ''}, `;
         uptime += `${hours} heure${hours > 1 ? 's' : ''}`;
 
+    function getCommitCount() {
+    try {
+        const { execSync } = require('child_process');
+        return execSync('git rev-list --count HEAD').toString().trim();
+    } catch (e) {
+        return null;
+    }
+}
+        
         const commitCount = getCommitCount();
         const versionStr = commitCount ? `Version 1.${commitCount}` : 'Version 1.0';
 
