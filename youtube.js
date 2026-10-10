@@ -228,10 +228,26 @@ async function verifierNouvellesVideosYouTube() {
     const client = ytState.client;
     if (!client || Object.keys(watchData).length === 0) return;
 
-    for (const [channelId, config] of Object.entries(watchData)) {
+    for (let [channelId, config] of Object.entries(watchData)) {
         try {
+            // Si l'identifiant n'est pas un vrai ID commençant par UC, on le résout automatiquement
+            let realId = config.channelId || channelId;
+            if (!realId.startsWith('UC')) {
+                const info = await resolveChannelId(realId);
+                if (info?.id) {
+                    delete watchData[channelId];
+                    realId = info.id;
+                    config.channelId = info.id;
+                    config.title = info.title;
+                    watchData[realId] = config;
+                    ytState.demanderSauvegarde();
+                } else {
+                    continue;
+                }
+            }
+
             // Utilisation du flux RSS officiel (gratuit, 0 quota API consommé)
-            const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+            const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${realId}`;
             const res = await fetch(rssUrl);
             if (!res.ok) continue;
             const xml = await res.text();
@@ -766,13 +782,24 @@ async function handleYoutubeInteraction(interaction) {
         const rapport = [];
         for (const ch of channels) {
             try {
-                const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${ch.channelId}`;
+                // Auto-résolution du vrai channel ID (UC...) si nécessaire
+                let targetId = ch.channelId;
+                if (!targetId.startsWith('UC')) {
+                    const info = await resolveChannelId(targetId);
+                    if (info?.id) {
+                        targetId = info.id;
+                        ch.channelId = info.id;
+                        ch.title = info.title;
+                    }
+                }
+
+                const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${targetId}`;
                 const res = await fetch(rssUrl);
                 if (res.ok) {
                     const xml = await res.text();
                     const titleMatch = xml.match(/<title>([^<]+)<\/title>/g);
                     const videoTitle = titleMatch && titleMatch[1] ? titleMatch[1].replace(/<\/?title>/g, '') : 'Dernière vidéo';
-                    rapport.push(`✅ **${ch.title}** : Connecté\n> Dernière vidéo détectée : *${decodeHtmlEntities(videoTitle).slice(0, 60)}*`);
+                    rapport.push(`✅ **${ch.title}** : Connecté\n> Dernière vidéo : *${decodeHtmlEntities(videoTitle).slice(0, 60)}*`);
                 } else {
                     rapport.push(`❌ **${ch.title}** : Erreur flux HTTP ${res.status}`);
                 }
