@@ -139,9 +139,28 @@ async function resolveChannelId(query) {
 //  PANNEAU DE CONFIGURATION !YTABO CONFIG
 // ==========================================
 
+function getChannelsList() {
+    const watchData = ytState.getYoutubeWatchData() || {};
+    return Object.entries(watchData).map(([key, val]) => {
+        if (typeof val === 'object' && val !== null) {
+            return {
+                channelId: String(val.channelId || key),
+                title: String(val.title || val.name || key),
+                discordChannelId: String(val.discordChannelId || val.channelId || 'Inconnu'),
+                customMessage: val.customMessage || "📢 **Nouvelle vidéo de {chaine} !**\n{url}"
+            };
+        }
+        return {
+            channelId: String(key),
+            title: String(key),
+            discordChannelId: String(val),
+            customMessage: "📢 **Nouvelle vidéo de {chaine} !**\n{url}"
+        };
+    }).filter(ch => ch.channelId && ch.channelId !== 'undefined');
+}
+
 function buildYtAboEmbed() {
-    const watchData = ytState.getYoutubeWatchData();
-    const channels = Object.values(watchData);
+    const channels = getChannelsList();
 
     const embed = new EmbedBuilder()
         .setColor(0xff0000)
@@ -153,12 +172,12 @@ function buildYtAboEmbed() {
         .setFooter({ text: 'Panneau réservé à Epsys • Sauvegardé dans #json' });
 
     if (channels.length === 0) {
-        embed.addFields({ name: 'Aucun abonnement', value: 'Clique sur **Ajouter une chaîne** ci-dessous pour commencer !' });
+        embed.addFields({ name: 'Aucun abonnement', value: 'Clique sur **➕ Ajouter une chaîne** ci-dessous pour commencer !' });
     } else {
         for (const ch of channels) {
             embed.addFields({
-                name: `🔴 ${ch.title || ch.channelId}`,
-                value: `• Salon : <#${ch.discordChannelId}>\n• Message : \`${ch.customMessage || 'Nouvelle vidéo de {chaine} !'}\``,
+                name: `🔴 ${ch.title}`,
+                value: `• Salon : <#${ch.discordChannelId}>\n• Message : \`${ch.customMessage}\``,
                 inline: false
             });
         }
@@ -168,8 +187,7 @@ function buildYtAboEmbed() {
 }
 
 function buildYtAboComponents() {
-    const watchData = ytState.getYoutubeWatchData();
-    const channels = Object.values(watchData);
+    const channels = getChannelsList();
 
     const rowButtons = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -190,8 +208,8 @@ function buildYtAboComponents() {
             .setPlaceholder('🗑️ Supprimer une chaîne...')
             .addOptions(
                 channels.slice(0, 25).map(ch => ({
-                    label: (ch.title || ch.channelId).slice(0, 50),
-                    description: `Salon : #${ch.discordChannelId}`,
+                    label: ch.title.slice(0, 50),
+                    description: `Salon : #${ch.discordChannelId}`.slice(0, 50),
                     value: ch.channelId
                 }))
             );
