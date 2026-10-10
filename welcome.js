@@ -141,31 +141,31 @@ async function generateWelcomeImage(avatarUrl, memberName) {
 
         // Texte du pseudo
         const cleanName = (memberName || 'NOUVEAU MEMBRE').toUpperCase();
-        let fontSize = 120;
+        let fontSize = 110;
 
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Syntaxe pure et stricte Pango : ZÉRO guillemet, ZÉRO virgule
-        ctx.font = `${fontSize}px LemonMilk`;
+        // Police LemonMilk avec fallback DejaVu Sans
+        ctx.font = `bold ${fontSize}px LemonMilk, "DejaVu Sans", sans-serif`;
 
-        // Réduction dynamique si le pseudo est trop long (ex: plus de 15 caractères)
+        // Réduction dynamique si le pseudo dépasse
         const maxTextWidth = 1350;
         while (ctx.measureText(cleanName).width > maxTextWidth && fontSize > 40) {
             fontSize -= 5;
-            ctx.font = `${fontSize}px LemonMilk`;
+            ctx.font = `bold ${fontSize}px LemonMilk, "DejaVu Sans", sans-serif`;
         }
 
         const posY = 825;
 
-        // Ombre portée sombre et nette pour faire ressortir le texte
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+        // Ombre portée sombre et nette
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
         ctx.shadowBlur = 10;
         ctx.shadowOffsetX = 4;
         ctx.shadowOffsetY = 4;
 
-        // Blanc éclatant pur, sans aucun contour
+        // Texte blanc pur
         ctx.fillStyle = '#ffffff';
         ctx.fillText(cleanName, centerX, posY);
         ctx.restore();
