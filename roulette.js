@@ -1755,15 +1755,68 @@ async function handleRouletteMessage(message, response, client) {
             return true;
         }
         if (command === '!removestate') {
-            const nom = argsBruts[argsBruts.length - 1]?.toLowerCase();
+            const nom = argsBruts[argsBruts.length - 1]?.toLowerCase().replace(/_/g, '-');
             const query = argsBruts.slice(0, -1).join(" ");
             const cible = message.mentions.members.first() ?? bridge.findMemberByName(message.guild, query).found;
             if (!cible) { await message.reply("Membre introuvable."); return true; }
-            if (nom === 'pseudo-lock') { roulettePseudoLock.delete(cible.id); await cible.setNickname(null).catch(() => {}); }
-            else if (nom === 'timeout') { rouletteTimeoutUntil.delete(cible.id); await cible.timeout(null).catch(() => {}); }
-            else if (ROULETTE_ETATS[nom]) ROULETTE_ETATS[nom].delete(cible.id);
+
+            const id = cible.id;
+            let retire = false;
+
+            // 1. Malus de transformations textuelles (boomer, bebe, caps, etc.)
+            const tf = rouletteTransfos.get(id);
+            const clesTransfos = {
+                'boomer': 'boomer', 'bebe': 'bebe', 'baby': 'bebe', 'caps': 'caps',
+                'censure': 'censure', 'mots': 'mots', 'mots-melanges': 'mots',
+                'lettres': 'lettres', 'lettres-melangees': 'lettres',
+                'emojionly': 'emojiOnly', 'emoji-only': 'emojiOnly',
+                'limite100': 'limite100', 'limite-100': 'limite100',
+                'limite30': 'limite30', 'limite-30': 'limite30'
+            };
+
+            if (tf && clesTransfos[nom] && tf[clesTransfos[nom]]) {
+                delete tf[clesTransfos[nom]];
+                if (Object.keys(tf).length === 0) rouletteTransfos.delete(id);
+                else rouletteTransfos.set(id, tf);
+                retire = true;
+            }
+
+            // 2. Pseudo lock & Timeout
+            if (nom === 'pseudo-lock' || nom === 'pseudo' || nom === 'pseudolock') {
+                roulettePseudoLock.delete(id);
+                await cible.setNickname(null).catch(() => {});
+                retire = true;
+            } else if (nom === 'timeout' || nom === 'mute') {
+                rouletteTimeoutUntil.delete(id);
+                await cible.timeout(null).catch(() => {});
+                retire = true;
+            }
+
+            // 3. Autres malus & bonus spécifiques
+            else if (nom === 'uwu') { rouletteUwuUntil.delete(id); retire = true; }
+            else if (nom === 'lettre' || nom === 'lettre-interdite' || nom === 'lettreinterdite') { rouletteLettreInterdite.delete(id); retire = true; }
+            else if (nom === 'emoji') { rouletteEmojiUntil.delete(id); retire = true; }
+            else if (nom === 'leet' || nom === 'l33t') { rouletteLeetUntil.delete(id); retire = true; }
+            else if (nom === 'antifeur' || nom === 'anti-feur') { rouletteAntiFeurUntil.delete(id); retire = true; }
+            else if (nom === 'couronne') { rouletteCouronneUntil.delete(id); retire = true; }
+            else if (nom === 'bouclier' || nom === 'superbouclier') { rouletteBouclierActif.delete(id); retire = true; }
+            else if (nom === 'redirect' || nom === 'redirection') { rouletteRedirectCharges.delete(id); retire = true; }
+            else if (nom === 'redirectchoix' || nom === 'redirect-choix') { rouletteRedirectChoixCible.delete(id); retire = true; }
+            else if (nom === 'cooldowncourt' || nom === 'cooldown-court') { rouletteCooldownCourtCharges.delete(id); retire = true; }
+            else if (nom === 'cooldown45' || nom === 'cooldown-45') { rouletteCooldown45Charges.delete(id); retire = true; }
+            else if (nom === 'couptriple' || nom === 'coup-triple') { rouletteCoupTripleCharges.delete(id); retire = true; }
+            else if (nom === 'freeroll' || nom === 'free-roll') { rouletteFreeRollUntil.delete(id); retire = true; }
+            else if (nom === 'cooldown' || nom === 'cd') { rouletteCooldowns.delete(id); retire = true; }
+            else if (nom === 'chatnoir' || nom === 'chat-noir') { retire = true; }
+            else if (ROULETTE_ETATS[nom]) { ROULETTE_ETATS[nom].delete(id); retire = true; }
+
             await bridge.saveAll();
-            await message.reply(`\`${nom}\` retiré de <@${cible.id}>.`);
+
+            if (retire) {
+                await message.reply(`✅ Effet \`${nom}\` retiré avec succès de <@${id}> !`);
+            } else {
+                await message.reply(`⚠️ L'effet \`${nom}\` n'était pas actif sur <@${id}> (ou nom inconnu).`);
+            }
             return true;
         }
     }
