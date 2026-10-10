@@ -500,6 +500,14 @@ async function getResponse(raw) {
         return { needsWelcome: true };
     }
 
+    if (command === "!help" || command === "!aide") {
+        return { needsHelp: true, data: getHelpResponse("!help")?.data };
+    }
+
+    if (command === "!helpx") {
+        return { needsHelpx: true };
+    }
+
     if (command === "!suggestion" || command === "!suggest" || command === "!sugg") {
         return { needsSuggestion: true };
     }
@@ -1290,7 +1298,8 @@ async function disableButtons(interaction) {
         return;
     }
 
-    if (response === null || response === undefined) return;
+    // Si ce n'est pas une réplique réflexe ET que ce n'est pas une commande commençant par !, on ignore
+    if (!response && !isExplicitCommand) return;
 
 // Commandes YouTube (!youtube, !last, !stats)
     if (await handleYoutubeMessage(message, response)) return;
