@@ -50,11 +50,14 @@ async function loadAll() {
             return;
         }
 
-        topData = { messages: jsonRecord.messages ?? {} };
-        birthdayData = { birthdays: jsonRecord.birthdays ?? {}, channels: jsonRecord.birthdayChannels ?? {} };
-        dailyData = jsonRecord.daily ?? {};
-        weeklyData = jsonRecord.weekly ?? {};
-        monthlyData = jsonRecord.monthly ?? {};
+        // Mise à jour en place pour conserver les références mémoire de tous les modules
+        topData.messages = jsonRecord.messages ?? {};
+        birthdayData.birthdays = jsonRecord.birthdays ?? {};
+        birthdayData.channels = jsonRecord.birthdayChannels ?? {};
+        
+        Object.assign(dailyData, jsonRecord.daily ?? {});
+        Object.assign(weeklyData, jsonRecord.weekly ?? {});
+        Object.assign(monthlyData, jsonRecord.monthly ?? {});
         youtubeWatchData = jsonRecord.youtubeWatch ?? {};
         reactionRolesData = jsonRecord.reactionRoles ?? {};
         motusData = jsonRecord.motusData ?? { dateKey: 0, mot: '', termine: false, vainqueurId: null, tentatives: {}, messageId: null };
