@@ -3,6 +3,8 @@
  * Affiche de bienvenue Canvas, configuration et commandes !welcome / /welcome
  */
 
+const fs = require('fs');
+const path = require('path');
 const {
     EmbedBuilder,
     ActionRowBuilder,
@@ -11,7 +13,40 @@ const {
     ChannelType,
     ButtonStyle
 } = require('discord.js');
-const { createCanvas, loadImage } = require('canvas');
+const { createCanvas, loadImage, registerFont } = require('canvas');
+
+// ==========================================
+//  ENREGISTREMENT SÉCURISÉ DE LA POLICE
+// ==========================================
+let lemonMilkChargee = false;
+const cheminsPossiblesPolice = [
+    './LEMONMILK-Bold.otf',
+    './LemonMilk-Bold.otf',
+    './lemonmilk-bold.otf',
+    './LEMONMILK.otf',
+    './LemonMilk.otf',
+    './lemonmilk.otf',
+    './assets/LEMONMILK-Bold.otf',
+    './assets/LemonMilk-Bold.otf'
+];
+
+for (const chemin of cheminsPossiblesPolice) {
+    if (fs.existsSync(chemin)) {
+        try {
+            registerFont(chemin, { family: 'LemonMilk', weight: 'bold' });
+            registerFont(chemin, { family: 'LEMONMILK', weight: 'bold' });
+            lemonMilkChargee = true;
+            console.log(`[Welcome] ✅ Police LemonMilk chargée depuis ${chemin}`);
+            break;
+        } catch (e) {
+            console.error(`[Welcome] Échec du chargement de la police depuis ${chemin} :`, e.message);
+        }
+    }
+}
+
+if (!lemonMilkChargee) {
+    console.warn("[Welcome] Attention : La police LemonMilk est introuvable. Police par défaut utilisée.");
+}
 
 const WELCOME_BACKGROUNDS = [
     ['./DHMISWelcome.png', './dhmiswelcome.png'],
@@ -36,6 +71,14 @@ function initWelcomeState(bridge) {
 async function chargerImageSecurisee(variantes) {
     for (const v of variantes) {
         try {
+            if (fs.existsSync(v)) {
+                return await loadImage(v);
+            }
+        } catch (e) {}
+    }
+    // Dernier essai direct au cas où
+    for (const v of variantes) {
+        try {
             return await loadImage(v);
         } catch (e) {}
     }
@@ -43,9 +86,6 @@ async function chargerImageSecurisee(variantes) {
 }
 
 async function generateWelcomeImage(avatarUrl, memberName) {
-    const oldBackend = process.env.PANGOCAIRO_BACKEND;
-    delete process.env.PANGOCAIRO_BACKEND;
-
     try {
         const overlay = await chargerImageSecurisee([
             './Bienvenue.png',
@@ -62,6 +102,7 @@ async function generateWelcomeImage(avatarUrl, memberName) {
         const canvas = createCanvas(w, h);
         const ctx = canvas.getContext('2d');
 
+        // Fond aléatoire ou dégradé de secours
         const bgVariantes = WELCOME_BACKGROUNDS[Math.floor(Math.random() * WELCOME_BACKGROUNDS.length)];
         const bgImg = await chargerImageSecurisee(bgVariantes);
         if (bgImg) {
@@ -75,6 +116,7 @@ async function generateWelcomeImage(avatarUrl, memberName) {
             ctx.fillRect(0, 0, w, h);
         }
 
+        // Avatar circulaire
         const centerX = 1024;
         const centerY = 349.5;
         const radius = 255;
@@ -94,8 +136,10 @@ async function generateWelcomeImage(avatarUrl, memberName) {
         }
         ctx.restore();
 
+        // Cadre Bienvenue par-dessus
         ctx.drawImage(overlay, 0, 0, w, h);
 
+        // Texte du pseudo
         const cleanName = (memberName || 'NOUVEAU MEMBRE').toUpperCase();
         let fontSize = 75;
 
@@ -103,28 +147,30 @@ async function generateWelcomeImage(avatarUrl, memberName) {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        ctx.font = `bold ${fontSize}px "LemonMilk"`;
+        // Police avec fallbacks déclarés sans guillemets
+        ctx.font = `bold ${fontSize}px LemonMilk, LEMONMILK, Arial, sans-serif`;
         const maxTextWidth = 1350;
         while (ctx.measureText(cleanName).width > maxTextWidth && fontSize > 36) {
             fontSize -= 2;
-            ctx.font = `bold ${fontSize}px "LemonMilk"`;
+            ctx.font = `bold ${fontSize}px LemonMilk, LEMONMILK, Arial, sans-serif`;
         }
 
+        const posY = 825;
+
+        // Contour noir net
         ctx.strokeStyle = '#000000';
-        ctx.lineWidth = Math.max(6, Math.round(fontSize * 0.14));
+        ctx.lineWidth = 8;
         ctx.lineJoin = 'round';
         ctx.miterLimit = 2;
-        ctx.strokeText(cleanName, centerX, 825);
+        ctx.strokeText(cleanName, centerX, posY);
 
+        // Remplissage blanc vif par-dessus
         ctx.fillStyle = '#ffffff';
-        ctx.fillText(cleanName, centerX, 825);
+        ctx.fillText(cleanName, centerX, posY);
         ctx.restore();
 
-        const buffer = canvas.toBuffer('image/png');
-        if (oldBackend) process.env.PANGOCAIRO_BACKEND = oldBackend;
-        return buffer;
+        return canvas.toBuffer('image/png');
     } catch (err) {
-        if (oldBackend) process.env.PANGOCAIRO_BACKEND = oldBackend;
         throw err;
     }
 }
@@ -216,7 +262,7 @@ async function handleWelcomeSlash(interaction) {
         return true;
     }
 
-    const sub = interaction.options.getSubcommand();
+    const sub = interaction.options.getSubcommand(false);
     if (sub === 'test') {
         await interaction.deferReply();
         try {
@@ -242,10 +288,13 @@ async function handleWelcomeSlash(interaction) {
 // =========================
 async function handleWelcomeInteraction(interaction) {
     const customId = interaction.customId;
-    if (!customId) return false;
+    if (!customId || !customId.startsWith('welcome_')) return false;
 
     if (interaction.isChannelSelectMenu() && customId === 'welcome_select_channel') {
-        if (interaction.user.id !== welcomeState.EPSYS_ID) return true;
+        if (interaction.user.id !== welcomeState.EPSYS_ID) {
+            await interaction.reply({ content: "Seule Epsys peut modifier cela.", ephemeral: true });
+            return true;
+        }
         const data = welcomeState.getWelcomeData();
         data.channelId = interaction.values[0];
         welcomeState.demanderSauvegarde();
@@ -257,7 +306,10 @@ async function handleWelcomeInteraction(interaction) {
     }
 
     if (interaction.isButton() && customId === 'welcome_toggle_active') {
-        if (interaction.user.id !== welcomeState.EPSYS_ID) return true;
+        if (interaction.user.id !== welcomeState.EPSYS_ID) {
+            await interaction.reply({ content: "Seule Epsys peut modifier cela.", ephemeral: true });
+            return true;
+        }
         const data = welcomeState.getWelcomeData();
         data.actif = !data.actif;
         welcomeState.demanderSauvegarde();
@@ -269,7 +321,10 @@ async function handleWelcomeInteraction(interaction) {
     }
 
     if (interaction.isButton() && customId === 'welcome_test_btn') {
-        if (interaction.user.id !== welcomeState.EPSYS_ID) return true;
+        if (interaction.user.id !== welcomeState.EPSYS_ID) {
+            await interaction.reply({ content: "Seule Epsys peut tester.", ephemeral: true });
+            return true;
+        }
         await interaction.deferReply({ ephemeral: true });
         try {
             const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 512 });
@@ -298,7 +353,7 @@ async function handleWelcomeMemberAdd(member) {
                 const cardBuffer = await generateWelcomeImage(avatarUrl, member.displayName);
                 await targetChan.send({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
             } catch (err) {
-                console.error("Erreur envoi bienvenue :", err.message);
+                console.error("[Welcome] Erreur lors de l'envoi du message de bienvenue :", err.message);
             }
         }
     }

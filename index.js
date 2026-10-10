@@ -194,14 +194,7 @@ const {
 } = require('discord.js');
 
 const { createCanvas, loadImage, registerFont } = require('canvas');
-
-process.env.PANGOCAIRO_BACKEND = 'fontconfig';
 const fs = require('fs');
-try { 
-    registerFont('./LEMONMILK-Bold.otf', { family: 'LEMONMILK' }); 
-} catch(e) { 
-    console.error('Font non trouvée:', e.message); 
-}
 
 // =========================
 //      INTERSECTIONS
@@ -235,6 +228,15 @@ const {
     handleRebusButton,
     handleRebusSlash
 } = require('./minijeux.js');
+
+///welcome.js
+const {
+    handleWelcomeMessage,
+    handleWelcomeSlash,
+    handleWelcomeInteraction,
+    handleWelcomeMemberAdd,
+    initWelcomeState
+} = require('./welcome.js');
 
 ///social.js
 const {
@@ -328,15 +330,6 @@ initQuotesState({
     estModo,
     EPSYS_ID: '436218312574107658'
 });
-
-///welcome.js
-const {
-    initWelcomeState,
-    handleWelcomeMessage,
-    handleWelcomeSlash,
-    handleWelcomeInteraction,
-    handleWelcomeMemberAdd
-} = require('./welcome.js');
 
 initWelcomeState({
     getWelcomeData: () => welcomeData,
