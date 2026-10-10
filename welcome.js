@@ -141,30 +141,39 @@ async function generateWelcomeImage(avatarUrl, memberName) {
 
         // Texte du pseudo
         const cleanName = (memberName || 'NOUVEAU MEMBRE').toUpperCase();
-        let fontSize = 75;
+        let fontSize = 95;
 
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Police avec fallbacks déclarés sans guillemets
-        ctx.font = `bold ${fontSize}px LemonMilk, LEMONMILK, Arial, sans-serif`;
-        const maxTextWidth = 1350;
+        // Définition de la police Lemon Milk (avec le vrai nom Linux Pango)
+        const definirPolice = (taille) => {
+            ctx.font = `${taille}px "LEMON MILK", "Lemon Milk", LemonMilk, sans-serif`;
+            // Sécurité absolue si le parseur rejette : force la taille
+            if (ctx.font.includes('10px')) {
+                ctx.font = `bold ${taille}px sans-serif`;
+            }
+        };
+
+        definirPolice(fontSize);
+
+        // Réduction automatique si le pseudo est très long
+        const maxTextWidth = 1400;
         while (ctx.measureText(cleanName).width > maxTextWidth && fontSize > 36) {
-            fontSize -= 2;
-            ctx.font = `bold ${fontSize}px LemonMilk, LEMONMILK, Arial, sans-serif`;
+            fontSize -= 4;
+            definirPolice(fontSize);
         }
 
         const posY = 825;
 
-        // Contour noir net
-        ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 8;
-        ctx.lineJoin = 'round';
-        ctx.miterLimit = 2;
-        ctx.strokeText(cleanName, centerX, posY);
+        // Ombre portée propre et marquée (sans contour noir)
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+        ctx.shadowBlur = 14;
+        ctx.shadowOffsetX = 4;
+        ctx.shadowOffsetY = 5;
 
-        // Remplissage blanc vif par-dessus
+        // Remplissage blanc pur
         ctx.fillStyle = '#ffffff';
         ctx.fillText(cleanName, centerX, posY);
         ctx.restore();
