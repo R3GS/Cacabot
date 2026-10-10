@@ -14,7 +14,12 @@ let twitchLiveEnCours = false;
 let quotesData = []; // [{ id, texte, authorId, authorName, addedById, timestamp, channelId }]
 let welcomeData = { channelId: null, actif: true };
 let dernierCommitSha = null;
+let numeroBuild = 1;
 let donneesChargees = false;
+
+function getVersionString() {
+    return `2.${String(numeroBuild).padStart(3, '0')}`;
+}
 const suggestionsData = new Map();
 
 const BACKUP_CHANNEL_ID = '1556005171744604161';
@@ -58,6 +63,7 @@ async function loadAll() {
         quotesData = jsonRecord.quotes ?? [];
         welcomeData = jsonRecord.welcomeData ?? { channelId: null, actif: true };
         dernierCommitSha = jsonRecord.dernierCommitSha ?? null;
+        if (jsonRecord.numeroBuild) numeroBuild = jsonRecord.numeroBuild;
 
         for (const [nom, map] of Object.entries(ROULETTE_ETATS)) {
             map.clear();
@@ -65,7 +71,8 @@ async function loadAll() {
         }
 
         donneesChargees = true;
-        console.log('✅ Toutes les données ont été appliquées avec succès !');
+        numeroBuild++; // Incrémentation uniquement au démarrage réussi !
+        console.log(`✅ Toutes les données appliquées — Version ${getVersionString()}`);
 
         // Si le salon était vide, on y dépose immédiatement le premier fichier de sauvegarde
         if (channel) {
@@ -106,6 +113,7 @@ async function saveAll() {
             quotes: quotesData,
             welcomeData: welcomeData,
             dernierCommitSha: dernierCommitSha,
+            numeroBuild: numeroBuild,
             roulette: Object.fromEntries(
                 Object.entries(ROULETTE_ETATS).map(([nom, map]) => [nom, Object.fromEntries(map)])
             )
@@ -392,7 +400,8 @@ const client = new Client({
 
 initToolsState({
     client,
-    topData
+    topData,
+    getVersionString
 });
 
 ///activity.js
@@ -2440,8 +2449,7 @@ client.once('ready', async () => {
                 }
 
                 if (nouveauCommitDetecte) {
-                    const commitCount = await getCommitCount();
-                    const versionTexte = commitCount ? ` *(Version 1.${commitCount})*` : '';
+                    const versionTexte = ` *(Version ${getVersionString()})*`;
                     const msgRetour = await salonNotif.send(`✅ Mise à jour faite, je suis de retour !${versionTexte}\nLaisse-moi encore 10 secondes et tu pourras exéctuer des commandes...`);
                     setTimeout(async () => {
                         await msgRetour.edit(`✅ Mise à jour faite, je suis de retour !${versionTexte}\nTout est prêt :)`).catch(() => {});
