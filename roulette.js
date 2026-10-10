@@ -147,7 +147,6 @@ const ROULETTE_TABLE = [
     { id: 'malus-linkedin', type: 'malus', poids: 1/65, nom: 'Gourou LinkedIn pendant 2h', desc: 'Finit chaque phrase par un cliché de gourou corporate pendant 2h' },
     { id: 'malus-censure', type: 'malus', poids: 1/85, nom: 'Censure pendant 2h', desc: 'Un mot sur 3 est censuré (▇▇) pendant 2h' },
     { id: 'malus-exclu-heure', type: 'malus', poids: 1/100, nom: 'Exclusion de 1 heure', desc: 'Exclusion de 1 heure' },
-    { id: 'malus-exclu-jour', type: 'malus', poids: 1/350, nom: 'Exclusion de 1 jour', desc: 'Exclusion de 1 jour' },
     { id: 'malus-mots-melanges', type: 'malus', poids: 1/120, nom: 'Mots mélangés pendant 2h', desc: 'Les mots de chaque message sont mélangés pendant 2h' },
     { id: 'malus-pseudo-lock-semaine', type: 'malus', poids: 1/150, nom: 'Pseudo horrible verrouillé pendant 1 semaine', desc: 'Pseudo horrible verrouillé pendant 1 semaine' },
     { id: 'malus-lettres-melangees', type: 'malus', poids: 1/180, nom: 'Lettres mélangées pendant 1h', desc: 'Les lettres de chaque mot sont mélangées pendant 1h' },
@@ -156,8 +155,9 @@ const ROULETTE_TABLE = [
     { id: 'malus-leet', type: 'malus', poids: 1/330, nom: 'Leet speak pendant 6h', desc: 'Tous ses messages sont écrits en leet speak pendant 6h' },
     { id: 'malus-lettre-interdite', type: 'malus', poids: 1/400, nom: 'Lettre interdite pendant 6h', desc: 'Ne peut plus utiliser une lettre au hasard pendant 6h' },
     { id: 'malus-uwu-24h', type: 'malus', poids: 1/480, nom: 'UwU obligatoire pendant 6h', desc: 'Doit finir chaque message par UwU pendant 6h' },
-    { id: 'malus-pseudo-lock-mois', type: 'malus', poids: 1/600, nom: 'Pseudo horrible verrouillé pendant 1 mois', desc: 'Pseudo horrible verrouillé pendant 1 mois' },
     { id: 'malus-prime', type: 'malus', poids: 1/800, nom: 'MALUS PRIME', desc: 'Cumule TOUS les malus de texte/pseudo en même temps' },
+    { id: 'malus-pseudo-lock-mois', type: 'malus', poids: 1/900, nom: 'Pseudo horrible verrouillé pendant 1 mois', desc: 'Pseudo horrible verrouillé pendant 1 mois' },
+    { id: 'malus-exclu-jour', type: 'malus', poids: 1/1000, nom: 'Exclusion de 1 jour', desc: 'Exclusion de 1 jour' },
     { id: 'malus-exclu-semaine', type: 'malus', poids: 1/1200, nom: 'Exclusion de 1 semaine', desc: 'Exclusion de 1 semaine' },
     { id: 'malus-ban', type: 'malus', poids: 1/15000, nom: 'Ban définitif', desc: 'Ban définitif' },
     { id: 'special-vote-immunite-exclusion', type: 'special', poids: 1/125, nom: 'Vote public', desc: 'Vote public : tirage à volonté pendant 1min ou exclusion 1 jour' },
@@ -1973,7 +1973,14 @@ async function handleRouletteMessage(message, response, client) {
                 await message.reply({ content: `Attends la fin du cooldown ! Il te reste **${resultat.reste} minute${resultat.reste > 1 ? 's' : ''}**.`, components: [notifRow] });
                 return true;
             }
-            const envoye = await message.reply({ embeds: resultat.embeds, components: resultat.components });
+            // failIfNotExists: false permet de poster dans le salon même si le membre a supprimé son message
+            const envoye = await message.reply({ 
+                embeds: resultat.embeds, 
+                components: resultat.components,
+                failIfNotExists: false 
+            }).catch(() => message.channel.send({ embeds: resultat.embeds, components: resultat.components }).catch(() => null));
+
+            if (!envoye) return true;
             await envoyerPingRedirection(message.channel, resultat);
             memoriserResultatRoulette(envoye.id, resultat.embeds[0]);
             if (resultat.attenteChoix) rouletteChoixEnAttente.add(envoye.id);
@@ -1993,7 +2000,8 @@ async function handleRouletteMessage(message, response, client) {
             new ButtonBuilder().setCustomId(`roulette_probas_pres_${message.author.id}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`roulette_tenter_${message.author.id}`).setLabel('🍀 Tenter sa chance').setStyle(ButtonStyle.Primary)
         );
-        await message.reply({ embeds: [embed], components: [row] });
+        await message.reply({ embeds: [embed], components: [row], failIfNotExists: false })
+            .catch(() => message.channel.send({ embeds: [embed], components: [row] }).catch(() => null));
         return true;
     }
 

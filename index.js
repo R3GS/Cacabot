@@ -172,6 +172,14 @@ process.on('SIGINT', async () => {
     process.exit(0);
 });
 
+// Empêche le bot de crasher si un message cité a été supprimé par l'utilisateur
+process.on('unhandledRejection', (error) => {
+    if (error?.code === 50035 || error?.code === 10008 || error?.code === 10062) {
+        return console.warn('⚠️ Requête Discord ignorée (message supprimé ou interaction expirée).');
+    }
+    console.error('⚠️ Erreur non gérée capturée :', error);
+});
+
 // Aliases pour compatibilite
 const saveTop = saveAll;
 const saveBirthdays = saveAll;
