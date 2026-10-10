@@ -15,14 +15,6 @@ const {
 } = require('discord.js');
 const { createCanvas, loadImage, registerFont } = require('canvas');
 
-console.log('====== [DEBUG CANVASS FONT] ======');
-        console.log('1. Nom à écrire :', cleanName);
-        console.log('2. Valeur brute ctx.font actuelle :', ctx.font);
-        ctx.font = 'bold 120px LemonMilk';
-        console.log('3. Valeur brute ctx.font après assignation :', ctx.font);
-        console.log('4. Largeur mesurée par Canvas :', ctx.measureText(cleanName).width);
-        console.log('==================================');
-        
 // ==========================================
 //  ENREGISTREMENT SÉCURISÉ DE LA POLICE
 // ==========================================
