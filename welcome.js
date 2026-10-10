@@ -157,7 +157,7 @@ async function generateWelcomeImage(avatarUrl, memberName) {
             ctx.font = `${fontSize}px "LEMON MILK", LemonMilk`;
         }
 
-        const posY = 845;
+        const posY = 825;
 
         // Ombre portée puissante à distance 0 (halo noir intense centré)
         ctx.shadowColor = '#000000';
