@@ -141,39 +141,31 @@ async function generateWelcomeImage(avatarUrl, memberName) {
 
         // Texte du pseudo
         const cleanName = (memberName || 'NOUVEAU MEMBRE').toUpperCase();
-        let fontSize = 95;
+        let fontSize = 120;
 
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        // Définition de la police Lemon Milk (avec le vrai nom Linux Pango)
-        const definirPolice = (taille) => {
-            ctx.font = `${taille}px "LEMON MILK", "Lemon Milk", LemonMilk, sans-serif`;
-            // Sécurité absolue si le parseur rejette : force la taille
-            if (ctx.font.includes('10px')) {
-                ctx.font = `bold ${taille}px sans-serif`;
-            }
-        };
+        // Syntaxe pure et stricte Pango : ZÉRO guillemet, ZÉRO virgule
+        ctx.font = `${fontSize}px LemonMilk`;
 
-        definirPolice(fontSize);
-
-        // Réduction automatique si le pseudo est très long
-        const maxTextWidth = 1400;
-        while (ctx.measureText(cleanName).width > maxTextWidth && fontSize > 36) {
-            fontSize -= 4;
-            definirPolice(fontSize);
+        // Réduction dynamique si le pseudo est trop long (ex: plus de 15 caractères)
+        const maxTextWidth = 1350;
+        while (ctx.measureText(cleanName).width > maxTextWidth && fontSize > 40) {
+            fontSize -= 5;
+            ctx.font = `${fontSize}px LemonMilk`;
         }
 
         const posY = 825;
 
-        // Ombre portée propre et marquée (sans contour noir)
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-        ctx.shadowBlur = 14;
+        // Ombre portée sombre et nette pour faire ressortir le texte
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+        ctx.shadowBlur = 10;
         ctx.shadowOffsetX = 4;
-        ctx.shadowOffsetY = 5;
+        ctx.shadowOffsetY = 4;
 
-        // Remplissage blanc pur
+        // Blanc éclatant pur, sans aucun contour
         ctx.fillStyle = '#ffffff';
         ctx.fillText(cleanName, centerX, posY);
         ctx.restore();
