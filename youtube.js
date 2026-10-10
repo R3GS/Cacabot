@@ -755,8 +755,35 @@ async function handleYoutubeInteraction(interaction) {
     // Bouton de test manuel
     if (interaction.isButton() && interaction.customId === 'ytabo_test_btn') {
         if (interaction.user.id !== EPSYS_ID) return true;
-        await interaction.reply({ content: "🔄 Vérification des flux YouTube lancée...", ephemeral: true });
-        await verifierNouvellesVideosYouTube();
+        await interaction.deferReply({ ephemeral: true });
+
+        const channels = getChannelsList();
+        if (channels.length === 0) {
+            await interaction.editReply("⚠️ Aucune chaîne YouTube n'est actuellement configurée. Clique sur **➕ Ajouter une chaîne** d'abord !");
+            return true;
+        }
+
+        const rapport = [];
+        for (const ch of channels) {
+            try {
+                const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${ch.channelId}`;
+                const res = await fetch(rssUrl);
+                if (res.ok) {
+                    const xml = await res.text();
+                    const titleMatch = xml.match(/<title>([^<]+)<\/title>/g);
+                    const videoTitle = titleMatch && titleMatch[1] ? titleMatch[1].replace(/<\/?title>/g, '') : 'Dernière vidéo';
+                    rapport.push(`✅ **${ch.title}** : Connecté\n> Dernière vidéo détectée : *${decodeHtmlEntities(videoTitle).slice(0, 60)}*`);
+                } else {
+                    rapport.push(`❌ **${ch.title}** : Erreur flux HTTP ${res.status}`);
+                }
+            } catch (e) {
+                rapport.push(`❌ **${ch.title}** : Erreur de connexion`);
+            }
+        }
+
+        await interaction.editReply({
+            content: `🔔 **Rapport de vérification YouTube en direct :**\n\n${rapport.join('\n\n')}\n\n*Les alertes automatiques surveillent ces chaînes toutes les 3 minutes.*`
+        });
         return true;
     }
 
