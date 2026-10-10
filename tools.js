@@ -16,13 +16,13 @@ const EPSYS_ID = '436218312574107658';
 
 let toolsState = {
     client: null,
-    topData: { messages: {} },
+    getTopData: () => ({ messages: {} }),
     getVersionString: () => '2.001'
 };
 
 function initToolsState(bridge) {
     toolsState.client = bridge.client;
-    toolsState.topData = bridge.topData;
+    if (bridge.getTopData) toolsState.getTopData = bridge.getTopData;
     if (bridge.getVersionString) toolsState.getVersionString = bridge.getVersionString;
 }
 
@@ -267,7 +267,7 @@ async function handleToolsMessage(message, response, client) {
             .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
             .addFields(
                 { name: '💻 Commandes', value: `30`, inline: true },
-                { name: '💬 Messages envoyés', value: `${toolsState.topData.messages['1503495713097519355'] || 0}`, inline: true },
+                { name: '💬 Messages de Cacabot', value: `${toolsState.getTopData().messages?.['1503495713097519355'] || 0}`, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
                 { name: '👑 Créatrice', value: 'Epsys', inline: true },
                 { name: '🤝 Collaboratrice', value: '[BDN](https://bdn-fr.xyz/)', inline: true },

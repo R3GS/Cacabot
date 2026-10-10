@@ -400,7 +400,7 @@ const client = new Client({
 
 initToolsState({
     client,
-    topData,
+    getTopData: () => topData,
     getVersionString
 });
 
