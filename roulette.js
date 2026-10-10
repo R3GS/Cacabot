@@ -23,10 +23,35 @@ const ROULETTE_WEBHOOK_EXCLUS = new Set([
 
 const ROULETTE_EMOJIS_ALEATOIRES = ['😂','😍','🔥','💀','🎉','😭','👀','🤡','😏','👁️👄👁️','🫦','😡'];
 const ROULETTE_BOOMER_FINS = [
-    '..... A BON ENTENDEUR ... 🤣🤣', '.... BISOUS A LA FAMILLE .. 🍷👍',
-    '.... PAUVRE FRANCE .... Amitiés ..', '... A MEDITER .... ☕🙋‍♂️',
-    '.... C ETAIT MIEUX AVANT ... 😡', '...\nBisous   -Mamie'
+    ', A BON ENTENDEUR... 🤣🤣', '.... BISOUS A LA FAMILLE 🍷👍',
+    '....PAUVRE FRANCE....\nAmitiés ..', '... A MEDITER ☕🙋‍♂️',
+    '....C ETAIT MIEUX AVANT !!!! 😡', '...\nBisous   -Mamie'
 ];
+
+const ROULETTE_EXISTENTIEL_FINS = [
+    '\nmais bon, au final, on va tous mourir seuls dans le néant...',
+    '\net pourtant l\'univers se fiche éperdument de notre existence...',
+    '\nest-ce que ça vaut vraiment la peine de continuer à faire semblant...?',
+    '\ntout ça pour finir poussière dans un monde indifférent.',
+    '\nmais à quoi bon, puisque rien n\'a de sens au fond.',
+    '\nun jour plus personne ne se souviendra même de ce message.'
+];
+
+const ROULETTE_LINKEDIN_FINS = [
+    '\nEn tant que leader agile, cette synergie m\'inspire au quotidien. Belle journée à tous ! 🚀 #Mindset #Leadership',
+    '\nVoilà pourquoi l\'échec est une formidable opportunité de disruption et de croissance. 💡 #Growth #Success',
+    '\nCe matin à 5h30, en prenant ma douche froide, j\'ai réalisé l\'importance de ce KPI. 💼 #MorningRoutine #Networking',
+    '\nEt vous, comment réinventez-vous votre valeur ajoutée dans l\'écosystème corporate ? 🤝 #Inspiration #B2B',
+    '\nRestez focus sur vos objectifs, l\'excellence opérationnelle n\'attend pas. 📈 #Motivation #Business'
+];
+
+const ROULETTE_ECHO_REPLIQUES = [
+    "C'est faux.", "Gênant.", "Qui a demandé ?", "Ratio.",
+    "Intéressant... non en vrai on s'en fout.", "Tu forces un peu là.",
+    "Supprime.", "Ok et ?", "On s'en branle un peu non ?", "Bizarre ce message."
+];
+
+const rouletteEchoUntil = new Map();
 
 const ROULETTE_ACHIEVEMENTS = [
     { id: 'forteresse', nom: 'Forteresse impénétrable', emoji: '🏰', desc: 'Accumuler un total de 10 boucliers dans sa réserve' },
@@ -77,6 +102,8 @@ const ROULETTE_NOMS_COMMANDES = {
     caps: 'malus-caps', emojionly: 'malus-emoji-only', censure: 'malus-censure', mots: 'malus-mots-melanges',
     lettres: 'malus-lettres-melangees', limite100: 'malus-limite-100', limite30: 'malus-limite-30',
     tournee: 'special-tournee-generale', bebe: 'malus-bebe',
+    brisebouclier: 'malus-brise-bouclier', existentiel: 'malus-existentiel',
+    linkedin: 'malus-linkedin', echo: 'malus-echo',
     vote: 'special-vote-immunite-exclusion',
     votepublic: 'bonus-vote-gagnant', votegagnant: 'bonus-vote-gagnant'
 };
@@ -114,6 +141,10 @@ const ROULETTE_TABLE = [
     { id: 'malus-chat-noir', type: 'malus', poids: 1/65, nom: 'Malédiction du Chat Noir', desc: 'Réinitialise ta pity et ton boost de bonus à zéro' },
     { id: 'malus-caps', type: 'malus', poids: 1/70, nom: 'MAJUSCULES pendant 2h', desc: 'Doit parler en MAJUSCULES pendant 2h' },
     { id: 'malus-boomer', type: 'malus', poids: 1/75, nom: 'Mode Boomer pendant 2h', desc: 'Parle comme un boomer sur Facebook pendant 2h' },
+    { id: 'malus-brise-bouclier', type: 'malus', poids: 1/30, nom: 'Brise-Bouclier', desc: 'Détruit instantanément toutes tes charges de bouclier' },
+    { id: 'malus-echo', type: 'malus', poids: 1/40, nom: 'Écho condescendant pendant 1h', desc: 'Cacabot te lâche des remarques cassantes sous tes messages pendant 1h' },
+    { id: 'malus-existentiel', type: 'malus', poids: 1/60, nom: 'Crise existentielle pendant 2h', desc: 'Finit chaque phrase par une conclusion sombre pendant 2h' },
+    { id: 'malus-linkedin', type: 'malus', poids: 1/65, nom: 'Gourou LinkedIn pendant 2h', desc: 'Finit chaque phrase par un cliché de gourou corporate pendant 2h' },
     { id: 'malus-censure', type: 'malus', poids: 1/85, nom: 'Censure pendant 2h', desc: 'Un mot sur 3 est censuré (▇▇) pendant 2h' },
     { id: 'malus-exclu-heure', type: 'malus', poids: 1/100, nom: 'Exclusion de 1 heure', desc: 'Exclusion de 1 heure' },
     { id: 'malus-exclu-jour', type: 'malus', poids: 1/350, nom: 'Exclusion de 1 jour', desc: 'Exclusion de 1 jour' },
@@ -151,7 +182,9 @@ const ROULETTE_EMOJIS_PAR_ID = {
     'malus-caps': '🔠', 'malus-emoji-only': '🙂', 'malus-censure': '▇', 'malus-mots-melanges': '🔀',
     'malus-lettres-melangees': '🔡', 'malus-limite-100': '✂️', 'malus-limite-30': '✂️',
     'special-tournee-generale': '🥂', 'malus-cooldown-45': '⏳', 'malus-prime': '💥', 'malus-bebe': '🍼',
-    'malus-chat-noir': '🐈‍⬛', 'malus-boomer': '🧓'
+    'malus-chat-noir': '🐈‍⬛', 'malus-boomer': '🧓',
+    'malus-brise-bouclier': '🪓', 'malus-echo': '🪞',
+    'malus-existentiel': '🥀', 'malus-linkedin': '👔'
 };
 
 const ROULETTE_FAILS = [
@@ -245,6 +278,7 @@ const ROULETTE_ETATS = {
     emoji: rouletteEmojiUntil,
     leet: rouletteLeetUntil,
     transfos: rouletteTransfos,
+    echo: rouletteEchoUntil,
     cooldown45: rouletteCooldown45Charges,
     cooldownCourt: rouletteCooldownCourtCharges,
     bouclier: rouletteBouclierActif,
@@ -415,6 +449,8 @@ function appliquerTransfos(userId, texte) {
     if (t.emojiOnly) r = surTexte(r, m => m.replace(/\S+/g, () => ROULETTE_EMOJIS_ALEATOIRES[Math.floor(Math.random() * ROULETTE_EMOJIS_ALEATOIRES.length)]));
     if (t.bebe) r = surTexte(r, m => m.replace(/j/g, 'z').replace(/J/g, 'Z').replace(/r/g, 'w').replace(/R/g, 'W'));
     if (t.boomer) r = surTexte(r, m => m.replace(/[\.!\?]+/g, '..... ') + ' ' + ROULETTE_BOOMER_FINS[Math.floor(Math.random() * ROULETTE_BOOMER_FINS.length)]);
+    if (t.existentiel) r = r + ROULETTE_EXISTENTIEL_FINS[Math.floor(Math.random() * ROULETTE_EXISTENTIEL_FINS.length)];
+    if (t.linkedin) r = r + ROULETTE_LINKEDIN_FINS[Math.floor(Math.random() * ROULETTE_LINKEDIN_FINS.length)];
     if (t.caps) r = surTexte(r, m => m.toUpperCase());
     const max = Math.min(t.limite30 ? 30 : Infinity, t.limite100 ? 100 : Infinity);
     if (max !== Infinity && [...r].length > max) r = [...r].slice(0, max).join('').replace(/<[^>]*$/, '');
@@ -794,6 +830,28 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'malus-boomer':
             if (basculerTransfo(member.id, 'boomer', 2 * 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur le **mode Boomer** alors qu'il était encore actif : le malus est **annulé** !`;
             return `🧓 **${auteurNom}** passe en **mode Boomer** pendant **2h** ..... A bon entendeur ... !`;
+        case 'malus-brise-bouclier': {
+            const rawB = rouletteBouclierActif.get(member.id);
+            const nbB = typeof rawB === 'number' ? rawB : (rawB ? 1 : 0);
+            rouletteBouclierActif.delete(member.id);
+            if (nbB > 0) return `🪓 **${auteurNom}** subit le **BRISE-BOUCLIER** : ses **${nbB} charge${nbB > 1 ? 's' : ''} de bouclier** sont réduites en miettes !`;
+            return `🪓 **${auteurNom}** subit le **BRISE-BOUCLIER** ! Heureusement, il/elle n'avait aucun bouclier en réserve... mais la menace était bien réelle !`;
+        }
+        case 'malus-existentiel':
+            if (basculerTransfo(member.id, 'existentiel', 2 * 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur la **crise existentielle** : le malus est **annulé** !`;
+            return `🥀 **${auteurNom}** entre en pleine **remise en question existentielle** pendant **2h**... à quoi bon ?`;
+        case 'malus-linkedin':
+            if (basculerTransfo(member.id, 'linkedin', 2 * 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur le **gourou LinkedIn** : le malus est **annulé** !`;
+            return `👔 **${auteurNom}** se transforme en **gourou LinkedIn** pendant **2h** ! Soyons agile 🚀`;
+        case 'malus-echo': {
+            const finEcho = rouletteEchoUntil.get(member.id);
+            if (finEcho && Date.now() < finEcho) {
+                rouletteEchoUntil.delete(member.id);
+                return `✨ **Miracle !** **${auteurNom}** retombe sur l'**écho condescendant** : Cacabot arrête de le/la clasher !`;
+            }
+            rouletteEchoUntil.set(member.id, Date.now() + 60 * 60 * 1000);
+            return `🪞 **${auteurNom}** subit l'**Écho Condescendant** pendant **1h** : Cacabot va lui lâcher ses meilleures remarques cassantes !`;
+        }
         case 'malus-emoji-only':
             if (basculerTransfo(member.id, 'emojiOnly', 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur l'**emoji only** alors qu'il était encore actif : le malus est **annulé** !`;
             return `**${auteurNom}** ne peut plus s'exprimer qu'en **emojis** pendant **1h** !`;
@@ -1771,7 +1829,8 @@ async function handleRouletteMessage(message, response, client) {
                 'lettres': 'lettres', 'lettres-melangees': 'lettres',
                 'emojionly': 'emojiOnly', 'emoji-only': 'emojiOnly',
                 'limite100': 'limite100', 'limite-100': 'limite100',
-                'limite30': 'limite30', 'limite-30': 'limite30'
+                'limite30': 'limite30', 'limite-30': 'limite30',
+                'existentiel': 'existentiel', 'linkedin': 'linkedin'
             };
 
             if (tf && clesTransfos[nom] && tf[clesTransfos[nom]]) {
@@ -1793,6 +1852,7 @@ async function handleRouletteMessage(message, response, client) {
             }
 
             // 3. Autres malus & bonus spécifiques
+            else if (nom === 'echo') { rouletteEchoUntil.delete(id); retire = true; }
             else if (nom === 'uwu') { rouletteUwuUntil.delete(id); retire = true; }
             else if (nom === 'lettre' || nom === 'lettre-interdite' || nom === 'lettreinterdite') { rouletteLettreInterdite.delete(id); retire = true; }
             else if (nom === 'emoji') { rouletteEmojiUntil.delete(id); retire = true; }
@@ -2269,6 +2329,18 @@ async function handleRouletteTransfoMessage(message, client) {
 
     const id = message.author.id;
     const now = Date.now();
+
+    // Effet Écho Condescendant (1 chance sur 3)
+    const finEcho = rouletteEchoUntil.get(id);
+    if (finEcho) {
+        if (now >= finEcho) {
+            rouletteEchoUntil.delete(id);
+        } else if (Math.random() < 0.35 && !message.content.startsWith('!')) {
+            const replique = ROULETTE_ECHO_REPLIQUES[Math.floor(Math.random() * ROULETTE_ECHO_REPLIQUES.length)];
+            setTimeout(() => { message.reply(replique).catch(() => {}); }, 1200);
+        }
+    }
+
     let contenu = message.content;
     let modifie = false;
 
