@@ -548,10 +548,23 @@ function buildBPRulesEmbed() {
 function buildBPButtons(authorId, targetId = null) {
     const tid = targetId || authorId;
     const estSoiMeme = authorId === tid;
+    const estAdminInspect = !estSoiMeme && authorId === bpBridge.EPSYS_ID;
 
+    if (estAdminInspect) {
+        // Vue modération Epsys sur un autre membre
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`bp_home_${authorId}_${tid}`).setLabel('🏠 Accueil').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`bp_quests_${authorId}_${tid}`).setLabel('📋 Ses Quêtes').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`bp_ladder_${authorId}_${tid}`).setLabel('🪜 Paliers').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`bp_addxp_${authorId}_${tid}`).setLabel('⚡ Ajouter XP').setStyle(ButtonStyle.Success)
+        );
+        return [row];
+    }
+
+    // Vue standard du membre sur son propre profil
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`bp_home_${authorId}_${tid}`).setLabel('🏠 Accueil').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`bp_quests_${authorId}_${tid}`).setLabel(estSoiMeme ? '📋 Mes Quêtes' : '📋 Ses Quêtes').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`bp_quests_${authorId}_${tid}`).setLabel('📋 Mes Quêtes').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`bp_ladder_${authorId}_${tid}`).setLabel('🪜 Paliers').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`bp_rules_${authorId}_${tid}`).setLabel('📜 Règles').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`bp_notifs_${authorId}`).setLabel('🔔 Notifications MP').setStyle(ButtonStyle.Secondary)
@@ -774,8 +787,71 @@ async function handleBattlePassSlash(interaction) {
 }
 
 async function handleBattlePassInteraction(interaction) {
+    // 1. Soumission de la modale "Ajouter XP" par Epsys
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('bp_modal_addxp_')) {
+        if (interaction.user.id !== bpBridge.EPSYS_ID) {
+            return interaction.reply({ content: "Action réservée à Epsys.", ephemeral: true });
+        }
+
+        const cibleId = interaction.customId.replace('bp_modal_addxp_', '');
+        const xpValeurStr = interaction.fields.getTextInputValue('xp_amount').trim();
+        const xpAmount = parseInt(xpValeurStr, 10);
+
+        if (isNaN(xpAmount) || xpAmount <= 0) {
+            return interaction.reply({ content: "❌ Montant d'XP invalide. Saisis un nombre entier positif.", ephemeral: true });
+        }
+
+        const p = getOuCreerProfilBP(cibleId);
+        ajouterXpEtMonteeDeNiveau(cibleId, p, xpAmount, `[AJOUT ADMIN EPSYS]`);
+        bpBridge.demanderSauvegarde();
+
+        const cibleMembre = interaction.guild?.members.cache.get(cibleId);
+        const embedMaj = buildBPHomeEmbed(cibleMembre || { displayName: `ID ${cibleId}` });
+
+        if (interaction.message?.editable) {
+            await interaction.message.edit({ embeds: [embedMaj], components: buildBPButtons(interaction.user.id, cibleId) }).catch(() => {});
+        }
+
+        await interaction.reply({
+            content: `⚡ **+${xpAmount} XP ajoutés avec succès à <@${cibleId}> !**\nNiveau actuel : **Niv. ${p.niveau}** (${p.xp}/${XP_PAR_NIVEAU} XP).`,
+            ephemeral: true
+        });
+        return true;
+    }
+
     const id = interaction.customId;
     if (!id) return false;
+
+    // Action Admin Epsys : Bouton "Ajouter XP" -> ouverture de la modale
+    if (id.startsWith('bp_addxp_')) {
+        const parts = id.split('_');
+        const authorId = parts[2];
+        const targetId = parts[3];
+
+        if (interaction.user.id !== bpBridge.EPSYS_ID) {
+            return interaction.reply({ content: "Ce bouton est réservé à Epsys.", ephemeral: true });
+        }
+
+        const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+        const modal = new ModalBuilder()
+            .setCustomId(`bp_modal_addxp_${targetId}`)
+            .setTitle(`⚡ Ajouter de l'XP Battle Pass`);
+
+        const xpInput = new TextInputBuilder()
+            .setCustomId('xp_amount')
+            .setLabel("Montant d'XP à ajouter (ex : 50, 100, 500)")
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('50')
+            .setMinLength(1)
+            .setMaxLength(5)
+            .setRequired(true);
+
+        const firstActionRow = new ActionRowBuilder().addComponents(xpInput);
+        modal.addComponents(firstActionRow);
+
+        await interaction.showModal(modal);
+        return true;
+    }
 
     // Action Admin Epsys : Forcer la complétion d'une quête
     if (id.startsWith('bp_questforce_select_')) {
