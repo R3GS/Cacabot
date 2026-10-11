@@ -308,6 +308,9 @@ function ajouterXpEtMonteeDeNiveau(userId, p, xpBrut, titreQuete) {
         p.xp = XP_PAR_NIVEAU;
     }
 
+    // Persistance immédiate des gains
+    bpBridge.demanderSauvegarde();
+
     if (p.notifs === 'quetes') {
         let msg = `Tu as validé la quête : **${titreQuete}** (+${xpGagne} XP) !`;
         if (paliersDebloques.length > 0) {
@@ -542,12 +545,15 @@ function buildBPRulesEmbed() {
         .setFooter({ text: 'Règlement Officiel • Battle Pass Regaïa' });
 }
 
-function buildBPButtons(authorId) {
+function buildBPButtons(authorId, targetId = null) {
+    const tid = targetId || authorId;
+    const estSoiMeme = authorId === tid;
+
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`bp_home_${authorId}`).setLabel('🏠 Accueil').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`bp_quests_${authorId}`).setLabel('📋 Mes Quêtes').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`bp_ladder_${authorId}`).setLabel('🪜 Paliers').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`bp_rules_${authorId}`).setLabel('📜 Règles').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`bp_home_${authorId}_${tid}`).setLabel('🏠 Accueil').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`bp_quests_${authorId}_${tid}`).setLabel(estSoiMeme ? '📋 Mes Quêtes' : '📋 Ses Quêtes').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`bp_ladder_${authorId}_${tid}`).setLabel('🪜 Paliers').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`bp_rules_${authorId}_${tid}`).setLabel('📜 Règles').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`bp_notifs_${authorId}`).setLabel('🔔 Notifications MP').setStyle(ButtonStyle.Secondary)
     );
 
@@ -679,8 +685,36 @@ async function handleBattlePassMessage(message, helpers = {}) {
             return await afficherMenuQuestforce(message, cible);
         }
 
-        const embed = buildBPHomeEmbed(message.member);
-        const rows = buildBPButtons(message.author.id);
+        // Inspection d'un autre membre : !bp [membre] ou !pass [membre]
+        const queryMembre = parts.slice(1).join(" ");
+        let cible = message.member;
+
+        if (queryMembre) {
+            const mention = message.mentions.members.first();
+            if (mention) {
+                cible = mention;
+            } else if (helpers.findMemberByName) {
+                const result = helpers.findMemberByName(message.guild, queryMembre);
+                if (result.multiple && helpers.askDisambiguation) {
+                    return helpers.askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                        const mb = message.guild.members.cache.get(user.id);
+                        if (mb) {
+                            const embed = buildBPHomeEmbed(mb);
+                            const rows = buildBPButtons(message.author.id, mb.id);
+                            message.reply({ embeds: [embed], components: rows });
+                        }
+                    });
+                }
+                if (result.found) cible = result.found;
+                else {
+                    await message.reply("Membre introuvable sur le serveur.");
+                    return true;
+                }
+            }
+        }
+
+        const embed = buildBPHomeEmbed(cible);
+        const rows = buildBPButtons(message.author.id, cible.id);
         await message.reply({ embeds: [embed], components: rows });
         return true;
     }
@@ -830,28 +864,34 @@ async function handleBattlePassInteraction(interaction) {
 
     if (!id.startsWith('bp_')) return false;
 
-    const [, action, authorId] = id.split('_');
+    const parts = id.split('_');
+    const action = parts[1];
+    const authorId = parts[2];
+    const targetId = parts[3] || authorId;
+
     if (interaction.user.id !== authorId) {
-        return interaction.reply({ content: "Ce n'est pas ton pass de combat 😌", ephemeral: true });
+        return interaction.reply({ content: "Ce n'est pas ton menu d'inspection 😌", ephemeral: true });
     }
 
+    const cibleMembre = interaction.guild?.members.cache.get(targetId) || interaction.member;
+
     if (action === 'home') {
-        await interaction.update({ embeds: [buildBPHomeEmbed(interaction.member)], components: buildBPButtons(authorId) });
+        await interaction.update({ embeds: [buildBPHomeEmbed(cibleMembre)], components: buildBPButtons(authorId, targetId) });
         return true;
     }
 
     if (action === 'quests') {
-        await interaction.update({ embeds: [buildBPQuestsEmbed(interaction.member)], components: buildBPButtons(authorId) });
+        await interaction.update({ embeds: [buildBPQuestsEmbed(cibleMembre)], components: buildBPButtons(authorId, targetId) });
         return true;
     }
 
     if (action === 'ladder') {
-        await interaction.update({ embeds: [buildBPLadderEmbed(interaction.member)], components: buildBPButtons(authorId) });
+        await interaction.update({ embeds: [buildBPLadderEmbed(cibleMembre)], components: buildBPButtons(authorId, targetId) });
         return true;
     }
 
     if (action === 'rules') {
-        await interaction.update({ embeds: [buildBPRulesEmbed()], components: buildBPButtons(authorId) });
+        await interaction.update({ embeds: [buildBPRulesEmbed()], components: buildBPButtons(authorId, targetId) });
         return true;
     }
 
