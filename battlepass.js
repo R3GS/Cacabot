@@ -376,9 +376,9 @@ function buildBPHomeEmbed(membre) {
         .setTitle(`🎫 BATTLE PASS — SAISON ${bpBridge.getBattlePassData().saison || 1}`)
         .setDescription(desc)
         .addFields(
-            { name: '###🎯 Prochain Palier Majeur', value: getProchainPalierMajeurText(p.niveau), inline: false },
-            { name: '###🔔 Alertes privées (MP)', value: `Statut : **${getLibelleNotif(p.notifs)}** *(modifie-le via le bouton ⚙️ ci-dessous)*`, inline: false },
-            { name: '###📜 Esprit de Regaïa', value: '-# *Le staff rappelle que le pass récompense l\'activité naturelle. Les conversations artificielles ou de pur grind ne sont pas tolérées.*' }
+            { name: '🎯 Prochain Palier Majeur', value: getProchainPalierMajeurText(p.niveau), inline: false },
+            { name: '🔔 Alertes privées (MP)', value: `Statut : **${getLibelleNotif(p.notifs)}** *(modifie-le via le bouton ⚙️ ci-dessous)*`, inline: false },
+            { name: '📜 Esprit de Regaïa', value: '-# *Le staff rappelle que le pass récompense l\'activité naturelle. Les conversations artificielles ou de pur grind ne sont pas tolérées.*' }
         )
         .setFooter({ text: 'Commandes : !bp • Reset quotidien à 00h00' })
         .setThumbnail(membre.user.displayAvatarURL({ dynamic: true, size: 256 }));
@@ -410,8 +410,8 @@ function buildBPQuestsEmbed(membre) {
         .setColor(0x3498db)
         .setTitle(`📋 QUÊTES DU PASS — ${membre.displayName}`)
         .addFields(
-            { name: '###☀️ __QUÊTES QUOTIDIENNES__ (Reset - 00h00)', value: quotidiennesLignes || '*Aucune quête*', inline: false },
-            { name: '###📅 __QUÊTES HEBDOMADAIRES__ (Reset - Lundi)', value: hebdosLignes || '*Aucune quête*', inline: false }
+            { name: '☀️ __QUÊTES QUOTIDIENNES__ (Reset - 00h00)', value: quotidiennesLignes || '*Aucune quête*', inline: false },
+            { name: '📅 __QUÊTES HEBDOMADAIRES__ (Reset - Lundi)', value: hebdosLignes || '*Aucune quête*', inline: false }
         )
         .setFooter({ text: 'Valide au moins 1 quotidienne pour conserver ta série de jours consécutifs !' });
 }
