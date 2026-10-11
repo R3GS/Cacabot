@@ -274,6 +274,8 @@ const {
     rouletteAchievements,
     rouletteStats,
     rouletteBouclierActif,
+    rouletteRedirectCharges,
+    crediterInventaireRoulette,
     handleRouletteMessage,
     handleRouletteSlash,
     handleRouletteButton,
