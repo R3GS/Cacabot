@@ -275,8 +275,47 @@ function buildNotifSettingsRow(valeurActuelle) {
 }
 
 // ==========================================
-//  TRACKER CENTRAL D'ACTIVITÉ
+//  TRACKER CENTRAL D'ACTIVITÉ & AUTO-CLAIM
 // ==========================================
+
+function ajouterXpEtMonteeDeNiveau(userId, p, xpBrut, titreQuete) {
+    const mult = getMultiplicateurStreak(p.streak);
+    const xpGagne = Math.round(xpBrut * mult);
+    p.xp += xpGagne;
+
+    const paliersDebloques = [];
+    while (p.xp >= XP_PAR_NIVEAU && p.niveau < NIVEAU_MAX) {
+        p.xp -= XP_PAR_NIVEAU;
+        p.niveau++;
+        p.paliersReclames.push(p.niveau);
+        const reco = RECOMPENSES_PALIERS[p.niveau];
+        if (reco) {
+            paliersDebloques.push(`**Niveau ${p.niveau}** : ${reco.nom}`);
+            attribuerRecompenseInventaire(userId, reco.item);
+
+            const doitEnvoyerMP = (p.notifs === 'niveaux') || (p.notifs === 'paliers' && reco.majeur);
+            if (doitEnvoyerMP) {
+                envoyerNotificationMP(
+                    userId,
+                    `🎉 NOUVEAU NIVEAU DÉVERROUILLÉ : NIVEAU ${p.niveau} !`,
+                    `Félicitations ! Tu as franchi un palier du Pass de Combat !\n\n🎁 **Récompense :** ${reco.nom}\n*Déposée directement dans ton inventaire (\`!rlt claim\`) !*`
+                );
+            }
+        }
+    }
+
+    if (p.niveau >= NIVEAU_MAX) {
+        p.xp = XP_PAR_NIVEAU;
+    }
+
+    if (p.notifs === 'quetes') {
+        let msg = `Tu as validé la quête : **${titreQuete}** (+${xpGagne} XP) !`;
+        if (paliersDebloques.length > 0) {
+            msg += `\n\n🏆 **Paliers débloqués :**\n${paliersDebloques.join('\n')}\n*Récompense(s) dans ton inventaire (\`!rlt claim\`) !*`;
+        }
+        envoyerNotificationMP(userId, '✅ QUÊTE VALIDÉE & XP CRÉDITÉ !', msg);
+    }
+}
 
 function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
     const p = getOuCreerProfilBP(userId);
@@ -289,20 +328,14 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
             q.progression = Math.min(q.objectif, q.progression + amount);
             if (q.progression >= q.objectif) {
                 q.terminee = true;
+                q.reclamee = true; // Réclamée automatiquement
                 const today = getTodayKey();
                 if (p.dernierJourStreak !== today) {
                     p.streak = (p.streak || 0) + 1;
                     p.dernierJourStreak = today;
                     checkStreakRewards(userId, p.streak);
                 }
-                // Alerte MP si l'option 'quetes' est activée
-                if (p.notifs === 'quetes') {
-                    envoyerNotificationMP(
-                        userId,
-                        '✅ QUÊTE DU BATTLE PASS TERMINÉE !',
-                        `Tu as terminé la quête : **${q.desc}** (+${q.xp} XP) !\n\nTape \`!bp\` sur le serveur pour récupérer tes récompenses !`
-                    );
-                }
+                ajouterXpEtMonteeDeNiveau(userId, p, q.xp, q.desc);
             }
             modifie = true;
         }
@@ -315,13 +348,8 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
             q.progression = Math.min(q.objectif, q.progression + amount);
             if (q.progression >= q.objectif) {
                 q.terminee = true;
-                if (p.notifs === 'quetes') {
-                    envoyerNotificationMP(
-                        userId,
-                        '🎉 QUÊTE HEBDOMADAIRE DU PASS VALIDÉE !',
-                        `Tu as terminé la quête hebdo : **${q.desc}** (+${q.xp} XP) !\n\nTape \`!bp\` pour réclamer ton XP !`
-                    );
-                }
+                q.reclamee = true; // Réclamée automatiquement
+                ajouterXpEtMonteeDeNiveau(userId, p, q.xp, q.desc);
             }
             modifie = true;
         }
@@ -352,26 +380,22 @@ function buildBPHomeEmbed(membre) {
     const mult = getMultiplicateurStreak(p.streak);
     const multStr = mult > 1 ? ` *(+${Math.round((mult - 1) * 100)}% d'XP)*` : '';
 
-    const nbQuetesFinies = p.quetesDuJour.filter(q => q.terminee && !q.reclamee).length +
-                          p.quetesHebdo.filter(q => q.terminee && !q.reclamee).length;
-
     const pct = Math.min(100, Math.round((p.xp / XP_PAR_NIVEAU) * 100));
     const nbVert = Math.round((pct / 100) * 10);
     const barre = '🟩'.repeat(nbVert) + '⬜'.repeat(10 - nbVert);
 
     let desc = `### 🌟 Bienvenue dans le Pass de Combat de Regaïa !\n` +
-               `Accomplis tes quêtes, maintiens ta série quotidienne et franchis les **25 paliers** du mois pour remporter des récompenses exclusives !\n\n` +
+               `Accomplis tes quêtes, maintiens ta série quotidienne et gravis les **25 paliers** du mois pour remporter des récompenses exclusives !\n\n` +
+               `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n` +
                `👤 **Membre :** <@${membre.id}>\n\n` +
                `⭐ **Niveau actuel :** **Niveau ${p.niveau}/${NIVEAU_MAX}**\n\n` +
                `📈 **Progression XP :** \`${barre}\` **${p.xp}/${XP_PAR_NIVEAU} XP** (${pct}%)\n\n` +
-               `🔥 **Série quotidienne :** **${p.streak} jour${p.streak > 1 ? 's' : ''} consécutif${p.streak > 1 ? 's' : ''}**${multStr}\n\n`;
-
-    if (nbQuetesFinies > 0) {
-        desc += `🎁 **${nbQuetesFinies} quête(s) terminée(s) en attente d'XP !**\n> Clique sur le bouton vert **🎁 Récupérer** ci-dessous !\n\n`;
-    }
+               `🔥 **Série quotidienne :** **${p.streak} jour${p.streak > 1 ? 's' : ''} consécutif${p.streak > 1 ? 's' : ''}**${multStr}\n\n` +
+               `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
 
     if (p.notifs !== 'desactive' && p.mpBloques) {
-        desc += `⚠️ **Attention : Tes MP Discord sont fermés !**\n*Active l'option "Autoriser les messages privés" sur ce serveur pour recevoir tes alertes privées.*\n\n`;
+        desc += `⚠️ **Attention : Tes MP Discord sont fermés !**\n*Active l'option "Autoriser les messages privés" sur ce serveur pour recevoir tes alertes privées.*\n\n` +
+                `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n`;
     }
 
     const embed = new EmbedBuilder()
@@ -385,12 +409,12 @@ function buildBPHomeEmbed(membre) {
                 inline: false 
             },
             { 
-                name: '🔔 Alertes privées (MP)', 
-                value: `> Statut actuel : **${getLibelleNotif(p.notifs)}**\n> *(Personnalisable avec le bouton ⚙️ Alertes MP)*`, 
+                name: '🔔 Notifications privées (MP)', 
+                value: `> Statut actuel : **${getLibelleNotif(p.notifs)}**\n> *(Modifiable avec le bouton ci-dessous)*`, 
                 inline: false 
             }
         )
-        .setFooter({ text: 'Commandes : !bp • Reset quotidien à 00h00' })
+        .setFooter({ text: 'Commandes : !bp • Reset quotidien à 00h00 • XP crédité automatiquement' })
         .setThumbnail(membre.user.displayAvatarURL({ dynamic: true, size: 256 }));
 
     return embed;
@@ -407,19 +431,19 @@ function buildBPQuestsEmbed(membre) {
     const p = getOuCreerProfilBP(membre.id);
 
     const quotidiennesLignes = p.quetesDuJour.map(q => {
-        const icon = q.reclamee ? '☑️' : q.terminee ? '✅' : '⏳';
+        const icon = q.terminee ? '✅' : '⏳';
         return `${icon} **[${q.xp} XP] ${q.desc}**\n> Progression : \`${q.progression}/${q.objectif}\``;
     }).join('\n\n');
 
     const hebdosLignes = p.quetesHebdo.map(q => {
-        const icon = q.reclamee ? '☑️' : q.terminee ? '✅' : '⏳';
+        const icon = q.terminee ? '✅' : '⏳';
         return `${icon} **[${q.xp} XP] ${q.desc}**\n> Progression : \`${q.progression}/${q.objectif}\``;
     }).join('\n\n');
 
     const desc = `# ☀️ QUÊTES QUOTIDIENNES\n` +
                  `*Réinitialisées chaque nuit à 00h00*\n\n` +
                  (quotidiennesLignes || '*Aucune quête active.*') +
-                 `\n\n\u200b\n` +
+                 `\n\n▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n\n` +
                  `# 📅 QUÊTES HEBDOMADAIRES\n` +
                  `*Réinitialisées chaque lundi*\n\n` +
                  (hebdosLignes || '*Aucune quête active.*');
@@ -428,7 +452,7 @@ function buildBPQuestsEmbed(membre) {
         .setColor(0x3498db)
         .setTitle(`📋 QUÊTES DU PASS — ${membre.displayName}`)
         .setDescription(desc)
-        .setFooter({ text: 'Valide au moins 1 quête par jour pour conserver ta série !' });
+        .setFooter({ text: 'L\'XP est crédité automatiquement dès la validation d\'une quête !' });
 }
 
 function buildBPLadderEmbed(membre) {
@@ -472,19 +496,15 @@ function buildBPRulesEmbed() {
 }
 
 function buildBPButtons(authorId) {
-    const row1 = new ActionRowBuilder().addComponents(
+    const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`bp_home_${authorId}`).setLabel('🏠 Accueil').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`bp_quests_${authorId}`).setLabel('📋 Mes Quêtes').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`bp_ladder_${authorId}`).setLabel('🪜 Paliers').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`bp_claim_${authorId}`).setLabel('🎁 Récupérer').setStyle(ButtonStyle.Success)
-    );
-
-    const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`bp_rules_${authorId}`).setLabel('📜 Règles').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`bp_notifs_${authorId}`).setLabel('⚙️ Alertes MP').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`bp_notifs_${authorId}`).setLabel('🔔 Notifications MP').setStyle(ButtonStyle.Secondary)
     );
 
-    return [row1, row2];
+    return [row];
 }
 
 // ==========================================
@@ -676,23 +696,6 @@ async function handleBattlePassInteraction(interaction) {
 
         const rowMenu = buildNotifSettingsRow(p.notifs);
         await interaction.reply({ embeds: [embed], components: [rowMenu], ephemeral: true });
-        return true;
-    }
-
-    if (action === 'claim') {
-        const res = reclamerRecompensesEtXP(interaction.member);
-        if (res.xpGagne === 0) {
-            return interaction.reply({ content: "⚠️ Tu n'as aucune quête complétée à réclamer pour l'instant !", ephemeral: true });
-        }
-
-        let desc = `🎉 **+${res.xpGagne} XP récupérés avec succès !**\n\n`;
-        if (res.paliersDebloques.length > 0) {
-            desc += `🏆 **NOUVEAUX PALIERS DÉVERROUILLÉS :**\n${res.paliersDebloques.join('\n')}\n*Tes récompenses ont été déposées dans ton inventaire (\`!rlt claim\`) !*\n\n`;
-        }
-        desc += `*Consulte tes stats à jour sur l'accueil !*`;
-
-        await interaction.reply({ content: desc, ephemeral: true });
-        await interaction.message.edit({ embeds: [buildBPHomeEmbed(interaction.member)], components: buildBPButtons(authorId) }).catch(() => {});
         return true;
     }
 
