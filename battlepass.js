@@ -777,11 +777,11 @@ async function handleBattlePassMessage(message, helpers = {}) {
 function buildBPOnboardingEmbed(membre) {
     return new EmbedBuilder()
         .setColor(0xffd20a)
-        .setTitle('🎫 DÉCOUVRE LE BATTLE PASS DE REGAÏA !')
+        .setTitle('🎫 DÉCOUVRE LE BATTLE PASS DE LA ROULETTE !')
         .setDescription(
             `Bienvenue <@${membre.id}> ! Tu n'as pas encore rejoint le **Battle Pass mensuel de Regaïa**.\n\n` +
             `### 🎯 C'est quoi le Battle Pass ?\n` +
-            `Chaque mois, monte à travers **25 niveaux** pour débloquer des récompenses gratuites pour la roulette et le serveur :\n` +
+            `Chaque mois, monte à travers **25 niveaux** pour débloquer des récompenses gratuites pour la roulette regaïenne :\n` +
             `• 🛡️ Boucliers de protection contre les malus\n` +
             `• 🎟️ Tickets pour passer les cooldowns de roulette\n` +
             `• 🎰 Coups triples, redirections de malus et pouvoirs exclusifs\n\n` +
