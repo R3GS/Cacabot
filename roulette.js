@@ -1575,17 +1575,8 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         if (hh.count >= 10) deverrouillerSucces(authorId, 'oiseau-nuit', channel);
     }
 
-    if (outcomeId.startsWith('malus-')) {
-        const cons = (rouletteMalusConsecutifs.get(authorId) || 0) + 1;
-        rouletteMalusConsecutifs.set(authorId, cons);
-        if (cons >= 3) deverrouillerSucces(authorId, 'enchainement-fatal', channel);
-
-        let diffList = rouletteMalusDifferents.get(authorId);
-        if (!Array.isArray(diffList)) diffList = [];
-        if (!diffList.includes(outcomeId)) diffList.push(outcomeId);
-        rouletteMalusDifferents.set(authorId, diffList);
-        if (diffList.length >= 10) deverrouillerSucces(authorId, 'seum-en-personne', channel);
-    } else {
+    // Si ce n'est pas un malus, on remet la série de malus consécutifs à 0
+    if (!outcomeId.startsWith('malus-')) {
         rouletteMalusConsecutifs.delete(authorId);
     }
 
@@ -1620,6 +1611,9 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         const restantes = bCharges - 1;
         if (restantes <= 0) rouletteBouclierActif.delete(authorId);
         else rouletteBouclierActif.set(authorId, restantes);
+
+        // Le malus a été paré : aucun malus n'est subi, brise la série consécutive de malchance
+        rouletteMalusConsecutifs.delete(authorId);
 
         if (bridge.trackBattlePassProgress) {
             bridge.trackBattlePassProgress(authorId, 'malus_pare', 1);
@@ -1658,6 +1652,19 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
                 }
             }
         }
+    }
+
+    // Comptabilisation des malus RÉELLEMENT subis (uniquement pour la cible qui le prend)
+    if (outcomeId.startsWith('malus-')) {
+        const cons = (rouletteMalusConsecutifs.get(cible.id) || 0) + 1;
+        rouletteMalusConsecutifs.set(cible.id, cons);
+        if (cons >= 3) deverrouillerSucces(cible.id, 'enchainement-fatal', channel);
+
+        let diffList = rouletteMalusDifferents.get(cible.id);
+        if (!Array.isArray(diffList)) diffList = [];
+        if (!diffList.includes(outcomeId)) diffList.push(outcomeId);
+        rouletteMalusDifferents.set(cible.id, diffList);
+        if (diffList.length >= 10) deverrouillerSucces(cible.id, 'seum-en-personne', channel);
     }
 
     const proxy = { member: cible, channel, guild };
