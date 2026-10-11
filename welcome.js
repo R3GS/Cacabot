@@ -350,9 +350,13 @@ async function handleWelcomeMemberAdd(member) {
         const targetChan = member.guild.channels.cache.get(data.channelId);
         if (targetChan) {
             try {
+                const { MessageFlags } = require('discord.js');
                 const avatarUrl = member.user.displayAvatarURL({ extension: 'png', size: 512 });
                 const cardBuffer = await generateWelcomeImage(avatarUrl, member.displayName);
-                await targetChan.send({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
+                await targetChan.send({ 
+                    files: [{ attachment: cardBuffer, name: 'bienvenue.png' }],
+                    flags: [MessageFlags.SuppressNotifications]
+                });
             } catch (err) {
                 console.error("[Welcome] Erreur lors de l'envoi du message de bienvenue :", err.message);
             }

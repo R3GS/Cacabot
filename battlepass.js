@@ -889,9 +889,15 @@ async function handleBattlePassMessage(message, helpers = {}) {
             return true;
         }
 
+        const { MessageFlags } = require('discord.js');
         const embed = buildBPHomeEmbed(cible);
         const rows = buildBPButtons(message.author.id, cible.id);
-        await message.reply({ embeds: [embed], components: rows });
+        await message.reply({ 
+            embeds: [embed], 
+            components: rows,
+            flags: [MessageFlags.SuppressNotifications],
+            allowedMentions: { repliedUser: false }
+        });
         return true;
     }
     return false;

@@ -210,7 +210,12 @@ async function envoyerMotusQuotidien(guild, heureSession = 10) {
         ? '# 🟥 LE MOTUS DU SOIR (7 LETTRES - 1H) EST LANCÉ !' 
         : '# 🟩 LE MOTUS DU MATIN (6 LETTRES - 1H) EST LANCÉ !';
 
-    const sent = await channel.send({ content: texteAnnonce, embeds: [embed] });
+    const { MessageFlags } = require('discord.js');
+    const sent = await channel.send({ 
+        content: texteAnnonce, 
+        embeds: [embed],
+        flags: [MessageFlags.SuppressNotifications]
+    });
     nouvelleData.messageId = sent.id;
     minijeuxBridge.setMotusData(nouvelleData);
     minijeuxBridge.demanderSauvegarde();
@@ -302,6 +307,7 @@ async function handleMotusMessage(message, response, client, helpers) {
                 ? `\n> ❌ **Lettres absentes :** \`${lettresAbsentes}\`` 
                 : '';
 
+            const { MessageFlags } = require('discord.js');
             if (rawGuess === motDuJour) {
                 motusData.termine = true;
                 motusData.vainqueurId = message.author.id;
@@ -312,7 +318,9 @@ async function handleMotusMessage(message, response, client, helpers) {
 
                 await message.reply({
                     content: `**${lettresEspacées}**\n${grille} *(Essai ${essaiNum}/3)*`,
-                    components: [rowOriginal]
+                    components: [rowOriginal],
+                    flags: [MessageFlags.SuppressNotifications],
+                    allowedMentions: { repliedUser: false }
                 });
 
                 const prochainRdv = motusData.heureSession === 10 
@@ -336,7 +344,11 @@ async function handleMotusMessage(message, response, client, helpers) {
                         .setStyle(ButtonStyle.Primary)
                 );
 
-                await message.channel.send({ embeds: [embedVictoire], components: [rowStats] });
+                await message.channel.send({ 
+                    embeds: [embedVictoire], 
+                    components: [rowStats],
+                    flags: [MessageFlags.SuppressNotifications]
+                });
                 return true;
             } else {
                 minijeuxBridge.demanderSauvegarde();
@@ -346,7 +358,9 @@ async function handleMotusMessage(message, response, client, helpers) {
 
                 await message.reply({
                     content: `**${lettresEspacées}**\n${grille} *(Essai ${essaiNum}/3)*${ligneAbsentes}${infoReste}`,
-                    components: [rowOriginal]
+                    components: [rowOriginal],
+                    flags: [MessageFlags.SuppressNotifications],
+                    allowedMentions: { repliedUser: false }
                 });
                 return true;
             }
@@ -686,11 +700,13 @@ async function lancerSessionRebus(guild) {
         compteurMessages: 0
     };
 
+    const { MessageFlags } = require('discord.js');
     await channel.send({
         content: `# 🧩 LE RÉBUS REGAÏEN DU JOUR EST LANCÉ !\n` +
                  `🎭 **Thème du jour :** ${theme.nom}\n` +
                  `🎯 **5 manches au programme** • **5 minutes** par manche !\n` +
-                 `*La première manche commence dans quelques secondes...*`
+                 `*La première manche commence dans quelques secondes...*`,
+        flags: [MessageFlags.SuppressNotifications]
     });
 
     setTimeout(() => passerMancheSuivanteRebus(guild), 4000);
@@ -711,8 +727,9 @@ async function passerMancheSuivanteRebus(guild) {
     rebusSession.expireAt = Date.now() + 5 * 60 * 1000;
     rebusSession.compteurMessages = 0;
 
+    const { MessageFlags } = require('discord.js');
     const embed = buildRebusEmbed(rebusSession.manche, item, rebusSession.expireAt);
-    await channel.send({ embeds: [embed] });
+    await channel.send({ embeds: [embed], flags: [MessageFlags.SuppressNotifications] });
 
     rebusSession.timer = setTimeout(async () => {
         if (!rebusSession.active || !rebusSession.currentItem) return;
@@ -743,8 +760,13 @@ async function verifierReponseRebus(message) {
         minijeuxBridge.trackBattlePassProgress?.(uid, 'rebus_win', 1);
         minijeuxBridge.trackBattlePassProgress?.(uid, 'minijeu_win', 1);
 
+        const { MessageFlags } = require('discord.js');
         const titreReponse = item[1].charAt(0).toUpperCase() + item[1].slice(1);
-        await message.reply(`✅ **Bravo <@${uid}> !** C'était bien **${titreReponse}** ! (+1 point)`);
+        await message.reply({ 
+            content: `✅ **Bravo <@${uid}> !** C'était bien **${titreReponse}** ! (+1 point)`,
+            flags: [MessageFlags.SuppressNotifications],
+            allowedMentions: { repliedUser: false }
+        });
 
         setTimeout(() => passerMancheSuivanteRebus(message.guild), 4000);
         return true;
@@ -803,7 +825,12 @@ async function terminerSessionRebus(channel) {
             .setStyle(ButtonStyle.Primary)
     );
 
-    await channel.send({ embeds: [embedVictoire], components: [rowStats] });
+    const { MessageFlags } = require('discord.js');
+    await channel.send({ 
+        embeds: [embedVictoire], 
+        components: [rowStats],
+        flags: [MessageFlags.SuppressNotifications]
+    });
 }
 
 async function handleRebusMessage(message, response, client, helpers) {

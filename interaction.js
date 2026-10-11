@@ -411,110 +411,12 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
             return message.reply({ embeds: [embedBot] });
         }
 
+        const { MessageFlags } = require('discord.js');
         const embed = buildKissEmbed(auteurNom, cibleNom);
         const kissBackButton = new ButtonBuilder()
             .setCustomId(`kiss_back_${message.author.id}_${cible.id}_${auteurNom}`)
             .setLabel("\ud83d\udc8b Embrasser en retour")
-            .setStyle(ButtonStyle.Primary);
-        const row = new ActionRowBuilder().addComponents(kissBackButton);
-        return message.reply({ embeds: [embed], components: [row] });
-    }
 
-    // !run
-    if (response?.needsRun) {
-        let cible = message.mentions.users.first() || replyCible;
-        const auteurNom = message.member?.displayName ?? message.author.username;
-
-    if (!cible) {
-        const args = message.content.trim().split(/\s+/).slice(1).join(" ");
-        if (args.length > 0) {
-            const result = findMemberByName(message.guild, args);
-            if (result.multiple) {
-                askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
-                return;
-            }
-            if (result.found) cible = result.found.user;
-        }
-    }
-
-    if (!cible) {
-        const embed = buildRunEmbed(`🏃 **${auteurNom}** fuit !`);
-        const runJoinButton = new ButtonBuilder()
-            .setCustomId(`run_join_${message.author.id}_${auteurNom}`)
-            .setLabel("🏃 Accompagner")
-            .setStyle(ButtonStyle.Secondary);
-        const row = new ActionRowBuilder().addComponents(runJoinButton);
-        return message.reply({ embeds: [embed], components: [row] });
-    }
-
-    if (cible.id === message.author.id) {
-        const embed = buildRunEmbed(`🏃 **${auteurNom}** fuit !`);
-        const runJoinButton = new ButtonBuilder()
-            .setCustomId(`run_join_${message.author.id}_${auteurNom}`)
-            .setLabel("🏃 Accompagner")
-            .setStyle(ButtonStyle.Secondary);
-        const row = new ActionRowBuilder().addComponents(runJoinButton);
-        return message.reply({ embeds: [embed], components: [row] });
-    }
-
-    if (cible.id === client.user.id) {
-        const embed = buildRunEmbed(`🏃 **${auteurNom}** me fuit ! Reviens-là !`);
-        return message.reply({ embeds: [embed] });
-    }
-
-    const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
-    const embed = buildRunEmbed(`🏃 **${auteurNom}** fuit de **${cibleNom}** !`);
-    const runJoinButton = new ButtonBuilder()
-        .setCustomId(`run_join_${message.author.id}_${auteurNom}_${cible.id}`)
-        .setLabel("🏃 Accompagner")
-        .setStyle(ButtonStyle.Secondary);
-    const row = new ActionRowBuilder().addComponents(runJoinButton);
-    return message.reply({ embeds: [embed], components: [row] });
-}
-
-    // !hug
-    if (response?.needsHug) {
-        let cible = message.mentions.users.first() || replyCible;
-        const auteurNom = message.member?.displayName ?? message.author.username;
-
-        if (!cible) {
-            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
-            if (args.length > 0) {
-                const result = findMemberByName(message.guild, args);
-                if (result.multiple) {
-                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
-                    return;
-                }
-                if (result.found) cible = result.found.user;
-            }
-        }
-
-        if (!cible) {
-            return message.reply("Euuh... Tu veux c\u00e2liner qui du coup ?");
-        }
-
-        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
-
-        if (cible.id === message.author.id) {
-            const embedSelf = buildHugEmbed(auteurNom, auteurNom).setDescription(`\ud83e\udef2 **${auteurNom}** se fait un c\u00e2lin... \u00c7a va aller...`);
-            return message.reply({ embeds: [embedSelf] });
-        }
-
-        if (cible.id === client.user.id) {
-            const embedBot = buildHugEmbed(auteurNom, "Cacabot").setDescription(`\ud83e\udef2 **${auteurNom}** me fait un c\u00e2lin !`);
-            return message.reply({ embeds: [embedBot] });
-        }
-
-        const embed = buildHugEmbed(auteurNom, cibleNom);
-        const hugBackButton = new ButtonBuilder()
-            .setCustomId(`hug_back_${message.author.id}_${cible.id}_${auteurNom}`)
-            .setLabel("\ud83e\udef2 C\u00e2liner en retour")
-            .setStyle(ButtonStyle.Primary);
-        const row = new ActionRowBuilder().addComponents(hugBackButton);
-        return message.reply({ embeds: [embed], components: [row] });
-    }
-
-    // !dance
     if (response?.needsDance) {
         let cible = message.mentions.users.first() || replyCible;
         const auteurNom = message.member?.displayName ?? message.author.username;
@@ -681,7 +583,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
 
     // !palaref
     if (response?.needsPalaref) {
-        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://tenor.com/view/vilebrequin-vilebrequin-sylvain-levy-vilebrequin-sylvain-vilebrequin-levy-sylvain-levy-gif-24319115", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
+        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://tenor.com/view/vilebrequin-vilebrequin-sylvain-levy-vilebrequin-sylvain-vilebrequin-levy-sylvain-levy-gif-24319115", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://klipy.com/gifs/tuc-gian-3", "https://cdn.discordapp.com/attachments/1480756332373213275/1548362733408362578/michel-palareff-v0-r9ywzo3614u31.png?ex=6aa6c8aa&is=6aa5772a&hm=20f2c75585bd442371e0095f00b4f1ffbf94e00b2e5ed5b1e56c5b3fd2c0b313&", "https://klipy.com/gifs/fnaf-215", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
         const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
         const auteurNom = message.member?.displayName ?? message.author.username;
         let cible = message.mentions.users.first() || replyCible;
@@ -1179,6 +1081,792 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
         const row = new ActionRowBuilder().addComponents(dieButton);
         return message.reply({ embeds: [embed], components: [row] });
     }
+            .setStyle(ButtonStyle.Primary);
+        const row = new ActionRowBuilder().addComponents(kissBackButton);
+        return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+    // !run
+    const { MessageFlags } = require('discord.js');
+    if (response?.needsRun) {
+        let cible = message.mentions.users.first() || replyCible;
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+    if (!cible) {
+        const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+        if (args.length > 0) {
+            const result = findMemberByName(message.guild, args);
+            if (result.multiple) {
+                askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                return;
+            }
+            if (result.found) cible = result.found.user;
+        }
+    }
+
+    if (!cible) {
+        const embed = buildRunEmbed(`🏃 **${auteurNom}** fuit !`);
+        const runJoinButton = new ButtonBuilder()
+            .setCustomId(`run_join_${message.author.id}_${auteurNom}`)
+            .setLabel("🏃 Accompagner")
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(runJoinButton);
+        return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+    if (cible.id === message.author.id) {
+        const embed = buildRunEmbed(`🏃 **${auteurNom}** fuit !`);
+        const runJoinButton = new ButtonBuilder()
+            .setCustomId(`run_join_${message.author.id}_${auteurNom}`)
+            .setLabel("🏃 Accompagner")
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(runJoinButton);
+        return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+    if (cible.id === client.user.id) {
+        const embed = buildRunEmbed(`🏃 **${auteurNom}** me fuit ! Reviens-là !`);
+        return message.reply({ embeds: [embed], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+    const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+    const embed = buildRunEmbed(`🏃 **${auteurNom}** fuit de **${cibleNom}** !`);
+    const runJoinButton = new ButtonBuilder()
+        .setCustomId(`run_join_${message.author.id}_${auteurNom}_${cible.id}`)
+        .setLabel("🏃 Accompagner")
+        .setStyle(ButtonStyle.Secondary);
+    const row = new ActionRowBuilder().addComponents(runJoinButton);
+    return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+}
+
+    // !hug
+    if (response?.needsHug) {
+        let cible = message.mentions.users.first() || replyCible;
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
+                if (result.found) cible = result.found.user;
+            }
+        }
+
+        if (!cible) {
+            return message.reply({ content: "Euuh... Tu veux câliner qui du coup ?", flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+
+        if (cible.id === message.author.id) {
+            const embedSelf = buildHugEmbed(auteurNom, auteurNom).setDescription(`🫂 **${auteurNom}** se fait un câlin... Ça va aller...`);
+            return message.reply({ embeds: [embedSelf], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        if (cible.id === client.user.id) {
+            const embedBot = buildHugEmbed(auteurNom, "Cacabot").setDescription(`🫂 **${auteurNom}** me fait un câlin !`);
+            return message.reply({ embeds: [embedBot], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        const embed = buildHugEmbed(auteurNom, cibleNom);
+        const hugBackButton = new ButtonBuilder()
+            .setCustomId(`hug_back_${message.author.id}_${cible.id}_${auteurNom}`)
+            .setLabel("🫂 Câliner en retour")
+            .setStyle(ButtonStyle.Primary);
+        const row = new ActionRowBuilder().addComponents(hugBackButton);
+        return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+    // !danse
+    const { MessageFlags } = require('discord.js');
+    if (response?.needsDance) {
+        let cible = message.mentions.users.first() || replyCible;
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
+                if (result.found) cible = result.found.user;
+            }
+        }
+
+        if (!cible) {
+            const embed = buildDanceEmbed(`🕺 **${auteurNom}** s'ambiance comme jamais !`, true);
+            const danceJoinButton = new ButtonBuilder()
+                .setCustomId(`dance_join_${message.author.id}_${auteurNom}`)
+                .setLabel("💃 Rejoindre la danse")
+                .setStyle(ButtonStyle.Primary);
+            const row = new ActionRowBuilder().addComponents(danceJoinButton);
+            return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+
+        if (cible.id === client.user.id) {
+            const embed = buildDanceEmbed(`🕺 **${auteurNom}** danse avec moi !`, false);
+            return message.reply({ embeds: [embed], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        const embed = buildDanceEmbed(`🕺 **${auteurNom}** danse avec **${cibleNom}** !`, false);
+        const danceBackButton = new ButtonBuilder()
+            .setCustomId(`dance_back_${message.author.id}_${cible.id}_${auteurNom}`)
+            .setLabel("💃 Rejoindre la danse")
+            .setStyle(ButtonStyle.Primary);
+        const row = new ActionRowBuilder().addComponents(danceBackButton);
+        return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+    // !insult
+    if (response?.needsInsult) {
+        let cible = message.mentions.users.first() || replyCible;
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
+                if (result.found) cible = result.found.user;
+            }
+        }
+
+        if (!cible) {
+            return message.reply({ content: "Mentionne quelqu'un pour l'insulter !", flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        if (cible.id === message.author.id) {
+            return message.reply({ content: "Tu ne peux pas t'insulter toi-même... Mentionne quelqu'un plutôt !", flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        if (cible.id === client.user.id) {
+            const embed = buildInsultEmbed(`🖕 **${auteurNom}** m'insulte ! J'ai fait quoi ?!`);
+            return message.reply({ embeds: [embed], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        const embed = buildInsultEmbed(`🖕 **${auteurNom}** insulte **${cibleNom}** !`);
+        const insultBackButton = new ButtonBuilder()
+            .setCustomId(`insult_back_${message.author.id}_${cible.id}_${auteurNom}`)
+            .setLabel("🖕 Insulter en retour")
+            .setStyle(ButtonStyle.Primary);
+        const row = new ActionRowBuilder().addComponents(insultBackButton);
+        return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+    // !laugh
+    if (response?.needsLaugh) {
+        let cible = message.mentions.users.first() || replyCible;
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
+                if (result.found) cible = result.found.user;
+            }
+        }
+
+        if (cible && cible.id !== message.author.id && cible.id !== client.user.id) {
+            const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+            const embed = buildLaughEmbed(`😆 **${auteurNom}** se fout de la gueule de **${cibleNom}** !`);
+            const laughButton = new ButtonBuilder()
+                .setCustomId(`laugh_with_${message.author.id}_${auteurNom}`)
+                .setLabel("😆 Rire avec")
+                .setStyle(ButtonStyle.Primary);
+            const row = new ActionRowBuilder().addComponents(laughButton);
+            return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        const embed = buildLaughEmbed(`😆 **${auteurNom}** se tape une barre !`);
+        const laughButton = new ButtonBuilder()
+            .setCustomId(`laugh_with_${message.author.id}_${auteurNom}`)
+            .setLabel("😆 Rire avec")
+            .setStyle(ButtonStyle.Primary);
+        const row = new ActionRowBuilder().addComponents(laughButton);
+        return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+    // !rizz
+    if (response?.needsRizz) {
+        let cible = message.mentions.users.first() || replyCible;
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
+                if (result.found) cible = result.found.user;
+            }
+        }
+
+        if (!cible) {
+            return message.reply({ content: "Choisis quelqu'un que tu veux rizz !", flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        if (cible.id === message.author.id) {
+            return message.reply({ content: "Tu ne peux pas te rizz toi-même !", flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        if (cible.id === client.user.id) {
+            const embed = buildRizzEmbed(`🗿 **${auteurNom}** me rizz ! Eh beh 😊`);
+            return message.reply({ embeds: [embed], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        const embed = buildRizzEmbed(`🗿 **${auteurNom}** rizz **${cibleNom}** !`);
+
+        const rizzBackButton = new ButtonBuilder()
+            .setCustomId(`rizz_back_${message.author.id}_${cible.id}_${auteurNom}`)
+            .setLabel("🗿 Rizz en retour")
+            .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(rizzBackButton);
+        return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+    // !palaref
+    if (response?.needsPalaref) {
+        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://tenor.com/view/vilebrequin-vilebrequin-sylvain-levy-vilebrequin-sylvain-vilebrequin-levy-sylvain-levy-gif-24319115", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://klipy.com/gifs/tuc-gian-3", "https://cdn.discordapp.com/attachments/1480756332373213275/1548362733408362578/michel-palareff-v0-r9ywzo3614u31.png?ex=6aa6c8aa&is=6aa5772a&hm=20f2c75585bd442371e0095f00b4f1ffbf94e00b2e5ed5b1e56c5b3fd2c0b313&", "https://klipy.com/gifs/fnaf-215", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
+        const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        let cible = message.mentions.users.first() || replyCible;
+
+        if (!cible) {
+            const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (query) {
+                if (client.user.username.toLowerCase().includes(query.toLowerCase()) || 'cacabot'.includes(query.toLowerCase())) {
+                    cible = client.user;
+                } else {
+                    const result = findMemberByName(message.guild, query);
+                    if (result.multiple) {
+                        askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const cibleNom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
+                            const btn = new ButtonBuilder()
+                                .setCustomId(`palaref_aussi_${message.author.id}_${auteurNom}_${user.id}`)
+                                .setLabel('😐 Pas la ref non plus')
+                                .setStyle(ButtonStyle.Secondary);
+                            const row = new ActionRowBuilder().addComponents(btn);
+                            const embed = new EmbedBuilder()
+                                .setColor(0x503649)
+                                .setDescription(`😐 **${auteurNom}** n'a pas la ref de **${cibleNom}**...`)
+                                .setImage(gif);
+                            message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+                        });
+                        return;
+                    }
+                    if (result.found) cible = result.found.user;
+                }
+            }
+        }
+
+        let description;
+        if (!cible) {
+            description = `😐 **${auteurNom}** n'a pas la ref...`;
+        } else if (cible.id === message.author.id) {
+            return message.reply({ content: "Tu n'as pas ta propre ref ? ...Hein ?", ephemeral: true });
+        } else if (cible.id === client.user.id) {
+            description = `😐 **${auteurNom}** n'a pas ma ref...`;
+        } else {
+            const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+            description = `😐 **${auteurNom}** n'a pas la ref de **${cibleNom}**...`;
+        }
+
+        const btn = new ButtonBuilder()
+            .setCustomId(`palaref_aussi_${message.author.id}_${auteurNom}_${cible?.id ?? 'none'}`)
+            .setLabel('😐 Pas la ref non plus')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(btn);
+        const embed = new EmbedBuilder()
+            .setColor(0x503649)
+            .setDescription(description)
+            .setImage(gif);
+        return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+    // !jailaref
+    if (response?.needsJailaref) {
+        const jailarefGifs = ["https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/f1/7d/7y2QyYzWIYksGnnK.gif", "https://cdn.discordapp.com/attachments/720079691041472572/1548362421079646481/caf5c232438734937f6e1cf4c7bc5411.png", "https://media1.tenor.com/m/13XpzbwtVnYAAAAC/dway-the-roc.gif", "https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/14/44/oqcpwYRAEpXGYqfyw.gif", "https://static2.klipy.com/ii/50d7c955398dfd7e3c8ba5281154280f/79/6d/eoUS3shzyQLpKm.gif", "https://static2.klipy.com/ii/d7aec6f6f171607374b2065c836f92f4/3d/31/08K8MgEk.gif", "https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/64/b0/SdnOajVDadHUy.gif", "https://cdn.discordapp.com/attachments/720079691041472572/1548366731666268250/image2.gif", "https://static2.klipy.com/ii/9294a2e836d178ddc22430dd7765727e/44/86/6QBidjUuV1oBpAnHIw7o.gif"];
+        const gif = jailarefGifs[Math.floor(Math.random() * jailarefGifs.length)];
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        let cible = message.mentions.users.first() || replyCible;
+
+        if (!cible) {
+            const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (query) {
+                if (client.user.username.toLowerCase().includes(query.toLowerCase()) || 'cacabot'.includes(query.toLowerCase())) {
+                    cible = client.user;
+                } else {
+                    const result = findMemberByName(message.guild, query);
+                    if (result.multiple) {
+                        askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const cibleNom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
+                            const btn = new ButtonBuilder()
+                                .setCustomId(`jailaref_with_${message.author.id}_${auteurNom}_${user.id}`)
+                                .setLabel('😎 J\'ai la ref aussi')
+                                .setStyle(ButtonStyle.Secondary);
+                            const row = new ActionRowBuilder().addComponents(btn);
+                            const embed = new EmbedBuilder()
+                                .setColor(0x503649)
+                                .setDescription(`😎 **${auteurNom}** a la ref de **${cibleNom}** !`)
+                                .setImage(gif);
+                            message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+                        });
+                        return;
+                    }
+                    if (result.found) cible = result.found.user;
+                }
+            }
+        }
+
+        let description;
+        if (!cible) {
+            description = `😎 **${auteurNom}** a la ref !`;
+        } else if (cible.id === message.author.id) {
+            return message.reply({ content: "Bah oui, t'as forcément ta propre ref...", ephemeral: true });
+        } else if (cible.id === client.user.id) {
+            description = `😎 **${auteurNom}** a ma ref !`;
+        } else {
+            const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+            description = `😎 **${auteurNom}** a la ref de **${cibleNom}** !`;
+        }
+
+        const btn = new ButtonBuilder()
+            .setCustomId(`jailaref_with_${message.author.id}_${auteurNom}_${cible?.id ?? 'none'}`)
+            .setLabel('😎 J\'ai la ref aussi')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(btn);
+        const embed = new EmbedBuilder()
+            .setColor(0x503649)
+            .setDescription(description)
+            .setImage(gif);
+        return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+    // !explode
+    if (response?.needsExplode) {
+        const explodeGifs = [
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564402697375794/cat-cats.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564403230183599/cat-explosion_1.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564403653804153/floop-flop.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564404031426661/cat-explodes.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564404400521267/cat-funny.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564404882870292/spideyvivi.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564405281194064/cat-explode-cat-meme.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564405847298150/explosion-missile.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564406224781373/exploding-cat-cat-blowing-up.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564406799532052/cat-gato.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564412172570664/boomshakalaka.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564412763836466/elgatitolover-cat.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564413376335962/cat-explosion-ellie-cat-explosion.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564413795635311/exploding-car-explode.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564414147825774/cat-explosion.gif"
+        ];
+        const gif = explodeGifs[Math.floor(Math.random() * explodeGifs.length)];
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        let cible = message.mentions.users.first() || replyCible;
+
+        if (!cible) {
+            const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (query) {
+                if (client.user.username.toLowerCase().includes(query.toLowerCase()) || 'cacabot'.includes(query.toLowerCase())) {
+                    cible = client.user;
+                } else {
+                    const result = findMemberByName(message.guild, query);
+                    if (result.multiple) {
+                        askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const cibleNom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
+                            const explodeBtn = new ButtonBuilder()
+                                .setCustomId(`explode_with_${message.author.id}_${auteurNom}`)
+                                .setLabel("💥 Exploser avec")
+                                .setStyle(ButtonStyle.Secondary);
+                            const row = new ActionRowBuilder().addComponents(explodeBtn);
+                            const embed = new EmbedBuilder()
+                                .setColor(0xec0f6e)
+                                .setDescription(`💥 **${auteurNom}** explose à cause de **${cibleNom}** !`)
+                                .setImage(gif);
+                            message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+                        });
+                        return;
+                    }
+                    if (result.found) cible = result.found.user;
+                }
+            }
+        }
+
+        let titre;
+        if (cible && cible.id === client.user.id) {
+            titre = `**${auteurNom}** explose à cause de moi ! Nooon !`;
+        } else if (cible && cible.id !== message.author.id) {
+            const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+            titre = `💥 **${auteurNom}** explose à cause de **${cibleNom}** !`;
+        } else {
+            titre = `💥 **${auteurNom}** explose !`;
+        }
+
+        const explodeBtn = new ButtonBuilder()
+            .setCustomId(`explode_with_${message.author.id}_${auteurNom}`)
+            .setLabel("💥 Exploser avec")
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(explodeBtn);
+
+        const embed = new EmbedBuilder()
+            .setColor(0xec0f6e)
+            .setDescription(titre)
+            .setImage(gif);
+
+        return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+    // !bait
+    if (response?.needsBait) {
+        const baitGifs = [
+            "https://cdn.discordapp.com/attachments/1072299294519988345/1304467586746028193/brandbird_4.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570790706253864/tadc-bubble-tadc.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570791683522760/tadc-the-amazing-digital-circus.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570792279379988/tadc-caine-tadc.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570793021505736/flight-flightreacts.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570793718022226/superman-superman-flying.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570795160731728/f8957342b4d99638.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570795974295672/down-syndrome.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570796981194822/flight.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570797979172964/catreacts-ragebait.gif"
+        ];
+        const gif = baitGifs[Math.floor(Math.random() * baitGifs.length)];
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        let cible = message.mentions.users.first() || replyCible;
+
+        if (!cible) {
+            const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (query) {
+                if (client.user.username.toLowerCase().includes(query.toLowerCase()) || 'cacabot'.includes(query.toLowerCase())) {
+                    cible = client.user;
+                } else {
+                    const result = findMemberByName(message.guild, query);
+                    if (result.multiple) {
+                        askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const cibleNom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
+                            const vengBtn = new ButtonBuilder()
+                                .setCustomId(`bait_venge_${user.id}_${message.author.id}_${auteurNom}`)
+                                .setLabel("💢 SE VENGER !")
+                                .setStyle(ButtonStyle.Danger);
+                            const row = new ActionRowBuilder().addComponents(vengBtn);
+                            const embed = new EmbedBuilder()
+                                .setColor(0xffb14a)
+                                .setDescription(`😜 **${auteurNom}** ragebait **${cibleNom}** !`)
+                                .setImage(gif);
+                            message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+                        });
+                        return;
+                    }
+                    if (result.found) cible = result.found.user;
+                }
+            }
+        }
+
+        if (!cible) {
+            return message.reply({ content: "Choisis quelqu'un que tu veux ragebait !", flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        if (cible.id === message.author.id) {
+            return message.reply({ content: "Tu ne peux pas te ragebait toi-même !" }).then(msg => setTimeout(() => { msg.delete().catch(() => {}); message.delete().catch(() => {}); }, 6000));
+        }
+
+        let titre;
+        if (cible.id === client.user.id) {
+            titre = `😜 **${auteurNom}** me ragebait ! Gngngngn...`;
+            const embed = new EmbedBuilder()
+                .setColor(0xffb14a)
+                .setDescription(titre)
+                .setImage(gif);
+            return message.reply({ embeds: [embed], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        titre = `😜 **${auteurNom}** ragebait **${cibleNom}** !`;
+
+        const vengBtn = new ButtonBuilder()
+            .setCustomId(`bait_venge_${cible.id}_${message.author.id}_${auteurNom}`)
+            .setLabel("💢 SE VENGER !")
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(vengBtn);
+
+        const embed = new EmbedBuilder()
+            .setColor(0xffb14a)
+            .setDescription(titre)
+            .setImage(gif);
+
+        return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+    // !bang
+    if (response?.needsBang) {
+        let cible = message.mentions.users.first() || replyCible;
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
+                if (result.found) cible = result.found.user;
+            }
+        }
+
+        if (!cible) {
+            return message.reply({ content: "Mentionne la personne sur qui tu veux tirer !", flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        if (cible.id === message.author.id) {
+            return message.reply({ content: "Évite de te tirer dessus :(", flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        if (cible.id === client.user.id) {
+            const embed = buildBangEmbed(`💥 **${auteurNom}** me tire dessus ! HÉ !`);
+            return message.reply({ embeds: [embed], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        const embed = buildBangEmbed(`💥 **${auteurNom}** tire sur **${cibleNom}** !`);
+
+        const bangBackButton = new ButtonBuilder()
+            .setCustomId(`bang_back_${message.author.id}_${cible.id}_${auteurNom}`)
+            .setLabel("💥 Riposter !")
+            .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(bangBackButton);
+        return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+    // !punch
+    if (response?.needsPunch) {
+        let cible = message.mentions.users.first() || replyCible;
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+                if (result.multiple) {
+                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    return;
+                }
+                if (result.found) cible = result.found.user;
+            }
+        }
+
+        if (!cible) {
+            return message.reply({ content: "Mentionne quelqu'un que tu veux frapper !", flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        if (cible.id === message.author.id) {
+            return message.reply({ content: "Tu ne peux pas te frapper toi-même ! 'Fin si mais... Ne le fais pas.", flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        if (cible.id === client.user.id) {
+            const embed = buildPunchEmbed(`🤜 **${auteurNom}** me frappe ! Aïeuh !`);
+            return message.reply({ embeds: [embed], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        const embed = buildPunchEmbed(`🤜 **${auteurNom}** frappe **${cibleNom}** !`);
+
+        const punchBackButton = new ButtonBuilder()
+            .setCustomId(`punch_back_${message.author.id}_${cible.id}_${auteurNom}`)
+            .setLabel("🤜 Frapper en retour")
+            .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(punchBackButton);
+        return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+    // !ban
+    if (response?.needsBan) {
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        let cible = message.mentions.users.first() || replyCible;
+
+        if (!cible) {
+            const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (query) {
+                if (client.user.username.toLowerCase().includes(query.toLowerCase()) || 'cacabot'.includes(query.toLowerCase())) {
+                    cible = client.user;
+                } else {
+                    const result = findMemberByName(message.guild, query);
+                    if (result.multiple) {
+                        const banGifsDisamb = [
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557423686029352/cat-screaming-cat-disappearing.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557409148567572/ahh-kid-turns-blue-and-vanishes.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424092741764/duck-disappears.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424491462856/tom-skot.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424805777428/atoms-cry.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425288380576/sr-pelo-screaming.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425690775683/cat-scream.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426043355278/meme-quarantine.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426433294437/flight-flights.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426881958020/nikocado-avocado-nikocado.gif",
+                            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557427209109544/moist-moist-critical.gif"
+                        ];
+                        askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const cibleNom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
+                            const gif = banGifsDisamb[Math.floor(Math.random() * banGifsDisamb.length)];
+                            const embed = new EmbedBuilder()
+                                .setColor(0xcdc9dc)
+                                .setDescription(`🔨 **${auteurNom}** bannit **${cibleNom}** !`)
+                                .setImage(gif);
+                            message.reply({ embeds: [embed], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+                        });
+                        return;
+                    }
+                    if (result.found) cible = result.found.user;
+                }
+            }
+        }
+
+        if (!cible) {
+            return message.reply({ content: "Choisis quelqu'un que tu veux bannir !", flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        if (cible.id === message.author.id) {
+            return message.reply({ content: "Tu ne peux pas te bannir toi-même ! Demande aux modos pour ça." });
+        }
+
+        const banGifs = [
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557423686029352/cat-screaming-cat-disappearing.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557409148567572/ahh-kid-turns-blue-and-vanishes.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424092741764/duck-disappears.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424491462856/tom-skot.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424805777428/atoms-cry.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425288380576/sr-pelo-screaming.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425690775683/cat-scream.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426043355278/meme-quarantine.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426433294437/flight-flights.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426881958020/nikocado-avocado-nikocado.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557427209109544/moist-moist-critical.gif"
+        ];
+        const gif = banGifs[Math.floor(Math.random() * banGifs.length)];
+
+        let titre;
+        if (cible.id === client.user.id) {
+            titre = `**${auteurNom}** me bannit... Pas cool.`;
+        } else {
+            const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+            titre = `🔨 **${auteurNom}** bannit **${cibleNom}** !`;
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(0xcdc9dc)
+            .setDescription(titre)
+            .setImage(gif);
+
+        return message.reply({ embeds: [embed], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+    // !die
+    if (response?.needsDie) {
+        let cible = message.mentions.users.first() || replyCible;
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+            if (query) {
+                const lq = query.toLowerCase();
+                if (client.user.username.toLowerCase().includes(lq) || 'cacabot'.includes(lq)) {
+                    cible = client.user;
+                } else {
+                    const result = findMemberByName(message.guild, query);
+                    if (result.found) cible = result.found.user;
+                }
+            }
+        }
+
+        if (cible && cible.id === client.user.id) {
+            const embed = buildDieEmbed(`☠️ **${auteurNom}** meurt à cause de moi ! (cheh)`);
+            const dieButton = new ButtonBuilder()
+                .setCustomId(`die_with_${message.author.id}_${auteurNom}`)
+                .setLabel("☠️ Mourir avec")
+                .setStyle(ButtonStyle.Primary);
+            const row = new ActionRowBuilder().addComponents(dieButton);
+            return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        }
+
+        let causeNom = null;
+        if (cible && cible.id !== message.author.id) {
+            causeNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        }
+
+        if (message.reference) {
+            const repliedMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+            if (repliedMsg && repliedMsg.author.id !== message.author.id && repliedMsg.author.id !== client.user.id) {
+                causeNom = message.guild?.members.cache.get(repliedMsg.author.id)?.displayName ?? repliedMsg.author.username;
+            }
+        }
+
+        const titre = causeNom
+            ? `☠️ **${auteurNom}** meurt à cause de **${causeNom}**`
+            : `☠️ **${auteurNom}** meurt...`;
+
+        const embed = buildDieEmbed(titre);
+
+        const dieButton = new ButtonBuilder()
+            .setCustomId(`die_with_${message.author.id}_${auteurNom}`)
+            .setLabel("☠️ Mourir avec")
+            .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(dieButton);
+        return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
+        let causeNom = null;
+
+        // Cas !die @X
+        if (cible && cible.id !== message.author.id) {
+            causeNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        }
+
+        // Cas reply (priorité sur le ping si les deux sont présents)
+        if (message.reference) {
+            const repliedMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+            if (repliedMsg && repliedMsg.author.id !== message.author.id && repliedMsg.author.id !== client.user.id) {
+                causeNom = message.guild?.members.cache.get(repliedMsg.author.id)?.displayName ?? repliedMsg.author.username;
+            }
+        }
+
+        const titre = causeNom
+            ? `\u2620\ufe0f **${auteurNom}** meurt \u00e0 cause de **${causeNom}**`
+            : `\u2620\ufe0f **${auteurNom}** meurt...`;
+
+        const embed = buildDieEmbed(titre);
+
+        const dieButton = new ButtonBuilder()
+            .setCustomId(`die_with_${message.author.id}_${auteurNom}`)
+            .setLabel("\u2620\ufe0f Mourir avec")
+            .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(dieButton);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
 
 }
 
@@ -1227,10 +1915,11 @@ async function runInteractionButton(interaction) {
             return interaction.reply({ content: "Pas sympa de voler les bisous des autres :/", ephemeral: true });
         }
 
+        const { MessageFlags } = require('discord.js');
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
         const embed = buildKissEmbed(retourNom, originalAuthorNom);
         await interaction.message.edit({ components: [] }).catch(() => {});
-        return interaction.reply({ embeds: [embed] });
+        return interaction.reply({ embeds: [embed], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
     }
 
     // =========================

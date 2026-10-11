@@ -331,15 +331,16 @@ function verifierHappyHour(client) {
     const salon = client?.channels.cache.get(ROULETTE_SALON_ID);
     if (!salon) return;
 
+    const { MessageFlags } = require('discord.js');
     if (h === 20 && m === 0 && dernierEnvoiHappyHour !== '20h00') {
         dernierEnvoiHappyHour = '20h00';
-        salon.send('# __🎰 C\'EST L\'HAPPY HOUR SUR LA ROULETTE ! (20h - 21h)__\n🔥 Pendant 1 heure, les cooldowns de tout le monde passent à **5 minutes** au lieu de 15 ! Tentez votre chance !');
+        salon.send({ content: '# __🎰 C\'EST L\'HAPPY HOUR SUR LA ROULETTE ! (20h - 21h)__\n🔥 Pendant 1 heure, les cooldowns de tout le monde passent à **5 minutes** au lieu de 15 ! Tentez votre chance !', flags: [MessageFlags.SuppressNotifications] });
     } else if (h === 20 && m === 30 && dernierEnvoiHappyHour !== '20h30') {
         dernierEnvoiHappyHour = '20h30';
-        salon.send('# __🎰 PLUS QUE 30 MINUTES D\'HAPPY HOUR !__\n⚡ Les tirages sont toujours à **5 minutes** de cooldown jusqu\'à 21h !');
+        salon.send({ content: '# __🎰 PLUS QUE 30 MINUTES D\'HAPPY HOUR !__\n⚡ Les tirages sont toujours à **5 minutes** de cooldown jusqu\'à 21h !', flags: [MessageFlags.SuppressNotifications] });
     } else if (h === 21 && m === 0 && dernierEnvoiHappyHour !== '21h00') {
         dernierEnvoiHappyHour = '21h00';
-        salon.send('# __🏁 FIN DE L\'HAPPY HOUR !__\nRetour au cooldown normal de 15 minutes. Merci d\'avoir joué !');
+        salon.send({ content: '# __🏁 FIN DE L\'HAPPY HOUR !__\nRetour au cooldown normal de 15 minutes. Merci d\'avoir joué !', flags: [MessageFlags.SuppressNotifications] });
     }
 }
 
@@ -383,10 +384,15 @@ async function deverrouillerSucces(userId, achId, channel) {
         .setDescription(`<@${userId}> vient d'obtenir le succès **${ach.emoji} ${ach.nom}** !\n\n*${ach.desc}*`)
         .setImage('https://cdn.discordapp.com/attachments/1480756332373213275/1555806751448629410/achievement-unlocked_1.gif');
 
+    const { MessageFlags } = require('discord.js');
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`rlt_achs_${userId}_0_${userId}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary)
     );
-    await channel?.send({ embeds: [embed], components: [row] }).catch(() => {});
+    await channel?.send({ 
+        embeds: [embed], 
+        components: [row],
+        flags: [MessageFlags.SuppressNotifications]
+    }).catch(() => {});
 }
 
 function finitParUnEmoji(texte) {
@@ -523,12 +529,14 @@ function armerNotifRoulette(userId, channelId, client) {
         const salon = await client.channels.fetch(channelId).catch(() => null);
         if (!salon) return;
 
+        const { MessageFlags } = require('discord.js');
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`roulette_tenter_${userId}`).setLabel('🎰 Tenter sa chance').setStyle(ButtonStyle.Primary)
         );
         await salon.send({
             content: `🎰 <@${userId}>, ton cooldown roulette est terminé ! Clique ci-dessous pour relancer immédiatement :`,
-            components: [row]
+            components: [row],
+            flags: [MessageFlags.SuppressNotifications]
         }).catch(() => {});
     }, Math.min(delai, 2 ** 31 - 1));
 
@@ -708,13 +716,14 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                     rouletteTimeoutUntil.set(member.id, Date.now() + 7 * 24 * 60 * 60 * 1000);
                 });
         case 'bonus-gif-ou-audio': {
+            const { MessageFlags } = require('discord.js');
             const todayStr = new Date().toDateString();
             const rec = roulettePapayouDaily.get(member.id) ?? { date: todayStr, count: 0 };
             rec.count = rec.date === todayStr ? rec.count + 1 : 1;
             rec.date = todayStr;
             roulettePapayouDaily.set(member.id, rec);
             if (rec.count >= 3) deverrouillerSucces(member.id, 'fan-carlos', message.channel);
-            await message.channel.send({ files: ["./PAPAYOU.mp3"] }).catch(() => {});
+            await message.channel.send({ files: ["./PAPAYOU.mp3"], flags: [MessageFlags.SuppressNotifications] }).catch(() => {});
             return `**${auteurNom}** a fait spawn un petit cadeau !`;
         }
         case 'bonus-anti-feur':
@@ -1180,10 +1189,12 @@ async function demarrerVoteRoulette(msg, membre) {
                         .setStyle(ButtonStyle.Success)
                 );
 
+                const { MessageFlags } = require('discord.js');
                 await targetMsg.channel.send({
                     content: `🔔 <@${membre.id}>, le vote est terminé !`,
                     embeds: [embedVictoire],
-                    components: [rowVictoire]
+                    components: [rowVictoire],
+                    flags: [MessageFlags.SuppressNotifications]
                 }).catch(() => {});
             } else {
                 deverrouillerSucces(membre.id, 'condamne-plebe', targetMsg.channel);
@@ -1464,8 +1475,13 @@ async function envoyerHallOfFame(guild, membre, entry) {
         .setTimestamp();
 
     if (avatar) embed.setThumbnail(avatar);
+    const { MessageFlags } = require('discord.js');
     deverrouillerSucces(membre.id, 'hof', salon);
-    await salon.send({ content: `🎉 Félicitations à <@${membre.id}> pour son coup de maître !`, embeds: [embed] }).catch(() => {});
+    await salon.send({ 
+        content: `🎉 Félicitations à <@${membre.id}> pour son coup de maître !`, 
+        embeds: [embed],
+        flags: [MessageFlags.SuppressNotifications]
+    }).catch(() => {});
 }
 
 function membresTop30Roulette(guild, authorId) {
@@ -1479,7 +1495,12 @@ function membresTop30Roulette(guild, authorId) {
 
 async function envoyerPingRedirection(channel, resultat) {
     if (!resultat.pingCible) return;
-    await channel.send({ content: resultat.pingCible.texte, allowedMentions: { users: [resultat.pingCible.id] } }).catch(() => {});
+    const { MessageFlags } = require('discord.js');
+    await channel.send({ 
+        content: resultat.pingCible.texte, 
+        flags: [MessageFlags.SuppressNotifications],
+        allowedMentions: { users: [resultat.pingCible.id] } 
+    }).catch(() => {});
 }
 
 function libelleProbaRoulette(outcomeId) {
@@ -2043,12 +2064,18 @@ async function handleRouletteMessage(message, response, client) {
                 cible = result.found;
             }
         }
+        const { MessageFlags } = require('discord.js');
         if (!cible) { await message.reply("Membre introuvable."); return true; }
-        await message.reply({ embeds: [buildRouletteStateEmbed(cible, message.guild?.id)] });
+        await message.reply({ 
+            embeds: [buildRouletteStateEmbed(cible, message.guild?.id)],
+            flags: [MessageFlags.SuppressNotifications],
+            allowedMentions: { repliedUser: false }
+        });
         return true;
     }
 
     if (command === '!roulettestats' || command === '!rltstats') {
+        const { MessageFlags } = require('discord.js');
         const query = raw.split(/\s+/).slice(1).join(" ");
         let cible = message.mentions.members.first();
         if (!cible) {
@@ -2060,7 +2087,7 @@ async function handleRouletteMessage(message, response, client) {
                         const membre = message.guild.members.cache.get(user.id);
                         if (membre) {
                             const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`rlt_achs_${membre.id}_0_${message.author.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary));
-                            message.reply({ embeds: [buildRouletteStatsEmbed(membre)], components: [row] });
+                            message.reply({ embeds: [buildRouletteStatsEmbed(membre)], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
                         }
                     });
                 }
@@ -2069,13 +2096,14 @@ async function handleRouletteMessage(message, response, client) {
         }
         if (!cible) { await message.reply("Membre introuvable."); return true; }
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`rlt_achs_${cible.id}_0_${message.author.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary));
-        await message.reply({ embeds: [buildRouletteStatsEmbed(cible)], components: [row] });
+        await message.reply({ embeds: [buildRouletteStatsEmbed(cible)], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
         return true;
     }
 
     if (['!rlttop', '!roulettetop', '!rltleaderboard'].includes(command)) {
+        const { MessageFlags } = require('discord.js');
         const { embed, row } = buildRouletteTopEmbed(message.guild, message.author.id);
-        await message.reply({ embeds: [embed], components: [row] });
+        await message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
         return true;
     }
 
@@ -2121,11 +2149,18 @@ async function handleRouletteMessage(message, response, client) {
                 return true;
             }
             // failIfNotExists: false permet de poster dans le salon même si le membre a supprimé son message
+            const { MessageFlags } = require('discord.js');
             const envoye = await message.reply({ 
                 embeds: resultat.embeds, 
                 components: resultat.components,
+                flags: [MessageFlags.SuppressNotifications],
+                allowedMentions: { repliedUser: false },
                 failIfNotExists: false 
-            }).catch(() => message.channel.send({ embeds: resultat.embeds, components: resultat.components }).catch(() => null));
+            }).catch(() => message.channel.send({ 
+                embeds: resultat.embeds, 
+                components: resultat.components,
+                flags: [MessageFlags.SuppressNotifications]
+            }).catch(() => null));
 
             if (!envoye) return true;
             await envoyerPingRedirection(message.channel, resultat);
@@ -2147,8 +2182,18 @@ async function handleRouletteMessage(message, response, client) {
             new ButtonBuilder().setCustomId(`roulette_probas_pres_${message.author.id}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`roulette_tenter_${message.author.id}`).setLabel('🍀 Tenter sa chance').setStyle(ButtonStyle.Primary)
         );
-        await message.reply({ embeds: [embed], components: [row], failIfNotExists: false })
-            .catch(() => message.channel.send({ embeds: [embed], components: [row] }).catch(() => null));
+        const { MessageFlags } = require('discord.js');
+        await message.reply({ 
+            embeds: [embed], 
+            components: [row], 
+            flags: [MessageFlags.SuppressNotifications],
+            allowedMentions: { repliedUser: false },
+            failIfNotExists: false 
+        }).catch(() => message.channel.send({ 
+            embeds: [embed], 
+            components: [row],
+            flags: [MessageFlags.SuppressNotifications]
+        }).catch(() => null));
         return true;
     }
 

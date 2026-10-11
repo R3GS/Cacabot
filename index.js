@@ -1277,7 +1277,8 @@ async function disableButtons(interaction) {
     // =========================
     if (await handleRouletteMessage(message, null, client)) return;
 
-    // Ping Cacabot seul -> "Quoi ? (Feur)"
+    // Ping Cacabot seul -> "Quoi ? (Feur)" (Silencieux)
+    const { MessageFlags } = require('discord.js');
     const strippedMsg = message.content.replace(/<@!?1503495713097519355>/g, '').trim();
     if (!isChannelMuted(message.channel.id) && message.content.includes('1503495713097519355') && strippedMsg.length === 0) {
         const finAf = rouletteAntiFeurUntil.get(message.author.id);
@@ -1288,13 +1289,13 @@ async function disableButtons(interaction) {
             trackBattlePassProgress(message.author.id, 'feur_dodge', 1);
             return message.react('🛡️').catch(() => {});
         }
-        return message.reply('Quoi ? (Feur)');
+        return message.reply({ content: 'Quoi ? (Feur)', flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
     }
-    // Cheh
+    // Cheh (Silencieux)
     const cleanedCheh = message.content.toLowerCase().trim();
     if (!isChannelMuted(message.channel.id) && pendingCheh.has(message.channel.id) && (cleanedCheh.includes('ntm') || cleanedCheh.includes('tg') || cleanedCheh.includes('nique ta') || cleanedCheh.includes('ta gueule') || cleanedCheh.includes('jte bz') || cleanedCheh.includes('bztmr') || cleanedCheh.includes('va te faire enculer') || cleanedCheh.includes('la ferme') || cleanedCheh.includes('tais-toi') || cleanedCheh.includes('mange tes'))) {
         pendingCheh.delete(message.channel.id);
-        return message.reply(CHEH_GIF);
+        return message.reply({ content: CHEH_GIF, flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
     }
 
     // Comptage messages pour !top & Capteur Central Battle Pass
@@ -1514,17 +1515,18 @@ async function disableButtons(interaction) {
     // Commandes Activité (!profil, !avatar, !actif, !top, !setmessages)
     if (await handleActivityMessage(message, response)) return;
 
-    // hé petit
+    // hé petit (Silencieux)
+    const { MessageFlags } = require('discord.js');
     if (response?.needsHePetit) {
-        await message.reply({ files: ['./monty.gif'] });
-        await message.channel.send({ files: ['./' + 'h\u00e9 petit.mp3'] });
+        await message.reply({ files: ['./monty.gif'], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        await message.channel.send({ files: ['./' + 'hé petit.mp3'], flags: [MessageFlags.SuppressNotifications] });
         return;
     }
 
-    // jtm cacabot
+    // jtm cacabot (Silencieux)
     if (response?.needsJtm) {
         const auteurNom = message.member?.displayName ?? message.author.username;
-        return message.reply(`Moi aussi jtm **${auteurNom}** \u2764\ufe0f`);
+        return message.reply({ content: `Moi aussi jtm **${auteurNom}** ❤️`, flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
     }
 
     // !horoscope
@@ -1628,9 +1630,14 @@ async function disableButtons(interaction) {
         }
     }
 
-    // Réponse texte simple
+    // Réponse texte simple (100% silencieuse)
     if (response && typeof response === "object" && response.files) {
-        return message.reply({ files: response.files });
+        const { MessageFlags } = require('discord.js');
+        return message.reply({ 
+            files: response.files,
+            flags: [MessageFlags.SuppressNotifications],
+            allowedMentions: { repliedUser: false }
+        });
     }
 
     if (typeof response === "string") {
@@ -1649,7 +1656,12 @@ async function disableButtons(interaction) {
             if (d >= 5) deverrouillerSucces(message.author.id, 'tete-dure', message.channel);
             return message.react('🛡️').catch(() => {});
         }
-        const autoReplyMsg = await message.reply({ content: response });
+        const { MessageFlags } = require('discord.js');
+        const autoReplyMsg = await message.reply({ 
+            content: response,
+            flags: [MessageFlags.SuppressNotifications],
+            allowedMentions: { repliedUser: false }
+        });
         if (pendingCheh.has(message.channel.id)) clearTimeout(pendingCheh.get(message.channel.id).timeout);
         const chehTimeout = setTimeout(() => { pendingCheh.delete(message.channel.id); }, 10000);
         pendingCheh.set(message.channel.id, { timeout: chehTimeout, replyMsg: autoReplyMsg });
@@ -2316,8 +2328,12 @@ client.on('messageReactionAdd', async (reaction, user) => {
     );
     if (emojiReaction && emojiReaction.count > 1) return;
 
+    const { MessageFlags } = require('discord.js');
     const memberNom = msg.guild?.members.cache.get(user.id)?.displayName ?? user.username;
-    await msg.channel.send(`Bah alors, **${memberNom}**, on m'envoie un doigt d'honneur ?`);
+    await msg.channel.send({ 
+        content: `Bah alors, **${memberNom}**, on m'envoie un doigt d'honneur ?`,
+        flags: [MessageFlags.SuppressNotifications]
+    });
 });
 
 client.on('messageReactionRemove', async (reaction, user) => {
