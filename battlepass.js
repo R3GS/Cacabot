@@ -641,17 +641,92 @@ function attribuerRecompenseInventaire(userId, itemKey) {
 //  HANDLERS MESSAGES & SLASH
 // =========================
 
-async function handleBattlePassMessage(message) {
+async function handleBattlePassMessage(message, helpers = {}) {
     const raw = message.content.trim();
-    const cmd = raw.split(/\s+/)[0].toLowerCase();
+    const parts = raw.split(/\s+/);
+    const cmd = parts[0].toLowerCase();
+    const sub = parts[1]?.toLowerCase();
 
     if (['!bp', '!pass', '!battlepass'].includes(cmd)) {
+        // Commande d'administration Epsys : !bp questforce [membre]
+        if (sub === 'questforce') {
+            if (message.author.id !== bpBridge.EPSYS_ID) {
+                await message.reply("Cette commande est réservée à Epsys.");
+                return true;
+            }
+
+            const query = parts.slice(2).join(" ");
+            let cible = message.mentions.members.first();
+            if (!cible) {
+                if (!query) cible = message.member;
+                else if (helpers.findMemberByName) {
+                    const result = helpers.findMemberByName(message.guild, query);
+                    if (result.multiple && helpers.askDisambiguation) {
+                        return helpers.askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const mb = message.guild.members.cache.get(user.id);
+                            if (mb) afficherMenuQuestforce(message, mb);
+                        });
+                    }
+                    cible = result.found;
+                }
+            }
+
+            if (!cible) {
+                await message.reply("Membre introuvable. Usage : `!bp questforce [pseudo/mention]`");
+                return true;
+            }
+
+            return await afficherMenuQuestforce(message, cible);
+        }
+
         const embed = buildBPHomeEmbed(message.member);
         const rows = buildBPButtons(message.author.id);
         await message.reply({ embeds: [embed], components: rows });
         return true;
     }
     return false;
+}
+
+async function afficherMenuQuestforce(message, cible) {
+    const p = getOuCreerProfilBP(cible.id);
+    const embed = buildBPQuestsEmbed(cible);
+    embed.setTitle(`🛠️ [ADMIN] Quêtes de ${cible.displayName} — Force Completion`);
+
+    const options = [];
+    p.quetesDuJour.forEach((q, idx) => {
+        if (!q.terminee) {
+            options.push({
+                label: `☀️ [Q${idx + 1}] (+${q.xp} XP) ${q.desc}`.slice(0, 100),
+                description: `Progression : ${q.progression}/${q.objectif} (Quotidienne)`.slice(0, 100),
+                value: `daily_${q.id}`
+            });
+        }
+    });
+
+    p.quetesHebdo.forEach((q, idx) => {
+        if (!q.terminee) {
+            options.push({
+                label: `📅 [H${idx + 1}] (+${q.xp} XP) ${q.desc}`.slice(0, 100),
+                description: `Progression : ${q.progression}/${q.objectif} (Hebdomadaire)`.slice(0, 100),
+                value: `weekly_${q.id}`
+            });
+        }
+    });
+
+    if (options.length === 0) {
+        embed.setDescription("Toutes les quêtes de ce membre sont déjà terminées !");
+        await message.reply({ embeds: [embed] });
+        return true;
+    }
+
+    const menu = new StringSelectMenuBuilder()
+        .setCustomId(`bp_questforce_select_${cible.id}`)
+        .setPlaceholder('Sélectionne une quête à compléter de force...')
+        .addOptions(options.slice(0, 25));
+
+    const row = new ActionRowBuilder().addComponents(menu);
+    await message.reply({ embeds: [embed], components: [row] });
+    return true;
 }
 
 async function handleBattlePassSlash(interaction) {
@@ -667,6 +742,57 @@ async function handleBattlePassSlash(interaction) {
 async function handleBattlePassInteraction(interaction) {
     const id = interaction.customId;
     if (!id) return false;
+
+    // Action Admin Epsys : Forcer la complétion d'une quête
+    if (id.startsWith('bp_questforce_select_')) {
+        if (interaction.user.id !== bpBridge.EPSYS_ID) {
+            return interaction.reply({ content: "Cette action est réservée à Epsys.", ephemeral: true });
+        }
+
+        const cibleId = id.split('_')[3];
+        const valChoisie = interaction.values[0];
+        const [categorie, queteId] = valChoisie.split('_');
+        const p = getOuCreerProfilBP(cibleId);
+
+        let queteTrouvee = null;
+        if (categorie === 'daily') {
+            queteTrouvee = p.quetesDuJour.find(q => q.id === queteId);
+        } else {
+            queteTrouvee = p.quetesHebdo.find(q => q.id === queteId);
+        }
+
+        if (!queteTrouvee || queteTrouvee.terminee) {
+            return interaction.reply({ content: "Cette quête a déjà été terminée ou n'existe plus.", ephemeral: true });
+        }
+
+        // Complétion immédiate
+        queteTrouvee.progression = queteTrouvee.objectif;
+        queteTrouvee.terminee = true;
+        queteTrouvee.reclamee = true;
+
+        if (categorie === 'daily') {
+            const today = getTodayKey();
+            if (p.dernierJourStreak !== today) {
+                p.streak = (p.streak || 0) + 1;
+                p.dernierJourStreak = today;
+                checkStreakRewards(cibleId, p.streak);
+            }
+        }
+
+        ajouterXpEtMonteeDeNiveau(cibleId, p, queteTrouvee.xp, `[FORCÉ PAR ADMIN] ${queteTrouvee.desc}`);
+        bpBridge.demanderSauvegarde();
+
+        const cibleMembre = interaction.guild.members.cache.get(cibleId);
+        const embedMaj = buildBPQuestsEmbed(cibleMembre || { displayName: `ID ${cibleId}` });
+        embedMaj.setTitle(`✅ Quête complétée de force pour ${cibleMembre?.displayName ?? cibleId} !`);
+
+        await interaction.update({ embeds: [embedMaj], components: [] });
+        await interaction.followUp({
+            content: `⚡ **Succès !** La quête **${queteTrouvee.desc}** (+${queteTrouvee.xp} XP) a été validée pour <@${cibleId}> !\nNiveau actuel : **Niv. ${p.niveau}** (${p.xp}/${XP_PAR_NIVEAU} XP).`,
+            ephemeral: true
+        });
+        return true;
+    }
 
     // 1. Menu déroulant des notifications (en MP ou sur le serveur)
     if (id === 'bp_notifs_select') {

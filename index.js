@@ -1399,7 +1399,7 @@ async function disableButtons(interaction) {
     if (!response && !isExplicitCommand) return;
 
 // Commandes Battle Pass (!bp, !pass)
-    if (await handleBattlePassMessage(message)) return;
+    if (await handleBattlePassMessage(message, { findMemberByName, askDisambiguation })) return;
 
     // Commandes YouTube (!youtube, !last, !stats)
     if (await handleYoutubeMessage(message, response)) return;
