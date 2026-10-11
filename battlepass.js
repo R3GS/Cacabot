@@ -350,7 +350,7 @@ function checkStreakRewards(userId, streak) {
 function buildBPHomeEmbed(membre) {
     const p = getOuCreerProfilBP(membre.id);
     const mult = getMultiplicateurStreak(p.streak);
-    const multStr = mult > 1 ? ` (+${Math.round((mult - 1) * 100)}% d'XP)` : '';
+    const multStr = mult > 1 ? ` *(+${Math.round((mult - 1) * 100)}% d'XP)*` : '';
 
     const nbQuetesFinies = p.quetesDuJour.filter(q => q.terminee && !q.reclamee).length +
                           p.quetesHebdo.filter(q => q.terminee && !q.reclamee).length;
@@ -359,16 +359,19 @@ function buildBPHomeEmbed(membre) {
     const nbVert = Math.round((pct / 100) * 10);
     const barre = '🟩'.repeat(nbVert) + '⬜'.repeat(10 - nbVert);
 
-    let desc = `Bienvenue dans le Pass de Combat officiel de Regaïa !\nAccomplis tes quêtes, maintiens ta série quotidienne et débloque les 25 paliers du mois !\n\n` +
-               `👤 **Membre :** <@${membre.id}>\n` +
-               `⭐ **Niveau actuel :** **Niveau ${p.niveau}/${NIVEAU_MAX}**\n` +
-               `📈 **Progression XP :** \`${barre}\` **${p.xp}/${XP_PAR_NIVEAU} XP** (${pct}%)\n` +
-               `🔥 **Série actuelle :** **${p.streak} jour${p.streak > 1 ? 's' : ''} consécutif${p.streak > 1 ? 's' : ''}**${multStr}\n\n` +
-               (nbQuetesFinies > 0 ? `🎁 **${nbQuetesFinies} quête(s) terminée(s) en attente d'XP !** Clique sur *Récupérer* !\n\n` : `*Aucune quête en attente.*\n\n`);
+    let desc = `### 🌟 Bienvenue dans le Pass de Combat de Regaïa !\n` +
+               `Accomplis tes quêtes, maintiens ta série quotidienne et franchis les **25 paliers** du mois pour remporter des récompenses exclusives !\n\n` +
+               `👤 **Membre :** <@${membre.id}>\n\n` +
+               `⭐ **Niveau actuel :** **Niveau ${p.niveau}/${NIVEAU_MAX}**\n\n` +
+               `📈 **Progression XP :** \`${barre}\` **${p.xp}/${XP_PAR_NIVEAU} XP** (${pct}%)\n\n` +
+               `🔥 **Série quotidienne :** **${p.streak} jour${p.streak > 1 ? 's' : ''} consécutif${p.streak > 1 ? 's' : ''}**${multStr}\n\n`;
 
-    // Avertissement si l'utilisateur a ses MP bloqués
+    if (nbQuetesFinies > 0) {
+        desc += `🎁 **${nbQuetesFinies} quête(s) terminée(s) en attente d'XP !**\n> Clique sur le bouton vert **🎁 Récupérer** ci-dessous !\n\n`;
+    }
+
     if (p.notifs !== 'desactive' && p.mpBloques) {
-        desc += `⚠️ **Tu as fermé tes MP de la part des inconnus, je peux rien t'envoyer !**\n*Active l'option "Autoriser les messages privés provenant des membres du serveur" dans tes paramètres Discord si tu souhaites recevoir tes alertes.*\n\n`;
+        desc += `⚠️ **Attention : Tes MP Discord sont fermés !**\n*Active l'option "Autoriser les messages privés" sur ce serveur pour recevoir tes alertes privées.*\n\n`;
     }
 
     const embed = new EmbedBuilder()
@@ -376,9 +379,16 @@ function buildBPHomeEmbed(membre) {
         .setTitle(`🎫 BATTLE PASS — SAISON ${bpBridge.getBattlePassData().saison || 1}`)
         .setDescription(desc)
         .addFields(
-            { name: '🎯 Prochain Palier Majeur', value: getProchainPalierMajeurText(p.niveau), inline: false },
-            { name: '🔔 Alertes privées (MP)', value: `Statut : **${getLibelleNotif(p.notifs)}** *(modifie-le via le bouton ⚙️ ci-dessous)*`, inline: false },
-            { name: '📜 Esprit de Regaïa', value: '-# *Le staff rappelle que le pass récompense l\'activité naturelle. Les conversations artificielles ou de pur grind ne sont pas tolérées.*' }
+            { 
+                name: '🎯 Prochain Palier Majeur', 
+                value: `> ${getProchainPalierMajeurText(p.niveau)}\n\u200b`, 
+                inline: false 
+            },
+            { 
+                name: '🔔 Alertes privées (MP)', 
+                value: `> Statut actuel : **${getLibelleNotif(p.notifs)}**\n> *(Personnalisable avec le bouton ⚙️ Alertes MP)*`, 
+                inline: false 
+            }
         )
         .setFooter({ text: 'Commandes : !bp • Reset quotidien à 00h00' })
         .setThumbnail(membre.user.displayAvatarURL({ dynamic: true, size: 256 }));
@@ -389,7 +399,7 @@ function buildBPHomeEmbed(membre) {
 function getProchainPalierMajeurText(niveau) {
     const majeurs = [5, 10, 15, 20, 25];
     const next = majeurs.find(n => n > niveau);
-    if (!next) return '👑 **Palier Ultime atteint !** Félicitations pour avoir conquis la saison !';
+    if (!next) return '👑 **Palier Ultime atteint !** Tu as conquis la saison !';
     return `**Niveau ${next} :** ${RECOMPENSES_PALIERS[next].nom}`;
 }
 
@@ -406,42 +416,59 @@ function buildBPQuestsEmbed(membre) {
         return `${icon} **[${q.xp} XP] ${q.desc}**\n> Progression : \`${q.progression}/${q.objectif}\``;
     }).join('\n\n');
 
+    const desc = `# ☀️ QUÊTES QUOTIDIENNES\n` +
+                 `*Réinitialisées chaque nuit à 00h00*\n\n` +
+                 (quotidiennesLignes || '*Aucune quête active.*') +
+                 `\n\n\u200b\n` +
+                 `# 📅 QUÊTES HEBDOMADAIRES\n` +
+                 `*Réinitialisées chaque lundi*\n\n` +
+                 (hebdosLignes || '*Aucune quête active.*');
+
     return new EmbedBuilder()
         .setColor(0x3498db)
         .setTitle(`📋 QUÊTES DU PASS — ${membre.displayName}`)
-        .addFields(
-            { name: '☀️ __QUÊTES QUOTIDIENNES__ (Reset - 00h00)', value: quotidiennesLignes || '*Aucune quête*', inline: false },
-            { name: '📅 __QUÊTES HEBDOMADAIRES__ (Reset - Lundi)', value: hebdosLignes || '*Aucune quête*', inline: false }
-        )
-        .setFooter({ text: 'Valide au moins 1 quotidienne pour conserver ta série de jours consécutifs !' });
+        .setDescription(desc)
+        .setFooter({ text: 'Valide au moins 1 quête par jour pour conserver ta série !' });
 }
 
 function buildBPLadderEmbed(membre) {
     const p = getOuCreerProfilBP(membre.id);
     const lignes = [];
 
-    lignes.push('🪜 **ÉCHELLE DE PROGRESSION DU BATTLE PASS** (Saison 1)\n');
+    lignes.push('### 🪜 ÉCHELLE DES RÉCOMPENSES (Saison 1)\n');
 
-    for (let niv = 1; niv <= NIVEAU_MAX; niv++) {
+    for (let niv = NIVEAU_MAX; niv >= 1; niv--) {
         const reco = RECOMPENSES_PALIERS[niv];
         const isMajeur = reco.majeur;
-        const prefix = isMajeur ? '⭐' : '║ ';
+        const etoile = isMajeur ? '⭐ ' : '';
 
         if (niv < p.niveau) {
-            lignes.push(`   ${prefix} ✅ **Niv. ${niv}** — ${reco.nom}`);
+            lignes.push(`\`[ ✓ ]\` 🪜 **Niv. ${String(niv).padStart(2, '0')}** — ${etoile}${reco.nom}`);
         } else if (niv === p.niveau) {
-            lignes.push(`\n   ╠══ 🎯 **[TU ES ICI] NIVEAU ${niv}** (${p.xp}/${XP_PAR_NIVEAU} XP) ══╣\n`);
-            lignes.push(`   ${prefix} 🔒 **Niv. ${niv}** — ${reco.nom}`);
+            lignes.push(`**👉 🎯 [NIVEAU ACTUEL ${niv}]** (${p.xp}/${XP_PAR_NIVEAU} XP)\n\`[ ▶ ]\` 🪜 **Niv. ${String(niv).padStart(2, '0')}** — ${etoile}${reco.nom}`);
         } else {
-            lignes.push(`   ${prefix} 🔒 **Niv. ${niv}** — ${reco.nom}`);
+            lignes.push(`\`[   ]\` 🪜 **Niv. ${String(niv).padStart(2, '0')}** — ${etoile}${reco.nom}`);
         }
     }
 
     return new EmbedBuilder()
         .setColor(0x9b59b6)
-        .setTitle(`🪜 Échelle des Paliers — ${membre.displayName}`)
+        .setTitle(`🪜 Échelle de Progression — ${membre.displayName}`)
         .setDescription(lignes.join('\n'))
-        .setFooter({ text: 'Chaque niveau requiert 500 XP' });
+        .setFooter({ text: '⭐ = Palier majeur • 500 XP requis par niveau' });
+}
+
+function buildBPRulesEmbed() {
+    return new EmbedBuilder()
+        .setColor(0xffd20a)
+        .setTitle('📜 RÈGLES DU BATTLE PASS')
+        .setDescription(
+            `### 🌿 L'esprit de Regaïa\n` +
+            `Le Pass de Combat est conçu pour récompenser **l'activité vivante, naturelle et chaleureuse** sur le serveur !\n\n` +
+            `*Emplacement réservé : tes règles détaillées seront affichées ici dès que tu me les auras transmises !*\n\n` +
+            `> 💡 **En attendant :** Participe aux discussions, tente ta chance à la roulette, joue aux mini-jeux du jour et maintiens ta série quotidienne sans spammer !`
+        )
+        .setFooter({ text: 'Battle Pass • Serveur Regaïa' });
 }
 
 function buildBPButtons(authorId) {
@@ -450,7 +477,8 @@ function buildBPButtons(authorId) {
         new ButtonBuilder().setCustomId(`bp_quests_${authorId}`).setLabel('📋 Mes Quêtes').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`bp_ladder_${authorId}`).setLabel('🪜 Paliers').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`bp_claim_${authorId}`).setLabel('🎁 Récupérer').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`bp_notifs_${authorId}`).setLabel('⚙️ Notifs MP').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`bp_rules_${authorId}`).setLabel('📜 Règles').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`bp_notifs_${authorId}`).setLabel('⚙️ Alertes MP').setStyle(ButtonStyle.Secondary)
     );
 }
 
@@ -621,6 +649,11 @@ async function handleBattlePassInteraction(interaction) {
 
     if (action === 'ladder') {
         await interaction.update({ embeds: [buildBPLadderEmbed(interaction.member)], components: [buildBPButtons(authorId)] });
+        return true;
+    }
+
+    if (action === 'rules') {
+        await interaction.update({ embeds: [buildBPRulesEmbed()], components: [buildBPButtons(authorId)] });
         return true;
     }
 
