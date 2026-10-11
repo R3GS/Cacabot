@@ -580,8 +580,8 @@ async function handleBattlePassMessage(message) {
 
     if (['!bp', '!pass', '!battlepass'].includes(cmd)) {
         const embed = buildBPHomeEmbed(message.member);
-        const row = buildBPButtons(message.author.id);
-        await message.reply({ embeds: [embed], components: [row] });
+        const rows = buildBPButtons(message.author.id);
+        await message.reply({ embeds: [embed], components: rows });
         return true;
     }
     return false;
@@ -590,8 +590,8 @@ async function handleBattlePassMessage(message) {
 async function handleBattlePassSlash(interaction) {
     if (['bp', 'pass', 'battlepass'].includes(interaction.commandName)) {
         const embed = buildBPHomeEmbed(interaction.member);
-        const row = buildBPButtons(interaction.user.id);
-        await interaction.reply({ embeds: [embed], components: [row] });
+        const rows = buildBPButtons(interaction.user.id);
+        await interaction.reply({ embeds: [embed], components: rows });
         return true;
     }
     return false;
@@ -643,22 +643,22 @@ async function handleBattlePassInteraction(interaction) {
     }
 
     if (action === 'home') {
-        await interaction.update({ embeds: [buildBPHomeEmbed(interaction.member)], components: [buildBPButtons(authorId)] });
+        await interaction.update({ embeds: [buildBPHomeEmbed(interaction.member)], components: buildBPButtons(authorId) });
         return true;
     }
 
     if (action === 'quests') {
-        await interaction.update({ embeds: [buildBPQuestsEmbed(interaction.member)], components: [buildBPButtons(authorId)] });
+        await interaction.update({ embeds: [buildBPQuestsEmbed(interaction.member)], components: buildBPButtons(authorId) });
         return true;
     }
 
     if (action === 'ladder') {
-        await interaction.update({ embeds: [buildBPLadderEmbed(interaction.member)], components: [buildBPButtons(authorId)] });
+        await interaction.update({ embeds: [buildBPLadderEmbed(interaction.member)], components: buildBPButtons(authorId) });
         return true;
     }
 
     if (action === 'rules') {
-        await interaction.update({ embeds: [buildBPRulesEmbed()], components: [buildBPButtons(authorId)] });
+        await interaction.update({ embeds: [buildBPRulesEmbed()], components: buildBPButtons(authorId) });
         return true;
     }
 
