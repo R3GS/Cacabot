@@ -698,7 +698,7 @@ async function afficherMenuQuestforce(message, cible) {
             options.push({
                 label: `☀️ [Q${idx + 1}] (+${q.xp} XP) ${q.desc}`.slice(0, 100),
                 description: `Progression : ${q.progression}/${q.objectif} (Quotidienne)`.slice(0, 100),
-                value: `daily_${q.id}`
+                value: `daily::${q.id}`
             });
         }
     });
@@ -708,7 +708,7 @@ async function afficherMenuQuestforce(message, cible) {
             options.push({
                 label: `📅 [H${idx + 1}] (+${q.xp} XP) ${q.desc}`.slice(0, 100),
                 description: `Progression : ${q.progression}/${q.objectif} (Hebdomadaire)`.slice(0, 100),
-                value: `weekly_${q.id}`
+                value: `weekly::${q.id}`
             });
         }
     });
@@ -749,9 +749,9 @@ async function handleBattlePassInteraction(interaction) {
             return interaction.reply({ content: "Cette action est réservée à Epsys.", ephemeral: true });
         }
 
-        const cibleId = id.split('_')[3];
+        const cibleId = id.replace('bp_questforce_select_', '');
         const valChoisie = interaction.values[0];
-        const [categorie, queteId] = valChoisie.split('_');
+        const [categorie, queteId] = valChoisie.split('::');
         const p = getOuCreerProfilBP(cibleId);
 
         let queteTrouvee = null;
