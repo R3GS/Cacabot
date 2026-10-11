@@ -2489,6 +2489,9 @@ client.once('ready', async () => {
     // Chargement immédiat des données sans attendre
     await loadAll();
 
+    // On arme les notifications UNIQUEMENT après la réhydratation complète du JSON
+    for (const [uid, chId] of rouletteNotifs) armerNotifRoulette(uid, chId, client);
+
     // Envoi immédiat du message de retour à la seconde où les commandes sont opérationnelles
     (async () => {
         try {
@@ -2538,7 +2541,6 @@ client.once('ready', async () => {
         }
     })();
 
-    for (const [uid, chId] of rouletteNotifs) armerNotifRoulette(uid, chId, client);
     cleanOldData();
     setInterval(() => verifierHappyHour(client), 30 * 1000);
     setInterval(() => verifierTwitchLive(client), 60 * 1000);

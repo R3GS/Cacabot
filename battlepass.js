@@ -472,14 +472,19 @@ function buildBPRulesEmbed() {
 }
 
 function buildBPButtons(authorId) {
-    return new ActionRowBuilder().addComponents(
+    const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`bp_home_${authorId}`).setLabel('🏠 Accueil').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`bp_quests_${authorId}`).setLabel('📋 Mes Quêtes').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`bp_ladder_${authorId}`).setLabel('🪜 Paliers').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`bp_claim_${authorId}`).setLabel('🎁 Récupérer').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`bp_claim_${authorId}`).setLabel('🎁 Récupérer').setStyle(ButtonStyle.Success)
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`bp_rules_${authorId}`).setLabel('📜 Règles').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`bp_notifs_${authorId}`).setLabel('⚙️ Alertes MP').setStyle(ButtonStyle.Secondary)
     );
+
+    return [row1, row2];
 }
 
 // ==========================================
@@ -687,7 +692,7 @@ async function handleBattlePassInteraction(interaction) {
         desc += `*Consulte tes stats à jour sur l'accueil !*`;
 
         await interaction.reply({ content: desc, ephemeral: true });
-        await interaction.message.edit({ embeds: [buildBPHomeEmbed(interaction.member)], components: [buildBPButtons(authorId)] }).catch(() => {});
+        await interaction.message.edit({ embeds: [buildBPHomeEmbed(interaction.member)], components: buildBPButtons(authorId) }).catch(() => {});
         return true;
     }
 

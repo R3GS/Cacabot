@@ -262,6 +262,7 @@ const rouletteTimeoutUntil = new Map();
 const rouletteWebhooks = new Map();
 const rouletteNotifs = new Map();
 const rouletteNotifTimers = new Map();
+const notifsEnvoyeesRecent = new Set();
 let dernierEnvoiHappyHour = null;
 
 const ROULETTE_ETATS = {
@@ -474,14 +475,51 @@ function retirerLettre(texte, lettre) {
 }
 
 function armerNotifRoulette(userId, channelId, client) {
-    clearTimeout(rouletteNotifTimers.get(userId));
+    if (rouletteNotifTimers.has(userId)) {
+        clearTimeout(rouletteNotifTimers.get(userId));
+        rouletteNotifTimers.delete(userId);
+    }
+
     const fin = rouletteCooldowns.get(userId) ?? 0;
-    const delai = Math.max(fin - Date.now(), 0);
+    const now = Date.now();
+
+    // Si la notif a déjà été envoyée il y a moins d'une minute, on stoppe net
+    if (notifsEnvoyeesRecent.has(userId)) {
+        rouletteNotifs.delete(userId);
+        return;
+    }
+
+    // Si le cooldown est fini depuis plus de 10 secondes au boot, on purge sans ping fantôme
+    if (now >= fin && (now - fin > 10000)) {
+        rouletteNotifs.delete(userId);
+        bridge.demanderSauvegarde();
+        return;
+    }
+
+    const delai = Math.max(fin - now, 0);
+
     const timer = setTimeout(async () => {
         rouletteNotifTimers.delete(userId);
-        const finActuelle = rouletteCooldowns.get(userId) ?? 0;
-        if (Date.now() < finActuelle) return armerNotifRoulette(userId, channelId, client);
+
+        // Verrou absolu anti-doublon
+        if (!rouletteNotifs.has(userId) || notifsEnvoyeesRecent.has(userId)) {
+            rouletteNotifs.delete(userId);
+            return;
+        }
+
+        // On consomme la notif et on active le verrou d'1 minute
         rouletteNotifs.delete(userId);
+        notifsEnvoyeesRecent.add(userId);
+        setTimeout(() => notifsEnvoyeesRecent.delete(userId), 60000);
+        bridge.demanderSauvegarde();
+
+        const finActuelle = rouletteCooldowns.get(userId) ?? 0;
+        if (Date.now() < finActuelle) {
+            notifsEnvoyeesRecent.delete(userId);
+            rouletteNotifs.set(userId, channelId);
+            return armerNotifRoulette(userId, channelId, client);
+        }
+
         const salon = await client.channels.fetch(channelId).catch(() => null);
         if (!salon) return;
 
@@ -493,6 +531,7 @@ function armerNotifRoulette(userId, channelId, client) {
             components: [row]
         }).catch(() => {});
     }, Math.min(delai, 2 ** 31 - 1));
+
     rouletteNotifTimers.set(userId, timer);
 }
 
