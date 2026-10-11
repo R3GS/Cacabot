@@ -381,7 +381,8 @@ initRouletteBridge({
     EPSYS_ID: '436218312574107658',
     findMemberByName,
     askDisambiguation,
-    suggestionsData
+    suggestionsData,
+    trackBattlePassProgress
 });
 
 
@@ -1287,6 +1288,7 @@ async function disableButtons(interaction) {
             const d = (rouletteAntiFeurDodges.get(message.author.id) || 0) + 1;
             rouletteAntiFeurDodges.set(message.author.id, d);
             if (d >= 5) deverrouillerSucces(message.author.id, 'tete-dure', message.channel);
+            trackBattlePassProgress(message.author.id, 'feur_dodge', 1);
             return message.react('🛡️').catch(() => {});
         }
         return message.reply('Quoi ? (Feur)');
@@ -1305,6 +1307,17 @@ async function disableButtons(interaction) {
         topData.messages[uid]++;
         if (message.content.trim().length >= 4 && !message.content.startsWith('!')) {
             trackBattlePassProgress(uid, 'message', 1);
+            
+            // Vérification si le membre parle sous l'effet d'un malus textuel
+            const transfosMembre = ROULETTE_ETATS.transfos.get(uid);
+            const aMalusActif = (transfosMembre && Object.keys(transfosMembre).length > 0) ||
+                                (ROULETTE_ETATS.uwu.get(uid) > Date.now()) ||
+                                (ROULETTE_ETATS.lettreInterdite.get(uid)?.until > Date.now()) ||
+                                (ROULETTE_ETATS.emoji.get(uid) > Date.now()) ||
+                                (ROULETTE_ETATS.leet.get(uid) > Date.now());
+            if (aMalusActif) {
+                trackBattlePassProgress(uid, 'malus_msg', 1);
+            }
         }
 
         // ==========================================
@@ -2542,6 +2555,26 @@ client.once('ready', async () => {
     })();
 
     cleanOldData();
+
+    // Surveillance de l'activité en salon vocal pour le Battle Pass (chaque minute)
+    setInterval(() => {
+        const guildRegaia = client.guilds.cache.get('720057528351850547');
+        if (!guildRegaia) return;
+
+        const salonsVocaux = guildRegaia.channels.cache.filter(c => c.isVoiceBased());
+        for (const salon of salonsVocaux.values()) {
+            const membresHumains = salon.members.filter(m => !m.user.bot);
+            // On compte les minutes si au moins 2 personnes sont ensemble dans le salon vocal
+            if (membresHumains.size >= 2) {
+                for (const membre of membresHumains.values()) {
+                    if (!membre.voice.deaf && !membre.voice.serverDeaf) {
+                        trackBattlePassProgress(membre.id, 'vocal_min', 1);
+                    }
+                }
+            }
+        }
+    }, 60 * 1000);
+
     setInterval(() => verifierHappyHour(client), 30 * 1000);
     setInterval(() => verifierTwitchLive(client), 60 * 1000);
     setInterval(() => verifierNouvellesVideosYouTube(), 3 * 60 * 1000); // Vérifie les vidéos YouTube toutes les 3 minutes

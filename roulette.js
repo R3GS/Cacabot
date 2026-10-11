@@ -1608,6 +1608,10 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         if (restantes <= 0) rouletteBouclierActif.delete(authorId);
         else rouletteBouclierActif.set(authorId, restantes);
 
+        if (bridge.trackBattlePassProgress) {
+            bridge.trackBattlePassProgress(authorId, 'malus_pare', 1);
+        }
+
         if (['malus-timeout-20min', 'malus-exclu-heure', 'malus-exclu-jour', 'malus-exclu-semaine', 'malus-ban'].includes(outcomeId)) {
             deverrouillerSucces(authorId, 'pare-balles', channel);
         }
