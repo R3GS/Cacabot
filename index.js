@@ -382,7 +382,7 @@ initRouletteBridge({
     findMemberByName,
     askDisambiguation,
     suggestionsData,
-    trackBattlePassProgress
+    trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta)
 });
 
 
