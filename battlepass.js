@@ -332,15 +332,8 @@ function ajouterXpEtMonteeDeNiveau(userId, p, xpBrut, titreQuete) {
 
 function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
     const p = getOuCreerProfilBP(userId);
-    // Si le joueur n'a jamais joué à la roulette et n'a pas validé l'activation, pas de progression
-    if (!p.actif) {
-        // Exception : un premier tirage à la roulette active automatiquement le pass !
-        if (type === 'roulette_roll') {
-            p.actif = true;
-        } else {
-            return;
-        }
-    }
+    // Le pass ne s'active QUE sur clic explicite du bouton vert. Aucun tirage roulette ne l'active en douce.
+    if (!p.actif) return;
 
     let modifie = false;
 
@@ -716,6 +709,21 @@ async function handleBattlePassMessage(message, helpers = {}) {
             }
 
             return await afficherMenuQuestforce(message, cible);
+        }
+
+        // Commande de prévisualisation de l'embed d'onboarding : !bp embedtest
+        if (sub === 'embedtest') {
+            if (message.author.id !== bpBridge.EPSYS_ID) {
+                await message.reply("Cette commande est réservée à Epsys.");
+                return true;
+            }
+            const embedTest = buildBPOnboardingEmbed(message.member);
+            const rowTest = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`bp_test_btn_actif`).setLabel('Activer le battle pass ! ✅').setStyle(ButtonStyle.Success).setDisabled(true),
+                new ButtonBuilder().setCustomId(`bp_test_btn_refus`).setLabel('Annuler ❌').setStyle(ButtonStyle.Danger).setDisabled(true)
+            );
+            await message.reply({ content: "🔍 **Prévisualisation de l'embed d'activation (Boutons désactivés en mode test) :**", embeds: [embedTest], components: [rowTest] });
+            return true;
         }
 
         // Inspection d'un autre membre : !bp [membre] ou !pass [membre]

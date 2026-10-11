@@ -19,7 +19,8 @@ function buildHelpxMenu(authorId) {
             { label: 'Cacabot', emoji: '🤖', value: 'cacabot' },
             { label: 'Générateurs', emoji: '🔮', value: 'generateurs' },
             { label: 'Pour les autres', emoji: '👥', value: 'autres' },
-            { label: 'Roulette', emoji: '🎰', value: 'roulette' }
+            { label: 'Roulette', emoji: '🎰', value: 'roulette' },
+            { label: 'Battle Pass', emoji: '🎫', value: 'battlepass' }
         );
 }
 
@@ -51,13 +52,22 @@ function buildHelpxCategorieEmbed(categorie) {
             );
     }
     if (categorie === 'roulette') {
-        return embed.setColor(0xffd20a).setTitle('🎰 Commandes roulette')
+        return embed.setColor(0xffd20a).setTitle('🎰 Commandes Roulette (Epsys-Only)')
             .addFields(
                 { name: '🔄 **!reroll [membre]**', value: 'Réinitialise le cooldown d\'un·e membre.' },
                 { name: '🎉/💀 **!bonusforce / !malusforce [id] [membre]**', value: 'Impose un bonus ou un malus à un·e membre.' },
-{ name: '📋 **!rouletteID / !rltid**', value: 'Affiche tous les identifiants de bonus/malus/spécial, triés par bouton.' },
+                { name: '📋 **!rouletteid / !rltid**', value: 'Affiche tous les identifiants de bonus/malus/spécial, triés par bouton.' },
                 { name: '♻️ **!resetroulettestate / !resetrlt [membre]**', value: 'Réinitialise tout l\'état roulette d\'un·e membre.' },
-                { name: '🗑️ **!removestate [membre] [nom]**', value: 'Retire un seul effet actif d\'un·e membre.' }
+                { name: '🗑️ **!removestate [membre] [nom]**', value: 'Retire un seul effet actif d\'un·e membre (pseudo, mute, transfos, etc.).' },
+                { name: '🎖️ **!rltsuccesforce [id/test] [membre]**', value: 'Débloque de force un succès de la roulette ou lance une carte de test.' }
+            );
+    }
+    if (categorie === 'battlepass') {
+        return embed.setColor(0x2ecc71).setTitle('🎫 Commandes Battle Pass (Epsys-Only)')
+            .addFields(
+                { name: '⚡ **!bp [membre]**', value: 'Inspecter le Battle Pass d\'un membre avec le bouton spécial **⚡ Ajouter XP** (ouvre une modale pour injecter de l\'XP).' },
+                { name: '🛠️ **!bp questforce [membre]**', value: 'Affiche les quêtes en cours d\'un membre et propose un menu déroulant pour en compléter une de force.' },
+                { name: '🔍 **!bp embedtest**', value: 'Affiche la prévisualisation de l\'embed d\'onboarding/activation que voient les nouveaux membres.' }
             );
     }
     return embed.setTitle('❓ Inconnu').setDescription('Catégorie introuvable.');
