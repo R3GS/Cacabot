@@ -7,6 +7,7 @@ const {
     EmbedBuilder,
     ActionRowBuilder,
     ButtonBuilder,
+    StringSelectMenuBuilder,
     ButtonStyle
 } = require('discord.js');
 
@@ -14,6 +15,7 @@ const XP_PAR_NIVEAU = 500;
 const NIVEAU_MAX = 25;
 
 let bpBridge = {
+    client: null,
     getBattlePassData: () => ({}),
     demanderSauvegarde: () => {},
     crediterInventaireRoulette: () => {},
@@ -96,7 +98,7 @@ const RECOMPENSES_PALIERS = {
 };
 
 // ==========================================
-//  HELPERS DE TEMPS & INITIALISATION
+//  HELPERS DE TEMPS & PROFIL
 // ==========================================
 
 function getTodayKey() {
@@ -167,14 +169,17 @@ function getOuCreerProfilBP(userId) {
             semaineActuelle: null,
             quetesDuJour: [],
             quetesHebdo: [],
-            historiqueJoursQuetes: []
+            notifs: 'paliers', // 'paliers', 'niveaux', 'quetes', 'desactive'
+            mpBloques: false
         };
         bpData.joueurs[userId] = p;
     }
 
+    // Valeur par défaut pour les anciens profils
+    if (!p.notifs) p.notifs = 'paliers';
+
     // Reset Quotidien
     if (p.dernierJourDate !== today) {
-        // Vérification de rupture de série
         if (p.dernierJourDate) {
             const hier = new Date();
             hier.setDate(hier.getDate() - 1);
@@ -204,6 +209,72 @@ function getMultiplicateurStreak(streak) {
 }
 
 // ==========================================
+//  SYSTÈME DE NOTIFICATIONS PRIVÉES (MP)
+// ==========================================
+
+async function envoyerNotificationMP(userId, titre, description, forceTest = false) {
+    const p = getOuCreerProfilBP(userId);
+    if (!forceTest && p.notifs === 'desactive') return false;
+
+    const client = bpBridge.client;
+    if (!client) return false;
+
+    try {
+        const user = await client.users.fetch(userId).catch(() => null);
+        if (!user) return false;
+
+        const embed = new EmbedBuilder()
+            .setColor(0xffd20a)
+            .setTitle(titre)
+            .setDescription(description)
+            .addFields(
+                { name: '⚙️ Tes notifications actuelles', value: getLibelleNotif(p.notifs), inline: false },
+                { name: 'Conseil', value: '-# *Tu peux modifier tes alertes avec le menu déroulant ci-dessous à tout moment.*' }
+            )
+            .setFooter({ text: 'Battle Pass Regaïa • Cacabot' })
+            .setTimestamp();
+
+        const row = buildNotifSettingsRow(p.notifs);
+        await user.send({ embeds: [embed], components: [row] });
+        
+        p.mpBloques = false; // Les MP passent bien !
+        bpBridge.demanderSauvegarde();
+        return true;
+    } catch (err) {
+        // Erreur 50007 : l'utilisateur a bloqué ses MP
+        if (err.code === 50007) {
+            p.mpBloques = true;
+            bpBridge.demanderSauvegarde();
+        }
+        return false;
+    }
+}
+
+function getLibelleNotif(val) {
+    switch (val) {
+        case 'quetes': return '🔔 À chaque quête terminée';
+        case 'niveaux': return '⭐ À chaque niveau passé (Niv. 1 à 25)';
+        case 'paliers': return '🏆 Uniquement aux Paliers Majeurs (Niv. 5, 10, 15, 20, 25)';
+        case 'desactive': return '🔕 Désactivées';
+        default: return '🏆 Paliers majeurs uniquement';
+    }
+}
+
+function buildNotifSettingsRow(valeurActuelle) {
+    const menu = new StringSelectMenuBuilder()
+        .setCustomId('bp_notifs_select')
+        .setPlaceholder('Modifier mes alertes MP...')
+        .addOptions([
+            { label: '📜 Toutes les quêtes', description: 'Reçois un MP dès qu\'une quête est validée', value: 'quetes', default: valeurActuelle === 'quetes' },
+            { label: '⭐ Tous les niveaux', description: 'Reçois un MP à chaque niveau gagné', value: 'niveaux', default: valeurActuelle === 'niveaux' },
+            { label: '🏆 Paliers majeurs', description: 'Reçois un MP aux niveaux 5, 10, 15, 20, 25', value: 'paliers', default: valeurActuelle === 'paliers' },
+            { label: '🔕 Désactiver', description: 'Ne recevoir aucun MP', value: 'desactive', default: valeurActuelle === 'desactive' }
+        ]);
+
+    return new ActionRowBuilder().addComponents(menu);
+}
+
+// ==========================================
 //  TRACKER CENTRAL D'ACTIVITÉ
 // ==========================================
 
@@ -218,12 +289,19 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
             q.progression = Math.min(q.objectif, q.progression + amount);
             if (q.progression >= q.objectif) {
                 q.terminee = true;
-                // Validation du jour de streak dès qu'au moins 1 quête est finie !
                 const today = getTodayKey();
                 if (p.dernierJourStreak !== today) {
                     p.streak = (p.streak || 0) + 1;
                     p.dernierJourStreak = today;
                     checkStreakRewards(userId, p.streak);
+                }
+                // Alerte MP si l'option 'quetes' est activée
+                if (p.notifs === 'quetes') {
+                    envoyerNotificationMP(
+                        userId,
+                        '✅ QUÊTE DU BATTLE PASS TERMINÉE !',
+                        `Tu as terminé la quête : **${q.desc}** (+${q.xp} XP) !\n\nTape \`!bp\` sur le serveur pour récupérer tes récompenses !`
+                    );
                 }
             }
             modifie = true;
@@ -237,6 +315,13 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
             q.progression = Math.min(q.objectif, q.progression + amount);
             if (q.progression >= q.objectif) {
                 q.terminee = true;
+                if (p.notifs === 'quetes') {
+                    envoyerNotificationMP(
+                        userId,
+                        '🎉 QUÊTE HEBDOMADAIRE DU PASS VALIDÉE !',
+                        `Tu as terminé la quête hebdo : **${q.desc}** (+${q.xp} XP) !\n\nTape \`!bp\` pour réclamer ton XP !`
+                    );
+                }
             }
             modifie = true;
         }
@@ -246,13 +331,15 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
 }
 
 function checkStreakRewards(userId, streak) {
-    // Récompenses de streak de la Bible
     if (streak === 7) {
         bpBridge.crediterInventaireRoulette(userId, 'ticketSkip', 1);
+        envoyerNotificationMP(userId, '🔥 1 SEMAINE DE STREAK !', 'Félicitations pour tes 7 jours consécutifs ! Tu reçois **1 Ticket Skip-Cooldown** offert dans ton inventaire !');
     } else if (streak === 14) {
         bpBridge.crediterInventaireRoulette(userId, 'superBouclier', 2);
+        envoyerNotificationMP(userId, '🔥 2 SEMAINES DE STREAK !', 'Incroyable, 14 jours de suite ! Tu reçois **2 Super Boucliers** dans ton inventaire !');
     } else if (streak === 21) {
         bpBridge.crediterInventaireRoulette(userId, 'redirectChoix5', 5);
+        envoyerNotificationMP(userId, '🔥 3 SEMAINES DE STREAK !', '21 jours d\'affilée ! Tu remportes **5 Redirections de malus au choix** (limité à 1 par jour) !');
     }
 }
 
@@ -268,24 +355,29 @@ function buildBPHomeEmbed(membre) {
     const nbQuetesFinies = p.quetesDuJour.filter(q => q.terminee && !q.reclamee).length +
                           p.quetesHebdo.filter(q => q.terminee && !q.reclamee).length;
 
-    // Barre de progression XP
     const pct = Math.min(100, Math.round((p.xp / XP_PAR_NIVEAU) * 100));
     const nbVert = Math.round((pct / 100) * 10);
     const barre = '🟩'.repeat(nbVert) + '⬜'.repeat(10 - nbVert);
 
+    let desc = `Bienvenue dans le Pass de Combat officiel de Regaïa !\nAccomplis tes quêtes, maintiens ta série quotidienne et débloque les 25 paliers du mois !\n\n` +
+               `👤 **Membre :** <@${membre.id}>\n` +
+               `⭐ **Niveau actuel :** **Niveau ${p.niveau}/${NIVEAU_MAX}**\n` +
+               `📈 **Progression XP :** \`${barre}\` **${p.xp}/${XP_PAR_NIVEAU} XP** (${pct}%)\n` +
+               `🔥 **Série actuelle :** **${p.streak} jour${p.streak > 1 ? 's' : ''} consécutif${p.streak > 1 ? 's' : ''}**${multStr}\n\n` +
+               (nbQuetesFinies > 0 ? `🎁 **${nbQuetesFinies} quête(s) terminée(s) en attente d'XP !** Clique sur *Récupérer* !\n\n` : `*Aucune quête en attente.*\n\n`);
+
+    // Avertissement si l'utilisateur a ses MP bloqués
+    if (p.notifs !== 'desactive' && p.mpBloques) {
+        desc += `⚠️ **T'as fermé tes MP de la part des inconnus donc je peux rien t'envoyer !**\n*Active l'option "Autoriser les messages privés provenant des membres du serveur" dans tes paramètres Discord si tu souhaites recevoir tes alertes.*\n\n`;
+    }
+
     const embed = new EmbedBuilder()
         .setColor(0xffd20a)
         .setTitle(`🎫 BATTLE PASS — SAISON ${bpBridge.getBattlePassData().saison || 1}`)
-        .setDescription(
-            `Bienvenue dans le Pass de Combat officiel de Regaïa !\nAccomplis tes quêtes, maintiens ta série quotidienne et débloque les 25 paliers du mois !\n\n` +
-            `👤 **Membre :** <@${membre.id}>\n` +
-            `⭐ **Niveau actuel :** **Niveau ${p.niveau}/${NIVEAU_MAX}**\n` +
-            `📈 **Progression XP :** \`${barre}\` **${p.xp}/${XP_PAR_NIVEAU} XP** (${pct}%)\n` +
-            `🔥 **Série actuelle :** **${p.streak} jour${p.streak > 1 ? 's' : ''} consécutif${p.streak > 1 ? 's' : ''}**${multStr}\n\n` +
-            (nbQuetesFinies > 0 ? `🎁 **${nbQuetesFinies} quête(s) terminée(s) en attente d'XP !** Clique sur *Récupérer* !` : `*Aucune quête en attente.*`)
-        )
+        .setDescription(desc)
         .addFields(
             { name: '🎯 Prochain Palier Majeur', value: getProchainPalierMajeurText(p.niveau), inline: false },
+            { name: '🔔 Alertes privées (MP)', value: `Statut : **${getLibelleNotif(p.notifs)}** *(modifie-le via le bouton ⚙️ ci-dessous)*`, inline: false },
             { name: '📜 Esprit de Regaïa', value: '-# *Le staff rappelle que le pass récompense l\'activité naturelle. Les conversations artificielles ou de pur grind ne sont pas tolérées.*' }
         )
         .setFooter({ text: 'Commandes : !bp • Reset quotidien à 00h00' })
@@ -356,8 +448,9 @@ function buildBPButtons(authorId) {
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`bp_home_${authorId}`).setLabel('🏠 Accueil').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`bp_quests_${authorId}`).setLabel('📋 Mes Quêtes').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`bp_ladder_${authorId}`).setLabel('🪜 Paliers & Échelle').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`bp_claim_${authorId}`).setLabel('🎁 Récupérer').setStyle(ButtonStyle.Success)
+        new ButtonBuilder().setCustomId(`bp_ladder_${authorId}`).setLabel('🪜 Paliers').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`bp_claim_${authorId}`).setLabel('🎁 Récupérer').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`bp_notifs_${authorId}`).setLabel('⚙️ Notifs MP').setStyle(ButtonStyle.Secondary)
     );
 }
 
@@ -403,6 +496,16 @@ function reclamerRecompensesEtXP(membre) {
         if (reco) {
             paliersDebloques.push(`**Niveau ${p.niveau}** : ${reco.nom}`);
             attribuerRecompenseInventaire(membre.id, reco.item);
+
+            // Notification MP si configurée
+            const doitEnvoyerMP = (p.notifs === 'niveaux') || (p.notifs === 'paliers' && reco.majeur);
+            if (doitEnvoyerMP) {
+                envoyerNotificationMP(
+                    membre.id,
+                    `🎉 NOUVEAU NIVEAU DÉVERROUILLÉ : NIVEAU ${p.niveau} !`,
+                    `Félicitations ! Tu as franchi un palier du Pass de Combat !\n\n🎁 **Récompense :** ${reco.nom}\n*Déposée directement dans ton inventaire (\`!rlt claim\`) !*`
+                );
+            }
         }
     }
 
@@ -463,7 +566,43 @@ async function handleBattlePassSlash(interaction) {
 
 async function handleBattlePassInteraction(interaction) {
     const id = interaction.customId;
-    if (!id || !id.startsWith('bp_')) return false;
+    if (!id) return false;
+
+    // 1. Menu déroulant des notifications (en MP ou sur le serveur)
+    if (id === 'bp_notifs_select') {
+        const p = getOuCreerProfilBP(interaction.user.id);
+        const choix = interaction.values[0];
+        p.notifs = choix;
+        bpBridge.demanderSauvegarde();
+
+        if (choix === 'desactive') {
+            await interaction.reply({ content: '🔕 **Notifications MP désactivées !** Tu ne recevras plus de message privé de Cacabot.', ephemeral: true });
+            return true;
+        }
+
+        // Test d'envoi immédiat pour vérifier que les MPs ne sont pas fermés
+        const testOk = await envoyerNotificationMP(
+            interaction.user.id,
+            '🔔 TEST DE NOTIFICATION BATTLE PASS',
+            `Tes préférences ont été mises à jour sur : **${getLibelleNotif(choix)}** !\nCe message confirme que tes MP Discord sont bien ouverts.`,
+            true
+        );
+
+        if (!testOk) {
+            await interaction.reply({
+                content: `⚠️ **T'as fermé tes MP de la part des membres du serveur, je peux rien t'envoyer !**\nOuvre d'abord tes messages privés dans tes paramètres Discord si tu veux recevoir tes alertes 😉`,
+                ephemeral: true
+            });
+        } else {
+            await interaction.reply({
+                content: `✅ **Préférences enregistrées !** Je viens de t'envoyer un message privé de test pour confirmer.`,
+                ephemeral: true
+            });
+        }
+        return true;
+    }
+
+    if (!id.startsWith('bp_')) return false;
 
     const [, action, authorId] = id.split('_');
     if (interaction.user.id !== authorId) {
@@ -482,6 +621,23 @@ async function handleBattlePassInteraction(interaction) {
 
     if (action === 'ladder') {
         await interaction.update({ embeds: [buildBPLadderEmbed(interaction.member)], components: [buildBPButtons(authorId)] });
+        return true;
+    }
+
+    if (action === 'notifs') {
+        const p = getOuCreerProfilBP(interaction.user.id);
+        const embed = new EmbedBuilder()
+            .setColor(0x5865f2)
+            .setTitle('⚙️ Paramètres des Notifications Privées (MP)')
+            .setDescription(
+                `Choisis quand tu souhaites que Cacabot t'envoie un message privé pour ton Battle Pass !\n\n` +
+                `• **Statut actuel :** **${getLibelleNotif(p.notifs)}**\n` +
+                (p.mpBloques ? `\n⚠️ *Tes MP Discord semblent fermés aux membres du serveur.*` : '')
+            )
+            .setFooter({ text: 'Sélectionne une option dans le menu ci-dessous' });
+
+        const rowMenu = buildNotifSettingsRow(p.notifs);
+        await interaction.reply({ embeds: [embed], components: [rowMenu], ephemeral: true });
         return true;
     }
 

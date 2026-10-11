@@ -436,6 +436,7 @@ const {
 } = require('./battlepass.js');
 
 initBattlePassState({
+    client,
     getBattlePassData: () => battlePassData,
     demanderSauvegarde,
     crediterInventaireRoulette,
