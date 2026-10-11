@@ -445,6 +445,7 @@ initBattlePassState({
     crediterInventaireRoulette,
     rouletteBouclierActif,
     rouletteRedirectCharges,
+    rouletteStats,
     EPSYS_ID: '436218312574107658'
 });
 

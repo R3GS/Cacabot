@@ -143,7 +143,13 @@ function tirerQuetesHebdo() {
     ];
 }
 
-function getOuCreerProfilBP(userId) {
+function aJoueALaRoulette(userId) {
+    if (!bpBridge.rouletteStats) return false;
+    const stats = bpBridge.rouletteStats.get(userId);
+    return stats && stats.tirages > 0;
+}
+
+function getOuCreerProfilBP(userId, autoActif = false) {
     const bpData = bpBridge.getBattlePassData();
     const currentMonth = getMonthKey();
     const today = getTodayKey();
@@ -159,7 +165,9 @@ function getOuCreerProfilBP(userId) {
 
     let p = bpData.joueurs[userId];
     if (!p) {
+        const estActifParDefaut = autoActif || aJoueALaRoulette(userId);
         p = {
+            actif: estActifParDefaut,
             niveau: 1,
             xp: 0,
             paliersReclames: [],
@@ -169,14 +177,16 @@ function getOuCreerProfilBP(userId) {
             semaineActuelle: null,
             quetesDuJour: [],
             quetesHebdo: [],
-            notifs: 'paliers', // 'paliers', 'niveaux', 'quetes', 'desactive'
+            notifs: 'desactive', // Alertes à zéro par défaut pour éviter tout MP intrusif
             mpBloques: false
         };
         bpData.joueurs[userId] = p;
     }
 
-    // Valeur par défaut pour les anciens profils
-    if (!p.notifs) p.notifs = 'paliers';
+    // Sécurité : s'il n'avait pas le champ actif mais a déjà joué à la roulette
+    if (p.actif === undefined) {
+        p.actif = aJoueALaRoulette(userId) || (p.xp > 0) || (p.niveau > 1);
+    }
 
     // Reset Quotidien
     if (p.dernierJourDate !== today) {
@@ -322,6 +332,16 @@ function ajouterXpEtMonteeDeNiveau(userId, p, xpBrut, titreQuete) {
 
 function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
     const p = getOuCreerProfilBP(userId);
+    // Si le joueur n'a jamais joué à la roulette et n'a pas validé l'activation, pas de progression
+    if (!p.actif) {
+        // Exception : un premier tirage à la roulette active automatiquement le pass !
+        if (type === 'roulette_roll') {
+            p.actif = true;
+        } else {
+            return;
+        }
+    }
+
     let modifie = false;
 
     // 1. Quotidiennes
@@ -726,12 +746,44 @@ async function handleBattlePassMessage(message, helpers = {}) {
             }
         }
 
+        // Si le membre inspecté (ou soi-même) n'a jamais activé le pass et n'a jamais joué à la roulette
+        const pCible = getOuCreerProfilBP(cible.id);
+        if (!pCible.actif && cible.id === message.author.id) {
+            const embedOnboarding = buildBPOnboardingEmbed(message.member);
+            const rowOnboarding = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`bp_activer_${message.author.id}`).setLabel('Activer le battle pass ! ✅').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`bp_refuser_${message.author.id}`).setLabel('Annuler ❌').setStyle(ButtonStyle.Danger)
+            );
+            await message.reply({ embeds: [embedOnboarding], components: [rowOnboarding] });
+            return true;
+        }
+
         const embed = buildBPHomeEmbed(cible);
         const rows = buildBPButtons(message.author.id, cible.id);
         await message.reply({ embeds: [embed], components: rows });
         return true;
     }
     return false;
+}
+
+function buildBPOnboardingEmbed(membre) {
+    return new EmbedBuilder()
+        .setColor(0xffd20a)
+        .setTitle('🎫 DÉCOUVRE LE BATTLE PASS DE REGAÏA !')
+        .setDescription(
+            `Bienvenue <@${membre.id}> ! Tu n'as pas encore rejoint le **Battle Pass mensuel de Regaïa**.\n\n` +
+            `### 🎯 C'est quoi le Battle Pass ?\n` +
+            `Chaque mois, monte à travers **25 niveaux** pour débloquer des récompenses gratuites pour la roulette et le serveur :\n` +
+            `• 🛡️ Boucliers de protection contre les malus\n` +
+            `• 🎟️ Tickets pour passer les cooldowns de roulette\n` +
+            `• 🎰 Coups triples, redirections de malus et pouvoirs exclusifs\n\n` +
+            `### ☀️ Comment monter en niveau ?\n` +
+            `Accomplis 4 quêtes quotidiennes et 3 quêtes hebdos simples en participant au serveur (messages, vocaux, mini-jeux, interactions).\n\n` +
+            `> 🔕 **Tranquillité garantie :** Toutes les alertes en message privé (MP) sont **désactivées par défaut**. Tu ne recevras aucun MP sans l'avoir choisi.\n\n` +
+            `*Veux-tu activer ton Battle Pass pour la saison en cours ?*`
+        )
+        .setFooter({ text: 'Clique sur un bouton ci-dessous pour confirmer ton choix' })
+        .setThumbnail(membre.user.displayAvatarURL({ dynamic: true, size: 256 }));
 }
 
 async function afficherMenuQuestforce(message, cible) {
@@ -946,7 +998,29 @@ async function handleBattlePassInteraction(interaction) {
     const targetId = parts[3] || authorId;
 
     if (interaction.user.id !== authorId) {
-        return interaction.reply({ content: "Ce n'est pas ton menu d'inspection 😌", ephemeral: true });
+        return interaction.reply({ content: "Ce n'est pas ton menu 😌", ephemeral: true });
+    }
+
+    // Clic sur "Activer le battle pass ! ✅"
+    if (action === 'activer') {
+        const p = getOuCreerProfilBP(authorId, true);
+        p.actif = true;
+        bpBridge.demanderSauvegarde();
+
+        const embedHome = buildBPHomeEmbed(interaction.member);
+        const rowsHome = buildBPButtons(authorId);
+        await interaction.update({ embeds: [embedHome], components: rowsHome });
+        return true;
+    }
+
+    // Clic sur "Annuler ❌"
+    if (action === 'refuser') {
+        await interaction.update({
+            content: "❌ **Battle Pass annulé !**\n*Tu pourras l'activer à tout moment en tapant `!bp` ou en faisant un tirage à la roulette.*",
+            embeds: [],
+            components: []
+        });
+        return true;
     }
 
     const cibleMembre = interaction.guild?.members.cache.get(targetId) || interaction.member;
