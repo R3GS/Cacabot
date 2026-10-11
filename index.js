@@ -1262,11 +1262,6 @@ async function disableButtons(interaction) {
         if (await handleWatcherMessage(message)) return;
 
         // =========================
-        //   COMMANDES ROULETTE
-        // =========================
-        if (await handleRouletteMessage(message, null, client)) return;
-
-        // =========================
         //   SALON DÉCODEUR D'EMOJIS
         // =========================
         if (await handleRebusMessage(message, null, client, { findMemberByName })) return;
@@ -1280,6 +1275,11 @@ async function disableButtons(interaction) {
     //   SÉCURITÉ & MODÉRATION
     // =========================
     if (await handleSecurityMessage(message)) return;
+
+    // =========================
+    //   COMMANDES ROULETTE
+    // =========================
+    if (await handleRouletteMessage(message, null, client)) return;
 
     // Ping Cacabot seul -> "Quoi ? (Feur)"
     const strippedMsg = message.content.replace(/<@!?1503495713097519355>/g, '').trim();
@@ -1301,15 +1301,20 @@ async function disableButtons(interaction) {
         return message.reply(CHEH_GIF);
     }
 
-    // Comptage messages pour !top
+    // Comptage messages pour !top & Capteur Central Battle Pass
     if (message.guild && message.guild.id === '720057528351850547') {
         const uid = message.author.id;
         if (!topData.messages[uid]) topData.messages[uid] = 0;
         topData.messages[uid]++;
+
+        const rawLower = message.content.trim().toLowerCase();
+        const cmdPass = rawLower.split(/\s+/)[0];
+
+        // 1. Quête messages simples
         if (message.content.trim().length >= 4 && !message.content.startsWith('!')) {
             trackBattlePassProgress(uid, 'message', 1);
             
-            // Vérification si le membre parle sous l'effet d'un malus textuel
+            // Quête : parler sous un malus textuel
             const transfosMembre = ROULETTE_ETATS.transfos.get(uid);
             const aMalusActif = (transfosMembre && Object.keys(transfosMembre).length > 0) ||
                                 (ROULETTE_ETATS.uwu.get(uid) > Date.now()) ||
@@ -1321,49 +1326,22 @@ async function disableButtons(interaction) {
             }
         }
 
-        // ==========================================
-        //  CAPTEUR CENTRAL DU BATTLE PASS
-        // ==========================================
-        const rawLower = message.content.trim().toLowerCase();
-        const cmdPass = rawLower.split(/\s+/)[0];
-
-        // Quêtes Roulette
-        if (cmdPass === '!rlt' || cmdPass === '!roulette') {
-            if (rawLower.includes('go')) {
-                trackBattlePassProgress(uid, 'roulette_roll', 1);
-                const parisH = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' })).getHours();
-                if (parisH === 20) {
-                    trackBattlePassProgress(uid, 'happy_hour_roll', 1);
-                }
-            }
-        }
-        // Quêtes Interactions Bienveillantes
-        else if (['!kiss', '!hug', '!danse', '!dance', '!bisou', '!calin'].includes(cmdPass)) {
+        // 2. Quêtes d'interactions & commandes (capturées AVANT que les sous-modules ne fassent return)
+        if (['!kiss', '!hug', '!danse', '!dance', '!bisou', '!calin'].includes(cmdPass)) {
             trackBattlePassProgress(uid, 'interact_gentil', 1);
-        }
-        // Quêtes Interactions Combat
-        else if (['!punch', '!bang', '!insult', '!frappe', '!tir', '!pan'].includes(cmdPass)) {
+        } else if (['!punch', '!bang', '!insult', '!frappe', '!tir', '!pan'].includes(cmdPass)) {
             trackBattlePassProgress(uid, 'interact_combat', 1);
-        }
-        // Quêtes Oracle & Astres
-        else if (['!horoscope', '!destin'].includes(cmdPass)) {
+        } else if (['!horoscope', '!destin'].includes(cmdPass)) {
             trackBattlePassProgress(uid, 'oracle', 1);
-        }
-        // Quêtes Dévotion Epsys
-        else if (['!epsys', '!bougetoi', '!montage', '!video', '!lavideo'].includes(cmdPass)) {
+        } else if (['!epsys', '!bougetoi', '!montage', '!video', '!lavideo'].includes(cmdPass)) {
             trackBattlePassProgress(uid, 'epsys_cmd', 1);
-        }
-        // Quêtes Citations
-        else if (['!quote', '!citation'].includes(cmdPass)) {
+        } else if (['!quote', '!citation'].includes(cmdPass)) {
             trackBattlePassProgress(uid, 'quote', 1);
-        }
-        // Quêtes Références
-        else if (['!jailaref', '!palaref', '!glaref', '!gref', '!pref'].includes(cmdPass)) {
+        } else if (['!jailaref', '!palaref', '!glaref', '!gref', '!pref'].includes(cmdPass)) {
             trackBattlePassProgress(uid, 'ref', 1);
-        }
-        // Quête Essai Mini-jeux (dans le salon Motus)
-        else if (message.channel.id === MOTUS_CHANNEL_ID && rawLower.length >= 5 && rawLower.length <= 8) {
+        } else if (message.channel.id === MOTUS_CHANNEL_ID && rawLower.length >= 5 && rawLower.length <= 8) {
             trackBattlePassProgress(uid, 'minijeu_essai', 1);
+            trackBattlePassProgress(uid, 'minijeu_part', 1);
         }
 
         // Sauvegarde tous les 75 messages

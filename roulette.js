@@ -1553,6 +1553,19 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
 
     const outcomeId = tirerRoulette(authorId, guild?.id);
 
+    // ==========================================
+    //  BRANCHEMENT BATTLE PASS (ROULETTE ROLL)
+    // ==========================================
+    if (bridge.trackBattlePassProgress) {
+        bridge.trackBattlePassProgress(authorId, 'roulette_roll', 1);
+        if (estHappyHour()) {
+            bridge.trackBattlePassProgress(authorId, 'happy_hour_roll', 1);
+        }
+        if (outcomeId === 'bonus-gif-ou-audio') {
+            bridge.trackBattlePassProgress(authorId, 'papayou', 1);
+        }
+    }
+
     if (estHappyHour()) {
         const todayH = new Date().toDateString();
         const hh = rouletteHappyHourCompteur.get(authorId) ?? { date: todayH, count: 0 };
