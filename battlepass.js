@@ -490,7 +490,7 @@ function buildBPLadderEmbed(membre) {
             const cadreActuel = estActuel ? ' 👉 **[TU ES ICI]**' : '';
             lignes.push(
                 `\n⭐ **─── PALIER MAJEUR : NIVEAU ${niv} ───**${cadreActuel}\n` +
-                `> ${check} **${reco.nom.toUpperCase()}**\n`
+                `${check} **${reco.nom.toUpperCase()}**\n`
             );
         } else {
             if (estActuel) {

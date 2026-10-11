@@ -369,9 +369,18 @@ function buildDieEmbed(description) {
 // =========================
 
 async function runInteractionMessage(message, response, client, { findMemberByName, askDisambiguation }) {
+    // Résolution automatique de la cible via message répondu (Reply Discord direct ou sans ping)
+    let replyCible = message.mentions.repliedUser || null;
+    if (!replyCible && message.reference?.messageId) {
+        try {
+            const repliedMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+            if (repliedMsg?.author) replyCible = repliedMsg.author;
+        } catch (e) {}
+    }
+
     // !kiss
     if (response?.needsKiss) {
-        let cible = message.mentions.users.first();
+        let cible = message.mentions.users.first() || replyCible;
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (!cible) {
@@ -412,10 +421,9 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
     }
 
     // !run
-
     if (response?.needsRun) {
-    let cible = message.mentions.users.first();
-    const auteurNom = message.member?.displayName ?? message.author.username;
+        let cible = message.mentions.users.first() || replyCible;
+        const auteurNom = message.member?.displayName ?? message.author.username;
 
     if (!cible) {
         const args = message.content.trim().split(/\s+/).slice(1).join(" ");
@@ -466,7 +474,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
 
     // !hug
     if (response?.needsHug) {
-        let cible = message.mentions.users.first();
+        let cible = message.mentions.users.first() || replyCible;
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (!cible) {
@@ -508,7 +516,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
 
     // !dance
     if (response?.needsDance) {
-        let cible = message.mentions.users.first();
+        let cible = message.mentions.users.first() || replyCible;
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (!cible) {
@@ -551,7 +559,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
 
     // !insult
     if (response?.needsInsult) {
-        let cible = message.mentions.users.first();
+        let cible = message.mentions.users.first() || replyCible;
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (!cible) {
@@ -591,7 +599,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
 
     // !laugh
     if (response?.needsLaugh) {
-        let cible = message.mentions.users.first();
+        let cible = message.mentions.users.first() || replyCible;
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (!cible) {
@@ -628,7 +636,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
 
     // !rizz
     if (response?.needsRizz) {
-        let cible = message.mentions.users.first();
+        let cible = message.mentions.users.first() || replyCible;
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (!cible) {
@@ -676,7 +684,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
         const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://tenor.com/view/vilebrequin-vilebrequin-sylvain-levy-vilebrequin-sylvain-vilebrequin-levy-sylvain-levy-gif-24319115", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
         const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
         const auteurNom = message.member?.displayName ?? message.author.username;
-        let cible = message.mentions.users.first();
+        let cible = message.mentions.users.first() || replyCible;
 
         if (!cible) {
             const query = message.content.trim().split(/\s+/).slice(1).join(" ");
@@ -735,7 +743,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
         const jailarefGifs = ["https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/f1/7d/7y2QyYzWIYksGnnK.gif", "https://cdn.discordapp.com/attachments/720079691041472572/1548362421079646481/caf5c232438734937f6e1cf4c7bc5411.png", "https://media1.tenor.com/m/13XpzbwtVnYAAAAC/dway-the-roc.gif", "https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/14/44/oqcpwYRAEpXGYqfyw.gif", "https://static2.klipy.com/ii/50d7c955398dfd7e3c8ba5281154280f/79/6d/eoUS3shzyQLpKm.gif", "https://static2.klipy.com/ii/d7aec6f6f171607374b2065c836f92f4/3d/31/08K8MgEk.gif", "https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/64/b0/SdnOajVDadHUy.gif", "https://cdn.discordapp.com/attachments/720079691041472572/1548366731666268250/image2.gif", "https://static2.klipy.com/ii/9294a2e836d178ddc22430dd7765727e/44/86/6QBidjUuV1oBpAnHIw7o.gif"];
         const gif = jailarefGifs[Math.floor(Math.random() * jailarefGifs.length)];
         const auteurNom = message.member?.displayName ?? message.author.username;
-        let cible = message.mentions.users.first();
+        let cible = message.mentions.users.first() || replyCible;
 
         if (!cible) {
             const query = message.content.trim().split(/\s+/).slice(1).join(" ");
@@ -811,7 +819,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
         ];
         const gif = explodeGifs[Math.floor(Math.random() * explodeGifs.length)];
         const auteurNom = message.member?.displayName ?? message.author.username;
-        let cible = message.mentions.users.first();
+        let cible = message.mentions.users.first() || replyCible;
 
         if (!cible) {
             const query = message.content.trim().split(/\s+/).slice(1).join(" ");
@@ -881,7 +889,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
         ];
         const gif = baitGifs[Math.floor(Math.random() * baitGifs.length)];
         const auteurNom = message.member?.displayName ?? message.author.username;
-        let cible = message.mentions.users.first();
+        let cible = message.mentions.users.first() || replyCible;
 
         if (!cible) {
             const query = message.content.trim().split(/\s+/).slice(1).join(" ");
@@ -948,7 +956,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
 
     // !bang
     if (response?.needsBang) {
-        let cible = message.mentions.users.first();
+        let cible = message.mentions.users.first() || replyCible;
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (!cible) {
@@ -990,7 +998,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
 
     // !punch
     if (response?.needsPunch) {
-        let cible = message.mentions.users.first();
+        let cible = message.mentions.users.first() || replyCible;
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         if (!cible) {
@@ -1034,7 +1042,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
         // !ban
     if (response?.needsBan) {
         const auteurNom = message.member?.displayName ?? message.author.username;
-        let cible = message.mentions.users.first();
+        let cible = message.mentions.users.first() || replyCible;
 
         if (!cible) {
             const query = message.content.trim().split(/\s+/).slice(1).join(" ");
@@ -1114,7 +1122,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
 
     // !die
     if (response?.needsDie) {
-        let cible = message.mentions.users.first();
+        let cible = message.mentions.users.first() || replyCible;
         const auteurNom = message.member?.displayName ?? message.author.username;
 
         // Recherche partielle si pas de ping
