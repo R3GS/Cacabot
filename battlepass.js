@@ -490,44 +490,44 @@ function buildBPRulesEmbed() {
             `### 1. 🪜 Structure & Progression\n` +
             `• **Durée de saison :** 1 mois calendaire (reset complet des quêtes et des paliers le 1er de chaque mois à 00h00).\n` +
             `• **Progression linéaire :** 25 niveaux au total, coût fixe de **500 XP par niveau** (pas de courbe exponentielle).\n` +
-            `• **Paliers Majeurs :** Niveaux **5, 10, 15, 20 et 25** débloquant des récompenses premium (Pack 5 Boucliers, Coup Triple, Sniper, Pseudo Verrouillé, Palier Ultime).\n\n` +
-
+            `• **Paliers Majeurs :** Niveaux **5, 10, 15, 20 et 25** débloquant des récompenses premium (Pack 5 Boucliers, Coup Triple, Sniper, Pseudo Verrouillé, Palier Ultime).\n` +
+            `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n`
             `### 2. ☀️ Quêtes Quotidiennes (4 par jour)\n` +
             `• **Reset chaque nuit à 00h00 pile** (heure de Paris). Les quêtes non terminées expirent et ne se reportent pas.\n` +
             `• **Tirage équilibré :**\n` +
             `  - 🟢 **2 Faciles (50 XP)** : 10 messages, 1 roulette, 1 interaction bienveillante...\n` +
             `  - 🟡 **1 Moyenne (100 XP)** : 35 messages, 15 min en vocal, 2 essais mini-jeux...\n` +
             `  - 🔴 **1 Défi / Troll (150 XP)** : parler sous un malus, parer un Feur, résoudre une énigme...\n` +
-            `• **Gain de base journalier :** **350 XP** (hors bonus de série).\n\n` +
-
+            `• **Gain de base journalier :** **350 XP** (hors bonus de série).\n` +
+            `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n`
             `### 3. 📅 Quêtes Hebdomadaires (3 par semaine)\n` +
             `• **Reset chaque lundi à 00h00.**\n` +
-            `• **Objectifs d'endurance :** Rapportent entre **300 et 500 XP** chacune (200 messages, 60 min vocal, 30 tirages roulette, 2 victoires mini-jeux...).\n\n` +
-
+            `• **Objectifs d'endurance :** Rapportent entre **300 et 500 XP** chacune (200 messages, 60 min vocal, 30 tirages roulette, 2 victoires mini-jeux...).\n` +
+            `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n`
             `### 4. 🔥 Séries Quotidiennes (Streaks) & Multiplicateurs\n` +
             `• **Maintien du Streak :** Valider au moins **1 quête quotidienne** dans la journée.\n` +
             `• **Pénalité :** Si un jour est sauté, la série retombe immédiatement à **0**.\n` +
-            `• **Multiplicateurs d'XP passifs sur toutes tes quêtes :**\n` +
+            `• **Multiplicateurs d'XP passifs sur toutes les quêtes :**\n` +
             `  - 3 jours consécutifs : **+10% d'XP** (x1.10)\n` +
             `  - 7 jours consécutifs : **+15% d'XP** (x1.15)\n` +
             `  - 14 jours consécutifs : **+25% d'XP** (x1.25)\n` +
             `• **Bonus de palier de série offerts dans l'inventaire :**\n` +
             `  - **7 jours** : 1 Ticket Coupe-File (Skip Cooldown)\n` +
             `  - **14 jours** : 2 Super Boucliers\n` +
-            `  - **21 jours** : 5 Redirections de malus au choix\n\n` +
-
+            `  - **21 jours** : 5 Redirections de malus au choix\n` +
+            `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n`
             `### 5. ⚡ XP Automatique & Inventaire\n` +
             `• L'XP est injecté **automatiquement** dès qu'une quête est complétée.\n` +
-            `• Le bonus de streak s'applique en temps réel, les niveaux se franchissent et les objets sont instantanément déposés dans ton inventaire Roulette (\`!rlt claim\`).\n\n` +
-
+            `• Le bonus de streak s'applique en temps réel, les niveaux se franchissent et les objets sont instantanément déposés dans l'inventaire Roulette (\`!rlt claim\`).\n` +
+            `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n`
             `### 6. 🔕 Politique Anti-Spam (100% MP)\n` +
             `• Le bot n'envoie **JAMAIS** de notification de quête ou de niveau sur les salons publics.\n` +
             `• 4 réglages au choix via le bouton **🔔 Notifications MP** : Toutes les quêtes, Tous les niveaux, Paliers majeurs uniquement (défaut) ou Désactivé.\n` +
-            `• Si tes MP sont fermés, l'erreur est absorbée silencieusement sans polluer les salons.\n\n` +
-
-            `### 🚨 7. FAIR-PLAY & ESPRIT DU SERVEUR (STRICT)\n` +
-            `> ⚠️ **Le Pass de Combat récompense l'activité naturelle, vivante et chaleureuse sur Regaïa.**\n` +
-            `> **Le flood artificiel, le monologue, le spam de commandes ou le grind forcé pour monter le pass sont STRICTEMENT INTERDITS et sanctionnables par le staff (réinitialisation du pass, mutes, voire exclusions).**`
+            `• Si tes MP sont fermés, l'erreur est absorbée silencieusement sans polluer les salons.\n` +
+            `▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬\n`
+            `### 🚨 7. FAIR-PLAY & ESPRIT DU SERVEUR (STRICT) 🚨\n` +
+            `⚠️ **Le Pass de Combat récompense l'activité naturelle, vivante et chaleureuse sur Regaïa.**\n` +
+            `**Le flood artificiel, le monologue, le spam de commandes ou le grind forcé pour monter le pass sont STRICTEMENT INTERDITS et sanctionnables par le staff (réinitialisation du pass, mutes, voire exclusions).**`
         )
         .setFooter({ text: 'Règlement Officiel • Battle Pass Regaïa' });
 }
