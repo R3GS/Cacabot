@@ -1584,4 +1584,102 @@ async function handleInteractionButton(interaction) {
     return true;
 }
 
-module.exports = { INTERACTION_COMMANDS, handleInteractionMessage, handleInteractionButton };
+async function handleInteractionSlash(interaction, client) {
+    const aliasMap = {
+        bisou: 'kiss', calin: 'hug', court: 'run', dance: 'danse',
+        frappe: 'punch', tir: 'bang', pan: 'bang', pleure: 'cry',
+        explose: 'explode'
+    };
+    const cmd = aliasMap[interaction.commandName] || interaction.commandName;
+    const slashInteractions = ['kiss', 'hug', 'run', 'danse', 'insult', 'rire', 'rizz', 'bang', 'punch', 'die', 'palaref', 'jailaref', 'explode', 'bait', 'ban'];
+    if (!slashInteractions.includes(cmd)) return false;
+
+    const auteurNom = interaction.member?.displayName ?? interaction.user.username;
+    const auteurId = interaction.user.id;
+    const cibleUser = interaction.options.getUser('membre');
+    const cibleMember = cibleUser ? interaction.guild?.members.cache.get(cibleUser.id) : null;
+    const cibleNom = cibleMember?.displayName ?? cibleUser?.username;
+
+    if (cmd === 'kiss') {
+        if (!cibleUser) return interaction.reply({ content: "Tu veux embrasser qui ?", ephemeral: true });
+        if (cibleUser.id === auteurId) return interaction.reply({ embeds: [buildKissEmbed(auteurNom, auteurNom).setDescription(`💋 **${auteurNom}** s'embrasse ! Attends... Comment c'est possible ?`)] });
+        if (cibleUser.id === client.user.id) return interaction.reply({ embeds: [buildKissEmbed(auteurNom, "Cacabot").setDescription(`💋 **${auteurNom}** m'embrasse ! Awww merci <3`)] });
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`kiss_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("💋 Embrasser en retour").setStyle(ButtonStyle.Primary));
+        return interaction.reply({ embeds: [buildKissEmbed(auteurNom, cibleNom)], components: [row] });
+    }
+    if (cmd === 'hug') {
+        if (!cibleUser) return interaction.reply({ content: "Tu veux câliner qui ?", ephemeral: true });
+        if (cibleUser.id === auteurId) return interaction.reply({ embeds: [buildHugEmbed(auteurNom, auteurNom).setDescription(`🫂 **${auteurNom}** se fait un câlin... Ça va aller...`)] });
+        if (cibleUser.id === client.user.id) return interaction.reply({ embeds: [buildHugEmbed(auteurNom, "Cacabot").setDescription(`🫂 **${auteurNom}** me fait un câlin !`)] });
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`hug_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🫂 Câliner en retour").setStyle(ButtonStyle.Primary));
+        return interaction.reply({ embeds: [buildHugEmbed(auteurNom, cibleNom)], components: [row] });
+    }
+    if (cmd === 'run') {
+        if (!cibleUser || cibleUser.id === auteurId) {
+            const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`run_join_${auteurId}_${auteurNom}`).setLabel("🏃 Accompagner").setStyle(ButtonStyle.Secondary));
+            return interaction.reply({ embeds: [buildRunEmbed(`🏃 **${auteurNom}** fuit !`)], components: [row] });
+        }
+        if (cibleUser.id === client.user.id) return interaction.reply({ embeds: [buildRunEmbed(`🏃 **${auteurNom}** me fuit ! Reviens-là !`)] });
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`run_join_${auteurId}_${auteurNom}_${cibleUser.id}`).setLabel("🏃 Accompagner").setStyle(ButtonStyle.Secondary));
+        return interaction.reply({ embeds: [buildRunEmbed(`🏃 **${auteurNom}** fuit de **${cibleNom}** !`)], components: [row] });
+    }
+    if (cmd === 'danse') {
+        if (!cibleUser) {
+            const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`dance_join_${auteurId}_${auteurNom}`).setLabel("💃 Rejoindre la danse").setStyle(ButtonStyle.Primary));
+            return interaction.reply({ embeds: [buildDanceEmbed(`💃 **${auteurNom}** s'ambiance comme jamais !`, true)], components: [row] });
+        }
+        if (cibleUser.id === client.user.id) return interaction.reply({ embeds: [buildDanceEmbed(`💃 **${auteurNom}** danse avec moi !`, false)] });
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`dance_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("💃 Rejoindre la danse").setStyle(ButtonStyle.Primary));
+        return interaction.reply({ embeds: [buildDanceEmbed(`💃 **${auteurNom}** danse avec **${cibleNom}** !`, false)], components: [row] });
+    }
+    if (cmd === 'insult') {
+        if (!cibleUser) return interaction.reply({ content: "Mentionne quelqu'un pour l'insulter !", ephemeral: true });
+        if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas t'insulter toi-même !", ephemeral: true });
+        if (cibleUser.id === client.user.id) return interaction.reply({ embeds: [buildInsultEmbed(`🖕 **${auteurNom}** m'insulte ! J'ai fait quoi ?!`)] });
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`insult_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🖕 Insulter en retour").setStyle(ButtonStyle.Primary));
+        return interaction.reply({ embeds: [buildInsultEmbed(`🖕 **${auteurNom}** insulte **${cibleNom}** !`)], components: [row] });
+    }
+    if (cmd === 'rire') {
+        const texte = (cibleUser && cibleUser.id !== auteurId && cibleUser.id !== client.user.id) ? `😆 **${auteurNom}** se fout de la gueule de **${cibleNom}** !` : `😆 **${auteurNom}** se tape une barre !`;
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`laugh_with_${auteurId}_${auteurNom}`).setLabel("😆 Rire avec").setStyle(ButtonStyle.Primary));
+        return interaction.reply({ embeds: [buildLaughEmbed(texte)], components: [row] });
+    }
+    if (cmd === 'rizz') {
+        if (!cibleUser) return interaction.reply({ content: "Choisis quelqu'un à rizz !", ephemeral: true });
+        if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te rizz toi-même !", ephemeral: true });
+        if (cibleUser.id === client.user.id) return interaction.reply({ embeds: [buildRizzEmbed(`🗿 **${auteurNom}** me rizz ! Eh beh 😊`)] });
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`rizz_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🗿 Rizz en retour").setStyle(ButtonStyle.Primary));
+        return interaction.reply({ embeds: [buildRizzEmbed(`🗿 **${auteurNom}** rizz **${cibleNom}** !`)], components: [row] });
+    }
+    if (cmd === 'bang') {
+        if (!cibleUser) return interaction.reply({ content: "Mentionne la personne sur qui tu veux tirer !", ephemeral: true });
+        if (cibleUser.id === auteurId) return interaction.reply({ content: "Évite de te tirer dessus :(", ephemeral: true });
+        if (cibleUser.id === client.user.id) return interaction.reply({ embeds: [buildBangEmbed(`💥 **${auteurNom}** me tire dessus ! HÉ !`)] });
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`bang_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("💥 Riposter !").setStyle(ButtonStyle.Primary));
+        return interaction.reply({ embeds: [buildBangEmbed(`💥 **${auteurNom}** tire sur **${cibleNom}** !`)], components: [row] });
+    }
+    if (cmd === 'punch') {
+        if (!cibleUser) return interaction.reply({ content: "Mentionne quelqu'un à frapper !", ephemeral: true });
+        if (cibleUser.id === auteurId) return interaction.reply({ content: "Ne te frappe pas toi-même !", ephemeral: true });
+        if (cibleUser.id === client.user.id) return interaction.reply({ embeds: [buildPunchEmbed(`🤜 **${auteurNom}** me frappe ! Aïeuh !`)] });
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`punch_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🤜 Frapper en retour").setStyle(ButtonStyle.Primary));
+        return interaction.reply({ embeds: [buildPunchEmbed(`🤜 **${auteurNom}** frappe **${cibleNom}** !`)], components: [row] });
+    }
+    if (cmd === 'die') {
+        if (cibleUser && cibleUser.id === client.user.id) {
+            const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`die_with_${auteurId}_${auteurNom}`).setLabel("☠️ Mourir avec").setStyle(ButtonStyle.Primary));
+            return interaction.reply({ embeds: [buildDieEmbed(`☠️ **${auteurNom}** meurt à cause de moi ! (cheh)`)] , components: [row] });
+        }
+        const desc = (cibleUser && cibleUser.id !== auteurId) ? `☠️ **${auteurNom}** meurt à cause de **${cibleNom}**` : `☠️ **${auteurNom}** meurt...`;
+        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`die_with_${auteurId}_${auteurNom}`).setLabel("☠️ Mourir avec").setStyle(ButtonStyle.Primary));
+        return interaction.reply({ embeds: [buildDieEmbed(desc)], components: [row] });
+    }
+    return false;
+}
+
+module.exports = {
+    INTERACTION_COMMANDS,
+    handleInteractionMessage,
+    handleInteractionButton,
+    handleInteractionSlash
+};

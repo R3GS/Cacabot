@@ -1033,13 +1033,74 @@ function buildInventaireEmbed(membre) {
     const items = [];
     const options = [];
 
-    if (inv.freeRoll1Min && inv.freeRoll1Min > 0) {
-        items.push(`🎰 **Tirage à volonté (1 min)** : x${inv.freeRoll1Min}`);
-        options.push({
+    const ITEMS_METADATA = {
+        freeRoll1Min: {
             label: '🎰 Tirage à volonté (1 min)',
-            description: `Activer 1 session d'1 min (en réserve : x${inv.freeRoll1Min})`,
-            value: 'freeRoll1Min'
-        });
+            emoji: '🎰',
+            desc: '1 minute sans cooldown et immunisé aux mutes'
+        },
+        ticketSkip: {
+            label: '🎟️ Ticket Coupe-File',
+            emoji: '🎟️',
+            desc: 'Réinitialise immédiatement ton cooldown de roulette'
+        },
+        trefle20: {
+            label: '🍀 Trèfle de Chance (+20%)',
+            emoji: '🍀',
+            desc: '+20% de bonus jackpot sur tes 2 prochains tirages'
+        },
+        eponge: {
+            label: '🧹 Éponge à Malus',
+            emoji: '🧹',
+            desc: 'Nettoie et annule tous tes malus textuels actifs'
+        },
+        miniHH: {
+            label: '⚡ Pass Mini Happy-Hour',
+            emoji: '⚡',
+            desc: 'Tes 2 prochains tirages ont un cooldown réduit à 5 minutes'
+        },
+        pityBoost: {
+            label: '📈 Coup de Pouce Pity',
+            emoji: '📈',
+            desc: 'Ajoute +1 malus et +1 nul pour rapprocher du bonus garanti'
+        },
+        coupTriple: {
+            label: '🎰 Coup Triple',
+            emoji: '🎰',
+            desc: '3 tirages consécutifs sans aucun cooldown'
+        },
+        superBouclier: {
+            label: '🔰 Super Bouclier',
+            emoji: '🔰',
+            desc: 'Ajoute +3 charges de bouclier de protection'
+        },
+        redirectChoix5: {
+            label: '🎯 5 Redirections au choix',
+            emoji: '🎯',
+            desc: 'Ajoute 5 redirections ciblées en réserve'
+        },
+        pseudoLockSemaine: {
+            label: '✍️ Gravé dans la roche',
+            emoji: '✍️',
+            desc: 'Verrouille le pseudo d\'un membre pendant 1 semaine'
+        },
+        epingleSalon: {
+            label: '📌 Épingle Salon',
+            emoji: '📌',
+            desc: 'Droit d\'épingler un message dans le salon'
+        }
+    };
+
+    for (const [key, qte] of Object.entries(inv)) {
+        if (qte > 0 && ITEMS_METADATA[key]) {
+            const meta = ITEMS_METADATA[key];
+            items.push(`${meta.emoji} **${meta.label}** : x${qte}\n> *${meta.desc}*`);
+            options.push({
+                label: `${meta.label} (x${qte})`.slice(0, 100),
+                description: meta.desc.slice(0, 100),
+                value: key
+            });
+        }
     }
 
     const embed = new EmbedBuilder()
@@ -1047,7 +1108,7 @@ function buildInventaireEmbed(membre) {
         .setTitle(`🎒 Inventaire de récompenses — ${membre.displayName}`)
         .setDescription(
             items.length > 0
-                ? items.join('\n') + "\n\n*Choisis la récompense à activer dans le menu déroulant ci-dessous :*"
+                ? items.join('\n\n') + "\n\n*Choisis la récompense à activer dans le menu déroulant ci-dessous :*"
                 : "*Ton inventaire est vide pour le moment.*"
         );
 
@@ -1056,7 +1117,7 @@ function buildInventaireEmbed(membre) {
         const menu = new StringSelectMenuBuilder()
             .setCustomId(`rlt_claim_menu_${membre.id}`)
             .setPlaceholder('Sélectionne une récompense à activer...')
-            .addOptions(options);
+            .addOptions(options.slice(0, 25));
         row = new ActionRowBuilder().addComponents(menu);
     }
 
@@ -1554,7 +1615,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     const outcomeId = tirerRoulette(authorId, guild?.id);
 
     // ==========================================
-    //  BRANCHEMENT BATTLE PASS (ROULETTE ROLL)
+    //  BRANCHEMENT BATTLE PASS (ROULETTE ROLL & BONUS)
     // ==========================================
     if (bridge.trackBattlePassProgress) {
         bridge.trackBattlePassProgress(authorId, 'roulette_roll', 1);
@@ -1563,6 +1624,14 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         }
         if (outcomeId === 'bonus-gif-ou-audio') {
             bridge.trackBattlePassProgress(authorId, 'papayou', 1);
+        }
+        if (pityAvant.malus >= ROULETTE_PITY_MALUS || pityAvant.nuls >= ROULETTE_PITY_NULS) {
+            bridge.trackBattlePassProgress(authorId, 'pity_win', 1);
+        }
+        const bActif = (rouletteBouclierActif.get(authorId) || 0) > 0;
+        if (bActif) bridge.trackBattlePassProgress(authorId, 'bouclier_actif', 1);
+        if ((rouletteJackpotBonus.get(authorId) || 0) >= 0.20) {
+            bridge.trackBattlePassProgress(authorId, 'jackpot_haut', 1);
         }
     }
 
@@ -1586,8 +1655,17 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     envoyerHallOfFame(guild, membre, entryTiree).catch(() => {});
     verifierRoleGamblingAddict(membre).catch(() => {});
 
-    if (entryTiree?.type === 'bonus' && bridge.estAnniversaireAujourdhui(guild?.id, authorId)) {
-        deverrouillerSucces(authorId, 'jour-de-gloire', channel);
+    if (entryTiree?.type === 'bonus') {
+        if (bridge.trackBattlePassProgress) {
+            bridge.trackBattlePassProgress(authorId, 'bonus_gagne', 1);
+            bridge.trackBattlePassProgress(authorId, 'bonus_diff', 1);
+            if (probaReelle(entryTiree) <= 0.01) {
+                bridge.trackBattlePassProgress(authorId, 'bonus_rare', 1);
+            }
+        }
+        if (bridge.estAnniversaireAujourdhui(guild?.id, authorId)) {
+            deverrouillerSucces(authorId, 'jour-de-gloire', channel);
+        }
     }
 
     let cible = membre;
@@ -1949,6 +2027,7 @@ async function handleRouletteMessage(message, response, client) {
     }
 
     if (command === '!roulettestate' || command === '!rltstate') {
+        bridge.trackBattlePassProgress?.(message.author.id, 'rlt_state', 1);
         const query = raw.split(/\s+/).slice(1).join(" ");
         let cible = message.mentions.members.first();
         if (!cible) {
@@ -2026,6 +2105,7 @@ async function handleRouletteMessage(message, response, client) {
     }
 
     if (['!rouletteclaim', '!rltclaim', '!claim'].includes(command) || ((command === '!roulette' || command === '!rlt') && raw.split(" ")[1]?.toLowerCase() === 'claim')) {
+        bridge.trackBattlePassProgress?.(message.author.id, 'rlt_claim_check', 1);
         const { embed, row } = buildInventaireEmbed(message.member);
         await message.reply({ embeds: [embed], components: row ? [row] : [] });
         return true;
@@ -2175,23 +2255,69 @@ async function handleRouletteButton(interaction, client) {
             return interaction.reply({ content: "Tu n'as plus cette récompense en réserve ou elle a déjà été activée !", ephemeral: true });
         }
 
+        let messageConfirmation = "";
+
         if (itemChoisi === 'freeRoll1Min') {
             rouletteFreeRollUntil.set(targetUserId, Date.now() + 60 * 1000);
             rouletteImmuniteUntil.set(targetUserId, Date.now() + 60 * 1000);
-            bridge.demanderSauvegarde();
-
-            // Met à jour l'embed d'inventaire après consommation
-            const member = interaction.guild?.members.cache.get(targetUserId) ?? interaction.member;
-            const majInv = buildInventaireEmbed(member);
-            await interaction.update({ embeds: [majInv.embed], components: majInv.row ? [majInv.row] : [] }).catch(() => {});
-
-            await interaction.followUp({
-                content: `⚡ **C'EST PARTI !** <@${targetUserId}>, ton **tirage à volonté (1 min)** est activé ! Aucun cooldown et immunité aux mutes pendant 60 secondes ! Fais péter \`!rlt go\` ! 🎰`,
-                ephemeral: false
-            });
-            return true;
+            messageConfirmation = `⚡ **C'EST PARTI !** <@${targetUserId}>, ton **tirage à volonté (1 min)** est activé ! Aucun cooldown et immunité aux mutes pendant 60 secondes ! Fais péter \`!rlt go\` ! 🎰`;
+        } else if (itemChoisi === 'ticketSkip') {
+            rouletteCooldowns.delete(targetUserId);
+            messageConfirmation = `🎟️ **COUPE-FILE UTILISÉ !** <@${targetUserId}>, ton cooldown roulette est remis à zéro ! Tu peux relancer immédiatement avec \`!rlt go\` ! ⚡`;
+        } else if (itemChoisi === 'trefle20') {
+            const curCharges = rouletteJackpotBoostCharges.get(targetUserId) || 0;
+            const curVal = rouletteJackpotBoostValue.get(targetUserId) || 0;
+            rouletteJackpotBoostCharges.set(targetUserId, curCharges + 2);
+            rouletteJackpotBoostValue.set(targetUserId, curVal + 0.20);
+            messageConfirmation = `🍀 **TRÈFLE ACTIVÉ !** <@${targetUserId}>, tu gagnes **+20% de bonus jackpot** sur tes 2 prochains tirages !`;
+        } else if (itemChoisi === 'eponge') {
+            rouletteTransfos.delete(targetUserId);
+            rouletteUwuUntil.delete(targetUserId);
+            rouletteLettreInterdite.delete(targetUserId);
+            rouletteEmojiUntil.delete(targetUserId);
+            rouletteLeetUntil.delete(targetUserId);
+            rouletteEchoUntil.delete(targetUserId);
+            messageConfirmation = `🧹 **ÉPONGE À MALUS !** Tous tes malus textuels ont été effacés ! Tu peux reparler normalement ! ✨`;
+        } else if (itemChoisi === 'miniHH') {
+            rouletteCooldownCourtCharges.set(targetUserId, (rouletteCooldownCourtCharges.get(targetUserId) || 0) + 2);
+            messageConfirmation = `⚡ **MINI HAPPY-HOUR !** Tes 2 prochains tirages auront un cooldown réduit à 5 minutes !`;
+        } else if (itemChoisi === 'pityBoost') {
+            const pity = roulettePity.get(targetUserId) ?? { malus: 0, nuls: 0 };
+            pity.malus++;
+            pity.nuls++;
+            roulettePity.set(targetUserId, pity);
+            messageConfirmation = `📈 **COUP DE POUCE PITY !** Ta pity avance de +1 malus et +1 tirage nul ! Le bonus garanti approche !`;
+        } else if (itemChoisi === 'coupTriple') {
+            rouletteCooldowns.delete(targetUserId);
+            const actuelles = rouletteCoupTripleCharges.get(targetUserId) || 0;
+            rouletteCoupTripleCharges.set(targetUserId, actuelles + 3);
+            messageConfirmation = `🎰 **COUP TRIPLE ACTIVÉ !** 3 tirages immédiats sans aucun cooldown ajoutés !`;
+        } else if (itemChoisi === 'superBouclier') {
+            const tot = (rouletteBouclierActif.get(targetUserId) || 0) + 3;
+            rouletteBouclierActif.set(targetUserId, tot);
+            messageConfirmation = `🔰 **SUPER BOUCLIER ACTIVÉ !** +3 charges de bouclier ajoutées (${tot} en réserve) !`;
+        } else if (itemChoisi === 'redirectChoix5') {
+            const tot = (rouletteRedirectCharges.get(targetUserId) || 0) + 5;
+            rouletteRedirectCharges.set(targetUserId, tot);
+            messageConfirmation = `🎯 **5 REDIRECTIONS AU CHOIX !** Tu as 5 malus redirigeables en réserve (${tot} au total) !`;
+        } else {
+            messageConfirmation = `✅ **Objet activé !** Ton objet a été appliqué avec succès.`;
         }
 
+        bridge.demanderSauvegarde();
+        if (bridge.trackBattlePassProgress) {
+            bridge.trackBattlePassProgress(targetUserId, 'item_consomme', 1);
+            if (itemChoisi === 'ticketSkip' || itemChoisi === 'eponge') {
+                bridge.trackBattlePassProgress(targetUserId, 'skip_ou_eponge', 1);
+            }
+        }
+
+        // Met à jour l'embed d'inventaire après consommation
+        const member = interaction.guild?.members.cache.get(targetUserId) ?? interaction.member;
+        const majInv = buildInventaireEmbed(member);
+        await interaction.update({ embeds: [majInv.embed], components: majInv.row ? [majInv.row] : [] }).catch(() => {});
+
+        await interaction.followUp({ content: messageConfirmation, ephemeral: false });
         return true;
     }
 

@@ -33,39 +33,139 @@ function initBattlePassState(bridge) {
 // ==========================================
 
 const QUETES_QUOTIDIENNES_POOL = [
-    // Faciles (50 XP)
-    { id: 'salutations', tier: 'facile', xp: 50, desc: 'Envoyer au moins 10 messages sur le serveur', objectif: 10, type: 'message' },
-    { id: 'appel_casino', tier: 'facile', xp: 50, desc: 'Faire 1 tirage de roulette (!rlt go)', objectif: 1, type: 'roulette_roll' },
-    { id: 'coup_de_coeur', tier: 'facile', xp: 50, desc: 'Faire une interaction bienveillante (!kiss, !hug, !danse)', objectif: 1, type: 'interact_gentil' },
-    { id: 'reglements_compte', tier: 'facile', xp: 50, desc: 'Faire une interaction de combat (!punch, !bang, !insult)', objectif: 1, type: 'interact_combat' },
-    { id: 'oracle', tier: 'facile', xp: 50, desc: 'Consulter son horoscope ou son destin (!horoscope, !destin)', objectif: 1, type: 'oracle' },
-    { id: 'archive', tier: 'facile', xp: 50, desc: 'Consulter une citation culte (!quote)', objectif: 1, type: 'quote' },
+    // ==========================================
+    //  TIER 1 : FACILES (50 XP)
+    // ==========================================
+    { id: 'petit_coucou', tier: 'facile', xp: 50, desc: 'Envoyer au moins 10 messages naturels sur le serveur', objectif: 10, type: 'message' },
+    { id: 'lancer_des', tier: 'facile', xp: 50, desc: 'Faire son 1er tirage de roulette de la journée (!rlt go)', objectif: 1, type: 'roulette_roll' },
+    { id: 'double_jet', tier: 'facile', xp: 50, desc: 'Effectuer 2 tirages de roulette dans la journée', objectif: 2, type: 'roulette_roll' },
+    { id: 'papotage_rapide', tier: 'facile', xp: 50, desc: 'Discuter au moins 5 minutes en salon vocal avec du monde', objectif: 5, type: 'vocal_min' },
+    { id: 'citoyen_engage', tier: 'facile', xp: 50, desc: 'Voter sur une suggestion active dans #suggestions', objectif: 1, type: 'sugg_vote' },
+    { id: 'noctambule_matinal', tier: 'facile', xp: 50, desc: 'Poster un message entre 00h et 08h du matin', objectif: 1, type: 'message_nuit' },
+    { id: 'pause_midi', tier: 'facile', xp: 50, desc: 'Envoyer au moins 3 messages entre 12h et 14h', objectif: 3, type: 'message_midi' },
+    { id: 'curieux_stats', tier: 'facile', xp: 50, desc: 'Consulter son état ou ses malus roulette (!rlt state)', objectif: 1, type: 'rlt_state' },
+    { id: 'tour_salons', tier: 'facile', xp: 50, desc: 'Parler dans au moins 2 salons textuels différents', objectif: 2, type: 'salons_diff' },
+    { id: 'assiduite_soir', tier: 'facile', xp: 50, desc: 'Participer à une discussion après 19h', objectif: 3, type: 'message_soir' },
+    { id: 'client_casino', tier: 'facile', xp: 50, desc: 'Faire un tirage de roulette sans aucun bonus ni malus actif', objectif: 1, type: 'roulette_neutre' },
+    { id: 'garder_rythme', tier: 'facile', xp: 50, desc: 'Envoyer des messages à au moins 2 heures d\'intervalle', objectif: 2, type: 'heures_diff' },
+    { id: 'decouverte_inventaire', tier: 'facile', xp: 50, desc: 'Consulter son inventaire de récompenses (!rlt claim)', objectif: 1, type: 'rlt_claim_check' },
+    { id: 'tirage_matinal', tier: 'facile', xp: 50, desc: 'Faire un tirage de roulette avant midi', objectif: 1, type: 'roulette_matin' },
+    { id: 'debut_soiree', tier: 'facile', xp: 50, desc: 'Envoyer au moins 5 messages entre 18h et 20h', objectif: 5, type: 'message_soir_debut' },
+    { id: 'reaction_commu', tier: 'facile', xp: 50, desc: 'Réagir avec un emoji sous les messages de 3 membres', objectif: 3, type: 'reaction_add' },
+    { id: 'coup_essai_motus', tier: 'facile', xp: 50, desc: 'Proposer 1 mot au Motus du matin (10h) ou du soir (19h)', objectif: 1, type: 'minijeu_essai' },
 
-    // Moyennes (100 XP)
-    { id: 'pipelette', tier: 'moyen', xp: 100, desc: 'Envoyer 35 messages sur le serveur', objectif: 35, type: 'message' },
-    { id: 'creuse_meninges', tier: 'moyen', xp: 100, desc: 'Proposer 2 essais au Motus ou 1 essai au Rébus', objectif: 2, type: 'minijeu_essai' },
-    { id: 'papote_vocal', tier: 'moyen', xp: 100, desc: 'Passer au moins 15 minutes en salon vocal', objectif: 15, type: 'vocal_min' },
-    { id: 'double_dose', tier: 'moyen', xp: 100, desc: 'Faire 2 tirages d\'affilée pendant l\'Happy Hour (20h-21h)', objectif: 2, type: 'happy_hour_roll' },
-    { id: 'papayou', tier: 'moyen', xp: 100, desc: 'Faire spawn le bonus PAPAYOU.mp3 à la roulette', objectif: 1, type: 'papayou' },
+    // ==========================================
+    //  TIER 2 : MOYENNES (100 XP)
+    // ==========================================
+    { id: 'habitue_comptoir', tier: 'moyen', xp: 100, desc: 'Envoyer au moins 35 messages sur le serveur dans la journée', objectif: 35, type: 'message' },
+    { id: 'soiree_posee_vocal', tier: 'moyen', xp: 100, desc: 'Passer au moins 20 minutes cumulées en salon vocal avec du monde', objectif: 20, type: 'vocal_min' },
+    { id: 'heure_de_pointe', tier: 'moyen', xp: 100, desc: 'Faire au moins 1 tirage pendant l\'Happy Hour (20h - 21h)', objectif: 1, type: 'happy_hour_roll' },
+    { id: 'double_happy_hour', tier: 'moyen', xp: 100, desc: 'Faire 2 tirages de roulette pendant l\'Happy Hour (20h - 21h)', objectif: 2, type: 'happy_hour_roll' },
+    { id: 'remue_meninges', tier: 'moyen', xp: 100, desc: 'Proposer au moins 2 essais valides au Motus (10h ou 19h)', objectif: 2, type: 'minijeu_essai' },
+    { id: 'rdv_rebus', tier: 'moyen', xp: 100, desc: 'Participer au Rébus Regaïen de 15h00 (au moins 1 tentative)', objectif: 1, type: 'rebus_part' },
+    { id: 'conso_inventaire', tier: 'moyen', xp: 100, desc: 'Activer un objet depuis son inventaire de roulette (!rlt claim)', objectif: 1, type: 'item_consomme' },
+    { id: 'chasseur_bonus', tier: 'moyen', xp: 100, desc: 'Décrocher un bonus à la roulette (hors résultat nul ou malus)', objectif: 1, type: 'bonus_gagne' },
+    { id: 'perseverance_casino', tier: 'moyen', xp: 100, desc: 'Effectuer au moins 4 tirages de roulette dans la journée', objectif: 4, type: 'roulette_roll' },
+    { id: 'bouclier_pret', tier: 'moyen', xp: 100, desc: 'Posséder au moins 1 charge de bouclier active dans son état', objectif: 1, type: 'bouclier_actif' },
+    { id: 'discussion_active', tier: 'moyen', xp: 100, desc: 'Envoyer au moins 15 messages dans un même salon textuel', objectif: 15, type: 'message_salon_unique' },
+    { id: 'fidele_poste', tier: 'moyen', xp: 100, desc: 'Continuer à discuter alors qu\'on a un cooldown roulette actif', objectif: 5, type: 'msg_sous_cooldown' },
+    { id: 'noctambule_vocal', tier: 'moyen', xp: 100, desc: 'Passer au moins 15 minutes en salon vocal après 22h', objectif: 15, type: 'vocal_nuit' },
+    { id: 'vocal_bande', tier: 'moyen', xp: 100, desc: 'Être en salon vocal avec au moins 3 personnes réunies', objectif: 10, type: 'vocal_groupe' },
+    { id: 'double_service_motus', tier: 'moyen', xp: 100, desc: 'Participer à la fois au Motus de 10h et à celui de 19h', objectif: 2, type: 'motus_double_session' },
+    { id: 'devoir_civique', tier: 'moyen', xp: 100, desc: 'Participer à un Vote Public sur la roulette (voter ✅ ou ❌)', objectif: 1, type: 'vote_public_part' },
+    { id: 'defenseur_pare', tier: 'moyen', xp: 100, desc: 'Bloquer un malus de roulette grâce à un bouclier actif', objectif: 1, type: 'malus_pare' },
 
-    // Défis / Trolls (150 XP)
-    { id: 'guerrier_loose', tier: 'defi', xp: 150, desc: 'Subir un malus et poster 3 messages sous son effet', objectif: 3, type: 'malus_msg' },
-    { id: 'casse_cou', tier: 'defi', xp: 150, desc: 'Bloquer 5 Feur de Cacabot avec le bouclier Anti-Feur', objectif: 5, type: 'feur_dodge' },
-    { id: 'jailaref', tier: 'defi', xp: 150, desc: 'Utiliser !jailaref ou !palaref dans une discussion', objectif: 1, type: 'ref' },
-    { id: 'devotion', tier: 'defi', xp: 150, desc: 'Envoyer un GIF (!epsys) ou un coup de pression (!bougetoi)', objectif: 1, type: 'epsys_cmd' },
-    { id: 'intello', tier: 'defi', xp: 150, desc: 'Trouver la solution d\'une session de Motus ou Rébus', objectif: 1, type: 'minijeu_win' }
+    // ==========================================
+    //  TIER 3 : DÉFIS & TROLLS (150 XP)
+    // ==========================================
+    { id: 'guerrier_loose', tier: 'defi', xp: 150, desc: 'Subir un malus de texte et envoyer au moins 3 messages sous son effet', objectif: 3, type: 'malus_msg' },
+    { id: 'victime_exemplaire', tier: 'defi', xp: 150, desc: 'Subir un mute roulette et revenir discuter dès la fin du mute', objectif: 1, type: 'mute_survecu' },
+    { id: 'survivant_malus', tier: 'defi', xp: 150, desc: 'Envoyer au moins 10 messages tout en ayant un malus roulette actif', objectif: 10, type: 'malus_msg' },
+    { id: 'cerveau_or_motus', tier: 'defi', xp: 150, desc: 'Être le/la premier.e à trouver le mot du jour au Motus', objectif: 1, type: 'motus_win' },
+    { id: 'dechiffreur_rebus', tier: 'defi', xp: 150, desc: 'Trouver la solution d\'une manche au Rébus Regaïen de 15h', objectif: 1, type: 'rebus_win' },
+    { id: 'plein_happy_hour', tier: 'defi', xp: 150, desc: 'Faire au moins 3 tirages pendant l\'Happy Hour (20h - 21h)', objectif: 3, type: 'happy_hour_roll' },
+    { id: 'pity_activee', tier: 'defi', xp: 150, desc: 'Décrocher un bonus garanti grâce au système de Pity', objectif: 1, type: 'pity_win' },
+    { id: 'chimiste_herbe', tier: 'defi', xp: 150, desc: 'Annuler un malus actif via la mécanique de contre-poison', objectif: 1, type: 'contre_poison' },
+    { id: 'marathonien_vocal', tier: 'defi', xp: 150, desc: 'Passer au moins 45 minutes cumulées en salon vocal dans la journée', objectif: 45, type: 'vocal_min' },
+    { id: 'grand_bavard', tier: 'defi', xp: 150, desc: 'Dépasser les 75 messages envoyés sur le serveur en une seule journée', objectif: 75, type: 'message' },
+    { id: 'couronne_tete', tier: 'defi', xp: 150, desc: 'Décrocher le bonus de la Couronne ou parler sous son effet', objectif: 5, type: 'couronne_msg' },
+    { id: 'jackpot_en_vue', tier: 'defi', xp: 150, desc: 'Monter son boost Jackpot roulette accumulé à +20% ou plus', objectif: 1, type: 'jackpot_haut' },
+    { id: 'haute_tension', tier: 'defi', xp: 150, desc: 'Lancer un tirage de roulette en ayant déjà 2 malus cumulés', objectif: 1, type: 'roll_sous_malus_cumules' },
+    { id: 'coup_de_genie', tier: 'defi', xp: 150, desc: 'Obtenir un bonus très rare (probabilité ≤ 1%) à la roulette', objectif: 1, type: 'bonus_rare' },
+    { id: 'sauve_par_gong', tier: 'defi', xp: 150, desc: 'Utiliser une Éponge à malus ou un Ticket Coupe-File de son inventaire', objectif: 1, type: 'skip_ou_eponge' },
+    { id: 'session_casino_totale', tier: 'defi', xp: 150, desc: 'Effectuer au moins 6 tirages de roulette sur l\'ensemble de la journée', objectif: 6, type: 'roulette_roll' }
 ];
 
 const QUETES_HEBDOMADAIRES_POOL = [
-    { id: 'pilier_comptoir', xp: 350, desc: 'Envoyer un total de 200 messages dans la semaine', objectif: 200, type: 'message' },
-    { id: 'habitudes_vocal', xp: 300, desc: 'Passer au moins 60 minutes cumulées en vocal', objectif: 60, type: 'vocal_min' },
-    { id: 'semaine_studieuse', xp: 500, desc: 'Compléter ses 4 quotidiennes au moins 3 jours différents', objectif: 3, type: 'full_daily' },
-    { id: 'accro_roulette', xp: 350, desc: 'Effectuer au moins 30 tirages de roulette', objectif: 30, type: 'roulette_roll' },
-    { id: 'pare_epreuve', xp: 400, desc: 'Bloquer 10 malus grâce à un bouclier ou contre-poison', objectif: 10, type: 'malus_pare' },
-    { id: 'regulier_hh', xp: 400, desc: 'Participer à l\'Happy Hour sur 3 jours distincts (20h-21h)', objectif: 3, type: 'hh_jours' },
-    { id: 'assidu_enigmes', xp: 350, desc: 'Participer à au moins 5 sessions de mini-jeux', objectif: 5, type: 'minijeu_part' },
-    { id: 'chasseur_gloire', xp: 450, desc: 'Remporter au moins 2 victoires (Motus ou Rébus)', objectif: 2, type: 'minijeu_win' },
-    { id: 'grand_survivant', xp: 400, desc: 'Subir au moins 3 malus différents dans la semaine', objectif: 3, type: 'malus_diff' }
+    // ==========================================
+    //  1. ACTIVITÉ & PRÉSENCE TEXTUELLE
+    // ==========================================
+    { id: 'pilier_salon', xp: 350, desc: 'Envoyer au moins 200 messages sur le serveur au cours de la semaine', objectif: 200, type: 'message' },
+    { id: 'grand_bavard_hebdo', xp: 450, desc: 'Dépasser les 350 messages textuels sur l\'ensemble de la semaine', objectif: 350, type: 'message' },
+    { id: 'fidelite_poste', xp: 400, desc: 'Envoyer des messages au moins 5 jours distincts dans la semaine', objectif: 5, type: 'message_jours' },
+    { id: 'semaine_complete', xp: 500, desc: 'Être actif.ve et présent.e dans les salons 6 jours différents sur 7', objectif: 6, type: 'message_jours' },
+    { id: 'regularite_exemplaire', xp: 350, desc: 'Poster au moins 15 messages par jour sur 4 jours différents', objectif: 4, type: 'message_regulier' },
+    { id: 'habitue_soirees', xp: 400, desc: 'Envoyer au moins 60 messages en soirée (après 20h) sur la semaine', objectif: 60, type: 'message_soir' },
+    { id: 'esprit_groupe', xp: 350, desc: 'Participer à des discussions dans au moins 4 salons textuels différents', objectif: 4, type: 'salons_diff_hebdo' },
+    { id: 'weekend_anime', xp: 350, desc: 'Envoyer au moins 50 messages cumulés entre le samedi et le dimanche', objectif: 50, type: 'message_weekend' },
+    { id: 'leve_tot_assidu', xp: 350, desc: 'Participer au chat matinal (avant 10h) sur au moins 3 jours différents', objectif: 3, type: 'message_matin_jours' },
+    { id: 'debatteur_regulier', xp: 400, desc: 'Envoyer au moins 25 messages dans un même salon sur 3 jours distincts', objectif: 3, type: 'debatteur_jours' },
+    { id: 'garde_nuit', xp: 350, desc: 'Participer aux discussions nocturnes (après minuit) sur 3 nuits différentes', objectif: 3, type: 'message_nuit_jours' },
+
+    // ==========================================
+    //  2. ENDURANCE VOCALE & SALONS VOCAUX
+    // ==========================================
+    { id: 'habitue_micro', xp: 350, desc: 'Passer au moins 60 minutes cumulées en salon vocal sur la semaine', objectif: 60, type: 'vocal_min' },
+    { id: 'resident_vocal', xp: 450, desc: 'Cumuler au moins 120 minutes (2 heures) en salon vocal sur la semaine', objectif: 120, type: 'vocal_min' },
+    { id: 'marathonien_vocal_hebdo', xp: 500, desc: 'Cumuler au moins 180 minutes (3 heures) en salon vocal avec du monde', objectif: 180, type: 'vocal_min' },
+    { id: 'regulier_vocal', xp: 400, desc: 'Discuter en salon vocal sur au moins 3 jours différents de la semaine', objectif: 3, type: 'vocal_jours' },
+    { id: 'assidu_voix', xp: 450, desc: 'Passer au moins 20 minutes en vocal sur 4 jours distincts', objectif: 4, type: 'vocal_jours_20' },
+    { id: 'session_long_cours', xp: 350, desc: 'Participer à une session vocale d\'au moins 45 minutes d\'affilée', objectif: 1, type: 'vocal_session_longue' },
+    { id: 'noctambule_vocal_hebdo', xp: 400, desc: 'Passer au moins 40 minutes cumulées en vocal après 22h dans la semaine', objectif: 40, type: 'vocal_nuit' },
+    { id: 'bande_complet', xp: 400, desc: 'Participer à un vocal réunissant au moins 3 membres sur 2 sessions', objectif: 2, type: 'vocal_groupe' },
+    { id: 'weekend_vocal', xp: 350, desc: 'Passer au moins 60 minutes en salon vocal entre samedi et dimanche', objectif: 60, type: 'vocal_weekend' },
+    { id: 'vocal_aprem', xp: 300, desc: 'Passer au moins 30 minutes en vocal entre 14h et 18h sur la semaine', objectif: 30, type: 'vocal_aprem' },
+
+    // ==========================================
+    //  3. ASSIDUITÉ DU BATTLE PASS & STREAKS
+    // ==========================================
+    { id: 'travailleur_acharne', xp: 350, desc: 'Valider au moins 10 quêtes quotidiennes au cours de la semaine', objectif: 10, type: 'quetes_daily_validees' },
+    { id: 'chasseur_quetes', xp: 450, desc: 'Valider au moins 16 quêtes quotidiennes au cours de la semaine', objectif: 16, type: 'quetes_daily_validees' },
+    { id: 'double_grand_chelem', xp: 400, desc: 'Compléter l\'intégralité de ses 4 quotidiennes au moins 2 jours différents', objectif: 2, type: 'full_daily' },
+    { id: 'semaine_studieuse', xp: 500, desc: 'Réaliser le Grand Chelem (4/4 quotidiennes) sur au moins 3 jours différents', objectif: 3, type: 'full_daily' },
+    { id: 'infaillible', xp: 500, desc: 'Maintenir sa série quotidienne (streak) active pendant les 7 jours de la semaine', objectif: 7, type: 'streak_hebdo' },
+    { id: 'objectif_constance', xp: 350, desc: 'Valider au moins 1 quête quotidienne chaque jour pendant 5 jours consécutifs', objectif: 5, type: 'streak_hebdo_5' },
+
+    // ==========================================
+    //  4. CASINO, ROULETTE & HAPPY HOUR
+    // ==========================================
+    { id: 'client_fidele', xp: 350, desc: 'Effectuer au moins 25 tirages de roulette sur l\'ensemble de la semaine', objectif: 25, type: 'roulette_roll' },
+    { id: 'accro_roulette', xp: 450, desc: 'Effectuer au moins 40 tirages de roulette dans la semaine', objectif: 40, type: 'roulette_roll' },
+    { id: 'casino_maison', xp: 500, desc: 'Atteindre un total de 60 tirages de roulette sur la semaine', objectif: 60, type: 'roulette_roll' },
+    { id: 'rdv_20h', xp: 400, desc: 'Participer à l\'Happy Hour (20h - 21h) sur au moins 3 soirs distincts', objectif: 3, type: 'hh_jours' },
+    { id: 'inconditionnel_hh', xp: 500, desc: 'Participer à l\'Happy Hour sur au moins 4 soirs distincts', objectif: 4, type: 'hh_jours' },
+    { id: 'specialiste_5min', xp: 400, desc: 'Réaliser au moins 8 tirages cumulés pendant les Happy Hours de la semaine', objectif: 8, type: 'happy_hour_roll' },
+    { id: 'pare_toute_epreuve', xp: 400, desc: 'Bloquer au moins 5 malus grâce à des boucliers au cours de la semaine', objectif: 5, type: 'malus_pare' },
+    { id: 'muraille_impenetrable', xp: 500, desc: 'Bloquer au moins 8 malus grâce à des boucliers dans la semaine', objectif: 8, type: 'malus_pare' },
+    { id: 'grand_survivant_hebdo', xp: 400, desc: 'Subir au moins 3 malus textuels différents sur la semaine', objectif: 3, type: 'malus_diff' },
+    { id: 'victime_heroique', xp: 450, desc: 'Subir au moins 6 malus de roulette au cours de la semaine', objectif: 6, type: 'malus_subis' },
+    { id: 'chance_tourne', xp: 400, desc: 'Déclencher le bonus garanti de la Pity au moins 2 fois dans la semaine', objectif: 2, type: 'pity_win' },
+    { id: 'gestionnaire_inventaire', xp: 350, desc: 'Utiliser au moins 3 objets de son inventaire roulette (!rlt claim)', objectif: 3, type: 'item_consomme' },
+    { id: 'collectionneur_bonus', xp: 400, desc: 'Décrocher au moins 4 bonus différents à la roulette dans la semaine', objectif: 4, type: 'bonus_diff' },
+    { id: 'voie_royale', xp: 400, desc: 'Participer à au moins 2 votes publics déclenchés sur la roulette dans la semaine', objectif: 2, type: 'vote_public_part' },
+
+    // ==========================================
+    //  5. MINI-JEUX : MOTUS & RÉBUS REGAÏEN
+    // ==========================================
+    { id: 'assidu_dictionnaire', xp: 350, desc: 'Proposer au moins 10 essais valides au Motus au cours de la semaine', objectif: 10, type: 'minijeu_essai' },
+    { id: 'expert_lettres', xp: 450, desc: 'Proposer au moins 20 essais valides au Motus dans la semaine', objectif: 20, type: 'minijeu_essai' },
+    { id: 'presence_deux_services', xp: 400, desc: 'Participer aux deux sessions Motus (10h et 19h) sur 3 jours différents', objectif: 3, type: 'motus_double_session' },
+    { id: 'vainqueur_motus', xp: 450, desc: 'Être le/la premier.e à trouver le mot du jour au moins 1 fois dans la semaine', objectif: 1, type: 'motus_win' },
+    { id: 'maitre_mots', xp: 500, desc: 'Remporter au moins 2 victoires au Motus dans la semaine', objectif: 2, type: 'motus_win' },
+    { id: 'fidele_15h', xp: 350, desc: 'Participer au Rébus Regaïen de 15h sur au moins 3 jours différents', objectif: 3, type: 'rebus_jours' },
+    { id: 'dechiffreur_regulier', xp: 450, desc: 'Remporter au moins 2 manches de Rébus Regaïen dans la semaine', objectif: 2, type: 'rebus_win' },
+    { id: 'chasseur_gloire_hebdo', xp: 500, desc: 'Remporter au moins 3 victoires cumulées (Motus ou manches de Rébus)', objectif: 3, type: 'minijeu_win' },
+    { id: 'omnipresent_enigmes', xp: 450, desc: 'Participer au Motus ET au Rébus sur au moins 3 jours distincts de la semaine', objectif: 3, type: 'minijeu_part_jours' }
 ];
 
 // Récompenses des 25 paliers
@@ -337,22 +437,50 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
 
     let modifie = false;
 
+    // Analyse temporelle heure de Paris
+    const nowParis = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const heure = nowParis.getHours();
+
+    const typesActifs = new Set([type]);
+
+    // Déclencheurs contextuels automatiques pour les messages
+    if (type === 'message') {
+        if (heure >= 0 && heure < 8) typesActifs.add('message_nuit');
+        if (heure >= 12 && heure < 14) typesActifs.add('message_midi');
+        if (heure >= 18 && heure < 20) typesActifs.add('message_soir_debut');
+        if (heure >= 19) typesActifs.add('message_soir');
+    }
+
+    // Déclencheurs contextuels pour les tirages roulette
+    if (type === 'roulette_roll') {
+        if (heure < 12) typesActifs.add('roulette_matin');
+    }
+
+    // Déclencheurs pour le vocal de nuit
+    if (type === 'vocal_min' && heure >= 22) {
+        typesActifs.add('vocal_nuit');
+    }
+
+    const validerQuete = (q, amt) => {
+        q.progression = Math.min(q.objectif, q.progression + amt);
+        if (q.progression >= q.objectif) {
+            q.terminee = true;
+            q.reclamee = true;
+            const today = getTodayKey();
+            if (p.dernierJourStreak !== today) {
+                p.streak = (p.streak || 0) + 1;
+                p.dernierJourStreak = today;
+                checkStreakRewards(userId, p.streak);
+            }
+            ajouterXpEtMonteeDeNiveau(userId, p, q.xp, q.desc);
+        }
+    };
+
     // 1. Quotidiennes
     for (const q of p.quetesDuJour) {
         if (q.terminee) continue;
-        if (q.type === type) {
-            q.progression = Math.min(q.objectif, q.progression + amount);
-            if (q.progression >= q.objectif) {
-                q.terminee = true;
-                q.reclamee = true; // Réclamée automatiquement
-                const today = getTodayKey();
-                if (p.dernierJourStreak !== today) {
-                    p.streak = (p.streak || 0) + 1;
-                    p.dernierJourStreak = today;
-                    checkStreakRewards(userId, p.streak);
-                }
-                ajouterXpEtMonteeDeNiveau(userId, p, q.xp, q.desc);
-            }
+        if (typesActifs.has(q.type)) {
+            validerQuete(q, amount);
             modifie = true;
         }
     }
@@ -360,13 +488,8 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
     // 2. Hebdomadaires
     for (const q of p.quetesHebdo) {
         if (q.terminee) continue;
-        if (q.type === type) {
-            q.progression = Math.min(q.objectif, q.progression + amount);
-            if (q.progression >= q.objectif) {
-                q.terminee = true;
-                q.reclamee = true; // Réclamée automatiquement
-                ajouterXpEtMonteeDeNiveau(userId, p, q.xp, q.desc);
-            }
+        if (typesActifs.has(q.type)) {
+            validerQuete(q, amount);
             modifie = true;
         }
     }

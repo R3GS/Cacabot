@@ -369,7 +369,8 @@ initMinijeuxState({
     setMotusStats: (s) => { motusStats = s; },
     getRebusStats: () => rebusStats,
     setRebusStats: (s) => { rebusStats = s; },
-    demanderSauvegarde: () => demanderSauvegarde()
+    demanderSauvegarde: () => demanderSauvegarde(),
+    trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta)
 });
 
 initRouletteBridge({
@@ -494,11 +495,6 @@ const {
     handleWatcherMessage,
     handleVoiceStateUpdate
 } = require('./watcher.js');
-
-// =========================
-//     DONNÉES WANTED
-// =========================
-// Déporté dans ./wanted.js
 
 const FEUR_IMMUNE = ['1503495713097519355'];
 
@@ -1401,6 +1397,9 @@ async function disableButtons(interaction) {
         return message.reply(getAnimalResponse(message, null, client.user.id));
     }
 
+    // Commandes Wanted (!wanted, !recherche, !preuves, !affaire)
+    if (await handleWantedMessage(message, response, client, { findMemberByName, askDisambiguation })) return;
+
     // Commandes Bienvenue (!welcome, !bienvenue)
     if (await handleWelcomeMessage(message, response)) return;
 
@@ -1636,6 +1635,11 @@ async function disableButtons(interaction) {
 
     if (typeof response === "string") {
         if (response.trim().length === 0) return;
+
+        // Répliques réflexes (feur, stiti, bril, etc.) : 1 fois sur 3 seulement
+        const estUrl = /^https?:\/\//i.test(response.trim());
+        if (!isExplicitCommand && !estUrl && Math.random() >= 1 / 3) return;
+
         const finAntiFeur = rouletteAntiFeurUntil.get(message.author.id);
 
         // Le bouclier Anti-Feur ne s'active que sur les répliques réflexes (quoi, qui, oui, non...), jamais sur les commandes avec !
@@ -1732,347 +1736,18 @@ try {
         // Commandes Activité (/profil, /top)
         if (await handleActivitySlash(interaction)) return;
 
-        const auteurNom = interaction.member?.displayName ?? interaction.user.username;
-        const auteurId = interaction.user.id;
+        // Commandes d'interactions (/kiss, /hug, /punch, /bang, /rizz, /danse, /rire, /cry, /run, /die, /explode, /bait, /ban, /jailaref, /palaref)
+        if (await handleInteractionSlash(interaction, client)) return;
 
-        if (commandName === 'kiss') {
-            const cibleUser = interaction.options.getUser('membre');
-            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
-            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
-
-            if (cibleUser.id === auteurId) {
-                const embed = buildKissEmbed(auteurNom, auteurNom).setDescription(`💋 **${auteurNom}** s'embrasse ! Attends... Comment c'est possible ?`);
-                return interaction.reply({ embeds: [embed] });
-            }
-            if (cibleUser.id === client.user.id) {
-                const embed = buildKissEmbed(auteurNom, "Cacabot").setDescription(`💋 **${auteurNom}** m'embrasse ! Awww merci <3`);
-                return interaction.reply({ embeds: [embed] });
-            }
-            const embed = buildKissEmbed(auteurNom, cibleNom);
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`kiss_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("💋 Embrasser en retour").setStyle(ButtonStyle.Primary)
-            );
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
-
-        if (commandName === 'hug') {
-            const cibleUser = interaction.options.getUser('membre');
-            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
-            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
-
-            if (cibleUser.id === auteurId) {
-                const embed = buildHugEmbed(auteurNom, auteurNom).setDescription(`🫂 **${auteurNom}** se fait un câlin... Ça va aller...`);
-                return interaction.reply({ embeds: [embed] });
-            }
-            if (cibleUser.id === client.user.id) {
-                const embed = buildHugEmbed(auteurNom, "Cacabot").setDescription(`🫂 **${auteurNom}** me fait un câlin !`);
-                return interaction.reply({ embeds: [embed] });
-            }
-            const embed = buildHugEmbed(auteurNom, cibleNom);
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`hug_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🫂 Câliner en retour").setStyle(ButtonStyle.Primary)
-            );
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
-
-        if (commandName === 'rizz') {
-            const cibleUser = interaction.options.getUser('membre');
-            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
-            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
-
-            if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te rizz toi-même !", ephemeral: true });
-            if (cibleUser.id === client.user.id) {
-                const embed = buildRizzEmbed(`🗿 **${auteurNom}** me rizz ! Eh beh 😊`);
-                return interaction.reply({ embeds: [embed] });
-            }
-            const embed = buildRizzEmbed(`🗿 **${auteurNom}** rizz **${cibleNom}** !`);
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`rizz_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🗿 Rizz en retour").setStyle(ButtonStyle.Primary)
-            );
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
-
-        if (commandName === 'punch') {
-            const cibleUser = interaction.options.getUser('membre');
-            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
-            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
-
-            if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te frapper toi-même ! 'Fin si mais... Ne le fais pas.", ephemeral: true });
-            if (cibleUser.id === client.user.id) {
-                const embed = buildPunchEmbed(`🤜 **${auteurNom}** me frappe ! Aïeuh !`);
-                return interaction.reply({ embeds: [embed] });
-            }
-            const embed = buildPunchEmbed(`🤜 **${auteurNom}** frappe **${cibleNom}** !`);
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`punch_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🤜 Frapper en retour").setStyle(ButtonStyle.Primary)
-            );
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
-
-        if (commandName === 'bang') {
-            const cibleUser = interaction.options.getUser('membre');
-            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
-            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
-
-            if (cibleUser.id === auteurId) return interaction.reply({ content: "Évite de te tirer dessus :(", ephemeral: true });
-            if (cibleUser.id === client.user.id) {
-                const embed = buildBangEmbed(`💥 **${auteurNom}** me tire dessus ! HÉ !`);
-                return interaction.reply({ embeds: [embed] });
-            }
-            const embed = buildBangEmbed(`💥 **${auteurNom}** tire sur **${cibleNom}** !`);
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`bang_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("💥 Riposter !").setStyle(ButtonStyle.Primary)
-            );
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
-
-        if (commandName === 'insult') {
-            const cibleUser = interaction.options.getUser('membre');
-            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
-            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
-
-            if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas t'insulter toi-même... Mentionne quelqu'un plutôt !", ephemeral: true });
-            if (cibleUser.id === client.user.id) {
-                const embed = buildInsultEmbed(`🖕 **${auteurNom}** m'insulte ! J'ai fait quoi ?!`);
-                return interaction.reply({ embeds: [embed] });
-            }
-            const embed = buildInsultEmbed(`🖕 **${auteurNom}** insulte **${cibleNom}** !`);
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`insult_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🖕 Insulter en retour").setStyle(ButtonStyle.Primary)
-            );
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
-
-        if (commandName === 'bait') {
-            const cibleUser = interaction.options.getUser('membre');
-            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
-            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
-
-            if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te ragebait toi-même !", ephemeral: true });
-            const baitGifs = [
-                "https://cdn.discordapp.com/attachments/1072299294519988345/1304467586746028193/brandbird_4.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570790706253864/tadc-bubble-tadc.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570791683522760/tadc-the-amazing-digital-circus.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570792279379988/tadc-caine-tadc.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570793021505736/flight-flightreacts.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570793718022226/superman-superman-flying.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570795160731728/f8957342b4d99638.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570795974295672/down-syndrome.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570796981194822/flight.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505570797979172964/catreacts-ragebait.gif"
-            ];
-            const gif = baitGifs[Math.floor(Math.random() * baitGifs.length)];
-            if (cibleUser.id === client.user.id) {
-                const embed = new EmbedBuilder().setColor(0xffb14a).setDescription(`😜 **${auteurNom}** me ragebait ! Gngngngn...`).setImage(gif);
-                return interaction.reply({ embeds: [embed] });
-            }
-            const embed = new EmbedBuilder().setColor(0xffb14a).setDescription(`😜 **${auteurNom}** ragebait **${cibleNom}** !`).setImage(gif);
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`bait_venge_${cibleUser.id}_${auteurId}_${auteurNom}`).setLabel("💢 SE VENGER !").setStyle(ButtonStyle.Secondary)
-            );
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
-
-        if (commandName === 'ban') {
-            const cibleUser = interaction.options.getUser('membre');
-            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
-            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
-
-            if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te bannir toi-même !", ephemeral: true });
-            const banGifs = [
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557423686029352/cat-screaming-cat-disappearing.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557409148567572/ahh-kid-turns-blue-and-vanishes.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424092741764/duck-disappears.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424491462856/tom-skot.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424805777428/atoms-cry.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425288380576/sr-pelo-screaming.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425690775683/cat-scream.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426043355278/meme-quarantine.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426433294437/flight-flights.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426881958020/nikocado-avocado-nikocado.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505557427209109544/moist-moist-critical.gif"
-            ];
-            const gif = banGifs[Math.floor(Math.random() * banGifs.length)];
-            const titre = cibleUser.id === client.user.id ? `**${auteurNom}** me bannit... Pas cool.` : `🔨 **${auteurNom}** bannit **${cibleNom}** !`;
-            const embed = new EmbedBuilder().setColor(0xcdc9dc).setDescription(titre).setImage(gif);
-            return interaction.reply({ embeds: [embed] });
-        }
-
-        if (commandName === 'danse') {
-            const cibleUser = interaction.options.getUser('membre');
-            if (!cibleUser) {
-                const embed = buildDanceEmbed(`💃 **${auteurNom}** s'ambiance comme jamais !`, true);
-                const row = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`dance_join_${auteurId}_${auteurNom}`).setLabel("💃 Rejoindre la danse").setStyle(ButtonStyle.Primary)
-                );
-                return interaction.reply({ embeds: [embed], components: [row] });
-            }
-            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
-            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
-            if (cibleUser.id === client.user.id) {
-                const embed = buildDanceEmbed(`💃 **${auteurNom}** danse avec moi !`, false);
-                return interaction.reply({ embeds: [embed] });
-            }
-            const embed = buildDanceEmbed(`💃 **${auteurNom}** danse avec **${cibleNom}** !`, false);
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`dance_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("💃 Rejoindre la danse").setStyle(ButtonStyle.Primary)
-            );
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
-
-        if (commandName === 'rire') {
-            const cibleUser = interaction.options.getUser('membre');
-            if (cibleUser && cibleUser.id !== auteurId && cibleUser.id !== client.user.id) {
-                const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
-                const cibleNom = cibleMember?.displayName ?? cibleUser.username;
-                const embed = buildLaughEmbed(`😆 **${auteurNom}** se fout de la gueule de **${cibleNom}** !`);
-                const row = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`laugh_with_${auteurId}_${auteurNom}`).setLabel("😆 Rire avec").setStyle(ButtonStyle.Primary)
-                );
-                return interaction.reply({ embeds: [embed], components: [row] });
-            }
-            const embed = buildLaughEmbed(`😆 **${auteurNom}** se tape une barre !`);
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`laugh_with_${auteurId}_${auteurNom}`).setLabel("😆 Rire avec").setStyle(ButtonStyle.Primary)
-            );
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
-
-        if (commandName === 'cry') {
-            const cryGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505906480916725791/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906486872768522/wwe.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487413964941/cry2.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487656972359/hamster.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487959093359/interstellar.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906869598814310/cry.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488625856622/powder.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488932176034/vi.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489271779449/gangle.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489657790466/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489947324589/fred.gif"];
-            const gif = cryGifs[Math.floor(Math.random() * cryGifs.length)];
-            const cibleUser = interaction.options.getUser('membre');
-            let desc, targetId = null, cibleNom = null;
-            if (cibleUser && cibleUser.id === auteurId) {
-                desc = `😭 **${auteurNom}** Pleure...`;
-                return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x597eff).setDescription(desc).setImage(gif)] });
-            } else if (cibleUser && cibleUser.id === client.user.id) {
-                desc = `😭 **${auteurNom}** pleure à cause de moi...`;
-            } else if (cibleUser) {
-                cibleNom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
-                targetId = cibleUser.id;
-                desc = `😭 **${auteurNom}** Pleure à cause de **${cibleNom}**...`;
-            } else {
-                desc = `😭 **${auteurNom}** Pleure...`;
-            }
-            const embed = new EmbedBuilder().setColor(0x597eff).setDescription(desc).setImage(gif);
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`cry_with_${auteurId}_${auteurNom}_${targetId ?? 'none'}_${cibleNom ?? 'none'}`).setLabel("😭 Pleurer avec").setStyle(ButtonStyle.Secondary)
-            );
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
-
-        if (commandName === 'run') {
-            const cibleUser = interaction.options.getUser('membre');
-            if (!cibleUser || cibleUser.id === auteurId) {
-                const embed = buildRunEmbed(`🏃 **${auteurNom}** fuit !`);
-                const row = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`run_join_${auteurId}_${auteurNom}`).setLabel("🏃 Accompagner").setStyle(ButtonStyle.Secondary)
-                );
-                return interaction.reply({ embeds: [embed], components: [row] });
-            }
-            if (cibleUser.id === client.user.id) {
-                const embed = buildRunEmbed(`🏃 **${auteurNom}** me fuit ! Reviens-là !`);
-                return interaction.reply({ embeds: [embed] });
-            }
-            const cibleMember = interaction.guild?.members.cache.get(cibleUser.id);
-            const cibleNom = cibleMember?.displayName ?? cibleUser.username;
-            const embed = buildRunEmbed(`🏃 **${auteurNom}** fuit de **${cibleNom}** !`);
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`run_join_${auteurId}_${auteurNom}_${cibleUser.id}`).setLabel("🏃 Accompagner").setStyle(ButtonStyle.Secondary)
-            );
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
-
-        if (commandName === 'explode') {
-            const explodeGifs = [
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564402697375794/cat-cats.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564403230183599/cat-explosion_1.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564403653804153/floop-flop.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564404031426661/cat-explodes.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564404400521267/cat-funny.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564404882870292/spideyvivi.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564405281194064/cat-explode-cat-meme.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564405847298150/explosion-missile.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564406224781373/exploding-cat-cat-blowing-up.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564406799532052/cat-gato.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564412172570664/boomshakalaka.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564412763836466/elgatitolover-cat.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564413376335962/cat-explosion-ellie-cat-explosion.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564413795635311/exploding-car-explode.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505564414147825774/cat-explosion.gif"
-            ];
-            const gif = explodeGifs[Math.floor(Math.random() * explodeGifs.length)];
-            const embed = new EmbedBuilder().setColor(0xec0f6e).setDescription(`💥 **${auteurNom}** explose !`).setImage(gif);
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`explode_with_${auteurId}_${auteurNom}`).setLabel("💥 Exploser avec").setStyle(ButtonStyle.Secondary)
-            );
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
-
-        if (commandName === 'die') {
-            const cibleUser = interaction.options.getUser('membre');
-            if (cibleUser && cibleUser.id === client.user.id) {
-                const embed = buildDieEmbed(`☠️ **${auteurNom}** meurt à cause de moi ! (cheh)`);
-                const row = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`die_with_${auteurId}_${auteurNom}`).setLabel("☠️ Mourir avec").setStyle(ButtonStyle.Primary)
-                );
-                return interaction.reply({ embeds: [embed], components: [row] });
-            }
-            const causeNom = cibleUser && cibleUser.id !== auteurId ? (interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username) : null;
-            const titre = causeNom ? `☠️ **${auteurNom}** meurt à cause de **${causeNom}**` : `☠️ **${auteurNom}** meurt...`;
-            const embed = buildDieEmbed(titre);
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`die_with_${auteurId}_${auteurNom}`).setLabel("☠️ Mourir avec").setStyle(ButtonStyle.Primary)
-            );
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
-
-        if (commandName === 'jailaref') {
-            const jailarefGifs = ["https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/f1/7d/7y2QyYzWIYksGnnK.gif", "https://cdn.discordapp.com/attachments/720079691041472572/1548362421079646481/caf5c232438734937f6e1cf4c7bc5411.png", "https://media1.tenor.com/m/13XpzbwtVnYAAAAC/dway-the-roc.gif", "https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/14/44/oqcpwYRAEpXGYqfyw.gif", "https://static2.klipy.com/ii/50d7c955398dfd7e3c8ba5281154280f/79/6d/eoUS3shzyQLpKm.gif", "https://static2.klipy.com/ii/d7aec6f6f171607374b2065c836f92f4/3d/31/08K8MgEk.gif", "https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/64/b0/SdnOajVDadHUy.gif", "https://cdn.discordapp.com/attachments/720079691041472572/1548366731666268250/image2.gif", "https://static2.klipy.com/ii/9294a2e836d178ddc22430dd7765727e/44/86/6QBidjUuV1oBpAnHIw7o.gif"];
-            const gif = jailarefGifs[Math.floor(Math.random() * jailarefGifs.length)];
-            const cibleUser = interaction.options.getUser('membre');
-            let desc;
-            if (!cibleUser) desc = `😎 **${auteurNom}** a la ref !`;
-            else if (cibleUser.id === auteurId) return interaction.reply({ content: "Bah oui, t'as forcément ta propre ref...", ephemeral: true });
-            else if (cibleUser.id === client.user.id) desc = `😎 **${auteurNom}** a ma ref !`;
-            else {
-                const cibleNom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
-                desc = `😎 **${auteurNom}** a la ref de **${cibleNom}** !`;
-            }
-            const embed = new EmbedBuilder().setColor(0x503649).setDescription(desc).setImage(gif);
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`jailaref_with_${auteurId}_${auteurNom}_${cibleUser?.id ?? 'none'}`).setLabel("😎 J'ai la ref aussi").setStyle(ButtonStyle.Secondary)
-            );
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
-
-        if (commandName === 'palaref') {
-            const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
-            const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
-            const cibleUser = interaction.options.getUser('membre');
-            let desc;
-            if (!cibleUser) desc = `😐 **${auteurNom}** n'a pas la ref...`;
-            else if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu n'as pas ta propre ref ? ...Hein ?", ephemeral: true });
-            else if (cibleUser.id === client.user.id) desc = `😐 **${auteurNom}** n'a pas ma ref...`;
-            else {
-                const cibleNom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
-                desc = `😐 **${auteurNom}** n'a pas la ref de **${cibleNom}**...`;
-            }
-            const embed = new EmbedBuilder().setColor(0x503649).setDescription(desc).setImage(gif);
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`palaref_aussi_${auteurId}_${auteurNom}_${cibleUser?.id ?? 'none'}`).setLabel("😐 Pas la ref non plus").setStyle(ButtonStyle.Secondary)
-            );
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
+        // Commandes Wanted (/wanted, /recherche, /preuves, /affaire)
+        if (typeof handleWantedSlash === 'function' && await handleWantedSlash(interaction)) return;
 
         // =========================
         // LOT 2 : JEUX & DESTIN
         // =========================
 
         if (commandName === 'destin') {
-            const destinReponse = getResponse("!destin");
-            return interaction.reply({ content: destinReponse });
+            return interaction.reply({ content: getDestinReponse() });
         }
 
         if (commandName === 'horoscope') {
@@ -2142,12 +1817,7 @@ try {
     // Interactions Panneau Bienvenue
     if (await handleWelcomeInteraction(interaction)) return;
 
-    // Annulation du brouillon
-    if (interaction.isButton() && interaction.customId === 'embed_cancel_draft') {
-        if (interaction.user.id !== '436218312574107658') return;
-        embedDrafts.delete(interaction.user.id);
-        return interaction.update({ content: "🗑️ Création de l'embed annulée.", embeds: [], components: [] });
-    }
+    // (Brouillons d'embeds gérés directement dans embeds.js)
 
     // Boutons de Sécurité & Rôles
     if (await handleSecurityInteraction(interaction)) return;
@@ -2246,6 +1916,7 @@ try {
                 data.pour.push(userId);
                 data.contre = data.contre.filter(id => id !== userId);
                 feedback = '✅ Tu as voté « Pour » !';
+                trackBattlePassProgress(userId, 'sugg_vote', 1);
             }
         } else {
             if (data.contre.includes(userId)) {
@@ -2255,6 +1926,7 @@ try {
                 data.contre.push(userId);
                 data.pour = data.pour.filter(id => id !== userId);
                 feedback = '❌ Tu as voté « Contre » !';
+                trackBattlePassProgress(userId, 'sugg_vote', 1);
             }
         }
 
@@ -2518,7 +2190,7 @@ client.once('ready', async () => {
                     // Envoi automatique du fichier index.js dans le salon d'archives de code
                     const salonCode = await client.channels.fetch('1556184304848085114').catch(() => null);
                     if (salonCode) {
-                        const versionNom = commitCount ? `1.${commitCount}` : 'actuelle';
+                        const versionNom = getVersionString();
                         const dateStr = new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }) + ' à ' + new Date().toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris' });
 
                         await salonCode.send({
@@ -2633,6 +2305,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
     await handleSecurityReactionAdd(reaction, user);
 
     if (user.bot) return;
+    trackBattlePassProgress(user.id, 'reaction_add', 1);
     if (reaction.emoji.name !== '🖕' && reaction.emoji.name !== 'middle_finger') return;
 
     const msg = reaction.message;

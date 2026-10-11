@@ -10,7 +10,8 @@ let minijeuxBridge = {
     setMotusStats: () => {},
     getRebusStats: () => ({}),
     setRebusStats: () => {},
-    demanderSauvegarde: () => {}
+    demanderSauvegarde: () => {},
+    trackBattlePassProgress: () => {}
 };
 
 function initMinijeuxState(bridge) {
@@ -305,6 +306,8 @@ async function handleMotusMessage(message, response, client, helpers) {
                 motusData.termine = true;
                 motusData.vainqueurId = message.author.id;
                 motusStats[message.author.id].victoires++;
+                minijeuxBridge.trackBattlePassProgress?.(message.author.id, 'motus_win', 1);
+                minijeuxBridge.trackBattlePassProgress?.(message.author.id, 'minijeu_win', 1);
                 minijeuxBridge.demanderSauvegarde();
 
                 await message.reply({
@@ -737,6 +740,8 @@ async function verifierReponseRebus(message) {
 
         const uid = message.author.id;
         rebusSession.scores[uid] = (rebusSession.scores[uid] || 0) + 1;
+        minijeuxBridge.trackBattlePassProgress?.(uid, 'rebus_win', 1);
+        minijeuxBridge.trackBattlePassProgress?.(uid, 'minijeu_win', 1);
 
         const titreReponse = item[1].charAt(0).toUpperCase() + item[1].slice(1);
         await message.reply(`✅ **Bravo <@${uid}> !** C'était bien **${titreReponse}** ! (+1 point)`);
