@@ -10,6 +10,8 @@ let reactionRolesData = {}; // messageId -> { channelId, roles: { emojiKey: role
 let motusData = { dateKey: 0, mot: '', termine: false, vainqueurId: null, tentatives: {}, messageId: null };
 let motusStats = {}; // userId -> { victoires: number, parties: number }
 let rebusStats = {};
+let penduData = { dateKey: 0, mot: '', lettresTrouvees: [], lettresFausses: [], erreursCollectives: 0, expireAt: 0, termine: false, vainqueurId: null, tentativesJoueurs: {}, compteurMessages: 0, messageId: null };
+let penduStats = {};
 let twitchLiveEnCours = false;
 let quotesData = []; // [{ id, texte, authorId, authorName, addedById, timestamp, channelId }]
 let welcomeData = { channelId: null, actif: true };
@@ -64,6 +66,8 @@ async function loadAll() {
         motusData = jsonRecord.motusData ?? { dateKey: 0, mot: '', termine: false, vainqueurId: null, tentatives: {}, messageId: null };
         motusStats = jsonRecord.motusStats ?? {};
         rebusStats = jsonRecord.rebusStats ?? {};
+        penduData = jsonRecord.penduData ?? { dateKey: 0, mot: '', lettresTrouvees: [], lettresFausses: [], erreursCollectives: 0, expireAt: 0, termine: false, vainqueurId: null, tentativesJoueurs: {}, compteurMessages: 0, messageId: null };
+        penduStats = jsonRecord.penduStats ?? {};
         quotesData = jsonRecord.quotes ?? [];
         welcomeData = jsonRecord.welcomeData ?? { channelId: null, actif: true };
         dernierCommitSha = jsonRecord.dernierCommitSha ?? null;
@@ -115,6 +119,8 @@ async function saveAll() {
             motusData: motusData,
             motusStats: motusStats,
             rebusStats: rebusStats,
+            penduData: penduData,
+            penduStats: penduStats,
             quotes: quotesData,
             welcomeData: welcomeData,
             dernierCommitSha: dernierCommitSha,
@@ -241,6 +247,26 @@ const {
     handleRebusButton,
     handleRebusSlash
 } = require('./minijeux.js');
+
+///pendu.js
+const {
+    initPenduState,
+    lancerPenduQuotidien,
+    handlePenduMessage,
+    handlePenduSlash,
+    handlePenduButton
+} = require('./pendu.js');
+
+initPenduState({
+    getPenduData: () => penduData,
+    setPenduData: (d) => { penduData = d; },
+    getPenduStats: () => penduStats,
+    setPenduStats: (s) => { penduStats = s; },
+    getMotusStats: () => motusStats,
+    getRebusStats: () => rebusStats,
+    demanderSauvegarde: () => demanderSauvegarde(),
+    trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta)
+});
 
 ///welcome.js
 const {
@@ -1267,6 +1293,11 @@ async function disableButtons(interaction) {
         // =========================
         if (await handleMotusMessage(message, null, client, { findMemberByName })) return;
 
+        // =========================
+        //   SALON PENDU QUOTIDIEN
+        // =========================
+        if (await handlePenduMessage(message, null, client, { findMemberByName })) return;
+
     // =========================
     //   SÉCURITÉ & MODÉRATION
     // =========================
@@ -1725,6 +1756,11 @@ try {
             return await handleRebusSlash(interaction);
         }
 
+        // Commandes Pendu Quotidien
+        if (commandName === 'pendu' || commandName === 'pendustats' || commandName === 'pendutop') {
+            return await handlePenduSlash(interaction);
+        }
+
         // Commande Quote (/quote, /citation)
         if (await handleQuotesSlash(interaction)) return;
 
@@ -1825,6 +1861,8 @@ try {
     if (await handleMotusButton(interaction)) return;
 
     if (await handleRebusButton(interaction)) return;
+
+    if (await handlePenduButton(interaction)) return;
 
     // Interactions Panneau Bienvenue
     if (await handleWelcomeInteraction(interaction)) return;
@@ -2004,7 +2042,7 @@ client.once('ready', async () => {
                     )
             ),
 
-        // Motus & Rébus Regaïen
+        // Motus & Rébus Regaïen & Pendu
         new SlashCommandBuilder().setName('motus').setDescription('Statut du Motus du jour (10h et 19h) et compte à rebours'),
         new SlashCommandBuilder().setName('motustats').setDescription('Consulter les victoires et parties au Motus')
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
@@ -2012,6 +2050,10 @@ client.once('ready', async () => {
         new SlashCommandBuilder().setName('decodeur').setDescription('Statut du Rébus Regaïen (raccourci)'),
         new SlashCommandBuilder().setName('rebusstats').setDescription('Consulter les victoires et points au Rébus Regaïen')
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
+        new SlashCommandBuilder().setName('pendu').setDescription('Statut du Pendu Quotidien (21h00) et mot en cours'),
+        new SlashCommandBuilder().setName('pendustats').setDescription('Consulter les statistiques du Pendu')
+            .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
+        new SlashCommandBuilder().setName('pendutop').setDescription('Classement hebdomadaire des mini-jeux et Top 10 global'),
 
         // Citations & Profils
         new SlashCommandBuilder().setName('quote').setDescription('Afficher une citation culte du serveur')
@@ -2270,7 +2312,23 @@ client.once('ready', async () => {
             if (guildRegaia) await envoyerMotusQuotidien(guildRegaia, 19);
         }
 
-        // 3. Arrêt automatique après 1h de jeu si le mot n'a pas été trouvé
+        // 4. Lancement du Pendu Quotidien à 21h00 (7 lettres - 1h)
+        if (h === 21 && m === 0 && derniereSessionLancee !== `${dateKey}_21h`) {
+            derniereSessionLancee = `${dateKey}_21h`;
+            if (guildRegaia) await lancerPenduQuotidien(guildRegaia);
+        }
+
+        // 5. Arrêt automatique du Pendu après 1h de jeu (à 22h00)
+        if (penduData.mot && !penduData.termine && penduData.expireAt && Date.now() >= penduData.expireAt) {
+            penduData.termine = true;
+            const salonPendu = client.channels.cache.get(PENDU_CHANNEL_ID);
+            if (salonPendu) {
+                salonPendu.send(`⏰ **Temps écoulé pour le Pendu !** Personne n'a trouvé le mot.\n🔤 Le mot était : **${penduData.mot}** ! Rendez-vous demain soir à 21h00 !`).catch(() => {});
+            }
+            demanderSauvegarde();
+        }
+
+        // Arrêt automatique après 1h de jeu si le mot n'a pas été trouvé
         if (motusData.mot && !motusData.termine && motusData.expireAt && Date.now() >= motusData.expireAt) {
             motusData.termine = true;
             const salon = client.channels.cache.get(MOTUS_CHANNEL_ID);

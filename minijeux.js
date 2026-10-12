@@ -1,6 +1,10 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 const MOTUS_CHANNEL_ID = '1556089022718152764';
+const EPSYS_ID = '436218312574107658';
+
+let motusTestSessions = new Map(); // channelId -> session
+let rebusTestSessions = new Map(); // channelId -> session
 
 // Pont de persistance avec index.js (pour loadAll / saveAll)
 let minijeuxBridge = {
@@ -206,15 +210,15 @@ async function envoyerMotusQuotidien(guild, heureSession = 10) {
     };
 
     const embed = buildMotusEmbed(mot, dateKey, longueur);
+    embed.setDescription(`📢 **Alerte :** <@&1558966826564845590>\n\n` + embed.data.description);
+
     const texteAnnonce = heureSession === 19 
         ? '# 🟥 LE MOTUS DU SOIR (7 LETTRES - 1H) EST LANCÉ !' 
         : '# 🟩 LE MOTUS DU MATIN (6 LETTRES - 1H) EST LANCÉ !';
 
-    const { MessageFlags } = require('discord.js');
     const sent = await channel.send({ 
-        content: texteAnnonce, 
-        embeds: [embed],
-        flags: [MessageFlags.SuppressNotifications]
+        content: `📢 <@&1558966826564845590>\n${texteAnnonce}`, 
+        embeds: [embed]
     });
     nouvelleData.messageId = sent.id;
     minijeuxBridge.setMotusData(nouvelleData);
@@ -252,6 +256,69 @@ function tempsAvantProchainMotus() {
 async function handleMotusMessage(message, response, client, helpers) {
     const motusData = minijeuxBridge.getMotusData();
     const motusStats = minijeuxBridge.getMotusStats();
+    const rawContent = message.content.trim();
+    const cmd = rawContent.split(/\s+/)[0]?.toLowerCase();
+
+    // Commande de test Motus (Epsys-only)
+    if (cmd === '!motustest') {
+        if (message.author.id !== EPSYS_ID) {
+            await message.reply("Cette commande de test est réservée à Epsys.");
+            return true;
+        }
+
+        const args = rawContent.split(/\s+/);
+        const longueur = args[1] === '7' ? 7 : 6;
+        const mot = getMotDuJour(Date.now() + Math.floor(Math.random() * 10000), longueur);
+        const expireAt = Date.now() + 60 * 60 * 1000;
+
+        motusTestSessions.set(message.channel.id, {
+            mot,
+            longueur,
+            expireAt,
+            termine: false,
+            tentatives: {}
+        });
+
+        const embed = buildMotusEmbed(mot, getMotusDateKey(), longueur);
+        await message.reply({
+            content: `🧪 **[MODE TEST] Motus solo lancé dans ce salon !** (Mot de ${longueur} lettres)`,
+            embeds: [embed]
+        });
+        return true;
+    }
+
+    // Gestion des réponses dans un salon de test Motus
+    if (motusTestSessions.has(message.channel.id) && !message.content.startsWith('!')) {
+        const sessionTest = motusTestSessions.get(message.channel.id);
+        if (sessionTest && !sessionTest.termine && Date.now() < sessionTest.expireAt) {
+            const rawGuess = message.content.trim().toUpperCase()
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^A-Z]/g, "");
+
+            if (rawGuess.length === sessionTest.longueur) {
+                if (!sessionTest.tentatives[message.author.id]) sessionTest.tentatives[message.author.id] = [];
+                const userTries = sessionTest.tentatives[message.author.id];
+                if (userTries.length >= 3) {
+                    await message.reply("❌ Tu as déjà utilisé tes 3 essais pour cette session test !");
+                    return true;
+                }
+
+                userTries.push(rawGuess);
+                const essaiNum = userTries.length;
+                const grille = evaluerMotus(rawGuess, sessionTest.mot, sessionTest.longueur);
+                const lettresEspacées = rawGuess.split('').join(' ');
+
+                if (rawGuess === sessionTest.mot) {
+                    sessionTest.termine = true;
+                    motusTestSessions.delete(message.channel.id);
+                    await message.reply(`🎉 **[TEST RÉUSSI]** Bravo ! Le mot était bien **${sessionTest.mot}** (trouvé en ${essaiNum}/3 essai${essaiNum > 1 ? 's' : ''}) !`);
+                } else {
+                    await message.reply(`**${lettresEspacées}**\n${grille} *(Essai ${essaiNum}/3 en test)*`);
+                }
+                return true;
+            }
+        }
+    }
 
     if (message.channel.id === MOTUS_CHANNEL_ID && !message.content.startsWith('!')) {
         const now = Date.now();
@@ -700,13 +767,20 @@ async function lancerSessionRebus(guild) {
         compteurMessages: 0
     };
 
-    const { MessageFlags } = require('discord.js');
+    const embedAnnonceRebus = new EmbedBuilder()
+        .setColor(theme.couleur || 0xf39c12)
+        .setTitle('🧩 LE RÉBUS REGAÏEN DU JOUR EST LANCÉ !')
+        .setDescription(
+            `📢 **Notification :** <@&1559041004114542592>\n\n` +
+            `🎭 **Thème du jour :** ${theme.nom}\n` +
+            `🎯 **5 manches au programme** • **5 minutes** par manche !\n\n` +
+            `*La première manche commence dans quelques secondes...*`
+        )
+        .setFooter({ text: 'Rébus Regaïen tous les jours à 15h00' });
+
     await channel.send({
-        content: `# 🧩 LE RÉBUS REGAÏEN DU JOUR EST LANCÉ !\n` +
-                 `🎭 **Thème du jour :** ${theme.nom}\n` +
-                 `🎯 **5 manches au programme** • **5 minutes** par manche !\n` +
-                 `*La première manche commence dans quelques secondes...*`,
-        flags: [MessageFlags.SuppressNotifications]
+        content: `📢 <@&1559041004114542592> **Le Rébus Regaïen de 15h00 commence !**`,
+        embeds: [embedAnnonceRebus]
     });
 
     setTimeout(() => passerMancheSuivanteRebus(guild), 4000);
@@ -834,6 +908,60 @@ async function terminerSessionRebus(channel) {
 }
 
 async function handleRebusMessage(message, response, client, helpers) {
+    const rawContent = message.content.trim();
+    const cmd = rawContent.split(/\s+/)[0]?.toLowerCase();
+
+    // Commande de test Rébus (Epsys-only)
+    if (cmd === '!rebustest') {
+        if (message.author.id !== EPSYS_ID) {
+            await message.reply("Cette commande de test est réservée à Epsys.");
+            return true;
+        }
+
+        const dateKey = getMotusDateKey();
+        const theme = getRebusThemeDuJour(dateKey);
+        const itemAlea = theme.pool[Math.floor(Math.random() * theme.pool.length)];
+        const expireAt = Date.now() + 5 * 60 * 1000;
+
+        rebusTestSessions.set(message.channel.id, {
+            item: itemAlea,
+            expireAt,
+            themeNom: theme.nom
+        });
+
+        const embedTest = new EmbedBuilder()
+            .setColor(theme.couleur || 0xf39c12)
+            .setTitle(`🧩 [TEST] Manche Rébus Test (${theme.nom})`)
+            .setDescription(
+                `Devine ce que représentent ces emojis :\n\n` +
+                `# ${itemAlea[0]}\n\n` +
+                `⏳ **Temps limite :** 5 minutes\n` +
+                `💬 *Tape directement le titre dans ce salon !*`
+            );
+
+        await message.reply({
+            content: `🧪 **[MODE TEST] Rébus solo lancé !**`,
+            embeds: [embedTest]
+        });
+        return true;
+    }
+
+    // Gestion des réponses dans un salon de test Rébus
+    if (rebusTestSessions.has(message.channel.id) && !message.content.startsWith('!')) {
+        const sTest = rebusTestSessions.get(message.channel.id);
+        if (sTest && Date.now() < sTest.expireAt) {
+            const guessNorm = normaliserRebus(message.content);
+            const reponsesValides = sTest.item.slice(1).map(r => normaliserRebus(r));
+
+            if (reponsesValides.includes(guessNorm)) {
+                rebusTestSessions.delete(message.channel.id);
+                const titreReponse = sTest.item[1].charAt(0).toUpperCase() + sTest.item[1].slice(1);
+                await message.reply(`✅ **[TEST RÉUSSI]** Bravo ! C'était bien **${titreReponse}** !`);
+                return true;
+            }
+        }
+    }
+
     // 1. Détection des réponses en cours dans le salon Rébus
     if (message.channel.id === MOTUS_CHANNEL_ID && rebusSession.active && rebusSession.currentItem && !message.content.startsWith('!')) {
         if (await verifierReponseRebus(message)) return true;
