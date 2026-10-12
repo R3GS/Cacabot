@@ -602,6 +602,13 @@ function buildQuestionRow() {
 async function handleSocialMessage(message, response, client, helpers) {
     const { findMemberByName, askDisambiguation } = helpers;
 
+    // 0. !choix
+    if (message.content.trim().toLowerCase().startsWith('!choix') || response?.needsChoix) {
+        const reponse = resoudreChoix(message.content);
+        await message.reply(reponse);
+        return true;
+    }
+
     // 1. !bougetoi
     if (response?.needsBougetoi) {
         const phrase = BOUGETOI_PHRASES[Math.floor(Math.random() * BOUGETOI_PHRASES.length)];

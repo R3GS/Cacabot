@@ -230,7 +230,7 @@ const { getHoroscopeForSign, buildHoroscopeEmbed, execute: executeHoroscope } = 
 const { getAnimalResponse } = require('./animal.js');
 
 ///interaction.js
-const { handleInteractionMessage, handleInteractionButton } = require('./interaction.js');
+const { handleInteractionMessage, handleInteractionButton, handleInteractionSlash } = require('./interaction.js');
 
 ///help.js
 const { getHelpResponse, handleHelpMessage, handleHelpInteraction } = require('./help.js');
@@ -558,6 +558,10 @@ async function getResponse(raw) {
 
     const reply = (normal, upper = normal.toUpperCase()) =>
         isUpper ? upper : normal;
+
+    if (command === "!choix") {
+        return { needsChoix: true };
+    }
 
     if (command === "!welcome" || command === "!bienvenue") {
         return { needsWelcome: true };

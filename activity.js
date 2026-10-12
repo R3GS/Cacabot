@@ -336,6 +336,10 @@ async function handleActivityMessage(message, response) {
 
     // !setmessages
     if (response?.needsSetMessages) {
+        if (message.author.id !== activityState.EPSYS_ID) {
+            await message.reply("Cette commande est réservée à Epsys.");
+            return true;
+        }
         const args = message.content.trim().split(/\s+/);
         const count = parseInt(args[args.length - 1]);
         const cible = message.mentions.users.first();

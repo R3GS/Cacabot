@@ -2368,7 +2368,7 @@ async function handleRouletteButton(interaction, client) {
         } else if (itemChoisi === 'redirectChoix5') {
             const tot = (rouletteRedirectCharges.get(targetUserId) || 0) + 5;
             rouletteRedirectCharges.set(targetUserId, tot);
-            messageConfirmation = `🎯 **5 REDIRECTIONS AU CHOIX !** Tu as 5 malus redirigeables en réserve (${tot} au total) !`;
+            messageConfirmation = `🎯 **5 REDIRECTIONS ACTIVÉES !** Tu as 5 redirections en réserve (${tot} au total) !`;
         } else {
             messageConfirmation = `✅ **Objet activé !** Ton objet a été appliqué avec succès.`;
         }

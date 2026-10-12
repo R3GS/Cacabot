@@ -323,6 +323,7 @@ async function handlePenduMessage(message, response, client, helpers) {
     const now = Date.now();
     const rawContent = message.content.trim();
     const cmd = rawContent.split(/\s+/)[0]?.toLowerCase();
+    const command = cmd;
 
     // 0. Commande de test Pendu (Epsys-only)
     if (cmd === '!pendutest') {

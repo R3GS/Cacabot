@@ -601,8 +601,7 @@ async function handleToolsSlash(interaction, client) {
         if (months > 0 || days > 0) uptime += `${days} jour${days > 1 ? 's' : ''}, `;
         uptime += `${hours} heure${hours > 1 ? 's' : ''}`;
         
-        const commitCount = getCommitCount();
-        const versionStr = commitCount ? `Version 1.${commitCount}` : 'Version 1.0';
+        const versionStr = `Version ${toolsState.getVersionString()}`;
 
         const embed = new EmbedBuilder()
             .setColor(0x5865f2)
@@ -610,7 +609,7 @@ async function handleToolsSlash(interaction, client) {
             .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
             .addFields(
                 { name: '💻 Commandes', value: `30`, inline: true },
-                { name: '💬 Messages envoyés', value: `${toolsState.topData.messages['1503495713097519355'] || 0}`, inline: true },
+                { name: '💬 Messages envoyés', value: `${toolsState.getTopData().messages?.['1503495713097519355'] || 0}`, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
                 { name: '👑 Créatrice', value: 'Epsys', inline: true },
                 { name: '🤝 Collaboratrice', value: '[BDN](https://bdn-fr.xyz/)', inline: true },
