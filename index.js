@@ -1212,6 +1212,11 @@ async function disableButtons(interaction) {
         }
         if (message.author.bot) return;
 
+        // Commande prioritaire Rolembed (Epsys-only)
+        if (message.content.trim().toLowerCase().startsWith('!rolembed')) {
+            if (await handleRolembedMessage(message)) return;
+        }
+
         // =========================
         //  COMMANDE DIAGNOSTIC (EPSYS)
         // =========================
@@ -1651,7 +1656,9 @@ async function disableButtons(interaction) {
     }
 
     // !embed & !rolembed (Epsys-only)
-    if (await handleRolembedMessage(message)) return;
+    if (message.content.trim().toLowerCase().startsWith('!rolembed')) {
+        if (await handleRolembedMessage(message)) return;
+    }
     if (await handleEmbedMessage(message, response, client)) return;
 
     // !question est pris en charge par handleSocialMessage
