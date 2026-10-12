@@ -732,7 +732,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'bonus-coup-triple': {
             rouletteCooldowns.delete(member.id);
             const chargesActuelles = rouletteCoupTripleCharges.get(member.id) || 0;
-            const totalCharges = chargesActuelles + 3;
+            const totalCharges = chargesActuelles + 2;
             rouletteCoupTripleCharges.set(member.id, totalCharges);
             return `🎰 **${auteurNom}** décroche le **COUP TRIPLE** ! **3 tirages supplémentaires** immédiats et sans aucun cooldown (${totalCharges} en réserve) !`;
         }
@@ -2359,7 +2359,7 @@ async function handleRouletteButton(interaction, client) {
         } else if (itemChoisi === 'coupTriple') {
             rouletteCooldowns.delete(targetUserId);
             const actuelles = rouletteCoupTripleCharges.get(targetUserId) || 0;
-            rouletteCoupTripleCharges.set(targetUserId, actuelles + 3);
+            rouletteCoupTripleCharges.set(targetUserId, actuelles + 2);
             messageConfirmation = `🎰 **COUP TRIPLE ACTIVÉ !** 3 tirages immédiats sans aucun cooldown ajoutés !`;
         } else if (itemChoisi === 'superBouclier') {
             const tot = (rouletteBouclierActif.get(targetUserId) || 0) + 3;
