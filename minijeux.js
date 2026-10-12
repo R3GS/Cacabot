@@ -281,9 +281,17 @@ async function handleMotusMessage(message, response, client, helpers) {
         });
 
         const embed = buildMotusEmbed(mot, getMotusDateKey(), longueur);
+        const rowStop = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`stop_test_motus_${message.channel.id}`)
+                .setLabel('🛑 Stopper le mini-jeu')
+                .setStyle(ButtonStyle.Danger)
+        );
+
         await message.reply({
             content: `🧪 **[MODE TEST] Motus solo lancé dans ce salon !** (Mot de ${longueur} lettres)`,
-            embeds: [embed]
+            embeds: [embed],
+            components: [rowStop]
         });
         return true;
     }
@@ -479,6 +487,20 @@ async function handleMotusMessage(message, response, client, helpers) {
 
 async function handleMotusButton(interaction) {
     if (!interaction.isButton()) return false;
+
+    if (interaction.customId.startsWith('stop_test_motus_')) {
+        if (interaction.user.id !== EPSYS_ID) {
+            await interaction.reply({ content: "Seule Epsys peut arrêter ce test.", ephemeral: true });
+            return true;
+        }
+        const chId = interaction.customId.replace('stop_test_motus_', '');
+        const session = motusTestSessions.get(chId);
+        const motSecret = session ? session.mot : 'inconnu';
+        motusTestSessions.delete(chId);
+        await interaction.update({ components: [] });
+        await interaction.channel.send(`🛑 **Test Motus arrêté !** Le mot était : **${motSecret}**.`);
+        return true;
+    }
 
     if (interaction.customId.startsWith('motus_show_original_')) {
         const motusData = minijeuxBridge.getMotusData();
@@ -940,9 +962,17 @@ async function handleRebusMessage(message, response, client, helpers) {
                 `💬 *Tape directement le titre dans ce salon !*`
             );
 
+        const rowStop = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`stop_test_rebus_${message.channel.id}`)
+                .setLabel('🛑 Stopper le mini-jeu')
+                .setStyle(ButtonStyle.Danger)
+        );
+
         await message.reply({
             content: `🧪 **[MODE TEST] Rébus solo lancé !**`,
-            embeds: [embedTest]
+            embeds: [embedTest],
+            components: [rowStop]
         });
         return true;
     }
@@ -1018,6 +1048,21 @@ async function handleRebusMessage(message, response, client, helpers) {
 
 async function handleRebusButton(interaction) {
     if (!interaction.isButton()) return false;
+
+    if (interaction.customId.startsWith('stop_test_rebus_')) {
+        if (interaction.user.id !== EPSYS_ID) {
+            await interaction.reply({ content: "Seule Epsys peut arrêter ce test.", ephemeral: true });
+            return true;
+        }
+        const chId = interaction.customId.replace('stop_test_rebus_', '');
+        const session = rebusTestSessions.get(chId);
+        const reponse = session?.item ? session.item[1] : 'inconnue';
+        rebusTestSessions.delete(chId);
+        await interaction.update({ components: [] });
+        await interaction.channel.send(`🛑 **Test Rébus arrêté !** La réponse était : **${reponse}**.`);
+        return true;
+    }
+
     if (interaction.customId === 'rebus_view_stats') {
         const member = interaction.member;
         const embed = buildRebusStatsEmbed(member);
