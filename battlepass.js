@@ -53,6 +53,8 @@ const QUETES_QUOTIDIENNES_POOL = [
     { id: 'debut_soiree', tier: 'facile', xp: 50, desc: 'Envoyer au moins 5 messages entre 18h et 20h', objectif: 5, type: 'message_soir_debut' },
     { id: 'reaction_commu', tier: 'facile', xp: 50, desc: 'Réagir avec un emoji sous les messages de 3 membres', objectif: 3, type: 'reaction_add' },
     { id: 'coup_essai_motus', tier: 'facile', xp: 50, desc: 'Proposer 1 mot au Motus du matin (10h) ou du soir (19h)', objectif: 1, type: 'minijeu_essai' },
+    { id: 'premiere_lettre', tier: 'facile', xp: 50, desc: 'Proposer au moins une lettre lors d\'une session de Pendu (21h)', objectif: 1, type: 'pendu_essai' },
+    { id: 'pendu_express', tier: 'facile', xp: 50, desc: 'Être le premier joueur à proposer une lettre après le lancement de 21h00', objectif: 1, type: 'pendu_premier' },
 
     // ==========================================
     //  TIER 2 : MOYENNES (100 XP)
@@ -74,6 +76,7 @@ const QUETES_QUOTIDIENNES_POOL = [
     { id: 'double_service_motus', tier: 'moyen', xp: 100, desc: 'Participer à la fois au Motus de 10h et à celui de 19h', objectif: 2, type: 'motus_double_session' },
     { id: 'devoir_civique', tier: 'moyen', xp: 100, desc: 'Participer à un Vote Public sur la roulette (voter ✅ ou ❌)', objectif: 1, type: 'vote_public_part' },
     { id: 'defenseur_pare', tier: 'moyen', xp: 100, desc: 'Bloquer un malus de roulette grâce à un bouclier actif', objectif: 1, type: 'malus_pare' },
+    { id: 'mot_mystere', tier: 'moyen', xp: 100, desc: 'Proposer au moins 3 lettres ou mots au cours d\'une session de Pendu', objectif: 3, type: 'pendu_essai' },
 
     // ==========================================
     //  TIER 3 : DÉFIS & TROLLS (150 XP)
@@ -93,7 +96,8 @@ const QUETES_QUOTIDIENNES_POOL = [
     { id: 'haute_tension', tier: 'defi', xp: 150, desc: 'Lancer un tirage de roulette en ayant déjà 2 malus cumulés', objectif: 1, type: 'roll_sous_malus_cumules' },
     { id: 'coup_de_genie', tier: 'defi', xp: 150, desc: 'Obtenir un bonus très rare (probabilité ≤ 1%) à la roulette', objectif: 1, type: 'bonus_rare' },
     { id: 'sauve_par_gong', tier: 'defi', xp: 150, desc: 'Utiliser une Éponge à malus ou un Ticket Coupe-File de son inventaire', objectif: 1, type: 'skip_ou_eponge' },
-    { id: 'session_casino_totale', tier: 'defi', xp: 150, desc: 'Effectuer au moins 6 tirages de roulette sur l\'ensemble de la journée', objectif: 6, type: 'roulette_roll' }
+    { id: 'session_casino_totale', tier: 'defi', xp: 150, desc: 'Effectuer au moins 6 tirages de roulette sur l\'ensemble de la journée', objectif: 6, type: 'roulette_roll' },
+    { id: 'vise_juste', tier: 'defi', xp: 150, desc: 'Trouver au moins 2 bonnes lettres différentes au cours d\'une session de Pendu', objectif: 2, type: 'pendu_bonne_lettre' }
 ];
 
 const QUETES_HEBDOMADAIRES_POOL = [
@@ -165,7 +169,13 @@ const QUETES_HEBDOMADAIRES_POOL = [
     { id: 'fidele_15h', xp: 350, desc: 'Participer au Rébus Regaïen de 15h sur au moins 3 jours différents', objectif: 3, type: 'rebus_jours' },
     { id: 'dechiffreur_regulier', xp: 450, desc: 'Remporter au moins 2 manches de Rébus Regaïen dans la semaine', objectif: 2, type: 'rebus_win' },
     { id: 'chasseur_gloire_hebdo', xp: 500, desc: 'Remporter au moins 3 victoires cumulées (Motus ou manches de Rébus)', objectif: 3, type: 'minijeu_win' },
-    { id: 'omnipresent_enigmes', xp: 450, desc: 'Participer au Motus ET au Rébus sur au moins 3 jours distincts de la semaine', objectif: 3, type: 'minijeu_part_jours' }
+    { id: 'omnipresent_enigmes', xp: 450, desc: 'Participer au Motus ET au Rébus sur au moins 3 jours distincts de la semaine', objectif: 3, type: 'minijeu_part_jours' },
+    { id: 'fidele_potence', xp: 400, desc: 'Participer à au moins 4 sessions de Pendu différentes dans la semaine', objectif: 4, type: 'pendu_jours' },
+    { id: 'bourreau_dejoue', xp: 450, desc: 'Remporter au moins 1 victoire au Pendu en découvrant le mot complet de 7 lettres', objectif: 1, type: 'pendu_win' },
+    { id: 'alphabet_regaïen', xp: 400, desc: 'Découvrir un total cumulé de 10 bonnes lettres au Pendu sur la semaine', objectif: 10, type: 'pendu_bonne_lettre' },
+    { id: 'esprit_equipe', xp: 350, desc: 'Participer à au moins 2 sessions où le mot du Pendu est trouvé collectivement', objectif: 2, type: 'pendu_victoire_collective' },
+    { id: 'grand_chelem_minijeux', xp: 450, desc: 'Participer au Motus, au Rébus ET au Pendu le même jour sur 2 jours de la semaine', objectif: 2, type: 'grand_chelem_minijeux' },
+    { id: 'tete_epaules', xp: 350, desc: 'Proposer au moins 15 lettres ou mots cumulés au Pendu sur la semaine', objectif: 15, type: 'pendu_essai' }
 ];
 
 // Récompenses des 25 paliers

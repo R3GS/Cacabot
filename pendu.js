@@ -438,9 +438,19 @@ async function handlePenduMessage(message, response, client, helpers) {
                 session.tentativesJoueurs[message.author.id]++;
                 const essaiNum = session.tentativesJoueurs[message.author.id];
 
+                // Déclencheurs Battle Pass pour les essais
+                penduBridge.trackBattlePassProgress?.(message.author.id, 'pendu_essai', 1);
+                const nbTotalEssais = Object.values(session.tentativesJoueurs).reduce((a, b) => a + b, 0);
+                if (nbTotalEssais === 1) {
+                    penduBridge.trackBattlePassProgress?.(message.author.id, 'pendu_premier', 1);
+                }
+
                 // Initialisation stats
                 if (!penduStats[message.author.id]) penduStats[message.author.id] = { victoires: 0, parties: 0, points: 0, hebdo: {} };
-                if (essaiNum === 1) penduStats[message.author.id].parties++;
+                if (essaiNum === 1) {
+                    penduStats[message.author.id].parties++;
+                    penduBridge.trackBattlePassProgress?.(message.author.id, 'pendu_jours', 1);
+                }
 
                 let bonneProposition = false;
                 const motComplet = session.mot;
@@ -460,6 +470,7 @@ async function handlePenduMessage(message, response, client, helpers) {
                         bonneProposition = true;
                         if (!session.lettresTrouvees.includes(rawGuess)) {
                             session.lettresTrouvees.push(rawGuess);
+                            penduBridge.trackBattlePassProgress?.(message.author.id, 'pendu_bonne_lettre', 1);
                         }
                     } else {
                         if (!session.lettresFausses.includes(rawGuess)) {
@@ -482,7 +493,12 @@ async function handlePenduMessage(message, response, client, helpers) {
                     if (!penduStats[message.author.id].hebdo) penduStats[message.author.id].hebdo = {};
                     penduStats[message.author.id].hebdo[weekKey] = (penduStats[message.author.id].hebdo[weekKey] || 0) + 3;
 
+                    // Déclencheurs Battle Pass pour la victoire individuelle et collective
+                    penduBridge.trackBattlePassProgress?.(message.author.id, 'pendu_win', 1);
                     penduBridge.trackBattlePassProgress?.(message.author.id, 'minijeu_win', 1);
+                    for (const participantId of Object.keys(session.tentativesJoueurs)) {
+                        penduBridge.trackBattlePassProgress?.(participantId, 'pendu_victoire_collective', 1);
+                    }
                     penduBridge.demanderSauvegarde();
 
                     const embedVictoire = new EmbedBuilder()

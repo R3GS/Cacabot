@@ -1,6 +1,6 @@
-// =========================
-//   AIDE : !help et !helpx
-// =========================
+// ==========================================
+//   AIDE : !help et !helpx pour Cacabot
+// ==========================================
 
 const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 
@@ -16,8 +16,8 @@ function buildHelpxMenu(authorId) {
         .setCustomId(`helpx_menu_${authorId}`)
         .setPlaceholder('Choisis une catégorie')
         .addOptions(
-            { label: 'Cacabot', emoji: '🤖', value: 'cacabot' },
-            { label: 'Générateurs', emoji: '🔮', value: 'generateurs' },
+            { label: 'Cacabot & Admin', emoji: '🤖', value: 'cacabot' },
+            { label: 'Générateurs & Tests', emoji: '🧪', value: 'generateurs' },
             { label: 'Pour les autres', emoji: '👥', value: 'autres' },
             { label: 'Roulette', emoji: '🎰', value: 'roulette' },
             { label: 'Battle Pass', emoji: '🎫', value: 'battlepass' }
@@ -26,31 +26,43 @@ function buildHelpxMenu(authorId) {
 
 function buildHelpxCategorieEmbed(categorie) {
     const embed = new EmbedBuilder().setColor(0x5865f2);
+
     if (categorie === 'cacabot') {
-        return embed.setTitle('🤖 Commandes liées à Cacabot')
+        return embed.setTitle('🤖 Commandes liées à Cacabot & Administration')
             .addFields(
-                { name: '🩺 **!diag / !cacatest**', value: 'Lancer un diagnostic complet de l\'état de santé et de tous les modules de Cacabot.' },
-                { name: '📺 **!ytabo config**', value: 'Panneau interactif de gestion des abonnements et notifications YouTube automatiques.' },
-                { name: '📣 **!say [ID_salon] [message]**', value: 'Envoyer un message dans un salon au nom de Cacabot.' },
-                { name: '💾 **!save**', value: 'Forcer une sauvegarde immédiate dans le salon de backup Discord.' },
-                { name: '💾 **!lastsave**', value: 'Afficher la date et l\'heure de la dernière sauvegarde Discord.' }
+                { name: '🩺 **!diag / !cacatest**', value: 'Diagnostic complet de l\'état de santé de tous les modules.' },
+                { name: '📺 **!ytabo config**', value: 'Panneau interactif des abonnements et notifications YouTube.' },
+                { name: '👋 **!welcome / !welcome test**', value: 'Configurer le salon d\'accueil ou tester l\'affiche Canvas.' },
+                { name: '📣 **!say [message]**', value: 'Envoyer un message dans un salon au nom de Cacabot.' },
+                { name: '✏️ **!edit [ID_message] [texte]**', value: 'Modifier un message envoyé par Cacabot.' },
+                { name: '🖼️ **!embed / !embed modify [ID]**', value: 'Créateur et modificateur interactif d\'embeds complets.' },
+                { name: '🎭 **!rolereac / !rolebtn**', value: 'Gérer les rôles réactions et boutons de rôles.' },
+                { name: '🤐 **!chut [temps] / !unchut**', value: 'Faire taire Cacabot temporairement sur un salon.' },
+                { name: '💾 **!save / !lastsave**', value: 'Forcer une sauvegarde ou consulter l\'heure de la dernière sauvegarde.' }
             );
     }
+
     if (categorie === 'generateurs') {
-        return embed.setTitle('🔮 Commandes génératrices')
+        return embed.setTitle('🧪 Générateurs & Tests en solo')
             .addFields(
-                { name: '🔮 **!horoscope [ID_salon]**', value: 'Forcer l\'envoi de l\'horoscope dans un salon spécifique.' },
-                { name: '🚨 **!wanted set @Membre/pseudo/ID**', value: 'Forcer le.a criminel.le du jour.' },
-                { name: '🔄 **!wanted reset**', value: 'Générer un nouveau criminel du jour.' }
+                { name: '🪢 **!pendutest**', value: 'Lancer une partie de test solo du Pendu (7 lettres) dans n\'importe quel salon secret.' },
+                { name: '🟩 **!motustest [6/7]**', value: 'Lancer un Motus solo de test (6 lettres par défaut, ou 7 avec `!motustest 7`).' },
+                { name: '🧩 **!rebustest**', value: 'Lancer une manche solo de test du Rébus Regaïen.' },
+                { name: '🎂 **!anniversairetest**', value: 'Tester l\'alerte et le GIF d\'anniversaire.' },
+                { name: '🟣 **!streamtest**', value: 'Tester l\'embed d\'alerte de live Twitch.' },
+                { name: '🔮 **!horoscope [ID_salon]**', value: 'Forcer l\'envoi de l\'horoscope du jour dans un salon spécifique.' },
+                { name: '🚨 **!wanted set / !wanted reset**', value: 'Définir ou réinitialiser le criminel du jour.' }
             );
     }
+
     if (categorie === 'autres') {
         return embed.setTitle('👥 Commandes pour les autres membres')
             .addFields(
-                { name: '⏰ **!rappel [ID] Xmin/h [message]**', value: 'Envoyer un rappel à un membre spécifique par son ID.' },
-                { name: '📝 **!setmessages @Membre**', value: 'Définir manuellement le nombre de messages d\'un membre.' }
+                { name: '⏰ **!rappel [ID] Xmin/h [message]**', value: 'Programmer un rappel pour un membre précis par son ID.' },
+                { name: '📝 **!setmessages @Membre [nombre]**', value: 'Définir manuellement le compteur de messages d\'un membre.' }
             );
     }
+
     if (categorie === 'roulette') {
         return embed.setColor(0xffd20a).setTitle('🎰 Commandes Roulette (Epsys-Only)')
             .addFields(
@@ -62,14 +74,16 @@ function buildHelpxCategorieEmbed(categorie) {
                 { name: '🎖️ **!rltsuccesforce [id/test] [membre]**', value: 'Débloque de force un succès de la roulette ou lance une carte de test.' }
             );
     }
+
     if (categorie === 'battlepass') {
         return embed.setColor(0x2ecc71).setTitle('🎫 Commandes Battle Pass (Epsys-Only)')
             .addFields(
-                { name: '⚡ **!bp [membre]**', value: 'Inspecter le Battle Pass d\'un membre avec le bouton spécial **⚡ Ajouter XP** (ouvre une modale pour injecter de l\'XP).' },
-                { name: '🛠️ **!bp questforce [membre]**', value: 'Affiche les quêtes en cours d\'un membre et propose un menu déroulant pour en compléter une de force.' },
-                { name: '🔍 **!bp embedtest**', value: 'Affiche la prévisualisation de l\'embed d\'onboarding/activation que voient les nouveaux membres.' }
+                { name: '⚡ **!bp [membre]**', value: 'Inspecter le Battle Pass d\'un membre avec le bouton **⚡ Ajouter XP**.' },
+                { name: '🛠️ **!bp questforce [membre]**', value: 'Menu déroulant pour compléter de force une quête en cours.' },
+                { name: '🔍 **!bp embedtest**', value: 'Prévisualiser l\'embed d\'onboarding que voient les nouveaux membres.' }
             );
     }
+
     return embed.setTitle('❓ Inconnu').setDescription('Catégorie introuvable.');
 }
 
@@ -78,12 +92,15 @@ function buildHelpxCategorieEmbed(categorie) {
 // =========================
 
 function getHelpResponse(command) {
-    if (command === "!help") {
+    if (command === "!help" || command === "!aide") {
         return {
             data: new EmbedBuilder()
                 .setColor(0x00ffff)
-                .setTitle("\ud83d\udca9 AIDE \u00c0 CACABOT")
-                .setDescription("Hey ! Voici Cacabot, qui, malgr\u00e9 son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\n\nPour d\u00e9couvrir les diff\u00e9rentes commandes disponibles de Cacabot, choisis l'une des cat\u00e9gories ci-dessous !")
+                .setTitle("💩 GUIDE D'AIDE DE CACABOT")
+                .setDescription(
+                    "Hey ! Voici Cacabot, le bot à tout faire de Regaïa !\n\n" +
+                    "Choisis une catégorie dans le menu ci-dessous pour découvrir toutes les commandes disponibles 👇"
+                )
         };
     }
 
@@ -102,7 +119,7 @@ async function runHelpMessage(message, response) {
     // !helpx
     if (response?.needsHelpx) {
         if (message.author.id !== '436218312574107658') {
-            return message.reply("Tu n'es pas autoris\u00e9(e) \u00e0 faire cette commande.");
+            return message.reply("Tu n'es pas autorisé(e) à faire cette commande.");
         }
         const embed = buildHelpxPresentationEmbed();
         const row = new ActionRowBuilder().addComponents(buildHelpxMenu(message.author.id));
@@ -113,10 +130,10 @@ async function runHelpMessage(message, response) {
     if (response?.data) {
         const menu = new StringSelectMenuBuilder()
             .setCustomId(`help_menu_${message.author.id}_${message.id}`)
-            .setPlaceholder('Choisis une cat\u00e9gorie')
+            .setPlaceholder('Choisis une catégorie...')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'Interact, Discussion, Anniversaire, Random', value: 'fun' },
-                { label: '\ud83d\udee0 Utilitaire', description: 'Discord, YouTube, Cacabot, Autres', value: 'util' },
+                { label: '🎉 Fun & Mini-jeux', description: 'Pendu, Motus, Rébus, Roulette, Battle Pass...', emoji: '🎉', value: 'fun' },
+                { label: '🛠️ Utilitaires & Serveur', description: 'Discord, Profil, Top, YouTube, Météo...', emoji: '🛠️', value: 'util' },
             );
 
         const row = new ActionRowBuilder().addComponents(menu);
@@ -139,166 +156,160 @@ async function runHelpInteraction(interaction) {
         return interaction.update({ embeds: [embed], components: [row] });
     }
 
-    if (interaction.isButton() && interaction.customId.startsWith('helpx_roulette_')) {
-        const authorId = interaction.customId.split('_')[2];
-        if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
-        }
-        const embed = new EmbedBuilder()
-            .setColor(0xffd20a)
-            .setTitle('🎰 Commandes admin roulette')
-            .setDescription(
-                "`!reroll [membre]` — réinitialise le cooldown d'un.e membre\n" +
-                "`!bonusforce`/`!malusforce [ID bonus/malus] [membre]` — impose un bonus/malus à un.e membre\n" +
-                "`!rouletteID`/`!rltID` — affiche les ID des bonus/malus\n" +
-                "`!resetroulettestate`/`!resetrlt [membre]` — reset tout l'état roulette d'un.e membre\n" +
-                "`!removestate [membre] [nom]` — retire un seul effet actif d'un.e membre"
-            );
-        return interaction.reply({ embeds: [embed], ephemeral: true });
-    }
-
-    // =========================
     // MENU SELECT FUN
-    // =========================
-
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_fun_')) {
         const funParts = interaction.customId.split('_');
         const helpAuthorId = funParts[2];
         const helpMessageId = funParts[3] ?? null;
         if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
+            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
         }
 
         const value = interaction.values[0];
         let embed;
 
+        if (value === 'minijeux') {
+            embed = new EmbedBuilder()
+                .setColor(0x9b59b6)
+                .setDescription("# 🎮 Mini-Jeux & Pass de Combat")
+                .addFields(
+                    { name: "🪢 !pendu / !pendustats / !pendutop", value: "Le Pendu Quotidien à **21h00** (7 lettres, 3 essais), stats et classement hebdo !" },
+                    { name: "🟩 !motus / !motustats", value: "Le Motus Quotidien à **10h00** (6 lettres) et **19h00** (7 lettres) !" },
+                    { name: "🧩 !rebus / !rebusstats", value: "Le Rébus Regaïen à **15h00** (5 manches de 5 minutes) !" },
+                    { name: "🎫 !pass / !bp", value: "Le Battle Pass mensuel de Regaïa : quêtes quotidiennes, hebdos et 25 paliers de récompenses !" },
+                    { name: "🎰 !roulette / !rlt [go/claim/state/stats]", value: "La Roulette Regaïenne : tente ta chance toutes les 15 min (5 min en Happy Hour à 20h) !" },
+                    { name: "🏆 !rlttop", value: "Le Panthéon des chasseurs de succès de la roulette !" }
+                );
+        }
+
         if (value === 'interact') {
             embed = new EmbedBuilder()
                 .setColor(0xffdc5d)
-                .setDescription("# \ud83d\udc46 Interact")
+                .setDescription("# 👆 Interactions Sociales")
                 .addFields(
-                    { name: "💋!kiss / !bisou", value: "Embrassez quelqu'un sur le serveur !" },
-                    { name: "🫂!hug / !calin", value: "Faites un c\u00e2lin \u00e0 quelqu'un sur le serveur !" },
-                    { name: "💃!danse / !dance", value: "Dansez avec quelqu'un sur le serveur !" },
-                    { name: "🗯️!insult", value: "Insulte quelqu'un du serveur ! (Oui c'est gratuit)" },
-                    { name: "☠️!die", value: "Mourez en direct sur le serveur !" },
-                    { name: "🔨!ban", value: "Bannir quelqu'un du serveur... symboliquement." },
-                    { name: "😛!bait", value: "Ragebait quelqu'un du serveur, gratuitement." },
-                    { name: "💥!explode / !explose", value: "Explose." },
-                    { name: "\ud83d\ude10 !palaref / !pref", value: "Ce moment g\u00eanant quand vous n'avez pas la ref..." },
-                    { name: "\ud83d\ude2d !glaref / !gref / !jailaref", value: "Vous avez la ref!" },
-                    { name: "\ud83d\ude2d !cry / !pleure", value: "Pleure." },
-                    { name: "👊!punch / !frappe", value: "Frappez quelqu'un sur le serveur !" },
-                    { name: "🔫!bang / !tir / !pan", value: "Tirez sur quelqu'un sur le serveur !" },
-                    { name: "🗿!rizz", value: "Rizzez quelqu'un sur le serveur !" },
-                    { name: "🏃!run", value: "Fuis quelqu'un sur le serveur !" },
-                    { name: "😆!rire", value: "Riez un bon coup !" }
+                    { name: "💋 !kiss / !bisou", value: "Embrasse quelqu'un sur le serveur !" },
+                    { name: "🫂 !hug / !calin", value: "Fais un câlin chaleureux !" },
+                    { name: "💃 !danse / !dance", value: "Danse solo ou avec un partenaire !" },
+                    { name: "🗯️ !insult", value: "Insulte gentiment (ou pas) un membre !" },
+                    { name: "👊 !punch / !frappe", value: "Frappe un membre !" },
+                    { name: "🔫 !bang / !tir / !pan", value: "Tire sur un membre !" },
+                    { name: "🗿 !rizz", value: "Tente de séduire avec ton meilleur rizz !" },
+                    { name: "🏃 !run / !court", value: "Prends la fuite !" },
+                    { name: "😆 !rire", value: "Ris de bon cœur !" },
+                    { name: "😭 !cry / !pleure", value: "Pleure un bon coup..." },
+                    { name: "☠️ !die", value: "Meurs en direct." },
+                    { name: "🔨 !ban", value: "Bannis symboliquement quelqu'un !" },
+                    { name: "😛 !bait", value: "Ragebait quelqu'un !" },
+                    { name: "💥 !explode", value: "Explose sans raison." },
+                    { name: "😐 !palaref / 😎 !jailaref", value: "Avoue que t'as pas la ref... ou affirme le contraire !" }
                 );
         }
 
         if (value === 'discussion') {
             embed = new EmbedBuilder()
                 .setColor(0x6bb5ff)
-                .setDescription("# \ud83d\udcac Discussion")
+                .setDescription("# 💬 Discussion & Dilemmes")
                 .addFields(
-                    { name: "❓!question", value: "Lance une question al\u00e9atoire parmi 6 cat\u00e9gories !" },
-                    { name: "⚖️!choix", value: "Vous avez du mal \u00e0 faire un choix ? Demandez \u00e0 Cacabot." }
+                    { name: "❓ !question", value: "Pose une question de débat du soir parmi 6 catégories !" },
+                    { name: "⚖️ !choix [option 1 ou option 2]", value: "Laisse Cacabot trancher un dilemme cornélien !" },
+                    { name: "👨‍🍳 !topchef", value: "Le verdict et la note gastronomique sans pitié de Cacabot sur un plat !" },
+                    { name: "💕 !lovecalc [@user1 @user2]", value: "Calcule le pourcentage d'amour et génère une carte personnalisée !" }
                 );
         }
 
         if (value === 'random') {
             embed = new EmbedBuilder()
                 .setColor(0xf5f8fa)
-                .setDescription("# \ud83d\udca5 Random")
+                .setDescription("# 🔮 Hasard & Fun")
                 .addFields(
-                    { name: "\ud83c\udfb0!roulette / !rlt", value: "Faire tourner la roulette et tomber sur un bonus... ou un malus." },
-                    { name: "🧠!destin", value: "Pr\u00e9dit votre destin et fait part des \u00e9v\u00e8nements de votre futur." },
-                    { name: "🐕!animal", value: "Devine votre animal spirituel parmi pr\u00e8s de 7000 combinaisons !" },
-                    { name: "👔!epsys", value: "Poste des GIFs al\u00e9atoires d'Epsys, parce que." },
-                    { name: "🤣!blague", value: "Lance une blague al\u00e9atoire en 3 cat\u00e9gories !" },
-                    { name: "🪙!flip", value: "Pour d\u00e9cider \u00e0 pile ou face !" },
-                    { name: "🔮!horoscope", value: "L'horoscope du jour selon Cacabot." },
-                    { name: "\ud83d\udea8!wanted", value: "D\u00e9signe le criminel du jour parmi les membres." }
+                    { name: "🔮 !horoscope", value: "L'horoscope cosmique quotidien de tous les signes !" },
+                    { name: "🧠 !destin", value: "Prédictions loufoques sur ton avenir." },
+                    { name: "🐕 !animal", value: "Découvre ton animal spirituel parmi 7000 combinaisons !" },
+                    { name: "🚨 !wanted", value: "Avis de recherche du criminel du jour !" },
+                    { name: "🪙 !flip", value: "Lance une pièce à pile ou face (solo ou duel de pari) !" },
+                    { name: "🤣 !blague", value: "Raconte une blague (Soft, Classique, Humour Noir) !" },
+                    { name: "🎬 !bougetoi", value: "Rappelle à Epsys d'aller monter sa vidéo !" },
+                    { name: "🐒 !sylvain", value: "Singe fort ensemble (Sylvain Lévy) !" },
+                    { name: "👗 !epsys", value: "GIF aléatoire d'Epsys !" }
                 );
         }
 
         if (value === 'anniversaire') {
             embed = new EmbedBuilder()
                 .setColor(0xff69b4)
-                .setDescription("# \ud83c\udf82 Anniversaire")
+                .setDescription("# 🎂 Anniversaires")
                 .addFields(
-                    { name: "!anniversaire set JJ/MM", value: "Enregistre ton anniversaire." },
-                    { name: "!anniversaire show", value: "Affiche ton anniversaire enregistr\u00e9." },
-                    { name: "!anniversaire list", value: "Liste tous les anniversaires du serveur." },
-                    { name: "!anniversaire next", value: "Affiche le prochain anniversaire du serveur." }
+                    { name: "📅 !anniversaire set JJ/MM", value: "Enregistre ton anniversaire." },
+                    { name: "👀 !anniversaire show [@membre]", value: "Affiche un anniversaire et le compte à rebours." },
+                    { name: "📋 !anniversaire list", value: "Liste tous les anniversaires (classique ou chronologique)." },
+                    { name: "🎉 !anniversaire next", value: "Affiche le prochain anniversaire à fêter !" },
+                    { name: "🗑️ !anniversaire remove", value: "Supprime ton anniversaire." }
                 );
-        }
-
-        if (!embed) {
-            embed = new EmbedBuilder().setColor(0xff0000).setTitle("Erreur").setDescription("Cat\u00e9gorie inconnue");
         }
 
         const backButton = new ButtonBuilder()
             .setCustomId(`help_fun_back_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('\u2b05 Retour')
+            .setLabel('⬅️ Retour')
             .setStyle(ButtonStyle.Secondary);
         const deleteButton = new ButtonBuilder()
             .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('\u274c Supprimer')
+            .setLabel('❌ Supprimer')
             .setStyle(ButtonStyle.Secondary);
         const backRow = new ActionRowBuilder().addComponents(backButton, deleteButton);
         return interaction.update({ embeds: [embed], components: [backRow] });
     }
 
-    // =========================
     // BOUTON RETOUR FUN
-    // =========================
-
     if (interaction.isButton() && interaction.customId.startsWith('help_fun_back_')) {
         const funBackParts = interaction.customId.split('_');
         const helpAuthorId = funBackParts[3];
         const helpMessageId = funBackParts[4] ?? null;
         if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
+            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
         }
 
         const funEmbed = new EmbedBuilder()
             .setColor(0xffcc00)
-            .setDescription("# \ud83c\udf89 Fun\n*Toutes les commandes pour animer le serveur et faire des trucs inutiles mais dr\u00f4les.*\n\n\ud83d\udc46 **Interact** \u2014 Interagis avec les membres du serveur\n\ud83d\udcac **Discussion** \u2014 Lance des d\u00e9bats ou laisse le hasard d\u00e9cider\n\ud83c\udf82 **Anniversaire** \u2014 Pour les anniversaires des membres du serveur\n\ud83d\udca5 **Random** \u2014 Commandes al\u00e9atoires et surprises");
+            .setDescription(
+                "# 🎉 Fun & Divertissement\n" +
+                "*Toutes les commandes pour animer le serveur et jouer ensemble.*\n\n" +
+                "🎮 **Mini-Jeux & Pass** — Pendu, Motus, Rébus, Roulette, Battle Pass\n" +
+                "👆 **Interact** — Interagis avec les membres\n" +
+                "💬 **Discussion** — Débats, dilemmes, lovecalc et cuisine\n" +
+                "🎂 **Anniversaire** — Gestion des anniversaires de Regaïa\n" +
+                "🔮 **Hasard & Fun** — Horoscope, destin, animal spirituel, blagues..."
+            );
 
         const funMenu = new StringSelectMenuBuilder()
             .setCustomId(`help_fun_${helpAuthorId}`)
-            .setPlaceholder('Choisis une cat\u00e9gorie')
+            .setPlaceholder('Choisis une sous-catégorie...')
             .addOptions(
-                { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, palaref, jailaref, punch, bang, rizz, rire, danse, run', value: 'interact' },
-                { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
-                { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
-                { label: '\ud83d\udca5 Random', description: 'roulette, destin, animal, epsys, flip, blague, horoscope, wanted', value: 'random' }
+                { label: '🎮 Mini-Jeux & Pass', description: 'pendu, motus, rebus, roulette, pass', value: 'minijeux' },
+                { label: '👆 Interactions', description: 'kiss, hug, insult, die, punch, bang, rizz...', value: 'interact' },
+                { label: '💬 Discussion', description: 'question, choix, topchef, lovecalc', value: 'discussion' },
+                { label: '🎂 Anniversaires', description: 'set, show, list, next, remove', value: 'anniversaire' },
+                { label: '🔮 Hasard & Fun', description: 'horoscope, destin, animal, wanted, blague...', value: 'random' }
             );
 
         const funBackButton = new ButtonBuilder()
             .setCustomId(`help_back_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('\u2b05 Retour')
+            .setLabel('⬅️ Retour Accueil')
             .setStyle(ButtonStyle.Secondary);
         const funDeleteButton = new ButtonBuilder()
             .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('\u274c Supprimer')
+            .setLabel('❌ Supprimer')
             .setStyle(ButtonStyle.Secondary);
         const funRow = new ActionRowBuilder().addComponents(funMenu);
         const funBackRow = new ActionRowBuilder().addComponents(funBackButton, funDeleteButton);
         return interaction.update({ embeds: [funEmbed], components: [funRow, funBackRow] });
     }
 
-
-    // =========================
     // MENU SELECT UTIL
-    // =========================
-
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_util_')) {
         const helpAuthorId = interaction.customId.split('_')[2];
         const helpMessageId = interaction.customId.split('_')[3] ?? null;
         if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
+            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
         }
 
         const value = interaction.values[0];
@@ -307,141 +318,147 @@ async function runHelpInteraction(interaction) {
         if (value === 'discord') {
             embed = new EmbedBuilder()
                 .setColor(0xbdddf4)
-                .setDescription("# \ud83d\udcac Discord")
+                .setDescription("# 💬 Vie du Serveur & Activité")
                 .addFields(
-                    { name: "<:serveur_icon:1505456319946031144> !serveur", value: "Afficher les informations du serveur." },
-                    { name: "\ud83d\udc64 !profil", value: "Afficher le profil d'un membre." },
-                    { name: "\ud83d\uddbc\ufe0f !avatar", value: "Afficher l'avatar d'un membre en grand." },
-                    { name: "\ud83c\udfc5 !top", value: "Afficher le top 10 des membres les plus actifs." },
-                    { name: "\ud83d\udcac !actif", value: "Affiche les membres les plus actifs du jour et de la semaine." }
+                    { name: "👤 !profil [@membre]", value: "Affiche le profil complet, messages, stats et succès débloqués !" },
+                    { name: "🖼️ !avatar [@membre]", value: "Affiche l'avatar d'un membre en haute résolution." },
+                    { name: "🏆 !top", value: "Classement général des membres les plus bavards." },
+                    { name: "📊 !actif", value: "Podium des plus actifs du jour, de la semaine et du mois !" },
+                    { name: "📜 !quote [numéro/recherche]", value: "Affiche une citation mythique archivée du serveur." },
+                    { name: "💡 !suggestion [idée]", value: "Soumettre une proposition au vote dans #suggestions !" },
+                    { name: "🏠 !serveur", value: "Informations complètes sur Regaïa (création, membres, boost...)." }
                 );
         }
 
         if (value === 'youtube') {
             embed = new EmbedBuilder()
                 .setColor(0xff0000)
-                .setDescription("# <:youtube_icon:1505457903585198151> YouTube")
+                .setDescription("# 📺 YouTube")
                 .addFields(
-                    { name: "🔎 !youtube", value: "Rechercher une vidéo sur YouTube." },
-                    { name: "❗ !last", value: "Afficher la dernière vidéo d'une chaîne." },
-                    { name: "📈 !stats", value: "Regarder les stats d'une chaîne YouTube." }
-                    );
+                    { name: "🔍 !youtube [recherche]", value: "Recherche de vidéos avec lecteur interactif." },
+                    { name: "🎬 !last [chaîne]", value: "Affiche la dernière vidéo publiée d'une chaîne." },
+                    { name: "📈 !stats [chaîne]", value: "Statistiques complètes d'une chaîne YouTube." }
+                );
         }
 
         if (value === 'autres') {
             embed = new EmbedBuilder()
                 .setColor(0x95a5a6)
-                .setDescription("# \ud83d\uddd2\ufe0f Autres")
+                .setDescription("# 📝 Utilitaires du quotidien")
                 .addFields(
-                    { name: "<:aternos_icon:1505454393049485362> !aternos", value: "Obtenir l'IP du serveur Aternos (Minecraft) de Rega\u00efa." },
-                    { name: "\u23f0 !rappel", value: "Se faire rappeler quelque chose dans X minutes/heures." },
-                    { name: "\u26c5 !météo", value: "Affiche la météo d'une ville." },
-                    { name: "🍅 !pomodoro", value: "Démarrer une séance de pomodoro." }
+                    { name: "⏰ !rappel [temps] [message]", value: "Programmer un rappel (ex : `!rappel 15min gâteau au four`)." },
+                    { name: "🍅 !pomodoro", value: "Configurer et lancer une session de concentration Pomodoro." },
+                    { name: "🌦️ !météo [ville]", value: "Météo et température en direct d'une ville." },
+                    { name: "⛏️ !aternos", value: "Obtenir l'adresse IP du serveur Minecraft de Regaïa." },
+                    { name: "🧹 !prune [nombre]", value: "Supprimer rapidement les derniers messages (permission requise)." }
                 );
         }
 
         if (value === 'cacabot') {
             embed = new EmbedBuilder()
                 .setColor(0x5865f2)
-                .setDescription("# \ud83e\udd16 Cacabot")
+                .setDescription("# 🤖 Cacabot")
                 .addFields(
-                    { name: "\ud83e\udd16 !botinfo / !about / !abt", value: "Affiche les informations de Cacabot." },
-                    { name: "🤫 !stop / !unstop", value: "Faire taire Cacabot pendant 1h, ou le faire revenir avant la fin." },
-                    { name: "\ud83c\udfd3 !ping", value: "Affiche la latence du bot." }
+                    { name: "ℹ️ !botinfo / !about", value: "Informations techniques, version et uptime du bot." },
+                    { name: "🏓 !ping", value: "Affiche la latence de réponse et du WebSocket Discord." },
+                    { name: "🤫 !stop / !unstop", value: "Faire taire temporairement les répliques réflexes de Cacabot." }
                 );
-        }
-
-        if (!embed) {
-            embed = new EmbedBuilder().setColor(0xff0000).setTitle("Erreur").setDescription("Cat\u00e9gorie inconnue");
         }
 
         const backButton = new ButtonBuilder()
             .setCustomId(`help_back_util_${helpAuthorId}`)
-            .setLabel('\u2b05 Retour')
+            .setLabel('⬅️ Retour')
             .setStyle(ButtonStyle.Secondary);
         const deleteButton = new ButtonBuilder()
             .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('\u274c Supprimer')
+            .setLabel('❌ Supprimer')
             .setStyle(ButtonStyle.Secondary);
         const backRow = new ActionRowBuilder().addComponents(backButton, deleteButton);
         return interaction.update({ embeds: [embed], components: [backRow] });
     }
 
-    // =========================
     // BOUTON RETOUR UTIL
-    // =========================
-
     if (interaction.isButton() && interaction.customId.startsWith('help_back_util_')) {
         const helpAuthorId = interaction.customId.replace('help_back_util_', '');
         if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
+            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
         }
 
         const utilEmbed = new EmbedBuilder()
-            .setColor(0x8899a6)
-            .setTitle("\ud83d\udee0 Utilitaire")
-            .setDescription("<:discord_icon:1505454379669524532> **Discord** \u2014 Commandes relatives au serveur\n<:youtube_icon:1505457903585198151> **YouTube** \u2014 Pour explorer le meilleur site de tous les temps\n\ud83e\udd16 **Cacabot** \u2014 Commandes relatives \u00e0 Cacabot\n\ud83d\uddd2\ufe0f **Autres** \u2014 Autres commandes non-r\u00e9pertori\u00e9es");
+            .setColor(0x3498db)
+            .setTitle("🛠️ Utilitaires")
+            .setDescription(
+                "💬 **Vie du Serveur** — Profils, classements, citations, suggestions...\n" +
+                "📺 **YouTube** — Recherches et statistiques de chaînes\n" +
+                "🤖 **Cacabot** — Informations, ping et gestion du bot\n" +
+                "📝 **Quotidien** — Rappels, météo, pomodoro, aternos..."
+            );
 
         const utilMenu = new StringSelectMenuBuilder()
             .setCustomId(`help_util_${helpAuthorId}`)
-            .setPlaceholder('Choisis une cat\u00e9gorie')
+            .setPlaceholder('Choisis une sous-catégorie...')
             .addOptions(
-                { label: '\ud83d\udcac Discord', description: 'serveur, info, avatar, top, actif', value: 'discord' },
-                { label: '▶️ YouTube', description: 'youtube, stats, last', value: 'youtube' },
-                { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping', value: 'cacabot' },
-                { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel, météo, pomodoro', value: 'autres' }
+                { label: '💬 Vie du Serveur', description: 'profil, top, actif, quote, suggestion, serveur', value: 'discord' },
+                { label: '📺 YouTube', description: 'youtube, stats, last', value: 'youtube' },
+                { label: '🤖 Cacabot', description: 'botinfo, ping, stop', value: 'cacabot' },
+                { label: '📝 Quotidien', description: 'rappel, météo, pomodoro, aternos, prune', value: 'autres' }
             );
 
         const utilBackButton = new ButtonBuilder()
             .setCustomId(`help_back_${helpAuthorId}`)
-            .setLabel('\u2b05 Retour')
+            .setLabel('⬅️ Retour Accueil')
             .setStyle(ButtonStyle.Secondary);
         const utilDeleteButton = new ButtonBuilder()
             .setCustomId(`help_delete_${helpAuthorId}_`)
-            .setLabel('\u274c Supprimer')
+            .setLabel('❌ Supprimer')
             .setStyle(ButtonStyle.Secondary);
         const utilRow = new ActionRowBuilder().addComponents(utilMenu);
         const utilBackRow = new ActionRowBuilder().addComponents(utilBackButton, utilDeleteButton);
         return interaction.update({ embeds: [utilEmbed], components: [utilRow, utilBackRow] });
     }
 
-    // =========================
-    // MENU SELECT
-    // =========================
-
+    // MENU SELECT ACCUEIL (!help)
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_menu_')) {
         const parts = interaction.customId.split('_');
         const helpAuthorId = parts[2];
         const helpMessageId = parts[3] ?? null;
         if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
+            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
         }
 
         const value = interaction.values[0];
-        let embed;
 
         if (value === 'fun') {
             const funEmbed = new EmbedBuilder()
                 .setColor(0xffcc00)
-                .setDescription("# \ud83c\udf89 Fun\n*Toutes les commandes pour animer le serveur et faire des trucs inutiles mais dr\u00f4les.*\n\n\ud83d\udc46 **Interact** \u2014 Interagis avec les membres du serveur\n\ud83d\udcac **Discussion** \u2014 Lance des d\u00e9bats ou laisse le hasard d\u00e9cider\n\ud83c\udf82 **Anniversaire** \u2014 Pour les anniversaires des membres du serveur\n\ud83d\udca5 **Random** \u2014 Commandes al\u00e9atoires et surprises");
+                .setDescription(
+                    "# 🎉 Fun & Divertissement\n" +
+                    "*Toutes les commandes pour animer le serveur et jouer ensemble.*\n\n" +
+                    "🎮 **Mini-Jeux & Pass** — Pendu, Motus, Rébus, Roulette, Battle Pass\n" +
+                    "👆 **Interact** — Interagis avec les membres\n" +
+                    "💬 **Discussion** — Débats, dilemmes, lovecalc et cuisine\n" +
+                    "🎂 **Anniversaire** — Gestion des anniversaires de Regaïa\n" +
+                    "🔮 **Hasard & Fun** — Horoscope, destin, animal spirituel, blagues..."
+                );
 
             const funMenu = new StringSelectMenuBuilder()
                 .setCustomId(`help_fun_${helpAuthorId}`)
-                .setPlaceholder('Choisis une cat\u00e9gorie')
+                .setPlaceholder('Choisis une sous-catégorie...')
                 .addOptions(
-                    { label: '\ud83d\udc46 Interact', description: 'kiss, hug, insult, die, ban, bait, explode, palaref, jailaref, punch, bang, rizz, rire, danse, run', value: 'interact' },
-                    { label: '\ud83d\udcac Discussion', description: 'question, choix', value: 'discussion' },
-                    { label: '\ud83c\udf82 Anniversaire', description: 'set, show, list, next', value: 'anniversaire' },
-                    { label: '\ud83d\udca5 Random', description: 'destin, animal, epsys, flip, blague, horoscope, wanted', value: 'random' }
+                    { label: '🎮 Mini-Jeux & Pass', description: 'pendu, motus, rebus, roulette, pass', value: 'minijeux' },
+                    { label: '👆 Interactions', description: 'kiss, hug, insult, die, punch, bang, rizz...', value: 'interact' },
+                    { label: '💬 Discussion', description: 'question, choix, topchef, lovecalc', value: 'discussion' },
+                    { label: '🎂 Anniversaires', description: 'set, show, list, next, remove', value: 'anniversaire' },
+                    { label: '🔮 Hasard & Fun', description: 'horoscope, destin, animal, wanted, blague...', value: 'random' }
                 );
 
             const funBackButton = new ButtonBuilder()
                 .setCustomId(`help_back_${helpAuthorId}_${helpMessageId ?? ''}`)
-                .setLabel('\u2b05 Retour')
+                .setLabel('⬅️ Retour Accueil')
                 .setStyle(ButtonStyle.Secondary);
             const funDeleteButton = new ButtonBuilder()
                 .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
-                .setLabel('\u274c Supprimer')
+                .setLabel('❌ Supprimer')
                 .setStyle(ButtonStyle.Secondary);
             const funRow = new ActionRowBuilder().addComponents(funMenu);
             const funBackRow = new ActionRowBuilder().addComponents(funBackButton, funDeleteButton);
@@ -451,55 +468,39 @@ async function runHelpInteraction(interaction) {
         if (value === 'util') {
             const utilEmbed = new EmbedBuilder()
                 .setColor(0x3498db)
-                .setTitle("\ud83d\udee0 Utilitaire")
-                .setDescription("<:discord_icon:1505454379669524532> **Discord** \u2014 Commandes relatives au serveur\n<:youtube_icon:1505457903585198151> **YouTube** \u2014 Pour explorer le meilleur site de tous les temps\n\ud83e\udd16 **Cacabot** \u2014 Commandes relatives \u00e0 Cacabot\n\ud83d\uddd2\ufe0f **Autres** \u2014 Autres commandes non-r\u00e9pertori\u00e9es");
+                .setTitle("🛠️ Utilitaires")
+                .setDescription(
+                    "💬 **Vie du Serveur** — Profils, classements, citations, suggestions...\n" +
+                    "📺 **YouTube** — Recherches et statistiques de chaînes\n" +
+                    "🤖 **Cacabot** — Informations, ping et gestion du bot\n" +
+                    "📝 **Quotidien** — Rappels, météo, pomodoro, aternos..."
+                );
 
             const utilMenu = new StringSelectMenuBuilder()
                 .setCustomId(`help_util_${helpAuthorId}`)
-                .setPlaceholder('Choisis une cat\u00e9gorie')
+                .setPlaceholder('Choisis une sous-catégorie...')
                 .addOptions(
-                    { label: '\ud83d\udcac Discord', description: 'serveur, info, avatar, top, actif', value: 'discord' },
-                    { label: '\u25b6\ufe0f YouTube', description: 'youtube, stats, last', value: 'youtube' },
-                    { label: '\ud83e\udd16 Cacabot', description: 'botinfo, ping, stop', value: 'cacabot' },
-                    { label: '\ud83d\uddd2\ufe0f Autres', description: 'aternos, rappel, météo, pomodoro', value: 'autres' }
+                    { label: '💬 Vie du Serveur', description: 'profil, top, actif, quote, suggestion, serveur', value: 'discord' },
+                    { label: '📺 YouTube', description: 'youtube, stats, last', value: 'youtube' },
+                    { label: '🤖 Cacabot', description: 'botinfo, ping, stop', value: 'cacabot' },
+                    { label: '📝 Quotidien', description: 'rappel, météo, pomodoro, aternos, prune', value: 'autres' }
                 );
 
             const utilBackButton = new ButtonBuilder()
                 .setCustomId(`help_back_${helpAuthorId}`)
-                .setLabel('\u2b05 Retour')
+                .setLabel('⬅️ Retour Accueil')
                 .setStyle(ButtonStyle.Secondary);
             const utilDeleteButton = new ButtonBuilder()
-                .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
-                .setLabel('\u274c Supprimer')
+                .setCustomId(`help_delete_${helpAuthorId}_`)
+                .setLabel('❌ Supprimer')
                 .setStyle(ButtonStyle.Secondary);
             const utilRow = new ActionRowBuilder().addComponents(utilMenu);
             const utilBackRow = new ActionRowBuilder().addComponents(utilBackButton, utilDeleteButton);
             return interaction.update({ embeds: [utilEmbed], components: [utilRow, utilBackRow] });
         }
-
-        if (!embed) {
-            embed = new EmbedBuilder()
-                .setColor(0xff0000)
-                .setTitle("Erreur")
-                .setDescription("Cat\u00e9gorie inconnue");
-        }
-
-        const backButton = new ButtonBuilder()
-            .setCustomId(`help_back_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('\u2b05 Retour')
-            .setStyle(ButtonStyle.Secondary);
-        const deleteButton = new ButtonBuilder()
-            .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('\u274c Supprimer')
-            .setStyle(ButtonStyle.Secondary);
-        const row = new ActionRowBuilder().addComponents(backButton, deleteButton);
-        return interaction.update({ embeds: [embed], components: [row] });
     }
 
-    // =========================
     // BOUTON SUPPRIMER
-    // =========================
-
     if (interaction.isButton() && interaction.customId.startsWith('help_delete_')) {
         const delParts = interaction.customId.split('_');
         const helpAuthorId = delParts[2];
@@ -507,9 +508,7 @@ async function runHelpInteraction(interaction) {
         if (interaction.user.id !== helpAuthorId) {
             return interaction.reply({ content: "Tu ne peux pas supprimer ce message !", ephemeral: true });
         }
-        // Supprimer l'embed
         await interaction.message.delete().catch(() => {});
-        // Supprimer le message original de la commande
         if (helpMessageId && helpMessageId !== '') {
             const originalMsg = await interaction.channel.messages.fetch(helpMessageId).catch(() => null);
             if (originalMsg) await originalMsg.delete().catch(() => {});
@@ -517,28 +516,28 @@ async function runHelpInteraction(interaction) {
         return;
     }
 
-    // =========================
-    // BOUTON RETOUR
-    // =========================
-
+    // BOUTON RETOUR ACCUEIL
     if (interaction.isButton() && interaction.customId.startsWith('help_back_')) {
         const backParts = interaction.customId.split('_');
         const helpAuthorId = backParts[2];
         const helpMessageId = backParts[3] ?? null;
         if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destin\u00e9 !", ephemeral: true });
+            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
         }
         const embed = new EmbedBuilder()
             .setColor(0x00ffff)
-            .setTitle("\ud83d\udca9 AIDE \u00c0 CACABOT")
-            .setDescription("Hey ! Voici Cacabot, qui, malgr\u00e9 son nom peu glorieux, offre de multiples commandes qui seront le Graal des gens qui aiment s'ennuyer !\n\nPour d\u00e9couvrir les diff\u00e9rentes commandes disponibles de Cacabot, choisis l'une des cat\u00e9gories ci-dessous !");
+            .setTitle("💩 GUIDE D'AIDE DE CACABOT")
+            .setDescription(
+                "Hey ! Voici Cacabot, le bot à tout faire de Regaïa !\n\n" +
+                "Choisis une catégorie dans le menu ci-dessous pour découvrir toutes les commandes disponibles 👇"
+            );
 
         const menu = new StringSelectMenuBuilder()
             .setCustomId(`help_menu_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setPlaceholder('Choisis une cat\u00e9gorie')
+            .setPlaceholder('Choisis une catégorie...')
             .addOptions(
-                { label: '\ud83c\udf89 Fun', description: 'Interact, Discussion, Anniversaire, Random', value: 'fun' },
-                { label: '\ud83d\udee0 Utilitaire', description: 'Discord, YouTube, Cacabot, Autres', value: 'util' }
+                { label: '🎉 Fun & Mini-jeux', description: 'Pendu, Motus, Rébus, Roulette, Battle Pass...', emoji: '🎉', value: 'fun' },
+                { label: '🛠️ Utilitaires & Serveur', description: 'Discord, Profil, Top, YouTube, Météo...', emoji: '🛠️', value: 'util' }
             );
         const row = new ActionRowBuilder().addComponents(menu);
         return interaction.update({ embeds: [embed], components: [row] });
@@ -546,7 +545,7 @@ async function runHelpInteraction(interaction) {
 }
 
 // =========================
-//   POINTS D'ENTRÉE (appelés depuis index.js)
+//   POINTS D'ENTRÉE EXPORTÉS
 // =========================
 
 async function handleHelpMessage(message, response) {

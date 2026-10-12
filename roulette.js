@@ -1476,7 +1476,6 @@ async function envoyerHallOfFame(guild, membre, entry) {
 
     if (avatar) embed.setThumbnail(avatar);
     const { MessageFlags } = require('discord.js');
-    deverrouillerSucces(membre.id, 'hof', salon);
     await salon.send({ 
         content: `🎉 Félicitations à <@${membre.id}> pour son coup de maître !`, 
         embeds: [embed],
@@ -1673,6 +1672,9 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     const failIndex = outcomeId === 'aucun-resultat' ? Math.floor(Math.random() * ROULETTE_FAILS.length) : 0;
     const entryTiree = ROULETTE_TABLE.find(e => e.id === outcomeId);
     updateRouletteStats(authorId, outcomeId, entryTiree, client);
+    if (entryTiree && entryTiree.type === 'bonus' && probaReelle(entryTiree) < ROULETTE_HOF_SEUIL) {
+        deverrouillerSucces(authorId, 'hof', channel);
+    }
     envoyerHallOfFame(guild, membre, entryTiree).catch(() => {});
     verifierRoleGamblingAddict(membre).catch(() => {});
 
