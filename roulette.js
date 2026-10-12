@@ -2058,7 +2058,7 @@ async function handleRouletteMessage(message, response, client) {
     ];
 
     if (ROULETTE_COMMANDES_PUBLIQUES.includes(command) && message.channel.id !== ROULETTE_SALON_ID) {
-        await message.reply(`🎰 <@${message.author.id}>, la roulette et toutes ses commandes se passent exclusivement dans le salon dédié : <#${ROULETTE_SALON_ID}> !`);
+        await message.reply(`🎰 <@${message.author.id}>, la roulette et toutes ses commandes se passent exclusivement dans le salon dédié : <#${ROULETTE_SALON_ID}>\n(Si tu n'as pas accès à ce salon, c'est que tu n'as pas encore choisi tes rôles dans <#1559082682313474059>)`);
         return true;
     }
 
