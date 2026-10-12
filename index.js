@@ -1440,9 +1440,6 @@ async function disableButtons(interaction) {
         return message.reply(getAnimalResponse(message, null, client.user.id));
     }
 
-    // Commandes Wanted (!wanted, !recherche, !preuves, !affaire)
-    if (await handleWantedMessage(message, response, client, { findMemberByName, askDisambiguation })) return;
-
     // Commandes Bienvenue (!welcome, !bienvenue)
     if (await handleWelcomeMessage(message, response)) return;
 
