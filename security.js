@@ -257,6 +257,67 @@ async function handleSecurityMessage(message) {
         const args = raw.split(/\s+/);
         const reactionRolesData = securityState.getReactionRolesData();
 
+        if (args[1]?.toLowerCase() === 'copy' || args[1]?.toLowerCase() === 'duplicate') {
+            const sourceId = args[2]?.replace(/^.*\/([0-9]+)$/, '$1');
+            const targetId = args[3]?.replace(/^.*\/([0-9]+)$/, '$1');
+
+            if (!sourceId || !targetId) {
+                await message.reply("Usage : `!rolereac copy [ID_message_source] [ID_message_cible]`");
+                return true;
+            }
+
+            const sourceConfig = reactionRolesData[sourceId];
+            if (!sourceConfig || !sourceConfig.roles || Object.keys(sourceConfig.roles).length === 0) {
+                await message.reply(`❌ Aucun rôle-réaction trouvé sur le message source \`${sourceId}\` !`);
+                return true;
+            }
+
+            // Recherche du message de destination
+            let targetMsg = await message.channel.messages.fetch(targetId).catch(() => null);
+            let targetChannel = message.channel;
+
+            if (!targetMsg && message.guild) {
+                for (const ch of message.guild.channels.cache.values()) {
+                    if (ch.isTextBased()) {
+                        targetMsg = await ch.messages.fetch(targetId).catch(() => null);
+                        if (targetMsg) { targetChannel = ch; break; }
+                    }
+                }
+            }
+
+            if (!targetMsg) {
+                await message.reply(`❌ Message de destination \`${targetId}\` introuvable sur le serveur !`);
+                return true;
+            }
+
+            // Duplication de la configuration en mémoire
+            reactionRolesData[targetId] = {
+                channelId: targetChannel.id,
+                roles: { ...sourceConfig.roles }
+            };
+            securityState.demanderSauvegarde();
+
+            // Application automatique de tous les émojis sur le nouveau message
+            const emojisAppliques = [];
+            for (const emojiStr of Object.keys(sourceConfig.roles)) {
+                try {
+                    await targetMsg.react(emojiStr);
+                    emojisAppliques.push(emojiStr);
+                } catch (err) {
+                    console.warn(`[RoleReac Copy] Impossible de réagir avec ${emojiStr}:`, err.message);
+                }
+            }
+
+            const nbRoles = Object.keys(sourceConfig.roles).length;
+            await message.reply(
+                `✅ **${nbRoles} rôle(s)-réaction copiés avec succès !**\n` +
+                `• **Source :** \`${sourceId}\`\n` +
+                `• **Destination :** [Clique ici pour voir le message](${targetMsg.url})\n` +
+                `• **Émojis appliqués :** ${emojisAppliques.join(' ')}`
+            );
+            return true;
+        }
+
         if (args[1]?.toLowerCase() === 'list') {
             const listMsg = Object.entries(reactionRolesData);
             if (listMsg.length === 0) { await message.reply("Aucun rôle réaction n'est configuré."); return true; }
