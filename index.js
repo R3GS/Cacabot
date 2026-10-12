@@ -1236,7 +1236,6 @@ async function disableButtons(interaction) {
                 { nom: 'Embeds (Epsys)', obj: typeof handleEmbedMessage === 'function' },
                 { nom: 'Social & Jeux', obj: typeof handleSocialMessage === 'function' },
                 { nom: 'Interactions', obj: typeof handleInteractionMessage === 'function' },
-                { nom: 'Wanted', obj: typeof handleWantedMessage === 'function' },
                 { nom: 'Help', obj: typeof handleHelpMessage === 'function' }
             ];
 
@@ -1794,9 +1793,6 @@ try {
 
         // Commandes d'interactions (/kiss, /hug, /punch, /bang, /rizz, /danse, /rire, /cry, /run, /die, /explode, /bait, /ban, /jailaref, /palaref)
         if (await handleInteractionSlash(interaction, client)) return;
-
-        // Commandes Wanted (/wanted, /recherche, /preuves, /affaire)
-        if (typeof handleWantedSlash === 'function' && await handleWantedSlash(interaction)) return;
 
         // =========================
         // LOT 2 : JEUX & DESTIN

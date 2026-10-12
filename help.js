@@ -51,7 +51,6 @@ function buildHelpxCategorieEmbed(categorie) {
                 { name: '🎂 **!anniversairetest**', value: 'Tester l\'alerte et le GIF d\'anniversaire.' },
                 { name: '🟣 **!streamtest**', value: 'Tester l\'embed d\'alerte de live Twitch.' },
                 { name: '🔮 **!horoscope [ID_salon]**', value: 'Forcer l\'envoi de l\'horoscope du jour dans un salon spécifique.' },
-                { name: '🚨 **!wanted set / !wanted reset**', value: 'Définir ou réinitialiser le criminel du jour.' }
             );
     }
 
@@ -225,7 +224,6 @@ async function runHelpInteraction(interaction) {
                     { name: "🔮 !horoscope", value: "L'horoscope cosmique quotidien de tous les signes !" },
                     { name: "🧠 !destin", value: "Prédictions loufoques sur ton avenir." },
                     { name: "🐕 !animal", value: "Découvre ton animal spirituel parmi 7000 combinaisons !" },
-                    { name: "🚨 !wanted", value: "Avis de recherche du criminel du jour !" },
                     { name: "🪙 !flip", value: "Lance une pièce à pile ou face (solo ou duel de pari) !" },
                     { name: "🤣 !blague", value: "Raconte une blague (Soft, Classique, Humour Noir) !" },
                     { name: "🎬 !bougetoi", value: "Rappelle à Epsys d'aller monter sa vidéo !" },
@@ -288,7 +286,7 @@ async function runHelpInteraction(interaction) {
                 { label: '👆 Interactions', description: 'kiss, hug, insult, die, punch, bang, rizz...', value: 'interact' },
                 { label: '💬 Discussion', description: 'question, choix, topchef, lovecalc', value: 'discussion' },
                 { label: '🎂 Anniversaires', description: 'set, show, list, next, remove', value: 'anniversaire' },
-                { label: '🔮 Hasard & Fun', description: 'horoscope, destin, animal, wanted, blague...', value: 'random' }
+                { label: '🔮 Hasard & Fun', description: 'horoscope, destin, animal, blague...', value: 'random' }
             );
 
         const funBackButton = new ButtonBuilder()
@@ -449,7 +447,7 @@ async function runHelpInteraction(interaction) {
                     { label: '👆 Interactions', description: 'kiss, hug, insult, die, punch, bang, rizz...', value: 'interact' },
                     { label: '💬 Discussion', description: 'question, choix, topchef, lovecalc', value: 'discussion' },
                     { label: '🎂 Anniversaires', description: 'set, show, list, next, remove', value: 'anniversaire' },
-                    { label: '🔮 Hasard & Fun', description: 'horoscope, destin, animal, wanted, blague...', value: 'random' }
+                    { label: '🔮 Hasard & Fun', description: 'horoscope, destin, animal, blague...', value: 'random' }
                 );
 
             const funBackButton = new ButtonBuilder()
