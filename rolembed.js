@@ -12,6 +12,7 @@ const {
 } = require('discord.js');
 
 const EPSYS_ID = '436218312574107658';
+const HEADER_IMAGE_URL = 'https://cdn.discordapp.com/attachments/1480756332373213275/1556919172556922990/roles.png';
 
 // Données des catégories et rôles
 const ROLE_CATEGORIES = {
@@ -124,6 +125,7 @@ function buildRoleEmbedPrincipal() {
     return new EmbedBuilder()
         .setColor(0x2b2d31)
         .setTitle('ARBOREZ LES RÔLES QUI VOUS PLAISENT')
+        .setImage(HEADER_IMAGE_URL)
         .setDescription(
             `╔══════════════════════════════════════════════╗\n\n` +
             `• 👏 **Bienvenue dans le salon des rôles :**\n` +
@@ -171,7 +173,7 @@ function buildCategoryEphemeralPayload(member, catKey) {
         rows.push(new ActionRowBuilder().addComponents(buttons.slice(i, i + 5)));
     }
 
-    return { embeds: [embed], components: rows, ephemeral: true };
+    return { embeds: [embed], components: rows };
 }
 
 // ==========================================
@@ -199,12 +201,13 @@ async function handleRolembedInteraction(interaction) {
     if (!interaction.isButton()) return false;
     const customId = interaction.customId;
 
-    // 1. Clic sur une catégorie principale -> Ouvre le panneau éphémère privé
+    // 1. Clic sur une catégorie principale -> Ouvre le panneau éphémère privé avec deferReply immédiat (anti-timeout)
     if (customId.startsWith('rolecat_')) {
+        await interaction.deferReply({ ephemeral: true });
         const catKey = customId.replace('rolecat_', '');
         const payload = buildCategoryEphemeralPayload(interaction.member, catKey);
         if (payload) {
-            await interaction.reply(payload);
+            await interaction.editReply(payload);
             return true;
         }
     }
@@ -230,8 +233,8 @@ async function handleRolembedInteraction(interaction) {
             await member.roles.add(roleId).catch(() => {});
         }
 
-        // On rafraîchit immédiatement le panneau éphémère (le bouton passe au vert avec ✅ ou redevient gris)
-        await interaction.guild.members.fetch(member.id); // mise à jour du cache
+        // On rafraîchit immédiatement le panneau éphémère
+        await interaction.guild.members.fetch(member.id);
         const updatedPayload = buildCategoryEphemeralPayload(member, catKey);
         await interaction.update(updatedPayload);
         return true;
