@@ -374,57 +374,109 @@ async function handlePenduMessage(message, response, client, helpers) {
                 .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                 .replace(/[^A-Z]/g, "");
 
-            if (rawGuess.length === 1 || rawGuess.length === 7) {
-                // Suppression du message si 1 seule lettre pour garder le chat propre
-                if (rawGuess.length === 1) {
-                    await message.delete().catch(() => {});
-                }
+            // Si c'est juste une phrase ou un message de discussion : on ne touche pas au jeu !
+            if (rawGuess.length !== 1 && rawGuess.length !== 7) {
+                return false;
+            }
 
-                // Pas de limite d'essais en mode test solo !
-                sTest.tentatives++;
+            // Suppression automatique si c'est 1 seule lettre pour laisser le chat propre
+            if (rawGuess.length === 1) {
+                await message.delete().catch(() => {});
+            }
 
-                if (rawGuess.length === 7) {
-                    if (rawGuess === sTest.mot) {
-                        sTest.lettresTrouvees = [...new Set(sTest.mot.split(''))];
-                        sTest.bonnesLettres += 7;
-                    } else {
-                        sTest.erreursCollectives++;
-                    }
-                } else if (rawGuess.length === 1) {
-                    if (sTest.mot.includes(rawGuess)) {
-                        if (!sTest.lettresTrouvees.includes(rawGuess)) {
-                            sTest.lettresTrouvees.push(rawGuess);
-                            sTest.bonnesLettres++;
-                        }
-                    } else {
-                        if (!sTest.lettresFausses.includes(rawGuess)) {
-                            sTest.lettresFausses.push(rawGuess);
-                            sTest.lettresRefusees.push(rawGuess);
-                        }
-                        sTest.erreursCollectives++;
+            sTest.tentatives++;
+
+            // Cas 1 : Mot complet de 7 lettres
+            if (rawGuess.length === 7) {
+                if (rawGuess === sTest.mot) {
+                    sTest.lettresTrouvees = [...new Set(sTest.mot.split(''))];
+                    sTest.bonnesLettres += 7;
+                } else {
+                    sTest.erreursCollectives++;
+                    if (!sTest.lettresRefusees.includes(rawGuess)) {
+                        sTest.lettresRefusees.push(rawGuess);
                     }
                 }
-
-                const gagneTest = sTest.mot.split('').every(l => sTest.lettresTrouvees.includes(l));
-                if (gagneTest || sTest.erreursCollectives >= 6) {
-                    sTest.termine = true;
-                    penduTestSessions.delete(message.channel.id);
-                    const msgFinal = gagneTest 
-                        ? `🎉 **[TEST RÉUSSI]** Bravo ! Le mot était bien **${sTest.mot}** (Lettres refusées : ${sTest.lettresRefusees.join(' ') || 'aucune'}) !`
-                        : `💀 **[TEST PERDU]** Pendu complet ! Le mot était **${sTest.mot}**.`;
-                    await message.channel.send(msgFinal);
-                    return true;
+            }
+            // Cas 2 : Lettre individuelle
+            else if (rawGuess.length === 1) {
+                if (sTest.mot.includes(rawGuess)) {
+                    if (!sTest.lettresTrouvees.includes(rawGuess)) {
+                        sTest.lettresTrouvees.push(rawGuess);
+                        sTest.bonnesLettres++;
+                    }
+                } else {
+                    // On ne compte une erreur que si la lettre n'était pas déjà refusée
+                    if (!sTest.lettresFausses.includes(rawGuess)) {
+                        sTest.lettresFausses.push(rawGuess);
+                        sTest.lettresRefusees.push(rawGuess);
+                        sTest.erreursCollectives++;
+                    }
                 }
+            }
 
-                // Modification sur place de l'embed
+            // Vérification VICTOIRE
+            const gagneTest = sTest.mot.split('').every(l => sTest.lettresTrouvees.includes(l));
+            if (gagneTest) {
+                sTest.termine = true;
+                penduTestSessions.delete(message.channel.id);
+
+                // Met à jour l'embed de base en retirant le bouton
                 if (sTest.messageId) {
                     const msgEmbed = await message.channel.messages.fetch(sTest.messageId).catch(() => null);
                     if (msgEmbed) {
-                        await msgEmbed.edit({ embeds: [buildPenduEmbed(sTest)] }).catch(() => {});
+                        await msgEmbed.edit({ embeds: [buildPenduEmbed(sTest)], components: [] }).catch(() => {});
                     }
                 }
+
+                const embedVictoireTest = new EmbedBuilder()
+                    .setColor(0x2ecc71)
+                    .setTitle('🎉 [TEST] MOT DÉCOUVERT AVEC SUCCÈS !')
+                    .setDescription(
+                        `🔤 **Le mot était bien :** \`${sTest.mot}\`\n\n` +
+                        `• **Erreurs commises :** ${sTest.erreursCollectives}/6\n` +
+                        `• **Lettres refusées :** \`${sTest.lettresRefusees.join(' ') || 'Aucune'}\``
+                    );
+
+                await message.channel.send({ embeds: [embedVictoireTest] });
                 return true;
             }
+
+            // Vérification DÉFAITE (6 erreurs atteintes) -> Envoi de l'embed de fin officiel
+            if (sTest.erreursCollectives >= 6) {
+                sTest.termine = true;
+                penduTestSessions.delete(message.channel.id);
+
+                // Met à jour l'embed de base en potence complète sans bouton
+                if (sTest.messageId) {
+                    const msgEmbed = await message.channel.messages.fetch(sTest.messageId).catch(() => null);
+                    if (msgEmbed) {
+                        await msgEmbed.edit({ embeds: [buildPenduEmbed(sTest)], components: [] }).catch(() => {});
+                    }
+                }
+
+                const embedDefaiteTest = new EmbedBuilder()
+                    .setColor(0xe74c3c)
+                    .setTitle('💀 [TEST] PENDU COMPLET ! (Fin de partie)')
+                    .setDescription(
+                        `${PENDU_DESSINS[6]}\n` +
+                        `Le nombre d'erreurs maximal (6/6) a été atteint !\n\n` +
+                        `🔤 **Le mot mystère était :** \`${sTest.mot}\`\n\n` +
+                        `❌ **Lettres refusées :** \`${sTest.lettresRefusees.join(' ') || 'Aucune'}\``
+                    );
+
+                await message.channel.send({ embeds: [embedDefaiteTest] });
+                return true;
+            }
+
+            // Si la partie continue : mise à jour sur place de l'embed
+            if (sTest.messageId) {
+                const msgEmbed = await message.channel.messages.fetch(sTest.messageId).catch(() => null);
+                if (msgEmbed) {
+                    await msgEmbed.edit({ embeds: [buildPenduEmbed(sTest)] }).catch(() => {});
+                }
+            }
+            return true;
         }
     }
 
