@@ -2049,6 +2049,19 @@ async function handleRouletteMessage(message, response, client) {
         }
     }
 
+    // Redirection automatique vers le salon dédié de la roulette
+    const ROULETTE_COMMANDES_PUBLIQUES = [
+        '!rlt', '!roulette', '!rltgo', '!rltstate', '!roulettestate',
+        '!rltstats', '!roulettestats', '!rltclaim', '!rouletteclaim',
+        '!claim', '!rlttop', '!roulettetop', '!rltleaderboard',
+        '!rltsucces', '!roulettesucces', '!rltsuccess', '!roulettesuccess'
+    ];
+
+    if (ROULETTE_COMMANDES_PUBLIQUES.includes(command) && message.channel.id !== ROULETTE_SALON_ID) {
+        await message.reply(`🎰 <@${message.author.id}>, la roulette et toutes ses commandes se passent exclusivement dans le salon dédié : <#${ROULETTE_SALON_ID}> !`);
+        return true;
+    }
+
     if (command === '!roulettestate' || command === '!rltstate') {
         bridge.trackBattlePassProgress?.(message.author.id, 'rlt_state', 1);
         const query = raw.split(/\s+/).slice(1).join(" ");
@@ -2205,6 +2218,15 @@ async function handleRouletteMessage(message, response, client) {
 async function handleRouletteSlash(interaction, client) {
     const cmd = interaction.commandName;
     const action = cmd === 'roulette' ? interaction.options.getString('action') : null;
+
+    // Redirection si exécutée hors du salon roulette
+    if ((cmd === 'roulette' || cmd === 'rlt') && interaction.channelId !== ROULETTE_SALON_ID) {
+        await interaction.reply({
+            content: `🎰 La roulette et toutes ses commandes sont réservées au salon <#${ROULETTE_SALON_ID}> !`,
+            ephemeral: true
+        });
+        return true;
+    }
 
     if (action === 'claim') {
         const member = interaction.guild?.members.cache.get(interaction.user.id) ?? interaction.member;

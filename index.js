@@ -257,6 +257,12 @@ const {
     handlePenduButton
 } = require('./pendu.js');
 
+///rolembed.js
+const {
+    handleRolembedMessage,
+    handleRolembedInteraction
+} = require('./rolembed.js');
+
 initPenduState({
     getPenduData: () => penduData,
     setPenduData: (d) => { penduData = d; },
@@ -1645,7 +1651,8 @@ async function disableButtons(interaction) {
         return message.reply(`\ud83d\udcbe Derni\u00e8re sauvegarde : **${dateStr}** (il y a ${mins}min ${secs}s)`);
     }
 
-    // !embed (Epsys-only)
+    // !embed & !rolembed (Epsys-only)
+    if (await handleRolembedMessage(message)) return;
     if (await handleEmbedMessage(message, response, client)) return;
 
     // !question est pris en charge par handleSocialMessage
@@ -1870,6 +1877,7 @@ try {
     // (Brouillons d'embeds gérés directement dans embeds.js)
 
     // Boutons de Sécurité & Rôles
+    if (await handleRolembedInteraction(interaction)) return;
     if (await handleSecurityInteraction(interaction)) return;
 
     // =========================
