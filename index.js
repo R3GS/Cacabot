@@ -209,7 +209,8 @@ const {
     ButtonStyle,
     SlashCommandBuilder,
     REST,
-    Routes
+    Routes,
+    MessageFlags
 } = require('discord.js');
 
 const { createCanvas, loadImage, registerFont } = require('canvas');
@@ -1315,7 +1316,6 @@ async function disableButtons(interaction) {
     if (await handleRouletteMessage(message, null, client)) return;
 
     // Ping Cacabot seul -> "Quoi ? (Feur)" (Silencieux)
-    const { MessageFlags } = require('discord.js');
     const strippedMsg = message.content.replace(/<@!?1503495713097519355>/g, '').trim();
     if (!isChannelMuted(message.channel.id) && message.content.includes('1503495713097519355') && strippedMsg.length === 0) {
         const finAf = rouletteAntiFeurUntil.get(message.author.id);
@@ -1553,7 +1553,6 @@ async function disableButtons(interaction) {
     if (await handleActivityMessage(message, response)) return;
 
     // hé petit (Silencieux)
-    const { MessageFlags } = require('discord.js');
     if (response?.needsHePetit) {
         await message.reply({ files: ['./monty.gif'], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
         await message.channel.send({ files: ['./' + 'hé petit.mp3'], flags: [MessageFlags.SuppressNotifications] });
@@ -1670,7 +1669,6 @@ async function disableButtons(interaction) {
 
     // Réponse texte simple (100% silencieuse)
     if (response && typeof response === "object" && response.files) {
-        const { MessageFlags } = require('discord.js');
         return message.reply({ 
             files: response.files,
             flags: [MessageFlags.SuppressNotifications],
@@ -1694,7 +1692,6 @@ async function disableButtons(interaction) {
             if (d >= 5) deverrouillerSucces(message.author.id, 'tete-dure', message.channel);
             return message.react('🛡️').catch(() => {});
         }
-        const { MessageFlags } = require('discord.js');
         const autoReplyMsg = await message.reply({ 
             content: response,
             flags: [MessageFlags.SuppressNotifications],
@@ -2394,7 +2391,6 @@ client.on('messageReactionAdd', async (reaction, user) => {
     );
     if (emojiReaction && emojiReaction.count > 1) return;
 
-    const { MessageFlags } = require('discord.js');
     const memberNom = msg.guild?.members.cache.get(user.id)?.displayName ?? user.username;
     await msg.channel.send({ 
         content: `Bah alors, **${memberNom}**, on m'envoie un doigt d'honneur ?`,
