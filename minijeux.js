@@ -1,6 +1,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
-const MOTUS_CHANNEL_ID = '1556089022718152764';
+const MOTUS_CHANNEL_ID = '1559041936256409650';
+const REBUS_CHANNEL_ID = '1556089022718152764';
 const EPSYS_ID = '436218312574107658';
 
 let motusTestSessions = new Map(); // channelId -> session
@@ -454,7 +455,7 @@ async function handleMotusMessage(message, response, client, helpers) {
             .setColor(enCours && motusData.longueur === 7 ? 0xe74c3c : 0x00b0f4)
             .setTitle(enCours ? '🟩 MOTUS EN COURS !' : '🟩 Motus Quotidien de Regaïa')
             .setDescription(desc)
-            .setFooter({ text: 'Salon dédié : <#1556089022718152764> • 3 essais individuels • 1 heure de jeu par session' });
+            .setFooter({ text: 'Salon dédié : <#1559041936256409650> • 3 essais individuels • 1 heure de jeu par session' });
 
         await message.reply({ embeds: [embed] });
         return true;
@@ -523,7 +524,7 @@ async function handleMotusSlash(interaction) {
             .setColor(enCours && motusData.longueur === 7 ? 0xe74c3c : 0x00b0f4)
             .setTitle(enCours ? '🟩 MOTUS EN COURS !' : '🟩 Motus Quotidien de Regaïa')
             .setDescription(desc)
-            .setFooter({ text: 'Salon dédié : <#1556089022718152764> • 3 essais individuels • 1 heure de jeu par session' });
+            .setFooter({ text: 'Salon dédié : <#1559041936256409650> • 3 essais individuels • 1 heure de jeu par session' });
 
         return interaction.reply({ embeds: [embed] });
     }
@@ -745,7 +746,7 @@ function buildRebusEmbed(manche, item, expireAt) {
 }
 
 async function lancerSessionRebus(guild) {
-    const channel = guild.channels.cache.get(MOTUS_CHANNEL_ID);
+    const channel = guild.channels.cache.get(REBUS_CHANNEL_ID);
     if (!channel) return;
 
     const dateKey = getMotusDateKey();
@@ -787,7 +788,7 @@ async function lancerSessionRebus(guild) {
 }
 
 async function passerMancheSuivanteRebus(guild) {
-    const channel = guild.channels.cache.get(MOTUS_CHANNEL_ID);
+    const channel = guild.channels.cache.get(REBUS_CHANNEL_ID);
     if (!channel) return;
 
     rebusSession.manche++;
@@ -963,7 +964,7 @@ async function handleRebusMessage(message, response, client, helpers) {
     }
 
     // 1. Détection des réponses en cours dans le salon Rébus
-    if (message.channel.id === MOTUS_CHANNEL_ID && rebusSession.active && rebusSession.currentItem && !message.content.startsWith('!')) {
+    if (message.channel.id === REBUS_CHANNEL_ID && rebusSession.active && rebusSession.currentItem && !message.content.startsWith('!')) {
         if (await verifierReponseRebus(message)) return true;
 
         rebusSession.compteurMessages = (rebusSession.compteurMessages || 0) + 1;
@@ -982,7 +983,7 @@ async function handleRebusMessage(message, response, client, helpers) {
 
         if (rebusSession.active && rebusSession.currentItem) {
             const expireTimestamp = Math.floor(rebusSession.expireAt / 1000);
-            desc = `🎮 **Le Rébus Regaïen est EN COURS dans <#${MOTUS_CHANNEL_ID}> !**\n\n` +
+            desc = `🎮 **Le Rébus Regaïen est EN COURS dans <#${REBUS_CHANNEL_ID}> !**\n\n` +
                    `📍 **Manche en cours :** ${rebusSession.manche}/5\n` +
                    `⏳ **Fin de la manche :** <t:${expireTimestamp}:R> !\n\n` +
                    `Prochaine session complète : **${jourStr} à 15h00** (<t:${timestamp}:R>).`;
@@ -1035,7 +1036,7 @@ async function handleRebusSlash(interaction) {
 
         if (rebusSession.active && rebusSession.currentItem) {
             const expireTimestamp = Math.floor(rebusSession.expireAt / 1000);
-            desc = `🎮 **Le Rébus Regaïen est EN COURS dans <#${MOTUS_CHANNEL_ID}> !**\n\n` +
+            desc = `🎮 **Le Rébus Regaïen est EN COURS dans <#${REBUS_CHANNEL_ID}> !**\n\n` +
                    `📍 **Manche en cours :** ${rebusSession.manche}/5\n` +
                    `⏳ **Fin de la manche :** <t:${expireTimestamp}:R> !\n\n` +
                    `Prochaine session complète : **${jourStr} à 15h00** (<t:${timestamp}:R>).`;
@@ -1061,6 +1062,7 @@ async function handleRebusSlash(interaction) {
 
 module.exports = {
     MOTUS_CHANNEL_ID,
+    REBUS_CHANNEL_ID,
     initMinijeuxState,
     initMotusState,
     getMotusDateKey,

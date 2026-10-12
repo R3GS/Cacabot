@@ -12,7 +12,7 @@ const {
     ButtonStyle
 } = require('discord.js');
 
-const PENDU_CHANNEL_ID = '1556089022718152764';
+const PENDU_CHANNEL_ID = '1559041872868024370';
 const EPSYS_ID = '436218312574107658';
 
 let penduTestSessions = new Map(); // channelId -> sessionTest
