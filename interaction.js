@@ -1841,6 +1841,37 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
         const row = new ActionRowBuilder().addComponents(dieButton);
         return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
     }
+
+        let causeNom = null;
+
+        // Cas !die @X
+        if (cible && cible.id !== message.author.id) {
+            causeNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+        }
+
+        // Cas reply (priorité sur le ping si les deux sont présents)
+        if (message.reference) {
+            const repliedMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+            if (repliedMsg && repliedMsg.author.id !== message.author.id && repliedMsg.author.id !== client.user.id) {
+                causeNom = message.guild?.members.cache.get(repliedMsg.author.id)?.displayName ?? repliedMsg.author.username;
+            }
+        }
+
+        const titre = causeNom
+            ? `\u2620\ufe0f **${auteurNom}** meurt \u00e0 cause de **${causeNom}**`
+            : `\u2620\ufe0f **${auteurNom}** meurt...`;
+
+        const embed = buildDieEmbed(titre);
+
+        const dieButton = new ButtonBuilder()
+            .setCustomId(`die_with_${message.author.id}_${auteurNom}`)
+            .setLabel("\u2620\ufe0f Mourir avec")
+            .setStyle(ButtonStyle.Primary);
+
+        const row = new ActionRowBuilder().addComponents(dieButton);
+        return message.reply({ embeds: [embed], components: [row] });
+    }
+
 }
 
 // =========================
