@@ -549,13 +549,14 @@ async function handlePenduMessage(message, response, client, helpers) {
                             penduBridge.trackBattlePassProgress?.(uid, 'pendu_bonne_lettre', 1);
                         }
                     } else {
+                        // On n'ajoute une erreur collective QUE si la lettre n'était pas déjà refusée
                         if (!session.lettresFausses.includes(rawGuess)) {
                             session.lettresFausses.push(rawGuess);
+                            session.erreursCollectives++;
                         }
                         if (!session.lettresRefuseesParJoueur[uid].includes(rawGuess)) {
                             session.lettresRefuseesParJoueur[uid].push(rawGuess);
                         }
-                        session.erreursCollectives++;
                     }
                 }
 
@@ -639,6 +640,14 @@ async function handlePenduMessage(message, response, client, helpers) {
                     session.termine = true;
                     penduBridge.demanderSauvegarde();
 
+                    // Mise à jour de l'embed principal sur place pour montrer la potence complète
+                    if (session.messageId) {
+                        const msgEmbed = await message.channel.messages.fetch(session.messageId).catch(() => null);
+                        if (msgEmbed) {
+                            await msgEmbed.edit({ embeds: [buildPenduEmbed(session)] }).catch(() => {});
+                        }
+                    }
+
                     const lignesDefaite = Object.keys(session.tentativesJoueurs).map(pId => {
                         const m = message.guild.members.cache.get(pId);
                         const nom = m?.displayName || `<@${pId}>`;
@@ -656,13 +665,6 @@ async function handlePenduMessage(message, response, client, helpers) {
                             `👥 **__Lettres refusées par joueur :__**\n${lignesDefaite || '*Aucune*'}\n\n` +
                             `Rendez-vous demain soir à **21h00** pour prendre votre revanche !`
                         );
-
-                    if (session.messageId) {
-                        const msgEmbed = await message.channel.messages.fetch(session.messageId).catch(() => null);
-                        if (msgEmbed) {
-                            await msgEmbed.edit({ embeds: [buildPenduEmbed(session)] }).catch(() => {});
-                        }
-                    }
 
                     await message.channel.send({ embeds: [embedDefaite] });
                     return true;
@@ -700,6 +702,24 @@ async function handlePenduMessage(message, response, client, helpers) {
                 }
             }
         }
+    }
+
+    // Commande de redémarrage d'urgence Pendu (Epsys-only)
+    if (command === '!pendu' && rawContent.split(/\s+/)[1]?.toLowerCase() === 'restart') {
+        if (message.author.id !== EPSYS_ID) {
+            await message.reply("Cette commande est réservée à Epsys.");
+            return true;
+        }
+
+        // Annulation de l'ancienne session
+        session.termine = true;
+        penduBridge.demanderSauvegarde();
+
+        await message.reply("♻️ **Session Pendu précédente annulée !** Relance immédiate d'une nouvelle partie de 7 lettres...");
+        if (message.guild) {
+            await lancerPenduQuotidien(message.guild);
+        }
+        return true;
     }
 
     // 2. Commande principale !pendu

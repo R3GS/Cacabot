@@ -210,6 +210,8 @@ async function envoyerMotusQuotidien(guild, heureSession = 10) {
         messageId: null
     };
 
+    minijeuxBridge.setMotusData(nouvelleData);
+
     const embed = buildMotusEmbed(mot, dateKey, longueur);
     embed.setDescription(`📢 **Alerte :** <@&1558966826564845590>\n\n` + embed.data.description);
 
@@ -329,13 +331,17 @@ async function handleMotusMessage(message, response, client, helpers) {
         }
     }
 
-    if (message.channel.id === MOTUS_CHANNEL_ID && !message.content.startsWith('!')) {
+    // Vérification salon Motus (officiel ou salon dédié aux mini-jeux)
+    const estSalonMotus = message.channel.id === MOTUS_CHANNEL_ID || message.channel.id === '1556089022718152764';
+    if (estSalonMotus && !message.content.startsWith('!')) {
         const now = Date.now();
-        if (!motusData.mot || motusData.termine || (motusData.expireAt && now >= motusData.expireAt)) {
-            if (!motusData.termine && motusData.expireAt && now >= motusData.expireAt) {
-                motusData.termine = true;
-                minijeuxBridge.demanderSauvegarde();
-            }
+        
+        // Si aucune partie n'est chargée ou expirée
+        if (!motusData.mot) return false;
+        if (motusData.termine) return false;
+        if (motusData.expireAt && now >= motusData.expireAt) {
+            motusData.termine = true;
+            minijeuxBridge.demanderSauvegarde();
             return false;
         }
 
@@ -343,7 +349,7 @@ async function handleMotusMessage(message, response, client, helpers) {
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
             .replace(/[^A-Z]/g, "");
 
-        const longueurAttendue = motusData.longueur || 6;
+        const longueurAttendue = motusData.longueur || (motusData.mot ? motusData.mot.length : 6);
 
         if (rawGuess.length === longueurAttendue) {
             const motDuJour = motusData.mot;
@@ -441,6 +447,28 @@ async function handleMotusMessage(message, response, client, helpers) {
                 return true;
             }
         }
+    }
+
+    // Commande de redémarrage d'urgence Motus (Epsys-only)
+    if (cmd === '!motus' && rawContent.split(/\s+/)[1]?.toLowerCase() === 'restart') {
+        if (message.author.id !== EPSYS_ID) {
+            await message.reply("Cette commande est réservée à Epsys.");
+            return true;
+        }
+
+        const nowParis = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+        const heureActuelle = nowParis.getHours();
+        const heureSession = (heureActuelle >= 19) ? 19 : 10;
+
+        // Annulation de l'ancienne session
+        motusData.termine = true;
+        minijeuxBridge.demanderSauvegarde();
+
+        await message.reply(`♻️ **Session Motus précédente annulée !** Relance immédiate d'une nouvelle partie (${heureSession === 19 ? '7 lettres' : '6 lettres'})...`);
+        if (message.guild) {
+            await envoyerMotusQuotidien(message.guild, heureSession);
+        }
+        return true;
     }
 
     if (response?.needsMotus) {
@@ -1004,6 +1032,25 @@ async function handleRebusMessage(message, response, client, helpers) {
             await message.channel.send({ content: '🔔 **Rappel du rébus à deviner :**', embeds: [embedRappel] });
         }
         return false;
+    }
+
+    // Commande de redémarrage d'urgence Rébus (Epsys-only)
+    if (cmd === '!rebus' && rawContent.split(/\s+/)[1]?.toLowerCase() === 'restart') {
+        if (message.author.id !== EPSYS_ID) {
+            await message.reply("Cette commande est réservée à Epsys.");
+            return true;
+        }
+
+        // Annulation et nettoyage complet de l'ancienne session
+        if (rebusSession.timer) clearTimeout(rebusSession.timer);
+        rebusSession.active = false;
+        rebusSession.currentItem = null;
+
+        await message.reply("♻️ **Session Rébus précédente annulée !** Relance immédiate d'une nouvelle partie (5 manches)...");
+        if (message.guild) {
+            await lancerSessionRebus(message.guild);
+        }
+        return true;
     }
 
     // 2. Commande !rebus
