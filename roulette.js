@@ -2588,7 +2588,7 @@ async function handleRouletteButton(interaction, client) {
         rouletteNotifs.set(userId, 'MP');
         armerNotifRoulette(userId, 'MP', client);
         bridge.demanderSauvegarde();
-        await interaction.reply({ content: `🔔 Noté ! Je t'enverrai un message privé dès la fin de ton cooldown <t:${Math.ceil(fin / 1000)}:R>.`, ephemeral: true });
+        await interaction.reply({ content: `🔔 Noté ! Si tes MP sont ouverts, je t'enverrai un message dès la fin de ton cooldown <t:${Math.ceil(fin / 1000)}:R> (si tes MP sont fermés, tu risques de ne rien recevoir).`, ephemeral: true });
         return true;
     }
 
