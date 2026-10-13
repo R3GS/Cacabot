@@ -2208,12 +2208,14 @@ async function handleRouletteMessage(message, response, client) {
             // failIfNotExists: false permet de poster dans le salon même si le membre a supprimé son message
             const { MessageFlags } = require('discord.js');
             const envoye = await message.reply({ 
+                content: '@silent',
                 embeds: resultat.embeds, 
                 components: resultat.components,
                 flags: [MessageFlags.SuppressNotifications],
                 allowedMentions: { repliedUser: false },
                 failIfNotExists: false 
             }).catch(() => message.channel.send({ 
+                content: '@silent',
                 embeds: resultat.embeds, 
                 components: resultat.components,
                 flags: [MessageFlags.SuppressNotifications]
@@ -2241,12 +2243,14 @@ async function handleRouletteMessage(message, response, client) {
         );
         const { MessageFlags } = require('discord.js');
         await message.reply({ 
+            content: '@silent',
             embeds: [embed], 
             components: [row], 
             flags: [MessageFlags.SuppressNotifications],
             allowedMentions: { repliedUser: false },
             failIfNotExists: false 
         }).catch(() => message.channel.send({ 
+            content: '@silent',
             embeds: [embed], 
             components: [row],
             flags: [MessageFlags.SuppressNotifications]
