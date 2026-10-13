@@ -495,13 +495,14 @@ function armerNotifRoulette(userId, channelId, client) {
         return;
     }
 
-    // Si le cooldown est fini depuis plus de 10 secondes au boot, on purge sans ping fantôme
-    if (now >= fin && (now - fin > 10000)) {
+    // Si le cooldown est fini depuis plus de 2 heures, on purge (évite de spammer les vieux tirages de la veille)
+    if (now >= fin && (now - fin > 2 * 60 * 60 * 1000)) {
         rouletteNotifs.delete(userId);
         bridge.demanderSauvegarde();
         return;
     }
 
+    // Si le cooldown s'est terminé pendant le redémarrage (moins de 2h), delai sera 0 et le MP partira direct !
     const delai = Math.max(fin - now, 0);
 
     const timer = setTimeout(async () => {
@@ -2736,6 +2737,13 @@ async function handleRoulettePseudoLock(oldMember, newMember) {
     }
 }
 
+function restaurerNotifsRoulette(client) {
+    if (!client) return;
+    for (const [userId, channelId] of rouletteNotifs.entries()) {
+        armerNotifRoulette(userId, channelId, client);
+    }
+}
+
 module.exports = {
     ROULETTE_ETATS,
     initRouletteBridge,
@@ -2743,6 +2751,7 @@ module.exports = {
     initialiserWebhooksRoulette,
     assurerWebhookRoulette,
     armerNotifRoulette,
+    restaurerNotifsRoulette,
     deverrouillerSucces,
     rouletteNotifs,
     rouletteAntiFeurUntil,
