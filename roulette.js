@@ -988,15 +988,19 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             return `🛡️ **${auteurNom}** gagne **1 charge de bouclier** (${total} en réserve) : son prochain malus sera annulé !`;
         }
         case 'bonus-redirect-choix': {
-            await message.channel.send(`🎯 **${auteurNom}**, tu as gagné le pouvoir de choisir qui prendra ton prochain malus à ta place !\nMentionne la personne de ton choix avec **@membre** dans ce salon (tu as **5 minutes**).`);
+            const { MessageFlags } = require('discord.js');
+            await message.channel.send({ content: `🎯 **${auteurNom}**, tu as gagné le pouvoir de choisir qui prendra ton prochain malus à ta place !\nMentionne un·e membre possédant le rôle <@&${ROULETTE_ROLE_JOUEUR_ID}> dans les **5 minutes**.`, flags: [MessageFlags.SuppressNotifications] });
             const collector = message.channel.createMessageCollector({
                 filter: m => m.author.id === member.id && m.mentions.members.first(),
                 time: 5 * 60 * 1000, max: 1
             });
             collector.on('collect', (m) => {
                 const cibleChoisie = m.mentions.members.first();
+                if (!cibleChoisie.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID)) {
+                    return message.channel.send({ content: `❌ **${cibleChoisie.displayName}** n'a pas le rôle roulette (<@&${ROULETTE_ROLE_JOUEUR_ID}>) ! Choisis quelqu'un qui participe à la roulette.`, flags: [MessageFlags.SuppressNotifications] });
+                }
                 rouletteRedirectChoixCible.set(member.id, cibleChoisie.id);
-                message.channel.send(`✅ C'est enregistré ! Le prochain malus de **${auteurNom}** sera automatiquement envoyé à **${cibleChoisie.displayName}** !`);
+                message.channel.send({ content: `✅ C'est enregistré ! Le prochain malus de **${auteurNom}** sera automatiquement envoyé à **${cibleChoisie.displayName}** !`, flags: [MessageFlags.SuppressNotifications] });
             });
             return `🎯 **${auteurNom}** a gagné une redirection de malus au choix !`;
         }
@@ -1516,13 +1520,21 @@ async function envoyerHallOfFame(guild, membre, entry) {
     }).catch(() => {});
 }
 
+const ROULETTE_ROLE_JOUEUR_ID = '1558968669751615528';
+
 function membresTop30Roulette(guild, authorId) {
-    return Object.entries(bridge.topData.messages || {})
+    const estEligible = (m) => m && !m.user.bot && m.id !== authorId && m.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID);
+
+    const candidatsTop = Object.entries(bridge.topData.messages || {})
         .sort((a, b) => b[1] - a[1])
         .map(([id]) => guild.members.cache.get(id))
-        .filter(m => m && !m.user.bot)
-        .slice(0, 30)
-        .filter(m => m.id !== authorId);
+        .filter(estEligible)
+        .slice(0, 30);
+
+    if (candidatsTop.length > 0) return candidatsTop;
+
+    // Fallback : n'importe quel membre du serveur qui possède le rôle roulette
+    return [...guild.members.cache.filter(estEligible).values()];
 }
 
 async function envoyerPingRedirection(channel, resultat) {
@@ -2208,14 +2220,12 @@ async function handleRouletteMessage(message, response, client) {
             // failIfNotExists: false permet de poster dans le salon même si le membre a supprimé son message
             const { MessageFlags } = require('discord.js');
             const envoye = await message.reply({ 
-                content: '@silent',
                 embeds: resultat.embeds, 
                 components: resultat.components,
                 flags: [MessageFlags.SuppressNotifications],
                 allowedMentions: { repliedUser: false },
                 failIfNotExists: false 
             }).catch(() => message.channel.send({ 
-                content: '@silent',
                 embeds: resultat.embeds, 
                 components: resultat.components,
                 flags: [MessageFlags.SuppressNotifications]
