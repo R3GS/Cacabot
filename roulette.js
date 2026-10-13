@@ -553,8 +553,7 @@ function armerNotifRoulette(userId, channelId, client) {
         );
         await salon.send({
             content: `🎰 <@${userId}>, ton cooldown roulette est terminé ! Clique ci-dessous pour relancer immédiatement :`,
-            components: [row],
-            flags: [MessageFlags.SuppressNotifications]
+            components: [row]
         }).catch(() => {});
     }, Math.min(delai, 2 ** 31 - 1));
 
