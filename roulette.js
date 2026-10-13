@@ -563,7 +563,7 @@ function armerNotifRoulette(userId, channelId, client) {
 function buildRowResultatRoulette(authorId, outcomeId, failIndex) {
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`roulette_notif_${authorId}`).setLabel('🔔 Me prévenir').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`roulette_notif_${authorId}`).setLabel('🔔 Me prévenir ici').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`roulette_notifmp_${authorId}`).setLabel('🔔 Me prévenir par MP').setStyle(ButtonStyle.Secondary)
     );
 }
