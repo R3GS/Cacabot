@@ -526,6 +526,24 @@ function armerNotifRoulette(userId, channelId, client) {
             return armerNotifRoulette(userId, channelId, client);
         }
 
+        // Si la notification a été demandée en MP
+        if (channelId === 'MP') {
+            const user = await client.users.fetch(userId).catch(() => null);
+            if (!user) return;
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setLabel('🎰 Aller au salon #roulette')
+                    .setStyle(ButtonStyle.Link)
+                    .setURL('https://discord.com/channels/720057528351850547/1553954760900608091')
+            );
+            await user.send({
+                content: `🎰 <@${userId}>, ton cooldown roulette sur **Regaïa** est terminé ! Tu peux relancer un tirage dès maintenant :`,
+                components: [row]
+            }).catch(() => {});
+            return;
+        }
+
         const salon = await client.channels.fetch(channelId).catch(() => null);
         if (!salon) return;
 
@@ -546,7 +564,8 @@ function armerNotifRoulette(userId, channelId, client) {
 function buildRowResultatRoulette(authorId, outcomeId, failIndex) {
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`roulette_notif_${authorId}`).setLabel('🔔 Me prévenir').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`roulette_notif_${authorId}`).setLabel('🔔 Me prévenir').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`roulette_notifmp_${authorId}`).setLabel('🔔 Me prévenir par MP').setStyle(ButtonStyle.Secondary)
     );
 }
 
@@ -736,35 +755,49 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             rouletteCoupTripleCharges.set(member.id, totalCharges);
             return `🎰 **${auteurNom}** décroche le **COUP TRIPLE** ! **3 tirages supplémentaires** immédiats et sans aucun cooldown (${totalCharges} en réserve) !`;
         }
-        case 'bonus-twitch-jeu':
-            await message.channel.send(`Bravo ! Tu as gagné le choix du jeu du prochain stream Twitch (jeu court uniquement) ! <@${bridge.EPSYS_ID}> viendra te voir pour en discuter✨`);
-            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
+        case 'bonus-twitch-jeu': {
+            const { MessageFlags } = require('discord.js');
+            await message.channel.send({ content: `Bravo ! Tu as gagné le choix du jeu du prochain stream Twitch (jeu court uniquement) ! <@${bridge.EPSYS_ID}> viendra te voir pour en discuter✨`, flags: [MessageFlags.SuppressNotifications] });
+            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"], flags: [MessageFlags.SuppressNotifications] }).catch(() => {});
             return `**${auteurNom}** a gagné le choix du jeu du prochain stream !`;
-        case 'bonus-commande-perso':
-            await message.channel.send(`Bravo ! Tu as gagné le droit d'ajouter une commande de ton choix à Cacabot (modifiable par les admins) ! <@${bridge.EPSYS_ID}> viendra te voir pour en discuter✨`);
-            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
+        }
+        case 'bonus-commande-perso': {
+            const { MessageFlags } = require('discord.js');
+            await message.channel.send({ content: `Bravo ! Tu as gagné le droit d'ajouter une commande de ton choix à Cacabot (modifiable par les admins) ! <@${bridge.EPSYS_ID}> viendra te voir pour en discuter✨`, flags: [MessageFlags.SuppressNotifications] });
+            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"], flags: [MessageFlags.SuppressNotifications] }).catch(() => {});
             return `**${auteurNom}** a gagné une commande Cacabot personnalisée !`;
-        case 'bonus-epsys-5e':
+        }
+        case 'bonus-epsys-5e': {
+            const { MessageFlags } = require('discord.js');
             deverrouillerSucces(member.id, 'argent-epsys', message.channel);
-            await message.channel.send(`Bravo ! Tu as gagné 5€ de la YouTube Money d'Epsys ! <@${bridge.EPSYS_ID}> viendra te voir pour en discuter✨`);
-            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
+            await message.channel.send({ content: `Bravo ! Tu as gagné 5€ de la YouTube Money d'Epsys ! <@${bridge.EPSYS_ID}> viendra te voir pour en discuter✨`, flags: [MessageFlags.SuppressNotifications] });
+            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"], flags: [MessageFlags.SuppressNotifications] }).catch(() => {});
             return `**${auteurNom}** a gagné 5€ !`;
-        case 'bonus-epsys-photo':
-            await message.channel.send(`Bravo ! Tu as gagné une photo disgracieuse d'Epsys signée et envoyée chez toi par la Poste ! <@${bridge.EPSYS_ID}> viendra te voir pour en discuter✨`);
-            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
+        }
+        case 'bonus-epsys-photo': {
+            const { MessageFlags } = require('discord.js');
+            await message.channel.send({ content: `Bravo ! Tu as gagné une photo disgracieuse d'Epsys signée et envoyée chez toi par la Poste ! <@${bridge.EPSYS_ID}> viendra te voir pour en discuter✨`, flags: [MessageFlags.SuppressNotifications] });
+            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"], flags: [MessageFlags.SuppressNotifications] }).catch(() => {});
             return `**${auteurNom}** a gagné une photo disgracieuse d'Epsys !`;
-        case 'bonus-youtube-credit':
-            await message.channel.send(`WOW, ça c'est de la chance ! Ton pseudo crédité sous chaque vidéo YouTube d'Epsys à partir d'aujourd'hui ! <@${bridge.EPSYS_ID}> viendra te voir pour en discuter✨`);
-            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
+        }
+        case 'bonus-youtube-credit': {
+            const { MessageFlags } = require('discord.js');
+            await message.channel.send({ content: `WOW, ça c'est de la chance ! Ton pseudo crédité sous chaque vidéo YouTube d'Epsys à partir d'aujourd'hui ! <@${bridge.EPSYS_ID}> viendra te voir pour en discuter✨`, flags: [MessageFlags.SuppressNotifications] });
+            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"], flags: [MessageFlags.SuppressNotifications] }).catch(() => {});
             return `**${auteurNom}** a gagné un crédit YouTube !`;
-        case 'bonus-epsys-goodies':
-            await message.channel.send(`Bravo ! Tu as gagné un goodie Epsys gratuit au choix (T-Shirt/Mug/Lot de 5 pin's) ! <@${bridge.EPSYS_ID}> viendra te voir pour en discuter✨`);
-            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
+        }
+        case 'bonus-epsys-goodies': {
+            const { MessageFlags } = require('discord.js');
+            await message.channel.send({ content: `Bravo ! Tu as gagné un goodie Epsys gratuit au choix (T-Shirt/Mug/Lot de 5 pin's) ! <@${bridge.EPSYS_ID}> viendra te voir pour en discuter✨`, flags: [MessageFlags.SuppressNotifications] });
+            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"], flags: [MessageFlags.SuppressNotifications] }).catch(() => {});
             return `**${auteurNom}** a gagné un goodie Epsys !`;
-        case 'bonus-epsys-petitdej':
-            await message.channel.send(`QUOI ?? Je pensais même pas que quelqu'un pouvait l'avoir ! Lors d'une prochaine convention ou rencontre IRL, Epsys devra t'apporter un petit déjeuner en maid dress x) <@${bridge.EPSYS_ID}> viendra te voir pour en discuter✨`);
-            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"] }).catch(() => {});
+        }
+        case 'bonus-epsys-petitdej': {
+            const { MessageFlags } = require('discord.js');
+            await message.channel.send({ content: `QUOI ?? Je pensais même pas que quelqu'un pouvait l'avoir ! Lors d'une prochaine convention ou rencontre IRL, Epsys devra t'apporter un petit déjeuner en maid dress x) <@${bridge.EPSYS_ID}> viendra te voir pour en discuter✨`, flags: [MessageFlags.SuppressNotifications] });
+            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"], flags: [MessageFlags.SuppressNotifications] }).catch(() => {});
             return `**${auteurNom}** a gagné le petit déj légendaire !`;
+        }
         case 'bonus-elu-roulette': {
             const roleId = '1553670290448457829';
             if (member.roles.cache.has(roleId)) return `**${auteurNom}** a déjà le rôle **Élu·e de la Roulette** — pas de doublon possible !`;
@@ -2159,8 +2192,17 @@ async function handleRouletteMessage(message, response, client) {
         if (direct) {
             const resultat = await tirerEtConstruireResultatRoulette(message.author.id, message.guild, message.channel, client);
             if (resultat.cooldown) {
-                const notifRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('roulette_notif').setLabel('🔔 Me prévenir').setStyle(ButtonStyle.Secondary));
-                await message.reply({ content: `Attends la fin du cooldown ! Il te reste **${resultat.reste} minute${resultat.reste > 1 ? 's' : ''}**.`, components: [notifRow] });
+                const { MessageFlags } = require('discord.js');
+                const notifRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('roulette_notif').setLabel('🔔 Me prévenir').setStyle(ButtonStyle.Secondary),
+                    new ButtonBuilder().setCustomId('roulette_notif_mp').setLabel('🔔 Me prévenir par MP').setStyle(ButtonStyle.Secondary)
+                );
+                await message.reply({ 
+                    content: `Attends la fin du cooldown ! Il te reste **${resultat.reste} minute${resultat.reste > 1 ? 's' : ''}**.`, 
+                    components: [notifRow],
+                    flags: [MessageFlags.SuppressNotifications],
+                    allowedMentions: { repliedUser: false }
+                });
                 return true;
             }
             // failIfNotExists: false permet de poster dans le salon même si le membre a supprimé son message
@@ -2539,6 +2581,18 @@ async function handleRouletteButton(interaction, client) {
         await interaction.update({ embeds: [embed], components: [row] });
         return true;
     }
+    if (customId.startsWith('roulette_notif_mp') || customId.startsWith('roulette_notifmp_')) {
+        const userId = interaction.user.id;
+        const fin = rouletteCooldowns.get(userId) ?? 0;
+        if (Date.now() >= fin) return interaction.reply({ content: "Ton cooldown est déjà terminé ! 🎰", ephemeral: true });
+        if (rouletteNotifs.has(userId)) return interaction.reply({ content: "Tu as déjà demandé à être prévenu·e pour ce cooldown !", ephemeral: true });
+        rouletteNotifs.set(userId, 'MP');
+        armerNotifRoulette(userId, 'MP', client);
+        bridge.demanderSauvegarde();
+        await interaction.reply({ content: `🔔 Noté ! Je t'enverrai un message privé dès la fin de ton cooldown <t:${Math.ceil(fin / 1000)}:R>.`, ephemeral: true });
+        return true;
+    }
+
     if (customId.startsWith('roulette_notif')) {
         const userId = interaction.user.id;
         const fin = rouletteCooldowns.get(userId) ?? 0;
@@ -2546,6 +2600,7 @@ async function handleRouletteButton(interaction, client) {
         if (rouletteNotifs.has(userId)) return interaction.reply({ content: "Tu seras déjà ping dès la fin de ton cooldown !", ephemeral: true });
         rouletteNotifs.set(userId, interaction.channelId);
         armerNotifRoulette(userId, interaction.channelId, client);
+        bridge.demanderSauvegarde();
         await interaction.reply({ content: `🔔 Noté ! Je te ping ici <t:${Math.ceil(fin / 1000)}:R>.`, ephemeral: true });
         return true;
     }
