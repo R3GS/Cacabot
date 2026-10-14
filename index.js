@@ -1,8 +1,4 @@
-// require('dotenv').config();
-// Le bot est fermé jusqu'à nouvel ordre
-// Pas de raison à donner
-// Un simple stop
-// Ça reprendra quand ça reprendra
+require('dotenv').config();
 
 let topData = { messages: {} };
 let birthdayData = { birthdays: {}, channels: {} };
@@ -2439,4 +2435,8 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     await handleVoiceStateUpdate(oldState, newState);
 });
 
-client.login(process.env.TOKEN);
+// client.login(process.env.TOKEN);
+// Le bot est fermé jusqu'à nouvel ordre
+// Pas de raison à donner
+// Un simple stop
+// Ça reprendra quand ça reprendra
