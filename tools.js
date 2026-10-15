@@ -397,10 +397,53 @@ async function handleToolsMessage(message, response, client) {
     // !say (Epsys-only)
     if (command === '!say' || response?.needsSay) {
         if (message.author.id !== EPSYS_ID) return true;
-        const texte = raw.slice(4).trim();
-        if (!texte) return message.reply("Usage : `!say [ton texte]`");
+
+        const args = raw.split(/\s+/);
+        if (args.length < 2 && message.attachments.size === 0) {
+            return message.reply("Usage : `!say [#salon ou ID_salon] [message]` (ou `!say [message]` dans le salon actuel)");
+        }
+
+        const firstArg = args[1] || '';
+        let targetChannel = null;
+
+        // 1. Mention Discord : #salon (<#123...>)
+        if (message.mentions.channels.first()) {
+            targetChannel = message.mentions.channels.first();
+        }
+        // 2. Par ID de salon direct : 1553954760900608091
+        else if (/^\d{17,20}$/.test(firstArg)) {
+            targetChannel = message.guild?.channels.cache.get(firstArg) 
+                         ?? await message.client.channels.fetch(firstArg).catch(() => null);
+        }
+        // 3. Par nom tapé avec ou sans # : #roulette ou roulette
+        else if (firstArg) {
+            const cleanName = firstArg.replace(/^#/, '').toLowerCase();
+            targetChannel = message.guild?.channels.cache.find(c => 
+                c.isTextBased() && c.name.toLowerCase() === cleanName
+            );
+        }
+
+        let texteToSend = '';
+        if (targetChannel) {
+            texteToSend = args.slice(2).join(' ');
+        } else {
+            // Si aucun salon n'a été spécifié, on envoie dans le salon actuel
+            targetChannel = message.channel;
+            texteToSend = raw.slice(4).trim();
+        }
+
+        const attachments = [...message.attachments.values()].map(a => a.url);
+        if (!texteToSend && attachments.length === 0) {
+            return message.reply("Précise un message ou ajoute une image à envoyer !");
+        }
+
         await message.delete().catch(() => {});
-        await message.channel.send(texte);
+        await targetChannel.send({
+            content: texteToSend || undefined,
+            files: attachments.length > 0 ? attachments : undefined
+        }).catch(err => {
+            message.channel.send(`❌ Impossible d'envoyer le message dans ce salon : ${err.message}`);
+        });
         return true;
     }
 

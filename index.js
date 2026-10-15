@@ -2435,8 +2435,4 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     await handleVoiceStateUpdate(oldState, newState);
 });
 
-// client.login(process.env.TOKEN);
-// Le bot est fermé jusqu'à nouvel ordre
-// Pas de raison à donner
-// Un simple stop
-// Ça reprendra quand ça reprendra
+client.login(process.env.TOKEN);

@@ -989,7 +989,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         }
         case 'bonus-redirect-choix': {
             const { MessageFlags } = require('discord.js');
-            await message.channel.send({ content: `🎯 **${auteurNom}**, tu as gagné le pouvoir de choisir qui prendra ton prochain malus à ta place !\nMentionne un·e membre possédant le rôle <@&${ROULETTE_ROLE_JOUEUR_ID}> dans les **5 minutes**.`, flags: [MessageFlags.SuppressNotifications] });
+            await message.channel.send({ content: `🎯 **${auteurNom}**, tu as gagné le pouvoir de choisir qui prendra ton prochain malus à ta place !\nMentionne un·e membre du salon dans les **5 minutes**.`, flags: [MessageFlags.SuppressNotifications] });
             const collector = message.channel.createMessageCollector({
                 filter: m => m.author.id === member.id && m.mentions.members.first(),
                 time: 5 * 60 * 1000, max: 1
@@ -997,7 +997,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             collector.on('collect', (m) => {
                 const cibleChoisie = m.mentions.members.first();
                 if (!cibleChoisie.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID)) {
-                    return message.channel.send({ content: `❌ **${cibleChoisie.displayName}** n'a pas le rôle roulette (<@&${ROULETTE_ROLE_JOUEUR_ID}>) ! Choisis quelqu'un qui participe à la roulette.`, flags: [MessageFlags.SuppressNotifications] });
+                    return message.channel.send({ content: `❌ **${cibleChoisie.displayName}** n'a pas le rôle de la roulette ! Choisis quelqu'un qui participe à la roulette.`, flags: [MessageFlags.SuppressNotifications] });
                 }
                 rouletteRedirectChoixCible.set(member.id, cibleChoisie.id);
                 message.channel.send({ content: `✅ C'est enregistré ! Le prochain malus de **${auteurNom}** sera automatiquement envoyé à **${cibleChoisie.displayName}** !`, flags: [MessageFlags.SuppressNotifications] });
@@ -2253,14 +2253,12 @@ async function handleRouletteMessage(message, response, client) {
         );
         const { MessageFlags } = require('discord.js');
         await message.reply({ 
-            content: '@silent',
             embeds: [embed], 
             components: [row], 
             flags: [MessageFlags.SuppressNotifications],
             allowedMentions: { repliedUser: false },
             failIfNotExists: false 
         }).catch(() => message.channel.send({ 
-            content: '@silent',
             embeds: [embed], 
             components: [row],
             flags: [MessageFlags.SuppressNotifications]
