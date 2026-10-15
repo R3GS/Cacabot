@@ -916,7 +916,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             const nbB = typeof rawB === 'number' ? rawB : (rawB ? 1 : 0);
             rouletteBouclierActif.delete(member.id);
             if (nbB > 0) return `🪓 **${auteurNom}** subit le **BRISE-BOUCLIER** : ses **${nbB} charge${nbB > 1 ? 's' : ''} de bouclier** sont réduites en miettes !`;
-            return `🪓 **${auteurNom}** subit le **BRISE-BOUCLIER** ! Heureusement, il/elle n'avait aucun bouclier en réserve... mais la menace était bien réelle !`;
+            return `🪓 **${auteurNom}** subit le **BRISE-BOUCLIER** ! Heureusement, **${auteurNom}** n'avait aucun bouclier en réserve... mais la menace était bien réelle !`;
         }
         case 'malus-existentiel':
             if (basculerTransfo(member.id, 'existentiel', 3 * 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur la **crise existentielle** : le malus est **annulé** !`;
@@ -1783,7 +1783,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
                 cibleNom = cible.displayName;
                 deverrouillerSucces(authorId, 'sniper-impitoyable', channel);
                 prefixeRedirect = `🎯 **${auteurNom}** avait choisi de rediriger son malus, envoyé vers **${cibleNom}** !\n`;
-                pingRedirection = { id: cible.id, raison: " quelqu'un a choisi de te l'envoyer.." };
+                pingRedirection = { id: cible.id, raison: " quelqu'un a choisi de te l'envoyer !" };
             }
         } else {
             const charges = rouletteRedirectCharges.get(authorId) || 0;
@@ -1794,7 +1794,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
                     cibleNom = cible.displayName;
                     rouletteRedirectCharges.set(authorId, charges - 1);
                     prefixeRedirect = `😈 **${auteurNom}** avait un malus en réserve, redirigé vers **${cibleNom}** !\n`;
-                    pingRedirection = { id: cible.id, raison: 'il/elle avait un malus en réserve' };
+                    pingRedirection = { id: cible.id, raison: '**${auteurNom}** avait un malus en réserve' };
                 }
             }
         }
