@@ -1794,7 +1794,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
                     cibleNom = cible.displayName;
                     rouletteRedirectCharges.set(authorId, charges - 1);
                     prefixeRedirect = `😈 **${auteurNom}** avait un malus en réserve, redirigé vers **${cibleNom}** !\n`;
-                    pingRedirection = { id: cible.id, raison: '**${auteurNom}** avait un malus en réserve' };
+                    pingRedirection = { id: cible.id, raison: 'iel avait un malus en réserve' };
                 }
             }
         }
@@ -1862,7 +1862,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         embeds: proxy.vote ? [buildVoteRouletteEmbed(proxy.vote)] : [embed],
         components: [buildRowResultatRoulette(authorId, outcomeId, failIndex)],
         vote: proxy.vote ?? null,
-        pingCible: pingRedirection ? { id: pingRedirection.id, texte: `🔔 <@${pingRedirection.id}>, **${auteurNom}** t'a redirigé le malus **${ROULETTE_NOMS[outcomeId]}** (${pingRedirection.raison}) !` } : null,
+        pingCible: pingRedirection ? { id: pingRedirection.id, texte: `🔔 <@${pingRedirection.id}>, **${auteurNom}** t'a redirigé le malus **${ROULETTE_NOMS[outcomeId]}** !` } : null,
         differe: differe ? async () => {
             await differe.action();
             return buildRouletteResultEmbed(outcomeId, prefixeRedirect + differe.texteFinal);
