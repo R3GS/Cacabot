@@ -58,7 +58,8 @@ function buildHelpxCategorieEmbed(categorie) {
         return embed.setTitle('👥 Commandes pour les autres membres')
             .addFields(
                 { name: '⏰ **!rappel [ID] Xmin/h [message]**', value: 'Programmer un rappel pour un membre précis par son ID.' },
-                { name: '📝 **!setmessages @Membre [nombre]**', value: 'Définir manuellement le compteur de messages d\'un membre.' }
+                { name: '📝 **!setmessages @Membre [nombre]**', value: 'Définir manuellement le compteur de messages d\'un membre.' },
+                { name: '🎮 **!jeupts [@membre]**', value: 'Panneau interactif complet pour modifier les points/victoires de Motus, Rébus et Pendu.' }
             );
     }
 

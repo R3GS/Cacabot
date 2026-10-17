@@ -402,6 +402,8 @@ initMinijeuxState({
     setMotusStats: (s) => { motusStats = s; },
     getRebusStats: () => rebusStats,
     setRebusStats: (s) => { rebusStats = s; },
+    getPenduStats: () => penduStats,
+    setPenduStats: (s) => { penduStats = s; },
     demanderSauvegarde: () => demanderSauvegarde(),
     trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta)
 });

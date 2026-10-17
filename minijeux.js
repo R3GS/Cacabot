@@ -1,4 +1,8 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { 
+    EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle,
+    StringSelectMenuBuilder, UserSelectMenuBuilder,
+    ModalBuilder, TextInputBuilder, TextInputStyle 
+} = require('discord.js');
 
 const MOTUS_CHANNEL_ID = '1559041936256409650';
 const REBUS_CHANNEL_ID = '1556089022718152764';
@@ -15,6 +19,8 @@ let minijeuxBridge = {
     setMotusStats: () => {},
     getRebusStats: () => ({}),
     setRebusStats: () => {},
+    getPenduStats: () => ({}),
+    setPenduStats: () => {},
     demanderSauvegarde: () => {},
     trackBattlePassProgress: () => {}
 };
@@ -261,6 +267,26 @@ async function handleMotusMessage(message, response, client, helpers) {
     const motusStats = minijeuxBridge.getMotusStats();
     const rawContent = message.content.trim();
     const cmd = rawContent.split(/\s+/)[0]?.toLowerCase();
+
+    // Commande Panneau de Gestion des Scores (Epsys-only)
+    if (cmd === '!jeupts' || cmd === '!points') {
+        if (message.author.id !== EPSYS_ID) {
+            await message.reply("Cette commande est réservée à Epsys.");
+            return true;
+        }
+
+        let cible = message.mentions.members.first();
+        if (!cible) {
+            const query = rawContent.split(/\s+/).slice(1).join(" ");
+            if (query && helpers?.findMemberByName) cible = helpers.findMemberByName(message.guild, query).found;
+        }
+        const targetId = cible ? cible.id : message.author.id;
+
+        const embed = buildJeuPtsEmbed(message.guild, targetId, 'motus_victoires');
+        const rows = buildJeuPtsComponents(targetId, 'motus_victoires');
+        await message.reply({ embeds: [embed], components: rows });
+        return true;
+    }
 
     // Commande de test Motus (Epsys-only)
     if (cmd === '!motustest') {
@@ -514,6 +540,11 @@ async function handleMotusMessage(message, response, client, helpers) {
 }
 
 async function handleMotusButton(interaction) {
+    // 1. Interceptions du panneau interactif !jeupts (Epsys-only)
+    if (interaction.customId && interaction.customId.startsWith('jeupts_')) {
+        return await handleJeuPtsInteraction(interaction);
+    }
+
     if (!interaction.isButton()) return false;
 
     if (interaction.customId.startsWith('stop_test_motus_')) {
@@ -1147,6 +1178,215 @@ async function handleRebusSlash(interaction) {
         const cible = interaction.options.getUser('membre') ?? interaction.user;
         const member = interaction.guild?.members.cache.get(cible.id) ?? interaction.member;
         return interaction.reply({ embeds: [buildRebusStatsEmbed(member)] });
+    }
+
+    return false;
+}
+
+// ==========================================
+//   LOGIQUE DU PANNEAU !JEUPTS (EPSYS-ONLY)
+// ==========================================
+
+const JEUPTS_LABELS = {
+    'motus_victoires': '🟩 Motus — Victoires',
+    'motus_parties': '🟩 Motus — Parties jouées',
+    'rebus_points': '🧩 Rébus — Points totaux',
+    'rebus_victoires': '🧩 Rébus — Victoires de session',
+    'rebus_parties': '🧩 Rébus — Parties jouées',
+    'pendu_points': '🪢 Pendu — Points totaux',
+    'pendu_victoires': '🪢 Pendu — Victoires',
+    'pendu_parties': '🪢 Pendu — Parties jouées'
+};
+
+function buildJeuPtsEmbed(guild, targetUserId, selectedStat = 'motus_victoires') {
+    const member = guild?.members.cache.get(targetUserId);
+    const nom = member?.displayName || `<@${targetUserId}>`;
+    const avatar = member?.user?.displayAvatarURL({ dynamic: true, size: 256 }) || null;
+
+    const motusStats = minijeuxBridge.getMotusStats();
+    const rebusStats = minijeuxBridge.getRebusStats();
+    const penduStats = minijeuxBridge.getPenduStats ? minijeuxBridge.getPenduStats() : {};
+
+    const m = motusStats[targetUserId] ?? { victoires: 0, parties: 0 };
+    const r = rebusStats[targetUserId] ?? { points: 0, victoires: 0, parties: 0 };
+    const p = penduStats[targetUserId] ?? { points: 0, victoires: 0, parties: 0 };
+
+    const scoreGlobal = (m.victoires * 3) + r.points + p.points;
+
+    const embed = new EmbedBuilder()
+        .setColor(0xf1c40f)
+        .setTitle(`🎮 Gestionnaire des Scores — ${nom}`)
+        .setDescription(
+            `Panneau d'administration des scores de **${nom}**.\n\n` +
+            `👉 **Stat actuellement ciblée :** **${JEUPTS_LABELS[selectedStat] || 'Non définie'}**\n` +
+            `-# *Choisis un membre ou une stat dans les menus ci-dessous pour la modifier.*`
+        )
+        .addFields(
+            {
+                name: '🟩 MOTUS',
+                value: `• **Victoires :** \`${m.victoires}\`\n• **Parties :** \`${m.parties}\``,
+                inline: true
+            },
+            {
+                name: '🧩 RÉBUS REGAÏEN',
+                value: `• **Points :** \`${r.points}\`\n• **Victoires :** \`${r.victoires}\`\n• **Parties :** \`${r.parties}\``,
+                inline: true
+            },
+            {
+                name: '🪢 PENDU QUOTIDIEN',
+                value: `• **Points :** \`${p.points}\`\n• **Victoires :** \`${p.victoires}\`\n• **Parties :** \`${p.parties}\``,
+                inline: true
+            },
+            {
+                name: '🏆 SCORE GLOBAL DU SERVEUR',
+                value: `🌟 **${scoreGlobal} points cumulés**\n-# *(3 pts / vic. Motus • 1 pt / manche Rébus • 3 pts / vic. Pendu)*`,
+                inline: false
+            }
+        )
+        .setFooter({ text: 'Commande Epsys-Only • Sauvegarde automatique' })
+        .setTimestamp();
+
+    if (avatar) embed.setThumbnail(avatar);
+    return embed;
+}
+
+function buildJeuPtsComponents(targetUserId, selectedStat = 'motus_victoires') {
+    const rowUser = new ActionRowBuilder().addComponents(
+        new UserSelectMenuBuilder()
+            .setCustomId(`jeupts_user_${selectedStat}`)
+            .setPlaceholder('👤 Choisir un autre membre...')
+    );
+
+    const rowStat = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId(`jeupts_stat_${targetUserId}`)
+            .setPlaceholder('🎯 Choisir la statistique à modifier...')
+            .addOptions([
+                { label: '🟩 Motus : Victoires', value: 'motus_victoires', default: selectedStat === 'motus_victoires' },
+                { label: '🟩 Motus : Parties jouées', value: 'motus_parties', default: selectedStat === 'motus_parties' },
+                { label: '🧩 Rébus : Points totaux', value: 'rebus_points', default: selectedStat === 'rebus_points' },
+                { label: '🧩 Rébus : Victoires de session', value: 'rebus_victoires', default: selectedStat === 'rebus_victoires' },
+                { label: '🧩 Rébus : Parties jouées', value: 'rebus_parties', default: selectedStat === 'rebus_parties' },
+                { label: '🪢 Pendu : Points totaux', value: 'pendu_points', default: selectedStat === 'pendu_points' },
+                { label: '🪢 Pendu : Victoires', value: 'pendu_victoires', default: selectedStat === 'pendu_victoires' },
+                { label: '🪢 Pendu : Parties jouées', value: 'pendu_parties', default: selectedStat === 'pendu_parties' }
+            ])
+    );
+
+    const rowButtons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`jeupts_act_${targetUserId}_${selectedStat}_add1`).setLabel('➕ +1').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`jeupts_act_${targetUserId}_${selectedStat}_add5`).setLabel('➕ +5').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`jeupts_act_${targetUserId}_${selectedStat}_sub1`).setLabel('➖ -1').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`jeupts_openmodal_${targetUserId}_${selectedStat}`).setLabel('✏️ Définir...').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`jeupts_act_${targetUserId}_${selectedStat}_reset`).setLabel('🗑️ Remise à 0').setStyle(ButtonStyle.Danger)
+    );
+
+    return [rowUser, rowStat, rowButtons];
+}
+
+function modifierStatMiniJeu(targetUserId, statKey, action, valeurDirecte = null) {
+    const motusStats = minijeuxBridge.getMotusStats();
+    const rebusStats = minijeuxBridge.getRebusStats();
+    const penduStats = minijeuxBridge.getPenduStats ? minijeuxBridge.getPenduStats() : {};
+
+    if (!motusStats[targetUserId]) motusStats[targetUserId] = { victoires: 0, parties: 0 };
+    if (!rebusStats[targetUserId]) rebusStats[targetUserId] = { points: 0, victoires: 0, parties: 0 };
+    if (!penduStats[targetUserId]) penduStats[targetUserId] = { points: 0, victoires: 0, parties: 0, hebdo: {} };
+
+    let ref = null;
+    let prop = null;
+
+    if (statKey === 'motus_victoires') { ref = motusStats[targetUserId]; prop = 'victoires'; }
+    else if (statKey === 'motus_parties') { ref = motusStats[targetUserId]; prop = 'parties'; }
+    else if (statKey === 'rebus_points') { ref = rebusStats[targetUserId]; prop = 'points'; }
+    else if (statKey === 'rebus_victoires') { ref = rebusStats[targetUserId]; prop = 'victoires'; }
+    else if (statKey === 'rebus_parties') { ref = rebusStats[targetUserId]; prop = 'parties'; }
+    else if (statKey === 'pendu_points') { ref = penduStats[targetUserId]; prop = 'points'; }
+    else if (statKey === 'pendu_victoires') { ref = penduStats[targetUserId]; prop = 'victoires'; }
+    else if (statKey === 'pendu_parties') { ref = penduStats[targetUserId]; prop = 'parties'; }
+
+    if (!ref || !prop) return;
+
+    if (action === 'add1') ref[prop] = (ref[prop] || 0) + 1;
+    else if (action === 'add5') ref[prop] = (ref[prop] || 0) + 5;
+    else if (action === 'sub1') ref[prop] = Math.max(0, (ref[prop] || 0) - 1);
+    else if (action === 'reset') ref[prop] = 0;
+    else if (action === 'set' && valeurDirecte !== null) ref[prop] = Math.max(0, valeurDirecte);
+
+    minijeuxBridge.demanderSauvegarde();
+}
+
+async function handleJeuPtsInteraction(interaction) {
+    if (interaction.user.id !== EPSYS_ID) {
+        return interaction.reply({ content: "Ce panneau est réservé à Epsys 😌", ephemeral: true });
+    }
+
+    const id = interaction.customId;
+
+    // 1. Changement de membre (UserSelectMenu)
+    if (id.startsWith('jeupts_user_')) {
+        const selectedStat = id.replace('jeupts_user_', '');
+        const targetUserId = interaction.values[0];
+        const embed = buildJeuPtsEmbed(interaction.guild, targetUserId, selectedStat);
+        const components = buildJeuPtsComponents(targetUserId, selectedStat);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    // 2. Changement de stat ciblée (StringSelectMenu)
+    if (id.startsWith('jeupts_stat_')) {
+        const targetUserId = id.replace('jeupts_stat_', '');
+        const selectedStat = interaction.values[0];
+        const embed = buildJeuPtsEmbed(interaction.guild, targetUserId, selectedStat);
+        const components = buildJeuPtsComponents(targetUserId, selectedStat);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    // 3. Actions rapides par boutons (+1, +5, -1, reset)
+    if (id.startsWith('jeupts_act_')) {
+        const [, , targetUserId, selectedStat, action] = id.split('_');
+        modifierStatMiniJeu(targetUserId, selectedStat, action);
+        const embed = buildJeuPtsEmbed(interaction.guild, targetUserId, selectedStat);
+        const components = buildJeuPtsComponents(targetUserId, selectedStat);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    // 4. Ouverture de la Modal de saisie directe
+    if (id.startsWith('jeupts_openmodal_')) {
+        const [, , targetUserId, selectedStat] = id.split('_');
+        const modal = new ModalBuilder()
+            .setCustomId(`jeupts_submodal_${targetUserId}_${selectedStat}`)
+            .setTitle('Définir le score manuellement');
+
+        const input = new TextInputBuilder()
+            .setCustomId('jeupts_input_val')
+            .setLabel(`Valeur pour ${JEUPTS_LABELS[selectedStat] || 'la stat'}`)
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('Entre un nombre (ex: 12)')
+            .setRequired(true);
+
+        modal.addComponents(new ActionRowBuilder().addComponents(input));
+        await interaction.showModal(modal);
+        return true;
+    }
+
+    // 5. Validation de la Modal
+    if (interaction.isModalSubmit() && id.startsWith('jeupts_submodal_')) {
+        const [, , targetUserId, selectedStat] = id.split('_');
+        const valStr = interaction.fields.getTextInputValue('jeupts_input_val').trim();
+        const num = parseInt(valStr, 10);
+
+        if (isNaN(num) || num < 0) {
+            return interaction.reply({ content: "❌ Nombre invalide ! Entre un nombre entier positif.", ephemeral: true });
+        }
+
+        modifierStatMiniJeu(targetUserId, selectedStat, 'set', num);
+        const embed = buildJeuPtsEmbed(interaction.guild, targetUserId, selectedStat);
+        const components = buildJeuPtsComponents(targetUserId, selectedStat);
+        await interaction.update({ embeds: [embed], components });
+        return true;
     }
 
     return false;
