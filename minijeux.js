@@ -957,19 +957,24 @@ async function terminerSessionRebus(channel) {
     }
     minijeuxBridge.demanderSauvegarde();
 
-    const medailles = ['🥇', '🥈', '🥉'];
+    // Gestion propre des médailles avec ex-æquo (tous les premiers ont 🥇)
+    let rangActuel = 1;
     const lignesPodium = scoresList.map(([uid, pts], i) => {
-        const med = medailles[i] ?? `**${i + 1}.**`;
+        if (i > 0 && pts < scoresList[i - 1][1]) rangActuel = i + 1;
+        const med = rangActuel === 1 ? '🥇' : rangActuel === 2 ? '🥈' : rangActuel === 3 ? '🥉' : `**${rangActuel}.**`;
         return `${med} <@${uid}> — **${pts} point${pts > 1 ? 's' : ''}**`;
     }).join('\n');
 
-    const vainqueurs = scoresList.filter(s => s[1] === maxScore).map(s => `<@${s[0]}>`).join(', ');
+    const vainqueurs = scoresList.filter(s => s[1] === maxScore).map(s => `<@${s[0]}>`);
+    const texteVictoire = vainqueurs.length > 1
+        ? `🤝 **ÉGALITÉ AU SOMMET !** Victoire partagée entre ${vainqueurs.join(' et ')} (**${maxScore} pts**) !`
+        : `Félicitations à ${vainqueurs[0]} pour cette victoire (**${maxScore} pts**) !`;
 
     const embedVictoire = new EmbedBuilder()
         .setColor(0xf1c40f)
         .setTitle('🏆 PODIUM DU RÉBUS REGAÏEN !')
         .setDescription(
-            `Félicitations à ${vainqueurs} pour cette victoire !\n\n` +
+            `${texteVictoire}\n\n` +
             `**__Classement de la session :__**\n${lignesPodium}`
         )
         .setFooter({ text: 'Rendez-vous demain à 15h00 ! • !rebus pour voir le statut' });

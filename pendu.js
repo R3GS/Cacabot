@@ -567,48 +567,60 @@ async function handlePenduMessage(message, response, client, helpers) {
                 if (motEntierementTrouve) {
                     session.termine = true;
 
-                    // Attribution de la victoire au joueur ayant trouvé le plus de bonnes lettres
-                    let vainqueurFinalId = uid;
-                    let maxBonnes = -1;
-                    for (const [pId, score] of Object.entries(session.bonnesLettresParJoueur)) {
-                        if (score > maxBonnes) {
-                            maxBonnes = score;
-                            vainqueurFinalId = pId;
-                        }
+                    // Détection du score maximal de bonnes lettres
+                    let maxBonnes = 0;
+                    for (const score of Object.values(session.bonnesLettresParJoueur)) {
+                        if (score > maxBonnes) maxBonnes = score;
                     }
 
-                    session.vainqueurId = vainqueurFinalId;
-                    penduStats[vainqueurFinalId].victoires++;
-                    penduStats[vainqueurFinalId].points += 3;
+                    // Attribution de la victoire à TOUS les joueurs ex-æquo ayant ce score max
+                    const vainqueurs = Object.keys(session.bonnesLettresParJoueur).filter(
+                        pId => session.bonnesLettresParJoueur[pId] === maxBonnes && maxBonnes > 0
+                    );
 
+                    // Si personne n'avait de point individuel (ex: mot entier deviné direct), le découvreur gagne
+                    if (vainqueurs.length === 0) vainqueurs.push(uid);
+
+                    session.vainqueurId = vainqueurs[0];
                     const weekKey = getPenduWeekKey();
-                    if (!penduStats[vainqueurFinalId].hebdo) penduStats[vainqueurFinalId].hebdo = {};
-                    penduStats[vainqueurFinalId].hebdo[weekKey] = (penduStats[vainqueurFinalId].hebdo[weekKey] || 0) + 3;
 
-                    penduBridge.trackBattlePassProgress?.(vainqueurFinalId, 'pendu_win', 1);
-                    penduBridge.trackBattlePassProgress?.(vainqueurFinalId, 'minijeu_win', 1);
+                    for (const vId of vainqueurs) {
+                        if (!penduStats[vId]) penduStats[vId] = { victoires: 0, parties: 0, points: 0, hebdo: {} };
+                        penduStats[vId].victoires++;
+                        penduStats[vId].points += 3;
+
+                        if (!penduStats[vId].hebdo) penduStats[vId].hebdo = {};
+                        penduStats[vId].hebdo[weekKey] = (penduStats[vId].hebdo[weekKey] || 0) + 3;
+
+                        penduBridge.trackBattlePassProgress?.(vId, 'pendu_win', 1);
+                        penduBridge.trackBattlePassProgress?.(vId, 'minijeu_win', 1);
+                    }
+
                     for (const participantId of Object.keys(session.tentativesJoueurs)) {
                         penduBridge.trackBattlePassProgress?.(participantId, 'pendu_victoire_collective', 1);
                     }
                     penduBridge.demanderSauvegarde();
 
-                    // Bilan de chaque participant avec ses lettres refusées (1 par ligne)
+                    // Bilan de chaque participant avec couronne 👑 pour TOUS les ex-æquo
                     const lignesParticipants = Object.keys(session.tentativesJoueurs).map(pId => {
                         const m = message.guild.members.cache.get(pId);
                         const nom = m?.displayName || `<@${pId}>`;
                         const bonnes = session.bonnesLettresParJoueur[pId] || 0;
                         const refus = session.lettresRefuseesParJoueur[pId]?.join(', ') || 'Aucune';
-                        const couronne = pId === vainqueurFinalId ? ' 👑' : '';
+                        const couronne = vainqueurs.includes(pId) ? ' 👑' : '';
                         return `• **${nom}**${couronne} : **${bonnes}** bonne(s) lettre(s) | ❌ Refusées : \`${refus}\``;
                     }).join('\n');
+
+                    const texteAnnonceVictoire = vainqueurs.length > 1
+                        ? `🤝 **ÉGALITÉ AU SOMMET !** Victoire partagée entre ${vainqueurs.map(id => `<@${id}>`).join(' et ')} (avec **${maxBonnes}** bonne(s) lettre(s) chacun·e) !\n⭐ **Récompense :** +3 points au classement hebdo pour chacun·e !`
+                        : `🏆 **Vainqueur de la manche :** <@${vainqueurs[0]}> (avec **${maxBonnes}** bonne(s) lettre(s)) !\n⭐ **Récompense :** +3 points au classement hebdomadaire !`;
 
                     const embedVictoire = new EmbedBuilder()
                         .setColor(0x2ecc71)
                         .setTitle('🎉 LE MOT A ÉTÉ DÉCOUVERT ! 🎉')
                         .setDescription(
                             `🔤 **Le mot était bien :** \`${motComplet}\`\n\n` +
-                            `🏆 **Vainqueur de la manche :** <@${vainqueurFinalId}> (avec le plus de bonnes lettres trouvées : **${maxBonnes}** bonne(s) lettre(s)) !\n` +
-                            `⭐ **Récompense :** +3 points au classement hebdomadaire !\n\n` +
+                            `${texteAnnonceVictoire}\n\n` +
                             `👥 **__Bilan des participant(e)s :__**\n${lignesParticipants || '*Aucun participant*'}`
                         )
                         .setFooter({ text: 'Rendez-vous demain soir à 21h00 pour le prochain Pendu !' });
