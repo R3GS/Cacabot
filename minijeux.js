@@ -539,9 +539,9 @@ async function handleMotusMessage(message, response, client, helpers) {
     return false;
 }
 
-async function handleMotusButton(interaction) {
-    // 1. Interceptions du panneau interactif !jeupts (Epsys-only)
-    if (interaction.customId && interaction.customId.startsWith('jeupts_')) {
+    async function handleMotusButton(interaction) {
+    // Interceptions du panneau interactif !jeupts (Epsys-only)
+    if (interaction.customId && interaction.customId.startsWith('jeupts')) {
         return await handleJeuPtsInteraction(interaction);
     }
 
@@ -1198,7 +1198,7 @@ const JEUPTS_LABELS = {
     'pendu_parties': '🪢 Pendu — Parties jouées'
 };
 
-function buildJeuPtsEmbed(guild, targetUserId, selectedStat = 'motus_victoires') {
+function buildJeuPtsEmbed(guild, targetUserId, selectedStat = 'motus_victoires', feedback = null) {
     const member = guild?.members.cache.get(targetUserId);
     const nom = member?.displayName || `<@${targetUserId}>`;
     const avatar = member?.user?.displayAvatarURL({ dynamic: true, size: 256 }) || null;
@@ -1213,14 +1213,17 @@ function buildJeuPtsEmbed(guild, targetUserId, selectedStat = 'motus_victoires')
 
     const scoreGlobal = (m.victoires * 3) + r.points + p.points;
 
+    let desc = `Panneau d'administration des scores de **${nom}**.\n\n`;
+    if (feedback) {
+        desc += `🔔 **Dernière action :** ${feedback}\n\n`;
+    }
+    desc += `👉 **Statistique actuellement ciblée :** **${JEUPTS_LABELS[selectedStat] || 'Non définie'}**\n` +
+            `-# *Utilise les boutons ci-dessous pour modifier cette statistique spécifique.*`;
+
     const embed = new EmbedBuilder()
-        .setColor(0xf1c40f)
+        .setColor(feedback ? 0x2ecc71 : 0xf1c40f)
         .setTitle(`🎮 Gestionnaire des Scores — ${nom}`)
-        .setDescription(
-            `Panneau d'administration des scores de **${nom}**.\n\n` +
-            `👉 **Stat actuellement ciblée :** **${JEUPTS_LABELS[selectedStat] || 'Non définie'}**\n` +
-            `-# *Choisis un membre ou une stat dans les menus ci-dessous pour la modifier.*`
-        )
+        .setDescription(desc)
         .addFields(
             {
                 name: '🟩 MOTUS',
@@ -1238,7 +1241,7 @@ function buildJeuPtsEmbed(guild, targetUserId, selectedStat = 'motus_victoires')
                 inline: true
             },
             {
-                name: '🏆 SCORE GLOBAL DU SERVEUR',
+                name: '🏆 SCORE GLOBAL COMBINÉ',
                 value: `🌟 **${scoreGlobal} points cumulés**\n-# *(3 pts / vic. Motus • 1 pt / manche Rébus • 3 pts / vic. Pendu)*`,
                 inline: false
             }
@@ -1251,34 +1254,42 @@ function buildJeuPtsEmbed(guild, targetUserId, selectedStat = 'motus_victoires')
 }
 
 function buildJeuPtsComponents(targetUserId, selectedStat = 'motus_victoires') {
+    const motusStats = minijeuxBridge.getMotusStats();
+    const rebusStats = minijeuxBridge.getRebusStats();
+    const penduStats = minijeuxBridge.getPenduStats ? minijeuxBridge.getPenduStats() : {};
+
+    const m = motusStats[targetUserId] ?? { victoires: 0, parties: 0 };
+    const r = rebusStats[targetUserId] ?? { points: 0, victoires: 0, parties: 0 };
+    const p = penduStats[targetUserId] ?? { points: 0, victoires: 0, parties: 0 };
+
     const rowUser = new ActionRowBuilder().addComponents(
         new UserSelectMenuBuilder()
-            .setCustomId(`jeupts_user_${selectedStat}`)
+            .setCustomId(`jeupts:user:${selectedStat}`)
             .setPlaceholder('👤 Choisir un autre membre...')
     );
 
     const rowStat = new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
-            .setCustomId(`jeupts_stat_${targetUserId}`)
+            .setCustomId(`jeupts:stat:${targetUserId}`)
             .setPlaceholder('🎯 Choisir la statistique à modifier...')
             .addOptions([
-                { label: '🟩 Motus : Victoires', value: 'motus_victoires', default: selectedStat === 'motus_victoires' },
-                { label: '🟩 Motus : Parties jouées', value: 'motus_parties', default: selectedStat === 'motus_parties' },
-                { label: '🧩 Rébus : Points totaux', value: 'rebus_points', default: selectedStat === 'rebus_points' },
-                { label: '🧩 Rébus : Victoires de session', value: 'rebus_victoires', default: selectedStat === 'rebus_victoires' },
-                { label: '🧩 Rébus : Parties jouées', value: 'rebus_parties', default: selectedStat === 'rebus_parties' },
-                { label: '🪢 Pendu : Points totaux', value: 'pendu_points', default: selectedStat === 'pendu_points' },
-                { label: '🪢 Pendu : Victoires', value: 'pendu_victoires', default: selectedStat === 'pendu_victoires' },
-                { label: '🪢 Pendu : Parties jouées', value: 'pendu_parties', default: selectedStat === 'pendu_parties' }
+                { label: `🟩 Motus : Victoires (Actuel : ${m.victoires})`, value: 'motus_victoires', default: selectedStat === 'motus_victoires' },
+                { label: `🟩 Motus : Parties jouées (Actuel : ${m.parties})`, value: 'motus_parties', default: selectedStat === 'motus_parties' },
+                { label: `🧩 Rébus : Points totaux (Actuel : ${r.points} pts)`, value: 'rebus_points', default: selectedStat === 'rebus_points' },
+                { label: `🧩 Rébus : Victoires (Actuel : ${r.victoires})`, value: 'rebus_victoires', default: selectedStat === 'rebus_victoires' },
+                { label: `🧩 Rébus : Parties jouées (Actuel : ${r.parties})`, value: 'rebus_parties', default: selectedStat === 'rebus_parties' },
+                { label: `🪢 Pendu : Points totaux (Actuel : ${p.points} pts)`, value: 'pendu_points', default: selectedStat === 'pendu_points' },
+                { label: `🪢 Pendu : Victoires (Actuel : ${p.victoires})`, value: 'pendu_victoires', default: selectedStat === 'pendu_victoires' },
+                { label: `🪢 Pendu : Parties jouées (Actuel : ${p.parties})`, value: 'pendu_parties', default: selectedStat === 'pendu_parties' }
             ])
     );
 
     const rowButtons = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`jeupts_act_${targetUserId}_${selectedStat}_add1`).setLabel('➕ +1').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`jeupts_act_${targetUserId}_${selectedStat}_add5`).setLabel('➕ +5').setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId(`jeupts_act_${targetUserId}_${selectedStat}_sub1`).setLabel('➖ -1').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`jeupts_openmodal_${targetUserId}_${selectedStat}`).setLabel('✏️ Définir...').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`jeupts_act_${targetUserId}_${selectedStat}_reset`).setLabel('🗑️ Remise à 0').setStyle(ButtonStyle.Danger)
+        new ButtonBuilder().setCustomId(`jeupts:act:${targetUserId}:${selectedStat}:add1`).setLabel('➕ +1').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`jeupts:act:${targetUserId}:${selectedStat}:add5`).setLabel('➕ +5').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`jeupts:act:${targetUserId}:${selectedStat}:sub1`).setLabel('➖ -1').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`jeupts:openmodal:${targetUserId}:${selectedStat}`).setLabel('✏️ Définir...').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`jeupts:act:${targetUserId}:${selectedStat}:reset`).setLabel('🗑️ Remise à 0').setStyle(ButtonStyle.Danger)
     );
 
     return [rowUser, rowStat, rowButtons];
@@ -1305,7 +1316,7 @@ function modifierStatMiniJeu(targetUserId, statKey, action, valeurDirecte = null
     else if (statKey === 'pendu_victoires') { ref = penduStats[targetUserId]; prop = 'victoires'; }
     else if (statKey === 'pendu_parties') { ref = penduStats[targetUserId]; prop = 'parties'; }
 
-    if (!ref || !prop) return;
+    if (!ref || !prop) return 0;
 
     if (action === 'add1') ref[prop] = (ref[prop] || 0) + 1;
     else if (action === 'add5') ref[prop] = (ref[prop] || 0) + 5;
@@ -1314,6 +1325,7 @@ function modifierStatMiniJeu(targetUserId, statKey, action, valeurDirecte = null
     else if (action === 'set' && valeurDirecte !== null) ref[prop] = Math.max(0, valeurDirecte);
 
     minijeuxBridge.demanderSauvegarde();
+    return ref[prop];
 }
 
 async function handleJeuPtsInteraction(interaction) {
@@ -1324,8 +1336,8 @@ async function handleJeuPtsInteraction(interaction) {
     const id = interaction.customId;
 
     // 1. Changement de membre (UserSelectMenu)
-    if (id.startsWith('jeupts_user_')) {
-        const selectedStat = id.replace('jeupts_user_', '');
+    if (id.startsWith('jeupts:user:')) {
+        const selectedStat = id.replace('jeupts:user:', '');
         const targetUserId = interaction.values[0];
         const embed = buildJeuPtsEmbed(interaction.guild, targetUserId, selectedStat);
         const components = buildJeuPtsComponents(targetUserId, selectedStat);
@@ -1334,8 +1346,8 @@ async function handleJeuPtsInteraction(interaction) {
     }
 
     // 2. Changement de stat ciblée (StringSelectMenu)
-    if (id.startsWith('jeupts_stat_')) {
-        const targetUserId = id.replace('jeupts_stat_', '');
+    if (id.startsWith('jeupts:stat:')) {
+        const targetUserId = id.replace('jeupts:stat:', '');
         const selectedStat = interaction.values[0];
         const embed = buildJeuPtsEmbed(interaction.guild, targetUserId, selectedStat);
         const components = buildJeuPtsComponents(targetUserId, selectedStat);
@@ -1344,27 +1356,36 @@ async function handleJeuPtsInteraction(interaction) {
     }
 
     // 3. Actions rapides par boutons (+1, +5, -1, reset)
-    if (id.startsWith('jeupts_act_')) {
-        const [, , targetUserId, selectedStat, action] = id.split('_');
-        modifierStatMiniJeu(targetUserId, selectedStat, action);
-        const embed = buildJeuPtsEmbed(interaction.guild, targetUserId, selectedStat);
+    if (id.startsWith('jeupts:act:')) {
+        const [, , targetUserId, selectedStat, action] = id.split(':');
+        const nouveauScore = modifierStatMiniJeu(targetUserId, selectedStat, action);
+
+        const actionsTexte = {
+            'add1': `✅ **+1** ajouté ! *(Nouveau score : **${nouveauScore}**)*`,
+            'add5': `✅ **+5** ajoutés ! *(Nouveau score : **${nouveauScore}**)*`,
+            'sub1': `➖ **-1** retiré ! *(Nouveau score : **${nouveauScore}**)*`,
+            'reset': `🗑️ Statistique remise à **0** !`
+        };
+
+        const feedback = actionsTexte[action] || `Stat mise à jour : **${nouveauScore}**`;
+        const embed = buildJeuPtsEmbed(interaction.guild, targetUserId, selectedStat, feedback);
         const components = buildJeuPtsComponents(targetUserId, selectedStat);
         await interaction.update({ embeds: [embed], components });
         return true;
     }
 
     // 4. Ouverture de la Modal de saisie directe
-    if (id.startsWith('jeupts_openmodal_')) {
-        const [, , targetUserId, selectedStat] = id.split('_');
+    if (id.startsWith('jeupts:openmodal:')) {
+        const [, , targetUserId, selectedStat] = id.split(':');
         const modal = new ModalBuilder()
-            .setCustomId(`jeupts_submodal_${targetUserId}_${selectedStat}`)
+            .setCustomId(`jeupts:submodal:${targetUserId}:${selectedStat}`)
             .setTitle('Définir le score manuellement');
 
         const input = new TextInputBuilder()
             .setCustomId('jeupts_input_val')
             .setLabel(`Valeur pour ${JEUPTS_LABELS[selectedStat] || 'la stat'}`)
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder('Entre un nombre (ex: 12)')
+            .setPlaceholder('Entre un nombre entier (ex: 12)')
             .setRequired(true);
 
         modal.addComponents(new ActionRowBuilder().addComponents(input));
@@ -1373,8 +1394,8 @@ async function handleJeuPtsInteraction(interaction) {
     }
 
     // 5. Validation de la Modal
-    if (interaction.isModalSubmit() && id.startsWith('jeupts_submodal_')) {
-        const [, , targetUserId, selectedStat] = id.split('_');
+    if (interaction.isModalSubmit() && id.startsWith('jeupts:submodal:')) {
+        const [, , targetUserId, selectedStat] = id.split(':');
         const valStr = interaction.fields.getTextInputValue('jeupts_input_val').trim();
         const num = parseInt(valStr, 10);
 
@@ -1382,8 +1403,9 @@ async function handleJeuPtsInteraction(interaction) {
             return interaction.reply({ content: "❌ Nombre invalide ! Entre un nombre entier positif.", ephemeral: true });
         }
 
-        modifierStatMiniJeu(targetUserId, selectedStat, 'set', num);
-        const embed = buildJeuPtsEmbed(interaction.guild, targetUserId, selectedStat);
+        const nouveauScore = modifierStatMiniJeu(targetUserId, selectedStat, 'set', num);
+        const feedback = `✏️ Défini manuellement à **${nouveauScore}** !`;
+        const embed = buildJeuPtsEmbed(interaction.guild, targetUserId, selectedStat, feedback);
         const components = buildJeuPtsComponents(targetUserId, selectedStat);
         await interaction.update({ embeds: [embed], components });
         return true;
