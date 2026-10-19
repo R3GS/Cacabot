@@ -1003,6 +1003,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                     return message.channel.send({ content: `❌ **${cibleChoisie.displayName}** n'a pas le rôle de la roulette ! Choisis quelqu'un qui participe à la roulette.`, flags: [MessageFlags.SuppressNotifications] });
                 }
                 rouletteRedirectChoixCible.set(member.id, cibleChoisie.id);
+                bridge.demanderSauvegarde();
                 message.channel.send({ content: `✅ C'est enregistré ! Le prochain malus de **${auteurNom}** sera automatiquement envoyé à **${cibleChoisie.displayName}** !`, flags: [MessageFlags.SuppressNotifications] });
             });
             return `🎯 **${auteurNom}** a gagné une redirection de malus au choix !`;
@@ -1020,6 +1021,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 roulettePseudoLock.set(cibleChoisie.id, { until: Date.now() + 48 * 60 * 60 * 1000, pseudo: nouveauPseudo });
                 await cibleChoisie.setNickname(nouveauPseudo).catch(() => {});
                 deverrouillerSucces(member.id, 'baptiseur', message.channel);
+                bridge.demanderSauvegarde();
                 message.channel.send(`✅ **${cibleChoisie.displayName}** se retrouve avec le pseudo **${nouveauPseudo}**, choisi par **${auteurNom}**, verrouillé pendant **48h** !`);
             });
             return `✍️ **${auteurNom}** a gagné le choix du pseudo d'un·e membre !`;
@@ -2344,7 +2346,10 @@ async function handleRouletteSlash(interaction, client) {
             await interaction.deferReply();
             const res = await tirerEtConstruireResultatRoulette(interaction.user.id, interaction.guild, interaction.channel, client);
             if (res.cooldown) {
-                const notifRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('roulette_notif').setLabel('🔔 Me prévenir').setStyle(ButtonStyle.Secondary));
+                const notifRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('roulette_notif').setLabel('🔔 Me prévenir ici').setStyle(ButtonStyle.Secondary),
+                    new ButtonBuilder().setCustomId('roulette_notif_mp').setLabel('🔔 Me prévenir par MP').setStyle(ButtonStyle.Secondary)
+                );
                 await interaction.editReply({ content: `⏳ Cooldown actif ! Il te reste **${res.reste} min**.`, components: [notifRow] });
                 return true;
             }
