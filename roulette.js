@@ -1080,6 +1080,16 @@ function buildInventaireEmbed(membre) {
     const options = [];
 
     const ITEMS_METADATA = {
+        bouclier_1: {
+            label: '🛡️ 1 Charge de Bouclier',
+            emoji: '🛡️',
+            desc: 'Ajoute 1 bouclier de protection contre le prochain malus'
+        },
+        bouclier_5: {
+            label: '🔰 Pack Défense (5 Boucliers)',
+            emoji: '🔰',
+            desc: 'Ajoute 5 boucliers de protection contre les malus'
+        },
         freeRoll1Min: {
             label: '🎰 Tirage à volonté (1 min)',
             emoji: '🎰',
@@ -2380,7 +2390,15 @@ async function handleRouletteButton(interaction, client) {
 
         let messageConfirmation = "";
 
-        if (itemChoisi === 'freeRoll1Min') {
+        if (itemChoisi === 'bouclier_1') {
+            const tot = (rouletteBouclierActif.get(targetUserId) || 0) + 1;
+            rouletteBouclierActif.set(targetUserId, tot);
+            messageConfirmation = `🛡️ **BOUCLIER ACTIVÉ !** +1 charge de bouclier ajoutée (${tot} en réserve) !`;
+        } else if (itemChoisi === 'bouclier_5') {
+            const tot = (rouletteBouclierActif.get(targetUserId) || 0) + 5;
+            rouletteBouclierActif.set(targetUserId, tot);
+            messageConfirmation = `🔰 **PACK DÉFENSE ACTIVÉ !** +5 charges de bouclier ajoutées (${tot} en réserve) !`;
+        } else if (itemChoisi === 'freeRoll1Min') {
             rouletteFreeRollUntil.set(targetUserId, Date.now() + 60 * 1000);
             rouletteImmuniteUntil.set(targetUserId, Date.now() + 60 * 1000);
             messageConfirmation = `⚡ **C'EST PARTI !** <@${targetUserId}>, ton **tirage à volonté (1 min)** est activé ! Aucun cooldown et immunité aux mutes pendant 60 secondes ! Fais péter \`!rlt go\` ! 🎰`;

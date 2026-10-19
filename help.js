@@ -80,6 +80,8 @@ function buildHelpxCategorieEmbed(categorie) {
             .addFields(
                 { name: '⚡ **!bp [membre]**', value: 'Inspecter le Battle Pass d\'un membre avec le bouton **⚡ Ajouter XP**.' },
                 { name: '🛠️ **!bp questforce [membre]**', value: 'Menu déroulant pour compléter de force une quête en cours.' },
+                { name: '🎁 **!bpgive [membre] [id] [qte]**', value: 'Déposer directement un bonus de palier dans l\'inventaire d\'un membre.' },
+                { name: '📋 **!bpgiveid**', value: 'Liste de tous les identifiants de bonus à donner avec !bpgive.' },
                 { name: '🔍 **!bp embedtest**', value: 'Prévisualiser l\'embed d\'onboarding que voient les nouveaux membres.' }
             );
     }

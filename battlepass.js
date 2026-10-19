@@ -318,6 +318,20 @@ function getOuCreerProfilBP(userId, autoActif = false) {
         p.quetesHebdo = tirerQuetesHebdo();
     }
 
+    // Rattrapage automatique de tous les paliers déjà atteints mais non reçus
+    if (p.actif) {
+        if (!p.paliersReclames) p.paliersReclames = [];
+        for (let niv = 1; niv <= p.niveau; niv++) {
+            if (!p.paliersReclames.includes(niv)) {
+                p.paliersReclames.push(niv);
+                const reco = RECOMPENSES_PALIERS[niv];
+                if (reco) {
+                    attribuerRecompenseInventaire(userId, reco.item);
+                }
+            }
+        }
+    }
+
     return p;
 }
 
@@ -783,13 +797,7 @@ function reclamerRecompensesEtXP(membre) {
 }
 
 function attribuerRecompenseInventaire(userId, itemKey) {
-    if (itemKey === 'bouclier_1') {
-        const total = (bpBridge.rouletteBouclierActif.get(userId) || 0) + 1;
-        bpBridge.rouletteBouclierActif.set(userId, total);
-    } else if (itemKey === 'bouclier_5') {
-        const total = (bpBridge.rouletteBouclierActif.get(userId) || 0) + 5;
-        bpBridge.rouletteBouclierActif.set(userId, total);
-    } else if (itemKey === 'redirectChoix') {
+    if (itemKey === 'redirectChoix') {
         const total = (bpBridge.rouletteRedirectCharges.get(userId) || 0) + 1;
         bpBridge.rouletteRedirectCharges.set(userId, total);
     } else if (itemKey === 'palierUltime') {
@@ -798,6 +806,7 @@ function attribuerRecompenseInventaire(userId, itemKey) {
         const total = (bpBridge.rouletteRedirectCharges.get(userId) || 0) + 3;
         bpBridge.rouletteRedirectCharges.set(userId, total);
     } else {
+        // Tous les autres items (tickets, boucliers, trèfles, éponges...) vont dans !rlt claim !
         bpBridge.crediterInventaireRoulette(userId, itemKey, 1);
     }
 }
@@ -806,11 +815,137 @@ function attribuerRecompenseInventaire(userId, itemKey) {
 //  HANDLERS MESSAGES & SLASH
 // =========================
 
+// Dictionnaire des identifiants simplifiés pour !bpgive
+const BP_GIVE_ITEMS = {
+    ticket: { id: 'ticketSkip', nom: '🎟️ Ticket Coupe-File (Skip Cooldown)' },
+    ticketskip: { id: 'ticketSkip', nom: '🎟️ Ticket Coupe-File (Skip Cooldown)' },
+    bouclier: { id: 'bouclier_1', nom: '🛡️ 1 Charge de Bouclier' },
+    bouclier1: { id: 'bouclier_1', nom: '🛡️ 1 Charge de Bouclier' },
+    bouclier5: { id: 'bouclier_5', nom: '🔰 Pack Défense (5 Boucliers)' },
+    packdefense: { id: 'bouclier_5', nom: '🔰 Pack Défense (5 Boucliers)' },
+    superbouclier: { id: 'superBouclier', nom: '🔰 Super Bouclier (3 Boucliers)' },
+    trefle: { id: 'trefle20', nom: '🍀 Trèfle de Chance (+20% Jackpot)' },
+    trefle20: { id: 'trefle20', nom: '🍀 Trèfle de Chance (+20% Jackpot)' },
+    eponge: { id: 'eponge', nom: '🧹 Éponge à Malus' },
+    minihh: { id: 'miniHH', nom: '⚡ Pass Mini Happy-Hour (2 tirages 5min)' },
+    pity: { id: 'pityBoost', nom: '📈 Coup de Pouce Pity (+1 malus/nul)' },
+    pityboost: { id: 'pityBoost', nom: '📈 Coup de Pouce Pity (+1 malus/nul)' },
+    triple: { id: 'coupTriple', nom: '🎰 Coup Triple (3 tirages gratuits)' },
+    couptriple: { id: 'coupTriple', nom: '🎰 Coup Triple (3 tirages gratuits)' },
+    sniper: { id: 'redirectChoix', nom: '🎯 Le Sniper (1 Redirection au choix)' },
+    redirectchoix: { id: 'redirectChoix', nom: '🎯 Le Sniper (1 Redirection au choix)' },
+    redirect5: { id: 'redirectChoix5', nom: '🎯 5 Redirections au choix' },
+    pseudo: { id: 'pseudoLockSemaine', nom: '✍️ Gravé dans la roche (Pseudo 1 sem.)' },
+    pseudolock: { id: 'pseudoLockSemaine', nom: '✍️ Gravé dans la roche (Pseudo 1 sem.)' },
+    freeroll: { id: 'freeRoll1Min', nom: '🎰 Tirage à volonté (1 min)' },
+    epingle: { id: 'epingleSalon', nom: '📌 Épingle Salon' },
+    ultime: { id: 'palierUltime', nom: '🏆 Pack Palier Ultime' }
+};
+
+function buildBPGiveIdEmbed() {
+    return new EmbedBuilder()
+        .setColor(0xffd20a)
+        .setTitle('📋 Identifiants des Récompenses Battle Pass (!bpgiveid)')
+        .setDescription(
+            `Voici les identifiants pour donner des récompenses avec la commande :\n` +
+            `👉 \`!bpgive [membre] [id] [quantité optionnelle]\`\n\n` +
+            `• \`ticket\` — 🎟️ Ticket Coupe-File (Skip Cooldown)\n` +
+            `• \`bouclier\` — 🛡️ 1 Charge de Bouclier\n` +
+            `• \`bouclier5\` — 🔰 Pack Défense (5 Boucliers)\n` +
+            `• \`superbouclier\` — 🔰 Super Bouclier (3 Boucliers)\n` +
+            `• \`trefle\` — 🍀 Trèfle de Chance (+20% Jackpot)\n` +
+            `• \`eponge\` — 🧹 Éponge à Malus\n` +
+            `• \`minihh\` — ⚡ Pass Mini Happy-Hour (2 tirages à 5min)\n` +
+            `• \`pity\` — 📈 Coup de Pouce Pity (+1 malus / +1 nul)\n` +
+            `• \`triple\` — 🎰 Coup Triple (3 tirages gratuits)\n` +
+            `• \`sniper\` — 🎯 Le Sniper (1 Redirection au choix)\n` +
+            `• \`redirect5\` — 🎯 5 Redirections au choix\n` +
+            `• \`pseudo\` — ✍️ Gravé dans la roche (Pseudo verrouillé 1 sem.)\n` +
+            `• \`freeroll\` — 🎰 Tirage à volonté (1 min sans cooldown)\n` +
+            `• \`epingle\` — 📌 Épingle Salon\n` +
+            `• \`ultime\` — 🏆 Pack Palier Ultime (Free roll + Épingle + 3 Redirections)`
+        )
+        .setFooter({ text: 'Exemple : !bpgive @Sasha ticket 2' });
+}
+
 async function handleBattlePassMessage(message, helpers = {}) {
     const raw = message.content.trim();
     const parts = raw.split(/\s+/);
     const cmd = parts[0].toLowerCase();
     const sub = parts[1]?.toLowerCase();
+
+    // Commande !bpgiveid (Epsys-only)
+    if (cmd === '!bpgiveid') {
+        if (message.author.id !== bpBridge.EPSYS_ID) {
+            await message.reply("Cette commande est réservée à Epsys.");
+            return true;
+        }
+        await message.reply({ embeds: [buildBPGiveIdEmbed()] });
+        return true;
+    }
+
+    // Commande !bpgive (Epsys-only)
+    if (cmd === '!bpgive') {
+        if (message.author.id !== bpBridge.EPSYS_ID) {
+            await message.reply("Cette commande est réservée à Epsys.");
+            return true;
+        }
+
+        if (parts.length < 3) {
+            const embedAide = new EmbedBuilder()
+                .setColor(0xe67e22)
+                .setTitle('⚠️ Commande incomplète')
+                .setDescription(
+                    `Il faut préciser le membre et l'identifiant du bonus à lui donner !\n\n` +
+                    `👉 **Syntaxe :** \`!bpgive [membre] [id du bonus] [quantité optionnelle]\`\n` +
+                    `👉 **Exemples :**\n` +
+                    `• \`!bpgive @Sasha ticket\`\n` +
+                    `• \`!bpgive @Sasha bouclier5 2\`\n` +
+                    `• \`!bpgive @Sasha trefle\`\n\n` +
+                    `📋 Tape **\`!bpgiveid\`** pour voir la liste complète de tous les identifiants disponibles !`
+                );
+            await message.reply({ embeds: [embedAide] });
+            return true;
+        }
+
+        const queryMembre = parts[1];
+        let cible = message.mentions.members.first();
+        if (!cible && helpers.findMemberByName) {
+            cible = helpers.findMemberByName(message.guild, queryMembre).found;
+        }
+
+        if (!cible) {
+            await message.reply("❌ Membre introuvable. Mentionne-le ou écris son pseudo exact.");
+            return true;
+        }
+
+        const slug = parts[2].toLowerCase();
+        const itemInfo = BP_GIVE_ITEMS[slug];
+
+        if (!itemInfo) {
+            await message.reply(`❌ Identifiant de bonus inconnu : \`${slug}\`.\nTape **\`!bpgiveid\`** pour voir la liste des bonus valides !`);
+            return true;
+        }
+
+        const quantite = Math.max(1, parseInt(parts[3], 10) || 1);
+
+        for (let i = 0; i < quantite; i++) {
+            attribuerRecompenseInventaire(cible.id, itemInfo.id);
+        }
+        bpBridge.demanderSauvegarde();
+
+        const embedSucces = new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle('🎁 Récompense Battle Pass attribuée !')
+            .setDescription(
+                `**${quantite > 1 ? `x${quantite} ` : ''}${itemInfo.nom}** ${quantite > 1 ? 'ont été déposés' : 'a été déposé'} avec succès dans l'inventaire de <@${cible.id}> !\n\n` +
+                `*Le membre peut ${quantite > 1 ? 'les' : 'l\''}activer à tout moment avec \`!rlt claim\`.*`
+            )
+            .setFooter({ text: 'Cacabot Battle Pass • Commande Epsys' });
+
+        await message.reply({ embeds: [embedSucces] });
+        return true;
+    }
 
     if (['!bp', '!pass', '!battlepass'].includes(cmd)) {
         // Commande d'administration Epsys : !bp questforce [membre]
