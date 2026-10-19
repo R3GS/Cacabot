@@ -865,7 +865,7 @@ function buildBPGiveIdEmbed() {
             `• \`epingle\` — 📌 Épingle Salon\n` +
             `• \`ultime\` — 🏆 Pack Palier Ultime (Free roll + Épingle + 3 Redirections)`
         )
-        .setFooter({ text: 'Exemple : !bpgive @Sasha ticket 2' });
+        .setFooter({ text: 'Exemple : !bpgive @Epsys ticket 2' });
 }
 
 async function handleBattlePassMessage(message, helpers = {}) {
@@ -896,12 +896,12 @@ async function handleBattlePassMessage(message, helpers = {}) {
                 .setColor(0xe67e22)
                 .setTitle('⚠️ Commande incomplète')
                 .setDescription(
-                    `Il faut préciser le membre et l'identifiant du bonus à lui donner !\n\n` +
+                    `Il faut préciser le/la membre et l'identifiant du bonus à lui donner !\n\n` +
                     `👉 **Syntaxe :** \`!bpgive [membre] [id du bonus] [quantité optionnelle]\`\n` +
                     `👉 **Exemples :**\n` +
-                    `• \`!bpgive @Sasha ticket\`\n` +
-                    `• \`!bpgive @Sasha bouclier5 2\`\n` +
-                    `• \`!bpgive @Sasha trefle\`\n\n` +
+                    `• \`!bpgive @Epsys ticket\`\n` +
+                    `• \`!bpgive @Epsys bouclier5 2\`\n` +
+                    `• \`!bpgive @Epsys trefle\`\n\n` +
                     `📋 Tape **\`!bpgiveid\`** pour voir la liste complète de tous les identifiants disponibles !`
                 );
             await message.reply({ embeds: [embedAide] });
