@@ -145,13 +145,11 @@ async function saveAll() {
         lastsaveSaveTime = new Date();
         console.log(`💾 Nouvelle sauvegarde postée dans #${channel.name}`);
 
-        // Nettoie automatiquement le salon pour ne garder que les 10 dernières sauvegardes
+        // Nettoyage instantané en 1 seule requête (évite de faire ramer le bot avec 15 suppressions individuelles)
         const messages = await channel.messages.fetch({ limit: 25 }).catch(() => null);
         if (messages && messages.size > 10) {
             const aSupprimer = [...messages.values()].slice(10);
-            for (const m of aSupprimer) {
-                await m.delete().catch(() => {});
-            }
+            await channel.bulkDelete(aSupprimer, true).catch(() => {});
         }
     } catch (err) {
         console.error('Erreur sauvegarde Discord:', err);

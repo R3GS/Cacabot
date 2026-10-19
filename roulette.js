@@ -489,72 +489,75 @@ function armerNotifRoulette(userId, channelId, client) {
     const fin = rouletteCooldowns.get(userId) ?? 0;
     const now = Date.now();
 
-    // Si la notif a déjà été envoyée il y a moins d'une minute, on stoppe net
-    if (notifsEnvoyeesRecent.has(userId)) {
-        rouletteNotifs.delete(userId);
-        return;
-    }
-
-    // Si le cooldown est fini depuis plus de 2 heures, on purge (évite de spammer les vieux tirages de la veille)
+    // Si le cooldown est fini depuis plus de 2 heures, purge silencieuse
     if (now >= fin && (now - fin > 2 * 60 * 60 * 1000)) {
         rouletteNotifs.delete(userId);
         bridge.demanderSauvegarde();
         return;
     }
 
-    // Si le cooldown s'est terminé pendant le redémarrage (moins de 2h), delai sera 0 et le MP partira direct !
     const delai = Math.max(fin - now, 0);
 
     const timer = setTimeout(async () => {
         rouletteNotifTimers.delete(userId);
 
-        // Verrou absolu anti-doublon
-        if (!rouletteNotifs.has(userId) || notifsEnvoyeesRecent.has(userId)) {
-            rouletteNotifs.delete(userId);
-            return;
-        }
-
-        // On consomme la notif et on active le verrou d'1 minute
+        if (!rouletteNotifs.has(userId)) return;
         rouletteNotifs.delete(userId);
-        notifsEnvoyeesRecent.add(userId);
-        setTimeout(() => notifsEnvoyeesRecent.delete(userId), 60000);
         bridge.demanderSauvegarde();
 
         const finActuelle = rouletteCooldowns.get(userId) ?? 0;
         if (Date.now() < finActuelle) {
-            notifsEnvoyeesRecent.delete(userId);
             rouletteNotifs.set(userId, channelId);
             return armerNotifRoulette(userId, channelId, client);
         }
 
-        // Si la notification a été demandée en MP
+        // Cas 1 : Envoi en Message Privé (MP) avec repli automatique sur le salon si les MP sont fermés
         if (channelId === 'MP') {
-            const user = await client.users.fetch(userId).catch(() => null);
-            if (!user) return;
+            const user = client.users.cache.get(userId) || await client.users.fetch(userId).catch(() => null);
+            let mpReussi = false;
 
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setLabel('🎰 Aller au salon #roulette')
-                    .setStyle(ButtonStyle.Link)
-                    .setURL('https://discord.com/channels/720057528351850547/1553954760900608091')
-            );
-            await user.send({
-                content: `🎰 <@${userId}>, ton cooldown roulette sur **Regaïa** est terminé ! Tu peux relancer un tirage dès maintenant :`,
-                components: [row]
-            }).catch(() => {});
+            if (user) {
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setLabel('🎰 Aller au salon #roulette')
+                        .setStyle(ButtonStyle.Link)
+                        .setURL('https://discord.com/channels/720057528351850547/1553954760900608091')
+                );
+                mpReussi = await user.send({
+                    content: `🎰 <@${userId}>, ton cooldown roulette sur **Regaïa** est terminé ! Tu peux relancer ton tirage dès maintenant :`,
+                    components: [row]
+                }).then(() => true).catch(() => false);
+            }
+
+            // Si le MP a échoué (MP fermés), on ping sur le salon roulette pour ne jamais laisser le/la membre sans alerte !
+            if (!mpReussi) {
+                const salonSecours = client.channels.cache.get(ROULETTE_SALON_ID) || await client.channels.fetch(ROULETTE_SALON_ID).catch(() => null);
+                if (salonSecours) {
+                    const rowTenter = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId(`roulette_tenter_${userId}`).setLabel('🎰 Tenter sa chance').setStyle(ButtonStyle.Primary)
+                    );
+                    await salonSecours.send({
+                        content: `🎰 <@${userId}>, ton cooldown roulette est terminé ! *(Tes MP Discord étant fermés, je te préviens ici)*`,
+                        components: [rowTenter],
+                        allowedMentions: { users: [userId] }
+                    }).catch(() => {});
+                }
+            }
             return;
         }
 
-        const salon = await client.channels.fetch(channelId).catch(() => null);
+        // Cas 2 : Envoi sur le salon demandé
+        const salon = client.channels.cache.get(channelId) || await client.channels.fetch(channelId).catch(() => null);
         if (!salon) return;
 
-        const { MessageFlags } = require('discord.js');
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`roulette_tenter_${userId}`).setLabel('🎰 Tenter sa chance').setStyle(ButtonStyle.Primary)
         );
+
         await salon.send({
             content: `🎰 <@${userId}>, ton cooldown roulette est terminé ! Clique ci-dessous pour relancer immédiatement :`,
-            components: [row]
+            components: [row],
+            allowedMentions: { users: [userId] }
         }).catch(() => {});
     }, Math.min(delai, 2 ** 31 - 1));
 
@@ -1895,12 +1898,11 @@ async function assurerWebhookRoulette(channel) {
 
 async function initialiserWebhooksRoulette(guild) {
     if (guild.id !== '720057528351850547') return;
-    const salons = guild.channels.cache.filter(c => c.type === ChannelType.GuildText);
-    for (const salon of salons.values()) {
-        await assurerWebhookRoulette(salon);
-        await new Promise(r => setTimeout(r, 300));
+    // Pré-chargement rapide uniquement sur le salon roulette officiel (les autres se créent à la demande sans bloquer)
+    const salonPrincipal = guild.channels.cache.get(ROULETTE_SALON_ID);
+    if (salonPrincipal) {
+        await assurerWebhookRoulette(salonPrincipal).catch(() => {});
     }
-    console.log(`✅ Webhooks roulette prêts sur ${salons.size} salons de ${guild.name}`);
 }
 
 async function handleRouletteMessage(message, response, client) {
@@ -2209,8 +2211,8 @@ async function handleRouletteMessage(message, response, client) {
         return true;
     }
 
-    if (command === '!roulette' || command === '!rlt') {
-        const direct = raw.split(" ")[1]?.toLowerCase() === 'go';
+    if (command === '!roulette' || command === '!rlt' || command === '!rltgo') {
+        const direct = command === '!rltgo' || raw.split(/\s+/)[1]?.toLowerCase() === 'go';
         if (direct) {
             const resultat = await tirerEtConstruireResultatRoulette(message.author.id, message.guild, message.channel, client);
             if (resultat.cooldown) {
@@ -2577,11 +2579,15 @@ async function handleRouletteButton(interaction, client) {
         if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
         const res = await tirerEtConstruireResultatRoulette(authorId, interaction.guild, interaction.channel, client);
         if (res.cooldown) {
-            const notifRow = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('roulette_notif').setLabel('🔔 Me prévenir').setStyle(ButtonStyle.Secondary));
+            const notifRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('roulette_notif').setLabel('🔔 Me prévenir ici').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('roulette_notif_mp').setLabel('🔔 Me prévenir par MP').setStyle(ButtonStyle.Secondary)
+            );
             await interaction.reply({ content: `⏳ Cooldown actif ! Il te reste **${res.reste} min**.`, components: [notifRow], ephemeral: true });
             return true;
         }
-        await interaction.update({ embeds: res.embeds, components: res.components });
+        // content: null supprime proprement l'ancien texte de rappel "ton cooldown est terminé..."
+        await interaction.update({ content: null, embeds: res.embeds, components: res.components });
         await envoyerPingRedirection(interaction.channel, res);
         memoriserResultatRoulette(interaction.message.id, res.embeds[0]);
         if (res.attenteChoix) rouletteChoixEnAttente.add(interaction.message.id);
@@ -2615,11 +2621,12 @@ async function handleRouletteButton(interaction, client) {
         const userId = interaction.user.id;
         const fin = rouletteCooldowns.get(userId) ?? 0;
         if (Date.now() >= fin) return interaction.reply({ content: "Ton cooldown est déjà terminé ! 🎰", ephemeral: true });
-        if (rouletteNotifs.has(userId)) return interaction.reply({ content: "Tu as déjà demandé à être prévenu·e pour ce cooldown !", ephemeral: true });
+        
+        // Réarmement immédiat sans blocage
         rouletteNotifs.set(userId, 'MP');
         armerNotifRoulette(userId, 'MP', client);
         bridge.demanderSauvegarde();
-        await interaction.reply({ content: `🔔 Noté ! Si tes MP sont ouverts, je t'enverrai un message dès la fin de ton cooldown <t:${Math.ceil(fin / 1000)}:R> (si tes MP sont fermés, tu risques de ne rien recevoir).`, ephemeral: true });
+        await interaction.reply({ content: `🔔 Noté ! Je t'enverrai un message privé dès la fin de ton cooldown <t:${Math.ceil(fin / 1000)}:R>.`, ephemeral: true });
         return true;
     }
 
@@ -2627,7 +2634,8 @@ async function handleRouletteButton(interaction, client) {
         const userId = interaction.user.id;
         const fin = rouletteCooldowns.get(userId) ?? 0;
         if (Date.now() >= fin) return interaction.reply({ content: "Ton cooldown est déjà terminé ! 🎰", ephemeral: true });
-        if (rouletteNotifs.has(userId)) return interaction.reply({ content: "Tu seras déjà ping dès la fin de ton cooldown !", ephemeral: true });
+        
+        // Réarmement immédiat sur le salon
         rouletteNotifs.set(userId, interaction.channelId);
         armerNotifRoulette(userId, interaction.channelId, client);
         bridge.demanderSauvegarde();
