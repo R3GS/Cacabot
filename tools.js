@@ -114,7 +114,10 @@ async function startPomodoro(channel, participantsMention, workMin, breakMin, cy
         await startPomodoro(channel, participantsMention, workMin, breakMin, nextCycle, nextPhase, reason);
     }, durationMs);
 
+    const ownerId = participantsMention.match(/\d{17,20}/)?.[0] ?? null;
+
     pomodoroSessions.set(channel.id, {
+        ownerId,
         message: msg,
         timeout,
         skip: async () => {
@@ -306,18 +309,27 @@ async function handleToolsMessage(message, response, client) {
             const mine = [...pendingRappels.entries()].filter(([, r]) => r.targetId === message.author.id);
             if (mine.length === 0) return message.reply("Tu n'as aucun rappel en attente !");
 
-            const fields = mine.sort((a, b) => a[1].triggerAt - b[1].triggerAt).map(([, r]) => {
+            const fields = mine.sort((a, b) => a[1].triggerAt - b[1].triggerAt).slice(0, 25).map(([, r]) => {
                 const remainingMs = r.triggerAt - Date.now();
                 const mins = Math.max(0, Math.floor(remainingMs / 60000));
                 const secs = Math.max(0, Math.floor((remainingMs % 60000) / 1000));
-                return { name: r.texte, value: mins > 0 ? `dans ${mins}min ${secs}s` : `dans ${secs}s`, inline: false };
+                return { name: r.texte.slice(0, 256), value: mins > 0 ? `dans ${mins}min ${secs}s` : `dans ${secs}s`, inline: false };
             });
 
-            return message.reply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('⏰ Tes rappels').addFields(fields)] });
-        }
+            const embed = new EmbedBuilder()
+                .setColor(0x5865f2)
+                .setTitle('⏰ Tes rappels')
+                .addFields(fields);
 
+            if (mine.length > 25) {
+                embed.setFooter({ text: `Affichage des 25 premiers rappels sur ${mine.length}.` });
+            }
+
+            return message.reply({ embeds: [embed] });
         if (sub === 'remove') {
-            const query = args.slice(2).join(' ').toLowerCase();
+            const query = args.slice(2).join(' ').trim().toLowerCase();
+            if (!query) return message.reply("Précise le nom du rappel à supprimer.");
+
             const match = [...pendingRappels.entries()].find(([, r]) => r.targetId === message.author.id && r.texte.toLowerCase().includes(query));
             if (!match) return message.reply("Aucun rappel correspondant trouvé !");
             clearTimeout(match[1].timeout);
@@ -338,14 +350,17 @@ async function handleToolsMessage(message, response, client) {
             texte = args.slice(2).join(' ');
         }
 
-        let ms = 0;
-        if (timeStr?.endsWith('min')) ms = parseInt(timeStr) * 60 * 1000;
-        else if (timeStr?.endsWith('h')) ms = parseInt(timeStr) * 60 * 60 * 1000;
-        else if (timeStr?.endsWith('s')) ms = parseInt(timeStr) * 1000;
-        else return message.reply('Format invalide ! Utilise `Xmin`, `Xh` ou `Xs`. Ex: `!rappel 10min gâteau au four`');
+        const matchTemps = timeStr?.match(/^(\d+)(min|h|s)$/);
+        if (!matchTemps) return message.reply('Format invalide ! Utilise `Xmin`, `Xh` ou `Xs`. Ex: `!rappel 10min gâteau au four`');
 
-        if (isNaN(ms) || ms <= 0 || ms > 24 * 60 * 60 * 1000) return message.reply('Durée invalide (maximum 24h) !');
+        const valeurTemps = Number(matchTemps[1]);
+        const uniteTemps = matchTemps[2];
+        const ms = valeurTemps * (uniteTemps === 'min' ? 60 * 1000 : uniteTemps === 'h' ? 60 * 60 * 1000 : 1000);
 
+        if (!Number.isSafeInteger(ms) || ms <= 0 || ms > 24 * 60 * 60 * 1000) return message.reply('Durée invalide (maximum 24h) !');
+        if (!texte?.trim()) return message.reply('Ajoute le texte du rappel. Exemple : `!rappel 10min sortir le gâteau`');
+
+        texte = texte.trim();
         await message.reply(`⏰ Rappel enregistré ! Je ping <@${targetId}> dans **${timeStr}**.`);
         scheduleRappel(message.channel.id, targetId, texte, ms);
         return true;
@@ -547,6 +562,9 @@ async function handleToolsSlash(interaction, client) {
                 return interaction.reply({ content: "Aucun pomodoro en cours !", ephemeral: true });
             }
             const s = pomodoroSessions.get(interaction.channel.id);
+            if (s.ownerId !== interaction.user.id && interaction.user.id !== EPSYS_ID) {
+                return interaction.reply({ content: "Seule la personne qui a lancé ce pomodoro peut l'arrêter.", ephemeral: true });
+            }
             clearTimeout(s.timeout);
             await s.message.delete().catch(() => {});
             pomodoroSessions.delete(interaction.channel.id);
@@ -600,7 +618,7 @@ async function handleToolsSlash(interaction, client) {
         if (sub === 'list') {
             const mine = [...pendingRappels.entries()].filter(([, r]) => r.targetId === interaction.user.id);
             if (mine.length === 0) return interaction.reply({ content: "Aucun rappel en attente !", ephemeral: true });
-            const fields = mine.sort((a, b) => a[1].triggerAt - b[1].triggerAt).map(([, r]) => {
+            const fields = mine.sort((a, b) => a[1].triggerAt - b[1].triggerAt).slice(0, 25).map(([, r]) => {
                 const rem = r.triggerAt - Date.now();
                 const m = Math.max(0, Math.floor(rem / 60000));
                 const s = Math.max(0, Math.floor((rem % 60000) / 1000));
@@ -609,7 +627,8 @@ async function handleToolsSlash(interaction, client) {
             return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('⏰ Tes rappels').addFields(fields)] });
         }
         if (sub === 'remove') {
-            const query = interaction.options.getString('nom').toLowerCase();
+            const query = interaction.options.getString('nom').trim().toLowerCase();
+            if (!query) return interaction.reply({ content: "Indique un mot du rappel à supprimer.", ephemeral: true });
             const match = [...pendingRappels.entries()].find(([, r]) => r.targetId === interaction.user.id && r.texte.toLowerCase().includes(query));
             if (!match) return interaction.reply({ content: "Rappel introuvable !", ephemeral: true });
             clearTimeout(match[1].timeout);
@@ -619,18 +638,26 @@ async function handleToolsSlash(interaction, client) {
         if (sub === 'ajouter') {
             const timeStr = interaction.options.getString('temps').toLowerCase();
             const texte = interaction.options.getString('message');
-            let ms = 0;
-            if (timeStr.endsWith('min')) ms = parseInt(timeStr) * 60 * 1000;
-            else if (timeStr.endsWith('h')) ms = parseInt(timeStr) * 60 * 60 * 1000;
-            else if (timeStr.endsWith('s')) ms = parseInt(timeStr) * 1000;
-            else return interaction.reply({ content: "Format invalide ! (ex: `15min`)", ephemeral: true });
+            const matchTemps = timeStr.match(/^(\d+)(min|h|s)$/);
+            if (!matchTemps) return interaction.reply({ content: "Format invalide ! (ex: `15min`)", ephemeral: true });
 
-            scheduleRappel(interaction.channel.id, interaction.user.id, texte, ms);
+            const valeurTemps = Number(matchTemps[1]);
+            const uniteTemps = matchTemps[2];
+            const ms = valeurTemps * (uniteTemps === 'min' ? 60 * 1000 : uniteTemps === 'h' ? 60 * 60 * 1000 : 1000);
+
+            if (!Number.isSafeInteger(ms) || ms <= 0 || ms > 24 * 60 * 60 * 1000) {
+                return interaction.reply({ content: "Durée invalide : utilise un délai supérieur à zéro et inférieur ou égal à 24 heures.", ephemeral: true });
+            }
+            if (!texte?.trim()) {
+                return interaction.reply({ content: "Ajoute le texte du rappel.", ephemeral: true });
+            }
+
+            scheduleRappel(interaction.channel.id, interaction.user.id, texte.trim(), ms);
             return interaction.reply(`⏰ Rappel enregistré dans **${timeStr}** pour : **${texte}**.`);
         }
     }
 
-    if (commandName === 'botinfo') {
+    if (commandName === 'botinfo' || commandName === 'about') {
         const startDate = new Date('2026-05-14T00:00:00');
         const diff = Date.now() - startDate;
         const totalHours = Math.floor(diff / (1000 * 60 * 60));
@@ -791,6 +818,9 @@ async function handleToolsInteraction(interaction, client) {
         const channelId = parts[2];
         const session = pomodoroSessions.get(channelId);
         if (!session) return interaction.reply({ content: "Ce pomodoro n'existe plus !", ephemeral: true });
+        if (session.ownerId !== interaction.user.id && interaction.user.id !== EPSYS_ID) {
+            return interaction.reply({ content: "Seule la personne qui a lancé ce pomodoro peut le contrôler.", ephemeral: true });
+        }
 
         if (action === 'stop') {
             clearTimeout(session.timeout);

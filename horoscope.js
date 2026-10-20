@@ -315,8 +315,15 @@ function getHoroscopeForSign(signIndex, dateKey) {
 
 function buildHoroscopeEmbed() {
     const now = new Date();
-    const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-    const dateStr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const dateKey = parisNow.getFullYear() * 10000 + (parisNow.getMonth() + 1) * 100 + parisNow.getDate();
+    const dateStr = now.toLocaleDateString('fr-FR', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'Europe/Paris'
+    });
 
     const signes = [
         { nom: 'Bélier', emoji: '♈' }, { nom: 'Taureau', emoji: '♉' }, { nom: 'Gémeaux', emoji: '♊' },

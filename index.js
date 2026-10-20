@@ -35,7 +35,9 @@ async function loadAll() {
         // 1. Cherche d'abord le dernier fichier de sauvegarde dans ton salon Discord
         if (channel) {
             const messages = await channel.messages.fetch({ limit: 10 }).catch(() => null);
-            const backupMsg = messages?.find(m => m.attachments.size > 0 && m.attachments.first().name.endsWith('.json'));
+            const backupMsg = messages?.find(m =>
+                m.attachments.some(attachment => attachment.name === 'cacabot_backup.json')
+            );
 
             if (backupMsg) {
                 const fileUrl = backupMsg.attachments.first().url;
@@ -146,10 +148,14 @@ async function saveAll() {
         console.log(`💾 Nouvelle sauvegarde postée dans #${channel.name}`);
 
         // Nettoyage instantané en 1 seule requête (évite de faire ramer le bot avec 15 suppressions individuelles)
-        const messages = await channel.messages.fetch({ limit: 25 }).catch(() => null);
-        if (messages && messages.size > 10) {
-            const aSupprimer = [...messages.values()].slice(10);
-            await channel.bulkDelete(aSupprimer, true).catch(() => {});
+        const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
+        if (messages) {
+            const sauvegardes = [...messages.values()]
+                .filter(m => m.attachments.some(attachment => attachment.name === 'cacabot_backup.json'));
+
+            for (const m of sauvegardes.slice(10)) {
+                await m.delete().catch(() => {});
+            }
         }
     } catch (err) {
         console.error('Erreur sauvegarde Discord:', err);
@@ -249,6 +255,7 @@ const {
 
 ///pendu.js
 const {
+    PENDU_CHANNEL_ID,
     initPenduState,
     lancerPenduQuotidien,
     handlePenduMessage,
@@ -1584,8 +1591,15 @@ async function disableButtons(interaction) {
             }
         }
         const now = new Date();
-        const dateKey = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
-        const dateStr = now.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+        const dateKey = parisNow.getFullYear() * 10000 + (parisNow.getMonth() + 1) * 100 + parisNow.getDate();
+        const dateStr = now.toLocaleDateString('fr-FR', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            timeZone: 'Europe/Paris'
+        });
 
         const signes = [
             { nom: 'B\u00e9lier', emoji: '\u2648' },
@@ -1798,6 +1812,58 @@ try {
         // Commandes d'interactions (/kiss, /hug, /punch, /bang, /rizz, /danse, /rire, /cry, /run, /die, /explode, /bait, /ban, /jailaref, /palaref)
         if (await handleInteractionSlash(interaction, client)) return;
 
+        if (commandName === 'cry') {
+            const cibleUser = interaction.options.getUser('membre');
+            const auteurNom = interaction.member?.displayName ?? interaction.user.username;
+            const cibleNom = cibleUser
+                ? interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username
+                : null;
+
+            const cryGifs = [
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906480916725791/zidane.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906486872768522/wwe.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487413964941/cry2.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487656972359/hamster.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487959093359/interstellar.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906869598814310/cry.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488625856622/powder.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488932176034/vi.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489271779449/gangle.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489657790466/pomni.gif",
+                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489947324589/fred.gif"
+            ];
+            const gif = cryGifs[Math.floor(Math.random() * cryGifs.length)];
+
+            if (cibleUser?.id === interaction.user.id) {
+                const embed = new EmbedBuilder()
+                    .setColor(0x597eff)
+                    .setDescription(`😭 **${auteurNom}** pleure...`)
+                    .setImage(gif);
+                return interaction.reply({ embeds: [embed] });
+            }
+
+            const description = cibleUser?.id === client.user.id
+                ? `😭 **${auteurNom}** pleure à cause de moi...`
+                : cibleUser
+                    ? `😭 **${auteurNom}** pleure à cause de **${cibleNom}**...`
+                    : `😭 **${auteurNom}** pleure...`;
+
+            const embed = new EmbedBuilder()
+                .setColor(0x597eff)
+                .setDescription(description)
+                .setImage(gif);
+
+            const cibleId = cibleUser && cibleUser.id !== client.user.id ? cibleUser.id : 'none';
+            const nomCible = cibleId === 'none' ? 'none' : cibleNom;
+            const bouton = new ButtonBuilder()
+                .setCustomId(`cry_with_${interaction.user.id}_${auteurNom}_${cibleId}_${nomCible}`)
+                .setLabel('😭 Pleurer avec')
+                .setStyle(ButtonStyle.Secondary);
+            const row = new ActionRowBuilder().addComponents(bouton);
+
+            return interaction.reply({ embeds: [embed], components: [row] });
+        }
+
         // =========================
         // LOT 2 : JEUX & DESTIN
         // =========================
@@ -2006,7 +2072,7 @@ try {
 } catch (err) {
     console.error('Erreur interactionCreate:', err);
     if (err.code === 10062 || err.message?.includes('Unknown interaction') || err.message?.includes('expired')) {
-        if (interaction.isButton()) {
+        if (interaction.isButton() && !interaction.replied && !interaction.deferred) {
             interaction.reply({ content: "Ce bouton n'est plus disponible !", ephemeral: true }).catch(() => {});
         }
     }

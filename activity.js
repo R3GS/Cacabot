@@ -39,20 +39,20 @@ function initActivityState(bridge) {
 // =========================
 
 function getMonthKey() {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const parisNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    return `${parisNow.getFullYear()}-${String(parisNow.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function getTodayKey() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const parisNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    return `${parisNow.getFullYear()}-${String(parisNow.getMonth() + 1).padStart(2, '0')}-${String(parisNow.getDate()).padStart(2, '0')}`;
 }
 
 function getWeekKey() {
-    const d = new Date();
-    const startOfYear = new Date(d.getFullYear(), 0, 1);
-    const week = Math.ceil(((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
-    return `${d.getFullYear()}-W${String(week).padStart(2, '0')}`;
+    const parisNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const startOfYear = new Date(parisNow.getFullYear(), 0, 1);
+    const week = Math.ceil(((parisNow - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
+    return `${parisNow.getFullYear()}-W${String(week).padStart(2, '0')}`;
 }
 
 function cleanOldData() {
@@ -341,11 +341,12 @@ async function handleActivityMessage(message, response) {
             return true;
         }
         const args = message.content.trim().split(/\s+/);
-        const count = parseInt(args[args.length - 1]);
+        const rawCount = args[args.length - 1];
+        const count = Number(rawCount);
         const cible = message.mentions.users.first();
         const targetId = cible ? cible.id : args[1];
 
-        if (!targetId || isNaN(count)) {
+        if (!targetId || !/^\d+$/.test(rawCount) || !Number.isSafeInteger(count)) {
             await message.reply("Usage : `!setmessages @Membre NombreDeMessages` ou `!setmessages ID NombreDeMessages`");
             return true;
         }
@@ -369,7 +370,7 @@ async function handleActivityMessage(message, response) {
 async function handleActivitySlash(interaction) {
     const { commandName } = interaction;
 
-    if (commandName === 'profil') {
+    if (commandName === 'profil' || commandName === 'profile') {
         const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
         return interaction.reply({ embeds: [buildProfilEmbed(cibleUser, interaction.guild)] });
     }

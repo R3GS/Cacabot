@@ -139,13 +139,20 @@ async function handleAnniversaireMessage(message, response) {
     }
 
     if (sub === 'set') {
-        const lastArg = args[args.length - 1];
-        const isDate = /^\d{2}\/\d{2}$/.test(lastArg);
+const lastArg = args[args.length - 1];
+const dateParts = lastArg.match(/^(\d{2})\/(\d{2})$/);
+const jour = Number(dateParts?.[1]);
+const mois = Number(dateParts?.[2]);
+const isDate = Boolean(dateParts) &&
+    mois >= 1 &&
+    mois <= 12 &&
+    jour >= 1 &&
+    jour <= new Date(2000, mois, 0).getDate();
 
-        if (!isDate) {
-            await message.reply("Format invalide ! Utilise `!anniversaire set JJ/MM` ou `!anniversaire set Pseudo JJ/MM`");
-            return true;
-        }
+if (!isDate) {
+    await message.reply("Date invalide ! Utilise `!anniversaire set JJ/MM` ou `!anniversaire set Pseudo JJ/MM`");
+    return true;
+}
 
         const date = lastArg;
 
@@ -239,8 +246,8 @@ async function handleAnniversaireMessage(message, response) {
                             const nom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
                             if (!date) return message.reply(`🎂 **${nom}** n'a pas encore enregistré son anniversaire.`);
                             const [d, m] = date.split('/').map(Number);
-                            const now = new Date(); const next = new Date(now.getFullYear(), m - 1, d);
-                            if (next < now) next.setFullYear(now.getFullYear() + 1);
+                            const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' })); const next = new Date(now.getFullYear(), m - 1, d);
+                            if (next < new Date(now.getFullYear(), now.getMonth(), now.getDate())) next.setFullYear(now.getFullYear() + 1);
                             const diffDays = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
                             const joursStr = diffDays === 0 ? "c'est aujourd'hui 🎉 !" : diffDays === 1 ? "c'est demain 🎉 !" : `dans **${diffDays} jours** !`;
                             return message.reply(`🎂 L'anniversaire de **${nom}** est le **${date}** — ${joursStr}`);
@@ -387,9 +394,18 @@ async function handleAnniversaireSlash(interaction) {
 
     if (sub === 'set') {
         const date = interaction.options.getString('date');
-        if (!/^\d{2}\/\d{2}$/.test(date)) {
-            return interaction.reply({ content: "Format invalide ! Utilise le format `JJ/MM` (ex : `24/07`).", ephemeral: true });
-        }
+const dateParts = date.match(/^(\d{2})\/(\d{2})$/);
+const jour = Number(dateParts?.[1]);
+const mois = Number(dateParts?.[2]);
+const dateValide = Boolean(dateParts) &&
+    mois >= 1 &&
+    mois <= 12 &&
+    jour >= 1 &&
+    jour <= new Date(2000, mois, 0).getDate();
+
+if (!dateValide) {
+    return interaction.reply({ content: "Date invalide ! Utilise le format `JJ/MM` (ex : `24/07`).", ephemeral: true });
+}
         const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
         const nom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
         guildBirthdays[cibleUser.id] = date;

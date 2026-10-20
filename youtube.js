@@ -268,21 +268,22 @@ async function verifierNouvellesVideosYouTube() {
 
             // Nouvelle vidéo détectée !
             if (config.lastVideoId !== latestVideoId) {
+                const targetChannel = client.channels.cache.get(config.discordChannelId);
+                if (!targetChannel) continue;
+
+                const videoUrl = `https://www.youtube.com/watch?v=${latestVideoId}`;
+                const messageTemplate = config.customMessage || "📢 **Nouvelle vidéo de {chaine} !**\n{url}";
+                const messageFinal = messageTemplate
+                    .replace('{chaine}', config.title || 'YouTube')
+                    .replace('{titre}', decodeHtmlEntities(videoTitle))
+                    .replace('{url}', videoUrl);
+
+                await targetChannel.send(messageFinal);
+
                 config.lastVideoId = latestVideoId;
                 ytState.demanderSauvegarde();
-
-                const targetChannel = client.channels.cache.get(config.discordChannelId);
-                if (targetChannel) {
-                    const videoUrl = `https://www.youtube.com/watch?v=${latestVideoId}`;
-                    const messageTemplate = config.customMessage || "📢 **Nouvelle vidéo de {chaine} !**\n{url}";
-                    const messageFinal = messageTemplate
-                        .replace('{chaine}', config.title || 'YouTube')
-                        .replace('{titre}', decodeHtmlEntities(videoTitle))
-                        .replace('{url}', videoUrl);
-
-                    await targetChannel.send(messageFinal);
-                    console.log(`[YouTube] 📢 Nouvelle vidéo envoyée pour ${config.title} : ${latestVideoId}`);
-                }
+                console.log(`[YouTube] 📢 Nouvelle vidéo envoyée pour ${config.title} : ${latestVideoId}`);
+            }
             }
         } catch (e) {
             console.error(`[YouTube] Erreur check chaîne ${channelId}:`, e.message);
@@ -794,7 +795,7 @@ async function handleYoutubeInteraction(interaction) {
                 }
 
                 const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${targetId}`;
-                const res = await fetch(rssUrl);
+                const res = await fetch(rssUrl, { signal: AbortSignal.timeout(10000) });
                 if (res.ok) {
                     const xml = await res.text();
                     const titleMatch = xml.match(/<title>([^<]+)<\/title>/g);
