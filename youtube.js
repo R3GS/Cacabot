@@ -284,7 +284,6 @@ async function verifierNouvellesVideosYouTube() {
                 ytState.demanderSauvegarde();
                 console.log(`[YouTube] 📢 Nouvelle vidéo envoyée pour ${config.title} : ${latestVideoId}`);
             }
-            }
         } catch (e) {
             console.error(`[YouTube] Erreur check chaîne ${channelId}:`, e.message);
         }

@@ -68,6 +68,13 @@ function cleanOldData() {
         const diff = (cy - wy) * 52 + (cw - ww);
         if (diff > 4) delete activityState.weeklyData[key];
     });
+    const currentMonth = getMonthKey();
+    const [cmy, cmm] = currentMonth.split('-').map(Number);
+    Object.keys(activityState.monthlyData).forEach(key => {
+        const [my, mm] = key.split('-').map(Number);
+        const diff = (cmy - my) * 12 + (cmm - mm);
+        if (diff > 6) delete activityState.monthlyData[key];
+    });
 }
 
 // =========================

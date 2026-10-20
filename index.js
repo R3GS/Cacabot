@@ -40,10 +40,15 @@ async function loadAll() {
             );
 
             if (backupMsg) {
-                const fileUrl = backupMsg.attachments.first().url;
-                const res = await fetch(fileUrl);
-                jsonRecord = await res.json();
-                console.log('✅ Données chargées depuis le salon de backup Discord !');
+                const targetAttachment = backupMsg.attachments.find(a => a.name === 'cacabot_backup.json');
+                if (targetAttachment) {
+                    const res = await fetch(targetAttachment.url);
+                    const parsed = await res.json();
+                    if (parsed && typeof parsed === 'object') {
+                        jsonRecord = parsed;
+                        console.log('✅ Données chargées depuis le salon de backup Discord !');
+                    }
+                }
             }
         }
 
@@ -52,6 +57,9 @@ async function loadAll() {
         if (!jsonRecord) {
             console.warn('⚠️ Aucune donnée précédente trouvée, démarrage à zéro.');
             donneesChargees = true;
+            if (channel) {
+                await saveAll();
+            }
             return;
         }
 
@@ -76,6 +84,11 @@ async function loadAll() {
         if (jsonRecord.numeroBuild) numeroBuild = jsonRecord.numeroBuild;
         if (jsonRecord.battlePassData) battlePassData = jsonRecord.battlePassData;
 
+        suggestionsData.clear();
+        for (const [k, v] of Object.entries(jsonRecord.suggestions ?? {})) {
+            suggestionsData.set(k, v);
+        }
+
         for (const [nom, map] of Object.entries(ROULETTE_ETATS)) {
             map.clear();
             for (const [k, v] of Object.entries(jsonRecord.roulette?.[nom] ?? {})) map.set(k, v);
@@ -99,9 +112,12 @@ async function loadAll() {
 
 let lastsaveSaveTime = null;
 let messagesSinceLastsaveSave = 0;
+let sauvegardeEnCours = false;
 
 async function saveAll() {
     if (!donneesChargees) { console.warn('⚠️ Sauvegarde ignorée : données non chargées'); return; }
+    if (sauvegardeEnCours) return;
+    sauvegardeEnCours = true;
     try {
         const channel = await client.channels.fetch(BACKUP_CHANNEL_ID).catch(() => null);
         if (!channel) {
@@ -128,6 +144,7 @@ async function saveAll() {
             dernierCommitSha: dernierCommitSha,
             numeroBuild: numeroBuild,
             battlePassData: battlePassData,
+            suggestions: Object.fromEntries(suggestionsData),
             roulette: Object.fromEntries(
                 Object.entries(ROULETTE_ETATS).map(([nom, map]) => [nom, Object.fromEntries(map)])
             )
@@ -159,6 +176,8 @@ async function saveAll() {
         }
     } catch (err) {
         console.error('Erreur sauvegarde Discord:', err);
+    } finally {
+        sauvegardeEnCours = false;
     }
 }
 
@@ -185,10 +204,16 @@ process.on('SIGINT', async () => {
     process.exit(0);
 });
 
-// Empêche le bot de crasher si un message cité a été supprimé par l'utilisateur
+// Empêche le bot de crasher sur les rejets Discord bénins (suppression, timeout ou ack)
 process.on('unhandledRejection', (error) => {
-    if (error?.code === 50035 || error?.code === 10008 || error?.code === 10062) {
-        return console.warn('⚠️ Requête Discord ignorée (message supprimé ou interaction expirée).');
+    if (
+        error?.code === 50035 ||
+        error?.code === 10008 ||
+        error?.code === 10062 ||
+        error?.code === 40060 ||
+        error?.code === 10015
+    ) {
+        return console.warn('⚠️ Requête Discord ignorée (message supprimé, interaction expirée ou webhook indisponible).');
     }
     console.error('⚠️ Erreur non gérée capturée :', error);
 });
@@ -225,13 +250,13 @@ const fs = require('fs');
 // =========================
 
 ///!destin
-const { getDestinReponse } = require('./destin.js');
+const { getDestinReponse, handleDestinSlash } = require('./destin.js');
 
 ///!horoscope
 const { getHoroscopeForSign, buildHoroscopeEmbed, execute: executeHoroscope } = require('./horoscope.js');
 
 ///animal.js
-const { getAnimalResponse } = require('./animal.js');
+const { getAnimalResponse, handleAnimalMessage, handleAnimalSlash } = require('./animal.js');
 
 ///interaction.js
 const { handleInteractionMessage, handleInteractionButton, handleInteractionSlash } = require('./interaction.js');
@@ -268,6 +293,20 @@ const {
     handleRolembedMessage,
     handleRolembedInteraction
 } = require('./rolembed.js');
+
+///suggestion.js
+const {
+    initSuggestionState,
+    handleSuggestionMessage,
+    handleSuggestionSlash,
+    handleSuggestionButton
+} = require('./suggestion.js');
+
+initSuggestionState({
+    getSuggestionsData: () => suggestionsData,
+    demanderSauvegarde,
+    trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta)
+});
 
 initPenduState({
     getPenduData: () => penduData,
@@ -375,6 +414,7 @@ initBirthdayState({
     saveBirthdays: async () => saveAll(),
     findMemberByName,
     askDisambiguation,
+    estModo,
     EPSYS_ID: '436218312574107658'
 });
 
@@ -1070,57 +1110,6 @@ const vocalMessages = new Map();
 const dernierMessageParUtilisateur = new Map();
 const EPSYS_ID = '436218312574107658';
 
-function buildSuggestionEmbed(data, authorMember) {
-    const pourCount = data.pour.length;
-    const contreCount = data.contre.length;
-    const total = pourCount + contreCount;
-
-    const pourPct = total > 0 ? Math.round((pourCount / total) * 100) : 0;
-    const contrePct = total > 0 ? (100 - pourPct) : 0;
-
-    let barre = '░░░░░░░░░░';
-    if (total > 0) {
-        const nbVert = Math.round((pourCount / total) * 10);
-        const nbRouge = 10 - nbVert;
-        barre = '🟩'.repeat(nbVert) + '🟥'.repeat(nbRouge);
-    }
-
-    const avatarUrl = authorMember?.user?.displayAvatarURL({ dynamic: true, size: 256 }) 
-                   ?? authorMember?.displayAvatarURL?.({ dynamic: true, size: 256 });
-
-    const embed = new EmbedBuilder()
-        .setColor(0xd96b00)
-        .setTitle('💡 NOUVELLE SUGGESTION')
-        .setDescription(
-            `**Proposition :**\n> ${data.texte}\n\n` +
-            `**Auteur·rice :** <@${data.authorId}>\n\n` +
-            `**Votes actuels :**\n` +
-            `✅ **Pour :** ${pourCount} (${pourPct}%)\n` +
-            `❌ **Contre :** ${contreCount} (${contrePct}%)\n\n` +
-            `\`${barre}\``
-        )
-        .setFooter({ text: 'Clique sur un bouton pour voter ou modifier ton vote !\nUtilisez !suggestion pour soumettre vos idées' })
-        .setTimestamp();
-
-    if (avatarUrl) embed.setThumbnail(avatarUrl);
-    return embed;
-}
-
-function buildSuggestionRow(data) {
-    return new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId('sugg_vote_pour')
-            .setLabel(`Pour (${data.pour.length})`)
-            .setEmoji('✅')
-            .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-            .setCustomId('sugg_vote_contre')
-            .setLabel(`Contre (${data.contre.length})`)
-            .setEmoji('❌')
-            .setStyle(ButtonStyle.Danger)
-    );
-}
-
 // =========================
 //           CHEH
 // =========================
@@ -1240,6 +1229,8 @@ async function disableButtons(interaction) {
                 { nom: 'Roulette', obj: typeof handleRouletteMessage === 'function' && typeof ROULETTE_ETATS === 'object' },
                 { nom: 'Tools & Utilitaires', obj: typeof handleToolsMessage === 'function' && typeof handleToolsSlash === 'function' },
                 { nom: 'Minijeux (Motus/Rébus)', obj: typeof handleMotusMessage === 'function' && typeof handleRebusMessage === 'function' },
+                { nom: 'Pendu Quotidien', obj: typeof handlePenduMessage === 'function' },
+                { nom: 'Suggestions', obj: typeof handleSuggestionMessage === 'function' },
                 { nom: 'Anniversaires', obj: typeof handleAnniversaireMessage === 'function' && typeof getGuildBirthdays === 'function' },
                 { nom: 'Citations (Quotes)', obj: typeof handleQuotesMessage === 'function' && Array.isArray(quotesData) },
                 { nom: 'Bienvenue (Canvas)', obj: typeof handleWelcomeMessage === 'function' },
@@ -1433,121 +1424,20 @@ async function disableButtons(interaction) {
     if (await handleYoutubeMessage(message, response)) return;
 
     // !animal
-    if (response?.needsMention) {
-        const args = message.content.trim().split(/\s+/).slice(1).join(" ");
-        if (!message.mentions.users.first() && args.length > 0) {
-            const result = findMemberByName(message.guild, args);
-            if (result.multiple) {
-                askDisambiguation(message, message.guild, result.candidates, (user) => {
-                    message.reply(getAnimalResponse(message, user, client.user.id));
-                });
-                return;
-            }
-            if (result.found) {
-                return message.reply(getAnimalResponse(message, result.found.user, client.user.id));
-            }
-        }
-        return message.reply(getAnimalResponse(message, null, client.user.id));
-    }
+    if (await handleAnimalMessage(message, response, client, { findMemberByName, askDisambiguation })) return;
 
     // Commandes Bienvenue (!welcome, !bienvenue)
     if (await handleWelcomeMessage(message, response)) return;
 
-    // !suggestion
-    if (response?.needsSuggestion) {
-        const SUGGESTION_CHANNEL_ID = '720079866199801937';
-        if (message.channel.id !== SUGGESTION_CHANNEL_ID) {
-            return message.channel.send(`💡 <@${message.author.id}>, les suggestions se font uniquement dans le salon <#${SUGGESTION_CHANNEL_ID}> !`);
-        }
-
-        const texte = message.content.trim().split(/\s+/).slice(1).join(" ");
-        if (!texte) {
-            return message.reply("Usage : `!suggestion [ton idée/proposition]`\nExemple : `!suggestion Créer un salon Meubles IKEA`");
-        }
-
-        const data = {
-            authorId: message.author.id,
-            texte: texte,
-            pour: [],
-            contre: []
-        };
-
-        const embed = buildSuggestionEmbed(data, message.member);
-        const row = buildSuggestionRow(data);
-
-        await message.delete().catch(() => {});
-        const sent = await message.channel.send({ embeds: [embed], components: [row] });
-
-        suggestionsData.set(sent.id, data);
-        demanderSauvegarde();
-        return;
-    }
+    // Commandes Suggestions (!suggestion, !suggest, !sugg)
+    if (await handleSuggestionMessage(message, response)) return;
 
     // Commandes sociales (!lovecalc, !topchef, !flip, !blague, !question, !sylvain, !bougetoi)
     if (await handleSocialMessage(message, response, client, { findMemberByName, askDisambiguation })) return;
 
     if (await handleInteractionMessage(message, response, client, { findMemberByName, askDisambiguation })) return;
 
-    // !cry
-    if (response?.needsCry) {
-        const cryGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505906480916725791/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906486872768522/wwe.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487413964941/cry2.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487656972359/hamster.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487959093359/interstellar.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906869598814310/cry.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488625856622/powder.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488932176034/vi.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489271779449/gangle.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489657790466/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489947324589/fred.gif"];
-        const gif = cryGifs[Math.floor(Math.random() * cryGifs.length)];
-        const auteurNom = message.member?.displayName ?? message.author.username;
-        let cible = message.mentions.users.first();
-
-        if (!cible) {
-            const query = message.content.trim().split(/\s+/).slice(1).join(' ');
-            if (query) {
-                if (client.user.username.toLowerCase().includes(query.toLowerCase()) || 'cacabot'.includes(query.toLowerCase())) {
-                    cible = client.user;
-                } else {
-                    const result = findMemberByName(message.guild, query);
-                    if (result.multiple) {
-                        askDisambiguation(message, message.guild, result.candidates, async (user) => {
-                            const cibleNom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
-                            const btn = new ButtonBuilder()
-                                .setCustomId(`cry_with_${message.author.id}_${auteurNom}_${user.id}_${cibleNom}`)
-                                .setLabel('\ud83d\ude2d Pleurer avec')
-                                .setStyle(ButtonStyle.Secondary);
-                            const row = new ActionRowBuilder().addComponents(btn);
-                            const embed = new EmbedBuilder()
-                                .setColor(0x597eff)
-                                .setDescription(`\ud83d\ude2d **${auteurNom}** Pleure \u00e0 cause de **${cibleNom}**...`)
-                                .setImage(gif);
-                            message.reply({ embeds: [embed], components: [row] });
-                        });
-                        return;
-                    }
-                    if (result.found) cible = result.found.user;
-                }
-            }
-        }
-
-        let desc, targetId = null, cibleNom = null;
-
-        if (cible && cible.id === message.author.id) {
-            desc = `\ud83d\ude2d **${auteurNom}** Pleure...`;
-            const embed = new EmbedBuilder().setColor(0x597eff).setDescription(desc).setImage(gif);
-            return message.reply({ embeds: [embed] });
-        } else if (cible && cible.id === '1503495713097519355') {
-            desc = `\ud83d\ude2d **${auteurNom}** pleure \u00e0 cause de moi...`;
-        } else if (cible) {
-            cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
-            targetId = cible.id;
-            desc = `\ud83d\ude2d **${auteurNom}** Pleure \u00e0 cause de **${cibleNom}**...`;
-        } else {
-            desc = `\ud83d\ude2d **${auteurNom}** Pleure...`;
-        }
-
-        const embed = new EmbedBuilder().setColor(0x597eff).setDescription(desc).setImage(gif);
-
-        const btn = new ButtonBuilder()
-            .setCustomId(`cry_with_${message.author.id}_${auteurNom}_${targetId ?? 'none'}_${cibleNom ?? 'none'}`)
-            .setLabel('\ud83d\ude2d Pleurer avec')
-            .setStyle(ButtonStyle.Secondary);
-        const row = new ActionRowBuilder().addComponents(btn);
-        return message.reply({ embeds: [embed], components: [row] });
-    }
+    // !cry est pris en charge par handleInteractionMessage
 
     // !bougetoi & !sylvain sont pris en charge par handleSocialMessage
 
@@ -1579,70 +1469,8 @@ async function disableButtons(interaction) {
 
     // !horoscope
     if (response?.needsHoroscope) {
-        const args = message.content.trim().split(/\s+/);
-        const forcedChannelId = args[1] && message.author.id === '436218312574107658' ? args[1] : null;
-        let targetChannel = message.channel;
-        if (forcedChannelId) {
-            try {
-                targetChannel = await client.channels.fetch(forcedChannelId);
-                if (!targetChannel) return message.reply('Salon introuvable.');
-            } catch (e) {
-                return message.reply('Salon introuvable.');
-            }
-        }
-        const now = new Date();
-        const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-        const dateKey = parisNow.getFullYear() * 10000 + (parisNow.getMonth() + 1) * 100 + parisNow.getDate();
-        const dateStr = now.toLocaleDateString('fr-FR', {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-            timeZone: 'Europe/Paris'
-        });
-
-        const signes = [
-            { nom: 'B\u00e9lier', emoji: '\u2648' },
-            { nom: 'Taureau', emoji: '\u2649' },
-            { nom: 'G\u00e9meaux', emoji: '\u264a' },
-            { nom: 'Cancer', emoji: '\u264b' },
-            { nom: 'Lion', emoji: '\u264c' },
-            { nom: 'Vierge', emoji: '\u264d' },
-            { nom: 'Balance', emoji: '\u264e' },
-            { nom: 'Scorpion', emoji: '\u264f' },
-            { nom: 'Sagittaire', emoji: '\u2650' },
-            { nom: 'Capricorne', emoji: '\u2651' },
-            { nom: 'Verseau', emoji: '\u2652' },
-            { nom: 'Poissons', emoji: '\u2653' },
-            { nom: 'Loutre', emoji: '\ud83e\udda6' },
-        ];
-
-        const description = signes.map((s, i) => {
-            const horoscope = getHoroscopeForSign(i, dateKey);
-            return `${s.emoji} **${s.nom}**\n${horoscope}`;
-        }).join('\n\n');
-
-        const embed = new EmbedBuilder()
-            .setColor(0x2c2f33)
-            .setTitle('\ud83d\udd2e Horoscope du jour')
-            .setDescription(description)
-            .setThumbnail('https://cdn.discordapp.com/attachments/1128032964924670053/1505637234596905080/color-replaced.png')
-            .setFooter({ text: `\ud83d\udcc5 ${dateStr.charAt(0).toUpperCase() + dateStr.slice(1)}` });
-
-        if (forcedChannelId) {
-            const titres = [
-                '# HOROSCOPE DU JOUR \ud83d\udd2e',
-                "# L'ORACLE A PARL\u00c9 \ud83d\udd2e",
-                '# LES ASTRES ONT PARL\u00c9 \ud83d\udd2e',
-                '# LES \u00c9TOILES ONT PARL\u00c9 \ud83d\udd2e',
-                "# L'UNIVERS NOUS ENVOIE SES SIGNES \ud83d\udd2e",
-            ];
-            const titre = titres[Math.floor(Math.random() * titres.length)];
-            await targetChannel.send(titre);
-            await targetChannel.send({ embeds: [embed] });
-            return message.react('✅');
-        }
-        return message.reply({ embeds: [embed] });
+        await executeHoroscope(message, client, response);
+        return;
     }
 
     // !save
@@ -1676,17 +1504,6 @@ async function disableButtons(interaction) {
     if (await handleEmbedMessage(message, response, client)) return;
 
     // !question est pris en charge par handleSocialMessage
-
-    // !help
-    const cmdPrefix = message.content.trim().split(/\s+/)[0]?.toLowerCase();
-    if (cmdPrefix === '!help' || cmdPrefix === '!aide') {
-        const argHelp = message.content.trim().split(/\s+/).slice(1).join(' ') || null;
-        const helpResp = getHelpResponse(argHelp);
-        if (helpResp) {
-            if (typeof helpResp === 'string') return message.reply(helpResp);
-            return message.reply(helpResp);
-        }
-    }
 
     // Réponse texte simple (100% silencieuse)
     if (response && typeof response === "object" && response.files) {
@@ -1812,74 +1629,17 @@ try {
         // Commandes d'interactions (/kiss, /hug, /punch, /bang, /rizz, /danse, /rire, /cry, /run, /die, /explode, /bait, /ban, /jailaref, /palaref)
         if (await handleInteractionSlash(interaction, client)) return;
 
-        if (commandName === 'cry') {
-            const cibleUser = interaction.options.getUser('membre');
-            const auteurNom = interaction.member?.displayName ?? interaction.user.username;
-            const cibleNom = cibleUser
-                ? interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username
-                : null;
-
-            const cryGifs = [
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906480916725791/zidane.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906486872768522/wwe.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487413964941/cry2.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487656972359/hamster.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487959093359/interstellar.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906869598814310/cry.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488625856622/powder.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488932176034/vi.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489271779449/gangle.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489657790466/pomni.gif",
-                "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489947324589/fred.gif"
-            ];
-            const gif = cryGifs[Math.floor(Math.random() * cryGifs.length)];
-
-            if (cibleUser?.id === interaction.user.id) {
-                const embed = new EmbedBuilder()
-                    .setColor(0x597eff)
-                    .setDescription(`😭 **${auteurNom}** pleure...`)
-                    .setImage(gif);
-                return interaction.reply({ embeds: [embed] });
-            }
-
-            const description = cibleUser?.id === client.user.id
-                ? `😭 **${auteurNom}** pleure à cause de moi...`
-                : cibleUser
-                    ? `😭 **${auteurNom}** pleure à cause de **${cibleNom}**...`
-                    : `😭 **${auteurNom}** pleure...`;
-
-            const embed = new EmbedBuilder()
-                .setColor(0x597eff)
-                .setDescription(description)
-                .setImage(gif);
-
-            const cibleId = cibleUser && cibleUser.id !== client.user.id ? cibleUser.id : 'none';
-            const nomCible = cibleId === 'none' ? 'none' : cibleNom;
-            const bouton = new ButtonBuilder()
-                .setCustomId(`cry_with_${interaction.user.id}_${auteurNom}_${cibleId}_${nomCible}`)
-                .setLabel('😭 Pleurer avec')
-                .setStyle(ButtonStyle.Secondary);
-            const row = new ActionRowBuilder().addComponents(bouton);
-
-            return interaction.reply({ embeds: [embed], components: [row] });
-        }
-
         // =========================
         // LOT 2 : JEUX & DESTIN
         // =========================
 
-        if (commandName === 'destin') {
-            return interaction.reply({ content: getDestinReponse() });
-        }
+        if (await handleDestinSlash(interaction)) return;
 
         if (commandName === 'horoscope') {
             return interaction.reply({ embeds: [buildHoroscopeEmbed()] });
         }
 
-        if (commandName === 'animal') {
-            const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
-            return interaction.reply(getAnimalResponse(interaction, cibleUser));
-        }
+        if (await handleAnimalSlash(interaction, client)) return;
 
         // flip et blague sont pris en charge par handleSocialSlash
 
@@ -1899,28 +1659,7 @@ try {
 
         if (await handleWelcomeSlash(interaction)) return;
 
-        if (commandName === 'suggestion') {
-            const SUGGESTION_CHANNEL_ID = '720079866199801937';
-            if (interaction.channel.id !== SUGGESTION_CHANNEL_ID) {
-                return interaction.reply({ content: `💡 Les suggestions se font uniquement dans le salon <#${SUGGESTION_CHANNEL_ID}> !`, ephemeral: true });
-            }
-
-            const texte = interaction.options.getString('proposition');
-            const data = {
-                authorId: interaction.user.id,
-                texte: texte,
-                pour: [],
-                contre: []
-            };
-
-            const embed = buildSuggestionEmbed(data, interaction.member);
-            const row = buildSuggestionRow(data);
-
-            const sent = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
-            suggestionsData.set(sent.id, data);
-            demanderSauvegarde();
-            return;
-        }
+        if (await handleSuggestionSlash(interaction)) return;
 
     if (await handleAnniversaireSlash(interaction)) return;
 
@@ -1971,37 +1710,6 @@ try {
     // Boutons et menus sociaux (flip, sylvain, blagues, questions)
     if (await handleSocialInteraction(interaction)) return;
 
-    // =========================
-    //        BOUTON CRY
-    // =========================
-
-    if (interaction.isButton() && interaction.customId.startsWith('cry_with_')) {
-        const parts = interaction.customId.split('_');
-        const originalAuthorId = parts[2];
-        const originalAuthorNom = parts[3];
-        const targetId = parts[4];
-        const targetNom = parts[5];
-
-        if (interaction.user.id === originalAuthorId) {
-            return interaction.reply({ content: "Tu as d\u00e9j\u00e0 pleur\u00e9...", ephemeral: true });
-        }
-        if (targetId !== 'none' && interaction.user.id === targetId) {
-            return interaction.reply({ content: `C'est toi qui a fait pleurer **${originalAuthorNom}** !`, ephemeral: true });
-        }
-
-        const cryGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505906480916725791/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906486872768522/wwe.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487413964941/cry2.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487656972359/hamster.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487959093359/interstellar.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906869598814310/cry.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488625856622/powder.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488932176034/vi.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489271779449/gangle.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489657790466/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489947324589/fred.gif"];
-        const gif = cryGifs[Math.floor(Math.random() * cryGifs.length)];
-        const clickerNom = interaction.member?.displayName ?? interaction.user.username;
-
-        const embed = new EmbedBuilder()
-            .setColor(0x597eff)
-            .setDescription(`\ud83d\ude2d **${clickerNom}** Pleure avec **${originalAuthorNom}**...`)
-            .setImage(gif);
-
-        await disableButtons(interaction);
-        return interaction.reply({ embeds: [embed] });
-    }
-
     // sylvain_again est géré par handleSocialInteraction
 
     // =========================
@@ -2019,63 +1727,24 @@ try {
     // =========================
     if (await handleToolsInteraction(interaction, client)) return;
 
-    // =========================
-    // BOUTONS SUGGESTIONS
-    // =========================
-    if (interaction.isButton() && (interaction.customId === 'sugg_vote_pour' || interaction.customId === 'sugg_vote_contre')) {
-        const msgId = interaction.message.id;
-        const data = suggestionsData.get(msgId);
-        if (!data) {
-            return interaction.reply({ content: "Cette suggestion est trop ancienne ou introuvable.", ephemeral: true });
-        }
-
-        const userId = interaction.user.id;
-        const votePour = interaction.customId === 'sugg_vote_pour';
-        let feedback = '';
-
-        if (votePour) {
-            if (data.pour.includes(userId)) {
-                data.pour = data.pour.filter(id => id !== userId);
-                feedback = '❌ Vote « Pour » retiré !';
-            } else {
-                data.pour.push(userId);
-                data.contre = data.contre.filter(id => id !== userId);
-                feedback = '✅ Tu as voté « Pour » !';
-                trackBattlePassProgress(userId, 'sugg_vote', 1);
-            }
-        } else {
-            if (data.contre.includes(userId)) {
-                data.contre = data.contre.filter(id => id !== userId);
-                feedback = '❌ Vote « Contre » retiré !';
-            } else {
-                data.contre.push(userId);
-                data.pour = data.pour.filter(id => id !== userId);
-                feedback = '❌ Tu as voté « Contre » !';
-                trackBattlePassProgress(userId, 'sugg_vote', 1);
-            }
-        }
-
-        suggestionsData.set(msgId, data);
-        demanderSauvegarde();
-
-        const authorMember = interaction.guild.members.cache.get(data.authorId);
-        const embed = buildSuggestionEmbed(data, authorMember);
-        const row = buildSuggestionRow(data);
-
-        await interaction.update({ embeds: [embed], components: [row] });
-        return interaction.followUp({ content: feedback, ephemeral: true });
-    }
+    // Boutons de vote Suggestions
+    if (await handleSuggestionButton(interaction)) return;
 
     // blagues et questions sont gérées par handleSocialInteraction
 
     // question_new_ est géré par handleSocialInteraction
 } catch (err) {
-    console.error('Erreur interactionCreate:', err);
-    if (err.code === 10062 || err.message?.includes('Unknown interaction') || err.message?.includes('expired')) {
-        if (interaction.isButton() && !interaction.replied && !interaction.deferred) {
-            interaction.reply({ content: "Ce bouton n'est plus disponible !", ephemeral: true }).catch(() => {});
-        }
+    if (err?.code === 10062 || err?.message?.includes('Unknown interaction') || err?.message?.includes('expired')) {
+        return; // Interaction expirée sur Discord, ignorer silencieusement
     }
+    console.error('Erreur interactionCreate:', err);
+    try {
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: "Une erreur est survenue lors de l'exécution.", ephemeral: true }).catch(() => {});
+        } else if (interaction.deferred) {
+            await interaction.followUp({ content: "Une erreur est survenue lors de l'exécution.", ephemeral: true }).catch(() => {});
+        }
+    } catch {}
 }
 });
 
@@ -2370,25 +2039,25 @@ client.once('ready', async () => {
         const guildRegaia = client.guilds.cache.get('720057528351850547');
 
         // 1. Lancement du Motus du matin à 10h00 (6 lettres)
-        if (h === 10 && m === 0 && derniereSessionLancee !== `${dateKey}_10h`) {
+        if (h === 10 && m >= 0 && m < 5 && derniereSessionLancee !== `${dateKey}_10h`) {
             derniereSessionLancee = `${dateKey}_10h`;
             if (guildRegaia) await envoyerMotusQuotidien(guildRegaia, 10);
         }
 
         // 2. Lancement du Rébus Regaïen à 15h00 (5 manches de 5 minutes)
-        if (h === 15 && m === 0 && derniereSessionLancee !== `${dateKey}_15h`) {
+        if (h === 15 && m >= 0 && m < 5 && derniereSessionLancee !== `${dateKey}_15h`) {
             derniereSessionLancee = `${dateKey}_15h`;
             if (guildRegaia) await lancerSessionRebus(guildRegaia);
         }
 
         // 3. Lancement du Motus du soir à 19h00 (7 lettres - Difficile)
-        if (h === 19 && m === 0 && derniereSessionLancee !== `${dateKey}_19h`) {
+        if (h === 19 && m >= 0 && m < 5 && derniereSessionLancee !== `${dateKey}_19h`) {
             derniereSessionLancee = `${dateKey}_19h`;
             if (guildRegaia) await envoyerMotusQuotidien(guildRegaia, 19);
         }
 
         // 4. Lancement du Pendu Quotidien à 21h00 (7 lettres - 1h)
-        if (h === 21 && m === 0 && derniereSessionLancee !== `${dateKey}_21h`) {
+        if (h === 21 && m >= 0 && m < 5 && derniereSessionLancee !== `${dateKey}_21h`) {
             derniereSessionLancee = `${dateKey}_21h`;
             if (guildRegaia) await lancerPenduQuotidien(guildRegaia);
         }

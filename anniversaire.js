@@ -18,11 +18,21 @@ let birthdayState = {
     saveBirthdays: async () => {},
     findMemberByName: () => ({ found: null, multiple: false, candidates: [] }),
     askDisambiguation: () => {},
+    estModo: () => false,
     EPSYS_ID: '436218312574107658'
 };
 
 function initBirthdayState(bridge) {
     birthdayState = { ...birthdayState, ...bridge };
+}
+
+function estAutoriseModif(member, targetId) {
+    if (!member) return false;
+    if (targetId && member.id === targetId) return true;
+    if (member.id === birthdayState.EPSYS_ID) return true;
+    if (birthdayState.estModo && birthdayState.estModo(member)) return true;
+    if (member.permissions?.has('ManageGuild') || member.permissions?.has('Administrator')) return true;
+    return false;
 }
 
 function getGuildBirthdays(guildId) {
@@ -47,6 +57,8 @@ function estAnniversaireAujourdhui(guildId, userId) {
     return dateAnniv === today;
 }
 
+const dejaSouhaites = new Set();
+
 async function checkBirthdays(client) {
     const now = new Date();
     const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
@@ -58,8 +70,13 @@ async function checkBirthdays(client) {
         for (const [userId, date] of Object.entries(guildBirthdays)) {
             if (date !== today) continue;
 
+            const cleSouhait = `${today}_${guild.id}_${userId}`;
+            if (dejaSouhaites.has(cleSouhait)) continue;
+
             const channel = guild.channels.cache.get(getBirthdayChannelId(guild.id));
             if (!channel) continue;
+
+            dejaSouhaites.add(cleSouhait);
 
             if (userId === client.user.id) {
                 await channel.send('JOYEUX ANNIVERSAIRE À MOI !! 🎉🎉🎉');
@@ -81,6 +98,9 @@ async function checkBirthdays(client) {
 }
 
 function scheduleBirthdayCheck(client) {
+    // Vérification immédiate au démarrage sans attendre minuit
+    checkBirthdays(client).catch(() => {});
+
     const now = new Date();
     const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
     const parisMidnight = new Date(parisNow);
@@ -157,6 +177,10 @@ if (!isDate) {
         const date = lastArg;
 
         if (args.length > 3) {
+            if (!estAutoriseModif(message.member, null)) {
+                await message.reply("❌ Tu ne peux enregistrer que ton propre anniversaire ! Seul un modérateur ou Epsys peut modifier celui d'un autre membre.");
+                return true;
+            }
             const query = args.slice(2, args.length - 1).join(" ");
             const result = birthdayState.findMemberByName(message.guild, query);
             if (result.multiple) {
@@ -189,6 +213,11 @@ if (!isDate) {
     if (sub === 'remove') {
         const query = args.slice(2).join(" ");
         const guildBirthdays = getGuildBirthdays(message.guild.id);
+
+        if (query && !estAutoriseModif(message.member, null)) {
+            await message.reply("❌ Tu ne peux supprimer que ton propre anniversaire ! Seul un modérateur ou Epsys peut supprimer celui d'un autre membre.");
+            return true;
+        }
 
         if (!query) {
             if (!guildBirthdays[message.author.id]) {
@@ -394,19 +423,22 @@ async function handleAnniversaireSlash(interaction) {
 
     if (sub === 'set') {
         const date = interaction.options.getString('date');
-const dateParts = date.match(/^(\d{2})\/(\d{2})$/);
-const jour = Number(dateParts?.[1]);
-const mois = Number(dateParts?.[2]);
-const dateValide = Boolean(dateParts) &&
-    mois >= 1 &&
-    mois <= 12 &&
-    jour >= 1 &&
-    jour <= new Date(2000, mois, 0).getDate();
+        const dateParts = date.match(/^(\d{2})\/(\d{2})$/);
+        const jour = Number(dateParts?.[1]);
+        const mois = Number(dateParts?.[2]);
+        const dateValide = Boolean(dateParts) &&
+            mois >= 1 &&
+            mois <= 12 &&
+            jour >= 1 &&
+            jour <= new Date(2000, mois, 0).getDate();
 
-if (!dateValide) {
-    return interaction.reply({ content: "Date invalide ! Utilise le format `JJ/MM` (ex : `24/07`).", ephemeral: true });
-}
+        if (!dateValide) {
+            return interaction.reply({ content: "Date invalide ! Utilise le format `JJ/MM` (ex : `24/07`).", ephemeral: true });
+        }
         const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
+        if (cibleUser.id !== interaction.user.id && !estAutoriseModif(interaction.member, cibleUser.id)) {
+            return interaction.reply({ content: "❌ Tu ne peux enregistrer que ton propre anniversaire ! Seul un modérateur ou Epsys peut modifier celui d'un autre membre.", ephemeral: true });
+        }
         const nom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
         guildBirthdays[cibleUser.id] = date;
         await birthdayState.saveBirthdays();
@@ -463,6 +495,9 @@ if (!dateValide) {
 
     if (sub === 'remove') {
         const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
+        if (cibleUser.id !== interaction.user.id && !estAutoriseModif(interaction.member, cibleUser.id)) {
+            return interaction.reply({ content: "❌ Tu ne peux supprimer que ton propre anniversaire ! Seul un modérateur ou Epsys peut supprimer celui d'un autre membre.", ephemeral: true });
+        }
         if (!guildBirthdays[cibleUser.id]) {
             return interaction.reply({ content: "Cet anniversaire n'est pas enregistré !", ephemeral: true });
         }

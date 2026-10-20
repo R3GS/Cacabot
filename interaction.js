@@ -30,7 +30,8 @@ const MESSAGE_FLAGS = [...new Set(Object.values(INTERACTION_COMMANDS))];
 const BUTTON_PREFIXES = [
     "run_join_", "kiss_back_", "hug_back_", "dance_join_", "dance_back_",
     "insult_back_", "laugh_with_", "rizz_back_", "bang_back_", "punch_back_", "die_with_",
-    "palaref_aussi_", "palaref_with_", "jailaref_with_", "explode_with_", "bait_venge_"
+    "palaref_aussi_", "palaref_with_", "jailaref_with_", "explode_with_", "bait_venge_",
+    "cry_with_"
 ];
 
 async function disableButtons(interaction) {
@@ -360,6 +361,28 @@ function buildDieEmbed(description) {
     const gif = dieGifs[Math.floor(Math.random() * dieGifs.length)];
     return new EmbedBuilder()
         .setColor(0x700000)
+        .setDescription(description)
+        .setImage(gif);
+}
+
+const cryGifs = [
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505906480916725791/zidane.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505906486872768522/wwe.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487413964941/cry2.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487656972359/hamster.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505906487959093359/interstellar.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505906869598814310/cry.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488625856622/powder.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505906488932176034/vi.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489271779449/gangle.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489657790466/pomni.gif",
+    "https://cdn.discordapp.com/attachments/1128032964924670053/1505906489947324589/fred.gif"
+];
+
+function buildCryEmbed(description) {
+    const gif = cryGifs[Math.floor(Math.random() * cryGifs.length)];
+    return new EmbedBuilder()
+        .setColor(0x597eff)
         .setDescription(description)
         .setImage(gif);
 }
@@ -1169,6 +1192,62 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
         return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
     }
 
+    // !cry
+    if (response?.needsCry) {
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        let cible = message.mentions.users.first() || replyCible;
+
+        if (!cible) {
+            const query = message.content.trim().split(/\s+/).slice(1).join(' ');
+            if (query) {
+                if (client.user.username.toLowerCase().includes(query.toLowerCase()) || 'cacabot'.includes(query.toLowerCase())) {
+                    cible = client.user;
+                } else if (findMemberByName) {
+                    const result = findMemberByName(message.guild, query);
+                    if (result.multiple && askDisambiguation) {
+                        return askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const cibleNom = message.guild?.members.cache.get(user.id)?.displayName ?? user.username;
+                            const btn = new ButtonBuilder()
+                                .setCustomId(`cry_with_${message.author.id}_${user.id}`)
+                                .setLabel('😭 Pleurer avec')
+                                .setStyle(ButtonStyle.Secondary);
+                            const row = new ActionRowBuilder().addComponents(btn);
+                            const embed = buildCryEmbed(`😭 **${auteurNom}** pleure à cause de **${cibleNom}**...`);
+                            message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+                        });
+                    }
+                    if (result.found) cible = result.found.user;
+                }
+            }
+        }
+
+        let desc;
+        let targetId = 'none';
+
+        if (cible && cible.id === message.author.id) {
+            desc = `😭 **${auteurNom}** pleure...`;
+            const embed = buildCryEmbed(desc);
+            return message.reply({ embeds: [embed], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        } else if (cible && cible.id === client.user.id) {
+            desc = `😭 **${auteurNom}** pleure à cause de moi...`;
+            targetId = client.user.id;
+        } else if (cible) {
+            const cibleNom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username;
+            targetId = cible.id;
+            desc = `😭 **${auteurNom}** pleure à cause de **${cibleNom}**...`;
+        } else {
+            desc = `😭 **${auteurNom}** pleure...`;
+        }
+
+        const embed = buildCryEmbed(desc);
+        const btn = new ButtonBuilder()
+            .setCustomId(`cry_with_${message.author.id}_${targetId}`)
+            .setLabel('😭 Pleurer avec')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(btn);
+        return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+    }
+
 }
 
 // =========================
@@ -1554,6 +1633,33 @@ async function runInteractionButton(interaction) {
         return interaction.reply({ embeds: [embed] });
     }
 
+    // =========================
+    //        BOUTON CRY
+    // =========================
+
+    if (interaction.isButton() && interaction.customId.startsWith('cry_with_')) {
+        const parts = interaction.customId.split('_');
+        const originalAuthorId = parts[2];
+        const targetId = parts[3];
+
+        if (interaction.user.id === originalAuthorId) {
+            return interaction.reply({ content: "Tu as déjà pleuré...", ephemeral: true });
+        }
+        if (targetId && targetId !== 'none' && interaction.user.id === targetId) {
+            const authorMember = interaction.guild?.members.cache.get(originalAuthorId);
+            const originalAuthorNom = authorMember?.displayName ?? 'cette personne';
+            return interaction.reply({ content: `C'est toi qui as fait pleurer **${originalAuthorNom}** !`, ephemeral: true });
+        }
+
+        const originalMember = interaction.guild?.members.cache.get(originalAuthorId);
+        const originalAuthorNom = originalMember?.displayName ?? 'cette personne';
+        const clickerNom = interaction.member?.displayName ?? interaction.user.username;
+
+        const embed = buildCryEmbed(`😭 **${clickerNom}** pleure avec **${originalAuthorNom}**...`);
+        await disableButtons(interaction);
+        return interaction.reply({ embeds: [embed] });
+    }
+
 }
 
 // =========================
@@ -1662,6 +1768,27 @@ async function handleInteractionSlash(interaction, client) {
         const desc = (cibleUser && cibleUser.id !== auteurId) ? `☠️ **${auteurNom}** meurt à cause de **${cibleNom}**` : `☠️ **${auteurNom}** meurt...`;
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`die_with_${auteurId}_${auteurNom}`).setLabel("☠️ Mourir avec").setStyle(ButtonStyle.Primary));
         return interaction.reply({ embeds: [buildDieEmbed(desc)], components: [row] });
+    }
+    if (cmd === 'cry') {
+        if (cibleUser?.id === auteurId) {
+            return interaction.reply({ embeds: [buildCryEmbed(`😭 **${auteurNom}** pleure...`)] });
+        }
+
+        const description = cibleUser?.id === client.user.id
+            ? `😭 **${auteurNom}** pleure à cause de moi...`
+            : cibleUser
+                ? `😭 **${auteurNom}** pleure à cause de **${cibleNom}**...`
+                : `😭 **${auteurNom}** pleure...`;
+
+        const embed = buildCryEmbed(description);
+        const targetId = (cibleUser && cibleUser.id !== client.user.id) ? cibleUser.id : 'none';
+        const bouton = new ButtonBuilder()
+            .setCustomId(`cry_with_${auteurId}_${targetId}`)
+            .setLabel('😭 Pleurer avec')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(bouton);
+
+        return interaction.reply({ embeds: [embed], components: [row] });
     }
     return false;
 }

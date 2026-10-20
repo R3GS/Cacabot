@@ -627,11 +627,11 @@ async function handlePenduMessage(message, response, client, helpers) {
 
                     const rowStats = new ActionRowBuilder().addComponents(
                         new ButtonBuilder()
-                            .setCustomId(`pendu_view_stats_${vainqueurFinalId}`)
+                            .setCustomId(`pendu_view_stats_${vainqueurs[0]}`)
                             .setLabel('📊 Mes stats Pendu')
                             .setStyle(ButtonStyle.Primary),
                         new ButtonBuilder()
-                            .setCustomId(`pendu_view_hebdo_${vainqueurFinalId}`)
+                            .setCustomId(`pendu_view_hebdo_${vainqueurs[0]}`)
                             .setLabel('🏆 Classement Hebdomadaire')
                             .setStyle(ButtonStyle.Success)
                     );

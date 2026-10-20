@@ -326,6 +326,8 @@ async function handleToolsMessage(message, response, client) {
             }
 
             return message.reply({ embeds: [embed] });
+        }
+
         if (sub === 'remove') {
             const query = args.slice(2).join(' ').trim().toLowerCase();
             if (!query) return message.reply("Précise le nom du rappel à supprimer.");

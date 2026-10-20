@@ -64,4 +64,36 @@ function getAnimalResponse(message, cibleUser, botUserId) {
     return `${base}\n**${animal} ${etat}**`;
 }
 
-module.exports = { getAnimalResponse };
+async function handleAnimalMessage(message, response, client, helpers) {
+    if (!response?.needsMention) return false;
+
+    const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+    if (!message.mentions.users.first() && args.length > 0 && helpers?.findMemberByName) {
+        const result = helpers.findMemberByName(message.guild, args);
+        if (result.multiple && helpers?.askDisambiguation) {
+            helpers.askDisambiguation(message, message.guild, result.candidates, (user) => {
+                message.reply(getAnimalResponse(message, user, client.user.id));
+            });
+            return true;
+        }
+        if (result.found) {
+            await message.reply(getAnimalResponse(message, result.found.user, client.user.id));
+            return true;
+        }
+    }
+    await message.reply(getAnimalResponse(message, null, client.user.id));
+    return true;
+}
+
+async function handleAnimalSlash(interaction, client) {
+    if (interaction.commandName !== 'animal') return false;
+    const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
+    await interaction.reply(getAnimalResponse(interaction, cibleUser, client?.user?.id));
+    return true;
+}
+
+module.exports = {
+    getAnimalResponse,
+    handleAnimalMessage,
+    handleAnimalSlash
+};

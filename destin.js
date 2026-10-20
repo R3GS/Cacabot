@@ -81,4 +81,13 @@ function getDestinReponse() {
     return destin[Math.floor(Math.random() * destin.length)];
 }
 
-module.exports = { getDestinReponse };
+async function handleDestinSlash(interaction) {
+    if (interaction.commandName !== 'destin') return false;
+    await interaction.reply({ content: getDestinReponse() });
+    return true;
+}
+
+module.exports = {
+    getDestinReponse,
+    handleDestinSlash
+};
