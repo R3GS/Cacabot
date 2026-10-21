@@ -566,7 +566,8 @@ function armerNotifRoulette(userId, channelId, client) {
 
 function buildRowResultatRoulette(authorId, outcomeId, failIndex) {
     return new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('roulette_tour').setLabel('🎲 À mon tour !').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('📊 Probabilités').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`roulette_notif_${authorId}`).setLabel('🔔 Me prévenir ici').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`roulette_notifmp_${authorId}`).setLabel('🔔 Me prévenir par MP').setStyle(ButtonStyle.Secondary)
     );
@@ -1582,7 +1583,7 @@ function libelleProbaRoulette(outcomeId) {
     return `1/${n} | ${pct}%`;
 }
 
-function buildRouletteResultEmbed(outcomeId, texte, authorId = null) {
+function buildRouletteResultEmbed(outcomeId, texte, authorId = null, auteurNom = null) {
     let delaiTexte = '15 minutes';
     if (authorId) {
         if ((rouletteCooldown45Charges.get(authorId) || 0) > 0) delaiTexte = '45 minutes';
@@ -1602,6 +1603,7 @@ function buildRouletteResultEmbed(outcomeId, texte, authorId = null) {
 
     const embed = new EmbedBuilder().setColor(couleur).setDescription(texteFinal);
     if (titre) embed.setTitle(titre);
+    if (auteurNom) embed.setFooter({ text: `Tirage de ${auteurNom}` });
     return embed;
 }
 
@@ -1794,7 +1796,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
             deverrouillerSucces(authorId, 'pare-balles', channel);
         }
         const msgRestantes = restantes > 0 ? ` (${restantes} charge${restantes > 1 ? 's' : ''} restante${restantes > 1 ? 's' : ''})` : '';
-        const embed = buildRouletteResultEmbed(outcomeId, `🛡️ **${auteurNom}** évite le malus **${ROULETTE_NOMS[outcomeId]}** grâce à son bouclier !${msgRestantes}`);
+        const embed = buildRouletteResultEmbed(outcomeId, `🛡️ **${auteurNom}** évite le malus **${ROULETTE_NOMS[outcomeId]}** grâce à son bouclier !${msgRestantes}`, authorId, auteurNom);
         return { embeds: [embed], components: [buildRowResultatRoulette(authorId, outcomeId, failIndex)] };
     }
 
@@ -1871,7 +1873,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     }
 
     bridge.demanderSauvegarde();
-    const embed = buildRouletteResultEmbed(outcomeId, prefixeRedirect + texte, authorId);
+    const embed = buildRouletteResultEmbed(outcomeId, prefixeRedirect + texte, authorId, auteurNom);
     const roleMaxId = ROULETTE_RANGS[ROULETTE_RANGS.length - 1].id;
     const dejaMaxRole = (outcomeId === 'bonus-role-superieur' || outcomeId === 'bonus-legendaire') && cible.roles.cache.has(roleMaxId);
 
@@ -1890,7 +1892,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         pingCible: pingRedirection ? { id: pingRedirection.id, texte: `🔔 <@${pingRedirection.id}>, **${auteurNom}** t'a redirigé le malus **${ROULETTE_NOMS[outcomeId]}** !` } : null,
         differe: differe ? async () => {
             await differe.action();
-            return buildRouletteResultEmbed(outcomeId, prefixeRedirect + differe.texteFinal);
+            return buildRouletteResultEmbed(outcomeId, prefixeRedirect + differe.texteFinal, authorId, auteurNom);
         } : null
     };
 }
@@ -2657,6 +2659,44 @@ async function handleRouletteButton(interaction, client) {
         await interaction.reply({ content: `🔔 Noté ! Je te ping ici <t:${Math.ceil(fin / 1000)}:R>.`, ephemeral: true });
         return true;
     }
+    if (customId === 'roulette_tour') {
+        const clickerId = interaction.user.id;
+        const res = await tirerEtConstruireResultatRoulette(clickerId, interaction.guild, interaction.channel, client);
+        if (res.cooldown) {
+            const notifRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`roulette_notif_${clickerId}`).setLabel('🔔 Me prévenir ici').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId(`roulette_notifmp_${clickerId}`).setLabel('🔔 Me prévenir par MP').setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.reply({
+                content: `Attends la fin du cooldown ! Il te reste **${res.reste} minute${res.reste > 1 ? 's' : ''}**.`,
+                components: [notifRow],
+                ephemeral: true
+            });
+        }
+
+        const { MessageFlags } = require('discord.js');
+        const envoye = await interaction.channel.send({
+            embeds: res.embeds,
+            components: res.components,
+            flags: [MessageFlags.SuppressNotifications]
+        });
+
+        await interaction.reply({ content: "🎲 Tirage envoyé dans le salon !", ephemeral: true }).catch(() => {});
+
+        await envoyerPingRedirection(interaction.channel, res);
+        memoriserResultatRoulette(envoye.id, res.embeds[0]);
+        if (res.attenteChoix) rouletteChoixEnAttente.add(envoye.id);
+        if (res.vote) await demarrerVoteRoulette(envoye, res.vote);
+        if (res.differe) {
+            setTimeout(async () => {
+                const embedFinal = await res.differe();
+                memoriserResultatRoulette(envoye.id, embedFinal);
+                envoye.edit({ embeds: [embedFinal] }).catch(() => {});
+            }, 10000);
+        }
+        return true;
+    }
+
     if (customId.startsWith('roulette_probas_res_')) {
         const [, , , authorId, outcomeId, failIndex] = customId.split('_');
         if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
