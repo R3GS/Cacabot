@@ -154,7 +154,7 @@ const ROULETTE_TABLE = [
     { id: 'malus-limite-30', type: 'malus', poids: 1/270, nom: 'Limite de 30 caractères pendant 1h', desc: 'Messages coupés à 30 caractères maximum pendant 1h' },
     { id: 'malus-leet', type: 'malus', poids: 1/330, nom: 'Leet speak pendant 6h', desc: 'Tous ses messages sont écrits en leet speak pendant 6h' },
     { id: 'malus-lettre-interdite', type: 'malus', poids: 1/400, nom: 'Lettre interdite pendant 6h', desc: 'Ne peut plus utiliser une lettre au hasard pendant 6h' },
-    { id: 'malus-uwu-24h', type: 'malus', poids: 1/480, nom: 'UwU obligatoire pendant 6h', desc: 'Doit finir chaque message par UwU pendant 6h' },
+    { id: 'malus-uwu-6h', type: 'malus', poids: 1/480, nom: 'UwU obligatoire pendant 6h', desc: 'Doit finir chaque message par UwU pendant 6h' },
     { id: 'malus-prime', type: 'malus', poids: 1/800, nom: 'MALUS PRIME', desc: 'Cumule TOUS les malus de texte/pseudo en même temps' },
     { id: 'malus-pseudo-lock-mois', type: 'malus', poids: 1/900, nom: 'Pseudo horrible verrouillé pendant 1 mois', desc: 'Pseudo horrible verrouillé pendant 1 mois' },
     { id: 'malus-exclu-jour', type: 'malus', poids: 1/1000, nom: 'Exclusion de 1 jour', desc: 'Exclusion de 1 jour' },
@@ -1048,11 +1048,20 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             rouletteUwuUntil.set(member.id, fin6h);
             rouletteEmojiUntil.set(member.id, fin6h);
             rouletteLeetUntil.set(member.id, fin6h);
+            rouletteEchoUntil.set(member.id, fin6h);
             activerTransfo(member.id, 'caps', 2 * 60 * 60 * 1000);
             activerTransfo(member.id, 'mots', 2 * 60 * 60 * 1000);
             activerTransfo(member.id, 'lettres', 60 * 60 * 1000);
             activerTransfo(member.id, 'bebe', 2 * 60 * 60 * 1000);
-            return `☠️☠️☠️ **${auteurNom}** subit le **MALUS PRIME** : tous les malus de texte en même temps !`;
+            activerTransfo(member.id, 'boomer', 2 * 60 * 60 * 1000);
+            activerTransfo(member.id, 'censure', 2 * 60 * 60 * 1000);
+
+            // Verrouillage d'un pseudo horrible pendant 24h
+            const pseudo = ROULETTE_NOMS_PSEUDO_LOCK[Math.floor(Math.random() * ROULETTE_NOMS_PSEUDO_LOCK.length)];
+            roulettePseudoLock.set(member.id, { until: Date.now() + 24 * 60 * 60 * 1000, pseudo });
+            await member.setNickname(pseudo).catch(() => {});
+
+            return `☠️☠️☠️ **${auteurNom}** subit le **MALUS PRIME** : TOUS les malus de texte et un pseudo horrible verrouillés en même temps !`;
         }
         case 'aucun-resultat':
             return ROULETTE_FAILS[failIndex];
@@ -1768,7 +1777,8 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
 
     const rawBCharges = rouletteBouclierActif.get(authorId);
     const bCharges = typeof rawBCharges === 'number' ? rawBCharges : (rawBCharges ? 1 : 0);
-    if (outcomeId.startsWith('malus-') && bCharges > 0) {
+    // Le Brise-Bouclier est inarrêtable et brise la garde sans pouvoir être paré
+    if (outcomeId.startsWith('malus-') && outcomeId !== 'malus-brise-bouclier' && bCharges > 0) {
         const restantes = bCharges - 1;
         if (restantes <= 0) rouletteBouclierActif.delete(authorId);
         else rouletteBouclierActif.set(authorId, restantes);

@@ -310,12 +310,19 @@ function getOuCreerProfilBP(userId, autoActif = false) {
         }
         p.dernierJourDate = today;
         p.quetesDuJour = tirerQuetesDuJour(today);
+        p.dailySalons = [];
+        p.dailyHours = [];
+        p.dailySalonCounts = {};
+        p.dailyMotusSessions = [];
     }
 
     // Reset Hebdo
     if (p.semaineActuelle !== week) {
         p.semaineActuelle = week;
         p.quetesHebdo = tirerQuetesHebdo();
+        p.weeklySalons = [];
+        p.weeklyDays = [];
+        p.weeklyDailyCount = 0;
     }
 
     // Rattrapage automatique de tous les paliers déjà atteints mais non reçus
@@ -456,51 +463,140 @@ function ajouterXpEtMonteeDeNiveau(userId, p, xpBrut, titreQuete) {
 
 function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
     const p = getOuCreerProfilBP(userId);
-    // Le pass ne s'active QUE sur clic explicite du bouton vert. Aucun tirage roulette ne l'active en douce.
     if (!p.actif) return;
 
     let modifie = false;
 
-    // Analyse temporelle heure de Paris
     const nowParis = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
     const heure = nowParis.getHours();
+    const dayOfWeek = nowParis.getDay(); // 0 = Dimanche, 6 = Samedi
+    const today = getTodayKey();
+
+    if (!p.dailySalons) p.dailySalons = [];
+    if (!p.dailyHours) p.dailyHours = [];
+    if (!p.dailySalonCounts) p.dailySalonCounts = {};
+    if (!p.weeklySalons) p.weeklySalons = [];
+    if (!p.weeklyDays) p.weeklyDays = [];
 
     const typesActifs = new Set([type]);
 
-    // Déclencheurs contextuels automatiques pour les messages
+    // 1. Déclencheurs contextuels de messages
     if (type === 'message') {
         if (heure >= 0 && heure < 8) typesActifs.add('message_nuit');
         if (heure >= 12 && heure < 14) typesActifs.add('message_midi');
         if (heure >= 18 && heure < 20) typesActifs.add('message_soir_debut');
         if (heure >= 19) typesActifs.add('message_soir');
+        if (dayOfWeek === 0 || dayOfWeek === 6) typesActifs.add('message_weekend');
+        if (heure < 10) typesActifs.add('message_matin_jours');
+
+        if (meta.hasCooldown) typesActifs.add('msg_sous_cooldown');
+        if (meta.hasCouronne) typesActifs.add('couronne_msg');
+
+        // Suivi des heures distinctes
+        if (!p.dailyHours.includes(heure)) {
+            p.dailyHours.push(heure);
+            if (p.dailyHours.length >= 2) typesActifs.add('heures_diff');
+        }
+
+        // Suivi des salons distincts (quotidien et hebdo)
+        if (meta.channelId) {
+            if (!p.dailySalons.includes(meta.channelId)) {
+                p.dailySalons.push(meta.channelId);
+            }
+            if (p.dailySalons.length >= 2) typesActifs.add('salons_diff');
+
+            if (!p.weeklySalons.includes(meta.channelId)) {
+                p.weeklySalons.push(meta.channelId);
+            }
+            if (p.weeklySalons.length >= 4) typesActifs.add('salons_diff_hebdo');
+
+            p.dailySalonCounts[meta.channelId] = (p.dailySalonCounts[meta.channelId] || 0) + 1;
+            if (p.dailySalonCounts[meta.channelId] >= 15) typesActifs.add('message_salon_unique');
+        }
+
+        // Suivi des jours actifs dans la semaine
+        if (!p.weeklyDays.includes(today)) {
+            p.weeklyDays.push(today);
+            typesActifs.add('message_jours');
+        }
     }
 
-    // Déclencheurs contextuels pour les tirages roulette
+    // 2. Déclencheurs Roulette
     if (type === 'roulette_roll') {
         if (heure < 12) typesActifs.add('roulette_matin');
+        if (meta.sansEffetActif) typesActifs.add('roulette_neutre');
+        if (meta.malusCumules >= 2) typesActifs.add('roll_sous_malus_cumules');
     }
 
-    // Déclencheurs pour le vocal de nuit
-    if (type === 'vocal_min' && heure >= 22) {
-        typesActifs.add('vocal_nuit');
+    // 3. Déclencheurs Vocal
+    if (type === 'vocal_min') {
+        if (heure >= 22) typesActifs.add('vocal_nuit');
+        if (heure >= 14 && heure < 18) typesActifs.add('vocal_aprem');
+        if (dayOfWeek === 0 || dayOfWeek === 6) typesActifs.add('vocal_weekend');
+        if (meta.groupeCount >= 3) typesActifs.add('vocal_groupe');
     }
+
+    // 4. Streaks Hebdos
+    if (p.streak >= 7) typesActifs.add('streak_hebdo');
+    if (p.streak >= 5) typesActifs.add('streak_hebdo_5');
 
     const validerQuete = (q, amt) => {
-        q.progression = Math.min(q.objectif, q.progression + amt);
-        if (q.progression >= q.objectif) {
+        // Pour les quêtes de comptage d'ensembles uniques (salons, jours...)
+        if (q.type === 'salons_diff') {
+            q.progression = Math.min(q.objectif, p.dailySalons.length);
+        } else if (q.type === 'salons_diff_hebdo') {
+            q.progression = Math.min(q.objectif, p.weeklySalons.length);
+        } else if (q.type === 'message_jours') {
+            q.progression = Math.min(q.objectif, p.weeklyDays.length);
+        } else if (q.type === 'message_salon_unique') {
+            const maxDansUnSalon = Math.max(...Object.values(p.dailySalonCounts), 0);
+            q.progression = Math.min(q.objectif, maxDansUnSalon);
+        } else {
+            q.progression = Math.min(q.objectif, q.progression + amt);
+        }
+
+        if (q.progression >= q.objectif && !q.terminee) {
             q.terminee = true;
             q.reclamee = true;
-            const today = getTodayKey();
             if (p.dernierJourStreak !== today) {
                 p.streak = (p.streak || 0) + 1;
                 p.dernierJourStreak = today;
                 checkStreakRewards(userId, p.streak);
             }
             ajouterXpEtMonteeDeNiveau(userId, p, q.xp, q.desc);
+
+            // Méta-quêtes hebdos : nombre de quotidiennes validées
+            p.weeklyDailyCount = (p.weeklyDailyCount || 0) + 1;
+            for (const hq of p.quetesHebdo) {
+                if (!hq.terminee && hq.type === 'quetes_daily_validees') {
+                    hq.progression = Math.min(hq.objectif, p.weeklyDailyCount);
+                    if (hq.progression >= hq.objectif) {
+                        hq.terminee = true;
+                        hq.reclamee = true;
+                        ajouterXpEtMonteeDeNiveau(userId, p, hq.xp, hq.desc);
+                    }
+                }
+            }
+
+            // Méta-quête Grand Chelem (4/4 quotidiennes)
+            const toutesTerminees = p.quetesDuJour.every(dq => dq.terminee);
+            if (toutesTerminees && p.dernierGrandChelem !== today) {
+                p.dernierGrandChelem = today;
+                for (const hq of p.quetesHebdo) {
+                    if (!hq.terminee && hq.type === 'full_daily') {
+                        hq.progression = Math.min(hq.objectif, hq.progression + 1);
+                        if (hq.progression >= hq.objectif) {
+                            hq.terminee = true;
+                            hq.reclamee = true;
+                            ajouterXpEtMonteeDeNiveau(userId, p, hq.xp, hq.desc);
+                        }
+                    }
+                }
+            }
         }
     };
 
-    // 1. Quotidiennes
+    // Application Quotidiennes
     for (const q of p.quetesDuJour) {
         if (q.terminee) continue;
         if (typesActifs.has(q.type)) {
@@ -509,7 +605,7 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
         }
     }
 
-    // 2. Hebdomadaires
+    // Application Hebdomadaires
     for (const q of p.quetesHebdo) {
         if (q.terminee) continue;
         if (typesActifs.has(q.type)) {

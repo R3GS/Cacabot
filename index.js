@@ -1350,9 +1350,16 @@ async function disableButtons(interaction) {
         const rawLower = message.content.trim().toLowerCase();
         const cmdPass = rawLower.split(/\s+/)[0];
 
-        // 1. Quête messages simples
+        // 1. Quête messages simples avec métadonnées de salon et d'état
         if (message.content.trim().length >= 4 && !message.content.startsWith('!')) {
-            trackBattlePassProgress(uid, 'message', 1);
+            const hasCooldown = (ROULETTE_ETATS.cooldowns.get(uid) > Date.now());
+            const hasCouronne = (ROULETTE_ETATS.couronne.get(uid) > Date.now());
+
+            trackBattlePassProgress(uid, 'message', 1, {
+                channelId: message.channel.id,
+                hasCooldown,
+                hasCouronne
+            });
             
             // Quête : parler sous un malus textuel
             const transfosMembre = ROULETTE_ETATS.transfos.get(uid);
@@ -2017,7 +2024,9 @@ client.once('ready', async () => {
             if (membresHumains.size >= 2) {
                 for (const membre of membresHumains.values()) {
                     if (!membre.voice.deaf && !membre.voice.serverDeaf) {
-                        trackBattlePassProgress(membre.id, 'vocal_min', 1);
+                        trackBattlePassProgress(membre.id, 'vocal_min', 1, {
+                            groupeCount: membresHumains.size
+                        });
                     }
                 }
             }
