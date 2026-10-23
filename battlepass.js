@@ -571,6 +571,7 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
     if (p.streak >= 7) typesActifs.add('streak_hebdo');
     if (p.streak >= 5) typesActifs.add('streak_hebdo_5');
 
+    
     const validerQuete = (q, amt) => {
         // Pour les quêtes de comptage d'ensembles uniques (salons, jours...)
         if (q.type === 'salons_diff') {
