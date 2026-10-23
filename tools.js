@@ -32,6 +32,39 @@ function initToolsState(bridge) {
 const pendingRappels = new Map();
 const rappelReports = new Map();
 const pomodoroSessions = new Map();
+const bugsList = [];
+
+function buildBugListEmbed(bugs) {
+    const embed = new EmbedBuilder()
+        .setColor(0xe74c3c)
+        .setTitle("🐛 Liste des bugs à réparer dans le code")
+        .setTimestamp();
+
+    if (bugs.length === 0) {
+        embed.setDescription("✅ **Aucun bug en attente !** Tout le code fonctionne à merveille.");
+        return embed;
+    }
+
+    let desc = `Il y a actuellement **${bugs.length}** bug${bugs.length > 1 ? "s" : ""} répertorié${bugs.length > 1 ? "s" : ""} :\n\n`;
+
+    bugs.forEach((b, idx) => {
+        let citation = "";
+        if (b.content && b.content.trim().length > 0) {
+            const truncated = b.content.length > 200 ? b.content.slice(0, 197) + "..." : b.content;
+            citation = `> *« ${truncated.replace(/\n/g, " ")} »*`;
+        }
+        if (b.hasImage) {
+            citation += (citation ? "\n" : "") + `> 🖼️ [Lien vers le message avec image](${b.url})`;
+        } else if (!citation) {
+            citation = `> [Accéder au message](${b.url})`;
+        }
+        desc += `**${idx + 1}.** ${citation}\n— **${b.author}** • ([Aller au message](${b.url}))\n\n`;
+    });
+
+    embed.setDescription(desc);
+    embed.setFooter({ text: "Epsys-only • !bug en répondant pour ajouter • !bug resolve [N] pour retirer" });
+    return embed;
+}
 
 // Helper git commit count sécurisé
 function getCommitCount() {
@@ -476,6 +509,114 @@ async function handleToolsMessage(message, response, client) {
         if (cible.author.id !== client.user.id) return message.reply("Je ne peux modifier que mes messages !");
         await cible.edit(newText);
         await message.delete().catch(() => {});
+        return true;
+    }
+
+    // !reply (Epsys-only, le petit frère de !say)
+    if (command === '!reply' || response?.needsReply) {
+        if (message.author.id !== EPSYS_ID) return true;
+
+        const args = raw.split(/\s+/);
+        const repliedMsgId = message.reference?.messageId;
+
+        let targetMsgId = null;
+        let texteToSend = '';
+
+        if (/^\d{17,20}$/.test(args[1] || '')) {
+            targetMsgId = args[1];
+            texteToSend = args.slice(2).join(' ');
+        } else if (repliedMsgId) {
+            targetMsgId = repliedMsgId;
+            texteToSend = args.slice(1).join(' ');
+        }
+
+        const attachments = [...message.attachments.values()].map(a => a.url);
+
+        if (!targetMsgId || (!texteToSend && attachments.length === 0)) {
+            return message.reply("Usage : `!reply [ID_message] [texte]` ou en répondant à un message : `!reply [texte]`");
+        }
+
+        let cibleMsg = await message.channel.messages.fetch(targetMsgId).catch(() => null);
+        if (!cibleMsg && message.guild) {
+            for (const ch of message.guild.channels.cache.values()) {
+                if (ch.isTextBased()) {
+                    cibleMsg = await ch.messages.fetch(targetMsgId).catch(() => null);
+                    if (cibleMsg) break;
+                }
+            }
+        }
+
+        if (!cibleMsg) {
+            return message.reply("❌ Message introuvable. Vérifie l'ID du message !");
+        }
+
+        await message.delete().catch(() => {});
+        await cibleMsg.reply({
+            content: texteToSend || undefined,
+            files: attachments.length > 0 ? attachments : undefined
+        }).catch(err => {
+            message.channel.send(`❌ Impossible de répondre au message : ${err.message}`);
+        });
+        return true;
+    }
+
+    // !bug & !bugs (Epsys-only)
+    if (command === '!bug' || command === '!bugs') {
+        if (message.author.id !== EPSYS_ID) return true;
+
+        const args = raw.split(/\s+/);
+        const sub = args[1]?.toLowerCase();
+        const repliedMsgId = message.reference?.messageId;
+
+        if (sub === 'clear' || sub === 'reset') {
+            bugsList.length = 0;
+            return message.reply("🧹 **Liste des bugs réinitialisée !**");
+        }
+
+        if (sub === 'resolve' || sub === 'del' || sub === 'remove') {
+            const indexToRemove = parseInt(args[2], 10) - 1;
+            if (isNaN(indexToRemove) || indexToRemove < 0 || indexToRemove >= bugsList.length) {
+                return message.reply("Usage : `!bug resolve [numéro]` (ex: `!bug resolve 1` pour retirer le 1er bug de la liste).");
+            }
+            const supprime = bugsList.splice(indexToRemove, 1)[0];
+            return message.reply(`✅ **Bug n°${indexToRemove + 1} résolu et retiré :**\n> *« ${supprime.content ? supprime.content.slice(0, 80) : 'Image/Fichier'} »* de **${supprime.author}**`);
+        }
+
+        // Si Epsys tape simplement "!bug" ou "!bugs" sans répondre à un message : afficher la liste
+        if (!repliedMsgId) {
+            const embed = buildBugListEmbed(bugsList);
+            return message.reply({ embeds: [embed] });
+        }
+
+        // Si Epsys répond à un message avec !bug : on répertorie le message dans la liste
+        const cibleMsg = await message.channel.messages.fetch(repliedMsgId).catch(() => null);
+        if (!cibleMsg) {
+            return message.reply("❌ Impossible de récupérer le message répondu.");
+        }
+
+        const membreAuteur = cibleMsg.member?.displayName ?? cibleMsg.author.username;
+        const hasImage = cibleMsg.attachments.size > 0;
+        const msgUrl = cibleMsg.url;
+
+        const dejaPresent = bugsList.some(b => b.id === cibleMsg.id);
+        if (!dejaPresent) {
+            bugsList.push({
+                id: cibleMsg.id,
+                author: membreAuteur,
+                authorId: cibleMsg.author.id,
+                channelId: cibleMsg.channel.id,
+                url: msgUrl,
+                content: cibleMsg.content || '',
+                hasImage: hasImage,
+                timestamp: Date.now()
+            });
+        }
+
+        const embedListe = buildBugListEmbed(bugsList);
+        await message.reply({
+            content: "🐛 **Bug répertorié avec succès !**",
+            embeds: [embedListe]
+        });
         return true;
     }
 

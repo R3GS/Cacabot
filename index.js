@@ -936,6 +936,14 @@ async function getResponse(raw) {
         return { needsEdit: true };
     }
 
+    if (command === "!reply") {
+        return { needsReply: true };
+    }
+
+    if (command === "!bug" || command === "!bugs") {
+        return { needsBug: true };
+    }
+
     if (command === "!embed") {
         return { needsEmbed: true };
     }

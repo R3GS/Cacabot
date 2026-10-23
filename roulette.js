@@ -25,7 +25,12 @@ const ROULETTE_EMOJIS_ALEATOIRES = ['😂','😍','🔥','💀','🎉','😭','�
 const ROULETTE_BOOMER_FINS = [
     ', A BON ENTENDEUR... 🤣🤣', '.... BISOUS A LA FAMILLE 🍷👍',
     '....PAUVRE FRANCE....\nAmitiés ..', '... A MEDITER ☕🙋‍♂️',
-    '....C ETAIT MIEUX AVANT !!!! 😡', '...\nBisous   -Mamie'
+    '....C ETAIT MIEUX AVANT !!!! 😡', '...\nBisous   -Mamie',
+    '.... LES JEUNES D AUJOURDHUI NE VEULENT PLUS TRAVAILLER.. bises gérard',
+    '.... tapez 1 si vous etes d accord.. amitiés du 77 🌹',
+    '.... encore un coup du gouvernement ça !! 🙄😡',
+    '.... A PARTAGER EN MASSE AVANT SUPPRESSION FACEBOOK !!!',
+    '.... bises a Jean-Pierre et aux gosses ... 🚗🍺'
 ];
 
 const ROULETTE_EXISTENTIEL_FINS = [
@@ -34,7 +39,11 @@ const ROULETTE_EXISTENTIEL_FINS = [
     '\nest-ce que ça vaut vraiment la peine de continuer à faire semblant...?',
     '\ntout ça pour finir poussière dans un monde indifférent.',
     '\nmais à quoi bon, puisque rien n\'a de sens au fond.',
-    '\nun jour plus personne ne se souviendra même de ce message.'
+    '\nun jour plus personne ne se souviendra même de ce message.',
+    '\nchaque seconde qui passe nous rapproche inéluctablement du vide.',
+    '\net dire que toute cette agitation finira oubliée sous la terre froide.',
+    '\nl\'entropie gagne toujours à la fin. Bonne journée quand même.',
+    '\non est juste des morceaux de viande qui attendent la fin sur un caillou flottant.'
 ];
 
 const ROULETTE_LINKEDIN_FINS = [
@@ -42,13 +51,20 @@ const ROULETTE_LINKEDIN_FINS = [
     '\nVoilà pourquoi l\'échec est une formidable opportunité de disruption et de croissance. 💡 #Growth #Success',
     '\nCe matin à 5h30, en prenant ma douche froide, j\'ai réalisé l\'importance de ce KPI. 💼 #MorningRoutine #Networking',
     '\nEt vous, comment réinventez-vous votre valeur ajoutée dans l\'écosystème corporate ? 🤝 #Inspiration #B2B',
-    '\nRestez focus sur vos objectifs, l\'excellence opérationnelle n\'attend pas. 📈 #Motivation #Business'
+    '\nRestez focus sur vos objectifs, l\'excellence opérationnelle n\'attend pas. 📈 #Motivation #Business',
+    '\nPrenez 5 minutes pour célébrer vos micro-victoires. Disrupter, c\'est avant tout oser. 🌟 #Proud #TalentAcquisition',
+    '\nJ\'ai refusé 15 offres pour vivre cette aventure humaine. La résilience n\'a pas de prix. 🔥 #WorkHard #ScaleUp',
+    '\nCe café en terrasse m\'a appris plus sur le management 3.0 que 5 ans d\'école de commerce. ☕ #Authenticity'
 ];
 
 const ROULETTE_ECHO_REPLIQUES = [
     "C'est faux.", "Gênant.", "Qui a demandé ?", "Ratio.",
-    "Intéressant... non en vrai on s'en fout.", "Tu forces un peu là.",
-    "Supprime.", "Ok et ?", "On s'en branle un peu non ?", "Bizarre ce message."
+    "Intéressant... non en vrai on s'en fout.", "Tu forces un peu là.", "Wow, c'est super intéressant (non)"
+    "Supprime.", "Ok et ?", "On s'en branle un peu non ?", "Bizarre ce message.",
+    "Même le bot a honte pour toi.", "Arrête de poster stp.", "Gros malaise dans la pièce.",
+    "-# *baille*", "Ok.", "C'est bien Éléonore on est contents.", "Bahh... C'est bien ?", "...Bref, qui a faim ?"
+    "https://tenor.com/view/f%C3%A9licitations-je-sais-pas-quoi-te-dire-gif-4771894558253473942",
+    "T'avais vraiment besoin d'envoyer ça ?", "D'accord le clown 🤡", "Tu te relis des fois ?"
 ];
 
 const rouletteEchoUntil = new Map();
@@ -455,9 +471,9 @@ function appliquerTransfos(userId, texte) {
     if (t.censure) r = surTexte(r, m => m.replace(/\S+/g, mot => Math.random() < 1/3 ? '▇▇' : mot));
     if (t.emojiOnly) r = surTexte(r, m => m.replace(/\S+/g, () => ROULETTE_EMOJIS_ALEATOIRES[Math.floor(Math.random() * ROULETTE_EMOJIS_ALEATOIRES.length)]));
     if (t.bebe) r = surTexte(r, m => m.replace(/j/g, 'z').replace(/J/g, 'Z').replace(/r/g, 'w').replace(/R/g, 'W'));
-    if (t.boomer) r = surTexte(r, m => m.replace(/[\.!\?]+/g, '..... ') + ' ' + ROULETTE_BOOMER_FINS[Math.floor(Math.random() * ROULETTE_BOOMER_FINS.length)]);
-    if (t.existentiel) r = r + ROULETTE_EXISTENTIEL_FINS[Math.floor(Math.random() * ROULETTE_EXISTENTIEL_FINS.length)];
-    if (t.linkedin) r = r + ROULETTE_LINKEDIN_FINS[Math.floor(Math.random() * ROULETTE_LINKEDIN_FINS.length)];
+    if (t.boomer && Math.random() < 0.35) r = surTexte(r, m => m.replace(/[\.!\?]+/g, '..... ') + ' ' + ROULETTE_BOOMER_FINS[Math.floor(Math.random() * ROULETTE_BOOMER_FINS.length)]);
+    if (t.existentiel && Math.random() < 0.35) r = r + ROULETTE_EXISTENTIEL_FINS[Math.floor(Math.random() * ROULETTE_EXISTENTIEL_FINS.length)];
+    if (t.linkedin && Math.random() < 0.35) r = r + ROULETTE_LINKEDIN_FINS[Math.floor(Math.random() * ROULETTE_LINKEDIN_FINS.length)];
     if (t.caps) r = surTexte(r, m => m.toUpperCase());
     const max = Math.min(t.limite30 ? 30 : Infinity, t.limite100 ? 100 : Infinity);
     if (max !== Infinity && [...r].length > max) r = [...r].slice(0, max).join('').replace(/<[^>]*$/, '');
@@ -1199,7 +1215,7 @@ function buildVoteRouletteEmbed(membre) {
     return new EmbedBuilder()
         .setColor(0xffd20a)
         .setTitle(`🗳️ VOTE PUBLIC ! (${libelleProbaRoulette('special-vote-immunite-exclusion')})`)
-        .setDescription(`Que mérite **${membre.displayName}** ?\n\n✅ Tirage à volonté pendant 1min (immunité au mute)\n❌ Exclusion pendant 1 jour\n\nVote ouvert pendant **2h**.`);
+        .setDescription(`Que mérite <@${membre.id}> ?\n\n✅ Tirage à volonté pendant 1min (immunité au mute)\n❌ Exclusion pendant 1 jour\n\nVote ouvert pendant **2h**.\n-# *(L'accusé.e n'a pas le droit de voter sur son propre sort)*`);
 }
 
 async function demarrerVoteRoulette(msg, membre) {
@@ -1220,20 +1236,26 @@ async function demarrerVoteRoulette(msg, membre) {
             const usersOui = reactionOui ? await reactionOui.users.fetch().catch(() => new Map()) : new Map();
             const usersNon = reactionNon ? await reactionNon.users.fetch().catch(() => new Map()) : new Map();
 
-            const idsOui = [...usersOui.values()].filter(u => !u.bot).map(u => u.id);
-            const idsNon = [...usersNon.values()].filter(u => !u.bot).map(u => u.id);
+            // Anti-triche : on exclut formellement les votes de l'accusé.e lui/elle-même
+            const idsOui = [...usersOui.values()].filter(u => !u.bot && u.id !== membre.id).map(u => u.id);
+            const idsNon = [...usersNon.values()].filter(u => !u.bot && u.id !== membre.id).map(u => u.id);
             const doubles = new Set(idsOui.filter(id => idsNon.includes(id)));
             const oui = idsOui.filter(id => !doubles.has(id)).length;
             const non = idsNon.filter(id => !doubles.has(id)).length;
 
+            // Détermination du salon où envoyer le verdict : toujours dans le salon roulette officiel !
+            const salonRoulette = msg.guild?.channels.cache.get(ROULETTE_SALON_ID) || targetMsg.channel;
+
             const posterReponse = async (texte) => {
-                const envoye = await targetMsg.reply(texte).catch(() => null);
-                if (!envoye) await targetMsg.channel.send(texte).catch(() => {});
+                await salonRoulette.send(texte).catch(() => {});
+                if (targetMsg.channel.id !== salonRoulette.id) {
+                    await targetMsg.reply(texte).catch(() => {});
+                }
             };
 
             if (oui >= non) {
                 crediterInventaireRoulette(membre.id, 'freeRoll1Min', 1);
-                deverrouillerSucces(membre.id, 'innocente', targetMsg.channel);
+                deverrouillerSucces(membre.id, 'innocente', salonRoulette);
 
                 const embedVictoire = new EmbedBuilder()
                     .setColor(0x00bf19)
@@ -1252,27 +1274,28 @@ async function demarrerVoteRoulette(msg, membre) {
                 );
 
                 const { MessageFlags } = require('discord.js');
-                await targetMsg.channel.send({
+                await salonRoulette.send({
                     content: `🔔 <@${membre.id}>, le vote est terminé !`,
                     embeds: [embedVictoire],
                     components: [rowVictoire],
                     flags: [MessageFlags.SuppressNotifications]
                 }).catch(() => {});
             } else {
-                deverrouillerSucces(membre.id, 'condamne-plebe', targetMsg.channel);
+                deverrouillerSucces(membre.id, 'condamne-plebe', salonRoulette);
                 if (bridge.estModo(membre)) {
                     rouletteCooldowns.set(membre.id, Date.now() + 24 * 60 * 60 * 1000);
-                    await posterReponse(`❌ Le vote a tranché (${non} contre vs ${oui} pour) : **${membre.displayName}** est Modo, exclusion changée en cooldown de **1 jour**.`);
+                    await posterReponse(`❌ Le vote a tranché (${non} contre vs ${oui} pour) : <@${membre.id}> est Modo, exclusion changée en cooldown de **1 jour**.`);
                 } else {
                     await membre.timeout(24 * 60 * 60 * 1000, 'Roulette - vote').catch(() => {});
                     rouletteTimeoutUntil.set(membre.id, Date.now() + 24 * 60 * 60 * 1000);
-                    await posterReponse(`❌ Le vote a tranché (${non} contre vs ${oui} pour) : **${membre.displayName}** est exclu.e pendant 1 jour.`);
+                    await posterReponse(`❌ Le vote a tranché (${non} contre vs ${oui} pour) : <@${membre.id}> est exclu.e pendant 1 jour.`);
                 }
             }
             bridge.demanderSauvegarde();
         } catch (e) {
             console.error('Erreur lors de la conclusion du vote roulette :', e);
-            await msg.channel.send(`⚠️ Une erreur est survenue lors du dépouillement du vote pour <@${membre.id}>.`).catch(() => {});
+            const salonSecours = msg.guild?.channels.cache.get(ROULETTE_SALON_ID) || msg.channel;
+            await salonSecours.send(`⚠️ Une erreur est survenue lors du dépouillement du vote pour <@${membre.id}>.`).catch(() => {});
         }
     }, 2 * 60 * 60 * 1000);
 }
@@ -2044,11 +2067,19 @@ async function handleRouletteMessage(message, response, client) {
             const query = argsBruts.join(" ");
             const cible = message.mentions.members.first() ?? bridge.findMemberByName(message.guild, query).found;
             if (!cible) { await message.reply("Membre introuvable."); return true; }
-            for (const map of Object.values(ROULETTE_ETATS)) map.delete(cible.id);
+
+            // Réinitialisation des effets, malus et cooldowns actifs UNIQUEMENT (les stats et succès restent préservés !)
+            const mapsExclues = new Set(['stats', 'achievements', 'suggestions']);
+            for (const [cle, map] of Object.entries(ROULETTE_ETATS)) {
+                if (!mapsExclues.has(cle) && map && typeof map.delete === 'function') {
+                    map.delete(cible.id);
+                }
+            }
+
             if (cible.setNickname) await cible.setNickname(null).catch(() => {});
             if (cible.timeout) await cible.timeout(null).catch(() => {});
             await bridge.saveAll();
-            await message.reply(`L'état roulette de <@${cible.id}> a été réinitialisé.`);
+            await message.reply(`L'état roulette (malus et cooldowns) de <@${cible.id}> a été réinitialisé sans toucher à ses stats ni ses succès ! ✅`);
             return true;
         }
         if (command === '!removestate') {

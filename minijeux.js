@@ -156,27 +156,37 @@ function evaluerMotus(guess, solution, longueur = 6) {
     return res.join('');
 }
 
-function buildMotusEmbed(mot, dateKey, longueur = 6) {
+function buildMotusEmbed(mot, dateKey, longueur = 6, manche = 1, totalManches = 2) {
     const premiereLettre = mot.charAt(0);
     const masque = `${premiereLettre} ` + '_ '.repeat(longueur - 1).trim();
-    const estDifficile = longueur === 7;
-    const titre = estDifficile ? '🟥 MOTUS DU SOIR — DIFFICILE (19h) 🟥' : '🟩 MOTUS DU MATIN (10h) 🟩';
-    const couleur = estDifficile ? 0xe74c3c : 0x00b0f4;
+    let diffStr = "moyen";
+    let couleur = 0x00b0f4;
+    if (longueur <= 4) {
+        diffStr = "facile";
+        couleur = 0x2ecc71;
+    } else if (longueur >= 7) {
+        diffStr = "difficile";
+        couleur = 0xe74c3c;
+    }
+    const diffUpper = diffStr.toUpperCase();
+    const titre = totalManches > 1
+        ? `🟩 MOTUS REGAÏEN — MANCHE ${manche}/${totalManches} (${diffUpper})`
+        : `🟩 MOTUS REGAÏEN (${diffUpper})`;
 
     return new EmbedBuilder()
         .setColor(couleur)
         .setTitle(titre)
         .setDescription(
             `Le Motus est ouvert pendant **1 heure pile** !\n\n` +
-            `🔤 **Mot à trouver :** \`${masque}\` (${longueur} lettres)\n` +
-            `🎯 **Règle :** Tu as **3 essais individuels** pour trouver le mot !\n` +
-            `⏳ **Temps limite :** 1 heure (fermeture et révélation du mot à ${estDifficile ? '20h00' : '11h00'})\n\n` +
+            `🔤 **Mot à trouver :** \`${masque}\` (${longueur} lettres - Difficulté : **${diffStr}**)\n` +
+            `🎯 **Règle :** Tu as **3 essais individuels** pour trouver le mot de cette manche !\n` +
+            `⏳ **Temps limite :** 1 heure par manche\n\n` +
             `🟩 **Vert** : Lettre bien placée\n` +
             `🟨 **Jaune** : Lettre présente mais mal placée\n` +
             `⬛ **Noir** : Lettre absente\n\n` +
             `*Écris simplement un mot de ${longueur} lettres commençant par **${premiereLettre}** dans ce salon !*`
         )
-        .setFooter({ text: 'Rendez-vous à 10h (6 lettres) et 19h (7 lettres) ! • !motus pour le statut' });
+        .setFooter({ text: `Manche ${manche}/${totalManches} • Difficulté : ${diffStr} • !motus pour le statut` });
 }
 
 function buildMotusStatsEmbed(cible, interactionUser) {
@@ -199,9 +209,19 @@ async function envoyerMotusQuotidien(guild, heureSession = 10) {
     if (!channel) return;
 
     const dateKey = getMotusDateKey();
-    const longueur = heureSession === 19 ? 7 : 6;
     const sessionKey = `${dateKey}_${heureSession}h`;
-    const mot = getMotDuJour(dateKey + (heureSession === 19 ? 999 : 0), longueur);
+    const motusData = minijeuxBridge.getMotusData() || {};
+
+    let mot;
+    let longueur;
+    if (motusData.prochainMotForce) {
+        mot = motusData.prochainMotForce;
+        longueur = mot.length;
+        delete motusData.prochainMotForce;
+    } else {
+        longueur = heureSession === 19 ? 7 : 6;
+        mot = getMotDuJour(dateKey + (heureSession === 19 ? 999 : 0), longueur);
+    }
     const expireAt = Date.now() + 60 * 60 * 1000;
 
     const nouvelleData = {
@@ -211,19 +231,23 @@ async function envoyerMotusQuotidien(guild, heureSession = 10) {
         expireAt: expireAt,
         heureSession: heureSession,
         termine: false,
+        manche: 1,
+        totalManches: 2,
+        enAttenteManche2: false,
         vainqueurId: null,
+        vainqueurs: [],
         tentatives: {},
         messageId: null
     };
 
     minijeuxBridge.setMotusData(nouvelleData);
 
-    const embed = buildMotusEmbed(mot, dateKey, longueur);
+    const embed = buildMotusEmbed(mot, dateKey, longueur, 1, 2);
     embed.setDescription(`📢 **Alerte :** <@&1558966826564845590>\n\n` + embed.data.description);
 
     const texteAnnonce = heureSession === 19 
-        ? '# 🟥 LE MOTUS DU SOIR (7 LETTRES - 1H) EST LANCÉ !' 
-        : '# 🟩 LE MOTUS DU MATIN (6 LETTRES - 1H) EST LANCÉ !';
+        ? `# 🟥 LE MOTUS DU SOIR (${longueur} LETTRES - MANCHE 1/2) EST LANCÉ !` 
+        : `# 🟩 LE MOTUS DU MATIN (${longueur} LETTRES - MANCHE 1/2) EST LANCÉ !`;
 
     const sent = await channel.send({ 
         content: `📢 <@&1558966826564845590>\n${texteAnnonce}`, 
@@ -517,7 +541,7 @@ async function handleMotusMessage(message, response, client, helpers) {
             .setColor(enCours && motusData.longueur === 7 ? 0xe74c3c : 0x00b0f4)
             .setTitle(enCours ? '🟩 MOTUS EN COURS !' : '🟩 Motus Quotidien de Regaïa')
             .setDescription(desc)
-            .setFooter({ text: 'Salon dédié : <#1559041936256409650> • 3 essais individuels • 1 heure de jeu par session' });
+            .setFooter({ text: '3 essais individuels • 1 heure de jeu par session' });
 
         await message.reply({ embeds: [embed] });
         return true;
@@ -590,7 +614,7 @@ async function handleMotusSlash(interaction) {
         const now = Date.now();
         const enCours = motusData.mot && !motusData.termine && motusData.expireAt && now < motusData.expireAt;
 
-        let desc = `Le prochain Motus aura lieu **${jourStr} à ${sessionNom}** (dans **${heures}h ${minutes}min**, <t:${timestamp}:R>) !\n\n-# *Sessions tous les jours : 10h00 (6 lettres) et 19h00 (7 lettres - Difficile).*`;
+        let desc = `Le prochain Motus aura lieu **${jourStr} à ${sessionNom}** (dans **${heures}h ${minutes}min**, <t:${timestamp}:R>) dans le salon <#1559041936256409650> !\n\n-# *Sessions tous les jours : 10h00 (6 lettres) et 19h00 (7 lettres - Difficile).*`;
 
         if (enCours) {
             const expireTimestamp = Math.floor(motusData.expireAt / 1000);
@@ -711,10 +735,10 @@ const REBUS_SERIES = [
     ["😈🍷🎹", "lucifer"], ["🕵️‍♂️🎻🇬🇧", "sherlock"], ["⏳🟦🚪", "doctor who"], ["📱👁️🪞", "black mirror"], ["⏳🌧️☢️", "dark"],
     ["☕🛋️👫", "friends"], ["☂️💛🍺", "how i met your mother", "himym"], ["⚛️🛋️🤓", "the big bang theory", "tbbt"], ["👮‍♂️🍩🏢", "brooklyn nine-nine", "b99"], ["📄🏢☕", "the office"],
     ["🌳🏞️🧇", "parks and recreation"], ["🧒📺🎳", "malcolm"], ["👨‍👩‍👧‍👦🏠🧢", "ma famille d abord"], ["🧒🏾🏫😭", "tout le monde deteste chris"], ["👑🍷🥩", "kaamelott"],
-    ["☕🏢📹", "camera cafe"], ["👴👵🛋️", "scenes de menages"], ["👨‍⚕️🏥🤪", "h"], ["⏱️⚡💨", "bref"], ["🎭💼⭐", "dix pour cent"],
+    ["☕🏢📹", "camera cafe"], ["👴👵🛋️", "scenes de menages"], ["🏥👨‍⚕️🤣", "h", "hopital"], ["⏱️🗣️💨", "bref"], ["🎭💼⭐", "dix pour cent"],
     ["🎩💎🗼", "lupin"], ["🕵️‍♂️🕶️🏢", "le bureau des legendes"], ["🗳️🏛️🇫🇷", "baron noir"], ["👮‍♀️⚖️🏢", "engrenages"], ["☀️🏢🌊", "plus belle la vie"],
-    ["👫🛋️🍷", "un gars une fille"], ["⛓️🗺️🏃‍♂️", "prison break"], ["✈️🏝️💨", "lost"], ["🧬🦸‍♂️💥", "heroes"], ["⏰💣🔫", "24 heures chrono", "24"],
-    ["🩸🔪💉", "dexter"], ["🕵️‍♀️🇺🇸💣", "homeland"], ["🍎🏘️🤫", "desperate housewives"], ["👨‍⚕️👩‍⚕️🏥", "greys anatomy", "grey's anatomy"], ["👨‍⚕️💊🦯", "dr house", "house"],
+    ["👫🛋️🍷", "un gars une fille"], ["⛓️🗺️🏃‍♂️", "prison break"], ["✈️🏝️💨", "lost"], ["🧬🦸‍♂️🌍", "heroes"], ["⏰💣🔫", "24 heures chrono", "24"],
+    ["🩸🔪💉", "dexter"], ["🕵️‍♀️🇺🇸💣", "homeland"], ["🍎🏘️👩", "desperate housewives"], ["👨‍⚕️👩‍⚕️🏥", "greys anatomy", "grey's anatomy"], ["👨‍⚕️💊🦯", "dr house", "house"],
     ["👨‍⚕️🩺🧩", "good doctor"], ["👨‍⚕️🏥🎵", "scrubs"], ["🚑🏥🩸", "urgences", "er"], ["🪓⛵🛡️", "vikings"], ["👑🇬🇧🏰", "the crown"],
     ["🏰🎩☕", "downton abbey"], ["💌👒🐝", "la chronique des bridgerton", "bridgerton"], ["⏳🏴󠁧󠁢󠁳󠁣󠁴󠁿❤️", "outlander"], ["🕊️🔫🦸", "peacemaker"], ["🦸‍♂️🩸😈", "the boys"],
     ["🦸‍♂️🩸🧒", "gen v"], ["🦯🔴🥋", "daredevil"], ["🥃📸👊", "jessica jones"], ["💀🔫🩸", "the punisher"], ["📺🪄❤️", "wandavision"],
@@ -723,17 +747,17 @@ const REBUS_SERIES = [
     ["🧢🥤🕵️", "riverdale"], ["💋👠🍸", "gossip girl"], ["🤫📱✉️", "pretty little liars"], ["🏫🍾🩸", "elite"], ["🎧📼💔", "13 reasons why"],
     ["🧢📖🔪", "you"], ["🧡⛓️👩", "orange is the new black"], ["🌿💰🔫", "narcos"], ["💵🛶💼", "ozark"], ["🧠🔍🕵️", "mindhunter"],
     ["❄️🩸🕵️", "fargo"], ["🏍️💀🔫", "sons of anarchy"], ["📻📦👮", "the wire"], ["🍝🔫🕶️", "les soprano", "the sopranos"], ["🚬🍸🏢", "mad men"],
-    ["💼🚁👴", "succession"], ["🏨👓💊🕵️🌺🍸", "the white lotus"], ["☢️🏭📉", "chernobyl"], ["🪖🎖️🌍", "band of brothers", "freres d armes"], ["🤠🤖🏜️", "westworld"],
+    ["💼🚁👴", "succession"], ["🏨🪷🍸", "the white lotus", "white lotus"], ["☢️🏭📉", "chernobyl"], ["🪖🎖️🌍", "band of brothers", "freres d armes"], ["🤠🤖🏜️", "westworld"],
     ["🔴👗🤰", "the handmaids tale", "la servante ecarlate"], ["👻🚗🗡️", "supernatural"], ["🧛‍♂️🩸🐺", "the vampire diaries"], ["🧛‍♂️⚜️👑", "the originals"], ["🐺🏈🌕", "teen wolf"],
     ["🏹🟢🦹", "arrow"], ["⚡🏃‍♂️🔴", "the flash", "flash"], ["🌾🦸‍♂️🚜", "smallville"], ["✨🧙‍♀️📖", "charmed"], ["🧛‍♀️🗡️⚰️", "buffy contre les vampires", "buffy"]
 ];
 
 const REBUS_ANIMES = [
-    ["📓🍎✍️", "death note"], ["⚔️🧱🍖", "l attaque des titans", "snk", "attack on titan"], ["⚔️👹🐗", "demon slayer", "kimetsu no yaiba"], ["🤞👁️🥋", "jujutsu kaisen", "jjk"], ["🦸‍♂️🥦💥", "my hero academia", "mha"],
+    ["📓🍎✍️", "death note"], ["🧱👹⚔️", "l attaque des titans", "snk", "attack on titan", "shingeki no kyojin"], ["⚔️👹🎋", "demon slayer", "kimetsu no yaiba"], ["🤞👁️👹", "jujutsu kaisen", "jjk"], ["🦸‍♂️🥦💥", "my hero academia", "mha"],
     ["🍥🦊🍜", "naruto", "naruto shippuden"], ["🐉⚡🥋", "dragon ball", "dragon ball z", "dbz"], ["🏴‍☠️👒🍖", "one piece"], ["🎣⚡🐜", "hunter x hunter", "hxh"], ["🗡️👻👘", "bleach"],
     ["🦾🤖⚗️", "fullmetal alchemist", "fma", "brotherhood"], ["☕👁️🩸", "tokyo ghoul"], ["⚔️🎮🏰", "sword art online", "sao"], ["🪚😈🩸", "chainsaw man"], ["🕵️‍♂️👧🥜", "spy x family"],
-    ["🛵⏳👊", "tokyo revengers"], ["🤖🩸👼", "evangelion", "neon genesis evangelion"], ["🎷🚀🚬", "cowboy bebop"], ["👁️👑♟️", "code geass"], ["🔬🍌⏳", "steins gate"],
-    ["🥦🧂👻", "mob psycho 100"], ["🥊👨‍🦲💥", "one punch man"], ["🪓⛵⚔️", "vinland saga"], ["⭐👊🧛", "jojo", "jojos bizarre adventure"], ["🍸♟️💀", "death parade"],
+    ["🛵⏳👊", "tokyo revengers"], ["🤖🩸👼", "evangelion", "neon genesis evangelion"], ["🤠🎷🚀", "cowboy bebop"], ["👁️👑♟️", "code geass"], ["🔬🍌⏱️", "steins gate", "steins;gate"],
+    ["🥦👦👻", "mob psycho 100", "mob psycho", "mob"], ["🥊👨‍🦲💥", "one punch man"], ["🪓⛵⚔️", "vinland saga"], ["⭐👊🧛‍♂️", "jojo", "jojos bizarre adventure", "jojo bizarre adventure"], ["🍸♟️💀", "death parade"],
     ["🦠✋🩸", "parasyte"], ["🔫🧠🏢", "psycho-pass"], ["👨‍⚕️🇩🇪💉", "monster"], ["🏐🐦💥", "haikyuu", "haikyu"], ["🏀🔴⚡", "kuroko no basket", "kuroko"],
     ["⚽⛓️🔥", "blue lock"], ["🏀⛹️‍♂️💥", "slam dunk"], ["🏎️⛰️💨", "initial d"], ["👓💊🕵️", "detective conan"], ["⚡🐭🔴", "pokemon"],
     ["🃏👁️🐉", "yu-gi-oh", "yugioh"], ["🌀🦁⚡", "beyblade"], ["🦖🦕🥚", "digimon"], ["🌙🎀🐱", "sailor moon"], ["🌸👧🗝️", "cardcaptor sakura", "sakura"],
@@ -902,7 +926,7 @@ async function verifierReponseRebus(message) {
     if (!rebusSession.active || !rebusSession.currentItem) return false;
 
     const guessNorm = normaliserRebus(message.content);
-    if (guessNorm.length < 2) return false;
+    if (!guessNorm || guessNorm.length < 1) return false;
 
     const item = rebusSession.currentItem;
     const reponsesValides = item.slice(1).map(r => normaliserRebus(r));
@@ -1090,13 +1114,13 @@ async function handleRebusMessage(message, response, client, helpers) {
     }
 
     // 2. Commande !rebus
-    if (response?.needsRebus) {
+    if (cmd === '!rebus' || cmd === '!decodeur' || cmd === '!emojis' || response?.needsRebus) {
         const { jourStr, h, m, timestamp } = tempsAvantProchainRebus();
-        let desc = `Le prochain Rébus Regaïen aura lieu **${jourStr} à 15h00** (dans **${h}h ${m}min**, <t:${timestamp}:R>) !\n-# *Thème mystère révélé au début de la partie.*`;
+        let desc = `Le prochain Rébus Regaïen aura lieu **${jourStr} à 15h00** (dans **${h}h ${m}min**, <t:${timestamp}:R>) dans le salon <#${REBUS_CHANNEL_ID}> !\n\n-# *Thème mystère révélé au début de la partie.*`;
 
         if (rebusSession.active && rebusSession.currentItem) {
             const expireTimestamp = Math.floor(rebusSession.expireAt / 1000);
-            desc = `🎮 **Le Rébus Regaïen est EN COURS dans <#${REBUS_CHANNEL_ID}> !**\n\n` +
+            desc = `🎮 **Le Rébus Regaïen est EN COURS dans le salon <#${REBUS_CHANNEL_ID}> !**\n\n` +
                    `📍 **Manche en cours :** ${rebusSession.manche}/5\n` +
                    `⏳ **Fin de la manche :** <t:${expireTimestamp}:R> !\n\n` +
                    `Prochaine session complète : **${jourStr} à 15h00** (<t:${timestamp}:R>).`;
@@ -1106,14 +1130,14 @@ async function handleRebusMessage(message, response, client, helpers) {
             .setColor(0xf39c12)
             .setTitle(rebusSession.active ? '🧩 RÉBUS REGAÏEN EN COURS !' : '🧩 Rébus Regaïen Quotidien (15h00)')
             .setDescription(desc)
-            .setFooter({ text: 'Salon dédié : <#1556089022718152764> • 5 manches de 5 minutes chaque jour à 15h00' });
+            .setFooter({ text: 'Regaïa • 5 manches de 5 minutes chaque jour à 15h00' });
 
         await message.reply({ embeds: [embed] });
         return true;
     }
 
     // 3. Commande !rebusstats
-    if (response?.needsRebusStats) {
+    if (cmd === '!rebusstats' || cmd === '!rebusstat' || response?.needsRebusStats) {
         let cible = message.mentions.members.first();
         if (!cible) {
             const query = message.content.trim().split(/\s+/).slice(1).join(" ");
