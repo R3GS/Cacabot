@@ -1,7 +1,9 @@
 const {
     EmbedBuilder, ActionRowBuilder, ButtonBuilder,
-    StringSelectMenuBuilder, UserSelectMenuBuilder, ButtonStyle, ChannelType
+    StringSelectMenuBuilder, UserSelectMenuBuilder, ButtonStyle, ChannelType,
+    ModalBuilder, TextInputBuilder, TextInputStyle
 } = require('discord.js');
+
 
 const ROULETTE_COOLDOWN_MS = 15 * 60 * 1000;
 const ROULETTE_COOLDOWN_EXEMPT = ['744217896581857281', '902651805614358568'];
@@ -2017,10 +2019,434 @@ async function initialiserWebhooksRoulette(guild) {
     }
 }
 
-async function handleRouletteMessage(message, response, client) {
-    const raw = message.content.trim();
-    const command = raw.split(" ")[0].toLowerCase();
+// ==========================================
+//   LOGIQUE DU PANNEAU !stats set (EPSYS)
+// ==========================================
+
+const ROULETTE_STATS_LABELS = {
+    'tirages': '🎲 Tirages totaux',
+    'bonus': '🎉 Bonus pris',
+    'malus': '💀 Malus subis',
+    'rien': '😶 Tirages nuls (« Rien »)',
+    'pireSerie': '📉 Pire série de malchance',
+    'plusGrosGain': '🏆 Plus gros gain',
+    'pity_malus': '🍀 Pity malus',
+    'pity_nuls': '🍀 Pity tirages nuls',
+    'jackpot': '📈 Boost Jackpot'
+};
+
+function buildRouletteStatsSetEmbed(guild, targetUserId, selectedStat = 'tirages', feedback = null) {
+    const member = guild?.members.cache.get(targetUserId);
+    const nom = member?.displayName || `<@${targetUserId}>`;
+    const avatar = member?.user?.displayAvatarURL({ dynamic: true, size: 256 }) || null;
+
+    const s = rouletteStats.get(targetUserId) ?? { tirages: 0, bonus: 0, malus: 0, rien: 0, plusGrosGain: null, pireSerie: 0 };
+    const p = roulettePity.get(targetUserId) ?? { malus: 0, nuls: 0 };
+    const j = Math.round((rouletteJackpotBonus.get(targetUserId) || 0) * 100);
+
+    const gainTexte = s.plusGrosGain 
+        ? `**${s.plusGrosGain.nom}** (${probaAffichee(s.plusGrosGain.proba).pct}%)` 
+        : '*Aucun bonus encore*';
+
+    let desc = `Panneau d'administration des statistiques de roulette de **${nom}**.\n\n`;
+    if (feedback) {
+        desc += `🔔 **Dernière action :** ${feedback}\n\n`;
+    }
+    desc += `👉 **Statistique actuellement ciblée :** **${ROULETTE_STATS_LABELS[selectedStat] || selectedStat}**\n` +
+            `-# *Utilise les boutons ou menus ci-dessous pour modifier cette statistique spécifique.*`;
+
+    const embed = new EmbedBuilder()
+        .setColor(feedback ? 0x2ecc71 : 0xffd20a)
+        .setTitle(`🎰 Gestionnaire des Stats Roulette — ${nom}`)
+        .setDescription(desc)
+        .addFields(
+            {
+                name: '📊 STATISTIQUES PRINCIPALES',
+                value: `• 🎲 **Tirages totaux :** \`${s.tirages}\`\n` +
+                       `• 🎉 **Bonus pris :** \`${s.bonus}\`\n` +
+                       `• 💀 **Malus subis :** \`${s.malus}\`\n` +
+                       `• 😶 **Résultats « Rien » :** \`${s.rien}\``,
+                inline: true
+            },
+            {
+                name: '🏆 EXPLOITS & SÉRIES',
+                value: `• 🏆 **Plus gros gain :**\n> ${gainTexte}\n` +
+                       `• 📉 **Pire série de malchance :** \`${s.pireSerie}\``,
+                inline: true
+            },
+            {
+                name: '🍀 PITY & JACKPOT',
+                value: `• 💀 **Pity malus :** \`${p.malus}/3\`\n` +
+                       `• 💨 **Pity nuls :** \`${p.nuls}/5\`\n` +
+                       `• 📈 **Boost jackpot :** \`+${j}%\``,
+                inline: false
+            }
+        )
+        .setFooter({ text: 'Commande Epsys-Only • Sauvegarde automatique (#json)' })
+        .setTimestamp();
+
+    if (avatar) embed.setThumbnail(avatar);
+    return embed;
+}
+
+function buildRouletteStatsSetComponents(targetUserId, selectedStat = 'tirages') {
+    const s = rouletteStats.get(targetUserId) ?? { tirages: 0, bonus: 0, malus: 0, rien: 0, plusGrosGain: null, pireSerie: 0 };
+    const p = roulettePity.get(targetUserId) ?? { malus: 0, nuls: 0 };
+    const j = Math.round((rouletteJackpotBonus.get(targetUserId) || 0) * 100);
+
+    const gainNomCourt = s.plusGrosGain ? s.plusGrosGain.nom.slice(0, 25) : 'Aucun';
+
+    // 1. Menu choix du membre
+    const rowUser = new ActionRowBuilder().addComponents(
+        new UserSelectMenuBuilder()
+            .setCustomId(`rltpts:user:${selectedStat}`)
+            .setPlaceholder('👤 Choisir un autre membre...')
+    );
+
+    // 2. Menu choix de la stat ciblée
+    const rowStat = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId(`rltpts:stat:${targetUserId}`)
+            .setPlaceholder('🎯 Choisir la statistique à modifier...')
+            .addOptions([
+                { label: `🎲 Tirages totaux (Actuel : ${s.tirages})`, value: 'tirages', default: selectedStat === 'tirages' },
+                { label: `🎉 Bonus pris (Actuel : ${s.bonus})`, value: 'bonus', default: selectedStat === 'bonus' },
+                { label: `💀 Malus subis (Actuel : ${s.malus})`, value: 'malus', default: selectedStat === 'malus' },
+                { label: `😶 Résultats « Rien » (Actuel : ${s.rien})`, value: 'rien', default: selectedStat === 'rien' },
+                { label: `📉 Pire série de malchance (Actuel : ${s.pireSerie})`, value: 'pireSerie', default: selectedStat === 'pireSerie' },
+                { label: `🏆 Plus gros gain (Actuel : ${gainNomCourt})`, value: 'plusGrosGain', default: selectedStat === 'plusGrosGain' },
+                { label: `🍀 Pity Malus (Actuel : ${p.malus}/3)`, value: 'pity_malus', default: selectedStat === 'pity_malus' },
+                { label: `🍀 Pity Nuls (Actuel : ${p.nuls}/5)`, value: 'pity_nuls', default: selectedStat === 'pity_nuls' },
+                { label: `📈 Boost Jackpot (Actuel : +${j}%)`, value: 'jackpot', default: selectedStat === 'jackpot' }
+            ])
+    );
+
+    // 3. Commandes spécifiques selon la stat
+    if (selectedStat === 'plusGrosGain') {
+        const bonusList = ROULETTE_TABLE
+            .filter(e => e.type === 'bonus')
+            .sort((a, b) => a.poids - b.poids);
+
+        const optionsBonus = bonusList.slice(0, 25).map(e => {
+            const { n, pct } = probaAffichee(probaReelle(e));
+            const emoji = ROULETTE_EMOJIS_PAR_ID[e.id] ?? '🎁';
+            return {
+                label: `${e.nom} (1/${n})`.slice(0, 100),
+                description: `Cote : ${pct}% de chance`.slice(0, 100),
+                value: e.id,
+                emoji
+            };
+        });
+
+        const rowGainMenu = new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(`rltpts:gainselect:${targetUserId}`)
+                .setPlaceholder('🎁 Choisir un bonus officiel comme plus gros gain...')
+                .addOptions(optionsBonus)
+        );
+
+        const rowGainBtns = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`rltpts:openmodal:${targetUserId}:plusGrosGain`)
+                .setLabel('✏️ Gain personnalisé...')
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId(`rltpts:act:${targetUserId}:plusGrosGain:reset`)
+                .setLabel('🗑️ Retirer le gain')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+        return [rowUser, rowStat, rowGainMenu, rowGainBtns];
+    }
+
+    // Boutons rapides pour les stats numériques
+    const rowButtons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`rltpts:act:${targetUserId}:${selectedStat}:add1`).setLabel('➕ +1').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`rltpts:act:${targetUserId}:${selectedStat}:add5`).setLabel('➕ +5').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`rltpts:act:${targetUserId}:${selectedStat}:sub1`).setLabel('➖ -1').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`rltpts:openmodal:${targetUserId}:${selectedStat}`).setLabel('✏️ Définir...').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`rltpts:act:${targetUserId}:${selectedStat}:reset`).setLabel('🗑️ Remise à 0').setStyle(ButtonStyle.Danger)
+    );
+
+    return [rowUser, rowStat, rowButtons];
+}
+
+function modifierStatRoulette(targetUserId, statKey, action, valeurDirecte = null) {
+    let s = rouletteStats.get(targetUserId);
+    if (!s) {
+        s = { tirages: 0, bonus: 0, malus: 0, rien: 0, plusGrosGain: null, pireSerie: 0, serieActuelle: 0 };
+        rouletteStats.set(targetUserId, s);
+    }
+
+    let p = roulettePity.get(targetUserId);
+    if (!p) {
+        p = { malus: 0, nuls: 0 };
+        roulettePity.set(targetUserId, p);
+    }
+
+    if (statKey === 'plusGrosGain') {
+        if (action === 'reset') {
+            s.plusGrosGain = null;
+        } else if (action === 'set' && valeurDirecte) {
+            s.plusGrosGain = valeurDirecte;
+        }
+        bridge.demanderSauvegarde();
+        return s.plusGrosGain ? s.plusGrosGain.nom : 'Aucun';
+    }
+
+    if (statKey === 'pity_malus') {
+        if (action === 'add1') p.malus = (p.malus || 0) + 1;
+        else if (action === 'add5') p.malus = (p.malus || 0) + 5;
+        else if (action === 'sub1') p.malus = Math.max(0, (p.malus || 0) - 1);
+        else if (action === 'reset') p.malus = 0;
+        else if (action === 'set' && valeurDirecte !== null) p.malus = Math.max(0, valeurDirecte);
+        bridge.demanderSauvegarde();
+        return `${p.malus}/3`;
+    }
+
+    if (statKey === 'pity_nuls') {
+        if (action === 'add1') p.nuls = (p.nuls || 0) + 1;
+        else if (action === 'add5') p.nuls = (p.nuls || 0) + 5;
+        else if (action === 'sub1') p.nuls = Math.max(0, (p.nuls || 0) - 1);
+        else if (action === 'reset') p.nuls = 0;
+        else if (action === 'set' && valeurDirecte !== null) p.nuls = Math.max(0, valeurDirecte);
+        bridge.demanderSauvegarde();
+        return `${p.nuls}/5`;
+    }
+
+    if (statKey === 'jackpot') {
+        let cur = Math.round((rouletteJackpotBonus.get(targetUserId) || 0) * 100);
+        if (action === 'add1') cur = Math.min(50, cur + 1);
+        else if (action === 'add5') cur = Math.min(50, cur + 5);
+        else if (action === 'sub1') cur = Math.max(0, cur - 1);
+        else if (action === 'reset') cur = 0;
+        else if (action === 'set' && valeurDirecte !== null) cur = Math.min(50, Math.max(0, valeurDirecte));
+        rouletteJackpotBonus.set(targetUserId, cur / 100);
+        bridge.demanderSauvegarde();
+        return `+${cur}%`;
+    }
+
+    if (action === 'add1') s[statKey] = (s[statKey] || 0) + 1;
+    else if (action === 'add5') s[statKey] = (s[statKey] || 0) + 5;
+    else if (action === 'sub1') s[statKey] = Math.max(0, (s[statKey] || 0) - 1);
+    else if (action === 'reset') s[statKey] = 0;
+    else if (action === 'set' && valeurDirecte !== null) s[statKey] = Math.max(0, valeurDirecte);
+
+    bridge.demanderSauvegarde();
+    return s[statKey];
+}
+
+async function handleRouletteStatsInteraction(interaction) {
+    if (interaction.user.id !== bridge.EPSYS_ID) {
+        return interaction.reply({ content: "Ce panneau est réservé à Epsys 😌", ephemeral: true });
+    }
+
+    const id = interaction.customId;
+
+    // 1. Changement de membre ciblé (UserSelectMenu)
+    if (id.startsWith('rltpts:user:')) {
+        const selectedStat = id.replace('rltpts:user:', '');
+        const targetUserId = interaction.values[0];
+        const embed = buildRouletteStatsSetEmbed(interaction.guild, targetUserId, selectedStat);
+        const components = buildRouletteStatsSetComponents(targetUserId, selectedStat);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    // 2. Changement de statistique ciblée (StringSelectMenu)
+    if (id.startsWith('rltpts:stat:')) {
+        const targetUserId = id.replace('rltpts:stat:', '');
+        const selectedStat = interaction.values[0];
+        const embed = buildRouletteStatsSetEmbed(interaction.guild, targetUserId, selectedStat);
+        const components = buildRouletteStatsSetComponents(targetUserId, selectedStat);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    // 3. Sélection d'un bonus officiel pour plusGrosGain (StringSelectMenu)
+    if (id.startsWith('rltpts:gainselect:')) {
+        const targetUserId = id.replace('rltpts:gainselect:', '');
+        const bonusId = interaction.values[0];
+        const entry = ROULETTE_TABLE.find(e => e.id === bonusId);
+
+        if (entry) {
+            const proba = probaReelle(entry);
+            const { pct } = probaAffichee(proba);
+            modifierStatRoulette(targetUserId, 'plusGrosGain', 'set', { nom: entry.nom, proba });
+            const feedback = `🏆 Plus gros gain défini sur **${entry.nom}** (${pct}%) !`;
+            const embed = buildRouletteStatsSetEmbed(interaction.guild, targetUserId, 'plusGrosGain', feedback);
+            const components = buildRouletteStatsSetComponents(targetUserId, 'plusGrosGain');
+            await interaction.update({ embeds: [embed], components });
+            return true;
+        }
+    }
+
+    // 4. Actions rapides par boutons (+1, +5, -1, reset)
+    if (id.startsWith('rltpts:act:')) {
+        const [, , targetUserId, selectedStat, action] = id.split(':');
+        const nouveau = modifierStatRoulette(targetUserId, selectedStat, action);
+
+        const actionsTexte = {
+            'add1': `✅ **+1** ajouté ! *(Nouvelle valeur : **${nouveau}**)*`,
+            'add5': `✅ **+5** ajoutés ! *(Nouvelle valeur : **${nouveau}**)*`,
+            'sub1': `➖ **-1** retiré ! *(Nouvelle valeur : **${nouveau}**)*`,
+            'reset': `🗑️ **${ROULETTE_STATS_LABELS[selectedStat] || selectedStat}** remis à zéro !`
+        };
+
+        const feedback = actionsTexte[action] || `Stat mise à jour : **${nouveau}**`;
+        const embed = buildRouletteStatsSetEmbed(interaction.guild, targetUserId, selectedStat, feedback);
+        const components = buildRouletteStatsSetComponents(targetUserId, selectedStat);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    // 5. Ouverture de la Modal de saisie directe
+    if (id.startsWith('rltpts:openmodal:')) {
+        const [, , targetUserId, selectedStat] = id.split(':');
+
+        if (selectedStat === 'plusGrosGain') {
+            const modal = new ModalBuilder()
+                .setCustomId(`rltpts:submodal:${targetUserId}:plusGrosGain`)
+                .setTitle('Définir le plus gros gain');
+
+            const inputNom = new TextInputBuilder()
+                .setCustomId('rltpts_gain_nom')
+                .setLabel('Nom du gain')
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder('Ex : 5€ de la YouTube Money')
+                .setRequired(true);
+
+            const inputProba = new TextInputBuilder()
+                .setCustomId('rltpts_gain_proba')
+                .setLabel('Probabilité (en % ou 1/N)')
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder('Ex : 0.05 ou 1/3400')
+                .setRequired(true);
+
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(inputNom),
+                new ActionRowBuilder().addComponents(inputProba)
+            );
+            await interaction.showModal(modal);
+            return true;
+        }
+
+        const modal = new ModalBuilder()
+            .setCustomId(`rltpts:submodal:${targetUserId}:${selectedStat}`)
+            .setTitle('Définir la statistique');
+
+        const input = new TextInputBuilder()
+            .setCustomId('rltpts_input_val')
+            .setLabel(`Valeur pour ${ROULETTE_STATS_LABELS[selectedStat] || 'la stat'}`)
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('Entre un nombre entier (ex: 42)')
+            .setRequired(true);
+
+        modal.addComponents(new ActionRowBuilder().addComponents(input));
+        await interaction.showModal(modal);
+        return true;
+    }
+
+    // 6. Validation de la Modal
+    if (interaction.isModalSubmit() && id.startsWith('rltpts:submodal:')) {
+        const [, , targetUserId, selectedStat] = id.split(':');
+
+        if (selectedStat === 'plusGrosGain') {
+            const nomSaisi = interaction.fields.getTextInputValue('rltpts_gain_nom').trim();
+            const probaStr = interaction.fields.getTextInputValue('rltpts_gain_proba').trim();
+
+            let probaNum = 0.01;
+            if (probaStr.includes('/')) {
+                const denom = parseFloat(probaStr.split('/')[1]);
+                if (!isNaN(denom) && denom > 0) probaNum = 1 / denom;
+            } else {
+                const val = parseFloat(probaStr.replace('%', ''));
+                if (!isNaN(val)) probaNum = val > 1 ? val / 100 : val;
+            }
+
+            modifierStatRoulette(targetUserId, 'plusGrosGain', 'set', { nom: nomSaisi, proba: probaNum });
+            const { pct } = probaAffichee(probaNum);
+            const feedback = `✏️ Plus gros gain défini sur **${nomSaisi}** (${pct}%) !`;
+            const embed = buildRouletteStatsSetEmbed(interaction.guild, targetUserId, 'plusGrosGain', feedback);
+            const components = buildRouletteStatsSetComponents(targetUserId, 'plusGrosGain');
+            await interaction.update({ embeds: [embed], components });
+            return true;
+        }
+
+        const valStr = interaction.fields.getTextInputValue('rltpts_input_val').trim();
+        const num = parseInt(valStr, 10);
+
+        if (isNaN(num) || num < 0) {
+            return interaction.reply({ content: "❌ Nombre invalide ! Entre un nombre entier positif.", ephemeral: true });
+        }
+
+        const nouveau = modifierStatRoulette(targetUserId, selectedStat, 'set', num);
+        const feedback = `✏️ **${ROULETTE_STATS_LABELS[selectedStat] || selectedStat}** défini à **${nouveau}** !`;
+        const embed = buildRouletteStatsSetEmbed(interaction.guild, targetUserId, selectedStat, feedback);
+        const components = buildRouletteStatsSetComponents(targetUserId, selectedStat);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    return false;
+}
+
+async function handleRouletteMessage(message, response, client, helpers) {
     const adminSuccesAliases = ['!roulettesuccesforce', '!rltsuccesforce', '!roulettesuccessforce', '!rltsuccessforce'];
+    const raw = message.content.trim();
+    const args = raw.split(/\s+/);
+    const command = args[0].toLowerCase();
+    const sousCmd = args[1]?.toLowerCase();
+
+    // ==========================================
+    //   COMMANDE !stats set (EPSYS-ONLY)
+    // ==========================================
+    if (
+        ((command === '!stats' || command === '!rltstats' || command === '!roulettestats') && sousCmd === 'set') ||
+        command === '!statsset' || command === '!setstats' || command === '!rltstatsset'
+    ) {
+        if (message.author.id !== bridge.EPSYS_ID) {
+            await message.reply("Cette commande est réservée à Epsys.");
+            return true;
+        }
+
+        const query = (sousCmd === 'set' ? args.slice(2) : args.slice(1)).join(" ").trim();
+        let cible = message.mentions?.members?.first ? message.mentions.members.first() : null;
+
+        if (!cible) {
+            if (!query) {
+                cible = message.member;
+            } else {
+                const findFn = bridge.findMemberByName || helpers?.findMemberByName;
+                const askFn = bridge.askDisambiguation || helpers?.askDisambiguation;
+                if (findFn) {
+                    const result = findFn(message.guild, query);
+                    if (result.multiple && askFn) {
+                        return askFn(message, message.guild, result.candidates, async (user) => {
+                            const mb = message.guild.members.cache.get(user.id);
+                            if (mb) {
+                                const embed = buildRouletteStatsSetEmbed(message.guild, mb.id, 'tirages');
+                                const rows = buildRouletteStatsSetComponents(mb.id, 'tirages');
+                                await message.reply({ embeds: [embed], components: rows });
+                            }
+                        });
+                    }
+                    cible = result.found;
+                }
+            }
+        }
+
+        if (!cible) {
+            await message.reply("Membre introuvable.");
+            return true;
+        }
+
+        const embed = buildRouletteStatsSetEmbed(message.guild, cible.id, 'tirages');
+        const rows = buildRouletteStatsSetComponents(cible.id, 'tirages');
+        await message.reply({ embeds: [embed], components: rows });
+        return true;
+    }
+    
 
     if (['!reroll', '!bonusforce', '!malusforce', '!rouletteid', '!rltid', '!resetroulettestate', '!resetrlt', '!removestate', ...adminSuccesAliases].includes(command)) {
         if (message.author.id !== bridge.EPSYS_ID) {
@@ -2500,6 +2926,10 @@ async function handleRouletteSlash(interaction, client) {
 }
 
 async function handleRouletteButton(interaction, client) {
+    if (interaction.customId && interaction.customId.startsWith('rltpts:')) {
+        return await handleRouletteStatsInteraction(interaction);
+    }
+
     const customId = interaction.customId;
 
     if (customId.startsWith('rlt_claim_menu_')) {

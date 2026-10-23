@@ -1327,7 +1327,7 @@ async function disableButtons(interaction) {
     // =========================
     //   COMMANDES ROULETTE
     // =========================
-    if (await handleRouletteMessage(message, null, client)) return;
+    if (await handleRouletteMessage(message, null, client, { findMemberByName, askDisambiguation })) return;
 
     // Ping Cacabot seul -> "Quoi ? (Feur)" (Silencieux)
     const strippedMsg = message.content.replace(/<@!?1503495713097519355>/g, '').trim();
