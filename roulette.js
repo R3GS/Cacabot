@@ -1610,13 +1610,13 @@ async function envoyerHallOfShame(guild, membre, entry) {
             { name: '🎲 Malchance de tirage', value: `**1/${n}** (${pct}%)`, inline: true },
             { name: '📅 Date du drame', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
         )
-        .setFooter({ text: 'Panthéon de la Honte (Hall of Shame) • Regaïa' })
+        .setFooter({ text: 'Panthéon de la Honte • Regaïa' })
         .setTimestamp();
 
     if (avatar) embed.setThumbnail(avatar);
     const { MessageFlags } = require('discord.js');
     await salon.send({ 
-        content: `💀 Toutes nos pensées vont à <@${membre.id}> qui vient de toucher le fond... Cheh !`, 
+        content: `💀 Toutes nos pensées vont à <@${membre.id}> qui vient de toucher le fond... (cheh)`, 
         embeds: [embed],
         flags: [MessageFlags.SuppressNotifications]
     }).catch(() => {});
