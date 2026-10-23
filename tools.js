@@ -555,7 +555,7 @@ async function handleToolsMessage(message, response, client) {
             content: texteToSend || undefined,
             files: attachments.length > 0 ? attachments : undefined
         }).catch(err => {
-            message.channel.send(`❌ Impossible de répondre au message : ${err.message}`);
+            message.channel.send(`❌ Impossible de répondre : ${err.message}`);
         });
         return true;
     }
@@ -576,19 +576,19 @@ async function handleToolsMessage(message, response, client) {
         if (sub === 'resolve' || sub === 'del' || sub === 'remove') {
             const indexToRemove = parseInt(args[2], 10) - 1;
             if (isNaN(indexToRemove) || indexToRemove < 0 || indexToRemove >= bugsList.length) {
-                return message.reply("Usage : `!bug resolve [numéro]` (ex: `!bug resolve 1` pour retirer le 1er bug de la liste).");
+                return message.reply("Usage : `!bug resolve [numéro]` (ex: `!bug resolve 1`).");
             }
             const supprime = bugsList.splice(indexToRemove, 1)[0];
-            return message.reply(`✅ **Bug n°${indexToRemove + 1} résolu et retiré :**\n> *« ${supprime.content ? supprime.content.slice(0, 80) : 'Image/Fichier'} »* de **${supprime.author}**`);
+            return message.reply(`✅ **Bug n°${indexToRemove + 1} résolu :**\n> *« ${supprime.content ? supprime.content.slice(0, 80) : 'Image/Fichier'} »* de **${supprime.author}**`);
         }
 
-        // Si Epsys tape simplement "!bug" ou "!bugs" sans répondre à un message : afficher la liste
+        // Si !bug seul : afficher la liste des bugs enregistrés
         if (!repliedMsgId) {
             const embed = buildBugListEmbed(bugsList);
             return message.reply({ embeds: [embed] });
         }
 
-        // Si Epsys répond à un message avec !bug : on répertorie le message dans la liste
+        // Si !bug en répondant à un message : répertorier le message dans la liste
         const cibleMsg = await message.channel.messages.fetch(repliedMsgId).catch(() => null);
         if (!cibleMsg) {
             return message.reply("❌ Impossible de récupérer le message répondu.");
@@ -614,7 +614,7 @@ async function handleToolsMessage(message, response, client) {
 
         const embedListe = buildBugListEmbed(bugsList);
         await message.reply({
-            content: "🐛 **Bug répertorié avec succès !**",
+            content: "🐛 **Bug répertorié dans la liste avec succès !**",
             embeds: [embedListe]
         });
         return true;

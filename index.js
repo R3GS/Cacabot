@@ -1452,13 +1452,11 @@ async function disableButtons(interaction) {
 
     if (await handleInteractionMessage(message, response, client, { findMemberByName, askDisambiguation })) return;
 
-    // !cry est pris en charge par handleInteractionMessage
+    // Commandes Motus (!motus, !motustats)
+    if (await handleMotusMessage(message, response, client, { findMemberByName })) return;
 
-    // !bougetoi & !sylvain sont pris en charge par handleSocialMessage
-
-    // !motus & !motustats sont pris en charge par handleMotusMessage ci-dessus
-
-    // !rebus & !rebusstats sont pris en charge par handleRebusMessage ci-dessus
+    // Commandes Rébus (!rebus, !rebusstats)
+    if (await handleRebusMessage(message, response, client, { findMemberByName })) return;
 
     // Commandes Quotes (!quote, !citation)
     if (await handleQuotesMessage(message, response)) return;
@@ -2136,6 +2134,16 @@ client.on('messageReactionAdd', async (reaction, user) => {
     await handleSecurityReactionAdd(reaction, user);
 
     if (user.bot) return;
+
+    // Anti-triche vote public : suppression immédiate de la réaction si l'accusé.e vote pour son propre sort
+    if (client.activeVotes && client.activeVotes.has(reaction.message.id)) {
+        const accusedId = client.activeVotes.get(reaction.message.id);
+        if (user.id === accusedId) {
+            await reaction.users.remove(user.id).catch(() => {});
+            return;
+        }
+    }
+
     trackBattlePassProgress(user.id, 'reaction_add', 1);
     if (reaction.emoji.name !== '🖕' && reaction.emoji.name !== 'middle_finger') return;
 

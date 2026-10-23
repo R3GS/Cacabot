@@ -521,22 +521,53 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
         }
     }
 
-    // 2. Déclencheurs Roulette
+    // 2. Déclencheurs Roulette & Pity
     if (type === 'roulette_roll') {
         if (heure < 12) typesActifs.add('roulette_matin');
         if (meta.sansEffetActif) typesActifs.add('roulette_neutre');
         if (meta.malusCumules >= 2) typesActifs.add('roll_sous_malus_cumules');
+
+        if (!p.weeklyHH) p.weeklyHH = [];
+        if (meta.isHappyHour && !p.weeklyHH.includes(today)) {
+            p.weeklyHH.push(today);
+            if (p.weeklyHH.length >= 3) typesActifs.add('hh_jours');
+        }
     }
 
-    // 3. Déclencheurs Vocal
+    // 3. Déclencheurs Vocal & Endurance
     if (type === 'vocal_min') {
         if (heure >= 22) typesActifs.add('vocal_nuit');
         if (heure >= 14 && heure < 18) typesActifs.add('vocal_aprem');
         if (dayOfWeek === 0 || dayOfWeek === 6) typesActifs.add('vocal_weekend');
         if (meta.groupeCount >= 3) typesActifs.add('vocal_groupe');
+
+        if (!p.weeklyVocalDays) p.weeklyVocalDays = [];
+        if (!p.weeklyVocalDays.includes(today)) {
+            p.weeklyVocalDays.push(today);
+            if (p.weeklyVocalDays.length >= 3) typesActifs.add('vocal_jours');
+            if (p.weeklyVocalDays.length >= 4) typesActifs.add('vocal_jours_20');
+        }
     }
 
-    // 4. Streaks Hebdos
+    // 4. Déclencheurs Mini-Jeux combinés
+    if (type === 'minijeu_essai') {
+        if (!p.dailyMotusSessions) p.dailyMotusSessions = [];
+        const sessionCourante = heure >= 18 ? '19h' : '10h';
+        if (!p.dailyMotusSessions.includes(sessionCourante)) {
+            p.dailyMotusSessions.push(sessionCourante);
+            if (p.dailyMotusSessions.length >= 2) typesActifs.add('motus_double_session');
+        }
+    }
+
+    if (type === 'rebus_part') {
+        if (!p.weeklyRebusDays) p.weeklyRebusDays = [];
+        if (!p.weeklyRebusDays.includes(today)) {
+            p.weeklyRebusDays.push(today);
+            if (p.weeklyRebusDays.length >= 3) typesActifs.add('rebus_jours');
+        }
+    }
+
+    // 5. Streaks Hebdos & Quotidiennes
     if (p.streak >= 7) typesActifs.add('streak_hebdo');
     if (p.streak >= 5) typesActifs.add('streak_hebdo_5');
 
@@ -548,6 +579,12 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
             q.progression = Math.min(q.objectif, p.weeklySalons.length);
         } else if (q.type === 'message_jours') {
             q.progression = Math.min(q.objectif, p.weeklyDays.length);
+        } else if (q.type === 'hh_jours') {
+            q.progression = Math.min(q.objectif, p.weeklyHH?.length || 0);
+        } else if (q.type === 'vocal_jours' || q.type === 'vocal_jours_20') {
+            q.progression = Math.min(q.objectif, p.weeklyVocalDays?.length || 0);
+        } else if (q.type === 'rebus_jours') {
+            q.progression = Math.min(q.objectif, p.weeklyRebusDays?.length || 0);
         } else if (q.type === 'message_salon_unique') {
             const maxDansUnSalon = Math.max(...Object.values(p.dailySalonCounts), 0);
             q.progression = Math.min(q.objectif, maxDansUnSalon);

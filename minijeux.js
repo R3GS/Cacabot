@@ -37,65 +37,85 @@ const initMotusState = initMinijeuxState;
 // ==========================================
 
 const MOTUS_6_LETTRES = [
-    "ACTION", "AGENDA", "AIGLES", "ALBUMS", "ALERTE", "AMICAL", "ANANAS", "ANCIEN", "ANNEAU", "APPELS",
-    "ARBRES", "ARCHES", "ARGENT", "ARMURE", "ARTIST", "ASPECT", "ASTUCE", "ATTACH", "AUTEUR", "AVENIR",
-    "BALLES", "BALLON", "BANANE", "BANDES", "BARQUE", "BASSIN", "BATEAU", "BATTRE", "BEAUTE", "BIAISE",
-    "BISTRO", "BLAGUE", "BLASON", "BLESSE", "BLONDE", "BONBON", "BORDEL", "BOTTES", "BOUCLE", "BOUGER",
-    "BOUGIE", "BOULES", "BOURSE", "BOUTON", "BRAVES", "BRIQUE", "BRISER", "BRUMES", "BUDGET", "BUFFET",
-    "BUREAU", "CABANE", "CADEAU", "CAHIER", "CALCUL", "CAMION", "CANAPE", "CANARD", "CANONS", "CARNET",
-    "CARTON", "CASINO", "CASQUE", "CASTEL", "CENTRE", "CERCLE", "CHAINE", "CHAMPS", "CHANCE", "CHAQUE",
-    "CHASSE", "CHAUVE", "CHEMIN", "CHEQUE", "CHEVAL", "CHIENS", "CHIMIE", "CHROME", "CHUTES", "CIMENT",
-    "CIRQUE", "CITRON", "CLASSE", "CLIENT", "CLIMAT", "CLOWNS", "COFFRE", "COLERE", "COMBAT", "COMETE",
-    "COMPTE", "CORDES", "CORONA", "COUSIN", "COTONS", "COUCOU", "COUDES", "COUPLE", "COURIR", "COURTE",
-    "CRAYON", "CREPES", "CRIMES", "CRISES", "CROIRE", "CUISIN", "CUIVRE", "DANGER", "DANSER", "DEBATS",
-    "DEBOUT", "DEBUTS", "DECHET", "DECIDE", "DECLIC", "DEFAUT", "DEFEND", "DELICE", "DEMAIN", "DEPART",
-    "DESSIN", "DESTIN", "DEVANT", "DEVOIR", "DIABLE", "DICTEE", "DIRECT", "DISQUE", "DOUBLE", "DOUCHE",
-    "DRAGON", "DRAMES", "DROITE", "ECHECS", "ECLAIR", "ECOLES", "ECORCE", "ECRANS", "ECRIRE", "EFFETS",
-    "EFFORT", "EGLISE", "ELANCE", "ENCLOS", "ENFANT", "ENIGME", "ENGINS", "ENTREE", "EPAULE", "EPICES",
-    "EPOQUE", "EQUIPE", "ERREUR", "ESPACE", "ESPOIR", "ESPRIT", "ESTIME", "ETAPES", "ETOILE", "EVITER",
-    "EXAMEN", "EXPERT", "FACILE", "FARCES", "FARINE", "FAUCON", "FAVEUR", "FEMMES", "FENTES", "FIEVRE",
-    "FIGUES", "FIGURE", "FILLES", "FLACON", "FLAMME", "FLECHE", "FLEURS", "FLEUVE", "FORCES", "FORMAT",
-    "FOUDRE", "FRANCE", "FRERES", "FROIDE", "FUMEES", "FUSEES", "FUSION", "GAGNER", "GARAGE", "GARCON",
-    "GARDES", "GATEAU", "GEANTS", "GENIES", "GENOUX", "GESTES", "GIBIER", "GIRAFE", "GLACES", "GLACON",
-    "GLISSE", "GLOBAL", "GOUTER", "GRADES", "GRAINE", "GRAINS", "GRANDE", "GRAPHE", "GROTTE", "GROUPE",
-    "GUITARE", "HABITS", "HACHIS", "HALLES", "HAMACS", "HANGAR", "HASARD", "HAUTES", "HERBES", "HEUREUX",
-    "HEURES", "HIBOUX", "HIVER", "HOMMES", "HOTELS", "HUILER", "HUMAIN", "HUMOUR", "HYMNES", "ICONES",
-    "IDEALS", "IDIOTS", "IMAGES", "IMPACT", "INDICE", "INVITE", "ISOLER", "JAMBES", "JARDIN", "JAUNES",
-    "JETONS", "JOCKEY", "JOUETS", "JOURNAL", "JOYEUX", "JUGES", "JUMEAU", "JUNGLE", "JUPES", "JUSTES",
-    "LACETS", "LAINES", "LANCER", "LAPINS", "LARGES", "LARMES", "LAVAGE", "LETTRE", "LEVEES", "LIBRES",
-    "LIGNES", "LIMITS", "LIONS", "LIVRES", "LOISIR", "LOUVES", "LOYERS", "LUTTES", "MACHIN", "MADAME",
-    "MAGIES", "MAIRES", "MAISON", "MALADE", "MANCHE", "MANEGE", "MANGER", "MARAIS", "MARCHE", "MARRON",
-    "MASQUE", "MASSES", "MATCHS", "MATINS", "MAUDIT", "MELONS", "MENACE", "MERITE", "MEUBLE", "MICROS",
-    "MILIEU", "MINCES", "MINUTE", "MIROIR", "MISERE", "MIXEUR", "MODELE", "MOMENT", "MONDES", "MONTRE",
-    "MORDRE", "MOTEUR", "MOTIFS", "MOUCHE", "MOULES", "MOYENS", "MUSEES", "NATION", "NATURE", "NAVIRE",
-    "NEIGES", "NOBLES", "NOIRES", "NOTICE", "NOTION", "NUAGES", "NUANCE", "NUMERO", "OBJETS", "OBSCUR",
-    "ODEURS", "OEUVRE", "OFFRES", "OIGNON", "OISEAU", "OMBRES", "ONGLES", "ONGLET", "ORAGES", "ORANGE",
-    "ORDRES", "ORGANE", "OUVRIR", "PAGNES", "PALAIS", "PANIER", "PANNES", "PAPIER", "PAQUET", "PARADE",
-    "PARDON", "PARFUM", "PARLER", "PAROIS", "PARTIR", "PASSER", "PASTEL", "PATRIE", "PATRON", "PAUVRE",
-    "PAYSAN", "PECHES", "PELOTE", "PENSEE", "PENTES", "PERLES", "PERMIS", "PETALE", "PHARES", "PHOTOS",
-    "PHRASE", "PIGEON", "PILIER", "PILOTE", "PIQUER", "PIRATE", "PISTES", "PLAGES", "PLAINE", "PLANTE",
-    "PLAQUE", "PLATRE", "PLEURS", "PLUMES", "POCHES", "POEMES", "POESIE", "POINTS", "POISON", "POULET",
-    "POLICE", "POMMES", "PORTES", "POSTES", "POTION", "POUDRE", "POULES", "POUSSE", "PREUVE", "PRIERE",
-    "PRINCE", "PRISON", "PRISES", "PROCES", "PROFIL", "PROJET", "PROMET", "PROPRE", "QUATRE", "RACINE",
-    "RADARS", "RADIOS", "RAISIN", "RAMPES", "RANGES", "RAPIDE", "RAYONS", "REBORD", "RECITS", "RECORD",
-    "REFLET", "REFUGE", "REGARD", "REGLES", "REGRET", "REINES", "RELAIS", "REMEDE", "REMISE", "RENARD",
-    "REPOND", "REPOS", "RESEAU", "RESINE", "RESTES", "RETOUR", "REVUES", "RIDEAU", "RISQUE", "RIVAGE",
-    "ROCHER", "ROMANS", "ROSACE", "ROUGES", "ROULES", "ROUTES", "RUBANS", "RUINES", "SABLES", "SABRES",
-    "SACHET", "SAISON", "SALADE", "SALLES", "SALONS", "SAPINS", "SAUTER", "SAVANT", "SAVEUR", "SAVONS",
-    "SCEAUX", "SCENES", "SEJOUR", "SENTIR", "SERVI", "SIECLE", "SIGNAL", "SIGNES", "SIMPLE", "SINGES",
-    "SIRENE", "SOEURS", "SOLDAT", "SOLEIL", "SOMMET", "SONGES", "SORTIE", "SOUCIS", "SOUPES", "SOURCE",
-    "SOURIS", "SPORTS", "STAGES", "STATUE", "STATUT", "STRESS", "STYLES", "SUCRES", "SUITES", "TABLES",
-    "TACHES", "TAILLE", "TALENT", "TALONS", "TAPIS", "TARIFS", "TARTES", "TEINTE", "TEMPLE", "TENDRE",
-    "TENUES", "TERMES", "TERRES", "TIGRES", "TISSUS", "TITRES", "TOILES", "TOMBES", "TONNER", "TORDRE",
-    "TORTUE", "TOUCHE", "TOURNE", "TOURS", "TRACES", "TRAINS", "TRAITE", "TRAMES", "TRESOR", "TRIBUS",
-    "TRICOT", "TRONCS", "TROUPE", "TUBES", "TUMEUR", "TUNNEL", "USINES", "VAGUES", "VALEUR", "VALISE",
-    "VALLEE", "VAPEUR", "VEINES", "VENINS", "VENTRE", "VERRES", "VERROU", "VERSES", "VERTUS", "VIANDE",
-    "VIBRER", "VICTOR", "VILLES", "VIOLON", "VIRAGE", "VISAGE", "VISITE", "VIVANT", "VOILES", "VOISIN",
-    "VOLEUR", "VOYAGE", "WAGONS", "ZEBRES", "ZIGZAG"
+    "ABRIER", "ABRUTE", "ABSENT", "ABUSER", "ACACIA", "ACCORD", "ACCROC", "ACCUSE", "ACHETE", "ACQUIS",
+    "ACTEUR", "ACTIFS", "ACTION", "ADAPTE", "ADEPTE", "ADHERE", "ADIEUX", "ADMIRE", "ADOPTE", "ADOREE",
+    "ADULTE", "AFFARE", "AFFAIS", "AFFAME", "AFFECT", "AFFILE", "AFFINE", "AFFLUE", "AFFOLE", "AFFRON",
+    "AGACER", "AGENDA", "AGENTS", "AGILES", "AGITER", "AGNEAU", "AGRUME", "AIDANT", "AIGLES", "AIGUAS",
+    "AIMANT", "AJOUTE", "AJUSTE", "ALARME", "ALBUMS", "ALCOVE", "ALERTE", "ALEVIN", "ALIGNY", "ALIGNE",
+    "ALLAIT", "ALLANT", "ALLEGE", "ALLIER", "ALLUME", "ALPINY", "ALTERE", "ALVEOE", "AMANTS", "AMASSER",
+    "AMATIR", "AMENDE", "AMICAL", "AMIRAL", "AMITIE", "AMORCE", "AMOURS", "AMUSER", "ANANAS", "ANCIEN",
+    "ANCRES", "ANEMIE", "ANGERS", "ANGINE", "ANGLES", "ANIMER", "ANNEAU", "ANNEES", "ANNEXE", "ANNULE",
+    "ANODIN", "ANORAK", "APERCU", "APLOMB", "APOTRE", "APPART", "APPELE", "APPELS", "APPORT", "APPUIS",
+    "APPRET", "APTERE", "ARABES", "ARBITR", "ARBRES", "ARCEAU", "ARCHER", "ARCHES", "ARDENT", "ARDOIS",
+    "ARGENT", "ARGILE", "ARMADA", "ARMEES", "ARMURE", "ARRETE", "ARRIEN", "ARRIVE", "ARROSE", "ARTIST",
+    "ASPECT", "ASPIRR", "ASSAUT", "ASSEZ", "ASSIS", "ASSURE", "ASTUCE", "ATELIE", "ATHLEE", "ATLANR",
+    "ATOUTS", "ATTACH", "ATTAQU", "ATTIRE", "AUDACE", "AUGURE", "AUMONE", "AURORE", "AUTEUR", "AVANCE",
+    "AVARIE", "AVENIR", "AVERER", "AVERTI", "AVEUGI", "AVOINE", "AVOIRS", "AVOUER", "BABINE", "BACCAS",
+    "BAGAGE", "BAGUES", "BAISER", "BAISSE", "BALADE", "BALAIS", "BALCON", "BALLES", "BALLON", "BAMBOU",
+    "BANANE", "BANDES", "BANQUE", "BARBES", "BARONS", "BARQUE", "BARRER", "BASSIN", "BATEAU", "BATTRE",
+    "BAVARD", "BEAUTE", "BECANE", "BEQUET", "BIAISE", "BISTRO", "BLAGUE", "BLASON", "BLESSE", "BLONDE",
+    "BLOQUE", "BONBON", "BORDEL", "BOTTES", "BOUCLE", "BOUGER", "BOUGIE", "BOULES", "BOURSE", "BOUTON",
+    "BRAVES", "BRIQUE", "BRISER", "BRONZE", "BRULER", "BRUMES", "BUDGET", "BUFFET", "BUREAU", "CABANE",
+    "CADEAU", "CAHIER", "CALCUL", "CAMION", "CANAPE", "CANARD", "CANONS", "CARNET", "CARTON", "CASINO",
+    "CASQUE", "CASTEL", "CENTRE", "CERCLE", "CHAINE", "CHAMPS", "CHANCE", "CHAQUE", "CHASSE", "CHAUVE",
+    "CHEMIN", "CHEQUE", "CHEVAL", "CHIENS", "CHIMIE", "CHROME", "CHUTES", "CIMENT", "CIRQUE", "CITRON",
+    "CLASSE", "CLIENT", "CLIMAT", "CLOWNS", "COFFRE", "COLERE", "COMBAT", "COMETE", "COMPTE", "CORDES",
+    "CORONA", "COUSIN", "COTONS", "COUCOU", "COUDES", "COUPLE", "COURIR", "COURTE", "CRAYON", "CREPES",
+    "CRIMES", "CRISES", "CROIRE", "CUISIN", "CUIVRE", "DANGER", "DANSER", "DEBATS", "DEBOUT", "DEBUTS",
+    "DECHET", "DECIDE", "DECLIC", "DEFAUT", "DEFEND", "DELICE", "DEMAIN", "DEPART", "DESSIN", "DESTIN",
+    "DEVANT", "DEVOIR", "DIABLE", "DICTEE", "DIRECT", "DISQUE", "DOUBLE", "DOUCHE", "DRAGON", "DRAMES",
+    "DROITE", "ECHECS", "ECLAIR", "ECOLES", "ECORCE", "ECRANS", "ECRIRE", "EFFETS", "EFFORT", "EGLISE",
+    "ELANCE", "ENCLOS", "ENFANT", "ENIGME", "ENGINS", "ENTREE", "EPAULE", "EPICES", "EPOQUE", "EQUIPE",
+    "ERREUR", "ESPACE", "ESPOIR", "ESPRIT", "ESTIME", "ETAPES", "ETOILE", "EVITER", "EXAMEN", "EXPERT",
+    "FACILE", "FARCES", "FARINE", "FAUCON", "FAVEUR", "FEMMES", "FENTES", "FIEVRE", "FIGUES", "FIGURE",
+    "FILLES", "FLACON", "FLAMME", "FLECHE", "FLEURS", "FLEUVE", "FORCES", "FORMAT", "FOUDRE", "FRANCE",
+    "FRERES", "FROIDE", "FUMEES", "FUSEES", "FUSION", "GAGNER", "GARAGE", "GARCON", "GARDES", "GATEAU",
+    "GEANTS", "GENIES", "GENOUX", "GESTES", "GIBIER", "GIRAFE", "GLACES", "GLACON", "GLISSE", "GLOBAL",
+    "GOUTER", "GRADES", "GRAINE", "GRAINS", "GRANDE", "GRAPHE", "GROTTE", "GROUPE", "HABITS", "HACHIS",
+    "HALLES", "HAMACS", "HANGAR", "HASARD", "HAUTES", "HERBES", "HEURES", "HIBOUX", "HOMMES", "HOTELS",
+    "HUILER", "HUMAIN", "HUMOUR", "HYMNES", "ICONES", "IDEALS", "IDIOTS", "IMAGES", "IMPACT", "INDICE",
+    "INVITE", "ISOLER", "JAMBES", "JARDIN", "JAUNES", "JETONS", "JOCKEY", "JOUETS", "JOYEUX", "JUGES",
+    "JUMEAU", "JUNGLE", "JUPES", "JUSTES", "LACETS", "LAINES", "LANCER", "LAPINS", "LARGES", "LARMES",
+    "LAVAGE", "LETTRE", "LEVEES", "LIBRES", "LIGNES", "LIMITS", "LIVRES", "LOISIR", "LOUVES", "LOYERS",
+    "LUTTES", "MACHIN", "MADAME", "MAGIES", "MAIRES", "MAISON", "MALADE", "MANCHE", "MANEGE", "MANGER",
+    "MARAIS", "MARCHE", "MARRON", "MASQUE", "MASSES", "MATCHS", "MATINS", "MAUDIT", "MELONS", "MENACE",
+    "MERITE", "MEUBLE", "MICROS", "MILIEU", "MINCES", "MINUTE", "MIROIR", "MISERE", "MIXEUR", "MODELE",
+    "MOMENT", "MONDES", "MONTRE", "MORDRE", "MOTEUR", "MOTIFS", "MOUCHE", "MOULES", "MOYENS", "MUSEES",
+    "NATION", "NATURE", "NAVIRE", "NEIGES", "NOBLES", "NOIRES", "NOTICE", "NOTION", "NUAGES", "NUANCE",
+    "NUMERO", "OBJETS", "OBSCUR", "ODEURS", "OEUVRE", "OFFRES", "OIGNON", "OISEAU", "OMBRES", "ONGLES",
+    "ONGLET", "ORAGES", "ORANGE", "ORDRES", "ORGANE", "OUVRIR", "PAGNES", "PALAIS", "PANIER", "PANNES",
+    "PAPIER", "PAQUET", "PARADE", "PARDON", "PARFUM", "PARLER", "PAROIS", "PARTIR", "PASSER", "PASTEL",
+    "PATRIE", "PATRON", "PAUVRE", "PAYSAN", "PECHES", "PELOTE", "PENSEE", "PENTES", "PERLES", "PERMIS",
+    "PETALE", "PHARES", "PHOTOS", "PHRASE", "PIGEON", "PILIER", "PILOTE", "PIQUER", "PIRATE", "PISTES",
+    "PLAGES", "PLAINE", "PLANTE", "PLAQUE", "PLATRE", "PLEURS", "PLUMES", "POCHES", "POEMES", "POESIE",
+    "POINTS", "POISON", "POULET", "POLICE", "POMMES", "PORTES", "POSTES", "POTION", "POUDRE", "POULES",
+    "POUSSE", "PREUVE", "PRIERE", "PRINCE", "PRISON", "PRISES", "PROCES", "PROFIL", "PROJET", "PROMET",
+    "PROPRE", "QUATRE", "RACINE", "RADARS", "RADIOS", "RAISIN", "RAMPES", "RANGES", "RAPIDE", "RAYONS",
+    "REBORD", "RECITS", "RECORD", "REFLET", "REFUGE", "REGARD", "REGLES", "REGRET", "REINES", "RELAIS",
+    "REMEDE", "REMISE", "RENARD", "REPOND", "REPOS", "RESEAU", "RESINE", "RESTES", "RETOUR", "REVUES",
+    "RIDEAU", "RISQUE", "RIVAGE", "ROCHER", "ROMANS", "ROSACE", "ROUGES", "ROULES", "ROUTES", "RUBANS",
+    "RUINES", "SABLES", "SABRES", "SACHET", "SAISON", "SALADE", "SALLES", "SALONS", "SAPINS", "SAUTER",
+    "SAVANT", "SAVEUR", "SAVONS", "SCEAUX", "SCENES", "SEJOUR", "SENTIR", "SIECLE", "SIGNAL", "SIGNES",
+    "SIMPLE", "SINGES", "SIRENE", "SOEURS", "SOLDAT", "SOLEIL", "SOMMET", "SONGES", "SORTIE", "SOUCIS",
+    "SOUPES", "SOURCE", "SOURIS", "SPORTS", "STAGES", "STATUE", "STATUT", "STRESS", "STYLES", "SUCRES",
+    "SUITES", "TABLES", "TACHES", "TAILLE", "TALENT", "TALONS", "TAPIS", "TARIFS", "TARTES", "TEINTE",
+    "TEMPLE", "TENDRE", "TENUES", "TERMES", "TERRES", "TIGRES", "TISSUS", "TITRES", "TOILES", "TOMBES",
+    "TONNER", "TORDRE", "TORTUE", "TOUCHE", "TOURNE", "TOURS", "TRACES", "TRAINS", "TRAITE", "TRAMES",
+    "TRESOR", "TRIBUS", "TRICOT", "TRONCS", "TROUPE", "TUBES", "TUMEUR", "TUNNEL", "USINES", "VAGUES",
+    "VALEUR", "VALISE", "VALLEE", "VAPEUR", "VEINES", "VENINS", "VENTRE", "VERRES", "VERROU", "VERSES",
+    "VERTUS", "VIANDE", "VIBRER", "VICTOR", "VILLES", "VIOLON", "VIRAGE", "VISAGE", "VISITE", "VIVANT",
+    "VOILES", "VOISIN", "VOLEUR", "VOYAGE", "WAGONS", "ZEBRES", "ZIGZAG"
 ].filter(w => w.length === 6);
 
 const MOTUS_7_LETTRES = [
-    "ABRICOT", "ANIMAUX", "BAGARRE", "BATEAUX", "BICYCLE", "BISTROT", "BONHEUR", "BOUTEIL", "BUREAUX", "CAPRICE",
+    "ABANDON", "ABATTEZ", "ABATTRE", "ABIMENT", "ABRICOT", "ABSENCE", "ACCEPTE", "ACCORDE", "ACCUEIL", "ACHETEZ",
+    "ACTIVEE", "ADAPTEZ", "ADHERER", "ADMIREZ", "ADOPTEZ", "ADRESSE", "AFFAIRE", "AFFICHE", "AFFRONT", "AGACANT",
+    "AGISSENT", "AGRANDI", "ALARMES", "ALIGNER", "ALLIAGE", "ALLUMER", "ALTERER", "AMATEUR", "AMELIOR", "AMENENT",
+    "AMPOULE", "ANALYSE", "ANCIENS", "ANIMAUX", "ANNONCE", "APAISEZ", "APERCOI", "APLAUDI", "APOSTRE", "APPAREI",
+    "APPELLE", "APPLIQU", "APPORTY", "APPORTS", "APPREND", "APPRETE", "ARBITRE", "ARCHERS", "ARDOISE", "ARGENTS",
+    "ARRETES", "ARRIVEE", "ARRIVYS", "ARROSEZ", "ARTICLE", "ARTISAN", "ASPECTS", "ASSEMBL", "ASSISTE", "ASSOCIE",
+    "ASSUREZ", "ATTAQUE", "ATTEINT", "ATTENDE", "ATTENTY", "ATTIRER", "ATTRAIT", "AUBERGE", "AUDACEZ", "AVANCES",
+    "AVENIRS", "AVERTIR", "BAGARRE", "BATEAUX", "BICYCLE", "BISTROT", "BONHEUR", "BOUTEIL", "BUREAUX", "CAPRICE",
     "CHATEAU", "CHOCOLA", "CLAVIER", "COFFRET", "COPAINS", "COULEUR", "COURAGE", "COUTEAU", "CUISINE", "DANGERS",
     "DESTINS", "DIAMANT", "DIPLOME", "DRAPEAU", "ECLIPSE", "ENFANTS", "ENIGMES", "ETOILES", "FAMILLE", "FANTOME",
     "FLAMMES", "FLEUVES", "FORTUNE", "FOUDRES", "FROMAGE", "GALAXIE", "GATEAUX", "GLACONS", "GUITARE", "HORIZON",
@@ -159,6 +179,7 @@ function evaluerMotus(guess, solution, longueur = 6) {
 function buildMotusEmbed(mot, dateKey, longueur = 6, manche = 1, totalManches = 2) {
     const premiereLettre = mot.charAt(0);
     const masque = `${premiereLettre} ` + '_ '.repeat(longueur - 1).trim();
+
     let diffStr = "moyen";
     let couleur = 0x00b0f4;
     if (longueur <= 4) {
@@ -168,10 +189,10 @@ function buildMotusEmbed(mot, dateKey, longueur = 6, manche = 1, totalManches = 
         diffStr = "difficile";
         couleur = 0xe74c3c;
     }
-    const diffUpper = diffStr.toUpperCase();
+
     const titre = totalManches > 1
-        ? `🟩 MOTUS REGAÏEN — MANCHE ${manche}/${totalManches} (${diffUpper})`
-        : `🟩 MOTUS REGAÏEN (${diffUpper})`;
+        ? `🟩 MOTUS REGAÏEN — MANCHE ${manche}/${totalManches}`
+        : `🟩 MOTUS REGAÏEN`;
 
     return new EmbedBuilder()
         .setColor(couleur)
@@ -180,7 +201,7 @@ function buildMotusEmbed(mot, dateKey, longueur = 6, manche = 1, totalManches = 
             `Le Motus est ouvert pendant **1 heure pile** !\n\n` +
             `🔤 **Mot à trouver :** \`${masque}\` (${longueur} lettres - Difficulté : **${diffStr}**)\n` +
             `🎯 **Règle :** Tu as **3 essais individuels** pour trouver le mot de cette manche !\n` +
-            `⏳ **Temps limite :** 1 heure par manche\n\n` +
+            `⏳ **Temps limite :** 1 heure de session\n\n` +
             `🟩 **Vert** : Lettre bien placée\n` +
             `🟨 **Jaune** : Lettre présente mais mal placée\n` +
             `⬛ **Noir** : Lettre absente\n\n` +
@@ -290,7 +311,35 @@ async function handleMotusMessage(message, response, client, helpers) {
     const motusData = minijeuxBridge.getMotusData();
     const motusStats = minijeuxBridge.getMotusStats();
     const rawContent = message.content.trim();
-    const cmd = rawContent.split(/\s+/)[0]?.toLowerCase();
+    const args = rawContent.split(/\s+/);
+    const cmd = args[0]?.toLowerCase();
+
+    // Commande Epsys pour décider manuellement du mot de la prochaine session
+    if (cmd === '!motus' && (args[1]?.toLowerCase() === 'set' || args[1]?.toLowerCase() === 'force')) {
+        if (message.author.id !== EPSYS_ID) {
+            await message.reply("Cette commande est réservée à Epsys.");
+            return true;
+        }
+
+        const motChoisi = args[2]?.toUpperCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^A-Z]/g, "");
+
+        if (!motChoisi || motChoisi.length < 3) {
+            await message.reply("Usage : `!motus set [mot]` (ex : `!motus set crocodile`). Minimum 3 lettres.");
+            return true;
+        }
+
+        motusData.prochainMotForce = motChoisi;
+        minijeuxBridge.demanderSauvegarde();
+
+        let diffStr = "moyen";
+        if (motChoisi.length <= 4) diffStr = "facile";
+        else if (motChoisi.length >= 7) diffStr = "difficile";
+
+        await message.reply(`✅ Le mot de la prochaine session de Motus sera **${motChoisi}** (${motChoisi.length} lettres - difficulté **${diffStr}**) ! L'embed classique sera utilisé.`);
+        return true;
+    }
 
     // Commande Panneau de Gestion des Scores (Epsys-only)
     if (cmd === '!jeupts' || cmd === '!points') {
@@ -441,12 +490,9 @@ async function handleMotusMessage(message, response, client, helpers) {
 
             const { MessageFlags } = require('discord.js');
             if (rawGuess === motDuJour) {
-                motusData.termine = true;
-                motusData.vainqueurId = message.author.id;
                 motusStats[message.author.id].victoires++;
                 minijeuxBridge.trackBattlePassProgress?.(message.author.id, 'motus_win', 1);
                 minijeuxBridge.trackBattlePassProgress?.(message.author.id, 'minijeu_win', 1);
-                minijeuxBridge.demanderSauvegarde();
 
                 await message.reply({
                     content: `**${lettresEspacées}**\n${grille} *(Essai ${essaiNum}/3)*`,
@@ -455,19 +501,8 @@ async function handleMotusMessage(message, response, client, helpers) {
                     allowedMentions: { repliedUser: false }
                 });
 
-                const prochainRdv = motusData.heureSession === 10 
-                    ? 'Rendez-vous ce soir à 19h00 pour le Motus difficile (7 lettres) !' 
-                    : 'Rendez-vous demain à 10h00 pour le prochain Motus !';
-
-                const embedVictoire = new EmbedBuilder()
-                    .setColor(0x2ecc71)
-                    .setTitle('🎉 MOTUS TROUVÉ ! 🎉')
-                    .setDescription(
-                        `Félicitations à <@${message.author.id}> qui a trouvé le mot en **${essaiNum} essai${essaiNum > 1 ? 's' : ''}** !\n\n` +
-                        `🔤 **Le mot était :** \`${motDuJour}\` (${longueurAttendue} lettres)\n` +
-                        `🏆 **Total de victoires :** **${motusStats[message.author.id].victoires}**`
-                    )
-                    .setFooter({ text: prochainRdv });
+                const mancheActuelle = motusData.manche || 1;
+                const totalManches = motusData.totalManches || 2;
 
                 const rowStats = new ActionRowBuilder().addComponents(
                     new ButtonBuilder()
@@ -476,11 +511,65 @@ async function handleMotusMessage(message, response, client, helpers) {
                         .setStyle(ButtonStyle.Primary)
                 );
 
-                await message.channel.send({ 
-                    embeds: [embedVictoire], 
-                    components: [rowStats],
-                    flags: [MessageFlags.SuppressNotifications]
-                });
+                if (mancheActuelle < totalManches) {
+                    // Préparation de la manche 2 dans 30 secondes
+                    motusData.termine = true;
+                    minijeuxBridge.demanderSauvegarde();
+
+                    const embedManche1 = new EmbedBuilder()
+                        .setColor(0x2ecc71)
+                        .setTitle(`🎉 MANCHE ${mancheActuelle}/${totalManches} REMPORTÉE !`)
+                        .setDescription(
+                            `Félicitations à <@${message.author.id}> qui trouve le mot en **${essaiNum} essai${essaiNum > 1 ? 's' : ''}** !\n\n` +
+                            `🔤 **Le mot était :** \`${motDuJour}\`\n\n` +
+                            `⏳ **La manche 2 commence dans 30 secondes !** Vos 3 essais seront réinitialisés pour le prochain mot !`
+                        )
+                        .setFooter({ text: `Manche 2 dans 30 secondes chrono !` });
+
+                    await message.channel.send({ embeds: [embedManche1], components: [rowStats] });
+
+                    setTimeout(async () => {
+                        const dateKey = getMotusDateKey();
+                        const longueurM2 = motusData.heureSession === 19 ? 7 : 6;
+                        const nouveauMot = getMotDuJour(dateKey + 5555, longueurM2);
+
+                        motusData.mot = nouveauMot;
+                        motusData.longueur = longueurM2;
+                        motusData.manche = 2;
+                        motusData.termine = false;
+                        motusData.tentatives = {};
+                        motusData.expireAt = Date.now() + 60 * 60 * 1000;
+                        minijeuxBridge.demanderSauvegarde();
+
+                        const embedM2 = buildMotusEmbed(nouveauMot, dateKey, longueurM2, 2, 2);
+                        await message.channel.send({
+                            content: `📢 **C'EST PARTI POUR LA MANCHE 2/2 !** Nouveau mot en jeu :`,
+                            embeds: [embedM2]
+                        });
+                    }, 30000);
+                    return true;
+                }
+
+                // Fin définitive de la session (après manche 2)
+                motusData.termine = true;
+                motusData.vainqueurId = message.author.id;
+                minijeuxBridge.demanderSauvegarde();
+
+                const prochainRdv = motusData.heureSession === 10 
+                    ? 'Rendez-vous ce soir à 19h00 pour le Motus difficile (7 lettres) !' 
+                    : 'Rendez-vous demain à 10h00 pour le prochain Motus !';
+
+                const embedVictoire = new EmbedBuilder()
+                    .setColor(0x2ecc71)
+                    .setTitle('🏆 MOTUS TERMINÉ ! VICTOIRE DE LA SESSION !')
+                    .setDescription(
+                        `Félicitations à <@${message.author.id}> qui a trouvé le mot de la manche 2 en **${essaiNum} essai${essaiNum > 1 ? 's' : ''}** !\n\n` +
+                        `🔤 **Le mot était :** \`${motDuJour}\` (${longueurAttendue} lettres)\n` +
+                        `🏆 **Total de victoires de ${message.member?.displayName ?? message.author.username} :** **${motusStats[message.author.id].victoires}**`
+                    )
+                    .setFooter({ text: prochainRdv });
+
+                await message.channel.send({ embeds: [embedVictoire], components: [rowStats] });
                 return true;
             } else {
                 minijeuxBridge.demanderSauvegarde();
@@ -521,17 +610,20 @@ async function handleMotusMessage(message, response, client, helpers) {
         return true;
     }
 
-    if (response?.needsMotus) {
+    if (cmd === '!motus' || response?.needsMotus) {
         const { jourStr, heures, minutes, sessionNom, timestamp } = tempsAvantProchainMotus();
         const now = Date.now();
         const enCours = motusData.mot && !motusData.termine && motusData.expireAt && now < motusData.expireAt;
 
-        let desc = `Le prochain Motus aura lieu **${jourStr} à ${sessionNom}** (dans **${heures}h ${minutes}min**, <t:${timestamp}:R>) !\n\n-# *Sessions tous les jours : 10h00 (6 lettres) et 19h00 (7 lettres - Difficile).*`;
+        let desc = `Le prochain Motus aura lieu **${jourStr} à ${sessionNom}** (dans **${heures}h ${minutes}min**, <t:${timestamp}:R>) !\n\n` +
+                   `📍 **Salon officiel :** <#${MOTUS_CHANNEL_ID}>\n` +
+                   `-# *Sessions tous les jours : 10h00 (6 lettres) et 19h00 (7 lettres - Difficile).*`;
 
         if (enCours) {
             const expireTimestamp = Math.floor(motusData.expireAt / 1000);
             const titreType = motusData.longueur === 7 ? '🟥 Motus du soir (7 lettres - Difficile)' : '🟩 Motus du matin (6 lettres)';
-            desc = `🎮 **${titreType} est EN COURS dans <#${MOTUS_CHANNEL_ID}> !**\n\n` +
+            desc = `🎮 **${titreType} est EN COURS !**\n\n` +
+                   `📍 **Joue directement dans :** <#${MOTUS_CHANNEL_ID}>\n` +
                    `Tu as **3 essais individuels** pour deviner le mot.\n` +
                    `⏳ **Fin de la session :** <t:${expireTimestamp}:R> (fermeture à <t:${expireTimestamp}:t>) !\n\n` +
                    `Prochaine session : **${jourStr} à ${sessionNom}** (<t:${timestamp}:R>).`;
@@ -540,8 +632,7 @@ async function handleMotusMessage(message, response, client, helpers) {
         const embed = new EmbedBuilder()
             .setColor(enCours && motusData.longueur === 7 ? 0xe74c3c : 0x00b0f4)
             .setTitle(enCours ? '🟩 MOTUS EN COURS !' : '🟩 Motus Quotidien de Regaïa')
-            .setDescription(desc)
-            .setFooter({ text: '3 essais individuels • 1 heure de jeu par session' });
+            .setDescription(desc);
 
         await message.reply({ embeds: [embed] });
         return true;
@@ -735,7 +826,7 @@ const REBUS_SERIES = [
     ["😈🍷🎹", "lucifer"], ["🕵️‍♂️🎻🇬🇧", "sherlock"], ["⏳🟦🚪", "doctor who"], ["📱👁️🪞", "black mirror"], ["⏳🌧️☢️", "dark"],
     ["☕🛋️👫", "friends"], ["☂️💛🍺", "how i met your mother", "himym"], ["⚛️🛋️🤓", "the big bang theory", "tbbt"], ["👮‍♂️🍩🏢", "brooklyn nine-nine", "b99"], ["📄🏢☕", "the office"],
     ["🌳🏞️🧇", "parks and recreation"], ["🧒📺🎳", "malcolm"], ["👨‍👩‍👧‍👦🏠🧢", "ma famille d abord"], ["🧒🏾🏫😭", "tout le monde deteste chris"], ["👑🍷🥩", "kaamelott"],
-    ["☕🏢📹", "camera cafe"], ["👴👵🛋️", "scenes de menages"], ["🏥👨‍⚕️🤣", "h", "hopital"], ["⏱️🗣️💨", "bref"], ["🎭💼⭐", "dix pour cent"],
+    ["☕🏢📹", "camera cafe"], ["👴👵🛋️", "scenes de menages"], ["🏥👨‍⚕️🤣", "h", "hopital", "la serie h", "serie h", "l hopital", "l'hopital"], ["⏱️🗣️💨", "bref"], ["🎭💼💯", "dix pour cent"],
     ["🎩💎🗼", "lupin"], ["🕵️‍♂️🕶️🏢", "le bureau des legendes"], ["🗳️🏛️🇫🇷", "baron noir"], ["👮‍♀️⚖️🏢", "engrenages"], ["☀️🏢🌊", "plus belle la vie"],
     ["👫🛋️🍷", "un gars une fille"], ["⛓️🗺️🏃‍♂️", "prison break"], ["✈️🏝️💨", "lost"], ["🧬🦸‍♂️🌍", "heroes"], ["⏰💣🔫", "24 heures chrono", "24"],
     ["🩸🔪💉", "dexter"], ["🕵️‍♀️🇺🇸💣", "homeland"], ["🍎🏘️👩", "desperate housewives"], ["👨‍⚕️👩‍⚕️🏥", "greys anatomy", "grey's anatomy"], ["👨‍⚕️💊🦯", "dr house", "house"],
@@ -925,13 +1016,19 @@ async function passerMancheSuivanteRebus(guild) {
 async function verifierReponseRebus(message) {
     if (!rebusSession.active || !rebusSession.currentItem) return false;
 
-    const guessNorm = normaliserRebus(message.content);
+    const raw = message.content.trim().toLowerCase();
+    const guessNorm = normaliserRebus(raw);
     if (!guessNorm || guessNorm.length < 1) return false;
 
     const item = rebusSession.currentItem;
     const reponsesValides = item.slice(1).map(r => normaliserRebus(r));
 
-    if (reponsesValides.includes(guessNorm)) {
+    // Prise en charge spéciale pour "H"
+    const isHSpecial = reponsesValides.includes('h') && (
+        guessNorm === 'h' || raw === 'h' || raw === 'la série h' || raw === 'la serie h' || raw === 'série h' || raw === 'serie h'
+    );
+
+    if (reponsesValides.includes(guessNorm) || isHSpecial) {
         clearTimeout(rebusSession.timer);
         rebusSession.currentItem = null;
 
@@ -1116,11 +1213,14 @@ async function handleRebusMessage(message, response, client, helpers) {
     // 2. Commande !rebus
     if (cmd === '!rebus' || cmd === '!decodeur' || cmd === '!emojis' || response?.needsRebus) {
         const { jourStr, h, m, timestamp } = tempsAvantProchainRebus();
-        let desc = `Le prochain Rébus Regaïen aura lieu **${jourStr} à 15h00** (dans **${h}h ${m}min**, <t:${timestamp}:R>) dans le salon <#${REBUS_CHANNEL_ID}> !\n\n-# *Thème mystère révélé au début de la partie.*`;
+        let desc = `Le prochain Rébus Regaïen aura lieu **${jourStr} à 15h00** (dans **${h}h ${m}min**, <t:${timestamp}:R>) !\n\n` +
+                   `📍 **Salon officiel :** <#${REBUS_CHANNEL_ID}>\n` +
+                   `-# *Thème mystère révélé au début de la partie.*`;
 
         if (rebusSession.active && rebusSession.currentItem) {
             const expireTimestamp = Math.floor(rebusSession.expireAt / 1000);
-            desc = `🎮 **Le Rébus Regaïen est EN COURS dans le salon <#${REBUS_CHANNEL_ID}> !**\n\n` +
+            desc = `🎮 **Le Rébus Regaïen est EN COURS !**\n\n` +
+                   `📍 **Joue directement dans :** <#${REBUS_CHANNEL_ID}>\n` +
                    `📍 **Manche en cours :** ${rebusSession.manche}/5\n` +
                    `⏳ **Fin de la manche :** <t:${expireTimestamp}:R> !\n\n` +
                    `Prochaine session complète : **${jourStr} à 15h00** (<t:${timestamp}:R>).`;
@@ -1129,8 +1229,7 @@ async function handleRebusMessage(message, response, client, helpers) {
         const embed = new EmbedBuilder()
             .setColor(0xf39c12)
             .setTitle(rebusSession.active ? '🧩 RÉBUS REGAÏEN EN COURS !' : '🧩 Rébus Regaïen Quotidien (15h00)')
-            .setDescription(desc)
-            .setFooter({ text: 'Regaïa • 5 manches de 5 minutes chaque jour à 15h00' });
+            .setDescription(desc);
 
         await message.reply({ embeds: [embed] });
         return true;

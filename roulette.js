@@ -30,7 +30,11 @@ const ROULETTE_BOOMER_FINS = [
     '.... tapez 1 si vous etes d accord.. amitiés du 77 🌹',
     '.... encore un coup du gouvernement ça !! 🙄😡',
     '.... A PARTAGER EN MASSE AVANT SUPPRESSION FACEBOOK !!!',
-    '.... bises a Jean-Pierre et aux gosses ... 🚗🍺'
+    '.... bises a Jean-Pierre et aux gosses ... 🚗🍺',
+    '.... de toute façon avec leurs téléphones greffés dans les mains.... 🤦‍♂️📵',
+    '.... bon dimanche les loulous !! prenez soin de vous .. ☀️☕',
+    '.... c\'est comme les 80 km/h une belle arnaque tout ça !!! 🚗💨',
+    '.... Amitiés sincères de Chantal et Daniel .... 💐🐕'
 ];
 
 const ROULETTE_EXISTENTIEL_FINS = [
@@ -43,7 +47,9 @@ const ROULETTE_EXISTENTIEL_FINS = [
     '\nchaque seconde qui passe nous rapproche inéluctablement du vide.',
     '\net dire que toute cette agitation finira oubliée sous la terre froide.',
     '\nl\'entropie gagne toujours à la fin. Bonne journée quand même.',
-    '\non est juste des morceaux de viande qui attendent la fin sur un caillou flottant.'
+    '\non est juste des morceaux de viande qui attendent la fin sur un caillou flottant.',
+    '\nnotre conscience n\'est qu\'un bug cosmique condamné à disparaître.',
+    '\nà l\'échelle géologique, ce message n\'aura servi rigoureusement à rien.'
 ];
 
 const ROULETTE_LINKEDIN_FINS = [
@@ -54,15 +60,17 @@ const ROULETTE_LINKEDIN_FINS = [
     '\nRestez focus sur vos objectifs, l\'excellence opérationnelle n\'attend pas. 📈 #Motivation #Business',
     '\nPrenez 5 minutes pour célébrer vos micro-victoires. Disrupter, c\'est avant tout oser. 🌟 #Proud #TalentAcquisition',
     '\nJ\'ai refusé 15 offres pour vivre cette aventure humaine. La résilience n\'a pas de prix. 🔥 #WorkHard #ScaleUp',
-    '\nCe café en terrasse m\'a appris plus sur le management 3.0 que 5 ans d\'école de commerce. ☕ #Authenticity'
+    '\nCe café en terrasse m\'a appris plus sur le management 3.0 que 5 ans d\'école de commerce. ☕ #Authenticity',
+    '\nAccepter l\'inconfort, c\'est scaler son capital humain. Et vous, quel a été votre déclic ? 🎯 #GrowthMindset',
+    '\nPartagez ce post si vous croyez encore à l\'intrapreneuriat bienveillant en 2026. 💬 #DeepWork #Synergie'
 ];
 
 const ROULETTE_ECHO_REPLIQUES = [
-    "C'est faux.", "Gênant.", "Qui a demandé ?", "Ratio.",
-    "Intéressant... non en vrai on s'en fout.", "Tu forces un peu là.", "Wow, c'est super intéressant (non)"
+    "C'est faux", "Gênant.", "Qui a demandé ?", "Ratio.",
+    "Intéressant... non en vrai on s'en fout.", "Tu forces un peu là.", "Wow, c'est super intéressant (non)",
     "Supprime.", "Ok et ?", "On s'en branle un peu non ?", "Bizarre ce message.",
-    "Même le bot a honte pour toi.", "Arrête de poster stp.", "Gros malaise dans la pièce.",
-    "-# *baille*", "Ok.", "C'est bien Éléonore on est contents.", "Bahh... C'est bien ?", "...Bref, qui a faim ?"
+    "Oui c'est bien", "Arrête de poster stp.", "Gros malaise...",
+    "-# *baille*", "Ok.", "C'est bien Éléonore on est contents.", "Bahh... C'est bien ?", "...Bref, qui a faim ?",
     "https://tenor.com/view/f%C3%A9licitations-je-sais-pas-quoi-te-dire-gif-4771894558253473942",
     "T'avais vraiment besoin d'envoyer ça ?", "D'accord le clown 🤡", "Tu te relis des fois ?"
 ];
@@ -471,9 +479,10 @@ function appliquerTransfos(userId, texte) {
     if (t.censure) r = surTexte(r, m => m.replace(/\S+/g, mot => Math.random() < 1/3 ? '▇▇' : mot));
     if (t.emojiOnly) r = surTexte(r, m => m.replace(/\S+/g, () => ROULETTE_EMOJIS_ALEATOIRES[Math.floor(Math.random() * ROULETTE_EMOJIS_ALEATOIRES.length)]));
     if (t.bebe) r = surTexte(r, m => m.replace(/j/g, 'z').replace(/J/g, 'Z').replace(/r/g, 'w').replace(/R/g, 'W'));
-    if (t.boomer && Math.random() < 0.35) r = surTexte(r, m => m.replace(/[\.!\?]+/g, '..... ') + ' ' + ROULETTE_BOOMER_FINS[Math.floor(Math.random() * ROULETTE_BOOMER_FINS.length)]);
-    if (t.existentiel && Math.random() < 0.35) r = r + ROULETTE_EXISTENTIEL_FINS[Math.floor(Math.random() * ROULETTE_EXISTENTIEL_FINS.length)];
-    if (t.linkedin && Math.random() < 0.35) r = r + ROULETTE_LINKEDIN_FINS[Math.floor(Math.random() * ROULETTE_LINKEDIN_FINS.length)];
+    // Une phrase tous les 3 messages environ (1/3) pour Boomer, Existentiel et LinkedIn
+    if (t.boomer && Math.random() < 0.33) r = surTexte(r, m => m.replace(/[\.!\?]+/g, '..... ') + ' ' + ROULETTE_BOOMER_FINS[Math.floor(Math.random() * ROULETTE_BOOMER_FINS.length)]);
+    if (t.existentiel && Math.random() < 0.33) r = r + ROULETTE_EXISTENTIEL_FINS[Math.floor(Math.random() * ROULETTE_EXISTENTIEL_FINS.length)];
+    if (t.linkedin && Math.random() < 0.33) r = r + ROULETTE_LINKEDIN_FINS[Math.floor(Math.random() * ROULETTE_LINKEDIN_FINS.length)];
     if (t.caps) r = surTexte(r, m => m.toUpperCase());
     const max = Math.min(t.limite30 ? 30 : Infinity, t.limite100 ? 100 : Infinity);
     if (max !== Infinity && [...r].length > max) r = [...r].slice(0, max).join('').replace(/<[^>]*$/, '');
@@ -1214,18 +1223,23 @@ function buildInventaireEmbed(membre) {
 function buildVoteRouletteEmbed(membre) {
     return new EmbedBuilder()
         .setColor(0xffd20a)
-        .setTitle(`🗳️ VOTE PUBLIC ! (${libelleProbaRoulette('special-vote-immunite-exclusion')})`)
-        .setDescription(`Que mérite <@${membre.id}> ?\n\n✅ Tirage à volonté pendant 1min (immunité au mute)\n❌ Exclusion pendant 1 jour\n\nVote ouvert pendant **2h**.\n-# *(L'accusé.e n'a pas le droit de voter sur son propre sort)*`);
+        .setTitle(`🗳️ VOTE PUBLIC : Que mérite <@${membre.id}> ?`)
+        .setDescription(`Que mérite <@${membre.id}> ?\n\n✅ Tirage à volonté pendant 1min (immunité au mute)\n❌ Exclusion pendant 1 jour\n\nVote ouvert pendant **2h**.\n-# *(L'accusé.e <@${membre.id}> ne peut pas réagir à ce vote)*`);
 }
 
 async function demarrerVoteRoulette(msg, membre) {
     await msg.react('✅').catch(() => {});
     await msg.react('❌').catch(() => {});
 
+    // Enregistrement du message de vote pour l'anti-triche immédiat
+    if (!msg.client.activeVotes) msg.client.activeVotes = new Map();
+    msg.client.activeVotes.set(msg.id, membre.id);
+
     const rappels = setInterval(() => { msg.reply('🆙').catch(() => {}); }, 55 * 60 * 1000);
 
     setTimeout(async () => {
         clearInterval(rappels);
+        msg.client.activeVotes?.delete(msg.id);
         try {
             const fresh = await msg.channel.messages.fetch(msg.id).catch(() => null);
             const targetMsg = fresh || msg;
@@ -1236,21 +1250,18 @@ async function demarrerVoteRoulette(msg, membre) {
             const usersOui = reactionOui ? await reactionOui.users.fetch().catch(() => new Map()) : new Map();
             const usersNon = reactionNon ? await reactionNon.users.fetch().catch(() => new Map()) : new Map();
 
-            // Anti-triche : on exclut formellement les votes de l'accusé.e lui/elle-même
+            // Anti-triche : on exclut formellement les votes de l'accusé.e
             const idsOui = [...usersOui.values()].filter(u => !u.bot && u.id !== membre.id).map(u => u.id);
             const idsNon = [...usersNon.values()].filter(u => !u.bot && u.id !== membre.id).map(u => u.id);
             const doubles = new Set(idsOui.filter(id => idsNon.includes(id)));
             const oui = idsOui.filter(id => !doubles.has(id)).length;
             const non = idsNon.filter(id => !doubles.has(id)).length;
 
-            // Détermination du salon où envoyer le verdict : toujours dans le salon roulette officiel !
+            // Envoi garanti UNIQUEMENT dans le salon de la roulette
             const salonRoulette = msg.guild?.channels.cache.get(ROULETTE_SALON_ID) || targetMsg.channel;
 
             const posterReponse = async (texte) => {
                 await salonRoulette.send(texte).catch(() => {});
-                if (targetMsg.channel.id !== salonRoulette.id) {
-                    await targetMsg.reply(texte).catch(() => {});
-                }
             };
 
             if (oui >= non) {
@@ -1732,7 +1743,24 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     //  BRANCHEMENT BATTLE PASS (ROULETTE ROLL & BONUS)
     // ==========================================
     if (bridge.trackBattlePassProgress) {
-        bridge.trackBattlePassProgress(authorId, 'roulette_roll', 1);
+        // Décompte des malus cumulés pour la quête "Haute Tension"
+        let nbMalusCumules = 0;
+        const nowCk = Date.now();
+        if (rouletteUwuUntil.has(authorId) && nowCk < rouletteUwuUntil.get(authorId)) nbMalusCumules++;
+        if (rouletteEmojiUntil.has(authorId) && nowCk < rouletteEmojiUntil.get(authorId)) nbMalusCumules++;
+        if (rouletteLeetUntil.has(authorId) && nowCk < rouletteLeetUntil.get(authorId)) nbMalusCumules++;
+        for (const fin of Object.values(rouletteTransfos.get(authorId) ?? {})) {
+            if (nowCk < fin) nbMalusCumules++;
+        }
+
+        const estNeutre = (outcomeId === 'aucun-resultat') && nbMalusCumules === 0 && (rouletteBouclierActif.get(authorId) || 0) === 0;
+
+        bridge.trackBattlePassProgress(authorId, 'roulette_roll', 1, {
+            isHappyHour: estHappyHour(),
+            sansEffetActif: estNeutre,
+            malusCumules: nbMalusCumules
+        });
+
         if (estHappyHour()) {
             bridge.trackBattlePassProgress(authorId, 'happy_hour_roll', 1);
         }
@@ -1870,7 +1898,10 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     if (tTransfo?.boomer && tTransfo?.bebe && Date.now() < tTransfo.boomer && Date.now() < tTransfo.bebe) {
         deverrouillerSucces(cible.id, 'crise-quarantaine', channel);
     }
-    if (texte.includes('Miracle !')) deverrouillerSucces(cible.id, 'pharmacien', channel);
+    if (texte.includes('Miracle !')) {
+        deverrouillerSucces(cible.id, 'pharmacien', channel);
+        bridge.trackBattlePassProgress?.(cible.id, 'contre_poison', 1);
+    }
 
     const nowCheck = Date.now();
     let malusTexteCumules = 0;
