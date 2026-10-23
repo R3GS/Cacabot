@@ -17,6 +17,7 @@ function buildHelpxMenu(authorId) {
         .setPlaceholder('Choisis une catégorie')
         .addOptions(
             { label: 'Cacabot & Admin', emoji: '🤖', value: 'cacabot' },
+            { label: 'Mini-jeux', emoji: '🎮', value: 'minijeux' },
             { label: 'Générateurs & Tests', emoji: '🧪', value: 'generateurs' },
             { label: 'Pour les autres', emoji: '👥', value: 'autres' },
             { label: 'Roulette', emoji: '🎰', value: 'roulette' },
@@ -34,7 +35,9 @@ function buildHelpxCategorieEmbed(categorie) {
                 { name: '📺 **!ytabo config**', value: 'Panneau interactif des abonnements et notifications YouTube.' },
                 { name: '👋 **!welcome / !welcome test**', value: 'Configurer le salon d\'accueil ou tester l\'affiche Canvas.' },
                 { name: '📣 **!say [ID Salon] [message]**', value: 'Envoyer un message dans un salon au nom de Cacabot.' },
+                { name: '💬 **!reply [ID_message] [texte]**', value: 'Répondre directement à un message sous le nom de Cacabot.' },
                 { name: '✏️ **!edit [ID_message] [texte]**', value: 'Modifier un message envoyé par Cacabot.' },
+                { name: '🐛 **!bug / !bug resolve [N]**', value: 'Répondre à un message avec `!bug` pour le répertorier dans la liste des bugs.' },
                 { name: '🖼️ **!embed / !embed modify [ID]**', value: 'Créateur et modificateur interactif d\'embeds complets.' },
                 { name: '🎭 **!rolereac / !rolebtn**', value: 'Gérer les rôles réactions et boutons de rôles.' },
                 { name: '🤐 **!chut [temps] / !unchut**', value: 'Faire taire Cacabot temporairement sur un salon.' },
@@ -42,12 +45,21 @@ function buildHelpxCategorieEmbed(categorie) {
             );
     }
 
+    if (categorie === 'minijeux') {
+        return embed.setTitle('🎮 Commandes Mini-Jeux (Epsys-Only)')
+            .addFields(
+                { name: '🔤 **!motus set / force [mot]**', value: 'Définit manuellement le mot secret de la prochaine session de Motus.' },
+                { name: '🧩 **!rebus set / force [titre ou emojis réponse]**', value: 'Définit le rébus secret de la prochaine session de Rébus.' },
+                { name: '📊 **!jeupts [@membre]**', value: 'Panneau interactif complet pour modifier les points/victoires de Motus, Rébus et Pendu.' },
+                { name: '🟩 **!motustest [6/7]**', value: 'Lancer un Motus solo de test dans le salon actuel.' },
+                { name: '🧩 **!rebustest**', value: 'Lancer une manche solo de test du Rébus dans le salon actuel.' },
+                { name: '🪢 **!pendutest**', value: 'Lancer une partie solo de test du Pendu dans le salon actuel.' }
+            );
+    }
+
     if (categorie === 'generateurs') {
         return embed.setTitle('🧪 Générateurs & Tests en solo')
             .addFields(
-                { name: '🪢 **!pendutest**', value: 'Lancer une partie de test solo du Pendu (7 lettres) dans n\'importe quel salon secret.' },
-                { name: '🟩 **!motustest [6/7]**', value: 'Lancer un Motus solo de test (6 lettres par défaut, ou 7 avec `!motustest 7`).' },
-                { name: '🧩 **!rebustest**', value: 'Lancer une manche solo de test du Rébus Regaïen.' },
                 { name: '🎂 **!anniversairetest**', value: 'Tester l\'alerte et le GIF d\'anniversaire.' },
                 { name: '🟣 **!streamtest**', value: 'Tester l\'embed d\'alerte de live Twitch.' },
                 { name: '🔮 **!horoscope [ID_salon]**', value: 'Forcer l\'envoi de l\'horoscope du jour dans un salon spécifique.' },
@@ -58,8 +70,7 @@ function buildHelpxCategorieEmbed(categorie) {
         return embed.setTitle('👥 Commandes pour les autres membres')
             .addFields(
                 { name: '⏰ **!rappel [ID] Xmin/h [message]**', value: 'Programmer un rappel pour un membre précis par son ID.' },
-                { name: '📝 **!setmessages @Membre [nombre]**', value: 'Définir manuellement le compteur de messages d\'un membre.' },
-                { name: '🎮 **!jeupts [@membre]**', value: 'Panneau interactif complet pour modifier les points/victoires de Motus, Rébus et Pendu.' }
+                { name: '📝 **!setmessages @Membre [nombre]**', value: 'Définir manuellement le compteur de messages d\'un membre.' }
             );
     }
 

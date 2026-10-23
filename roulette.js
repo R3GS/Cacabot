@@ -8,8 +8,16 @@ const ROULETTE_COOLDOWN_EXEMPT = ['744217896581857281', '902651805614358568'];
 const ROULETTE_JACKPOT_INCREMENT = 0.01;
 const ROULETTE_JACKPOT_MAX = 0.5;
 const ROULETTE_HOF_CHANNEL_ID = '1554331383361577010';
+const ROULETTE_HOS_CHANNEL_ID = '1563294813690929274';
 const ROULETTE_SALON_ID = '1553954760900608091';
 const ROULETTE_HOF_SEUIL = 0.0005;
+const ROULETTE_HOS_MALUS_IDS = new Set([
+    'malus-prime',
+    'malus-pseudo-lock-mois',
+    'malus-exclu-jour',
+    'malus-exclu-semaine',
+    'malus-ban'
+]);
 const ROULETTE_ROLE_ADDICT_ID = '1555245236249436160';
 const ROULETTE_ADDICT_SEUIL = 500;
 const ROULETTE_TAUX_ECHEC = 0.5;
@@ -1579,6 +1587,41 @@ async function envoyerHallOfFame(guild, membre, entry) {
     }).catch(() => {});
 }
 
+async function envoyerHallOfShame(guild, membre, entry) {
+    if (!entry || entry.type !== 'malus') return;
+    if (!ROULETTE_HOS_MALUS_IDS.has(entry.id)) return;
+
+    const salon = guild.channels.cache.get(ROULETTE_HOS_CHANNEL_ID) ?? await guild.channels.fetch(ROULETTE_HOS_CHANNEL_ID).catch(() => null);
+    if (!salon) return;
+
+    const { n, pct } = probaAffichee(probaReelle(entry));
+    const nom = membre?.displayName ?? membre?.user?.username ?? 'Un·e membre';
+    const avatar = membre?.user?.displayAvatarURL({ dynamic: true, size: 256 }) ?? membre?.displayAvatarURL?.({ dynamic: true, size: 256 });
+    const emoji = ROULETTE_EMOJIS_PAR_ID[entry.id] ?? '💀';
+
+    const embed = new EmbedBuilder()
+        .setColor(0x9e0000)
+        .setTitle('💀 NOUVELLE VICTIME AU HALL OF SHAME !')
+        .setDescription(`Le destin s'est acharné ! Un malus légendaire vient de s'abattre sur la roulette !`)
+        .addFields(
+            { name: '👤 Victime', value: `<@${membre.id}> (${nom})`, inline: true },
+            { name: `${emoji} Malus subi`, value: `**${entry.nom}**`, inline: true },
+            { name: '\u200b', value: '\u200b', inline: true },
+            { name: '🎲 Malchance de tirage', value: `**1/${n}** (${pct}%)`, inline: true },
+            { name: '📅 Date du drame', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+        )
+        .setFooter({ text: 'Panthéon de la Honte (Hall of Shame) • Regaïa' })
+        .setTimestamp();
+
+    if (avatar) embed.setThumbnail(avatar);
+    const { MessageFlags } = require('discord.js');
+    await salon.send({ 
+        content: `💀 Toutes nos pensées vont à <@${membre.id}> qui vient de toucher le fond... Cheh !`, 
+        embeds: [embed],
+        flags: [MessageFlags.SuppressNotifications]
+    }).catch(() => {});
+}
+
 const ROULETTE_ROLE_JOUEUR_ID = '1558968669751615528';
 
 function membresTop30Roulette(guild, authorId) {
@@ -1798,6 +1841,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         deverrouillerSucces(authorId, 'hof', channel);
     }
     envoyerHallOfFame(guild, membre, entryTiree).catch(() => {});
+    envoyerHallOfShame(guild, membre, entryTiree).catch(() => {});
     verifierRoleGamblingAddict(membre).catch(() => {});
 
     if (entryTiree?.type === 'bonus') {
@@ -2049,6 +2093,7 @@ async function handleRouletteMessage(message, response, client) {
             const texte = await appliquerEtDecrireResultat(outcomeId, proxy, cible.displayName, 0);
             const entryForcee = ROULETTE_TABLE.find(e => e.id === outcomeId);
             if (attendBonus) envoyerHallOfFame(message.guild, cible, entryForcee).catch(() => {});
+            else envoyerHallOfShame(message.guild, cible, entryForcee).catch(() => {});
             if (proxy.vote) {
                 const envoye = await message.reply({ embeds: [buildVoteRouletteEmbed(proxy.vote)] });
                 await demarrerVoteRoulette(envoye, proxy.vote);

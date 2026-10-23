@@ -951,6 +951,13 @@ async function lancerSessionRebus(guild) {
     const shuffled = [...theme.pool].sort(() => 0.5 - Math.random());
     const cinqItems = shuffled.slice(0, 5);
 
+    // Injection du rébus forcé par Epsys si configuré
+    const motusDataRef = minijeuxBridge.getMotusData() || {};
+    if (motusDataRef.prochainRebusForce) {
+        cinqItems[0] = motusDataRef.prochainRebusForce;
+        delete motusDataRef.prochainRebusForce;
+    }
+
     rebusSession = {
         active: true,
         manche: 0,
@@ -1117,7 +1124,52 @@ async function terminerSessionRebus(channel) {
 
 async function handleRebusMessage(message, response, client, helpers) {
     const rawContent = message.content.trim();
-    const cmd = rawContent.split(/\s+/)[0]?.toLowerCase();
+    const args = rawContent.split(/\s+/);
+    const cmd = args[0]?.toLowerCase();
+
+    // Commande Epsys pour décider manuellement du rébus de la prochaine session
+    if (cmd === '!rebus' && (args[1]?.toLowerCase() === 'set' || args[1]?.toLowerCase() === 'force')) {
+        if (message.author.id !== EPSYS_ID) {
+            await message.reply("Cette commande est réservée à Epsys.");
+            return true;
+        }
+
+        const query = args.slice(2).join(" ").trim();
+        if (!query) {
+            await message.reply(
+                "Usage :\n" +
+                "• Choisir un titre existant : `!rebus force titanic`\n" +
+                "• Définir un rébus complet : `!rebus force 🚢🧊💔 Titanic`"
+            );
+            return true;
+        }
+
+        // Cas 1 : Rébus complet avec emojis en premier argument
+        let itemChoisi = null;
+        if (/\p{Extended_Pictographic}/u.test(args[2]) && args[3]) {
+            const emojis = args[2];
+            const reponse = args.slice(3).join(" ").trim().toLowerCase();
+            itemChoisi = [emojis, reponse];
+        } else {
+            // Cas 2 : Recherche dans tous les pools existants
+            const queryNorm = normaliserRebus(query);
+            const tousLesPools = [...REBUS_FILMS, ...REBUS_JEUX, ...REBUS_SERIES, ...REBUS_ANIMES];
+            itemChoisi = tousLesPools.find(item => item.slice(1).some(rep => normaliserRebus(rep) === queryNorm || rep.toLowerCase().includes(query.toLowerCase())));
+        }
+
+        if (!itemChoisi) {
+            await message.reply(`❌ Aucun rébus trouvé pour **« ${query} »**. Tu peux aussi définir les emojis directement : \`!rebus force 🚢🧊💔 Titanic\``);
+            return true;
+        }
+
+        const motusDataRef = minijeuxBridge.getMotusData() || {};
+        motusDataRef.prochainRebusForce = itemChoisi;
+        minijeuxBridge.demanderSauvegarde();
+
+        const titreAffiche = itemChoisi[1].charAt(0).toUpperCase() + itemChoisi[1].slice(1);
+        await message.reply(`✅ Le prochain Rébus de la manche 1 sera : **${itemChoisi[0]}** (*${titreAffiche}*) !`);
+        return true;
+    }
 
     // Commande de test Rébus (Epsys-only)
     if (cmd === '!rebustest') {
