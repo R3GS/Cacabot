@@ -313,8 +313,23 @@ async function handleYoutubeMessage(message, response) {
 
     // 1. Commande !last
     if (command === '!last' || response?.needsLastVideo) {
-        const query = raw.split(/\s+/).slice(1).join(' ');
+        const query = raw.split(/\s+/).slice(1).join(' ').trim();
         if (!query) {
+            const channels = getChannelsList();
+            if (channels.length > 0) {
+                const menu = new StringSelectMenuBuilder()
+                    .setCustomId('yt_last_quick_select')
+                    .setPlaceholder('Choisis une chaîne pour voir sa dernière vidéo...')
+                    .addOptions(channels.slice(0, 25).map(c => ({
+                        label: c.title.slice(0, 50),
+                        value: c.channelId
+                    })));
+
+                return message.reply({
+                    content: "📺 **De quelle chaîne veux-tu voir la dernière vidéo ?**",
+                    components: [new ActionRowBuilder().addComponents(menu)]
+                });
+            }
             await message.reply("Usage : `!last [nom ou URL de la chaîne]`");
             return true;
         }
@@ -638,6 +653,19 @@ async function handleYoutubeSlash(interaction) {
 //  INTERACTIONS (Boutons, Menus, Modals)
 // ==========================================
 async function handleYoutubeInteraction(interaction) {
+    // Sélection rapide de chaîne pour !last
+    if (interaction.isStringSelectMenu() && interaction.customId === 'yt_last_quick_select') {
+        const chId = interaction.values[0];
+        await interaction.deferUpdate();
+        const latestRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${chId}&order=date&maxResults=1&type=video&key=${process.env.YOUTUBE_API_KEY}`);
+        const latestData = await latestRes.json();
+        if (latestData.items && latestData.items.length > 0) {
+            const videoId = latestData.items[0].id.videoId;
+            await interaction.followUp(`https://www.youtube.com/watch?v=${videoId}`);
+        }
+        return true;
+    }
+
     // 1. Boutons du lecteur de recherche (yt_prev, yt_next, yt_close)
     if (interaction.isButton() && interaction.customId.startsWith('yt_')) {
         const parts = interaction.customId.split('_');

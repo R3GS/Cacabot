@@ -878,6 +878,61 @@ let rebusSession = {
     compteurMessages: 0
 };
 
+const REBUS_GENRES = {
+    // Films
+    'un film d\'animation / Disney / Pixar': ['ratatouille', 'le roi lion', 'toy story', 'shrek', 'coco', 'vaiana', 'la haut', 'monstres et cie', 'nemo', 'cars', 'raiponce', 'reine des neiges', 'zootopie', 'vice-versa', 'alerte rouge', 'wall-e'],
+    'un film ou univers de super-héros': ['spider-man', 'batman', 'joker', 'avengers', 'iron man', 'thor', 'captain america', 'deadpool', 'wolverine', 'x-men', 'superman', 'aquaman', 'wonder woman', 'flash', 'suicide squad'],
+    'un film de science-fiction culte': ['star wars', 'matrix', 'inception', 'interstellar', 'alien', 'terminator', 'dune', 'retour vers le futur', 'premier contact', 'gravity', 'jurassic park'],
+    'un film d\'action / braquage': ['fast and furious', 'john wick', 'mission impossible', 'james bond', 'die hard', 'top gun', 'taxi', 'drive', 'taken', 'kingsman'],
+    'un chef-d\'œuvre du Studio Ghibli': ['le voyage de chihiro', 'princesse mononoke', 'mon voisin totoro', 'le chateau ambulant', 'le tombeau des lucioles'],
+    'un film d\'horreur ou épouvante': ['shining', 'saw', 'conjuring', 'annabelle', 'scream', 'halloween', 'ca', 'sans un bruit', 'get out', 'us', 'vendredi 13', 'freddy'],
+
+    // Jeux Vidéo
+    'un FPS / jeu de tir tactique': ['valorant', 'counter strike', 'call of duty', 'battlefield', 'overwatch', 'apex legends', 'rainbow six siege', 'doom', 'halo', 'team fortress 2'],
+    'une franchise ou grand classique Nintendo': ['mario', 'zelda', 'pokemon', 'animal crossing', 'kirby', 'splatoon', 'smash bros', 'donkey kong', 'metroid'],
+    'un Souls-like ou jeu d\'action exigeant': ['dark souls', 'bloodborne', 'elden ring', 'sekiro', 'demon souls', 'hades'],
+    'un jeu de survie / craft': ['minecraft', 'terraria', 'rust', 'the forest', 'ark', 'subnautica', 'raft', 'dont starve', 'palworld'],
+    'un jeu de combat': ['street fighter', 'tekken', 'mortal kombat', 'dragon ball fighterz', 'smash bros'],
+    'un jeu de course': ['mario kart', 'rocket league', 'forza', 'need for speed', 'gran turismo', 'f1'],
+    'un jeu d\'horreur': ['five nights at freddys', 'poppy playtime', 'phasmophobia', 'slender', 'resident evil', 'silent hill', 'outlast', 'dead space', 'dead by daylight'],
+
+    // Séries
+    'une sitcom / comédie': ['friends', 'how i met your mother', 'the big bang theory', 'brooklyn nine-nine', 'the office', 'malcolm', 'kaamelott', 'h', 'camera cafe'],
+    'une série dramatique ou thriller culte': ['breaking bad', 'better call saul', 'peaky blinders', 'squid game', 'la casa de papel', 'dexter', 'prison break', 'sherlock', 'black mirror', 'dark', 'stranger things'],
+    'une série médicale': ['dr house', 'greys anatomy', 'good doctor', 'urgences', 'scrubs', 'h'],
+    'une série médiévale ou fantastique': ['game of thrones', 'house of the dragon', 'the witcher', 'vikings', 'the boys', 'the last of us', 'the walking dead'],
+
+    // Animés
+    'un shōnen d\'action culte': ['naruto', 'one piece', 'dragon ball', 'bleach', 'hunter x hunter', 'jujutsu kaisen', 'demon slayer', 'my hero academia', 'attack on titan', 'chainsaw man', 'black clover'],
+    'un animé de sport': ['haikyuu', 'blue lock', 'kuroko no basket', 'slam dunk', 'initial d', 'captain tsubasa', 'hajime no ippo'],
+    'un animé psychologique ou à mystère': ['death note', 'tokyo ghoul', 'monster', 'psycho-pass', 'code geass', 'steins gate', 'erased', 'detective conan']
+};
+
+function genererIndiceRebus(item) {
+    if (!item) return "Aucun rébus en cours.";
+    const reponses = item.slice(1);
+    const titrePrincipal = item[1];
+
+    // 1. Cherche si l'œuvre correspond à un genre connu
+    for (const [genreLabel, titresDuGenre] of Object.entries(REBUS_GENRES)) {
+        const match = reponses.some(rep => {
+            const norm = normaliserRebus(rep);
+            return titresDuGenre.some(t => norm === normaliserRebus(t) || norm.includes(normaliserRebus(t)));
+        });
+        if (match) {
+            return `💡 **Indice :** C'est **${genreLabel}** !`;
+        }
+    }
+
+    // 2. Si aucun genre attribué : masque des initiales de chaque mot
+    const masque = titrePrincipal.split(' ').map(mot => {
+        if (mot.length <= 2) return mot;
+        return mot[0].toUpperCase() + ' ' + '_ '.repeat(mot.length - 1).trim();
+    }).join('   ');
+
+    return `💡 **Indice :** Le titre ressemble à :\n# \`${masque}\``;
+}
+
 function normaliserRebus(str) {
     if (!str) return '';
     return str.toLowerCase()
@@ -1009,6 +1064,14 @@ async function passerMancheSuivanteRebus(guild) {
     const embed = buildRebusEmbed(rebusSession.manche, item, rebusSession.expireAt);
     await channel.send({ embeds: [embed], flags: [MessageFlags.SuppressNotifications] });
 
+    // Indice automatique à 2 min 30 (mi-temps) si personne n'a trouvé
+    const mancheEnCours = rebusSession.manche;
+    setTimeout(async () => {
+        if (!rebusSession.active || !rebusSession.currentItem || rebusSession.manche !== mancheEnCours) return;
+        const indice = genererIndiceRebus(item);
+        await channel.send(indice);
+    }, 150 * 1000);
+
     rebusSession.timer = setTimeout(async () => {
         if (!rebusSession.active || !rebusSession.currentItem) return;
 
@@ -1126,6 +1189,21 @@ async function handleRebusMessage(message, response, client, helpers) {
     const rawContent = message.content.trim();
     const args = rawContent.split(/\s+/);
     const cmd = args[0]?.toLowerCase();
+
+    // Commande Epsys pour donner un indice immédiatement
+    if (cmd === '!rebus' && args[1]?.toLowerCase() === 'indice') {
+        if (message.author.id !== EPSYS_ID) {
+            await message.reply("Cette commande est réservée à Epsys.");
+            return true;
+        }
+        if (!rebusSession.active || !rebusSession.currentItem) {
+            await message.reply("Aucune manche de Rébus n'est en cours actuellement.");
+            return true;
+        }
+        const indice = genererIndiceRebus(rebusSession.currentItem);
+        await message.channel.send(indice);
+        return true;
+    }
 
     // Commande Epsys pour décider manuellement du rébus de la prochaine session
     if (cmd === '!rebus' && (args[1]?.toLowerCase() === 'set' || args[1]?.toLowerCase() === 'force')) {

@@ -184,6 +184,101 @@ function buildTopRow(page, authorId) {
     return new ActionRowBuilder().addComponents(prev, next);
 }
 
+function buildProfilRow(cibleId, authorId, ongletActuel = 'profil') {
+    const row = new ActionRowBuilder();
+
+    if (ongletActuel === 'profil') {
+        row.addComponents(
+            new ButtonBuilder().setCustomId(`prof_tab_roulette_${cibleId}_${authorId}`).setLabel('🎰 Roulette').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`prof_tab_bp_${cibleId}_${authorId}`).setLabel('🎫 Battle Pass').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`prof_tab_minijeux_${cibleId}_${authorId}`).setLabel('🎮 Mini-jeux').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`prof_tab_avatar_${cibleId}_${authorId}`).setLabel('🖼️ Avatar HD').setStyle(ButtonStyle.Secondary)
+        );
+    } else {
+        row.addComponents(
+            new ButtonBuilder().setCustomId(`prof_tab_back_${cibleId}_${authorId}`).setLabel('👤 Fiche Profil').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId(`prof_tab_roulette_${cibleId}_${authorId}`).setLabel('🎰 Roulette').setStyle(ongletActuel === 'roulette' ? ButtonStyle.Success : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`prof_tab_bp_${cibleId}_${authorId}`).setLabel('🎫 Battle Pass').setStyle(ongletActuel === 'bp' ? ButtonStyle.Success : ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`prof_tab_minijeux_${cibleId}_${authorId}`).setLabel('🎮 Mini-jeux').setStyle(ongletActuel === 'minijeux' ? ButtonStyle.Success : ButtonStyle.Secondary)
+        );
+    }
+
+    return row;
+}
+
+function buildProfilSubEmbed(cibleUser, guild, tab) {
+    const member = guild?.members.cache.get(cibleUser.id);
+    const nom = member?.displayName ?? cibleUser.username;
+
+    if (tab === 'roulette') {
+        const stats = activityState.rouletteStats?.get(cibleUser.id) ?? { tirages: 0, bonus: 0, malus: 0, rien: 0, plusGrosGain: null, pireSerie: 0 };
+        const userAchs = activityState.rouletteAchievements?.get(cibleUser.id) ?? {};
+        const gain = stats.plusGrosGain ? `**${stats.plusGrosGain.nom}**` : '*Aucun bonus encore*';
+
+        return new EmbedBuilder()
+            .setColor(0xffd20a)
+            .setTitle(`🎰 Statistiques Roulette — ${nom}`)
+            .setThumbnail(cibleUser.displayAvatarURL({ dynamic: true, size: 256 }))
+            .setDescription(
+                `🎲 **Tirages totaux :** \`${stats.tirages}\`\n` +
+                `🎉 **Bonus obtenus :** \`${stats.bonus}\`\n` +
+                `💀 **Malus subis :** \`${stats.malus}\`\n` +
+                `😶 **Résultats « Rien » :** \`${stats.rien}\`\n\n` +
+                `🏆 **Plus gros gain :** ${gain}\n` +
+                `📉 **Pire série de malchance :** \`${stats.pireSerie}\`\n` +
+                `🎖️ **Succès débloqués :** \`${Object.keys(userAchs).length}/30\``
+            )
+            .setFooter({ text: 'Tape !rlt go pour tenter ta chance !' });
+    }
+
+    if (tab === 'bp') {
+        const bpData = activityState.client?.battlePassData || {};
+        const p = bpData.joueurs?.[cibleUser.id] ?? { niveau: 1, xp: 0, streak: 0, actif: false, quetesDuJour: [] };
+        const barre = '🟩'.repeat(Math.min(10, Math.round((p.xp / 500) * 10))) + '⬜'.repeat(Math.max(0, 10 - Math.min(10, Math.round((p.xp / 500) * 10))));
+
+        const quetesActives = (p.quetesDuJour || []).map(q => `${q.terminee ? '✅' : '⏳'} ${q.desc} (\`${q.progression}/${q.objectif}\`)`).join('\n') || '*Aucune quête en cours*';
+
+        return new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle(`🎫 Battle Pass — ${nom}`)
+            .setThumbnail(cibleUser.displayAvatarURL({ dynamic: true, size: 256 }))
+            .setDescription(
+                `⭐ **Niveau :** **Niv. ${p.niveau}/25**\n` +
+                `📈 **Progression :** \`${barre}\` **${p.xp}/500 XP**\n` +
+                `🔥 **Série active :** **${p.streak || 0} jour(s) consécutif(s)**\n\n` +
+                `**__Quêtes Quotidiennes :__**\n${quetesActives}`
+            )
+            .setFooter({ text: 'Tape !bp pour ouvrir ton Battle Pass complet' });
+    }
+
+    if (tab === 'minijeux') {
+        const motus = activityState.getMotusStats()[cibleUser.id] ?? { victoires: 0, parties: 0 };
+        const rebus = activityState.getRebusStats()[cibleUser.id] ?? { victoires: 0, points: 0, parties: 0 };
+        const scoreCombiné = (motus.victoires * 3) + rebus.points;
+
+        return new EmbedBuilder()
+            .setColor(0x00b0f4)
+            .setTitle(`🎮 Mini-jeux du Serveur — ${nom}`)
+            .setThumbnail(cibleUser.displayAvatarURL({ dynamic: true, size: 256 }))
+            .addFields(
+                { name: '🟩 MOTUS (10h & 19h)', value: `• **Victoires :** \`${motus.victoires}\`\n• **Parties :** \`${motus.parties}\``, inline: true },
+                { name: '🧩 RÉBUS (15h00)', value: `• **Points :** \`${rebus.points}\`\n• **Victoires :** \`${rebus.victoires}\``, inline: true },
+                { name: '🌟 SCORE GLOBAL COMBINÉ', value: `🏆 **${scoreCombiné} points cumulés**\n-# *(3 pts / vic. Motus • 1 pt / manche Rébus)*`, inline: false }
+            )
+            .setFooter({ text: 'Sessions quotidiennes à 10h, 15h et 19h' });
+    }
+
+    if (tab === 'avatar') {
+        return new EmbedBuilder()
+            .setColor(0x5865f2)
+            .setTitle(`🖼️ Avatar HD de ${nom}`)
+            .setImage(cibleUser.displayAvatarURL({ dynamic: true, size: 1024 }))
+            .setFooter({ text: `ID : ${cibleUser.id}` });
+    }
+
+    return buildProfilEmbed(cibleUser, guild);
+}
+
 function buildProfilEmbed(cibleUser, guild) {
     const member = guild?.members.cache.get(cibleUser.id);
     const joinedAt = member?.joinedAt
@@ -280,7 +375,9 @@ async function handleActivityMessage(message, response) {
                 const result = activityState.findMemberByName(message.guild, args);
                 if (result.multiple && activityState.askDisambiguation) {
                     activityState.askDisambiguation(message, message.guild, result.candidates, (user) => {
-                        message.reply({ embeds: [buildProfilEmbed(user, message.guild)] });
+                        const embed = buildProfilEmbed(user, message.guild);
+                        const row = buildProfilRow(user.id, message.author.id, 'profil');
+                        message.reply({ embeds: [embed], components: [row] });
                     });
                     return true;
                 }
@@ -288,7 +385,9 @@ async function handleActivityMessage(message, response) {
             }
         }
         if (!cible) cible = message.author;
-        await message.reply({ embeds: [buildProfilEmbed(cible, message.guild)] });
+        const embed = buildProfilEmbed(cible, message.guild);
+        const row = buildProfilRow(cible.id, message.author.id, 'profil');
+        await message.reply({ embeds: [embed], components: [row] });
         return true;
     }
 
@@ -379,7 +478,9 @@ async function handleActivitySlash(interaction) {
 
     if (commandName === 'profil' || commandName === 'profile') {
         const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
-        return interaction.reply({ embeds: [buildProfilEmbed(cibleUser, interaction.guild)] });
+        const embed = buildProfilEmbed(cibleUser, interaction.guild);
+        const row = buildProfilRow(cibleUser.id, interaction.user.id, 'profil');
+        return interaction.reply({ embeds: [embed], components: [row] });
     }
 
     if (commandName === 'top') {
@@ -417,6 +518,31 @@ async function handleActivitySlash(interaction) {
 // =========================
 
 async function handleActivityButton(interaction) {
+    // Boutons de navigation du Profil
+    if (interaction.isButton() && interaction.customId.startsWith('prof_tab_')) {
+        const parts = interaction.customId.split('_');
+        const tab = parts[2];
+        const cibleId = parts[3];
+        const authorId = parts[4];
+
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Ce profil ne t'est pas destiné 😌", ephemeral: true });
+        }
+
+        const cibleUser = interaction.guild?.members.cache.get(cibleId)?.user 
+                       || await interaction.client.users.fetch(cibleId).catch(() => null);
+
+        if (!cibleUser) return interaction.reply({ content: "Membre introuvable !", ephemeral: true });
+
+        const embed = (tab === 'back') 
+            ? buildProfilEmbed(cibleUser, interaction.guild) 
+            : buildProfilSubEmbed(cibleUser, interaction.guild, tab);
+
+        const row = buildProfilRow(cibleId, authorId, tab === 'back' ? 'profil' : tab);
+        await interaction.update({ embeds: [embed], components: [row] });
+        return true;
+    }
+
     // Boutons Actif
     if (interaction.isButton() && (interaction.customId.startsWith('actif_jour_') || interaction.customId.startsWith('actif_semaine_') || interaction.customId.startsWith('actif_mois_'))) {
         const parts = interaction.customId.split('_');

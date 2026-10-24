@@ -48,7 +48,11 @@ function buildQuoteEmbedAndRow(quote, totalQuotes, filterId, guild) {
         new ButtonBuilder()
             .setCustomId(`quote_random_${filterId}`)
             .setLabel('🎲 Une autre citation')
-            .setStyle(ButtonStyle.Secondary)
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`quote_delete_${quote.id}`)
+            .setLabel('🗑️ Supprimer')
+            .setStyle(ButtonStyle.Danger)
     );
 
     return { embed: embedQuote, row };
@@ -262,7 +266,38 @@ async function handleQuotesSlash(interaction) {
 //  GESTION DES BOUTONS
 // =========================
 async function handleQuotesButton(interaction) {
-    if (!interaction.isButton() || !interaction.customId.startsWith('quote_random_')) {
+    if (!interaction.isButton()) return false;
+
+    // Bouton de suppression en 1 clic
+    if (interaction.customId.startsWith('quote_delete_')) {
+        const quoteId = parseInt(interaction.customId.replace('quote_delete_', ''), 10);
+        const quotesData = quotesState.getQuotesData();
+        const index = quotesData.findIndex(q => q.id === quoteId);
+
+        if (index === -1) {
+            return interaction.reply({ content: "Cette citation a déjà été supprimée !", ephemeral: true });
+        }
+
+        const q = quotesData[index];
+        const estAuteur = q.authorId === interaction.user.id || q.addedById === interaction.user.id;
+        const estAdmin = interaction.user.id === quotesState.EPSYS_ID || quotesState.estModo(interaction.member);
+
+        if (!estAuteur && !estAdmin) {
+            return interaction.reply({ content: "❌ Tu ne peux supprimer que les citations que tu as enregistrées ou dont tu es l'auteur !", ephemeral: true });
+        }
+
+        quotesData.splice(index, 1);
+        quotesState.demanderSauvegarde();
+
+        await interaction.update({
+            content: `🗑️ **La citation #${quoteId} a été supprimée des archives.**`,
+            embeds: [],
+            components: []
+        });
+        return true;
+    }
+
+    if (!interaction.customId.startsWith('quote_random_')) {
         return false;
     }
 

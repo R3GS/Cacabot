@@ -582,10 +582,23 @@ async function handleToolsMessage(message, response, client) {
             return message.reply(`✅ **Bug n°${indexToRemove + 1} résolu :**\n> *« ${supprime.content ? supprime.content.slice(0, 80) : 'Image/Fichier'} »* de **${supprime.author}**`);
         }
 
-        // Si !bug seul : afficher la liste des bugs enregistrés
+        // Si !bug seul : afficher la liste des bugs enregistrés avec menu de résolution rapide
         if (!repliedMsgId) {
             const embed = buildBugListEmbed(bugsList);
-            return message.reply({ embeds: [embed] });
+            const components = [];
+            if (bugsList.length > 0) {
+                const options = bugsList.slice(0, 25).map((b, idx) => ({
+                    label: `Bug #${idx + 1} (${b.author})`.slice(0, 50),
+                    description: (b.content || 'Image / Média').slice(0, 50),
+                    value: String(idx)
+                }));
+                const menu = new StringSelectMenuBuilder()
+                    .setCustomId('bug_resolve_select')
+                    .setPlaceholder('✅ Marquer un bug comme résolu...')
+                    .addOptions(options);
+                components.push(new ActionRowBuilder().addComponents(menu));
+            }
+            return message.reply({ embeds: [embed], components });
         }
 
         // Si !bug en répondant à un message : répertorier le message dans la liste
@@ -842,6 +855,40 @@ async function handleToolsSlash(interaction, client) {
 //    HANDLER INTERACTIONS
 // =========================
 async function handleToolsInteraction(interaction, client) {
+    // Résolution d'un bug en 1 clic via le menu
+    if (interaction.isStringSelectMenu() && interaction.customId === 'bug_resolve_select') {
+        if (interaction.user.id !== EPSYS_ID) {
+            return interaction.reply({ content: "Seule Epsys peut résoudre les bugs 😌", ephemeral: true });
+        }
+
+        const idx = parseInt(interaction.values[0], 10);
+        if (isNaN(idx) || !bugsList[idx]) {
+            return interaction.reply({ content: "Bug introuvable ou déjà résolu.", ephemeral: true });
+        }
+
+        const supprime = bugsList.splice(idx, 1)[0];
+        toolsState.demanderSauvegarde?.();
+
+        const embedMaj = buildBugListEmbed(bugsList);
+        const componentsMaj = [];
+        if (bugsList.length > 0) {
+            const options = bugsList.slice(0, 25).map((b, i) => ({
+                label: `Bug #${i + 1} (${b.author})`.slice(0, 50),
+                description: (b.content || 'Image / Média').slice(0, 50),
+                value: String(i)
+            }));
+            const menu = new StringSelectMenuBuilder()
+                .setCustomId('bug_resolve_select')
+                .setPlaceholder('✅ Marquer un bug comme résolu...')
+                .addOptions(options);
+            componentsMaj.push(new ActionRowBuilder().addComponents(menu));
+        }
+
+        await interaction.update({ embeds: [embedMaj], components: componentsMaj });
+        await interaction.followUp({ content: `✅ **Bug n°${idx + 1} résolu :**\n> *« ${supprime.content ? supprime.content.slice(0, 80) : 'Image'} »* de **${supprime.author}**`, ephemeral: true });
+        return true;
+    }
+
     // Bouton Rappel Reporter
     if (interaction.isButton() && interaction.customId.startsWith('rappel_report_')) {
         const targetId = interaction.customId.replace('rappel_report_', '');
@@ -981,9 +1028,25 @@ async function handleToolsInteraction(interaction, client) {
     return false;
 }
 
+function restaurerRappels() {
+    const now = Date.now();
+    for (const [id, r] of pendingRappels.entries()) {
+        const restant = r.triggerAt - now;
+        if (restant <= 0) {
+            pendingRappels.delete(id);
+        } else {
+            scheduleRappel(r.channelId, r.targetId, r.texte, restant);
+        }
+    }
+}
+
 module.exports = {
     initToolsState,
     handleToolsMessage,
     handleToolsSlash,
-    handleToolsInteraction
+    handleToolsInteraction,
+    getBugsList: () => bugsList,
+    setBugsList: (l) => { bugsList.length = 0; bugsList.push(...l); },
+    getPendingRappels: () => pendingRappels,
+    restaurerRappels
 };

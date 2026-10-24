@@ -554,6 +554,20 @@ async function handlePenduMessage(message, response, client, helpers) {
                         if (!session.lettresFausses.includes(rawGuess)) {
                             session.lettresFausses.push(rawGuess);
                             session.erreursCollectives++;
+
+                            // Indice de survie automatique déclenché à la 4ème erreur collective (sur 6)
+                            if (session.erreursCollectives === 4 && !session.indiceDonne) {
+                                session.indiceDonne = true;
+                                const voyellesRestantes = motComplet.split('').filter(l => 'AEIOUY'.includes(l) && !session.lettresTrouvees.includes(l));
+                                if (voyellesRestantes.length > 0) {
+                                    await message.channel.send(`🛡️ **INDICE DE SURVIE (4/6 erreurs) :** Il reste encore **${voyellesRestantes.length} voyelle(s)** non découverte(s) dans ce mot !`);
+                                } else {
+                                    const lettresRestantes = motComplet.split('').filter(l => !session.lettresTrouvees.includes(l));
+                                    const lettreOfferte = lettresRestantes[Math.floor(Math.random() * lettresRestantes.length)];
+                                    session.lettresTrouvees.push(lettreOfferte);
+                                    await message.channel.send(`🛡️ **INDICE DE SURVIE (4/6 erreurs) :** La potence approche ! Cacabot vous offre la lettre **« ${lettreOfferte} »** !`);
+                                }
+                            }
                         }
                         if (!session.lettresRefuseesParJoueur[uid].includes(rawGuess)) {
                             session.lettresRefuseesParJoueur[uid].push(rawGuess);
@@ -715,6 +729,36 @@ async function handlePenduMessage(message, response, client, helpers) {
                 }
             }
         }
+    }
+
+    // Commande manuelle d'indice pour le Pendu (Epsys-only)
+    if (command === '!pendu' && rawContent.split(/\s+/)[1]?.toLowerCase() === 'indice') {
+        if (message.author.id !== EPSYS_ID) {
+            await message.reply("Cette commande est réservée à Epsys.");
+            return true;
+        }
+        if (!session.mot || session.termine) {
+            await message.reply("Aucune partie de Pendu n'est en cours.");
+            return true;
+        }
+
+        const lettresRestantes = session.mot.split('').filter(l => !session.lettresTrouvees.includes(l));
+        if (lettresRestantes.length === 0) {
+            await message.reply("Toutes les lettres ont déjà été trouvées !");
+            return true;
+        }
+
+        const lettreOfferte = lettresRestantes[Math.floor(Math.random() * lettresRestantes.length)];
+        session.lettresTrouvees.push(lettreOfferte);
+        penduBridge.demanderSauvegarde();
+
+        if (session.messageId) {
+            const msgEmbed = await message.channel.messages.fetch(session.messageId).catch(() => null);
+            if (msgEmbed) await msgEmbed.edit({ embeds: [buildPenduEmbed(session)] }).catch(() => {});
+        }
+
+        await message.channel.send(`💡 **Indice accordé par Epsys :** La lettre **« ${lettreOfferte} »** est présente dans le mot !`);
+        return true;
     }
 
     // Commande de redémarrage d'urgence Pendu (Epsys-only)
