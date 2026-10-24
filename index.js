@@ -1334,7 +1334,7 @@ client.once('ready', async () => {
         // Jeux & Social
         new SlashCommandBuilder().setName('lovecalc').setDescription('Calculer la compatibilité amoureuse entre deux membres')
             .addUserOption(opt => opt.setName('membre1').setDescription('Premier membre').setRequired(true))
-            .addUserOption(opt => opt.setName('membre2').setDescription('Deuxième membre').setRequired(true)),
+            .addUserOption(opt => opt.setName('membre2').setDescription('Deuxième membre (facultatif, par défaut toi-même)').setRequired(false)),
         new SlashCommandBuilder().setName('flip').setDescription('Lancer une pièce à pile ou face (solo ou duel)'),
         new SlashCommandBuilder().setName('destin').setDescription('Prédit votre destin cosmique'),
         new SlashCommandBuilder().setName('horoscope').setDescription('L\'oracle cosmique du jour'),
@@ -1356,7 +1356,8 @@ client.once('ready', async () => {
             .addStringOption(opt => opt.setName('question').setDescription('Ex : pizza ou burger ?').setRequired(true)),
         new SlashCommandBuilder().setName('welcome').setDescription("Configurer ou tester l'accueil (Epsys-only)")
             .addSubcommand(sub => sub.setName('config').setDescription('Ouvrir le panneau de configuration'))
-            .addSubcommand(sub => sub.setName('test').setDescription("Tester l'affiche avec ta photo")),
+            .addSubcommand(sub => sub.setName('test').setDescription("Tester l'affiche avec ta photo ou un membre")
+                .addUserOption(opt => opt.setName('membre').setDescription('Membre à tester (facultatif)'))),
         new SlashCommandBuilder().setName('suggestion').setDescription('Proposer une idée pour le serveur')
             .addStringOption(opt => opt.setName('proposition').setDescription('Ton idée').setRequired(true)),
         new SlashCommandBuilder().setName('sugg').setDescription('Proposer une idée pour le serveur (raccourci)')

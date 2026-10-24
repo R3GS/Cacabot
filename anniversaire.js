@@ -7,7 +7,10 @@ const {
     EmbedBuilder,
     ActionRowBuilder,
     ButtonBuilder,
-    ButtonStyle
+    ButtonStyle,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
 } = require('discord.js');
 
 const BIRTHDAY_CHANNEL_ID = '720057528867618909';
@@ -395,7 +398,15 @@ if (!isDate) {
         .setColor(0xff69b4)
         .setTitle('🎂 Anniversaire')
         .addFields(...anniversaireFields);
-    await message.reply({ embeds: [anniversaireEmbed] });
+
+    const rowSetModal = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('anniv_open_set_modal')
+            .setLabel('📅 Enregistrer mon anniversaire')
+            .setStyle(ButtonStyle.Success)
+    );
+
+    await message.reply({ embeds: [anniversaireEmbed], components: [rowSetModal] });
     return true;
 }
 
@@ -514,6 +525,52 @@ async function handleAnniversaireSlash(interaction) {
 //  GESTION DES BOUTONS
 // =========================
 async function handleAnniversaireButton(interaction) {
+    // 1. Clic sur le bouton -> ouverture du formulaire interactif (Modal)
+    if (interaction.isButton() && interaction.customId === 'anniv_open_set_modal') {
+        const modal = new ModalBuilder()
+            .setCustomId('anniv_modal_submit')
+            .setTitle('Enregistrer ton anniversaire');
+
+        const inputDate = new TextInputBuilder()
+            .setCustomId('anniv_date_input')
+            .setLabel('Ta date de naissance (Format JJ/MM)')
+            .setPlaceholder('Ex : 24/07 ou 05/12')
+            .setStyle(TextInputStyle.Short)
+            .setMinLength(5)
+            .setMaxLength(5)
+            .setRequired(true);
+
+        modal.addComponents(new ActionRowBuilder().addComponents(inputDate));
+        await interaction.showModal(modal);
+        return true;
+    }
+
+    // 2. Soumission de la Modal
+    if (interaction.isModalSubmit() && interaction.customId === 'anniv_modal_submit') {
+        const dateSaisie = interaction.fields.getTextInputValue('anniv_date_input').trim();
+        const dateParts = dateSaisie.match(/^(\d{2})\/(\d{2})$/);
+        const jour = Number(dateParts?.[1]);
+        const mois = Number(dateParts?.[2]);
+        const dateValide = Boolean(dateParts) &&
+            mois >= 1 &&
+            mois <= 12 &&
+            jour >= 1 &&
+            jour <= new Date(2000, mois, 0).getDate();
+
+        if (!dateValide) {
+            return interaction.reply({ content: "❌ Date invalide ! Utilise le format `JJ/MM` (ex : `24/07`).", ephemeral: true });
+        }
+
+        const guildBirthdays = getGuildBirthdays(interaction.guild.id);
+        guildBirthdays[interaction.user.id] = dateSaisie;
+        await birthdayState.saveBirthdays();
+
+        return interaction.reply({
+            content: `🎂 **C'est noté !** Ton anniversaire a été enregistré le **${dateSaisie}** ! Tu auras ton ping de fête le jour J ! 🎉`,
+            ephemeral: true
+        });
+    }
+
     if (!interaction.isButton() || !interaction.customId.startsWith('anniv_list_')) return false;
 
     const parts = interaction.customId.split('_');

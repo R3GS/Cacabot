@@ -235,9 +235,25 @@ async function handleWelcomeMessage(message, response) {
     const subCmd = raw.split(/\s+/)[1]?.toLowerCase();
     if (subCmd === 'test') {
         try {
-            const avatarUrl = message.author.displayAvatarURL({ extension: 'png', size: 512 });
-            const cardBuffer = await generateWelcomeImage(avatarUrl, message.member?.displayName ?? message.author.username);
-            await message.reply({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
+            const args = raw.split(/\s+/);
+            const query = args.slice(2).join(" ").trim();
+            let cibleMembre = message.mentions.members.first();
+
+            if (!cibleMembre && query) {
+                const q = query.toLowerCase();
+                cibleMembre = message.guild?.members.cache.find(m =>
+                    (m.displayName && m.displayName.toLowerCase().includes(q)) ||
+                    (m.user.username && m.user.username.toLowerCase().includes(q))
+                );
+            }
+            if (!cibleMembre) cibleMembre = message.member;
+
+            const avatarUrl = cibleMembre.user.displayAvatarURL({ extension: 'png', size: 512 });
+            const cardBuffer = await generateWelcomeImage(avatarUrl, cibleMembre.displayName ?? cibleMembre.user.username);
+            await message.reply({ 
+                content: `🖼️ **Affiche test pour ${cibleMembre.displayName} :**`,
+                files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] 
+            });
         } catch (err) {
             console.error("Erreur welcome test :", err);
             await message.reply(`❌ **Erreur d'affiche :** \`${err.message}\``);
@@ -267,9 +283,14 @@ async function handleWelcomeSlash(interaction) {
     if (sub === 'test') {
         await interaction.deferReply();
         try {
-            const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 512 });
-            const cardBuffer = await generateWelcomeImage(avatarUrl, interaction.member?.displayName ?? interaction.user.username);
-            await interaction.editReply({ files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] });
+            const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
+            const cibleMembre = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
+            const avatarUrl = cibleUser.displayAvatarURL({ extension: 'png', size: 512 });
+            const cardBuffer = await generateWelcomeImage(avatarUrl, cibleMembre?.displayName ?? cibleUser.username);
+            await interaction.editReply({ 
+                content: `🖼️ **Affiche test pour ${cibleMembre?.displayName ?? cibleUser.username} :**`,
+                files: [{ attachment: cardBuffer, name: 'bienvenue.png' }] 
+            });
         } catch (err) {
             await interaction.editReply({ content: `❌ **Erreur :** \`${err.message}\`` });
         }

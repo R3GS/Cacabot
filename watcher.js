@@ -180,7 +180,39 @@ async function handleWatcherMessage(message) {
         return true;
     }
 
-    // 5. Commande !streamtest (Epsys-only)
+    // 5. Remplacement liens Twitter / X (fxtwitter)
+    const twitterRegex = /https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+\/status\/[0-9]+[^\s]*)/gi;
+    const twitterMatches = message.content.match(twitterRegex);
+    if (twitterMatches) {
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        const liensConvertis = twitterMatches.map(url => 
+            url.replace(/https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)/i, 'https://fxtwitter.com')
+        );
+
+        await message.delete().catch(() => {});
+        await message.channel.send(`**${auteurNom}** a partagé un tweet !\n-# *(lien converti pour l'affichage vidéo et médias)*`);
+        setTimeout(() => {
+            message.channel.send(liensConvertis.join('\n')).catch(() => {});
+        }, 300);
+        return true;
+    }
+
+    // 6. Remplacement liens Reddit (rxddit)
+    const redditRegex = /https?:\/\/(?:www\.)?reddit\.com\/r\/([^\s]+)/gi;
+    const redditMatches = message.content.match(redditRegex);
+    if (redditMatches) {
+        const auteurNom = message.member?.displayName ?? message.author.username;
+        const liensConvertis = redditMatches.map(url => url.replace('reddit.com', 'rxddit.com'));
+
+        await message.delete().catch(() => {});
+        await message.channel.send(`**${auteurNom}** a partagé un post Reddit !\n-# *(lien converti pour l'affichage de la vidéo avec le son)*`);
+        setTimeout(() => {
+            message.channel.send(liensConvertis.join('\n')).catch(() => {});
+        }, 300);
+        return true;
+    }
+
+    // 7. Commande !streamtest (Epsys-only)
     if (message.content.trim().toLowerCase() === '!streamtest') {
         if (message.author.id !== EPSYS_ID) return true;
         try {

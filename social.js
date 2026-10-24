@@ -650,42 +650,74 @@ async function handleSocialMessage(message, response, client, helpers) {
 
     // 4. !lovecalc
     if (response?.needsLovecalc) {
-        const args = message.content.trim().split(/\s+/);
-        let user1 = message.mentions.users.first();
-        let user2 = message.mentions.users.size >= 2 ? [...message.mentions.users.values()][1] : null;
+        const args = message.content.trim().split(/\s+/).slice(1);
+        let user1 = null;
+        let user2 = null;
 
-        if (!user1 && args[1]) {
-            const r = findMemberByName(message.guild, args[1]);
-            if (r.found) user1 = r.found.user;
-        }
-        if (!user2 && args[2]) {
-            const r = findMemberByName(message.guild, args[2]);
-            if (r.found) user2 = r.found.user;
+        const executeCalcul = async (u1, u2) => {
+            const ids = [u1.id, u2.id].sort();
+            const seed = parseInt(ids[0].slice(-4)) + parseInt(ids[1].slice(-4));
+            const percent = (seed * 7 + 13) % 101;
+            const nom1 = message.guild?.members.cache.get(u1.id)?.displayName ?? u1.username;
+            const nom2 = message.guild?.members.cache.get(u2.id)?.displayName ?? u2.username;
+
+            try {
+                const av1 = u1.displayAvatarURL({ extension: 'png', size: 256 });
+                const av2 = u2.displayAvatarURL({ extension: 'png', size: 256 });
+                const buffer = await generateLovecalcImage(av1, av2, percent);
+                const embed = new EmbedBuilder()
+                    .setColor(0xe91e63)
+                    .setDescription(`💕 **${nom1}** et **${nom2}** sont compatibles à **${percent}%** !`)
+                    .setImage('attachment://lovecalc.png');
+                await message.reply({ embeds: [embed], files: [{ attachment: buffer, name: 'lovecalc.png' }] });
+            } catch (e) {
+                await message.reply(`💕 **${nom1}** et **${nom2}** sont compatibles à **${percent}%** !`);
+            }
+        };
+
+        // Cas A : 2 mentions Discord
+        if (message.mentions.users.size >= 2) {
+            const mentions = [...message.mentions.users.values()];
+            return executeCalcul(mentions[0], mentions[1]);
         }
 
-        if (!user1 || !user2) {
-            await message.reply('Usage : `!lovecalc @User1 @User2` ou `!lovecalc pseudo1 pseudo2`');
-            return true;
+        // Cas B : 1 seule mention Discord -> compatibilité entre l'auteur et cette personne
+        if (message.mentions.users.size === 1) {
+            return executeCalcul(message.author, message.mentions.users.first());
         }
 
-        const ids = [user1.id, user2.id].sort();
-        const seed = parseInt(ids[0].slice(-4)) + parseInt(ids[1].slice(-4));
-        const percent = (seed * 7 + 13) % 101;
-        const nom1 = message.guild?.members.cache.get(user1.id)?.displayName ?? user1.username;
-        const nom2 = message.guild?.members.cache.get(user2.id)?.displayName ?? user2.username;
-
-        try {
-            const av1 = user1.displayAvatarURL({ extension: 'png', size: 256 });
-            const av2 = user2.displayAvatarURL({ extension: 'png', size: 256 });
-            const buffer = await generateLovecalcImage(av1, av2, percent);
-            const embed = new EmbedBuilder()
-                .setColor(0xe91e63)
-                .setDescription(`💕 **${nom1}** et **${nom2}** sont compatibles à **${percent}%** !`)
-                .setImage('attachment://lovecalc.png');
-            await message.reply({ embeds: [embed], files: [{ attachment: buffer, name: 'lovecalc.png' }] });
-        } catch (e) {
-            await message.reply(`💕 **${nom1}** et **${nom2}** sont compatibles à **${percent}%** !`);
+        // Cas C : Aucun mention -> recherche par pseudo(s)
+        if (args.length === 1) {
+            const res = findMemberByName(message.guild, args[0]);
+            if (res.multiple && askDisambiguation) {
+                return askDisambiguation(message, message.guild, res.candidates, (cible) => {
+                    executeCalcul(message.author, cible);
+                });
+            }
+            if (!res.found) {
+                return message.reply(`❌ Membre introuvable pour **« ${args[0]} »** !`);
+            }
+            return executeCalcul(message.author, res.found.user);
         }
+
+        if (args.length >= 2) {
+            const res1 = findMemberByName(message.guild, args[0]);
+            const res2 = findMemberByName(message.guild, args[1]);
+
+            if (res1.multiple && askDisambiguation) {
+                return askDisambiguation(message, message.guild, res1.candidates, (cible1) => {
+                    if (res2.found) executeCalcul(cible1, res2.found.user);
+                    else message.reply(`❌ Deuxième membre introuvable pour **« ${args[1]} »** !`);
+                });
+            }
+
+            if (!res1.found) return message.reply(`❌ Premier membre introuvable pour **« ${args[0]} »** !`);
+            if (!res2.found) return message.reply(`❌ Deuxième membre introuvable pour **« ${args[1]} »** !`);
+
+            return executeCalcul(res1.found.user, res2.found.user);
+        }
+
+        await message.reply("Usage :\n• Tester avec quelqu'un : `!lovecalc @Membre` ou `!lovecalc Sasha`\n• Entre deux membres : `!lovecalc Sasha Pierre`");
         return true;
     }
 
@@ -756,8 +788,15 @@ async function handleSocialSlash(interaction) {
 
     if (commandName === 'lovecalc') {
         await interaction.deferReply();
-        const user1 = interaction.options.getUser('membre1');
-        const user2 = interaction.options.getUser('membre2');
+        let user1 = interaction.options.getUser('membre1');
+        let user2 = interaction.options.getUser('membre2');
+
+        // Si le 2ème membre n'est pas spécifié, on teste avec la personne qui lance la commande
+        if (!user2) {
+            user2 = user1;
+            user1 = interaction.user;
+        }
+
         const ids = [user1.id, user2.id].sort();
         const seed = parseInt(ids[0].slice(-4)) + parseInt(ids[1].slice(-4));
         const percent = (seed * 7 + 13) % 101;

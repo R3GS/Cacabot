@@ -114,8 +114,9 @@ function scheduleRappel(channelId, targetId, texte, ms) {
 // =========================
 function buildPomoControls(channelId) {
     return new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`pomo_stop_${channelId}`).setLabel('⏹️ Arrêter').setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId(`pomo_skip_${channelId}`).setLabel('⏭️ Passer').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`pomo_join_${channelId}`).setLabel('👥 Rejoindre').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId(`pomo_skip_${channelId}`).setLabel('⏭️ Passer').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`pomo_stop_${channelId}`).setLabel('⏹️ Arrêter').setStyle(ButtonStyle.Danger)
     );
 }
 
@@ -148,16 +149,20 @@ async function startPomodoro(channel, participantsMention, workMin, breakMin, cy
     }, durationMs);
 
     const ownerId = participantsMention.match(/\d{17,20}/)?.[0] ?? null;
+    const participantsList = [ownerId].filter(Boolean);
 
     pomodoroSessions.set(channel.id, {
         ownerId,
+        participants: participantsList,
         message: msg,
         timeout,
         skip: async () => {
             clearTimeout(timeout);
             const nextPhase = isWork ? 'break' : 'work';
             const nextCycle = isWork ? cycle : cycle + 1;
-            await startPomodoro(channel, participantsMention, workMin, breakMin, nextCycle, nextPhase, reason);
+            const currentSession = pomodoroSessions.get(channel.id);
+            const allMentions = (currentSession?.participants || participantsList).map(id => `<@${id}>`).join(' ');
+            await startPomodoro(channel, allMentions, workMin, breakMin, nextCycle, nextPhase, reason);
         }
     });
 }
@@ -1010,6 +1015,17 @@ async function handleToolsInteraction(interaction, client) {
         if (!session) return interaction.reply({ content: "Ce pomodoro n'existe plus !", ephemeral: true });
         if (session.ownerId !== interaction.user.id && interaction.user.id !== EPSYS_ID) {
             return interaction.reply({ content: "Seule la personne qui a lancé ce pomodoro peut le contrôler.", ephemeral: true });
+        }
+
+        if (action === 'join') {
+            if (!session.participants) session.participants = [session.ownerId];
+            if (session.participants.includes(interaction.user.id)) {
+                return interaction.reply({ content: "Tu fais déjà partie de cette session de travail !", ephemeral: true });
+            }
+
+            session.participants.push(interaction.user.id);
+            const nomRejoint = interaction.member?.displayName ?? interaction.user.username;
+            return interaction.reply(`🤝 **${nomRejoint}** rejoint la session de Pomodoro ! Tu seras pingé.e aux prochains changements de phase !`);
         }
 
         if (action === 'stop') {

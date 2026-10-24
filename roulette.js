@@ -2466,7 +2466,7 @@ async function handleRouletteMessage(message, response, client, helpers) {
         }
         if (command === '!rouletteid' || command === '!rltid') {
             const embed = buildRouletteTypeEmbed('bonus')
-                .setDescription("`!bonusforce [id] [membre]` / `!malusforce [id] [membre]`\nExemple : `!bonusforce couronne @Sasha`\n\n" + buildRouletteTypeEmbed('bonus').data.description);
+                .setDescription("`!bonusforce [id] [membre]` / `!malusforce [id] [membre]`\nExemple : `!bonusforce couronne @Epsys`\n\n" + buildRouletteTypeEmbed('bonus').data.description);
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId(`roulette_id_bonus_${message.author.id}`).setLabel('🎉 Bonus').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId(`roulette_id_malus_${message.author.id}`).setLabel('💀 Malus').setStyle(ButtonStyle.Danger),

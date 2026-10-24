@@ -789,6 +789,43 @@ function buildBPLadderEmbed(membre) {
         .setFooter({ text: '⭐ = Palier majeur (tous les 5 niveaux) • 500 XP par niveau' });
 }
 
+function buildBPLeaderboardEmbed(guild, authorId) {
+    const bpData = bpBridge.getBattlePassData();
+    const joueurs = Object.entries(bpData.joueurs || {})
+        .filter(([, p]) => p && (p.niveau > 1 || p.xp > 0 || p.actif))
+        .map(([uid, p]) => ({
+            uid,
+            niveau: p.niveau || 1,
+            xp: p.xp || 0,
+            streak: p.streak || 0,
+            scoreTotal: ((p.niveau || 1) * 10000) + (p.xp || 0)
+        }))
+        .sort((a, b) => b.scoreTotal - a.scoreTotal);
+
+    const medailles = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+    const lignes = joueurs.slice(0, 10).map((j, i) => {
+        const m = guild?.members?.cache?.get(j.uid);
+        const nom = m?.displayName || `<@${j.uid}>`;
+        const streakStr = j.streak > 0 ? ` • 🔥 \`${j.streak}j\`` : '';
+        return `${medailles[i]} **${nom}** — **Niveau ${j.niveau}** (${j.xp}/500 XP)${streakStr}`;
+    });
+
+    const userRank = joueurs.findIndex(j => j.uid === authorId);
+    let footerTxt = "Valide tes quêtes quotidiennes et hebdos pour grimper au classement !";
+    if (userRank !== -1) {
+        footerTxt = `Ta position : #${userRank + 1} sur ${joueurs.length} membres actifs !`;
+    }
+
+    return new EmbedBuilder()
+        .setColor(0xf1c40f)
+        .setTitle(`🏆 CLASSEMENT DE LA SAISON ${bpData.saison || 1} (BATTLE PASS)`)
+        .setDescription(
+            `Voici les membres les plus avancés dans le Pass de Combat ce mois-ci !\n\n` +
+            (lignes.length > 0 ? lignes.join('\n\n') : '*Aucun membre n\'a encore progressé cette saison.*')
+        )
+        .setFooter({ text: footerTxt });
+}
+
 function buildBPRulesEmbed() {
     return new EmbedBuilder()
         .setColor(0xffd20a)
@@ -856,15 +893,19 @@ function buildBPButtons(authorId, targetId = null) {
     }
 
     // Vue standard du membre sur son propre profil
-    const row = new ActionRowBuilder().addComponents(
+    const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`bp_home_${authorId}_${tid}`).setLabel('🏠 Accueil').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`bp_quests_${authorId}_${tid}`).setLabel('📋 Mes Quêtes').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`bp_ladder_${authorId}_${tid}`).setLabel('🪜 Paliers').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`bp_leaderboard_${authorId}_${tid}`).setLabel('🏆 Podium Saison').setStyle(ButtonStyle.Secondary)
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`bp_rules_${authorId}_${tid}`).setLabel('📜 Règles').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`bp_notifs_${authorId}`).setLabel('🔔 Notifications MP').setStyle(ButtonStyle.Secondary)
     );
 
-    return [row];
+    return [row1, row2];
 }
 
 // ==========================================
@@ -1453,6 +1494,11 @@ async function handleBattlePassInteraction(interaction) {
 
     if (action === 'ladder') {
         await interaction.update({ embeds: [buildBPLadderEmbed(cibleMembre)], components: buildBPButtons(authorId, targetId) });
+        return true;
+    }
+
+    if (action === 'leaderboard') {
+        await interaction.update({ embeds: [buildBPLeaderboardEmbed(interaction.guild, authorId)], components: buildBPButtons(authorId, targetId) });
         return true;
     }
 
