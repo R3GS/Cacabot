@@ -298,6 +298,8 @@ const rouletteNotifs = new Map();
 const rouletteNotifTimers = new Map();
 const notifsEnvoyeesRecent = new Set();
 let dernierEnvoiHappyHour = null;
+const rouletteVoteRedirectCharges = new Map();
+const rouletteVoteVotants = new Map();
 
 const ROULETTE_ETATS = {
     cooldowns: rouletteCooldowns,
@@ -307,6 +309,8 @@ const ROULETTE_ETATS = {
     coupTriple: rouletteCoupTripleCharges,
     pseudoLock: roulettePseudoLock,
     redirectCharges: rouletteRedirectCharges,
+    voteRedirect: rouletteVoteRedirectCharges,
+    voteVotants: rouletteVoteVotants,
     pity: roulettePity,
     uwu: rouletteUwuUntil,
     lettreInterdite: rouletteLettreInterdite,
@@ -1026,53 +1030,15 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             if (total >= 10) deverrouillerSucces(member.id, 'forteresse', message.channel);
             return `🛡️ **${auteurNom}** gagne **1 charge de bouclier** (${total} en réserve) : son prochain malus sera annulé !`;
         }
-        case 'bonus-redirect-choix': {
-            const { MessageFlags } = require('discord.js');
-            await message.channel.send({ content: `🎯 **${auteurNom}**, tu as gagné le pouvoir de choisir qui prendra ton prochain malus à ta place !\nMentionne un·e membre du salon dans les **5 minutes**.`, flags: [MessageFlags.SuppressNotifications] });
-            const collector = message.channel.createMessageCollector({
-                filter: m => m.author.id === member.id && m.mentions.members.first(),
-                time: 5 * 60 * 1000, max: 1
-            });
-            collector.on('collect', (m) => {
-                const cibleChoisie = m.mentions.members.first();
-                if (!cibleChoisie.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID)) {
-                    return message.channel.send({ content: `❌ **${cibleChoisie.displayName}** n'a pas le rôle de la roulette ! Choisis quelqu'un qui participe à la roulette.`, flags: [MessageFlags.SuppressNotifications] });
-                }
-                rouletteRedirectChoixCible.set(member.id, cibleChoisie.id);
-                bridge.demanderSauvegarde();
-                message.channel.send({ content: `✅ C'est enregistré ! Le prochain malus de **${auteurNom}** sera automatiquement envoyé à **${cibleChoisie.displayName}** !`, flags: [MessageFlags.SuppressNotifications] });
-            });
-            return `🎯 **${auteurNom}** a gagné une redirection de malus au choix !`;
-        }
-        case 'bonus-pseudo-choix': {
-            await message.channel.send(`✍️ **${auteurNom}**, tu as gagné le droit de renommer un·e membre et de bloquer son pseudo pendant **48h** !\nÉcris son **@mention** suivi du **nouveau pseudo** dans les **5 minutes**.`);
-            const collector = message.channel.createMessageCollector({
-                filter: m => m.author.id === member.id && m.mentions.members.first(),
-                time: 5 * 60 * 1000, max: 1
-            });
-            collector.on('collect', async (m) => {
-                const cibleChoisie = m.mentions.members.first();
-                const nouveauPseudo = m.content.replace(/<@!?\d+>/g, '').trim().slice(0, 32);
-                if (!cibleChoisie || !nouveauPseudo) return message.channel.send(`❌ Format invalide, bonus perdu.`);
-                roulettePseudoLock.set(cibleChoisie.id, { until: Date.now() + 48 * 60 * 60 * 1000, pseudo: nouveauPseudo });
-                await cibleChoisie.setNickname(nouveauPseudo).catch(() => {});
-                deverrouillerSucces(member.id, 'baptiseur', message.channel);
-                bridge.demanderSauvegarde();
-                message.channel.send(`✅ **${cibleChoisie.displayName}** se retrouve avec le pseudo **${nouveauPseudo}**, choisi par **${auteurNom}**, verrouillé pendant **48h** !`);
-            });
-            return `✍️ **${auteurNom}** a gagné le choix du pseudo d'un·e membre !`;
-        }
-        case 'bonus-epingle': {
-            const collector = message.channel.createMessageCollector({
-                filter: m => m.author.id === member.id,
-                time: 5 * 60 * 1000, max: 1
-            });
-            collector.on('collect', async (m) => {
-                await m.pin().catch(() => {});
-                deverrouillerSucces(member.id, 'epingle', message.channel);
-            });
-            return `📌 **${auteurNom}** a gagné un droit spécial ! Envoie dans les **5 minutes** le message que tu veux épingler définitivement dans ce salon !`;
-        }
+        case 'bonus-redirect-choix':
+            crediterInventaireRoulette(member.id, 'redirectChoix', 1);
+            return `🎯 **${auteurNom}** a gagné une **Redirection de malus au choix** !\n-# 🎒 *Stocké dans ton inventaire (\`!rlt claim\` pour l'utiliser quand tu veux sans limite de temps).*`;
+        case 'bonus-pseudo-choix':
+            crediterInventaireRoulette(member.id, 'pseudoChoix', 1);
+            return `✍️ **${auteurNom}** a gagné le droit de **verrouiller le pseudo d'un·e membre pendant 48h** !\n-# 🎒 *Stocké dans ton inventaire (\`!rlt claim\` pour l'utiliser quand tu veux).*`;
+        case 'bonus-epingle':
+            crediterInventaireRoulette(member.id, 'epingleSalon', 1);
+            return `📌 **${auteurNom}** a gagné le droit d'**épingler un message** dans ce salon !\n-# 🎒 *Stocké dans ton inventaire (\`!rlt claim\` pour l'utiliser quand tu veux).*`;
         case 'special-vote-immunite-exclusion':
             message.vote = member;
             return `🗳️ **${auteurNom}** déclenche un **vote public** !`;
@@ -1185,15 +1151,25 @@ function buildInventaireEmbed(membre) {
             emoji: '🎯',
             desc: 'Ajoute 5 redirections ciblées en réserve'
         },
+        redirectChoix: {
+            label: '🎯 Redirection de malus au choix',
+            emoji: '🎯',
+            desc: 'Choisis le membre qui subira ton prochain malus à ta place'
+        },
+        pseudoChoix: {
+            label: '✍️ Pseudo au choix (48h)',
+            emoji: '✍️',
+            desc: 'Verrouille le pseudo du membre de ton choix pendant 48h'
+        },
         pseudoLockSemaine: {
             label: '✍️ Gravé dans la roche',
             emoji: '✍️',
             desc: 'Verrouille le pseudo d\'un membre pendant 1 semaine'
         },
         epingleSalon: {
-            label: '📌 Épingle Salon',
+            label: '📌 Message épinglé',
             emoji: '📌',
-            desc: 'Droit d\'épingler un message dans le salon'
+            desc: 'Épingle définitivement un de tes messages dans le salon'
         }
     };
 
@@ -1233,8 +1209,8 @@ function buildInventaireEmbed(membre) {
 function buildVoteRouletteEmbed(membre) {
     return new EmbedBuilder()
         .setColor(0xffd20a)
-        .setTitle(`🗳️ VOTE PUBLIC : Que mérite <@${membre.id}> ?`)
-        .setDescription(`Que mérite <@${membre.id}> ?\n\n✅ Tirage à volonté pendant 1min (immunité au mute)\n❌ Exclusion pendant 1 jour\n\nVote ouvert pendant **2h**.\n-# *(L'accusé.e <@${membre.id}> ne peut pas réagir à ce vote)*`);
+        .setTitle(`🗳️ VOTE PUBLIC ! (${libelleProbaRoulette('special-vote-immunite-exclusion')})`)
+        .setDescription(`Que mérite <@${membre.id}> ?\n\n✅ **Victoire :** Redirection de ses **3 prochains malus au choix** vers qui iel veut !\n❌ **Défaite :** Exclusion pendant **1 jour**\n\nVote ouvert pendant **2h**.\n-# *(L'accusé.e n'a pas le droit de voter sur son propre sort)*`);
 }
 
 async function demarrerVoteRoulette(msg, membre) {
@@ -1275,30 +1251,36 @@ async function demarrerVoteRoulette(msg, membre) {
             };
 
             if (oui >= non) {
-                crediterInventaireRoulette(membre.id, 'freeRoll1Min', 1);
+                const chargesActuelles = rouletteVoteRedirectCharges.get(membre.id) || 0;
+                rouletteVoteRedirectCharges.set(membre.id, chargesActuelles + 3);
+                rouletteVoteVotants.set(membre.id, {
+                    oui: votantsValidesOui,
+                    non: votantsValidesNon,
+                    tous: [...tousLesVotants]
+                });
                 deverrouillerSucces(membre.id, 'innocente', salonRoulette);
+
+                const ciblesNon = votantsValidesNon.length > 0 ? votantsValidesNon.map(id => `<@${id}>`).join(', ') : '*Aucun (personne n\'a voté contre toi !)*';
+                const ciblesOui = votantsValidesOui.length > 0 ? votantsValidesOui.map(id => `<@${id}>`).join(', ') : '*Aucun*';
 
                 const embedVictoire = new EmbedBuilder()
                     .setColor(0x00bf19)
                     .setTitle(`🕊️ JUGEMENT POPULAIRE : INNOCENTÉ.E !`)
                     .setDescription(
                         `La plèbe a parlé avec sagesse (${oui} pour vs ${non} contre) !\n\n` +
-                        `🎉 <@${membre.id}>, tu remportes **1 minute de tirage à volonté** (sans cooldown et immunisé aux mutes) !\n\n` +
-                        `🎁 **Si tu ne l'utilises pas tout de suite, ton cadeau sera stocké dans ton inventaire.**\nTape \`!roulette claim\` ou \`!rlt claim\` afin de l'activer !`
+                        `🎉 <@${membre.id}>, tu es acquitté.e et tu remportes **3 Redirections de malus au choix** !\n\n` +
+                        `🎯 **Comment les utiliser ?**\n` +
+                        `Lors de tes 3 prochains malus roulette, un **menu déroulant** s'affichera directement sous le tirage pour envoyer le malus à la personne de ton choix.\n\n` +
+                        `😈 **Suggestions de cibles parmi les votant.es :**\n` +
+                        `> ❌ **Celleux qui voulaient ta peau :** ${ciblesNon}\n` +
+                        `> ✅ **Celleux qui t'ont soutenu.e :** ${ciblesOui}\n\n` +
+                        `*À toi de choisir si tu veux te venger ou tester la loyauté de ton entourage...*`
                     );
-
-                const rowVictoire = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`rlt_claim_freeroll_${membre.id}`)
-                        .setLabel('🎰 Activer mon tirage (1 min)')
-                        .setStyle(ButtonStyle.Success)
-                );
 
                 const { MessageFlags } = require('discord.js');
                 await salonRoulette.send({
-                    content: `🔔 <@${membre.id}>, le vote est terminé !`,
+                    content: `🔔 <@${membre.id}>, le vote est terminé ! Tu as triomphé !`,
                     embeds: [embedVictoire],
-                    components: [rowVictoire],
                     flags: [MessageFlags.SuppressNotifications]
                 }).catch(() => {});
             } else {
@@ -1404,6 +1386,9 @@ function buildRouletteStateEmbed(cible, guildId = null) {
     if (bJCharges > 0) {
         const bJVal = Math.round((rouletteJackpotBoostValue.get(cible.id) || 0.25) * 100);
         bonus.push(`📈 Boost Jackpot : +${bJVal}% (${bJCharges} tirages restants)`);
+    }
+    if ((rouletteVoteRedirectCharges.get(cible.id) || 0) > 0) {
+        bonus.push(`🎯 **${rouletteVoteRedirectCharges.get(cible.id)} redirection(s) au choix (Vote public)**`);
     }
     if ((rouletteRedirectCharges.get(cible.id) || 0) > 0) {
         bonus.push(`😈 ${rouletteRedirectCharges.get(cible.id)} redirection(s) de malus`);
@@ -1973,7 +1958,28 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     }
 
     bridge.demanderSauvegarde();
-    const embed = buildRouletteResultEmbed(outcomeId, prefixeRedirect + texte, authorId, auteurNom);
+
+    let extraVoteTexte = '';
+    let menuVoteRedirectRow = null;
+    const voteCharges = rouletteVoteRedirectCharges.get(authorId) || 0;
+    if (outcomeId.startsWith('malus-') && voteCharges > 0 && outcomeId !== 'malus-brise-bouclier' && !prefixeRedirect) {
+        const votantsInfo = rouletteVoteVotants.get(authorId);
+        let noteVotants = '';
+        if (votantsInfo?.non?.length > 0) {
+            noteVotants = `\n-# 😈 *Rappel de ceux qui ont voté contre toi : ${votantsInfo.non.map(id => `<@${id}>`).join(', ')}*`;
+        }
+        extraVoteTexte = `\n\n🎯 **Privilège de vote populaire (${voteCharges} charge${voteCharges > 1 ? 's' : ''} restante${voteCharges > 1 ? 's' : ''}) :**\nTu peux renvoyer ce malus sur la personne de ton choix via le menu ci-dessous !${noteVotants}`;
+
+        const menuRedirection = new UserSelectMenuBuilder()
+            .setCustomId(`rlt_vote_redirect_${authorId}_${outcomeId}`)
+            .setPlaceholder('🎯 Choisis qui prendra ce malus à ta place...')
+            .setMinValues(1)
+            .setMaxValues(1);
+
+        menuVoteRedirectRow = new ActionRowBuilder().addComponents(menuRedirection);
+    }
+
+    const embed = buildRouletteResultEmbed(outcomeId, prefixeRedirect + texte + extraVoteTexte, authorId, auteurNom);
     const roleMaxId = ROULETTE_RANGS[ROULETTE_RANGS.length - 1].id;
     const dejaMaxRole = (outcomeId === 'bonus-role-superieur' || outcomeId === 'bonus-legendaire') && cible.roles.cache.has(roleMaxId);
 
@@ -1985,14 +1991,17 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         };
     }
     const differe = proxy.differe;
+    const resultComponents = [buildRowResultatRoulette(authorId, outcomeId, failIndex)];
+    if (menuVoteRedirectRow) resultComponents.unshift(menuVoteRedirectRow);
+
     return {
         embeds: proxy.vote ? [buildVoteRouletteEmbed(proxy.vote)] : [embed],
-        components: [buildRowResultatRoulette(authorId, outcomeId, failIndex)],
+        components: resultComponents,
         vote: proxy.vote ?? null,
         pingCible: pingRedirection ? { id: pingRedirection.id, texte: `🔔 <@${pingRedirection.id}>, **${auteurNom}** t'a redirigé le malus **${ROULETTE_NOMS[outcomeId]}** !` } : null,
         differe: differe ? async () => {
             await differe.action();
-            return buildRouletteResultEmbed(outcomeId, prefixeRedirect + differe.texteFinal, authorId, auteurNom);
+            return buildRouletteResultEmbed(outcomeId, prefixeRedirect + differe.texteFinal + extraVoteTexte, authorId, auteurNom);
         } : null
     };
 }
@@ -2925,12 +2934,123 @@ async function handleRouletteSlash(interaction, client) {
     return false;
 }
 
-async function handleRouletteButton(interaction, client) {
-    if (interaction.customId && interaction.customId.startsWith('rltpts:')) {
-        return await handleRouletteStatsInteraction(interaction);
+function annulerMalusSurMembre(userId, outcomeId, member) {
+    if (outcomeId.startsWith('malus-timeout-')) {
+        rouletteTimeoutUntil.delete(userId);
+        member?.timeout(null).catch(() => {});
+    } else if (outcomeId === 'malus-cooldown-45') {
+        rouletteCooldown45Charges.delete(userId);
+    } else if (outcomeId === 'malus-echo') {
+        rouletteEchoUntil.delete(userId);
+    } else if (outcomeId === 'malus-uwu-24h') {
+        rouletteUwuUntil.delete(userId);
+    } else if (outcomeId === 'malus-lettre-interdite') {
+        rouletteLettreInterdite.delete(userId);
+    } else if (outcomeId === 'malus-emoji') {
+        rouletteEmojiUntil.delete(userId);
+    } else if (outcomeId === 'malus-leet') {
+        rouletteLeetUntil.delete(userId);
+    } else {
+        const transfoMap = {
+            'malus-caps': 'caps',
+            'malus-mots-melanges': 'mots',
+            'malus-lettres-melangees': 'lettres',
+            'malus-censure': 'censure',
+            'malus-boomer': 'boomer',
+            'malus-bebe': 'bebe',
+            'malus-emoji-only': 'emojiOnly',
+            'malus-limite-100': 'limite100',
+            'malus-limite-30': 'limite30',
+            'malus-existentiel': 'existentiel',
+            'malus-linkedin': 'linkedin'
+        };
+        const cleTf = transfoMap[outcomeId];
+        if (cleTf) {
+            const t = rouletteTransfos.get(userId);
+            if (t && t[cleTf]) {
+                delete t[cleTf];
+                if (Object.keys(t).length === 0) rouletteTransfos.delete(userId);
+                else rouletteTransfos.set(userId, t);
+            }
+        }
     }
+}
 
+async function handleRouletteButton(interaction, client) {
     const customId = interaction.customId;
+
+    if (customId.startsWith('rlt_vote_redirect_')) {
+        const parts = customId.split('_');
+        const targetUserId = parts[3];
+        const outcomeId = parts.slice(4).join('_');
+
+        if (interaction.user.id !== targetUserId) {
+            return interaction.reply({ content: "Ce n'est pas ton privilège de vote à utiliser 😌", ephemeral: true });
+        }
+
+        const charges = rouletteVoteRedirectCharges.get(targetUserId) || 0;
+        if (charges <= 0) {
+            return interaction.reply({ content: "Tu n'as plus de charges de redirection de vote disponibles !", ephemeral: true });
+        }
+
+        const selectedId = interaction.values[0];
+        if (selectedId === targetUserId) {
+            return interaction.reply({ content: "❌ Tu ne peux pas te renvoyer le malus à toi-même !", ephemeral: true });
+        }
+
+        const cible = interaction.guild?.members.cache.get(selectedId);
+        if (!cible) {
+            return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
+        }
+        if (cible.user?.bot) {
+            return interaction.reply({ content: "❌ Les bots sont insensibles aux malus de la roulette !", ephemeral: true });
+        }
+        if (ROULETTE_ROLE_JOUEUR_ID && !cible.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID)) {
+            return interaction.reply({ content: `❌ **${cible.displayName}** ne participe pas à la roulette (rôle manquant) !`, ephemeral: true });
+        }
+
+        // Décrémente la charge
+        const restantes = charges - 1;
+        if (restantes <= 0) rouletteVoteRedirectCharges.delete(targetUserId);
+        else rouletteVoteRedirectCharges.set(targetUserId, restantes);
+
+        // Succès sniper
+        deverrouillerSucces(targetUserId, 'sniper-impitoyable', interaction.channel);
+
+        // Annule le malus sur l'auteur
+        annulerMalusSurMembre(targetUserId, outcomeId, interaction.member);
+
+        // Applique le malus sur la cible
+        const proxy = { member: cible, channel: interaction.channel, guild: interaction.guild };
+        const texteCible = await appliquerEtDecrireResultat(outcomeId, proxy, cible.displayName, 0);
+
+        // Désactive le menu déroulant sur le message d'origine
+        const rowDesactive = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('rlt_vote_redir_done')
+                .setLabel(`🎯 Redirigé vers ${cible.displayName} !`)
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(true)
+        );
+        if (interaction.message?.editable) {
+            const rowsMaj = interaction.message.components.map(r => {
+                if (r.components.some(c => c.customId?.startsWith('rlt_vote_redirect_'))) {
+                    return rowDesactive;
+                }
+                return r;
+            });
+            await interaction.message.edit({ components: rowsMaj }).catch(() => {});
+        }
+
+        bridge.demanderSauvegarde();
+
+        const resteMsg = restantes > 0 ? ` (${restantes} charge${restantes > 1 ? 's' : ''} restante${restantes > 1 ? 's' : ''})` : ' *(c\'était ta dernière charge !)*';
+        await interaction.reply({
+            content: `🎯 **${interaction.member.displayName}** utilise son privilège de vote populaire et renvoie le malus **${ROULETTE_NOMS[outcomeId] || outcomeId}** sur <@${cible.id}> !${resteMsg}\n> ${texteCible}`,
+            ephemeral: false
+        });
+        return true;
+    }
 
     if (customId.startsWith('rlt_claim_menu_')) {
         const targetUserId = customId.split('_')[3];
@@ -2997,6 +3117,48 @@ async function handleRouletteButton(interaction, client) {
             const tot = (rouletteRedirectCharges.get(targetUserId) || 0) + 5;
             rouletteRedirectCharges.set(targetUserId, tot);
             messageConfirmation = `🎯 **5 REDIRECTIONS ACTIVÉES !** Tu as 5 redirections en réserve (${tot} au total) !`;
+        } else if (itemChoisi === 'pseudoChoix') {
+            messageConfirmation = `✍️ **PSEUDO AU CHOIX ACTIVÉ !** Mentionne dans ce salon le membre et son nouveau pseudo dans les **5 minutes** (ex: @Membre NouveauPseudo).`;
+            const collector = interaction.channel.createMessageCollector({
+                filter: m => m.author.id === targetUserId && m.mentions.members.first(),
+                time: 5 * 60 * 1000, max: 1
+            });
+            collector.on('collect', async (m) => {
+                const cibleChoisie = m.mentions.members.first();
+                const nouveauPseudo = m.content.replace(/<@!?\d+>/g, '').trim().slice(0, 32);
+                if (!cibleChoisie || !nouveauPseudo) return m.reply(`❌ Format invalide.`);
+                roulettePseudoLock.set(cibleChoisie.id, { until: Date.now() + 48 * 60 * 60 * 1000, pseudo: nouveauPseudo });
+                await cibleChoisie.setNickname(nouveauPseudo).catch(() => {});
+                deverrouillerSucces(targetUserId, 'baptiseur', interaction.channel);
+                bridge.demanderSauvegarde();
+                m.reply(`✅ **${cibleChoisie.displayName}** se retrouve avec le pseudo **${nouveauPseudo}**, verrouillé pendant **48h** !`);
+            });
+        } else if (itemChoisi === 'epingleSalon') {
+            messageConfirmation = `📌 **MESSAGE ÉPINGLÉ ACTIVÉ !** Envoie dans ce salon le message que tu souhaites épingler définitivement (tu as **5 minutes**) !`;
+            const collector = interaction.channel.createMessageCollector({
+                filter: m => m.author.id === targetUserId,
+                time: 5 * 60 * 1000, max: 1
+            });
+            collector.on('collect', async (m) => {
+                await m.pin().catch(() => {});
+                deverrouillerSucces(targetUserId, 'epingle', interaction.channel);
+                m.reply(`✅ Ton message a été épinglé définitivement dans ce salon !`);
+            });
+        } else if (itemChoisi === 'redirectChoix') {
+            messageConfirmation = `🎯 **REDIRECTION AU CHOIX ACTIVÉE !** Mentionne dans ce salon la personne qui prendra ton prochain malus à ta place (tu as **5 minutes**).`;
+            const collector = interaction.channel.createMessageCollector({
+                filter: m => m.author.id === targetUserId && m.mentions.members.first(),
+                time: 5 * 60 * 1000, max: 1
+            });
+            collector.on('collect', (m) => {
+                const cibleChoisie = m.mentions.members.first();
+                if (ROULETTE_ROLE_JOUEUR_ID && !cibleChoisie.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID)) {
+                    return m.reply(`❌ **${cibleChoisie.displayName}** n'a pas le rôle de la roulette ! Choisis quelqu'un qui participe à la roulette.`);
+                }
+                rouletteRedirectChoixCible.set(targetUserId, cibleChoisie.id);
+                bridge.demanderSauvegarde();
+                m.reply(`✅ C'est enregistré ! Le prochain malus de **${interaction.member.displayName}** sera automatiquement envoyé à **${cibleChoisie.displayName}** !`);
+            });
         } else {
             messageConfirmation = `✅ **Objet activé !** Ton objet a été appliqué avec succès.`;
         }
@@ -3233,6 +3395,12 @@ async function handleRouletteButton(interaction, client) {
         }
         return true;
     }
+
+    if (interaction.customId && interaction.customId.startsWith('rltpts:')) {
+        return await handleRouletteStatsInteraction(interaction);
+    }
+
+    const customId = interaction.customId;
 
     if (customId.startsWith('roulette_probas_res_')) {
         const [, , , authorId, outcomeId, failIndex] = customId.split('_');
