@@ -972,16 +972,13 @@ function reclamerRecompensesEtXP(membre) {
 }
 
 function attribuerRecompenseInventaire(userId, itemKey) {
-    if (itemKey === 'redirectChoix') {
-        const total = (bpBridge.rouletteRedirectCharges.get(userId) || 0) + 1;
-        bpBridge.rouletteRedirectCharges.set(userId, total);
-    } else if (itemKey === 'palierUltime') {
+    if (itemKey === 'palierUltime') {
         bpBridge.crediterInventaireRoulette(userId, 'freeRoll1Min', 1);
         bpBridge.crediterInventaireRoulette(userId, 'epingleSalon', 1);
         const total = (bpBridge.rouletteRedirectCharges.get(userId) || 0) + 3;
         bpBridge.rouletteRedirectCharges.set(userId, total);
     } else {
-        // Tous les autres items (tickets, boucliers, trèfles, éponges...) vont dans !rlt claim !
+        // Tous les objets (tickets, boucliers, trèfles, éponges, redirectChoix, pseudoLockSemaine...) vont directement dans !rlt claim !
         bpBridge.crediterInventaireRoulette(userId, itemKey, 1);
     }
 }

@@ -1170,6 +1170,11 @@ function buildInventaireEmbed(membre) {
             label: '📌 Message épinglé',
             emoji: '📌',
             desc: 'Épingle définitivement un de tes messages dans le salon'
+        },
+        palierUltime: {
+            label: '🏆 Pack Palier Ultime',
+            emoji: '🏆',
+            desc: 'Déballe : 1 Tirage à volonté (1min) + 1 Épingle + 3 Redirections'
         }
     };
 
@@ -1240,8 +1245,16 @@ async function demarrerVoteRoulette(msg, membre) {
             const idsOui = [...usersOui.values()].filter(u => !u.bot && u.id !== membre.id).map(u => u.id);
             const idsNon = [...usersNon.values()].filter(u => !u.bot && u.id !== membre.id).map(u => u.id);
             const doubles = new Set(idsOui.filter(id => idsNon.includes(id)));
-            const oui = idsOui.filter(id => !doubles.has(id)).length;
-            const non = idsNon.filter(id => !doubles.has(id)).length;
+            const votantsValidesOui = idsOui.filter(id => !doubles.has(id));
+            const votantsValidesNon = idsNon.filter(id => !doubles.has(id));
+            const tousLesVotants = [...new Set([...votantsValidesOui, ...votantsValidesNon])];
+            const oui = votantsValidesOui.length;
+            const non = votantsValidesNon.length;
+
+            // Progression Battle Pass pour tous les votants valides
+            for (const vId of tousLesVotants) {
+                bridge.trackBattlePassProgress?.(vId, 'vote_public_part', 1);
+            }
 
             // Envoi garanti UNIQUEMENT dans le salon de la roulette
             const salonRoulette = msg.guild?.channels.cache.get(ROULETTE_SALON_ID) || targetMsg.channel;
@@ -1911,6 +1924,8 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
 
     // Comptabilisation des malus RÉELLEMENT subis (uniquement pour la cible qui le prend)
     if (outcomeId.startsWith('malus-')) {
+        bridge.trackBattlePassProgress?.(cible.id, 'malus_subis', 1);
+        bridge.trackBattlePassProgress?.(cible.id, 'malus_diff', 1);
         const cons = (rouletteMalusConsecutifs.get(cible.id) || 0) + 1;
         rouletteMalusConsecutifs.set(cible.id, cons);
         if (cons >= 3) deverrouillerSucces(cible.id, 'enchainement-fatal', channel);
@@ -3133,6 +3148,29 @@ async function handleRouletteButton(interaction, client) {
                 bridge.demanderSauvegarde();
                 m.reply(`✅ **${cibleChoisie.displayName}** se retrouve avec le pseudo **${nouveauPseudo}**, verrouillé pendant **48h** !`);
             });
+        } else if (itemChoisi === 'pseudoLockSemaine') {
+            messageConfirmation = `✍️ **GRAVÉ DANS LA ROCHE ACTIVÉ !** Mentionne dans ce salon le membre et son nouveau pseudo dans les **5 minutes** (ex: @Membre NouveauPseudo).\nCe pseudo sera **verrouillé pendant 1 semaine entière (7 jours)** ! 🗿`;
+            const collector = interaction.channel.createMessageCollector({
+                filter: m => m.author.id === targetUserId && m.mentions.members.first(),
+                time: 5 * 60 * 1000, max: 1
+            });
+            collector.on('collect', async (m) => {
+                const cibleChoisie = m.mentions.members.first();
+                const nouveauPseudo = m.content.replace(/<@!?\d+>/g, '').trim().slice(0, 32);
+                if (!cibleChoisie || !nouveauPseudo) return m.reply(`❌ Format invalide. Utilise : \`@Membre NouveauPseudo\`.`);
+                if (cibleChoisie.user.bot) return m.reply(`❌ Tu ne peux pas renommer un bot !`);
+                roulettePseudoLock.set(cibleChoisie.id, { until: Date.now() + 7 * 24 * 60 * 60 * 1000, pseudo: nouveauPseudo });
+                await cibleChoisie.setNickname(nouveauPseudo).catch(() => {});
+                deverrouillerSucces(targetUserId, 'baptiseur', interaction.channel);
+                bridge.demanderSauvegarde();
+                m.reply(`🗿 **GRAVÉ DANS LA ROCHE !** **${cibleChoisie.displayName}** se retrouve avec le pseudo **${nouveauPseudo}**, verrouillé pendant **7 jours** !`);
+            });
+            collector.on('end', (collected, reason) => {
+                if (collected.size === 0) {
+                    crediterInventaireRoulette(targetUserId, 'pseudoLockSemaine', 1);
+                    interaction.followUp({ content: `⏳ Temps écoulé ! Ton bonus **Gravé dans la roche** a été replacé dans ton inventaire (\`!rlt claim\`).`, ephemeral: true }).catch(() => {});
+                }
+            });
         } else if (itemChoisi === 'epingleSalon') {
             messageConfirmation = `📌 **MESSAGE ÉPINGLÉ ACTIVÉ !** Envoie dans ce salon le message que tu souhaites épingler définitivement (tu as **5 minutes**) !`;
             const collector = interaction.channel.createMessageCollector({
@@ -3143,6 +3181,12 @@ async function handleRouletteButton(interaction, client) {
                 await m.pin().catch(() => {});
                 deverrouillerSucces(targetUserId, 'epingle', interaction.channel);
                 m.reply(`✅ Ton message a été épinglé définitivement dans ce salon !`);
+            });
+            collector.on('end', (collected, reason) => {
+                if (collected.size === 0) {
+                    crediterInventaireRoulette(targetUserId, 'epingleSalon', 1);
+                    interaction.followUp({ content: `⏳ Temps écoulé ! Ton bonus **Message épinglé** a été replacé dans ton inventaire (\`!rlt claim\`).`, ephemeral: true }).catch(() => {});
+                }
             });
         } else if (itemChoisi === 'redirectChoix') {
             messageConfirmation = `🎯 **REDIRECTION AU CHOIX ACTIVÉE !** Mentionne dans ce salon la personne qui prendra ton prochain malus à ta place (tu as **5 minutes**).`;
@@ -3159,6 +3203,18 @@ async function handleRouletteButton(interaction, client) {
                 bridge.demanderSauvegarde();
                 m.reply(`✅ C'est enregistré ! Le prochain malus de **${interaction.member.displayName}** sera automatiquement envoyé à **${cibleChoisie.displayName}** !`);
             });
+            collector.on('end', (collected, reason) => {
+                if (collected.size === 0) {
+                    crediterInventaireRoulette(targetUserId, 'redirectChoix', 1);
+                    interaction.followUp({ content: `⏳ Temps écoulé ! Ta **Redirection de malus** a été replacée dans ton inventaire (\`!rlt claim\`).`, ephemeral: true }).catch(() => {});
+                }
+            });
+        } else if (itemChoisi === 'palierUltime') {
+            crediterInventaireRoulette(targetUserId, 'freeRoll1Min', 1);
+            crediterInventaireRoulette(targetUserId, 'epingleSalon', 1);
+            const tot = (rouletteRedirectCharges.get(targetUserId) || 0) + 3;
+            rouletteRedirectCharges.set(targetUserId, tot);
+            messageConfirmation = `🏆 **PACK PALIER ULTIME DÉBALLÉ !** Tu as reçu dans ton inventaire :\n- 🎰 **1 Tirage à volonté (1 min)**\n- 📌 **1 Message épinglé**\n- 🎯 **+3 Redirections de malus au choix** (total : ${tot}) !`;
         } else {
             messageConfirmation = `✅ **Objet activé !** Ton objet a été appliqué avec succès.`;
         }
@@ -3400,8 +3456,6 @@ async function handleRouletteButton(interaction, client) {
         return await handleRouletteStatsInteraction(interaction);
     }
 
-    const customId = interaction.customId;
-
     if (customId.startsWith('roulette_probas_res_')) {
         const [, , , authorId, outcomeId, failIndex] = customId.split('_');
         if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
@@ -3502,6 +3556,8 @@ async function handleRouletteTransfoMessage(message, client) {
         }
     }
     if (!modifie) return;
+
+    bridge.trackBattlePassProgress?.(id, 'malus_msg', 1);
 
     const salonWebhook = message.channel.isThread() ? message.channel.parent : message.channel;
     const webhook = await assurerWebhookRoulette(salonWebhook);
