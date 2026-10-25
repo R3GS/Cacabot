@@ -362,6 +362,22 @@ function estHappyHour() {
 }
 
 function verifierHappyHour(client) {
+    if (!client) return;
+
+    // Rétablissement automatique des pseudos quand le malus expire
+    const nowTs = Date.now();
+    for (const [userId, lock] of roulettePseudoLock.entries()) {
+        if (nowTs >= lock.until) {
+            roulettePseudoLock.delete(userId);
+            bridge.demanderSauvegarde();
+            const guild = client.guilds.cache.first();
+            const membre = guild?.members.cache.get(userId);
+            if (membre && membre.nickname === lock.pseudo) {
+                membre.setNickname(lock.originalNickname ?? null).catch(() => {});
+            }
+        }
+    }
+
     const now = new Date();
     const paris = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
     const h = paris.getHours();
@@ -900,13 +916,17 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             return `👑 **${auteurNom}** est officiellement respecté·e par Cacabot pendant **12h** !`;
         case 'malus-pseudo-lock-semaine': {
             const pseudo = ROULETTE_NOMS_PSEUDO_LOCK[Math.floor(Math.random() * ROULETTE_NOMS_PSEUDO_LOCK.length)];
-            roulettePseudoLock.set(member.id, { until: Date.now() + 7 * 24 * 60 * 60 * 1000, pseudo });
+            const lockExistant = roulettePseudoLock.get(member.id);
+            const originalNickname = lockExistant?.originalNickname !== undefined ? lockExistant.originalNickname : (member.nickname ?? null);
+            roulettePseudoLock.set(member.id, { until: Date.now() + 7 * 24 * 60 * 60 * 1000, pseudo, originalNickname });
             await member.setNickname(pseudo).catch(() => {});
             return `**${auteurNom}** se retrouve avec le pseudo **${pseudo}**, verrouillé pendant **1 semaine** !`;
         }
         case 'malus-pseudo-lock-mois': {
             const pseudo = ROULETTE_NOMS_PSEUDO_LOCK[Math.floor(Math.random() * ROULETTE_NOMS_PSEUDO_LOCK.length)];
-            roulettePseudoLock.set(member.id, { until: Date.now() + 30 * 24 * 60 * 60 * 1000, pseudo });
+            const lockExistant = roulettePseudoLock.get(member.id);
+            const originalNickname = lockExistant?.originalNickname !== undefined ? lockExistant.originalNickname : (member.nickname ?? null);
+            roulettePseudoLock.set(member.id, { until: Date.now() + 30 * 24 * 60 * 60 * 1000, pseudo, originalNickname });
             await member.setNickname(pseudo).catch(() => {});
             return `**${auteurNom}** se retrouve avec le pseudo **${pseudo}**, verrouillé pendant **1 mois** !`;
         }
@@ -1060,7 +1080,9 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
 
             // Verrouillage d'un pseudo horrible pendant 24h
             const pseudo = ROULETTE_NOMS_PSEUDO_LOCK[Math.floor(Math.random() * ROULETTE_NOMS_PSEUDO_LOCK.length)];
-            roulettePseudoLock.set(member.id, { until: Date.now() + 24 * 60 * 60 * 1000, pseudo });
+            const lockExistant = roulettePseudoLock.get(member.id);
+            const originalNickname = lockExistant?.originalNickname !== undefined ? lockExistant.originalNickname : (member.nickname ?? null);
+            roulettePseudoLock.set(member.id, { until: Date.now() + 24 * 60 * 60 * 1000, pseudo, originalNickname });
             await member.setNickname(pseudo).catch(() => {});
 
             return `☠️☠️☠️ **${auteurNom}** subit le **MALUS PRIME** : TOUS les malus de texte et un pseudo horrible verrouillés en même temps !`;
@@ -2638,8 +2660,9 @@ async function handleRouletteMessage(message, response, client, helpers) {
 
             // 2. Pseudo lock & Timeout
             if (nom === 'pseudo-lock' || nom === 'pseudo' || nom === 'pseudolock') {
+                const lock = roulettePseudoLock.get(id);
                 roulettePseudoLock.delete(id);
-                await cible.setNickname(null).catch(() => {});
+                await cible.setNickname(lock?.originalNickname ?? null).catch(() => {});
                 retire = true;
             } else if (nom === 'timeout' || nom === 'mute') {
                 rouletteTimeoutUntil.delete(id);
@@ -3142,7 +3165,9 @@ async function handleRouletteButton(interaction, client) {
                 const cibleChoisie = m.mentions.members.first();
                 const nouveauPseudo = m.content.replace(/<@!?\d+>/g, '').trim().slice(0, 32);
                 if (!cibleChoisie || !nouveauPseudo) return m.reply(`❌ Format invalide.`);
-                roulettePseudoLock.set(cibleChoisie.id, { until: Date.now() + 48 * 60 * 60 * 1000, pseudo: nouveauPseudo });
+                const lockExistant = roulettePseudoLock.get(cibleChoisie.id);
+                const originalNickname = lockExistant?.originalNickname !== undefined ? lockExistant.originalNickname : (cibleChoisie.nickname ?? null);
+                roulettePseudoLock.set(cibleChoisie.id, { until: Date.now() + 48 * 60 * 60 * 1000, pseudo: nouveauPseudo, originalNickname });
                 await cibleChoisie.setNickname(nouveauPseudo).catch(() => {});
                 deverrouillerSucces(targetUserId, 'baptiseur', interaction.channel);
                 bridge.demanderSauvegarde();
@@ -3584,6 +3609,10 @@ async function handleRoulettePseudoLock(oldMember, newMember) {
     if (!lock) return;
     if (Date.now() >= lock.until) {
         roulettePseudoLock.delete(newMember.id);
+        bridge.demanderSauvegarde();
+        if (newMember.nickname === lock.pseudo) {
+            await newMember.setNickname(lock.originalNickname ?? null).catch(() => {});
+        }
         return;
     }
     if (newMember.nickname !== lock.pseudo) {
