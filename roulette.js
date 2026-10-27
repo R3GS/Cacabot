@@ -141,7 +141,7 @@ const ROULETTE_NOMS_COMMANDES = {
     linkedin: 'malus-linkedin', echo: 'malus-echo',
     vote: 'special-vote-immunite-exclusion',
     votepublic: 'bonus-vote-gagnant', votegagnant: 'bonus-vote-gagnant',
-    redirectbonushasard: 'bonus-redirect-bonus-hasard', redirectbonuschoix: 'bonus-redirect-bonus-choix',
+    redirectbonushasard: 'malus-redirect-bonus-hasard', redirectbonuschoix: 'bonus-redirect-bonus-choix',
     zeroconsonne: 'malus-sans-consonne', sansconsonne: 'malus-sans-consonne',
     zerovoyelle: 'malus-sans-voyelle', sansvoyelle: 'malus-sans-voyelle',
     doubletemps: 'malus-double-temps-24h', malusx2: 'malus-double-temps-24h'
@@ -156,7 +156,6 @@ const ROULETTE_TABLE = [
     { id: 'bonus-coup-triple', type: 'bonus', poids: 1/20, nom: 'Coup Triple', desc: 'Tes 3 prochains tirages sont immédiats et sans aucun cooldown' },
     { id: 'bonus-super-bouclier', type: 'bonus', poids: 1/35, nom: 'Super Bouclier (3 malus)', desc: 'Immunité totale contre tes 3 prochains malus (cumulable)' },
     { id: 'bonus-couronne', type: 'bonus', poids: 1/50, nom: 'Couronne 👑 pendant 12h', desc: 'Une couronne 👑 sous tes messages pendant 12h' },
-    { id: 'bonus-redirect-bonus-hasard', type: 'bonus', poids: 1/50, nom: 'Prochain bonus redirigé au hasard', desc: 'Ton prochain bonus sera offert à un.e autre membre au hasard' },
     { id: 'bonus-redirect-malus', type: 'bonus', poids: 1/85, nom: '3 malus redirigés au hasard', desc: '3 prochains malus redirigés vers un.e autre membre' },
     { id: 'bonus-redirect-choix', type: 'bonus', poids: 1/100, nom: 'Malus redirigé au choix', desc: 'Redirige ton prochain malus vers la personne de ton choix' },
     { id: 'bonus-redirect-bonus-choix', type: 'bonus', poids: 1/100, nom: 'Bonus redirigé au choix', desc: 'Choisis le membre qui recevra ton prochain bonus à ta place' },
@@ -176,16 +175,18 @@ const ROULETTE_TABLE = [
     { id: 'malus-timeout-5min', type: 'malus', poids: 1/15, nom: 'Mute de 5 minutes', desc: 'Mute de 5 minutes' },
     { id: 'malus-cooldown-45', type: 'malus', poids: 1/20, nom: 'Cooldown de 45 min', desc: 'Les 2 prochains tirages ont un cooldown de 45 minutes' },
     { id: 'malus-timeout-20min', type: 'malus', poids: 1/25, nom: 'Mute de 20 minutes', desc: 'Mute de 20 minutes' },
-    { id: 'malus-emoji-only', type: 'malus', poids: 1/35, nom: 'Emoji only pendant 1h', desc: 'Tous ses mots sont remplacés par des emojis pendant 1h' },
-    { id: 'malus-bebe', type: 'malus', poids: 1/45, nom: 'Parler bébé pendant 2h', desc: 'Les « j » deviennent « z » et « r » deviennent « w » pendant 2h' },
-    { id: 'malus-emoji', type: 'malus', poids: 1/55, nom: 'Emoji obligatoire', desc: 'Doit finir chaque message par un emoji aléatoire pendant 6h' },
-    { id: 'malus-chat-noir', type: 'malus', poids: 1/65, nom: 'Malédiction du Chat Noir', desc: 'Réinitialise ta pity et ton boost de bonus à zéro' },
-    { id: 'malus-caps', type: 'malus', poids: 1/70, nom: 'MAJUSCULES pendant 2h', desc: 'Doit parler en MAJUSCULES pendant 2h' },
-    { id: 'malus-boomer', type: 'malus', poids: 1/75, nom: 'Mode Boomer pendant 2h', desc: 'Parle comme un boomer sur Facebook pendant 2h' },
     { id: 'malus-brise-bouclier', type: 'malus', poids: 1/30, nom: 'Brise-Bouclier', desc: 'Détruit instantanément toutes tes charges de bouclier' },
+    { id: 'malus-bebe', type: 'malus', poids: 1/40, nom: 'Parler bébé pendant 2h', desc: 'Les « j » deviennent « z » et « r » deviennent « w » pendant 2h' },
     { id: 'malus-echo', type: 'malus', poids: 1/40, nom: 'Écho condescendant pendant 3h', desc: 'Cacabot te lâche des remarques cassantes sous tes messages pendant 3h' },
-    { id: 'malus-existentiel', type: 'malus', poids: 1/60, nom: 'Crise existentielle pendant 3h', desc: 'Finit chaque phrase par une conclusion sombre pendant 3h' },
-    { id: 'malus-linkedin', type: 'malus', poids: 1/65, nom: 'Gourou LinkedIn pendant 3h', desc: 'Finit chaque phrase par un cliché de gourou corporate pendant 3h' },
+    { id: 'malus-boomer', type: 'malus', poids: 1/45, nom: 'Mode Boomer pendant 2h', desc: 'Parle comme un boomer sur Facebook pendant 2h' },
+    { id: 'malus-emoji', type: 'malus', poids: 1/45, nom: 'Emoji obligatoire', desc: 'Doit finir chaque message par un emoji aléatoire pendant 6h' },
+    { id: 'malus-redirect-bonus-hasard', type: 'malus', poids: 1/50, nom: 'Prochain bonus redirigé au hasard', desc: 'Ton prochain bonus sera offert à un.e autre membre au hasard' },
+    { id: 'malus-existentiel', type: 'malus', poids: 1/50, nom: 'Crise existentielle pendant 3h', desc: 'Finit chaque phrase par une conclusion sombre pendant 3h' },
+    { id: 'malus-linkedin', type: 'malus', poids: 1/50, nom: 'Gourou LinkedIn pendant 3h', desc: 'Finit chaque phrase par un cliché de gourou corporate pendant 3h' },
+    { id: 'malus-caps', type: 'malus', poids: 1/60, nom: 'MAJUSCULES pendant 2h', desc: 'Doit parler en MAJUSCULES pendant 2h' },
+    { id: 'malus-chat-noir', type: 'malus', poids: 1/65, nom: 'Malédiction du Chat Noir', desc: 'Réinitialise ta pity et ton boost de bonus à zéro' },
+    { id: 'malus-emoji-only', type: 'malus', poids: 1/70, nom: 'Emoji only pendant 1h', desc: 'Tous ses mots sont remplacés par des emojis pendant 1h' },
+    { id: 'malus-uwu-24h', type: 'malus', poids: 1/80, nom: 'UwU obligatoire pendant 6h', desc: 'Doit finir chaque message par UwU pendant 6h' },
     { id: 'malus-censure', type: 'malus', poids: 1/85, nom: 'Censure pendant 2h', desc: 'Un mot sur 3 est censuré (▇▇) pendant 2h' },
     { id: 'malus-exclu-heure', type: 'malus', poids: 1/100, nom: 'Exclusion de 1 heure', desc: 'Exclusion de 1 heure' },
     { id: 'malus-mots-melanges', type: 'malus', poids: 1/120, nom: 'Mots mélangés pendant 2h', desc: 'Les mots de chaque message sont mélangés pendant 2h' },
@@ -198,7 +199,6 @@ const ROULETTE_TABLE = [
     { id: 'malus-leet', type: 'malus', poids: 1/330, nom: 'Leet speak pendant 6h', desc: 'Tous ses messages sont écrits en leet speak pendant 6h' },
     { id: 'malus-double-temps-24h', type: 'malus', poids: 1/350, nom: 'Malus x2 pendant 24h', desc: 'La durée de tous ses prochains malus pendant 24h est multipliée par 2' },
     { id: 'malus-lettre-interdite', type: 'malus', poids: 1/400, nom: 'Lettre interdite pendant 6h', desc: 'Ne peut plus utiliser une lettre au hasard pendant 6h' },
-    { id: 'malus-uwu-6h', type: 'malus', poids: 1/480, nom: 'UwU obligatoire pendant 6h', desc: 'Doit finir chaque message par UwU pendant 6h' },
     { id: 'malus-prime', type: 'malus', poids: 1/800, nom: 'MALUS PRIME', desc: 'Cumule TOUS les malus de texte/pseudo en même temps' },
     { id: 'malus-pseudo-lock-mois', type: 'malus', poids: 1/900, nom: 'Pseudo horrible verrouillé pendant 1 mois', desc: 'Pseudo horrible verrouillé pendant 1 mois' },
     { id: 'malus-exclu-jour', type: 'malus', poids: 1/1000, nom: 'Exclusion de 1 jour', desc: 'Exclusion de 1 jour' },
@@ -229,7 +229,7 @@ const ROULETTE_EMOJIS_PAR_ID = {
     'malus-chat-noir': '🐈‍⬛', 'malus-boomer': '🧓',
     'malus-brise-bouclier': '🪓', 'malus-echo': '🪞',
     'malus-existentiel': '🥀', 'malus-linkedin': '👔',
-    'bonus-redirect-bonus-hasard': '🎁', 'bonus-redirect-bonus-choix': '🎀',
+    'malus-redirect-bonus-hasard': '🎁', 'bonus-redirect-bonus-hasard': '🎁', 'bonus-redirect-bonus-choix': '🎀',
     'malus-sans-consonne': '🅾️', 'malus-sans-voyelle': '🚫',
     'malus-double-temps-24h': '⏳'
 };
@@ -759,10 +759,11 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
     const multTemps = getMultiplicateurMalusTemps(member.id);
 
     switch (outcomeId) {
+        case 'malus-redirect-bonus-hasard':
         case 'bonus-redirect-bonus-hasard': {
             const tot = (rouletteRedirectBonusCharges.get(member.id) || 0) + 1;
             rouletteRedirectBonusCharges.set(member.id, tot);
-            return `🎁 **${auteurNom}** a obtenu **Prochain bonus redirigé au hasard** ! Son prochain bonus sera offert à un.e autre membre ! (${tot} en réserve)`;
+            return `🎁 **${auteurNom}** subit le malus **Prochain bonus redirigé au hasard** ! Son prochain bonus sera offert à un.e autre membre ! (${tot} en réserve)`;
         }
         case 'bonus-redirect-bonus-choix':
             crediterInventaireRoulette(member.id, 'redirectBonusChoix', 1);
