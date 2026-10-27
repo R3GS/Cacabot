@@ -10,7 +10,7 @@ const {
     ButtonStyle
 } = require('discord.js');
 
-const SUGGESTION_CHANNEL_ID = '720079866199801937';
+const SUGGESTION_CHANNEL_IDS = ['720079866199801937', '1553957252925235311'];
 
 let suggestionBridge = {
     getSuggestionsData: () => new Map(),
@@ -115,8 +115,8 @@ async function handleSuggestionMessage(message, response) {
 
     if (!estCmd && !response?.needsSuggestion) return false;
 
-    if (message.channel.id !== SUGGESTION_CHANNEL_ID) {
-        await message.channel.send(`💡 <@${message.author.id}>, les suggestions se font uniquement dans le salon <#${SUGGESTION_CHANNEL_ID}> !`);
+    if (!SUGGESTION_CHANNEL_IDS.includes(message.channel.id)) {
+        await message.channel.send(`💡 <@${message.author.id}>, les suggestions se font uniquement dans <#720079866199801937> ou <#1553957252925235311> !`);
         return true;
     }
 
@@ -154,8 +154,8 @@ async function handleSuggestionSlash(interaction) {
     const cmd = interaction.commandName;
     if (cmd !== 'suggestion' && cmd !== 'sugg') return false;
 
-    if (interaction.channel.id !== SUGGESTION_CHANNEL_ID) {
-        await interaction.reply({ content: `💡 Les suggestions se font uniquement dans le salon <#${SUGGESTION_CHANNEL_ID}> !`, ephemeral: true });
+    if (!SUGGESTION_CHANNEL_IDS.includes(interaction.channel.id)) {
+        await interaction.reply({ content: `💡 Les suggestions se font uniquement dans <#720079866199801937> ou <#1553957252925235311> !`, ephemeral: true });
         return true;
     }
 
