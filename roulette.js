@@ -12,6 +12,7 @@ const ROULETTE_JACKPOT_MAX = 0.5;
 const ROULETTE_HOF_CHANNEL_ID = '1554331383361577010';
 const ROULETTE_HOS_CHANNEL_ID = '1563294813690929274';
 const ROULETTE_SALON_ID = '1553954760900608091';
+const ROULETTE_SALON_ADMIN_ID = '1480756332373213275';
 const ROULETTE_HOF_SEUIL = 0.0005;
 const ROULETTE_HOS_MALUS_IDS = new Set([
     'malus-prime',
@@ -139,7 +140,11 @@ const ROULETTE_NOMS_COMMANDES = {
     brisebouclier: 'malus-brise-bouclier', existentiel: 'malus-existentiel',
     linkedin: 'malus-linkedin', echo: 'malus-echo',
     vote: 'special-vote-immunite-exclusion',
-    votepublic: 'bonus-vote-gagnant', votegagnant: 'bonus-vote-gagnant'
+    votepublic: 'bonus-vote-gagnant', votegagnant: 'bonus-vote-gagnant',
+    redirectbonushasard: 'bonus-redirect-bonus-hasard', redirectbonuschoix: 'bonus-redirect-bonus-choix',
+    zeroconsonne: 'malus-sans-consonne', sansconsonne: 'malus-sans-consonne',
+    zerovoyelle: 'malus-sans-voyelle', sansvoyelle: 'malus-sans-voyelle',
+    doubletemps: 'malus-double-temps-24h', malusx2: 'malus-double-temps-24h'
 };
 
 const ROULETTE_TABLE = [
@@ -151,8 +156,10 @@ const ROULETTE_TABLE = [
     { id: 'bonus-coup-triple', type: 'bonus', poids: 1/20, nom: 'Coup Triple', desc: 'Tes 3 prochains tirages sont immédiats et sans aucun cooldown' },
     { id: 'bonus-super-bouclier', type: 'bonus', poids: 1/35, nom: 'Super Bouclier (3 malus)', desc: 'Immunité totale contre tes 3 prochains malus (cumulable)' },
     { id: 'bonus-couronne', type: 'bonus', poids: 1/50, nom: 'Couronne 👑 pendant 12h', desc: 'Une couronne 👑 sous tes messages pendant 12h' },
+    { id: 'bonus-redirect-bonus-hasard', type: 'bonus', poids: 1/50, nom: 'Prochain bonus redirigé au hasard', desc: 'Ton prochain bonus sera offert à un.e autre membre au hasard' },
     { id: 'bonus-redirect-malus', type: 'bonus', poids: 1/85, nom: '3 malus redirigés au hasard', desc: '3 prochains malus redirigés vers un.e autre membre' },
     { id: 'bonus-redirect-choix', type: 'bonus', poids: 1/100, nom: 'Malus redirigé au choix', desc: 'Redirige ton prochain malus vers la personne de ton choix' },
+    { id: 'bonus-redirect-bonus-choix', type: 'bonus', poids: 1/100, nom: 'Bonus redirigé au choix', desc: 'Choisis le membre qui recevra ton prochain bonus à ta place' },
     { id: 'bonus-epingle', type: 'bonus', poids: 1/150, nom: 'Message épinglé', desc: 'Un message épinglé définitivement dans le salon' },
     { id: 'bonus-role-superieur', type: 'bonus', poids: 1/170, nom: 'Rôle de Regaïen.ne niv. supérieur', desc: 'Rôle de Regaïen.ne supérieur' },
     { id: 'bonus-pseudo-choix', type: 'bonus', poids: 1/250, nom: 'Pseudo au choix', desc: 'Choisis le pseudo d\'un·e membre, verrouillé pendant 48h' },
@@ -184,9 +191,12 @@ const ROULETTE_TABLE = [
     { id: 'malus-mots-melanges', type: 'malus', poids: 1/120, nom: 'Mots mélangés pendant 2h', desc: 'Les mots de chaque message sont mélangés pendant 2h' },
     { id: 'malus-pseudo-lock-semaine', type: 'malus', poids: 1/150, nom: 'Pseudo horrible verrouillé pendant 1 semaine', desc: 'Pseudo horrible verrouillé pendant 1 semaine' },
     { id: 'malus-lettres-melangees', type: 'malus', poids: 1/180, nom: 'Lettres mélangées pendant 1h', desc: 'Les lettres de chaque mot sont mélangées pendant 1h' },
+    { id: 'malus-sans-consonne', type: 'malus', poids: 1/200, nom: '0 Consonne pendant 2h', desc: 'Toutes les consonnes disparaissent de ses messages pendant 2h' },
     { id: 'malus-limite-100', type: 'malus', poids: 1/220, nom: 'Limite de 100 caractères pendant 2h', desc: 'Messages coupés à 100 caractères maximum pendant 2h' },
+    { id: 'malus-sans-voyelle', type: 'malus', poids: 1/250, nom: '0 Voyelle pendant 3h', desc: 'Toutes les voyelles disparaissent de ses messages pendant 3h' },
     { id: 'malus-limite-30', type: 'malus', poids: 1/270, nom: 'Limite de 30 caractères pendant 1h', desc: 'Messages coupés à 30 caractères maximum pendant 1h' },
     { id: 'malus-leet', type: 'malus', poids: 1/330, nom: 'Leet speak pendant 6h', desc: 'Tous ses messages sont écrits en leet speak pendant 6h' },
+    { id: 'malus-double-temps-24h', type: 'malus', poids: 1/350, nom: 'Malus x2 pendant 24h', desc: 'La durée de tous ses prochains malus pendant 24h est multipliée par 2' },
     { id: 'malus-lettre-interdite', type: 'malus', poids: 1/400, nom: 'Lettre interdite pendant 6h', desc: 'Ne peut plus utiliser une lettre au hasard pendant 6h' },
     { id: 'malus-uwu-6h', type: 'malus', poids: 1/480, nom: 'UwU obligatoire pendant 6h', desc: 'Doit finir chaque message par UwU pendant 6h' },
     { id: 'malus-prime', type: 'malus', poids: 1/800, nom: 'MALUS PRIME', desc: 'Cumule TOUS les malus de texte/pseudo en même temps' },
@@ -218,7 +228,10 @@ const ROULETTE_EMOJIS_PAR_ID = {
     'special-tournee-generale': '🥂', 'malus-cooldown-45': '⏳', 'malus-prime': '💥', 'malus-bebe': '🍼',
     'malus-chat-noir': '🐈‍⬛', 'malus-boomer': '🧓',
     'malus-brise-bouclier': '🪓', 'malus-echo': '🪞',
-    'malus-existentiel': '🥀', 'malus-linkedin': '👔'
+    'malus-existentiel': '🥀', 'malus-linkedin': '👔',
+    'bonus-redirect-bonus-hasard': '🎁', 'bonus-redirect-bonus-choix': '🎀',
+    'malus-sans-consonne': '🅾️', 'malus-sans-voyelle': '🚫',
+    'malus-double-temps-24h': '⏳'
 };
 
 const ROULETTE_FAILS = [
@@ -300,6 +313,15 @@ const notifsEnvoyeesRecent = new Set();
 let dernierEnvoiHappyHour = null;
 const rouletteVoteRedirectCharges = new Map();
 const rouletteVoteVotants = new Map();
+const rouletteRedirectBonusCharges = new Map();
+const rouletteRedirectBonusChoixCible = new Map();
+const rouletteDoubleTempsUntil = new Map();
+
+function getMultiplicateurMalusTemps(userId) {
+    const fin = rouletteDoubleTempsUntil.get(userId);
+    if (fin && Date.now() < fin) return 2;
+    return 1;
+}
 
 const ROULETTE_ETATS = {
     cooldowns: rouletteCooldowns,
@@ -309,6 +331,9 @@ const ROULETTE_ETATS = {
     coupTriple: rouletteCoupTripleCharges,
     pseudoLock: roulettePseudoLock,
     redirectCharges: rouletteRedirectCharges,
+    redirectBonusCharges: rouletteRedirectBonusCharges,
+    redirectBonusChoixCible: rouletteRedirectBonusChoixCible,
+    doubleTemps: rouletteDoubleTempsUntil,
     voteRedirect: rouletteVoteRedirectCharges,
     voteVotants: rouletteVoteVotants,
     pity: roulettePity,
@@ -509,6 +534,8 @@ function appliquerTransfos(userId, texte) {
     if (t.censure) r = surTexte(r, m => m.replace(/\S+/g, mot => Math.random() < 1/3 ? '▇▇' : mot));
     if (t.emojiOnly) r = surTexte(r, m => m.replace(/\S+/g, () => ROULETTE_EMOJIS_ALEATOIRES[Math.floor(Math.random() * ROULETTE_EMOJIS_ALEATOIRES.length)]));
     if (t.bebe) r = surTexte(r, m => m.replace(/j/g, 'z').replace(/J/g, 'Z').replace(/r/g, 'w').replace(/R/g, 'W'));
+    if (t.sansConsonne) r = surTexte(r, m => m.replace(/[b-df-hj-np-tv-z]/gi, ''));
+    if (t.sansVoyelle) r = surTexte(r, m => m.replace(/[aeiouyàâäéèêëîïôöùûüÿ]/gi, ''));
     // Une phrase tous les 3 messages environ (1/3) pour Boomer, Existentiel et LinkedIn
     if (t.boomer && Math.random() < 0.33) r = surTexte(r, m => m.replace(/[\.!\?]+/g, '..... ') + ' ' + ROULETTE_BOOMER_FINS[Math.floor(Math.random() * ROULETTE_BOOMER_FINS.length)]);
     if (t.existentiel && Math.random() < 0.33) r = r + ROULETTE_EXISTENTIEL_FINS[Math.floor(Math.random() * ROULETTE_EXISTENTIEL_FINS.length)];
@@ -729,8 +756,38 @@ function malusDiffere(message, nom, titre, futur, passe, action) {
 async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failIndex) {
     const member = message.member;
     const estModoUser = bridge.estModo(member);
+    const multTemps = getMultiplicateurMalusTemps(member.id);
 
     switch (outcomeId) {
+        case 'bonus-redirect-bonus-hasard': {
+            const tot = (rouletteRedirectBonusCharges.get(member.id) || 0) + 1;
+            rouletteRedirectBonusCharges.set(member.id, tot);
+            return `🎁 **${auteurNom}** a obtenu **Prochain bonus redirigé au hasard** ! Son prochain bonus sera offert à un.e autre membre ! (${tot} en réserve)`;
+        }
+        case 'bonus-redirect-bonus-choix':
+            crediterInventaireRoulette(member.id, 'redirectBonusChoix', 1);
+            return `🎀 **${auteurNom}** a gagné une **Redirection de bonus au choix** !\n-# 🎒 *Stocké dans ton inventaire (\`!rlt claim\` pour choisir qui recevra ton prochain bonus).*`;
+        case 'malus-sans-consonne': {
+            const duree = 2 * 60 * 60 * 1000 * multTemps;
+            const h = 2 * multTemps;
+            if (basculerTransfo(member.id, 'sansConsonne', duree)) return `✨ **Miracle !** **${auteurNom}** retombe sur le malus **0 Consonne** : il est **annulé** !`;
+            return `🅾️ **${auteurNom}** n'a plus le droit d'utiliser de **consonnes** pendant **${h}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
+        }
+        case 'malus-sans-voyelle': {
+            const duree = 3 * 60 * 60 * 1000 * multTemps;
+            const h = 3 * multTemps;
+            if (basculerTransfo(member.id, 'sansVoyelle', duree)) return `✨ **Miracle !** **${auteurNom}** retombe sur le malus **0 Voyelle** : il est **annulé** !`;
+            return `🚫 **${auteurNom}** n'a plus le droit d'utiliser de **voyelles** pendant **${h}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
+        }
+        case 'malus-double-temps-24h': {
+            const finActuelle = rouletteDoubleTempsUntil.get(member.id);
+            if (finActuelle && Date.now() < finActuelle) {
+                rouletteDoubleTempsUntil.delete(member.id);
+                return `✨ **Miracle !** **${auteurNom}** retombe sur le malus **Malus x2** : il est **annulé** !`;
+            }
+            rouletteDoubleTempsUntil.set(member.id, Date.now() + 24 * 60 * 60 * 1000);
+            return `⏳ **${auteurNom}** subit le malus **Malus x2** : pendant **24h**, la durée de tous ses prochains malus textuels et pseudos sera **multipliée par 2** !`;
+        }
         case 'malus-timeout-3min':
             if (estImmuniseRoulette(member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 3 minutes !`;
             if (estModoUser) return `🛡️ **${auteurNom}** est Modo : le mute de 3 minutes est annulé !`;
@@ -918,17 +975,19 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             const pseudo = ROULETTE_NOMS_PSEUDO_LOCK[Math.floor(Math.random() * ROULETTE_NOMS_PSEUDO_LOCK.length)];
             const lockExistant = roulettePseudoLock.get(member.id);
             const originalNickname = lockExistant?.originalNickname !== undefined ? lockExistant.originalNickname : (member.nickname ?? null);
-            roulettePseudoLock.set(member.id, { until: Date.now() + 7 * 24 * 60 * 60 * 1000, pseudo, originalNickname });
+            const dureeJours = 7 * multTemps;
+            roulettePseudoLock.set(member.id, { until: Date.now() + dureeJours * 24 * 60 * 60 * 1000, pseudo, originalNickname });
             await member.setNickname(pseudo).catch(() => {});
-            return `**${auteurNom}** se retrouve avec le pseudo **${pseudo}**, verrouillé pendant **1 semaine** !`;
+            return `**${auteurNom}** se retrouve avec le pseudo **${pseudo}**, verrouillé pendant **${dureeJours} jours** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         }
         case 'malus-pseudo-lock-mois': {
             const pseudo = ROULETTE_NOMS_PSEUDO_LOCK[Math.floor(Math.random() * ROULETTE_NOMS_PSEUDO_LOCK.length)];
             const lockExistant = roulettePseudoLock.get(member.id);
             const originalNickname = lockExistant?.originalNickname !== undefined ? lockExistant.originalNickname : (member.nickname ?? null);
-            roulettePseudoLock.set(member.id, { until: Date.now() + 30 * 24 * 60 * 60 * 1000, pseudo, originalNickname });
+            const dureeJours = 30 * multTemps;
+            roulettePseudoLock.set(member.id, { until: Date.now() + dureeJours * 24 * 60 * 60 * 1000, pseudo, originalNickname });
             await member.setNickname(pseudo).catch(() => {});
-            return `**${auteurNom}** se retrouve avec le pseudo **${pseudo}**, verrouillé pendant **1 mois** !`;
+            return `**${auteurNom}** se retrouve avec le pseudo **${pseudo}**, verrouillé pendant **${dureeJours} jours** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         }
         case 'malus-uwu-24h': {
             const finUwu = rouletteUwuUntil.get(member.id);
@@ -936,8 +995,9 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 rouletteUwuUntil.delete(member.id);
                 return `✨ **Miracle !** **${auteurNom}** retombe sur le malus **UwU** alors qu'il était encore actif : il est **annulé** !`;
             }
-            rouletteUwuUntil.set(member.id, Date.now() + 6 * 60 * 60 * 1000);
-            return `**${auteurNom}** doit terminer chacun de ses messages par **UwU** pendant **6h** !`;
+            const duree = 6 * 60 * 60 * 1000 * multTemps;
+            rouletteUwuUntil.set(member.id, Date.now() + duree);
+            return `**${auteurNom}** doit terminer chacun de ses messages par **UwU** pendant **${6 * multTemps}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         }
         case 'malus-lettre-interdite': {
             const lockLettre = rouletteLettreInterdite.get(member.id);
@@ -946,8 +1006,9 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 return `✨ **Miracle !** **${auteurNom}** retombe sur la **lettre interdite** alors qu'elle était encore active : elle est **annulée** !`;
             }
             const lettre = String.fromCharCode(65 + Math.floor(Math.random() * 26));
-            rouletteLettreInterdite.set(member.id, { until: Date.now() + 6 * 60 * 60 * 1000, lettre });
-            return `**${auteurNom}** ne peut plus utiliser la lettre **${lettre}** pendant **6h** !`;
+            const duree = 6 * 60 * 60 * 1000 * multTemps;
+            rouletteLettreInterdite.set(member.id, { until: Date.now() + duree, lettre });
+            return `**${auteurNom}** ne peut plus utiliser la lettre **${lettre}** pendant **${6 * multTemps}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         }
         case 'bonus-redirect-malus': {
             const total = (rouletteRedirectCharges.get(member.id) || 0) + 3;
@@ -960,8 +1021,9 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 rouletteEmojiUntil.delete(member.id);
                 return `✨ **Miracle !** **${auteurNom}** retombe sur l'**emoji obligatoire** alors qu'il était encore actif : il est **annulé** !`;
             }
-            rouletteEmojiUntil.set(member.id, Date.now() + 6 * 60 * 60 * 1000);
-            return `**${auteurNom}** doit terminer chacun de ses messages par un **emoji aléatoire** pendant **6h** !`;
+            const duree = 6 * 60 * 60 * 1000 * multTemps;
+            rouletteEmojiUntil.set(member.id, Date.now() + duree);
+            return `**${auteurNom}** doit terminer chacun de ses messages par un **emoji aléatoire** pendant **${6 * multTemps}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         }
         case 'malus-chat-noir':
             if ((rouletteJackpotBonus.get(member.id) || 0) >= 0.05) deverrouillerSucces(member.id, 'chat-noir', message.channel);
@@ -969,11 +1031,11 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             rouletteJackpotBonus.delete(member.id);
             return `🐈‍⬛ **${auteurNom}** subit la **Malédiction du Chat Noir** : sa pity et son bonus jackpot accumulés sont réduits à zéro !`;
         case 'malus-caps':
-            if (basculerTransfo(member.id, 'caps', 2 * 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur les **MAJUSCULES** alors qu'elles étaient encore actives : le malus est **annulé** !`;
-            return `**${auteurNom}** doit **PARLER EN MAJUSCULES** pendant **2h** !`;
+            if (basculerTransfo(member.id, 'caps', 2 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur les **MAJUSCULES** alors qu'elles étaient encore actives : le malus est **annulé** !`;
+            return `**${auteurNom}** doit **PARLER EN MAJUSCULES** pendant **${2 * multTemps}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         case 'malus-boomer':
-            if (basculerTransfo(member.id, 'boomer', 2 * 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur le **mode Boomer** alors qu'il était encore actif : le malus est **annulé** !`;
-            return `🧓 **${auteurNom}** passe en **mode Boomer** pendant **2h** ..... A bon entendeur ... !`;
+            if (basculerTransfo(member.id, 'boomer', 2 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur le **mode Boomer** alors qu'il était encore actif : le malus est **annulé** !`;
+            return `🧓 **${auteurNom}** passe en **mode Boomer** pendant **${2 * multTemps}h** ..... A bon entendeur ... !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         case 'malus-brise-bouclier': {
             const rawB = rouletteBouclierActif.get(member.id);
             const nbB = typeof rawB === 'number' ? rawB : (rawB ? 1 : 0);
@@ -982,38 +1044,39 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             return `🪓 **${auteurNom}** subit le **BRISE-BOUCLIER** ! Heureusement, **${auteurNom}** n'avait aucun bouclier en réserve... mais la menace était bien réelle !`;
         }
         case 'malus-existentiel':
-            if (basculerTransfo(member.id, 'existentiel', 3 * 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur la **crise existentielle** : le malus est **annulé** !`;
-            return `🥀 **${auteurNom}** entre en pleine **remise en question existentielle** pendant **3h**... à quoi bon ?`;
+            if (basculerTransfo(member.id, 'existentiel', 3 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur la **crise existentielle** : le malus est **annulé** !`;
+            return `🥀 **${auteurNom}** entre en pleine **remise en question existentielle** pendant **${3 * multTemps}h**... à quoi bon ?${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         case 'malus-linkedin':
-            if (basculerTransfo(member.id, 'linkedin', 3 * 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur le **gourou LinkedIn** : le malus est **annulé** !`;
-            return `👔 **${auteurNom}** se transforme en **gourou LinkedIn** pendant **3h** ! Soyons agile 🚀`;
+            if (basculerTransfo(member.id, 'linkedin', 3 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur le **gourou LinkedIn** : le malus est **annulé** !`;
+            return `👔 **${auteurNom}** se transforme en **gourou LinkedIn** pendant **${3 * multTemps}h** ! Soyons agile 🚀${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         case 'malus-echo': {
             const finEcho = rouletteEchoUntil.get(member.id);
             if (finEcho && Date.now() < finEcho) {
                 rouletteEchoUntil.delete(member.id);
                 return `✨ **Miracle !** **${auteurNom}** retombe sur l'**écho condescendant** : Cacabot arrête de le/la clasher !`;
             }
-            rouletteEchoUntil.set(member.id, Date.now() + 3 * 60 * 60 * 1000);
-            return `🪞 **${auteurNom}** subit l'**Écho Condescendant** pendant **3h** : Cacabot va lui lâcher ses meilleures remarques cassantes !`;
+            const duree = 3 * 60 * 60 * 1000 * multTemps;
+            rouletteEchoUntil.set(member.id, Date.now() + duree);
+            return `🪞 **${auteurNom}** subit l'**Écho Condescendant** pendant **${3 * multTemps}h** : Cacabot va lui lâcher ses meilleures remarques cassantes !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         }
         case 'malus-emoji-only':
-            if (basculerTransfo(member.id, 'emojiOnly', 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur l'**emoji only** alors qu'il était encore actif : le malus est **annulé** !`;
-            return `**${auteurNom}** ne peut plus s'exprimer qu'en **emojis** pendant **1h** !`;
+            if (basculerTransfo(member.id, 'emojiOnly', 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur l'**emoji only** alors qu'il était encore actif : le malus est **annulé** !`;
+            return `**${auteurNom}** ne peut plus s'exprimer qu'en **emojis** pendant **${1 * multTemps}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         case 'malus-censure':
-            if (basculerTransfo(member.id, 'censure', 2 * 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur la **censure** alors qu'elle était encore active : le malus est **annulé** !`;
-            return `**${auteurNom}** est **censuré·e** : un mot sur 3 disparaît pendant **2h** !`;
+            if (basculerTransfo(member.id, 'censure', 2 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur la **censure** alors qu'elle était encore active : le malus est **annulé** !`;
+            return `**${auteurNom}** est **censuré·e** : un mot sur 3 disparaît pendant **${2 * multTemps}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         case 'malus-mots-melanges':
-            if (basculerTransfo(member.id, 'mots', 2 * 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur les **mots mélangés** alors qu'ils étaient encore actifs : le malus est **annulé** !`;
-            return `**${auteurNom}** a les **mots mélangés** pendant **2h** !`;
+            if (basculerTransfo(member.id, 'mots', 2 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur les **mots mélangés** alors qu'ils étaient encore actifs : le malus est **annulé** !`;
+            return `**${auteurNom}** a les **mots mélangés** pendant **${2 * multTemps}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         case 'malus-lettres-melangees':
-            if (basculerTransfo(member.id, 'lettres', 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur les **lettres mélangées** alors qu'elles étaient encore actives : le malus est **annulé** !`;
-            return `**${auteurNom}** a les **lettres mélangées** pendant **1h** !`;
+            if (basculerTransfo(member.id, 'lettres', 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur les **lettres mélangées** alors qu'elles étaient encore actives : le malus est **annulé** !`;
+            return `**${auteurNom}** a les **lettres mélangées** pendant **${1 * multTemps}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         case 'malus-limite-100':
-            if (basculerTransfo(member.id, 'limite100', 2 * 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur la **limite de 100 caractères** alors qu'elle était encore active : le malus est **annulé** !`;
-            return `**${auteurNom}** est limité·e à **100 caractères** par message pendant **2h** !`;
+            if (basculerTransfo(member.id, 'limite100', 2 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur la **limite de 100 caractères** alors qu'elle était encore active : le malus est **annulé** !`;
+            return `**${auteurNom}** est limité·e à **100 caractères** par message pendant **${2 * multTemps}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         case 'malus-limite-30':
-            if (basculerTransfo(member.id, 'limite30', 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur la **limite de 30 caractères** alors qu'elle était encore active : le malus est **annulé** !`;
-            return `**${auteurNom}** est limité·e à **30 caractères** par message pendant **1h** !`;
+            if (basculerTransfo(member.id, 'limite30', 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur la **limite de 30 caractères** alors qu'elle était encore active : le malus est **annulé** !`;
+            return `**${auteurNom}** est limité·e à **30 caractères** par message pendant **${1 * multTemps}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         case 'special-tournee-generale':
             deverrouillerSucces(member.id, 'tournee-patron', message.channel);
             rouletteTourneeJusquA = Date.now() + 60 * 1000;
@@ -1024,12 +1087,13 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 rouletteLeetUntil.delete(member.id);
                 return `✨ **Miracle !** **${auteurNom}** retombe sur le **l33t sp34k** alors qu'il était encore actif : il est **annulé** !`;
             }
-            rouletteLeetUntil.set(member.id, Date.now() + 6 * 60 * 60 * 1000);
-            return `**${auteurNom}** parle maintenant en **l33t sp34k** pendant **6h** !`;
+            const duree = 6 * 60 * 60 * 1000 * multTemps;
+            rouletteLeetUntil.set(member.id, Date.now() + duree);
+            return `**${auteurNom}** parle maintenant en **l33t sp34k** pendant **${6 * multTemps}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         }
         case 'malus-bebe':
-            if (basculerTransfo(member.id, 'bebe', 2 * 60 * 60 * 1000)) return `✨ **Miracle !** **${auteurNom}** retombe sur le **parler bébé** alors qu'il était encore actif : le malus est **annulé** !`;
-            return `🍼 **${auteurNom}** parle maintenant comme un bébé pendant **2h** : ses « j » deviennent des « z » et ses « r » des « w » !`;
+            if (basculerTransfo(member.id, 'bebe', 2 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur le **parler bébé** alors qu'il était encore actif : le malus est **annulé** !`;
+            return `🍼 **${auteurNom}** parle maintenant comme un bébé pendant **${2 * multTemps}h** : ses « j » deviennent des « z » et ses « r » des « w » !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         case 'malus-cooldown-45': {
             if ((rouletteCooldown45Charges.get(member.id) || 0) > 0) deverrouillerSucces(member.id, 'double-peine', message.channel);
             annulerTiragesAGogo(member.id);
@@ -1177,6 +1241,11 @@ function buildInventaireEmbed(membre) {
             label: '🎯 Redirection de malus au choix',
             emoji: '🎯',
             desc: 'Choisis le membre qui subira ton prochain malus à ta place'
+        },
+        redirectBonusChoix: {
+            label: '🎀 Redirection de bonus au choix',
+            emoji: '🎀',
+            desc: 'Choisis le/la membre qui recevra ton prochain bonus à ta place'
         },
         pseudoChoix: {
             label: '✍️ Pseudo au choix (48h)',
@@ -1429,8 +1498,16 @@ function buildRouletteStateEmbed(cible, guildId = null) {
         bonus.push(`😈 ${rouletteRedirectCharges.get(cible.id)} redirection(s) de malus`);
     }
     if (rouletteRedirectChoixCible.has(cible.id)) bonus.push('🎯 Redirection de malus au choix en attente');
+    if ((rouletteRedirectBonusCharges.get(cible.id) || 0) > 0) {
+        bonus.push(`🎁 ${rouletteRedirectBonusCharges.get(cible.id)} redirection(s) de bonus au hasard`);
+    }
+    if (rouletteRedirectBonusChoixCible.has(cible.id)) bonus.push('🎀 Redirection de bonus au choix en attente');
     if ((rouletteCooldownCourtCharges.get(cible.id) || 0) > 0) {
         bonus.push(`⚡ ${rouletteCooldownCourtCharges.get(cible.id)} tirage(s) à cooldown réduit (5 min)`);
+    }
+
+    if (rouletteDoubleTempsUntil.has(cible.id) && now < rouletteDoubleTempsUntil.get(cible.id)) {
+        malus.push(`⏳ Malus x2 pendant 24h (fin ${tstamp(rouletteDoubleTempsUntil.get(cible.id))})`);
     }
 
     if (roulettePseudoLock.has(cible.id) && now < roulettePseudoLock.get(cible.id).until) {
@@ -1463,7 +1540,8 @@ function buildRouletteStateEmbed(cible, guildId = null) {
         caps: '🔠 Majuscules obligatoires', emojiOnly: '🙂 Emoji only', limite100: '✂️ Limite 100 caractères',
         limite30: '✂️ Limite 30 caractères', mots: '🔀 Mots mélangés', lettres: '🔤 Lettres mélangées',
         censure: '▇ Mots censurés', bebe: '🍼 Parler bébé', boomer: '🧓 Mode Boomer',
-        existentiel: '🥀 Crise existentielle', linkedin: '👔 Gourou LinkedIn'
+        existentiel: '🥀 Crise existentielle', linkedin: '👔 Gourou LinkedIn',
+        sansConsonne: '🅾️ 0 Consonne', sansVoyelle: '🚫 0 Voyelle'
     };
     for (const [k, fin] of Object.entries(tf)) {
         if (now < fin && libTf[k]) malus.push(`${libTf[k]} (fin ${tstamp(fin)})`);
@@ -1883,6 +1961,33 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     let cibleNom = auteurNom;
     let prefixeRedirect = '';
     let pingRedirection = null;
+
+    // Redirection des BONUS vers une cible au choix ou au hasard
+    if (entryTiree?.type === 'bonus' && !outcomeId.startsWith('bonus-redirect-bonus-')) {
+        const cibleBonusChoisieId = rouletteRedirectBonusChoixCible.get(authorId);
+        if (cibleBonusChoisieId) {
+            rouletteRedirectBonusChoixCible.delete(authorId);
+            const cibleChoisie = guild.members.cache.get(cibleBonusChoisieId);
+            if (cibleChoisie && cibleChoisie.id !== authorId) {
+                cible = cibleChoisie;
+                cibleNom = cible.displayName;
+                prefixeRedirect = `🎀 **${auteurNom}** avait choisi de rediriger son bonus, offert à **${cibleNom}** !\n`;
+                pingRedirection = { id: cible.id, texte: `🔔 <@${cible.id}>, **${auteurNom}** t'a offert son bonus **${ROULETTE_NOMS[outcomeId]}** !` };
+            }
+        } else {
+            const chargesBonus = rouletteRedirectBonusCharges.get(authorId) || 0;
+            if (chargesBonus > 0) {
+                const candidats = membresTop30Roulette(guild, authorId);
+                if (candidats.length > 0) {
+                    cible = candidats[Math.floor(Math.random() * candidats.length)];
+                    cibleNom = cible.displayName;
+                    rouletteRedirectBonusCharges.set(authorId, chargesBonus - 1);
+                    prefixeRedirect = `🎁 **${auteurNom}** avait un bonus à rediriger au hasard, offert à **${cibleNom}** !\n`;
+                    pingRedirection = { id: cible.id, texte: `🔔 <@${cible.id}>, **${auteurNom}** t'a offert son bonus **${ROULETTE_NOMS[outcomeId]}** !` };
+                }
+            }
+        }
+    }
 
     const jCharges = rouletteJackpotBoostCharges.get(authorId) || 0;
     if (jCharges > 0) {
@@ -2648,7 +2753,9 @@ async function handleRouletteMessage(message, response, client, helpers) {
                 'emojionly': 'emojiOnly', 'emoji-only': 'emojiOnly',
                 'limite100': 'limite100', 'limite-100': 'limite100',
                 'limite30': 'limite30', 'limite-30': 'limite30',
-                'existentiel': 'existentiel', 'linkedin': 'linkedin'
+                'existentiel': 'existentiel', 'linkedin': 'linkedin',
+                'sansconsonne': 'sansConsonne', 'sans-consonne': 'sansConsonne',
+                'sansvoyelle': 'sansVoyelle', 'sans-voyelle': 'sansVoyelle'
             };
 
             if (tf && clesTransfos[nom] && tf[clesTransfos[nom]]) {
@@ -2708,7 +2815,8 @@ async function handleRouletteMessage(message, response, client, helpers) {
         '!rltsucces', '!roulettesucces', '!rltsuccess', '!roulettesuccess'
     ];
 
-    if (ROULETTE_COMMANDES_PUBLIQUES.includes(command) && message.channel.id !== ROULETTE_SALON_ID) {
+    const estSalonAutorise = message.channel.id === ROULETTE_SALON_ID || message.channel.id === ROULETTE_SALON_ADMIN_ID;
+    if (ROULETTE_COMMANDES_PUBLIQUES.includes(command) && !estSalonAutorise) {
         await message.reply(`🎰 <@${message.author.id}>, la roulette et toutes ses commandes se passent exclusivement dans le salon dédié : <#${ROULETTE_SALON_ID}>\n(Si tu n'as pas accès à ce salon, c'est que tu n'as pas encore choisi tes rôles dans <#1559082682313474059>)`);
         return true;
     }
@@ -2879,8 +2987,9 @@ async function handleRouletteSlash(interaction, client) {
     const cmd = interaction.commandName;
     const action = cmd === 'roulette' ? interaction.options.getString('action') : null;
 
-    // Redirection si exécutée hors du salon roulette
-    if ((cmd === 'roulette' || cmd === 'rlt') && interaction.channelId !== ROULETTE_SALON_ID) {
+    // Redirection si exécutée hors du salon roulette (sauf salon admin epsys-only)
+    const estSalonSlashAutorise = interaction.channelId === ROULETTE_SALON_ID || interaction.channelId === ROULETTE_SALON_ADMIN_ID;
+    if ((cmd === 'roulette' || cmd === 'rlt') && !estSalonSlashAutorise) {
         await interaction.reply({
             content: `🎰 La roulette et toutes ses commandes sont réservées au salon <#${ROULETTE_SALON_ID}> !`,
             ephemeral: true
@@ -3232,6 +3341,27 @@ async function handleRouletteButton(interaction, client) {
                 if (collected.size === 0) {
                     crediterInventaireRoulette(targetUserId, 'redirectChoix', 1);
                     interaction.followUp({ content: `⏳ Temps écoulé ! Ta **Redirection de malus** a été replacée dans ton inventaire (\`!rlt claim\`).`, ephemeral: true }).catch(() => {});
+                }
+            });
+        } else if (itemChoisi === 'redirectBonusChoix') {
+            messageConfirmation = `🎀 **REDIRECTION DE BONUS ACTIVÉE !** Mentionne dans ce salon la personne qui recevra ton prochain bonus à ta place (tu as **5 minutes**).`;
+            const collector = interaction.channel.createMessageCollector({
+                filter: m => m.author.id === targetUserId && m.mentions.members.first(),
+                time: 5 * 60 * 1000, max: 1
+            });
+            collector.on('collect', (m) => {
+                const cibleChoisie = m.mentions.members.first();
+                if (ROULETTE_ROLE_JOUEUR_ID && !cibleChoisie.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID)) {
+                    return m.reply(`❌ **${cibleChoisie.displayName}** n'a pas le rôle de la roulette ! Choisis quelqu'un qui participe à la roulette.`);
+                }
+                rouletteRedirectBonusChoixCible.set(targetUserId, cibleChoisie.id);
+                bridge.demanderSauvegarde();
+                m.reply(`✅ C'est enregistré ! Le prochain bonus de **${interaction.member.displayName}** sera automatiquement offert à **${cibleChoisie.displayName}** !`);
+            });
+            collector.on('end', (collected, reason) => {
+                if (collected.size === 0) {
+                    crediterInventaireRoulette(targetUserId, 'redirectBonusChoix', 1);
+                    interaction.followUp({ content: `⏳ Temps écoulé ! Ta **Redirection de bonus** a été replacée dans ton inventaire (\`!rlt claim\`).`, ephemeral: true }).catch(() => {});
                 }
             });
         } else if (itemChoisi === 'palierUltime') {
@@ -3588,15 +3718,28 @@ async function handleRouletteTransfoMessage(message, client) {
     const webhook = await assurerWebhookRoulette(salonWebhook);
     if (!webhook) return;
 
+    if (client && !client.roulettePseudoLock) {
+        client.roulettePseudoLock = roulettePseudoLock;
+    }
+
     try {
-        await webhook.send({
+        const msgWebhook = await webhook.send({
             content: contenu.slice(0, 2000),
             username: message.member?.displayName ?? message.author.username,
             avatarURL: message.member?.displayAvatarURL() ?? message.author.displayAvatarURL(),
             files: [...message.attachments.values()].map(a => a.url),
             threadId: message.channel.isThread() ? message.channel.id : undefined,
-            allowedMentions: { parse: [] }
+            allowedMentions: { parse: [] },
+            wait: true
         });
+        if (msgWebhook?.id) {
+            if (!client.webhookMessagesAuthors) client.webhookMessagesAuthors = new Map();
+            client.webhookMessagesAuthors.set(msgWebhook.id, message.author.id);
+            if (client.webhookMessagesAuthors.size > 2000) {
+                const premier = client.webhookMessagesAuthors.keys().next().value;
+                client.webhookMessagesAuthors.delete(premier);
+            }
+        }
         if (!client.webhookDeletedMessages) client.webhookDeletedMessages = new Set();
         client.webhookDeletedMessages.add(message.id);
         setTimeout(() => client.webhookDeletedMessages?.delete(message.id), 15000);

@@ -23,8 +23,10 @@ function initSuggestionState(bridge) {
 }
 
 function buildSuggestionEmbed(data, authorMember) {
-    const pourCount = data.pour.length;
-    const contreCount = data.contre.length;
+    const pourList = Array.isArray(data.pour) ? data.pour : [];
+    const contreList = Array.isArray(data.contre) ? data.contre : [];
+    const pourCount = pourList.length;
+    const contreCount = contreList.length;
     const total = pourCount + contreCount;
 
     const pourPct = total > 0 ? Math.round((pourCount / total) * 100) : 0;
@@ -102,14 +104,18 @@ function buildSuggestionRow(data) {
 //  GESTION DES MESSAGES (!)
 // =========================
 async function handleSuggestionMessage(message, response) {
-    if (!response?.needsSuggestion) return false;
+    const raw = message.content.trim();
+    const cmd = raw.split(/\s+/)[0]?.toLowerCase();
+    const estCmd = cmd === '!suggestion' || cmd === '!suggest' || cmd === '!sugg';
+
+    if (!estCmd && !response?.needsSuggestion) return false;
 
     if (message.channel.id !== SUGGESTION_CHANNEL_ID) {
         await message.channel.send(`💡 <@${message.author.id}>, les suggestions se font uniquement dans le salon <#${SUGGESTION_CHANNEL_ID}> !`);
         return true;
     }
 
-    const texte = message.content.trim().split(/\s+/).slice(1).join(" ");
+    const texte = raw.split(/\s+/).slice(1).join(" ");
     if (!texte) {
         await message.reply("Usage : `!suggestion [ton idée/proposition]`\nExemple : `!suggestion Créer un salon Meubles IKEA`");
         return true;
@@ -118,15 +124,17 @@ async function handleSuggestionMessage(message, response) {
     const data = {
         authorId: message.author.id,
         texte: texte,
+        statut: 'en_attente',
+        verrouille: false,
         pour: [],
         contre: []
     };
 
     const embed = buildSuggestionEmbed(data, message.member);
-    const row = buildSuggestionRow(data);
+    const rows = buildSuggestionRow(data);
 
     await message.delete().catch(() => {});
-    const sent = await message.channel.send({ embeds: [embed], components: [row] });
+    const sent = await message.channel.send({ embeds: [embed], components: rows });
 
     const suggestionsData = suggestionBridge.getSuggestionsData();
     suggestionsData.set(sent.id, data);
@@ -150,14 +158,16 @@ async function handleSuggestionSlash(interaction) {
     const data = {
         authorId: interaction.user.id,
         texte: texte,
+        statut: 'en_attente',
+        verrouille: false,
         pour: [],
         contre: []
     };
 
     const embed = buildSuggestionEmbed(data, interaction.member);
-    const row = buildSuggestionRow(data);
+    const rows = buildSuggestionRow(data);
 
-    const sent = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
+    const sent = await interaction.reply({ embeds: [embed], components: rows, fetchReply: true });
     const suggestionsData = suggestionBridge.getSuggestionsData();
     suggestionsData.set(sent.id, data);
     suggestionBridge.demanderSauvegarde();
@@ -246,9 +256,9 @@ async function handleSuggestionButton(interaction) {
 
     const authorMember = interaction.guild.members.cache.get(data.authorId);
     const embed = buildSuggestionEmbed(data, authorMember);
-    const row = buildSuggestionRow(data);
+    const rows = buildSuggestionRow(data);
 
-    await interaction.update({ embeds: [embed], components: [row] });
+    await interaction.update({ embeds: [embed], components: rows });
     await interaction.followUp({ content: feedback, ephemeral: true });
     return true;
 }
