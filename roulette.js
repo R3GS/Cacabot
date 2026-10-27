@@ -88,6 +88,30 @@ const ROULETTE_ECHO_REPLIQUES = [
 
 const rouletteEchoUntil = new Map();
 
+const ROULETTE_PUBS_SPONSOR = [
+    '\n\n*Message sponsorisé par [Carglass](https://www.carglass.fr) : Carglass répare, Carglass remplace !*',
+    '\n\n*Publicité : Pour votre santé, mangez au moins cinq fruits et légumes par jour sur [MangerBouger](https://www.mangerbouger.fr).*',
+    '\n\n*Ce message vous est offert par [NordVPN](https://nordvpn.com) : Protégez vos données dès maintenant !*',
+    '\n\n*Un coup de barre ? [Mars](https://www.mars.com), et ça repart !*',
+    '\n\n*Offre exclusive [IKEA](https://www.ikea.com) : Retrouvez votre meuble préféré en kit !*',
+    '\n\n*Sponsorisé par [Sephora](https://www.sephora.fr) : Le pouvoir infini de la beauté.*',
+    '\n\n*Besoin d\'énergie ? [Red Bull](https://www.redbull.com) vous donne des aiiiles !*',
+    '\n\n*Parce que vous le valez bien. [L\'Oréal Paris](https://www.loreal-paris.fr).*',
+    '\n\n*Ce message est sponsorisé par [Spotify](https://www.spotify.com) : Écoutez vos titres favoris sans interruption.*',
+    '\n\n*Un break ? Prenez un [KitKat](https://www.kitkat.fr) !*'
+];
+
+const ROULETTE_AUTOCORRECT_PHRASES = [
+    ' *(attends je dois d\'abord acheter 12 kilos de courgettes)* ',
+    ' *[erreur T9 : je voulais dire que j\'adore les tractopelles]* ',
+    ' *(non mais en vrai les pigeons nous espionnent)* ',
+    ' *[correction auto : envoyer ma déclaration d\'impôts]* ',
+    ' *(bref tout ça pour dire que j\'ai perdu ma chaussette droite)* ',
+    ' *[T9 : comment faire cuire un pneu dans une poêle]* ',
+    ' *(et dire que pendant ce temps les loutres dorment en se tenant la patte)* ',
+    ' *[auto-remplacement : pardon mon chat a sauté sur le clavier]* '
+];
+
 const ROULETTE_ACHIEVEMENTS = [
     { id: 'forteresse', nom: 'Forteresse impénétrable', emoji: '🏰', desc: 'Accumuler un total de 10 boucliers dans sa réserve' },
     { id: 'chat-noir', nom: 'Victime du Destin', emoji: '🐈‍⬛', desc: 'Subir la Malédiction du Chat Noir avec +5% de bonus boosté ou plus' },
@@ -144,7 +168,11 @@ const ROULETTE_NOMS_COMMANDES = {
     redirectbonushasard: 'malus-redirect-bonus-hasard', redirectbonuschoix: 'bonus-redirect-bonus-choix',
     zeroconsonne: 'malus-sans-consonne', sansconsonne: 'malus-sans-consonne',
     zerovoyelle: 'malus-sans-voyelle', sansvoyelle: 'malus-sans-voyelle',
-    doubletemps: 'malus-double-temps-24h', malusx2: 'malus-double-temps-24h'
+    doubletemps: 'malus-double-temps-24h', malusx2: 'malus-double-temps-24h',
+    mocking: 'malus-mocking', begaiement: 'malus-begaiement',
+    publicite: 'malus-publicite', autocorrect: 'malus-autocorrect',
+    looongcooldown: 'malus-looong-cooldown', taxe: 'malus-looong-cooldown',
+    pickpocket: 'bonus-pickpocket', echangeurpoison: 'bonus-echangeur-poison'
 };
 
 const ROULETTE_TABLE = [
@@ -161,6 +189,8 @@ const ROULETTE_TABLE = [
     { id: 'bonus-redirect-bonus-choix', type: 'bonus', poids: 1/100, nom: 'Bonus redirigé au choix', desc: 'Choisis le membre qui recevra ton prochain bonus à ta place' },
     { id: 'bonus-epingle', type: 'bonus', poids: 1/150, nom: 'Message épinglé', desc: 'Un message épinglé définitivement dans le salon' },
     { id: 'bonus-role-superieur', type: 'bonus', poids: 1/170, nom: 'Rôle de Regaïen.ne niv. supérieur', desc: 'Rôle de Regaïen.ne supérieur' },
+    { id: 'bonus-pickpocket', type: 'bonus', poids: 1/40, nom: 'Pickpocket', desc: 'Vole 1 bouclier à un membre qui en a en réserve' },
+    { id: 'bonus-echangeur-poison', type: 'bonus', poids: 1/75, nom: 'Échangeur de poison', desc: 'Transfère un de tes malus actifs vers la personne de ton choix' },
     { id: 'bonus-pseudo-choix', type: 'bonus', poids: 1/250, nom: 'Pseudo au choix', desc: 'Choisis le pseudo d\'un·e membre, verrouillé pendant 48h' },
     { id: 'bonus-legendaire', type: 'bonus', poids: 1/420, nom: 'Regaïen·ne légendraire', desc: 'Rôle de Regaïen·ne légendraire' },
     { id: 'bonus-twitch-jeu', type: 'bonus', poids: 1/850, nom: 'Choix du jeu du prochain stream Twitch', desc: 'Choix du jeu du prochain stream Twitch' },
@@ -175,7 +205,12 @@ const ROULETTE_TABLE = [
     { id: 'malus-timeout-5min', type: 'malus', poids: 1/15, nom: 'Mute de 5 minutes', desc: 'Mute de 5 minutes' },
     { id: 'malus-cooldown-45', type: 'malus', poids: 1/20, nom: 'Cooldown de 45 min', desc: 'Les 2 prochains tirages ont un cooldown de 45 minutes' },
     { id: 'malus-timeout-20min', type: 'malus', poids: 1/25, nom: 'Mute de 20 minutes', desc: 'Mute de 20 minutes' },
+    { id: 'malus-looong-cooldown', type: 'malus', poids: 1/25, nom: 'Looong cooldown (1h)', desc: 'Le prochain tirage a un cooldown de 1 heure (60 minutes)' },
     { id: 'malus-brise-bouclier', type: 'malus', poids: 1/30, nom: 'Brise-Bouclier', desc: 'Détruit instantanément toutes tes charges de bouclier' },
+    { id: 'malus-begaiement', type: 'malus', poids: 1/45, nom: 'Bégaiement pendant 4h', desc: 'Bégaye sur chaque mot pendant 4h' },
+    { id: 'malus-publicite', type: 'malus', poids: 1/50, nom: 'Publicité intrusive pendant 2h', desc: 'Ajoute un sponsor et un lien officiel sous ses messages pendant 2h' },
+    { id: 'malus-autocorrect', type: 'malus', poids: 1/55, nom: 'Autocorrect maudit pendant 3h', desc: 'Insère une phrase absurde au milieu de ses messages (1 fois sur 2) pendant 3h' },
+    { id: 'malus-mocking', type: 'malus', poids: 1/60, nom: 'Mocking pendant 6h', desc: 'ÉcRiT cOmMe ÇA pendant 6h' },
     { id: 'malus-bebe', type: 'malus', poids: 1/40, nom: 'Parler bébé pendant 2h', desc: 'Les « j » deviennent « z » et « r » deviennent « w » pendant 2h' },
     { id: 'malus-echo', type: 'malus', poids: 1/40, nom: 'Écho condescendant pendant 3h', desc: 'Cacabot te lâche des remarques cassantes sous tes messages pendant 3h' },
     { id: 'malus-boomer', type: 'malus', poids: 1/45, nom: 'Mode Boomer pendant 2h', desc: 'Parle comme un boomer sur Facebook pendant 2h' },
@@ -231,7 +266,11 @@ const ROULETTE_EMOJIS_PAR_ID = {
     'malus-existentiel': '🥀', 'malus-linkedin': '👔',
     'malus-redirect-bonus-hasard': '🎁', 'bonus-redirect-bonus-hasard': '🎁', 'bonus-redirect-bonus-choix': '🎀',
     'malus-sans-consonne': '🅾️', 'malus-sans-voyelle': '🚫',
-    'malus-double-temps-24h': '⏳'
+    'malus-double-temps-24h': '⏳',
+    'malus-mocking': '🤡', 'malus-begaiement': '🗣️',
+    'malus-publicite': '📺', 'malus-autocorrect': '📱',
+    'malus-looong-cooldown': '⏳',
+    'bonus-pickpocket': '🦹', 'bonus-echangeur-poison': '🧪'
 };
 
 const ROULETTE_FAILS = [
@@ -296,6 +335,7 @@ const rouletteTransfos = new Map();
 const rouletteInventaire = new Map();
 let rouletteTourneeJusquA = 0;
 const rouletteCooldown45Charges = new Map();
+const rouletteLooongCooldownCharges = new Map();
 const rouletteCooldownCourtCharges = new Map();
 const rouletteBouclierActif = new Map();
 const rouletteJackpotBoostCharges = new Map();
@@ -344,6 +384,7 @@ const ROULETTE_ETATS = {
     transfos: rouletteTransfos,
     echo: rouletteEchoUntil,
     cooldown45: rouletteCooldown45Charges,
+    looongCooldown: rouletteLooongCooldownCharges,
     cooldownCourt: rouletteCooldownCourtCharges,
     bouclier: rouletteBouclierActif,
     jackpotBoostCharges: rouletteJackpotBoostCharges,
@@ -541,6 +582,20 @@ function appliquerTransfos(userId, texte) {
     if (t.existentiel && Math.random() < 0.33) r = r + ROULETTE_EXISTENTIEL_FINS[Math.floor(Math.random() * ROULETTE_EXISTENTIEL_FINS.length)];
     if (t.linkedin && Math.random() < 0.33) r = r + ROULETTE_LINKEDIN_FINS[Math.floor(Math.random() * ROULETTE_LINKEDIN_FINS.length)];
     if (t.caps) r = surTexte(r, m => m.toUpperCase());
+    if (t.mocking) r = surTexte(r, m => m.split('').map((c, i) => i % 2 === 0 ? c.toLowerCase() : c.toUpperCase()).join(''));
+    if (t.begaiement) r = surTexte(r, m => m.replace(/\b([a-zA-ZÀ-ÿ])(\w{2,})/g, '$1-$1$2'));
+    if (t.autocorrect && Math.random() < 0.5) {
+        const mots = r.split(/\s+/);
+        if (mots.length >= 2) {
+            const milieu = Math.floor(mots.length / 2);
+            const phraseRandom = ROULETTE_AUTOCORRECT_PHRASES[Math.floor(Math.random() * ROULETTE_AUTOCORRECT_PHRASES.length)];
+            mots.splice(milieu, 0, phraseRandom.trim());
+            r = mots.join(' ');
+        } else {
+            r = r + ' ' + ROULETTE_AUTOCORRECT_PHRASES[Math.floor(Math.random() * ROULETTE_AUTOCORRECT_PHRASES.length)].trim();
+        }
+    }
+    if (t.publicite) r = r + ROULETTE_PUBS_SPONSOR[Math.floor(Math.random() * ROULETTE_PUBS_SPONSOR.length)];
     const max = Math.min(t.limite30 ? 30 : Infinity, t.limite100 ? 100 : Infinity);
     if (max !== Infinity && [...r].length > max) r = [...r].slice(0, max).join('').replace(/<[^>]*$/, '');
     return r;
@@ -1095,6 +1150,53 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'malus-bebe':
             if (basculerTransfo(member.id, 'bebe', 2 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur le **parler bébé** alors qu'il était encore actif : le malus est **annulé** !`;
             return `🍼 **${auteurNom}** parle maintenant comme un bébé pendant **${2 * multTemps}h** : ses « j » deviennent des « z » et ses « r » des « w » !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
+        case 'bonus-pickpocket': {
+            const candidatsBouclier = [...rouletteBouclierActif.entries()]
+                .filter(([uid, b]) => uid !== member.id && (typeof b === 'number' ? b > 0 : Boolean(b)))
+                .map(([uid]) => message.guild?.members.cache.get(uid))
+                .filter(m => m && !m.user?.bot);
+
+            if (candidatsBouclier.length > 0) {
+                const victime = candidatsBouclier[Math.floor(Math.random() * candidatsBouclier.length)];
+                const boucliersVictime = rouletteBouclierActif.get(victime.id) || 1;
+                const restantesVictime = boucliersVictime - 1;
+                if (restantesVictime <= 0) rouletteBouclierActif.delete(victime.id);
+                else rouletteBouclierActif.set(victime.id, restantesVictime);
+
+                const mesBoucliers = (rouletteBouclierActif.get(member.id) || 0) + 1;
+                rouletteBouclierActif.set(member.id, mesBoucliers);
+
+                bridge.demanderSauvegarde();
+                message.pingCible = { id: victime.id, texte: `🦹 <@${victime.id}>, **${auteurNom}** t'a fait les poches et t'a volé **1 charge de bouclier** ! 🛡️` };
+                return `🦹 **${auteurNom}** réussit un vol à la tire ! Iel dérobe **1 charge de bouclier** à **${victime.displayName}** ! (${mesBoucliers} bouclier${mesBoucliers > 1 ? 's' : ''} en réserve)`;
+            } else {
+                const mesBoucliers = (rouletteBouclierActif.get(member.id) || 0) + 1;
+                rouletteBouclierActif.set(member.id, mesBoucliers);
+                bridge.demanderSauvegarde();
+                return `🦹 **${auteurNom}** tente un vol à la tire... mais personne sur le serveur n'avait de bouclier en réserve ! Cacabot lui offre donc **1 charge de bouclier** de consolation (${mesBoucliers} en réserve) !`;
+            }
+        }
+        case 'bonus-echangeur-poison':
+            crediterInventaireRoulette(member.id, 'echangeurPoison', 1);
+            return `🧪 **${auteurNom}** a gagné un **Échangeur de poison** !\n-# 🎒 *Stocké dans ton inventaire (\`!rlt claim\` pour transférer un de tes malus actifs vers la personne de ton choix).*`;
+        case 'malus-mocking':
+            if (basculerTransfo(member.id, 'mocking', 6 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur le **Mocking** : le malus est **annulé** !`;
+            return `🤡 **${auteurNom}** sUbIt Le MoCkInG pEnDaNt **${6 * multTemps}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
+        case 'malus-begaiement':
+            if (basculerTransfo(member.id, 'begaiement', 4 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur le **Bégaiement** : le malus est **annulé** !`;
+            return `🗣️ **${auteurNom}** b-bégaye s-sur c-chaque m-mot p-pendant **${4 * multTemps}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
+        case 'malus-publicite':
+            if (basculerTransfo(member.id, 'publicite', 2 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur la **Publicité intrusive** : le malus est **annulé** !`;
+            return `📺 **${auteurNom}** subit la **Publicité intrusive** pendant **${2 * multTemps}h** ! Ses messages seront sponsorisés !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
+        case 'malus-autocorrect':
+            if (basculerTransfo(member.id, 'autocorrect', 3 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur l'**Autocorrect maudit** : le malus est **annulé** !`;
+            return `📱 **${auteurNom}** subit l'**Autocorrect maudit** pendant **${3 * multTemps}h** : des phrases absurdes vont s'incruster dans ses messages (1 fois sur 2) !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
+        case 'malus-looong-cooldown': {
+            annulerTiragesAGogo(member.id);
+            rouletteCooldowns.set(member.id, Date.now() + 60 * 60 * 1000);
+            rouletteLooongCooldownCharges.set(member.id, 1);
+            return `⏳ **${auteurNom}** subit le malus **Looong cooldown** : son prochain tirage a un cooldown de **1 heure** (60 minutes) !`;
+        }
         case 'malus-cooldown-45': {
             if ((rouletteCooldown45Charges.get(member.id) || 0) > 0) deverrouillerSucces(member.id, 'double-peine', message.channel);
             annulerTiragesAGogo(member.id);
@@ -1257,6 +1359,11 @@ function buildInventaireEmbed(membre) {
             label: '✍️ Gravé dans la roche',
             emoji: '✍️',
             desc: 'Verrouille le pseudo d\'un membre pendant 1 semaine'
+        },
+        echangeurPoison: {
+            label: '🧪 Échangeur de poison',
+            emoji: '🧪',
+            desc: 'Transfère un de tes malus actifs vers le membre de ton choix'
         },
         epingleSalon: {
             label: '📌 Message épinglé',
@@ -1533,6 +1640,9 @@ function buildRouletteStateEmbed(cible, guildId = null) {
     if ((rouletteCooldown45Charges.get(cible.id) || 0) > 0) {
         malus.push(`⏳ ${rouletteCooldown45Charges.get(cible.id)} tirage(s) à cooldown 45 min`);
     }
+    if ((rouletteLooongCooldownCharges.get(cible.id) || 0) > 0) {
+        malus.push(`⏳ ${rouletteLooongCooldownCharges.get(cible.id)} tirage(s) à cooldown 1 heure`);
+    }
     if (rouletteEchoUntil.has(cible.id) && now < rouletteEchoUntil.get(cible.id)) {
         malus.push(`🪞 Écho condescendant (fin ${tstamp(rouletteEchoUntil.get(cible.id))})`);
     }
@@ -1543,7 +1653,9 @@ function buildRouletteStateEmbed(cible, guildId = null) {
         limite30: '✂️ Limite 30 caractères', mots: '🔀 Mots mélangés', lettres: '🔤 Lettres mélangées',
         censure: '▇ Mots censurés', bebe: '🍼 Parler bébé', boomer: '🧓 Mode Boomer',
         existentiel: '🥀 Crise existentielle', linkedin: '👔 Gourou LinkedIn',
-        sansConsonne: '🅾️ 0 Consonne', sansVoyelle: '🚫 0 Voyelle'
+        sansConsonne: '🅾️ 0 Consonne', sansVoyelle: '🚫 0 Voyelle',
+        mocking: '🤡 Mocking', begaiement: '🗣️ Bégaiement',
+        publicite: '📺 Publicité intrusive', autocorrect: '📱 Autocorrect maudit'
     };
     for (const [k, fin] of Object.entries(tf)) {
         if (now < fin && libTf[k]) malus.push(`${libTf[k]} (fin ${tstamp(fin)})`);
@@ -1862,9 +1974,13 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         }
         const chargesCourt = rouletteCooldownCourtCharges.get(authorId) || 0;
         const charges45 = rouletteCooldown45Charges.get(authorId) || 0;
+        const chargesLooong = rouletteLooongCooldownCharges.get(authorId) || 0;
         if (chargesCourt > 0) {
             rouletteCooldownCourtCharges.set(authorId, chargesCourt - 1);
             rouletteCooldowns.set(authorId, now + 5 * 60 * 1000);
+        } else if (chargesLooong > 0) {
+            rouletteLooongCooldownCharges.set(authorId, chargesLooong - 1);
+            rouletteCooldowns.set(authorId, now + 60 * 60 * 1000);
         } else if (charges45 > 0) {
             rouletteCooldown45Charges.set(authorId, charges45 - 1);
             rouletteCooldowns.set(authorId, now + 45 * 60 * 1000);
@@ -2992,7 +3108,9 @@ async function handleRouletteMessage(message, response, client, helpers) {
                 'limite30': 'limite30', 'limite-30': 'limite30',
                 'existentiel': 'existentiel', 'linkedin': 'linkedin',
                 'sansconsonne': 'sansConsonne', 'sans-consonne': 'sansConsonne',
-                'sansvoyelle': 'sansVoyelle', 'sans-voyelle': 'sansVoyelle'
+                'sansvoyelle': 'sansVoyelle', 'sans-voyelle': 'sansVoyelle',
+                'mocking': 'mocking', 'begaiement': 'begaiement',
+                'publicite': 'publicite', 'autocorrect': 'autocorrect'
             };
 
             if (tf && clesTransfos[nom] && tf[clesTransfos[nom]]) {
@@ -3027,6 +3145,7 @@ async function handleRouletteMessage(message, response, client, helpers) {
             else if (nom === 'redirectchoix' || nom === 'redirect-choix') { rouletteRedirectChoixCible.delete(id); retire = true; }
             else if (nom === 'cooldowncourt' || nom === 'cooldown-court') { rouletteCooldownCourtCharges.delete(id); retire = true; }
             else if (nom === 'cooldown45' || nom === 'cooldown-45') { rouletteCooldown45Charges.delete(id); retire = true; }
+            else if (nom === 'looongcooldown' || nom === 'looong-cooldown' || nom === 'taxe') { rouletteLooongCooldownCharges.delete(id); retire = true; }
             else if (nom === 'couptriple' || nom === 'coup-triple') { rouletteCoupTripleCharges.delete(id); retire = true; }
             else if (nom === 'freeroll' || nom === 'free-roll') { rouletteFreeRollUntil.delete(id); retire = true; }
             else if (nom === 'cooldown' || nom === 'cd') { rouletteCooldowns.delete(id); retire = true; }
@@ -3324,6 +3443,8 @@ function annulerMalusSurMembre(userId, outcomeId, member) {
         member?.timeout(null).catch(() => {});
     } else if (outcomeId === 'malus-cooldown-45') {
         rouletteCooldown45Charges.delete(userId);
+    } else if (outcomeId === 'malus-looong-cooldown') {
+        rouletteLooongCooldownCharges.delete(userId);
     } else if (outcomeId === 'malus-echo') {
         rouletteEchoUntil.delete(userId);
     } else if (outcomeId === 'malus-uwu-24h') {
@@ -3346,7 +3467,13 @@ function annulerMalusSurMembre(userId, outcomeId, member) {
             'malus-limite-100': 'limite100',
             'malus-limite-30': 'limite30',
             'malus-existentiel': 'existentiel',
-            'malus-linkedin': 'linkedin'
+            'malus-linkedin': 'linkedin',
+            'malus-sans-consonne': 'sansConsonne',
+            'malus-sans-voyelle': 'sansVoyelle',
+            'malus-mocking': 'mocking',
+            'malus-begaiement': 'begaiement',
+            'malus-publicite': 'publicite',
+            'malus-autocorrect': 'autocorrect'
         };
         const cleTf = transfoMap[outcomeId];
         if (cleTf) {
@@ -3358,6 +3485,117 @@ function annulerMalusSurMembre(userId, outcomeId, member) {
             }
         }
     }
+}
+
+// Fonctions utilitaires pour l'Échangeur de poison
+function listerMalusActifs(userId) {
+    const now = Date.now();
+    const liste = [];
+    const tf = rouletteTransfos.get(userId) ?? {};
+    const labelsTf = {
+        caps: '🔠 Majuscules', emojiOnly: '🙂 Emoji only', limite100: '✂️ Limite 100 caractères',
+        limite30: '✂️ Limite 30 caractères', mots: '🔀 Mots mélangés', lettres: '🔡 Lettres mélangées',
+        censure: '▇ Censure', bebe: '🍼 Parler bébé', boomer: '🧓 Mode Boomer',
+        existentiel: '🥀 Crise existentielle', linkedin: '👔 Gourou LinkedIn',
+        sansConsonne: '🅾️ 0 Consonne', sansVoyelle: '🚫 0 Voyelle',
+        mocking: '🤡 Mocking', begaiement: '🗣️ Bégaiement',
+        publicite: '📺 Publicité intrusive', autocorrect: '📱 Autocorrect maudit'
+    };
+    for (const [k, fin] of Object.entries(tf)) {
+        if (now < fin && labelsTf[k]) liste.push({ key: `transfo_${k}`, label: labelsTf[k], dureeRestante: fin - now });
+    }
+    if (rouletteUwuUntil.has(userId) && now < rouletteUwuUntil.get(userId)) {
+        liste.push({ key: 'uwu', label: '😳 UwU obligatoire', dureeRestante: rouletteUwuUntil.get(userId) - now });
+    }
+    if (rouletteEmojiUntil.has(userId) && now < rouletteEmojiUntil.get(userId)) {
+        liste.push({ key: 'emoji', label: '😀 Emoji obligatoire', dureeRestante: rouletteEmojiUntil.get(userId) - now });
+    }
+    if (rouletteLettreInterdite.has(userId) && now < rouletteLettreInterdite.get(userId).until) {
+        const obj = rouletteLettreInterdite.get(userId);
+        liste.push({ key: 'lettre', label: `🔤 Lettre interdite (${obj.lettre})`, dureeRestante: obj.until - now });
+    }
+    if (rouletteLeetUntil.has(userId) && now < rouletteLeetUntil.get(userId)) {
+        liste.push({ key: 'leet', label: '🤖 Leet speak', dureeRestante: rouletteLeetUntil.get(userId) - now });
+    }
+    if (rouletteEchoUntil.has(userId) && now < rouletteEchoUntil.get(userId)) {
+        liste.push({ key: 'echo', label: '🪞 Écho condescendant', dureeRestante: rouletteEchoUntil.get(userId) - now });
+    }
+    if (roulettePseudoLock.has(userId) && now < roulettePseudoLock.get(userId).until) {
+        const obj = roulettePseudoLock.get(userId);
+        liste.push({ key: 'pseudo', label: `🔒 Pseudo verrouillé (${obj.pseudo})`, dureeRestante: obj.until - now });
+    }
+    if (rouletteDoubleTempsUntil.has(userId) && now < rouletteDoubleTempsUntil.get(userId)) {
+        liste.push({ key: 'doubleTemps', label: '⏳ Malus x2', dureeRestante: rouletteDoubleTempsUntil.get(userId) - now });
+    }
+    return liste;
+}
+
+function transfererMalus(sourceId, destId, malusKey, guild) {
+    const now = Date.now();
+    let nomMalus = "Malus inconnu";
+
+    if (malusKey.startsWith('transfo_')) {
+        const tfKey = malusKey.replace('transfo_', '');
+        const tfSource = rouletteTransfos.get(sourceId) ?? {};
+        const fin = tfSource[tfKey] || (now + 2 * 60 * 60 * 1000);
+        const dureeRestante = Math.max(fin - now, 60 * 1000);
+        delete tfSource[tfKey];
+        if (Object.keys(tfSource).length === 0) rouletteTransfos.delete(sourceId);
+        else rouletteTransfos.set(sourceId, tfSource);
+
+        activerTransfo(destId, tfKey, dureeRestante);
+        nomMalus = tfKey;
+    } else if (malusKey === 'uwu') {
+        const fin = rouletteUwuUntil.get(sourceId) || (now + 6 * 60 * 60 * 1000);
+        const dureeRestante = Math.max(fin - now, 60 * 1000);
+        rouletteUwuUntil.delete(sourceId);
+        rouletteUwuUntil.set(destId, now + dureeRestante);
+        nomMalus = "UwU obligatoire";
+    } else if (malusKey === 'emoji') {
+        const fin = rouletteEmojiUntil.get(sourceId) || (now + 6 * 60 * 60 * 1000);
+        const dureeRestante = Math.max(fin - now, 60 * 1000);
+        rouletteEmojiUntil.delete(sourceId);
+        rouletteEmojiUntil.set(destId, now + dureeRestante);
+        nomMalus = "Emoji obligatoire";
+    } else if (malusKey === 'lettre') {
+        const obj = rouletteLettreInterdite.get(sourceId) || { until: now + 6 * 60 * 60 * 1000, lettre: 'E' };
+        const dureeRestante = Math.max(obj.until - now, 60 * 1000);
+        rouletteLettreInterdite.delete(sourceId);
+        rouletteLettreInterdite.set(destId, { until: now + dureeRestante, lettre: obj.lettre });
+        nomMalus = `Lettre interdite (${obj.lettre})`;
+    } else if (malusKey === 'leet') {
+        const fin = rouletteLeetUntil.get(sourceId) || (now + 6 * 60 * 60 * 1000);
+        const dureeRestante = Math.max(fin - now, 60 * 1000);
+        rouletteLeetUntil.delete(sourceId);
+        rouletteLeetUntil.set(destId, now + dureeRestante);
+        nomMalus = "Leet speak";
+    } else if (malusKey === 'echo') {
+        const fin = rouletteEchoUntil.get(sourceId) || (now + 3 * 60 * 60 * 1000);
+        const dureeRestante = Math.max(fin - now, 60 * 1000);
+        rouletteEchoUntil.delete(sourceId);
+        rouletteEchoUntil.set(destId, now + dureeRestante);
+        nomMalus = "Écho condescendant";
+    } else if (malusKey === 'pseudo') {
+        const lock = roulettePseudoLock.get(sourceId) || { until: now + 48 * 60 * 60 * 1000, pseudo: 'Puff goût paf' };
+        const dureeRestante = Math.max(lock.until - now, 60 * 1000);
+        roulettePseudoLock.delete(sourceId);
+        const memberSource = guild?.members.cache.get(sourceId);
+        if (memberSource) memberSource.setNickname(lock.originalNickname ?? null).catch(() => {});
+
+        const memberDest = guild?.members.cache.get(destId);
+        const destOriginal = memberDest?.nickname ?? null;
+        roulettePseudoLock.set(destId, { until: now + dureeRestante, pseudo: lock.pseudo, originalNickname: destOriginal });
+        if (memberDest) memberDest.setNickname(lock.pseudo).catch(() => {});
+        nomMalus = `Pseudo verrouillé (${lock.pseudo})`;
+    } else if (malusKey === 'doubleTemps') {
+        const fin = rouletteDoubleTempsUntil.get(sourceId) || (now + 24 * 60 * 60 * 1000);
+        const dureeRestante = Math.max(fin - now, 60 * 1000);
+        rouletteDoubleTempsUntil.delete(sourceId);
+        rouletteDoubleTempsUntil.set(destId, now + dureeRestante);
+        nomMalus = "Malus x2";
+    }
+
+    return { nomMalus };
 }
 
 async function handleRouletteButton(interaction, client) {
@@ -3575,6 +3813,38 @@ async function handleRouletteButton(interaction, client) {
             await interaction.followUp({
                 content: `🎀 **REDIRECTION DE BONUS AU CHOIX :** Sélectionne ci-dessous le membre qui recevra ton prochain bonus à ta place :`,
                 components: [rowUser],
+                ephemeral: true
+            });
+            return true;
+        } else if (itemChoisi === 'echangeurPoison') {
+            const malusActifs = listerMalusActifs(targetUserId);
+            if (malusActifs.length === 0) {
+                crediterInventaireRoulette(targetUserId, 'echangeurPoison', 1);
+                return interaction.reply({
+                    content: "❌ **Aucun malus actif !** Tu n'as aucun malus à transférer pour le moment. Ton **Échangeur de poison** reste dans ton inventaire !",
+                    ephemeral: true
+                });
+            }
+
+            const optionsMalus = malusActifs.map(m => ({
+                label: m.label.slice(0, 100),
+                description: `Reste : ~${Math.ceil(m.dureeRestante / 60000)} min`.slice(0, 100),
+                value: m.key
+            }));
+
+            const rowMalus = new ActionRowBuilder().addComponents(
+                new StringSelectMenuBuilder()
+                    .setCustomId(`rlt_poison_selmalus_${targetUserId}`)
+                    .setPlaceholder('🧪 Choisis le malus que tu veux refiler...')
+                    .addOptions(optionsMalus)
+            );
+
+            const member = interaction.guild?.members.cache.get(targetUserId) ?? interaction.member;
+            const majInv = buildInventaireEmbed(member);
+            await interaction.update({ embeds: [majInv.embed], components: majInv.row ? [majInv.row] : [] }).catch(() => {});
+            await interaction.followUp({
+                content: `🧪 **ÉCHANGEUR DE POISON :** Choisis d'abord le malus que tu souhaites transférer à quelqu'un :`,
+                components: [rowMalus],
                 ephemeral: true
             });
             return true;
@@ -3888,6 +4158,57 @@ async function handleRouletteButton(interaction, client) {
             await interaction.showModal(modal);
             return true;
         }
+    }
+
+    // Interception Échangeur de poison : sélection du malus
+    if (customId.startsWith('rlt_poison_selmalus_')) {
+        const targetUserId = customId.split('_')[3];
+        if (interaction.user.id !== targetUserId) {
+            return interaction.reply({ content: "Ce n'est pas ton objet 😌", ephemeral: true });
+        }
+        const malusChoisi = interaction.values[0];
+        const rowUser = new ActionRowBuilder().addComponents(
+            new UserSelectMenuBuilder()
+                .setCustomId(`rlt_poison_seluser_${targetUserId}_${malusChoisi}`)
+                .setPlaceholder('🎯 Choisis le membre qui recevra ce malus...')
+        );
+        await interaction.update({
+            content: `🎯 **ÉCHANGEUR DE POISON :** Sélectionne maintenant le membre du serveur qui va subir ce malus à ta place :`,
+            components: [rowUser]
+        });
+        return true;
+    }
+
+    // Interception Échangeur de poison : sélection du membre
+    if (customId.startsWith('rlt_poison_seluser_')) {
+        const parts = customId.split('_');
+        const targetUserId = parts[3];
+        const malusKey = parts.slice(4).join('_');
+
+        if (interaction.user.id !== targetUserId) {
+            return interaction.reply({ content: "Ce n'est pas ton objet 😌", ephemeral: true });
+        }
+
+        const selectedId = interaction.values[0];
+        const cible = interaction.guild?.members.cache.get(selectedId);
+        if (!cible) return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
+        if (cible.user?.bot) return interaction.reply({ content: "❌ Tu ne peux pas transférer de malus à un bot !", ephemeral: true });
+        if (cible.id === targetUserId) return interaction.reply({ content: "❌ Tu ne peux pas t'envoyer ton propre malus !", ephemeral: true });
+
+        const transfertResult = transfererMalus(targetUserId, cible.id, malusKey, interaction.guild);
+        bridge.demanderSauvegarde();
+
+        await interaction.update({
+            content: `🧪 **POISON ÉCHANGÉ !** Le malus **${transfertResult.nomMalus}** a été retiré de <@${targetUserId}> et transféré sur <@${cible.id}> ! 😈`,
+            components: []
+        });
+
+        const { MessageFlags } = require('discord.js');
+        await interaction.channel.send({
+            content: `🧪 **ÉCHANGEUR DE POISON :** <@${targetUserId}> s'est débarrassé de son malus **${transfertResult.nomMalus}** et l'a refilé à <@${cible.id}> !`,
+            flags: [MessageFlags.SuppressNotifications]
+        }).catch(() => {});
+        return true;
     }
 
     // Validation de la modal de saisie de pseudo
