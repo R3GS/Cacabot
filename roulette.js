@@ -2141,7 +2141,12 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         embeds: proxy.vote ? [buildVoteRouletteEmbed(proxy.vote)] : [embed],
         components: resultComponents,
         vote: proxy.vote ?? null,
-        pingCible: pingRedirection ? { id: pingRedirection.id, texte: `🔔 <@${pingRedirection.id}>, **${auteurNom}** t'a redirigé le malus **${ROULETTE_NOMS[outcomeId]}** !` } : null,
+        pingCible: pingRedirection ? {
+            id: pingRedirection.id,
+            texte: pingRedirection.texte || (entryTiree?.type === 'bonus'
+                ? `🔔 <@${pingRedirection.id}>, **${auteurNom}** t'a offert son bonus **${ROULETTE_NOMS[outcomeId] || outcomeId}** ! 🎁`
+                : `🔔 <@${pingRedirection.id}>, **${auteurNom}** t'a redirigé le malus **${ROULETTE_NOMS[outcomeId] || outcomeId}** ! 💀`)
+        } : null,
         differe: differe ? async () => {
             await differe.action();
             return buildRouletteResultEmbed(outcomeId, prefixeRedirect + differe.texteFinal + extraVoteTexte, authorId, auteurNom);
