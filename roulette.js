@@ -1418,7 +1418,8 @@ function buildRoulettePresentationEmbed(authorId, guildId = null) {
         { name: 'Cooldown ⏳', value: "15 minutes", inline: false },
         { name: 'Système de pity 📈', value: `Après **${ROULETTE_PITY_MALUS} malus** ou **${ROULETTE_PITY_NULS} résultats nuls**, bonus garanti au tirage suivant !`, inline: false },
         { name: 'Happy hour 🔥', value: "Tous les soirs de **20h à 21h**, cooldown à **5 minutes** pour tout le monde !", inline: false },
-        { name: 'Hall of fame 🏆', value: `Les bonus ultra rares (≤ **${(ROULETTE_HOF_SEUIL * 100).toFixed(2)}%**) dans <#${ROULETTE_HOF_CHANNEL_ID}> !`, inline: false }
+        { name: 'Hall of fame 🏆', value: `Les bonus ultra rares (≤ **${(ROULETTE_HOF_SEUIL * 100).toFixed(2)}%**) dans <#${ROULETTE_HOF_CHANNEL_ID}> !`, inline: false },
+        { name: 'Hall of shame 🤡', value: `Les bonus malus rares (≤ **0.06%**) dans <#1563294813690929274> !`, inline: false }
     ];
 
     if (cEstSonAnniv) {
@@ -2542,6 +2543,191 @@ async function handleRouletteStatsInteraction(interaction) {
     return false;
 }
 
+// ==========================================
+//   LOGIQUE DU PANNEAU !successgive (EPSYS)
+// ==========================================
+
+function buildSuccessGiveEmbed(guild, targetUserId, page = 0, feedback = null) {
+    const member = guild?.members.cache.get(targetUserId);
+    const nom = member?.displayName || `<@${targetUserId}>`;
+    const avatar = member?.user?.displayAvatarURL({ dynamic: true, size: 256 }) || null;
+
+    const userAchs = rouletteAchievements.get(targetUserId) ?? {};
+    const totalAchs = ROULETTE_ACHIEVEMENTS.length;
+    const debloques = Object.keys(userAchs).filter(id => ROULETTE_ACHIEVEMENTS.some(a => a.id === id)).length;
+
+    let desc = `Panneau de restitution et d'attribution des succès pour **${nom}**.\n\n`;
+    if (feedback) {
+        desc += `🔔 **Dernière action :** ${feedback}\n\n`;
+    }
+
+    desc += `📊 **Progression actuelle :** **${debloques} / ${totalAchs} succès** (${Math.round((debloques / totalAchs) * 100)}%)\n` +
+            `👉 *Utilise le menu ci-dessous pour sélectionner le ou les succès à débloquer.*`;
+
+    const embed = new EmbedBuilder()
+        .setColor(feedback ? 0x2ecc71 : 0xffd700)
+        .setTitle(`🎖️ Attribution des Succès — ${nom}`)
+        .setDescription(desc)
+        .setFooter({ text: `Page ${page + 1}/2 (Succès ${page === 0 ? '1 à 15' : '16 à 30'}) • Commande Epsys-Only` })
+        .setTimestamp();
+
+    if (avatar) embed.setThumbnail(avatar);
+    return embed;
+}
+
+function buildSuccessGiveComponents(targetUserId, page = 0) {
+    const userAchs = rouletteAchievements.get(targetUserId) ?? {};
+    const PAGE_SIZE = 15;
+    const start = page * PAGE_SIZE;
+    const tranche = ROULETTE_ACHIEVEMENTS.slice(start, start + PAGE_SIZE);
+
+    // 1. Choix du membre (UserSelectMenu)
+    const rowUser = new ActionRowBuilder().addComponents(
+        new UserSelectMenuBuilder()
+            .setCustomId(`rltgive:user:${page}`)
+            .setPlaceholder('👤 Choisir un autre membre...')
+    );
+
+    // 2. Sélection des succès de la page
+    const options = tranche.map(a => {
+        const possede = Boolean(userAchs[a.id]);
+        return {
+            label: `${possede ? '✅' : '🔒'} ${a.nom}`.slice(0, 100),
+            description: a.desc.slice(0, 100),
+            value: a.id,
+            emoji: a.emoji
+        };
+    });
+
+    const rowSelect = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId(`rltgive:select:${targetUserId}:${page}`)
+            .setPlaceholder(`🎖️ Choisir les succès à donner (Page ${page + 1}/2)...`)
+            .setMinValues(1)
+            .setMaxValues(options.length)
+            .addOptions(options)
+    );
+
+    // 3. Boutons de navigation et actions rapides
+    const rowButtons = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`rltgive:page:${targetUserId}:0`)
+            .setLabel('📄 Page 1 (1-15)')
+            .setStyle(page === 0 ? ButtonStyle.Primary : ButtonStyle.Secondary)
+            .setDisabled(page === 0),
+        new ButtonBuilder()
+            .setCustomId(`rltgive:page:${targetUserId}:1`)
+            .setLabel('📄 Page 2 (16-30)')
+            .setStyle(page === 1 ? ButtonStyle.Primary : ButtonStyle.Secondary)
+            .setDisabled(page === 1),
+        new ButtonBuilder()
+            .setCustomId(`rltgive:act:${targetUserId}:${page}:all`)
+            .setLabel('👑 Tout débloquer (30/30)')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId(`rltgive:act:${targetUserId}:${page}:clear`)
+            .setLabel('🗑️ Tout retirer (0/30)')
+            .setStyle(ButtonStyle.Danger)
+    );
+
+    return [rowUser, rowSelect, rowButtons];
+}
+
+async function handleSuccessGiveInteraction(interaction) {
+    if (interaction.user.id !== bridge.EPSYS_ID) {
+        return interaction.reply({ content: "Ce panneau est réservé à Epsys 😌", ephemeral: true });
+    }
+
+    const id = interaction.customId;
+
+    // 1. Changement de membre (UserSelectMenu)
+    if (id.startsWith('rltgive:user:')) {
+        const page = parseInt(id.replace('rltgive:user:', ''), 10) || 0;
+        const targetUserId = interaction.values[0];
+        const cible = interaction.guild?.members.cache.get(targetUserId);
+        if (cible?.user?.bot) {
+            return interaction.reply({ content: "❌ Tu ne peux pas donner de succès à un bot !", ephemeral: true });
+        }
+        const embed = buildSuccessGiveEmbed(interaction.guild, targetUserId, page);
+        const components = buildSuccessGiveComponents(targetUserId, page);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    // 2. Sélection de succès à débloquer (StringSelectMenu)
+    if (id.startsWith('rltgive:select:')) {
+        const [, , targetUserId, pageStr] = id.split(':');
+        const page = parseInt(pageStr, 10) || 0;
+        const selectionnes = interaction.values;
+
+        let userAchs = rouletteAchievements.get(targetUserId);
+        if (!userAchs) {
+            userAchs = {};
+            rouletteAchievements.set(targetUserId, userAchs);
+        }
+
+        const ajoutes = [];
+        const now = Date.now();
+        for (const achId of selectionnes) {
+            if (!userAchs[achId]) {
+                userAchs[achId] = now;
+                const achObj = ROULETTE_ACHIEVEMENTS.find(a => a.id === achId);
+                ajoutes.push(achObj ? `${achObj.emoji} **${achObj.nom}**` : achId);
+            }
+        }
+        rouletteAchievements.set(targetUserId, userAchs);
+        bridge.demanderSauvegarde();
+
+        const feedback = ajoutes.length > 0
+            ? `✅ **${ajoutes.length} succès attribué(s) :** ${ajoutes.join(', ')}`
+            : `ℹ️ Ces succès étaient déjà tous débloqués.`;
+
+        const embed = buildSuccessGiveEmbed(interaction.guild, targetUserId, page, feedback);
+        const components = buildSuccessGiveComponents(targetUserId, page);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    // 3. Changement de page
+    if (id.startsWith('rltgive:page:')) {
+        const [, , targetUserId, pageStr] = id.split(':');
+        const page = parseInt(pageStr, 10) || 0;
+        const embed = buildSuccessGiveEmbed(interaction.guild, targetUserId, page);
+        const components = buildSuccessGiveComponents(targetUserId, page);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    // 4. Actions Tout débloquer / Tout retirer
+    if (id.startsWith('rltgive:act:')) {
+        const [, , targetUserId, pageStr, action] = id.split(':');
+        const page = parseInt(pageStr, 10) || 0;
+
+        let feedback = '';
+        if (action === 'all') {
+            const userAchs = {};
+            const now = Date.now();
+            for (const a of ROULETTE_ACHIEVEMENTS) {
+                userAchs[a.id] = now;
+            }
+            rouletteAchievements.set(targetUserId, userAchs);
+            bridge.demanderSauvegarde();
+            feedback = `👑 **Les 30 succès ont tous été débloqués !**`;
+        } else if (action === 'clear') {
+            rouletteAchievements.delete(targetUserId);
+            bridge.demanderSauvegarde();
+            feedback = `🗑️ **Tous les succès ont été retirés (0/30).**`;
+        }
+
+        const embed = buildSuccessGiveEmbed(interaction.guild, targetUserId, page, feedback);
+        const components = buildSuccessGiveComponents(targetUserId, page);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    return false;
+}
+
 async function handleRouletteMessage(message, response, client, helpers) {
     const adminSuccesAliases = ['!roulettesuccesforce', '!rltsuccesforce', '!roulettesuccessforce', '!rltsuccessforce'];
     const raw = message.content.trim();
@@ -2597,7 +2783,52 @@ async function handleRouletteMessage(message, response, client, helpers) {
         await message.reply({ embeds: [embed], components: rows });
         return true;
     }
-    
+
+    // ==========================================
+    //   COMMANDE !successgive (EPSYS-ONLY)
+    // ==========================================
+    if (command === '!successgive' || command === '!succesgive') {
+        if (message.author.id !== bridge.EPSYS_ID) {
+            await message.reply("Cette commande est réservée à Epsys.");
+            return true;
+        }
+
+        const query = args.slice(1).join(" ").trim();
+        let cible = message.mentions?.members?.first ? message.mentions.members.first() : null;
+
+        if (!cible) {
+            if (!query) {
+                cible = message.member;
+            } else {
+                const findFn = bridge.findMemberByName || helpers?.findMemberByName;
+                const askFn = bridge.askDisambiguation || helpers?.askDisambiguation;
+                if (findFn) {
+                    const result = findFn(message.guild, query);
+                    if (result.multiple && askFn) {
+                        return askFn(message, message.guild, result.candidates, async (user) => {
+                            const mb = message.guild.members.cache.get(user.id);
+                            if (mb) {
+                                const embed = buildSuccessGiveEmbed(message.guild, mb.id, 0);
+                                const rows = buildSuccessGiveComponents(mb.id, 0);
+                                await message.reply({ embeds: [embed], components: rows });
+                            }
+                        });
+                    }
+                    cible = result.found;
+                }
+            }
+        }
+
+        if (!cible) {
+            await message.reply("Membre introuvable.");
+            return true;
+        }
+
+        const embed = buildSuccessGiveEmbed(message.guild, cible.id, 0);
+        const rows = buildSuccessGiveComponents(cible.id, 0);
+        await message.reply({ embeds: [embed], components: rows });
+        return true;
+    }
 
     if (['!reroll', '!bonusforce', '!malusforce', '!rouletteid', '!rltid', '!resetroulettestate', '!resetrlt', '!removestate', ...adminSuccesAliases].includes(command)) {
         if (message.author.id !== bridge.EPSYS_ID) {
@@ -3265,46 +3496,35 @@ async function handleRouletteButton(interaction, client) {
             rouletteRedirectCharges.set(targetUserId, tot);
             messageConfirmation = `🎯 **5 REDIRECTIONS ACTIVÉES !** Tu as 5 redirections en réserve (${tot} au total) !`;
         } else if (itemChoisi === 'pseudoChoix') {
-            messageConfirmation = `✍️ **PSEUDO AU CHOIX ACTIVÉ !** Mentionne dans ce salon le membre et son nouveau pseudo dans les **5 minutes** (ex: @Membre NouveauPseudo).`;
-            const collector = interaction.channel.createMessageCollector({
-                filter: m => m.author.id === targetUserId && m.mentions.members.first(),
-                time: 5 * 60 * 1000, max: 1
+            const rowUser = new ActionRowBuilder().addComponents(
+                new UserSelectMenuBuilder()
+                    .setCustomId(`rlt_claim_sel_pseudoChoix_${targetUserId}`)
+                    .setPlaceholder('👤 Choisir le membre dont tu veux changer le pseudo...')
+            );
+            const member = interaction.guild?.members.cache.get(targetUserId) ?? interaction.member;
+            const majInv = buildInventaireEmbed(member);
+            await interaction.update({ embeds: [majInv.embed], components: majInv.row ? [majInv.row] : [] }).catch(() => {});
+            await interaction.followUp({
+                content: `✍️ **PSEUDO AU CHOIX (48h) :** Sélectionne ci-dessous le membre du serveur dont tu veux changer le pseudo :`,
+                components: [rowUser],
+                ephemeral: true
             });
-            collector.on('collect', async (m) => {
-                const cibleChoisie = m.mentions.members.first();
-                const nouveauPseudo = m.content.replace(/<@!?\d+>/g, '').trim().slice(0, 32);
-                if (!cibleChoisie || !nouveauPseudo) return m.reply(`❌ Format invalide.`);
-                const lockExistant = roulettePseudoLock.get(cibleChoisie.id);
-                const originalNickname = lockExistant?.originalNickname !== undefined ? lockExistant.originalNickname : (cibleChoisie.nickname ?? null);
-                roulettePseudoLock.set(cibleChoisie.id, { until: Date.now() + 48 * 60 * 60 * 1000, pseudo: nouveauPseudo, originalNickname });
-                await cibleChoisie.setNickname(nouveauPseudo).catch(() => {});
-                deverrouillerSucces(targetUserId, 'baptiseur', interaction.channel);
-                bridge.demanderSauvegarde();
-                m.reply(`✅ **${cibleChoisie.displayName}** se retrouve avec le pseudo **${nouveauPseudo}**, verrouillé pendant **48h** !`);
-            });
+            return true;
         } else if (itemChoisi === 'pseudoLockSemaine') {
-            messageConfirmation = `✍️ **GRAVÉ DANS LA ROCHE ACTIVÉ !** Mentionne dans ce salon le membre et son nouveau pseudo dans les **5 minutes** (ex: @Membre NouveauPseudo).\nCe pseudo sera **verrouillé pendant 1 semaine entière (7 jours)** ! 🗿`;
-            const collector = interaction.channel.createMessageCollector({
-                filter: m => m.author.id === targetUserId && m.mentions.members.first(),
-                time: 5 * 60 * 1000, max: 1
+            const rowUser = new ActionRowBuilder().addComponents(
+                new UserSelectMenuBuilder()
+                    .setCustomId(`rlt_claim_sel_pseudoLockSemaine_${targetUserId}`)
+                    .setPlaceholder('👤 Choisir le membre dont tu veux verrouiller le pseudo (7 jours)...')
+            );
+            const member = interaction.guild?.members.cache.get(targetUserId) ?? interaction.member;
+            const majInv = buildInventaireEmbed(member);
+            await interaction.update({ embeds: [majInv.embed], components: majInv.row ? [majInv.row] : [] }).catch(() => {});
+            await interaction.followUp({
+                content: `🗿 **GRAVÉ DANS LA ROCHE (7 JOURS) :** Sélectionne ci-dessous le membre du serveur dont tu veux verrouiller le pseudo :`,
+                components: [rowUser],
+                ephemeral: true
             });
-            collector.on('collect', async (m) => {
-                const cibleChoisie = m.mentions.members.first();
-                const nouveauPseudo = m.content.replace(/<@!?\d+>/g, '').trim().slice(0, 32);
-                if (!cibleChoisie || !nouveauPseudo) return m.reply(`❌ Format invalide. Utilise : \`@Membre NouveauPseudo\`.`);
-                if (cibleChoisie.user.bot) return m.reply(`❌ Tu ne peux pas renommer un bot !`);
-                roulettePseudoLock.set(cibleChoisie.id, { until: Date.now() + 7 * 24 * 60 * 60 * 1000, pseudo: nouveauPseudo });
-                await cibleChoisie.setNickname(nouveauPseudo).catch(() => {});
-                deverrouillerSucces(targetUserId, 'baptiseur', interaction.channel);
-                bridge.demanderSauvegarde();
-                m.reply(`🗿 **GRAVÉ DANS LA ROCHE !** **${cibleChoisie.displayName}** se retrouve avec le pseudo **${nouveauPseudo}**, verrouillé pendant **7 jours** !`);
-            });
-            collector.on('end', (collected, reason) => {
-                if (collected.size === 0) {
-                    crediterInventaireRoulette(targetUserId, 'pseudoLockSemaine', 1);
-                    interaction.followUp({ content: `⏳ Temps écoulé ! Ton bonus **Gravé dans la roche** a été replacé dans ton inventaire (\`!rlt claim\`).`, ephemeral: true }).catch(() => {});
-                }
-            });
+            return true;
         } else if (itemChoisi === 'epingleSalon') {
             messageConfirmation = `📌 **MESSAGE ÉPINGLÉ ACTIVÉ !** Envoie dans ce salon le message que tu souhaites épingler définitivement (tu as **5 minutes**) !`;
             const collector = interaction.channel.createMessageCollector({
@@ -3323,47 +3543,35 @@ async function handleRouletteButton(interaction, client) {
                 }
             });
         } else if (itemChoisi === 'redirectChoix') {
-            messageConfirmation = `🎯 **REDIRECTION AU CHOIX ACTIVÉE !** Mentionne dans ce salon la personne qui prendra ton prochain malus à ta place (tu as **5 minutes**).`;
-            const collector = interaction.channel.createMessageCollector({
-                filter: m => m.author.id === targetUserId && m.mentions.members.first(),
-                time: 5 * 60 * 1000, max: 1
+            const rowUser = new ActionRowBuilder().addComponents(
+                new UserSelectMenuBuilder()
+                    .setCustomId(`rlt_claim_sel_redirectChoix_${targetUserId}`)
+                    .setPlaceholder('🎯 Choisir le membre qui subira ton prochain malus...')
+            );
+            const member = interaction.guild?.members.cache.get(targetUserId) ?? interaction.member;
+            const majInv = buildInventaireEmbed(member);
+            await interaction.update({ embeds: [majInv.embed], components: majInv.row ? [majInv.row] : [] }).catch(() => {});
+            await interaction.followUp({
+                content: `🎯 **REDIRECTION DE MALUS AU CHOIX :** Sélectionne ci-dessous le membre qui subira ton prochain malus à ta place :`,
+                components: [rowUser],
+                ephemeral: true
             });
-            collector.on('collect', (m) => {
-                const cibleChoisie = m.mentions.members.first();
-                if (ROULETTE_ROLE_JOUEUR_ID && !cibleChoisie.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID)) {
-                    return m.reply(`❌ **${cibleChoisie.displayName}** n'a pas le rôle de la roulette ! Choisis quelqu'un qui participe à la roulette.`);
-                }
-                rouletteRedirectChoixCible.set(targetUserId, cibleChoisie.id);
-                bridge.demanderSauvegarde();
-                m.reply(`✅ C'est enregistré ! Le prochain malus de **${interaction.member.displayName}** sera automatiquement envoyé à **${cibleChoisie.displayName}** !`);
-            });
-            collector.on('end', (collected, reason) => {
-                if (collected.size === 0) {
-                    crediterInventaireRoulette(targetUserId, 'redirectChoix', 1);
-                    interaction.followUp({ content: `⏳ Temps écoulé ! Ta **Redirection de malus** a été replacée dans ton inventaire (\`!rlt claim\`).`, ephemeral: true }).catch(() => {});
-                }
-            });
+            return true;
         } else if (itemChoisi === 'redirectBonusChoix') {
-            messageConfirmation = `🎀 **REDIRECTION DE BONUS ACTIVÉE !** Mentionne dans ce salon la personne qui recevra ton prochain bonus à ta place (tu as **5 minutes**).`;
-            const collector = interaction.channel.createMessageCollector({
-                filter: m => m.author.id === targetUserId && m.mentions.members.first(),
-                time: 5 * 60 * 1000, max: 1
+            const rowUser = new ActionRowBuilder().addComponents(
+                new UserSelectMenuBuilder()
+                    .setCustomId(`rlt_claim_sel_redirectBonusChoix_${targetUserId}`)
+                    .setPlaceholder('🎀 Choisir le membre qui recevra ton prochain bonus...')
+            );
+            const member = interaction.guild?.members.cache.get(targetUserId) ?? interaction.member;
+            const majInv = buildInventaireEmbed(member);
+            await interaction.update({ embeds: [majInv.embed], components: majInv.row ? [majInv.row] : [] }).catch(() => {});
+            await interaction.followUp({
+                content: `🎀 **REDIRECTION DE BONUS AU CHOIX :** Sélectionne ci-dessous le membre qui recevra ton prochain bonus à ta place :`,
+                components: [rowUser],
+                ephemeral: true
             });
-            collector.on('collect', (m) => {
-                const cibleChoisie = m.mentions.members.first();
-                if (ROULETTE_ROLE_JOUEUR_ID && !cibleChoisie.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID)) {
-                    return m.reply(`❌ **${cibleChoisie.displayName}** n'a pas le rôle de la roulette ! Choisis quelqu'un qui participe à la roulette.`);
-                }
-                rouletteRedirectBonusChoixCible.set(targetUserId, cibleChoisie.id);
-                bridge.demanderSauvegarde();
-                m.reply(`✅ C'est enregistré ! Le prochain bonus de **${interaction.member.displayName}** sera automatiquement offert à **${cibleChoisie.displayName}** !`);
-            });
-            collector.on('end', (collected, reason) => {
-                if (collected.size === 0) {
-                    crediterInventaireRoulette(targetUserId, 'redirectBonusChoix', 1);
-                    interaction.followUp({ content: `⏳ Temps écoulé ! Ta **Redirection de bonus** a été replacée dans ton inventaire (\`!rlt claim\`).`, ephemeral: true }).catch(() => {});
-                }
-            });
+            return true;
         } else if (itemChoisi === 'palierUltime') {
             crediterInventaireRoulette(targetUserId, 'freeRoll1Min', 1);
             crediterInventaireRoulette(targetUserId, 'epingleSalon', 1);
@@ -3609,6 +3817,95 @@ async function handleRouletteButton(interaction, client) {
 
     if (interaction.customId && interaction.customId.startsWith('rltpts:')) {
         return await handleRouletteStatsInteraction(interaction);
+    }
+
+    if (interaction.customId && interaction.customId.startsWith('rltgive:')) {
+        return await handleSuccessGiveInteraction(interaction);
+    }
+
+    // Gestion du menu de sélection contextuel pour les bonus d'inventaire
+    if (customId.startsWith('rlt_claim_sel_')) {
+        const [, , , actionType, targetUserId] = customId.split('_');
+        if (interaction.user.id !== targetUserId) {
+            return interaction.reply({ content: "Ce n'est pas ton bonus à configurer 😌", ephemeral: true });
+        }
+        const selectedId = interaction.values[0];
+        const cible = interaction.guild?.members.cache.get(selectedId);
+        if (!cible) {
+            return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
+        }
+        if (cible.user?.bot) {
+            return interaction.reply({ content: "❌ Tu ne peux pas sélectionner un bot !", ephemeral: true });
+        }
+
+        if (actionType === 'redirectChoix') {
+            if (cible.id === targetUserId) {
+                return interaction.reply({ content: "❌ Tu ne peux pas te renvoyer ton propre malus à toi-même !", ephemeral: true });
+            }
+            rouletteRedirectChoixCible.set(targetUserId, cible.id);
+            bridge.demanderSauvegarde();
+            await interaction.update({
+                content: `✅ C'est enregistré ! Le prochain malus de **${interaction.member.displayName}** sera automatiquement envoyé à **${cible.displayName}** !`,
+                components: []
+            });
+            return true;
+        }
+
+        if (actionType === 'redirectBonusChoix') {
+            if (cible.id === targetUserId) {
+                return interaction.reply({ content: "❌ Tu ne peux pas te rediriger ton bonus à toi-même !", ephemeral: true });
+            }
+            rouletteRedirectBonusChoixCible.set(targetUserId, cible.id);
+            bridge.demanderSauvegarde();
+            await interaction.update({
+                content: `✅ C'est enregistré ! Le prochain bonus de **${interaction.member.displayName}** sera automatiquement offert à **${cible.displayName}** !`,
+                components: []
+            });
+            return true;
+        }
+
+        if (actionType === 'pseudoChoix' || actionType === 'pseudoLockSemaine') {
+            const dureeStr = actionType === 'pseudoLockSemaine' ? '7j' : '48h';
+            const modal = new ModalBuilder()
+                .setCustomId(`rlt_modal_pseudolock:${targetUserId}:${cible.id}:${dureeStr}`)
+                .setTitle(`Pseudo de ${cible.displayName}`.slice(0, 45));
+
+            const input = new TextInputBuilder()
+                .setCustomId('nouveau_pseudo_val')
+                .setLabel(`Nouveau pseudo (verrouillé ${dureeStr === '7j' ? '7 jours' : '48h'})`)
+                .setStyle(TextInputStyle.Short)
+                .setMaxLength(32)
+                .setPlaceholder('Ex : SansPlomb95')
+                .setRequired(true);
+
+            modal.addComponents(new ActionRowBuilder().addComponents(input));
+            await interaction.showModal(modal);
+            return true;
+        }
+    }
+
+    // Validation de la modal de saisie de pseudo
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('rlt_modal_pseudolock:')) {
+        const [, targetUserId, cibleId, dureeStr] = interaction.customId.split(':');
+        const nouveauPseudo = interaction.fields.getTextInputValue('nouveau_pseudo_val').trim();
+        const cible = interaction.guild?.members.cache.get(cibleId);
+        if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
+
+        const lockExistant = roulettePseudoLock.get(cible.id);
+        const originalNickname = lockExistant?.originalNickname !== undefined ? lockExistant.originalNickname : (cible.nickname ?? null);
+        const dureeMs = dureeStr === '7j' ? 7 * 24 * 60 * 60 * 1000 : 48 * 60 * 60 * 1000;
+        const labelDuree = dureeStr === '7j' ? '7 jours' : '48h';
+
+        roulettePseudoLock.set(cible.id, { until: Date.now() + dureeMs, pseudo: nouveauPseudo, originalNickname });
+        await cible.setNickname(nouveauPseudo).catch(() => {});
+        deverrouillerSucces(targetUserId, 'baptiseur', interaction.channel);
+        bridge.demanderSauvegarde();
+
+        await interaction.reply({
+            content: `✅ **${cible.displayName}** se retrouve avec le pseudo **${nouveauPseudo}**, verrouillé pendant **${labelDuree}** !`,
+            ephemeral: false
+        });
+        return true;
     }
 
     if (customId.startsWith('roulette_probas_res_')) {

@@ -76,6 +76,11 @@ function buildSuggestionEmbed(data, authorMember) {
 }
 
 function buildSuggestionRow(data) {
+    // Si la proposition est retenue, étudiée ou refusée : on retire tous les boutons
+    if (data.statut && data.statut !== 'en_attente') {
+        return [];
+    }
+
     const rowVotes = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId('sugg_vote_pour')

@@ -121,6 +121,18 @@ function buildPenduEmbed(session) {
         ? session.lettresFausses.sort().join(' ') 
         : '*Aucune pour l\'instant*';
 
+    let dernierCoupTexte = '';
+    if (session.dernierCoup) {
+        dernierCoupTexte = `🎯 **Dernier coup :** <@${session.dernierCoup.userId}> a tenté **« ${session.dernierCoup.proposition} »** ➔ ${session.dernierCoup.statut}\n\n`;
+    }
+
+    let participantsTxt = '';
+    const entriesJoueurs = Object.entries(session.tentativesJoueurs || {});
+    if (entriesJoueurs.length > 0) {
+        const liste = entriesJoueurs.map(([uid, nb]) => `<@${uid}> (${nb}/3)`).join(' • ');
+        participantsTxt = `👥 **Essais utilisés :** ${liste}\n\n`;
+    }
+
     return new EmbedBuilder()
         .setColor(0x9b59b6)
         .setTitle('🪢 LE PENDU QUOTIDIEN DE REGAÏA (21h00)')
@@ -129,7 +141,9 @@ function buildPenduEmbed(session) {
             `🔤 **Mot de 7 lettres à deviner :**\n# \`${masque}\`\n\n` +
             `❌ **Lettres refusées :** \`${faussesLettresStr}\`\n\n` +
             `${potence}\n` +
-            `⚠️ **Erreurs collectives :** **${session.erreursCollectives}/6**\n` +
+            `⚠️ **Erreurs collectives :** **${session.erreursCollectives}/6**\n\n` +
+            (dernierCoupTexte || '') +
+            (participantsTxt || '') +
             `⏳ **Fin de la session :** <t:${expireTimestamp}:R> (à <t:${expireTimestamp}:t>)\n\n` +
             `🎯 **Règle :** Tu as **3 essais personnels** pour proposer une lettre ou le mot entier de 7 lettres !\n` +
             `💬 *Écris simplement ta lettre dans ce salon (le bot mettra à jour ce message directement).*`
@@ -157,6 +171,7 @@ async function lancerPenduQuotidien(guild) {
         tentativesJoueurs: {}, // userId -> totalEssais
         bonnesLettresParJoueur: {}, // userId -> count
         lettresRefuseesParJoueur: {}, // userId -> [lettres]
+        dernierCoup: null,
         compteurMessagesLongs: 0,
         messageId: null
     };
@@ -380,6 +395,20 @@ async function handlePenduMessage(message, response, client, helpers) {
                 return false;
             }
 
+            // Détection des doublons en mode test
+            const doublonTest = (rawGuess.length === 1 && (sTest.lettresTrouvees.includes(rawGuess) || sTest.lettresFausses.includes(rawGuess)))
+                || (rawGuess.length === 7 && sTest.lettresRefusees.includes(rawGuess));
+
+            if (doublonTest) {
+                const terme = rawGuess.length === 1 ? `la lettre **« ${rawGuess} »**` : `le mot **« ${rawGuess} »**`;
+                const mAvert = await message.channel.send(`⚠️ <@${message.author.id}>, ${terme} a déjà été proposé dans ce test !`);
+                setTimeout(() => {
+                    mAvert.delete().catch(() => {});
+                    message.delete().catch(() => {});
+                }, 5000);
+                return true;
+            }
+
             // Suppression automatique si c'est 1 seule lettre pour laisser le chat propre
             if (rawGuess.length === 1) {
                 await message.delete().catch(() => {});
@@ -392,27 +421,40 @@ async function handlePenduMessage(message, response, client, helpers) {
                 if (rawGuess === sTest.mot) {
                     sTest.lettresTrouvees = [...new Set(sTest.mot.split(''))];
                     sTest.bonnesLettres += 7;
+                    sTest.dernierCoup = {
+                        userId: message.author.id,
+                        proposition: rawGuess,
+                        statut: '🟢 **Mot exact trouvé !** 🎉'
+                    };
                 } else {
                     sTest.erreursCollectives++;
-                    if (!sTest.lettresRefusees.includes(rawGuess)) {
-                        sTest.lettresRefusees.push(rawGuess);
-                    }
+                    sTest.lettresRefusees.push(rawGuess);
+                    sTest.dernierCoup = {
+                        userId: message.author.id,
+                        proposition: rawGuess,
+                        statut: '❌ **Mot incorrect !**'
+                    };
                 }
             }
             // Cas 2 : Lettre individuelle
             else if (rawGuess.length === 1) {
                 if (sTest.mot.includes(rawGuess)) {
-                    if (!sTest.lettresTrouvees.includes(rawGuess)) {
-                        sTest.lettresTrouvees.push(rawGuess);
-                        sTest.bonnesLettres++;
-                    }
+                    sTest.lettresTrouvees.push(rawGuess);
+                    sTest.bonnesLettres++;
+                    sTest.dernierCoup = {
+                        userId: message.author.id,
+                        proposition: rawGuess,
+                        statut: '🟢 **Bonne lettre !**'
+                    };
                 } else {
-                    // On ne compte une erreur que si la lettre n'était pas déjà refusée
-                    if (!sTest.lettresFausses.includes(rawGuess)) {
-                        sTest.lettresFausses.push(rawGuess);
-                        sTest.lettresRefusees.push(rawGuess);
-                        sTest.erreursCollectives++;
-                    }
+                    sTest.lettresFausses.push(rawGuess);
+                    sTest.lettresRefusees.push(rawGuess);
+                    sTest.erreursCollectives++;
+                    sTest.dernierCoup = {
+                        userId: message.author.id,
+                        proposition: rawGuess,
+                        statut: '❌ **Refusée !**'
+                    };
                 }
             }
 
@@ -497,26 +539,43 @@ async function handlePenduMessage(message, response, client, helpers) {
 
             // Cas A : Le joueur propose 1 seule lettre OU le mot entier de 7 lettres
             if (rawGuess.length === 1 || rawGuess.length === 7) {
-                // Suppression du message du joueur SI C'EST 1 SEULE LETTRE
-                if (rawGuess.length === 1) {
-                    await message.delete().catch(() => {});
-                }
-
                 if (!session.tentativesJoueurs[uid]) session.tentativesJoueurs[uid] = 0;
                 if (!session.bonnesLettresParJoueur[uid]) session.bonnesLettresParJoueur[uid] = 0;
                 if (!session.lettresRefuseesParJoueur[uid]) session.lettresRefuseesParJoueur[uid] = [];
 
+                // 1. Vérification : joueur ayant déjà épuisé ses 3 essais
                 if (session.tentativesJoueurs[uid] >= 3) {
-                    // Si le joueur a déjà fait ses 3 essais et a tapé un mot de 7 lettres, on le prévient
-                    if (rawGuess.length === 7) {
-                        const mAvert = await message.reply("❌ Tu as déjà utilisé tes **3 essais** pour cette partie !");
-                        setTimeout(() => mAvert.delete().catch(() => {}), 4000);
-                    }
+                    const mAvert = await message.channel.send(`❌ <@${uid}>, tu as déjà utilisé tes **3 essais** pour cette partie !`);
+                    setTimeout(() => {
+                        mAvert.delete().catch(() => {});
+                        message.delete().catch(() => {});
+                    }, 5000);
                     return true;
+                }
+
+                // 2. Vérification : doublons (lettre ou mot déjà proposé) -> pas de pénalité, suppression après 5s
+                const estDoublonLettre = rawGuess.length === 1 && (session.lettresTrouvees.includes(rawGuess) || session.lettresFausses.includes(rawGuess));
+                const estDoublonMot = rawGuess.length === 7 && Object.values(session.lettresRefuseesParJoueur).some(list => list.includes(rawGuess));
+
+                if (estDoublonLettre || estDoublonMot) {
+                    const terme = rawGuess.length === 1 ? `la lettre **« ${rawGuess} »**` : `le mot **« ${rawGuess} »**`;
+                    const mAvert = await message.channel.send(`⚠️ <@${uid}>, ${terme} a déjà été proposé ! Ton essai est conservé.`);
+                    setTimeout(() => {
+                        mAvert.delete().catch(() => {});
+                        message.delete().catch(() => {});
+                    }, 5000);
+                    return true;
+                }
+
+                // 3. Proposition valide : suppression immédiate de la lettre pour laisser le chat propre
+                if (rawGuess.length === 1) {
+                    await message.delete().catch(() => {});
                 }
 
                 session.tentativesJoueurs[uid]++;
                 const motComplet = session.mot;
+                const essaisRestants = 3 - session.tentativesJoueurs[uid];
+                const pluriel = essaisRestants > 1 ? 's' : '';
 
                 penduBridge.trackBattlePassProgress?.(uid, 'pendu_essai', 1);
                 const nbTotalEssais = Object.values(session.tentativesJoueurs).reduce((a, b) => a + b, 0);
@@ -536,41 +595,54 @@ async function handlePenduMessage(message, response, client, helpers) {
                         const restantes = motComplet.split('').filter(l => !session.lettresTrouvees.includes(l));
                         session.bonnesLettresParJoueur[uid] += Math.max(restantes.length, 1);
                         session.lettresTrouvees = [...new Set(motComplet.split(''))];
+                        session.dernierCoup = {
+                            userId: uid,
+                            proposition: rawGuess,
+                            statut: `🟢 **Mot exact trouvé !** 🎉`
+                        };
                     } else {
                         session.erreursCollectives++;
                         session.lettresRefuseesParJoueur[uid].push(rawGuess);
+                        session.dernierCoup = {
+                            userId: uid,
+                            proposition: rawGuess,
+                            statut: `❌ **Mot incorrect !** *(${essaisRestants}/3 essai${pluriel} restant${pluriel})*`
+                        };
                     }
                 }
                 // Cas 2 : Lettre individuelle
                 else if (rawGuess.length === 1) {
                     if (motComplet.includes(rawGuess)) {
-                        if (!session.lettresTrouvees.includes(rawGuess)) {
-                            session.lettresTrouvees.push(rawGuess);
-                            session.bonnesLettresParJoueur[uid]++;
-                            penduBridge.trackBattlePassProgress?.(uid, 'pendu_bonne_lettre', 1);
-                        }
+                        session.lettresTrouvees.push(rawGuess);
+                        session.bonnesLettresParJoueur[uid]++;
+                        penduBridge.trackBattlePassProgress?.(uid, 'pendu_bonne_lettre', 1);
+                        session.dernierCoup = {
+                            userId: uid,
+                            proposition: rawGuess,
+                            statut: `🟢 **Bonne lettre !** *(${essaisRestants}/3 essai${pluriel} restant${pluriel})*`
+                        };
                     } else {
-                        // On n'ajoute une erreur collective QUE si la lettre n'était pas déjà refusée
-                        if (!session.lettresFausses.includes(rawGuess)) {
-                            session.lettresFausses.push(rawGuess);
-                            session.erreursCollectives++;
+                        session.lettresFausses.push(rawGuess);
+                        session.erreursCollectives++;
+                        session.lettresRefuseesParJoueur[uid].push(rawGuess);
+                        session.dernierCoup = {
+                            userId: uid,
+                            proposition: rawGuess,
+                            statut: `❌ **Refusée !** *(${essaisRestants}/3 essai${pluriel} restant${pluriel})*`
+                        };
 
-                            // Indice de survie automatique déclenché à la 4ème erreur collective (sur 6)
-                            if (session.erreursCollectives === 4 && !session.indiceDonne) {
-                                session.indiceDonne = true;
-                                const voyellesRestantes = motComplet.split('').filter(l => 'AEIOUY'.includes(l) && !session.lettresTrouvees.includes(l));
-                                if (voyellesRestantes.length > 0) {
-                                    await message.channel.send(`🛡️ **INDICE DE SURVIE (4/6 erreurs) :** Il reste encore **${voyellesRestantes.length} voyelle(s)** non découverte(s) dans ce mot !`);
-                                } else {
-                                    const lettresRestantes = motComplet.split('').filter(l => !session.lettresTrouvees.includes(l));
-                                    const lettreOfferte = lettresRestantes[Math.floor(Math.random() * lettresRestantes.length)];
-                                    session.lettresTrouvees.push(lettreOfferte);
-                                    await message.channel.send(`🛡️ **INDICE DE SURVIE (4/6 erreurs) :** La potence approche ! Cacabot vous offre la lettre **« ${lettreOfferte} »** !`);
-                                }
+                        // Indice de survie automatique déclenché à la 4ème erreur collective (sur 6)
+                        if (session.erreursCollectives === 4 && !session.indiceDonne) {
+                            session.indiceDonne = true;
+                            const voyellesRestantes = motComplet.split('').filter(l => 'AEIOUY'.includes(l) && !session.lettresTrouvees.includes(l));
+                            if (voyellesRestantes.length > 0) {
+                                await message.channel.send(`🛡️ **INDICE DE SURVIE (4/6 erreurs) :** Il reste encore **${voyellesRestantes.length} voyelle(s)** non découverte(s) dans ce mot !`);
+                            } else {
+                                const lettresRestantes = motComplet.split('').filter(l => !session.lettresTrouvees.includes(l));
+                                const lettreOfferte = lettresRestantes[Math.floor(Math.random() * lettresRestantes.length)];
+                                session.lettresTrouvees.push(lettreOfferte);
+                                await message.channel.send(`🛡️ **INDICE DE SURVIE (4/6 erreurs) :** La potence approche ! Cacabot vous offre la lettre **« ${lettreOfferte} »** !`);
                             }
-                        }
-                        if (!session.lettresRefuseesParJoueur[uid].includes(rawGuess)) {
-                            session.lettresRefuseesParJoueur[uid].push(rawGuess);
                         }
                     }
                 }
@@ -716,6 +788,13 @@ async function handlePenduMessage(message, response, client, helpers) {
                 // Après 15 messages de discussion, renvoi de l'embed qui devient la nouvelle référence active
                 if (session.compteurMessagesLongs >= 15) {
                     session.compteurMessagesLongs = 0;
+
+                    // Option 1 : on supprime l'ancien embed pour éviter qu'il reste figé plus haut
+                    if (session.messageId) {
+                        const ancienMsg = await message.channel.messages.fetch(session.messageId).catch(() => null);
+                        if (ancienMsg) await ancienMsg.delete().catch(() => {});
+                    }
+
                     const embedRappel = buildPenduEmbed(session);
                     const sentRappel = await message.channel.send({
                         content: '🔔 **Rappel du mot à deviner :**',
@@ -784,8 +863,30 @@ async function handlePenduMessage(message, response, client, helpers) {
         const enCours = session.mot && !session.termine && session.expireAt && now < session.expireAt;
 
         if (enCours) {
+            // Si la commande est tapée dans le salon officiel du Pendu
+            if (message.channel.id === PENDU_CHANNEL_ID) {
+                // Option 1 : on supprime l'ancien embed et la commande pour ne garder qu'un seul embed vivant tout en bas
+                if (session.messageId) {
+                    const ancienMsg = await message.channel.messages.fetch(session.messageId).catch(() => null);
+                    if (ancienMsg) await ancienMsg.delete().catch(() => {});
+                }
+
+                await message.delete().catch(() => {});
+
+                const embed = buildPenduEmbed(session);
+                const sent = await message.channel.send({
+                    content: '🪢 **Partie de Pendu en cours (remise en bas du salon) :**',
+                    embeds: [embed]
+                });
+
+                session.messageId = sent.id;
+                penduBridge.demanderSauvegarde();
+                return true;
+            }
+
+            // Si tapée dans un autre salon : simple affichage informatif sans toucher à l'embed officiel
             const embed = buildPenduEmbed(session);
-            await message.reply({ content: '🪢 **Une partie de Pendu est actuellement EN COURS !**', embeds: [embed] });
+            await message.reply({ content: `🪢 **Une partie de Pendu est actuellement EN COURS dans <#${PENDU_CHANNEL_ID}> !**`, embeds: [embed] });
             return true;
         }
 
