@@ -172,7 +172,8 @@ const ROULETTE_NOMS_COMMANDES = {
     mocking: 'malus-mocking', begaiement: 'malus-begaiement',
     publicite: 'malus-publicite', autocorrect: 'malus-autocorrect',
     looongcooldown: 'malus-looong-cooldown', taxe: 'malus-looong-cooldown',
-    pickpocket: 'bonus-pickpocket', echangeurpoison: 'bonus-echangeur-poison'
+    pickpocket: 'bonus-pickpocket', echangeurpoison: 'bonus-echangeur-poison',
+    partagebonus: 'bonus-partage-bonus', partage: 'bonus-partage-bonus'
 };
 
 const ROULETTE_TABLE = [
@@ -184,6 +185,7 @@ const ROULETTE_TABLE = [
     { id: 'bonus-coup-triple', type: 'bonus', poids: 1/20, nom: 'Coup Triple', desc: 'Tes 3 prochains tirages sont immédiats et sans aucun cooldown' },
     { id: 'bonus-super-bouclier', type: 'bonus', poids: 1/35, nom: 'Super Bouclier (3 malus)', desc: 'Immunité totale contre tes 3 prochains malus (cumulable)' },
     { id: 'bonus-couronne', type: 'bonus', poids: 1/50, nom: 'Couronne 👑 pendant 12h', desc: 'Une couronne 👑 sous tes messages pendant 12h' },
+    { id: 'bonus-partage-bonus', type: 'bonus', poids: 1/80, nom: 'Partage de bonus au choix', desc: 'Partage ton prochain bonus avec le membre de ton choix' },
     { id: 'bonus-redirect-malus', type: 'bonus', poids: 1/85, nom: '3 malus redirigés au hasard', desc: '3 prochains malus redirigés vers un.e autre membre' },
     { id: 'bonus-redirect-choix', type: 'bonus', poids: 1/100, nom: 'Malus redirigé au choix', desc: 'Redirige ton prochain malus vers la personne de ton choix' },
     { id: 'bonus-redirect-bonus-choix', type: 'bonus', poids: 1/100, nom: 'Bonus redirigé au choix', desc: 'Choisis le membre qui recevra ton prochain bonus à ta place' },
@@ -270,7 +272,8 @@ const ROULETTE_EMOJIS_PAR_ID = {
     'malus-mocking': '🤡', 'malus-begaiement': '🗣️',
     'malus-publicite': '📺', 'malus-autocorrect': '📱',
     'malus-looong-cooldown': '⏳',
-    'bonus-pickpocket': '🦹', 'bonus-echangeur-poison': '🧪'
+    'bonus-pickpocket': '🦹', 'bonus-echangeur-poison': '🧪',
+    'bonus-partage-bonus': '🤝'
 };
 
 const ROULETTE_FAILS = [
@@ -355,6 +358,7 @@ const rouletteVoteRedirectCharges = new Map();
 const rouletteVoteVotants = new Map();
 const rouletteRedirectBonusCharges = new Map();
 const rouletteRedirectBonusChoixCible = new Map();
+const roulettePartageBonusChoixCible = new Map();
 const rouletteDoubleTempsUntil = new Map();
 
 function getMultiplicateurMalusTemps(userId) {
@@ -373,6 +377,7 @@ const ROULETTE_ETATS = {
     redirectCharges: rouletteRedirectCharges,
     redirectBonusCharges: rouletteRedirectBonusCharges,
     redirectBonusChoixCible: rouletteRedirectBonusChoixCible,
+    partageBonusChoixCible: roulettePartageBonusChoixCible,
     doubleTemps: rouletteDoubleTempsUntil,
     voteRedirect: rouletteVoteRedirectCharges,
     voteVotants: rouletteVoteVotants,
@@ -823,6 +828,9 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'bonus-redirect-bonus-choix':
             crediterInventaireRoulette(member.id, 'redirectBonusChoix', 1);
             return `🎀 **${auteurNom}** a gagné une **Redirection de bonus au choix** !\n-# 🎒 *Stocké dans ton inventaire (\`!rlt claim\` pour choisir qui recevra ton prochain bonus).*`;
+        case 'bonus-partage-bonus':
+            crediterInventaireRoulette(member.id, 'partageBonus', 1);
+            return `🤝 **${auteurNom}** a gagné un **Partage de bonus au choix** !\n-# 🎒 *Stocké dans ton inventaire (\`!rlt claim\` pour choisir avec qui partager ton prochain bonus).*`;
         case 'malus-sans-consonne': {
             const duree = 2 * 60 * 60 * 1000 * multTemps;
             const h = 2 * multTemps;
@@ -1109,7 +1117,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             const finEcho = rouletteEchoUntil.get(member.id);
             if (finEcho && Date.now() < finEcho) {
                 rouletteEchoUntil.delete(member.id);
-                return `✨ **Miracle !** **${auteurNom}** retombe sur l'**écho condescendant** : Cacabot arrête de le/la clasher !`;
+                return `✨ **Miracle !** **${auteurNom}** retombe sur l'**écho condescendant** : Cacabot arrête de le·la clasher !`;
             }
             const duree = 3 * 60 * 60 * 1000 * multTemps;
             rouletteEchoUntil.set(member.id, Date.now() + duree);
@@ -1349,6 +1357,11 @@ function buildInventaireEmbed(membre) {
             label: '🎀 Redirection de bonus au choix',
             emoji: '🎀',
             desc: 'Choisis le/la membre qui recevra ton prochain bonus à ta place'
+        },
+        partageBonus: {
+            label: '🤝 Partage de bonus au choix',
+            emoji: '🤝',
+            desc: 'Partage ton prochain bonus avec le membre de ton choix (vous en profitez tous les deux)'
         },
         pseudoChoix: {
             label: '✍️ Pseudo au choix (48h)',
@@ -1611,6 +1624,10 @@ function buildRouletteStateEmbed(cible, guildId = null) {
         bonus.push(`🎁 ${rouletteRedirectBonusCharges.get(cible.id)} redirection(s) de bonus au hasard`);
     }
     if (rouletteRedirectBonusChoixCible.has(cible.id)) bonus.push('🎀 Redirection de bonus au choix en attente');
+    if (roulettePartageBonusChoixCible.has(cible.id)) {
+        const pId = roulettePartageBonusChoixCible.get(cible.id);
+        bonus.push(`🤝 Partage du prochain bonus actif (avec <@${pId}>)`);
+    }
     if ((rouletteCooldownCourtCharges.get(cible.id) || 0) > 0) {
         bonus.push(`⚡ ${rouletteCooldownCourtCharges.get(cible.id)} tirage(s) à cooldown réduit (5 min)`);
     }
@@ -2161,7 +2178,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
                     cibleNom = cible.displayName;
                     rouletteRedirectCharges.set(authorId, charges - 1);
                     prefixeRedirect = `😈 **${auteurNom}** avait un malus en réserve, redirigé vers **${cibleNom}** !\n`;
-                    pingRedirection = { id: cible.id, raison: 'iel avait un malus en réserve' };
+                    pingRedirection = { id: cible.id, raison: 'un malus en réserve a été redirigé vers toi' };
                 }
             }
         }
@@ -2182,8 +2199,33 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         if (diffList.length >= 10) deverrouillerSucces(cible.id, 'seum-en-personne', channel);
     }
 
+    // Vérification du Partage de bonus au choix
+    let partenairePartage = null;
+    if (entryTiree?.type === 'bonus' && !outcomeId.startsWith('bonus-redirect-bonus-') && outcomeId !== 'bonus-partage-bonus') {
+        const partId = roulettePartageBonusChoixCible.get(authorId);
+        if (partId) {
+            roulettePartageBonusChoixCible.delete(authorId);
+            const mPart = guild.members.cache.get(partId);
+            if (mPart && mPart.id !== authorId) {
+                partenairePartage = mPart;
+            }
+        }
+    }
+
     const proxy = { member: cible, channel, guild };
-    const texte = await appliquerEtDecrireResultat(outcomeId, proxy, cibleNom, failIndex);
+    let texte = await appliquerEtDecrireResultat(outcomeId, proxy, cibleNom, failIndex);
+
+    if (partenairePartage) {
+        const proxyPart = { member: partenairePartage, channel, guild };
+        const textePart = await appliquerEtDecrireResultat(outcomeId, proxyPart, partenairePartage.displayName, failIndex);
+        texte += `\n\n🤝 **BONUS PARTAGÉ !** <@${partenairePartage.id}> en profite également !\n> ${textePart}`;
+        const { MessageFlags } = require('discord.js');
+        await channel.send({
+            content: `🤝 🔔 <@${partenairePartage.id}>, **${auteurNom}** a partagé son bonus **${ROULETTE_NOMS[outcomeId] || outcomeId}** avec toi !`,
+            flags: [MessageFlags.SuppressNotifications],
+            allowedMentions: { users: [partenairePartage.id] }
+        }).catch(() => {});
+    }
 
     const tTransfo = rouletteTransfos.get(cible.id);
     if (tTransfo?.boomer && tTransfo?.bebe && Date.now() < tTransfo.boomer && Date.now() < tTransfo.bebe) {
@@ -3143,6 +3185,7 @@ async function handleRouletteMessage(message, response, client, helpers) {
             else if (nom === 'bouclier' || nom === 'superbouclier') { rouletteBouclierActif.delete(id); retire = true; }
             else if (nom === 'redirect' || nom === 'redirection') { rouletteRedirectCharges.delete(id); retire = true; }
             else if (nom === 'redirectchoix' || nom === 'redirect-choix') { rouletteRedirectChoixCible.delete(id); retire = true; }
+            else if (nom === 'partagebonus' || nom === 'partage-bonus' || nom === 'partage') { roulettePartageBonusChoixCible.delete(id); retire = true; }
             else if (nom === 'cooldowncourt' || nom === 'cooldown-court') { rouletteCooldownCourtCharges.delete(id); retire = true; }
             else if (nom === 'cooldown45' || nom === 'cooldown-45') { rouletteCooldown45Charges.delete(id); retire = true; }
             else if (nom === 'looongcooldown' || nom === 'looong-cooldown' || nom === 'taxe') { rouletteLooongCooldownCharges.delete(id); retire = true; }
@@ -3816,6 +3859,21 @@ async function handleRouletteButton(interaction, client) {
                 ephemeral: true
             });
             return true;
+        } else if (itemChoisi === 'partageBonus') {
+            const rowUser = new ActionRowBuilder().addComponents(
+                new UserSelectMenuBuilder()
+                    .setCustomId(`rlt_claim_sel_partageBonus_${targetUserId}`)
+                    .setPlaceholder('🤝 Choisir le membre avec qui partager ton prochain bonus...')
+            );
+            const member = interaction.guild?.members.cache.get(targetUserId) ?? interaction.member;
+            const majInv = buildInventaireEmbed(member);
+            await interaction.update({ embeds: [majInv.embed], components: majInv.row ? [majInv.row] : [] }).catch(() => {});
+            await interaction.followUp({
+                content: `🤝 **PARTAGE DE BONUS AU CHOIX :** Sélectionne ci-dessous le membre avec qui tu souhaites partager ton prochain bonus :`,
+                components: [rowUser],
+                ephemeral: true
+            });
+            return true;
         } else if (itemChoisi === 'echangeurPoison') {
             const malusActifs = listerMalusActifs(targetUserId);
             if (malusActifs.length === 0) {
@@ -4140,6 +4198,19 @@ async function handleRouletteButton(interaction, client) {
             return true;
         }
 
+        if (actionType === 'partageBonus') {
+            if (cible.id === targetUserId) {
+                return interaction.reply({ content: "❌ Tu ne peux pas partager ton bonus avec toi-même !", ephemeral: true });
+            }
+            roulettePartageBonusChoixCible.set(targetUserId, cible.id);
+            bridge.demanderSauvegarde();
+            await interaction.update({
+                content: `✅ C'est enregistré ! Le prochain bonus de **${interaction.member.displayName}** sera automatiquement partagé avec **${cible.displayName}** (vous en profiterez tous les deux) ! 🤝`,
+                components: []
+            });
+            return true;
+        }
+
         if (actionType === 'pseudoChoix' || actionType === 'pseudoLockSemaine') {
             const dureeStr = actionType === 'pseudoLockSemaine' ? '7j' : '48h';
             const modal = new ModalBuilder()
@@ -4250,7 +4321,7 @@ async function handleRouletteButton(interaction, client) {
         if (!embed) {
             const auteurNom = interaction.guild?.members.cache.get(authorId)?.displayName ?? interaction.user.username;
             const nom = ROULETTE_NOMS[outcomeId] ?? outcomeId;
-            const texte = outcomeId === 'aucun-resultat' ? ROULETTE_FAILS[parseInt(failIndex, 10)] : `**${auteurNom}** est tombé.e sur **${nom}**.`;
+            const texte = outcomeId === 'aucun-resultat' ? ROULETTE_FAILS[parseInt(failIndex, 10)] : `**${auteurNom}** est tombé·e sur **${nom}**.`;
             embed = buildRouletteResultEmbed(outcomeId, texte);
         }
         const row = buildRowResultatRoulette(authorId, outcomeId, failIndex);
