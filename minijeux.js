@@ -401,11 +401,15 @@ async function handleMotusMessage(message, response, client, helpers) {
     if (motusTestSessions.has(message.channel.id) && !message.content.startsWith('!')) {
         const sessionTest = motusTestSessions.get(message.channel.id);
         if (sessionTest && !sessionTest.termine && Date.now() < sessionTest.expireAt) {
+            const motsMessage = message.content.trim().split(/\s+/);
+            if (motsMessage.length !== 1) return false;
+
             const rawGuess = message.content.trim().toUpperCase()
                 .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                 .replace(/[^A-Z]/g, "");
 
-            if (rawGuess.length === sessionTest.longueur) {
+            const premiereLettre = (sessionTest.mot || '').charAt(0).toUpperCase();
+            if (rawGuess.length === sessionTest.longueur && rawGuess.startsWith(premiereLettre)) {
                 if (!sessionTest.tentatives[message.author.id]) sessionTest.tentatives[message.author.id] = [];
                 const userTries = sessionTest.tentatives[message.author.id];
                 if (userTries.length >= 3) {
@@ -444,13 +448,19 @@ async function handleMotusMessage(message, response, client, helpers) {
             return false;
         }
 
+        // Ignore les phrases ou messages à plusieurs mots
+        const motsMessage = message.content.trim().split(/\s+/);
+        if (motsMessage.length !== 1) return false;
+
         const rawGuess = message.content.trim().toUpperCase()
             .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
             .replace(/[^A-Z]/g, "");
 
         const longueurAttendue = motusData.longueur || (motusData.mot ? motusData.mot.length : 6);
+        const premiereLettre = (motusData.mot || '').charAt(0).toUpperCase();
 
-        if (rawGuess.length === longueurAttendue) {
+        // N'accepte le mot QUE s'il commence par la première lettre officielle du Motus
+        if (rawGuess.length === longueurAttendue && rawGuess.startsWith(premiereLettre)) {
             const motDuJour = motusData.mot;
             if (!motusData.tentatives[message.author.id]) {
                 motusData.tentatives[message.author.id] = [];
@@ -464,6 +474,7 @@ async function handleMotusMessage(message, response, client, helpers) {
 
             userTries.push(rawGuess);
             const essaiNum = userTries.length;
+            minijeuxBridge.trackBattlePassProgress?.(message.author.id, 'minijeu_essai', 1);
 
             if (!motusStats[message.author.id]) motusStats[message.author.id] = { victoires: 0, parties: 0 };
             if (essaiNum === 1) motusStats[message.author.id].parties++;
@@ -1089,6 +1100,8 @@ async function verifierReponseRebus(message) {
     const raw = message.content.trim().toLowerCase();
     const guessNorm = normaliserRebus(raw);
     if (!guessNorm || guessNorm.length < 1) return false;
+
+    minijeuxBridge.trackBattlePassProgress?.(message.author.id, 'rebus_part', 1);
 
     const item = rebusSession.currentItem;
     const reponsesValides = item.slice(1).map(r => normaliserRebus(r));

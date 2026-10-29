@@ -1013,6 +1013,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             const newVal = curVal + 0.25;
             rouletteJackpotBoostCharges.set(member.id, newCharges);
             rouletteJackpotBoostValue.set(member.id, newVal);
+            bridge.trackBattlePassProgress?.(member.id, 'jackpot_haut', 1);
             return `📈 **${auteurNom}** active un **BOOST JACKPOT IMMÉDIAT** ! **+${Math.round(newVal * 100)}% de chance de bonus** sur ses **${newCharges} prochains tirages** (cumulable) !`;
         }
         case 'bonus-super-bouclier': {
@@ -1540,7 +1541,7 @@ function buildRoulettePresentationEmbed(authorId, guildId = null) {
         { name: 'Système de pity 📈', value: `Après **${ROULETTE_PITY_MALUS} malus** ou **${ROULETTE_PITY_NULS} résultats nuls**, bonus garanti au tirage suivant !`, inline: false },
         { name: 'Happy hour 🔥', value: "Tous les soirs de **20h à 21h**, cooldown à **5 minutes** pour tout le monde !", inline: false },
         { name: 'Hall of fame 🏆', value: `Les bonus ultra rares (≤ **${(ROULETTE_HOF_SEUIL * 100).toFixed(2)}%**) dans <#${ROULETTE_HOF_CHANNEL_ID}> !`, inline: false },
-        { name: 'Hall of shame 🤡', value: `Les bonus malus rares (≤ **0.06%**) dans <#1563294813690929274> !`, inline: false }
+        { name: 'Hall of shame 🤡', value: `Les bonus malus rares (≤ **0.05%**) dans <#1563294813690929274> !`, inline: false }
     ];
 
     if (cEstSonAnniv) {
@@ -1855,6 +1856,38 @@ async function envoyerHallOfShame(guild, membre, entry) {
 
 const ROULETTE_ROLE_JOUEUR_ID = '1558968669751615528';
 
+function buildMenuChoixMembreRoulette(guild, authorId, customId, placeholder) {
+    const membresEligibles = guild.members.cache
+        .filter(m => !m.user.bot && m.id !== authorId && m.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID))
+        .map(m => m);
+
+    membresEligibles.sort((a, b) => {
+        const topA = bridge.topData?.messages?.[a.id] || 0;
+        const topB = bridge.topData?.messages?.[b.id] || 0;
+        if (topB !== topA) return topB - topA;
+        return a.displayName.localeCompare(b.displayName);
+    });
+
+    const options = membresEligibles.slice(0, 25).map(m => ({
+        label: m.displayName.slice(0, 100),
+        description: `@${m.user.username}`.slice(0, 100),
+        value: m.id
+    }));
+
+    if (options.length === 0) {
+        options.push({
+            label: 'Aucun joueur éligible trouvé',
+            description: 'Aucun autre membre ne possède le rôle roulette',
+            value: 'aucun'
+        });
+    }
+
+    return new StringSelectMenuBuilder()
+        .setCustomId(customId)
+        .setPlaceholder(placeholder)
+        .addOptions(options);
+}
+
 function membresTop30Roulette(guild, authorId) {
     const estEligible = (m) => m && !m.user.bot && m.id !== authorId && m.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID);
 
@@ -2054,7 +2087,9 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         }
         const bActif = (rouletteBouclierActif.get(authorId) || 0) > 0;
         if (bActif) bridge.trackBattlePassProgress(authorId, 'bouclier_actif', 1);
-        if ((rouletteJackpotBonus.get(authorId) || 0) >= 0.20) {
+        const boostJackpotVal = (rouletteJackpotBoostCharges.get(authorId) || 0) > 0 ? (rouletteJackpotBoostValue.get(authorId) || 0.25) : 0;
+        const totalJackpotReel = (rouletteJackpotBonus.get(authorId) || 0) + boostJackpotVal;
+        if (totalJackpotReel >= 0.20) {
             bridge.trackBattlePassProgress(authorId, 'jackpot_haut', 1);
         }
     }
@@ -2191,7 +2226,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     // Comptabilisation des malus RÉELLEMENT subis (uniquement pour la cible qui le prend)
     if (outcomeId.startsWith('malus-')) {
         bridge.trackBattlePassProgress?.(cible.id, 'malus_subis', 1);
-        bridge.trackBattlePassProgress?.(cible.id, 'malus_diff', 1);
+        bridge.trackBattlePassProgress?.(cible.id, 'malus_diff', 1, { malusId: outcomeId });
         const cons = (rouletteMalusConsecutifs.get(cible.id) || 0) + 1;
         rouletteMalusConsecutifs.set(cible.id, cons);
         if (cons >= 3) deverrouillerSucces(cible.id, 'enchainement-fatal', channel);
@@ -2276,11 +2311,12 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         }
         extraVoteTexte = `\n\n🎯 **Privilège de vote populaire (${voteCharges} charge${voteCharges > 1 ? 's' : ''} restante${voteCharges > 1 ? 's' : ''}) :**\nTu peux renvoyer ce malus sur la personne de ton choix via le menu ci-dessous !${noteVotants}`;
 
-        const menuRedirection = new UserSelectMenuBuilder()
-            .setCustomId(`rlt_vote_redirect_${authorId}_${outcomeId}`)
-            .setPlaceholder('🎯 Choisis qui prendra ce malus à ta place...')
-            .setMinValues(1)
-            .setMaxValues(1);
+        const menuRedirection = buildMenuChoixMembreRoulette(
+            guild,
+            authorId,
+            `rlt_vote_redirect_${authorId}_${outcomeId}`,
+            '🎯 Choisis qui prendra ce malus à ta place...'
+        );
 
         menuVoteRedirectRow = new ActionRowBuilder().addComponents(menuRedirection);
     }
@@ -3756,6 +3792,7 @@ async function handleRouletteButton(interaction, client) {
             const curVal = rouletteJackpotBoostValue.get(targetUserId) || 0;
             rouletteJackpotBoostCharges.set(targetUserId, curCharges + 2);
             rouletteJackpotBoostValue.set(targetUserId, curVal + 0.20);
+            bridge.trackBattlePassProgress?.(targetUserId, 'jackpot_haut', 1);
             messageConfirmation = `🍀 **TRÈFLE ACTIVÉ !** <@${targetUserId}>, tu gagnes **+20% de bonus jackpot** sur tes 2 prochains tirages !`;
         } else if (itemChoisi === 'eponge') {
             rouletteTransfos.delete(targetUserId);
@@ -3789,9 +3826,7 @@ async function handleRouletteButton(interaction, client) {
             messageConfirmation = `🎯 **5 REDIRECTIONS ACTIVÉES !** Tu as 5 redirections en réserve (${tot} au total) !`;
         } else if (itemChoisi === 'pseudoChoix') {
             const rowUser = new ActionRowBuilder().addComponents(
-                new UserSelectMenuBuilder()
-                    .setCustomId(`rlt_claim_sel_pseudoChoix_${targetUserId}`)
-                    .setPlaceholder('👤 Choisir le membre dont tu veux changer le pseudo...')
+                buildMenuChoixMembreRoulette(interaction.guild, targetUserId, `rlt_claim_sel_pseudoChoix_${targetUserId}`, '👤 Choisir le membre dont tu veux changer le pseudo...')
             );
             const member = interaction.guild?.members.cache.get(targetUserId) ?? interaction.member;
             const majInv = buildInventaireEmbed(member);
@@ -3804,9 +3839,7 @@ async function handleRouletteButton(interaction, client) {
             return true;
         } else if (itemChoisi === 'pseudoLockSemaine') {
             const rowUser = new ActionRowBuilder().addComponents(
-                new UserSelectMenuBuilder()
-                    .setCustomId(`rlt_claim_sel_pseudoLockSemaine_${targetUserId}`)
-                    .setPlaceholder('👤 Choisir le membre dont tu veux verrouiller le pseudo (7 jours)...')
+                buildMenuChoixMembreRoulette(interaction.guild, targetUserId, `rlt_claim_sel_pseudoLockSemaine_${targetUserId}`, '👤 Choisir le membre dont tu veux verrouiller le pseudo (7 jours)...')
             );
             const member = interaction.guild?.members.cache.get(targetUserId) ?? interaction.member;
             const majInv = buildInventaireEmbed(member);
@@ -3836,9 +3869,7 @@ async function handleRouletteButton(interaction, client) {
             });
         } else if (itemChoisi === 'redirectChoix') {
             const rowUser = new ActionRowBuilder().addComponents(
-                new UserSelectMenuBuilder()
-                    .setCustomId(`rlt_claim_sel_redirectChoix_${targetUserId}`)
-                    .setPlaceholder('🎯 Choisir le membre qui subira ton prochain malus...')
+                buildMenuChoixMembreRoulette(interaction.guild, targetUserId, `rlt_claim_sel_redirectChoix_${targetUserId}`, '🎯 Choisir le membre qui subira ton prochain malus...')
             );
             const member = interaction.guild?.members.cache.get(targetUserId) ?? interaction.member;
             const majInv = buildInventaireEmbed(member);
@@ -3851,9 +3882,7 @@ async function handleRouletteButton(interaction, client) {
             return true;
         } else if (itemChoisi === 'redirectBonusChoix') {
             const rowUser = new ActionRowBuilder().addComponents(
-                new UserSelectMenuBuilder()
-                    .setCustomId(`rlt_claim_sel_redirectBonusChoix_${targetUserId}`)
-                    .setPlaceholder('🎀 Choisir le membre qui recevra ton prochain bonus...')
+                buildMenuChoixMembreRoulette(interaction.guild, targetUserId, `rlt_claim_sel_redirectBonusChoix_${targetUserId}`, '🎀 Choisir le membre qui recevra ton prochain bonus...')
             );
             const member = interaction.guild?.members.cache.get(targetUserId) ?? interaction.member;
             const majInv = buildInventaireEmbed(member);
@@ -3866,9 +3895,7 @@ async function handleRouletteButton(interaction, client) {
             return true;
         } else if (itemChoisi === 'partageBonus') {
             const rowUser = new ActionRowBuilder().addComponents(
-                new UserSelectMenuBuilder()
-                    .setCustomId(`rlt_claim_sel_partageBonus_${targetUserId}`)
-                    .setPlaceholder('🤝 Choisir le membre avec qui partager ton prochain bonus...')
+                buildMenuChoixMembreRoulette(interaction.guild, targetUserId, `rlt_claim_sel_partageBonus_${targetUserId}`, '🤝 Choisir le membre avec qui partager ton prochain bonus...')
             );
             const member = interaction.guild?.members.cache.get(targetUserId) ?? interaction.member;
             const majInv = buildInventaireEmbed(member);
@@ -4244,9 +4271,7 @@ async function handleRouletteButton(interaction, client) {
         }
         const malusChoisi = interaction.values[0];
         const rowUser = new ActionRowBuilder().addComponents(
-            new UserSelectMenuBuilder()
-                .setCustomId(`rlt_poison_seluser_${targetUserId}_${malusChoisi}`)
-                .setPlaceholder('🎯 Choisis le membre qui recevra ce malus...')
+            buildMenuChoixMembreRoulette(interaction.guild, targetUserId, `rlt_poison_seluser_${targetUserId}_${malusChoisi}`, '🎯 Choisis le membre qui recevra ce malus...')
         );
         await interaction.update({
             content: `🎯 **ÉCHANGEUR DE POISON :** Sélectionne maintenant le membre du serveur qui va subir ce malus à ta place :`,
@@ -4361,6 +4386,12 @@ async function handleRouletteTransfoMessage(message, client) {
 
     const id = message.author.id;
     const now = Date.now();
+
+    // Détection de fin de mute roulette pour la quête "Victime exemplaire"
+    if (rouletteTimeoutUntil.has(id) && now >= rouletteTimeoutUntil.get(id)) {
+        rouletteTimeoutUntil.delete(id);
+        bridge.trackBattlePassProgress?.(id, 'mute_survecu', 1);
+    }
 
     // Effet Écho Condescendant (1 chance sur 3)
     const finEcho = rouletteEchoUntil.get(id);

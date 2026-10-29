@@ -314,6 +314,10 @@ function getOuCreerProfilBP(userId, autoActif = false) {
         p.dailyHours = [];
         p.dailySalonCounts = {};
         p.dailyMotusSessions = [];
+        p.dailyMessageCount = 0;
+        p.dailyVocalMinutes = 0;
+        p.dailyReactedMembers = [];
+        p.dailyMinigames = [];
     }
 
     // Reset Hebdo
@@ -323,6 +327,21 @@ function getOuCreerProfilBP(userId, autoActif = false) {
         p.weeklySalons = [];
         p.weeklyDays = [];
         p.weeklyDailyCount = 0;
+        p.weeklyHH = [];
+        p.weeklyVocalDays = [];
+        p.weeklyVocal20Days = [];
+        p.weeklyVocalGroupeDays = [];
+        p.weeklyRebusDays = [];
+        p.weeklyPenduDays = [];
+        p.weeklyMatinDays = [];
+        p.weeklyNuitDays = [];
+        p.weeklyDays15Msgs = [];
+        p.weeklyDebatteurDays = [];
+        p.weeklyDoubleMotusDays = [];
+        p.weeklyBonuses = [];
+        p.weeklyMalusSubis = [];
+        p.weeklyMotusAndRebusDays = [];
+        p.weeklyGrandChelemMinijeuxDays = [];
     }
 
     // Rattrapage automatique de tous les paliers déjà atteints mais non reçus
@@ -467,36 +486,73 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
 
     let modifie = false;
 
-    const nowParis = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-    const heure = nowParis.getHours();
-    const dayOfWeek = nowParis.getDay(); // 0 = Dimanche, 6 = Samedi
-    const today = getTodayKey();
+    const nowParis = meta.fakeDate || new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const heure = meta.fakeHour !== undefined ? meta.fakeHour : nowParis.getHours();
+    const dayOfWeek = meta.fakeDay !== undefined ? meta.fakeDay : nowParis.getDay(); // 0 = Dimanche, 6 = Samedi
+    const today = meta.fakeToday || getTodayKey();
 
+    // Initialisation sécurisée des structures quotidiennes
     if (!p.dailySalons) p.dailySalons = [];
     if (!p.dailyHours) p.dailyHours = [];
     if (!p.dailySalonCounts) p.dailySalonCounts = {};
+    if (!p.dailyMotusSessions) p.dailyMotusSessions = [];
+    if (!p.dailyReactedMembers) p.dailyReactedMembers = [];
+    if (!p.dailyMinigames) p.dailyMinigames = [];
+
+    // Initialisation sécurisée des structures hebdomadaires
     if (!p.weeklySalons) p.weeklySalons = [];
     if (!p.weeklyDays) p.weeklyDays = [];
+    if (!p.weeklyHH) p.weeklyHH = [];
+    if (!p.weeklyVocalDays) p.weeklyVocalDays = [];
+    if (!p.weeklyVocal20Days) p.weeklyVocal20Days = [];
+    if (!p.weeklyVocalGroupeDays) p.weeklyVocalGroupeDays = [];
+    if (!p.weeklyRebusDays) p.weeklyRebusDays = [];
+    if (!p.weeklyPenduDays) p.weeklyPenduDays = [];
+    if (!p.weeklyMatinDays) p.weeklyMatinDays = [];
+    if (!p.weeklyNuitDays) p.weeklyNuitDays = [];
+    if (!p.weeklyDays15Msgs) p.weeklyDays15Msgs = [];
+    if (!p.weeklyDebatteurDays) p.weeklyDebatteurDays = [];
+    if (!p.weeklyDoubleMotusDays) p.weeklyDoubleMotusDays = [];
+    if (!p.weeklyBonuses) p.weeklyBonuses = [];
+    if (!p.weeklyMalusSubis) p.weeklyMalusSubis = [];
+    if (!p.weeklyMotusAndRebusDays) p.weeklyMotusAndRebusDays = [];
+    if (!p.weeklyGrandChelemMinijeuxDays) p.weeklyGrandChelemMinijeuxDays = [];
 
     const typesActifs = new Set([type]);
 
     // 1. Déclencheurs contextuels de messages
     if (type === 'message') {
-        if (heure >= 0 && heure < 8) typesActifs.add('message_nuit');
+        p.dailyMessageCount = (p.dailyMessageCount || 0) + 1;
+
+        if (heure >= 0 && heure < 8) {
+            typesActifs.add('message_nuit');
+            if (!p.weeklyNuitDays.includes(today)) p.weeklyNuitDays.push(today);
+            typesActifs.add('message_nuit_jours');
+        }
         if (heure >= 12 && heure < 14) typesActifs.add('message_midi');
         if (heure >= 18 && heure < 20) typesActifs.add('message_soir_debut');
         if (heure >= 19) typesActifs.add('message_soir');
         if (dayOfWeek === 0 || dayOfWeek === 6) typesActifs.add('message_weekend');
-        if (heure < 10) typesActifs.add('message_matin_jours');
+
+        if (heure < 10) {
+            if (!p.weeklyMatinDays.includes(today)) p.weeklyMatinDays.push(today);
+            typesActifs.add('message_matin_jours');
+        }
+
+        if (p.dailyMessageCount >= 15) {
+            if (!p.weeklyDays15Msgs.includes(today)) p.weeklyDays15Msgs.push(today);
+            typesActifs.add('message_regulier');
+        }
 
         if (meta.hasCooldown) typesActifs.add('msg_sous_cooldown');
         if (meta.hasCouronne) typesActifs.add('couronne_msg');
+        if (meta.muteSurvecu) typesActifs.add('mute_survecu');
 
         // Suivi des heures distinctes
         if (!p.dailyHours.includes(heure)) {
             p.dailyHours.push(heure);
-            if (p.dailyHours.length >= 2) typesActifs.add('heures_diff');
         }
+        if (p.dailyHours.length >= 2) typesActifs.add('heures_diff');
 
         // Suivi des salons distincts (quotidien et hebdo)
         if (meta.channelId) {
@@ -512,6 +568,10 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
 
             p.dailySalonCounts[meta.channelId] = (p.dailySalonCounts[meta.channelId] || 0) + 1;
             if (p.dailySalonCounts[meta.channelId] >= 15) typesActifs.add('message_salon_unique');
+            if (p.dailySalonCounts[meta.channelId] >= 25) {
+                if (!p.weeklyDebatteurDays.includes(today)) p.weeklyDebatteurDays.push(today);
+                typesActifs.add('debatteur_jours');
+            }
         }
 
         // Suivi des jours actifs dans la semaine
@@ -527,65 +587,150 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
         if (meta.sansEffetActif) typesActifs.add('roulette_neutre');
         if (meta.malusCumules >= 2) typesActifs.add('roll_sous_malus_cumules');
 
-        if (!p.weeklyHH) p.weeklyHH = [];
         if (meta.isHappyHour && !p.weeklyHH.includes(today)) {
             p.weeklyHH.push(today);
             if (p.weeklyHH.length >= 3) typesActifs.add('hh_jours');
         }
     }
 
+    if (type === 'bonus_diff') {
+        const bId = meta.bonusId || meta.outcomeId || ('bonus_' + Date.now());
+        if (!p.weeklyBonuses.includes(bId)) p.weeklyBonuses.push(bId);
+    }
+
+    if (type === 'malus_diff') {
+        const mId = meta.malusId || meta.outcomeId || ('malus_' + Date.now());
+        if (!p.weeklyMalusSubis.includes(mId)) p.weeklyMalusSubis.push(mId);
+    }
+
     // 3. Déclencheurs Vocal & Endurance
     if (type === 'vocal_min') {
+        p.dailyVocalMinutes = (p.dailyVocalMinutes || 0) + amount;
+        p.vocalCurrentSessionMinutes = (p.vocalCurrentSessionMinutes || 0) + amount;
+        if (p.vocalCurrentSessionMinutes >= 45 || meta.sessionDuration >= 45) {
+            typesActifs.add('vocal_session_longue');
+        }
+
         if (heure >= 22) typesActifs.add('vocal_nuit');
         if (heure >= 14 && heure < 18) typesActifs.add('vocal_aprem');
         if (dayOfWeek === 0 || dayOfWeek === 6) typesActifs.add('vocal_weekend');
-        if (meta.groupeCount >= 3) typesActifs.add('vocal_groupe');
 
-        if (!p.weeklyVocalDays) p.weeklyVocalDays = [];
+        if (meta.groupeCount >= 3) {
+            typesActifs.add('vocal_groupe');
+            if (!p.weeklyVocalGroupeDays.includes(today)) {
+                p.weeklyVocalGroupeDays.push(today);
+            }
+        }
+
         if (!p.weeklyVocalDays.includes(today)) {
             p.weeklyVocalDays.push(today);
             if (p.weeklyVocalDays.length >= 3) typesActifs.add('vocal_jours');
-            if (p.weeklyVocalDays.length >= 4) typesActifs.add('vocal_jours_20');
+        }
+
+        if (p.dailyVocalMinutes >= 20) {
+            if (!p.weeklyVocal20Days.includes(today)) p.weeklyVocal20Days.push(today);
+            typesActifs.add('vocal_jours_20');
         }
     }
 
     // 4. Déclencheurs Mini-Jeux combinés
     if (type === 'minijeu_essai') {
-        if (!p.dailyMotusSessions) p.dailyMotusSessions = [];
+        if (!p.dailyMinigames.includes('motus')) p.dailyMinigames.push('motus');
         const sessionCourante = heure >= 18 ? '19h' : '10h';
         if (!p.dailyMotusSessions.includes(sessionCourante)) {
             p.dailyMotusSessions.push(sessionCourante);
-            if (p.dailyMotusSessions.length >= 2) typesActifs.add('motus_double_session');
+            if (p.dailyMotusSessions.length >= 2) {
+                typesActifs.add('motus_double_session');
+                if (!p.weeklyDoubleMotusDays.includes(today)) {
+                    p.weeklyDoubleMotusDays.push(today);
+                }
+            }
         }
     }
 
     if (type === 'rebus_part') {
-        if (!p.weeklyRebusDays) p.weeklyRebusDays = [];
+        if (!p.dailyMinigames.includes('rebus')) p.dailyMinigames.push('rebus');
         if (!p.weeklyRebusDays.includes(today)) {
             p.weeklyRebusDays.push(today);
             if (p.weeklyRebusDays.length >= 3) typesActifs.add('rebus_jours');
         }
     }
 
-    // 5. Streaks Hebdos & Quotidiennes
+    if (type === 'pendu_essai') {
+        if (!p.dailyMinigames.includes('pendu')) p.dailyMinigames.push('pendu');
+    }
+
+    if (type === 'pendu_jours') {
+        if (!p.weeklyPenduDays.includes(today)) p.weeklyPenduDays.push(today);
+    }
+
+    // Combinaisons mini-jeux hebdos
+    if (p.dailyMinigames.includes('motus') && p.dailyMinigames.includes('rebus')) {
+        if (!p.weeklyMotusAndRebusDays.includes(today)) p.weeklyMotusAndRebusDays.push(today);
+        typesActifs.add('minijeu_part_jours');
+    }
+
+    if (p.dailyMinigames.includes('motus') && p.dailyMinigames.includes('rebus') && p.dailyMinigames.includes('pendu')) {
+        if (!p.weeklyGrandChelemMinijeuxDays.includes(today)) p.weeklyGrandChelemMinijeuxDays.push(today);
+        typesActifs.add('grand_chelem_minijeux');
+    }
+
+    // 5. Réactions
+    if (type === 'reaction_add') {
+        const target = meta.targetAuthorId || ('target_' + Math.random());
+        if (!p.dailyReactedMembers.includes(target)) p.dailyReactedMembers.push(target);
+    }
+
+    // 6. Streaks Hebdos & Quotidiennes
     if (p.streak >= 7) typesActifs.add('streak_hebdo');
     if (p.streak >= 5) typesActifs.add('streak_hebdo_5');
 
-    
     const validerQuete = (q, amt) => {
-        // Pour les quêtes de comptage d'ensembles uniques (salons, jours...)
+        // Pour les quêtes de comptage d'ensembles uniques (salons, jours, streaks, etc.)
         if (q.type === 'salons_diff') {
             q.progression = Math.min(q.objectif, p.dailySalons.length);
         } else if (q.type === 'salons_diff_hebdo') {
             q.progression = Math.min(q.objectif, p.weeklySalons.length);
+        } else if (q.type === 'heures_diff') {
+            q.progression = Math.min(q.objectif, p.dailyHours.length);
         } else if (q.type === 'message_jours') {
             q.progression = Math.min(q.objectif, p.weeklyDays.length);
+        } else if (q.type === 'message_matin_jours') {
+            q.progression = Math.min(q.objectif, p.weeklyMatinDays.length);
+        } else if (q.type === 'message_nuit_jours') {
+            q.progression = Math.min(q.objectif, p.weeklyNuitDays.length);
+        } else if (q.type === 'message_regulier') {
+            q.progression = Math.min(q.objectif, p.weeklyDays15Msgs.length);
+        } else if (q.type === 'debatteur_jours') {
+            q.progression = Math.min(q.objectif, p.weeklyDebatteurDays.length);
         } else if (q.type === 'hh_jours') {
-            q.progression = Math.min(q.objectif, p.weeklyHH?.length || 0);
-        } else if (q.type === 'vocal_jours' || q.type === 'vocal_jours_20') {
-            q.progression = Math.min(q.objectif, p.weeklyVocalDays?.length || 0);
+            q.progression = Math.min(q.objectif, p.weeklyHH.length);
+        } else if (q.type === 'vocal_jours') {
+            q.progression = Math.min(q.objectif, p.weeklyVocalDays.length);
+        } else if (q.type === 'vocal_jours_20') {
+            q.progression = Math.min(q.objectif, p.weeklyVocal20Days.length);
+        } else if (q.type === 'vocal_groupe') {
+            if (q.id === 'bande_complet') q.progression = Math.min(q.objectif, p.weeklyVocalGroupeDays.length);
+            else q.progression = Math.min(q.objectif, q.progression + amt);
         } else if (q.type === 'rebus_jours') {
-            q.progression = Math.min(q.objectif, p.weeklyRebusDays?.length || 0);
+            q.progression = Math.min(q.objectif, p.weeklyRebusDays.length);
+        } else if (q.type === 'pendu_jours') {
+            q.progression = Math.min(q.objectif, p.weeklyPenduDays.length);
+        } else if (q.type === 'motus_double_session') {
+            if (q.id === 'presence_deux_services') q.progression = Math.min(q.objectif, p.weeklyDoubleMotusDays.length);
+            else q.progression = Math.min(q.objectif, p.dailyMotusSessions.length);
+        } else if (q.type === 'minijeu_part_jours') {
+            q.progression = Math.min(q.objectif, p.weeklyMotusAndRebusDays.length);
+        } else if (q.type === 'grand_chelem_minijeux') {
+            q.progression = Math.min(q.objectif, p.weeklyGrandChelemMinijeuxDays.length);
+        } else if (q.type === 'bonus_diff') {
+            q.progression = Math.min(q.objectif, p.weeklyBonuses.length);
+        } else if (q.type === 'malus_diff') {
+            q.progression = Math.min(q.objectif, p.weeklyMalusSubis.length);
+        } else if (q.type === 'reaction_add') {
+            q.progression = Math.min(q.objectif, p.dailyReactedMembers.length);
+        } else if (q.type === 'streak_hebdo' || q.type === 'streak_hebdo_5') {
+            q.progression = Math.min(q.objectif, p.streak || 0);
         } else if (q.type === 'message_salon_unique') {
             const maxDansUnSalon = Math.max(...Object.values(p.dailySalonCounts), 0);
             q.progression = Math.min(q.objectif, maxDansUnSalon);
@@ -617,7 +762,7 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
             }
 
             // Méta-quête Grand Chelem (4/4 quotidiennes)
-            const toutesTerminees = p.quetesDuJour.every(dq => dq.terminee);
+            const toutesTerminees = p.quetesDuJour.length > 0 && p.quetesDuJour.every(dq => dq.terminee);
             if (toutesTerminees && p.dernierGrandChelem !== today) {
                 p.dernierGrandChelem = today;
                 for (const hq of p.quetesHebdo) {
