@@ -3448,19 +3448,17 @@ async function handleRouletteSlash(interaction, client) {
         const rowBtns = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`rlt_achs_${member.id}_0_${interaction.user.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary)
         );
-        const rowUser = new ActionRowBuilder().addComponents(
-            new UserSelectMenuBuilder().setCustomId(`rlt_inspect_stats_${interaction.user.id}`).setPlaceholder('🔍 Inspecter un autre membre...')
-        );
-        await interaction.reply({ embeds: [buildRouletteStatsEmbed(member)], components: [rowBtns, rowUser] });
+        const rowUser = buildMenuChoixMembreRoulette(interaction.guild, interaction.user.id, `rlt_inspect_stats_${interaction.user.id}`, '🔍 Inspecter un autre membre...');
+        const components = rowUser ? [rowBtns, rowUser] : [rowBtns];
+        await interaction.reply({ embeds: [buildRouletteStatsEmbed(member)], components });
         return true;
     }
 
     if (action === 'state') {
         const member = interaction.member;
-        const rowUser = new ActionRowBuilder().addComponents(
-            new UserSelectMenuBuilder().setCustomId(`rlt_inspect_state_${interaction.user.id}`).setPlaceholder('🔍 Inspecter un autre membre...')
-        );
-        await interaction.reply({ embeds: [buildRouletteStateEmbed(member, interaction.guildId)], components: [rowUser] });
+        const rowUser = buildMenuChoixMembreRoulette(interaction.guild, interaction.user.id, `rlt_inspect_state_${interaction.user.id}`, '🔍 Inspecter un autre membre...');
+        const components = rowUser ? [rowUser] : [];
+        await interaction.reply({ embeds: [buildRouletteStateEmbed(member, interaction.guildId)], components });
         return true;
     }
 
@@ -3473,10 +3471,10 @@ async function handleRouletteSlash(interaction, client) {
     if (action === 'succes') {
         const member = interaction.member;
         const { embed, row } = buildRouletteAchievementsEmbed(member, 0, interaction.user.id);
-        const rowUser = new ActionRowBuilder().addComponents(
-            new UserSelectMenuBuilder().setCustomId(`rlt_inspect_succes_${interaction.user.id}`).setPlaceholder('🔍 Inspecter un autre membre...')
-        );
-        const components = row ? [row, rowUser] : [rowUser];
+        const rowUser = buildMenuChoixMembreRoulette(interaction.guild, interaction.user.id, `rlt_inspect_succes_${interaction.user.id}`, '🔍 Inspecter un autre membre...');
+        const components = [];
+        if (row) components.push(row);
+        if (rowUser) components.push(rowUser);
         await interaction.reply({ embeds: [embed], components });
         return true;
     }
@@ -4009,22 +4007,24 @@ async function handleRouletteButton(interaction, client) {
         const cible = interaction.guild.members.cache.get(cibleId);
         if (!cible) return interaction.reply({ content: "Membre introuvable sur le serveur.", ephemeral: true });
 
-        const rowUser = new ActionRowBuilder().addComponents(
-            new UserSelectMenuBuilder().setCustomId(`rlt_inspect_${type}_${authorId}`).setPlaceholder('🔍 Inspecter un autre membre...')
-        );
+        const rowUser = buildMenuChoixMembreRoulette(interaction.guild, authorId, `rlt_inspect_${type}_${authorId}`, '🔍 Inspecter un autre membre...');
+        const componentsUser = rowUser ? [rowUser] : [];
 
         if (type === 'state') {
-            await interaction.update({ embeds: [buildRouletteStateEmbed(cible, interaction.guildId)], components: [rowUser] });
+            await interaction.update({ embeds: [buildRouletteStateEmbed(cible, interaction.guildId)], components: componentsUser });
             return true;
         } else if (type === 'stats') {
             const rowBtns = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId(`rlt_achs_${cible.id}_0_${authorId}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary)
             );
-            await interaction.update({ embeds: [buildRouletteStatsEmbed(cible)], components: [rowBtns, rowUser] });
+            const components = rowUser ? [rowBtns, rowUser] : [rowBtns];
+            await interaction.update({ embeds: [buildRouletteStatsEmbed(cible)], components });
             return true;
         } else if (type === 'succes') {
             const { embed, row } = buildRouletteAchievementsEmbed(cible, 0, authorId);
-            const components = row ? [row, rowUser] : [rowUser];
+            const components = [];
+            if (row) components.push(row);
+            if (rowUser) components.push(rowUser);
             await interaction.update({ embeds: [embed], components });
             return true;
         }
