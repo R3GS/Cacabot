@@ -1922,14 +1922,15 @@ function buildRoulettePaytableEmbed() {
             .sort((a, b) => b.poids - a.poids)
             .map(e => {
                 const { n, pct } = probaAffichee(probaReelle(e));
-                return `**1/${n}** (${pct}%) — ${e.desc}`;
+                const emoji = ROULETTE_EMOJIS_PAR_ID[e.id] ? `${ROULETTE_EMOJIS_PAR_ID[e.id]} ` : '';
+                return `**1/${n}** (${pct}%) — ${emoji}${e.nom}`;
             });
         return lignes.length ? `**${titre} :**\n${lignes.join('\n')}` : null;
     };
 
     return new EmbedBuilder()
         .setColor(0xffd20a)
-        .setTitle('🎰 Probabilités')
+        .setTitle('🎰 Probabilités de la Roulette')
         .setDescription([
             section('🎉 BONUS', 'bonus'),
             section('💀 MALUS', 'malus'),
@@ -2007,7 +2008,10 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         }
     }
 
-    const membre = guild.members.cache.get(authorId);
+    let membre = guild?.members?.cache?.get(authorId);
+    if (!membre && guild) {
+        membre = await guild.members.fetch(authorId).catch(() => null);
+    }
     const auteurNom = membre?.displayName ?? 'Quelqu\'un';
 
     const pityAvant = roulettePity.get(authorId) ?? { malus: 0, nuls: 0 };
@@ -3642,6 +3646,7 @@ function transfererMalus(sourceId, destId, malusKey, guild) {
 }
 
 async function handleRouletteButton(interaction, client) {
+    client = client || interaction.client;
     const customId = interaction.customId;
 
     if (customId.startsWith('rlt_vote_redirect_')) {
