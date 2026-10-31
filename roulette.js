@@ -89,16 +89,16 @@ const ROULETTE_ECHO_REPLIQUES = [
 const rouletteEchoUntil = new Map();
 
 const ROULETTE_PUBS_SPONSOR = [
-    '\n\n*Message sponsorisé par [Carglass](https://www.carglass.fr) : Carglass répare, Carglass remplace !*',
-    '\n\n*Publicité : Pour votre santé, mangez au moins cinq fruits et légumes par jour sur [MangerBouger](https://www.mangerbouger.fr).*',
-    '\n\n*Ce message vous est offert par [NordVPN](https://nordvpn.com) : Protégez vos données dès maintenant !*',
-    '\n\n*Un coup de barre ? [Mars](https://www.mars.com), et ça repart !*',
-    '\n\n*Offre exclusive [IKEA](https://www.ikea.com) : Retrouvez votre meuble préféré en kit !*',
-    '\n\n*Sponsorisé par [Sephora](https://www.sephora.fr) : Le pouvoir infini de la beauté.*',
-    '\n\n*Besoin d\'énergie ? [Red Bull](https://www.redbull.com) vous donne des aiiiles !*',
-    '\n\n*Parce que vous le valez bien. [L\'Oréal Paris](https://www.loreal-paris.fr).*',
-    '\n\n*Ce message est sponsorisé par [Spotify](https://www.spotify.com) : Écoutez vos titres favoris sans interruption.*',
-    '\n\n*Un break ? Prenez un [KitKat](https://www.kitkat.fr) !*'
+    '\n\n*Message sponsorisé par [Carglass](<https://www.carglass.fr>) : Carglass répare, Carglass remplace !*',
+    '\n\n*Publicité : Pour votre santé, mangez au moins cinq fruits et légumes par jour sur [MangerBouger](<https://www.mangerbouger.fr>).*',
+    '\n\n*Ce message vous est offert par [NordVPN](<https://nordvpn.com>) : Protégez vos données dès maintenant !*',
+    '\n\n*Un coup de barre ? [Mars](<https://www.mars.com>), et ça repart !*',
+    '\n\n*Offre exclusive [IKEA](<https://www.ikea.com>) : Retrouvez votre meuble préféré en kit !*',
+    '\n\n*Sponsorisé par [Sephora](<https://www.sephora.fr>) : Le pouvoir infini de la beauté.*',
+    '\n\n*Besoin d\'énergie ? [Red Bull](<https://www.redbull.com>) vous donne des aiiiles !*',
+    '\n\n*Parce que vous le valez bien. [L\'Oréal Paris](<https://www.loreal-paris.fr>).*',
+    '\n\n*Ce message est sponsorisé par [Spotify](<https://www.spotify.com>) : Écoutez vos titres favoris sans interruption.*',
+    '\n\n*Un break ? Prenez un [KitKat](<https://www.kitkat.fr>) !*'
 ];
 
 const ROULETTE_AUTOCORRECT_PHRASES = [
@@ -242,7 +242,7 @@ const ROULETTE_TABLE = [
     { id: 'malus-exclu-semaine', type: 'malus', poids: 1/1200, nom: 'Exclusion de 1 semaine', desc: 'Exclusion de 1 semaine' },
     { id: 'malus-ban', type: 'malus', poids: 1/15000, nom: 'Ban définitif', desc: 'Ban définitif' },
     { id: 'special-vote-immunite-exclusion', type: 'special', poids: 1/125, nom: 'Vote public', desc: 'Vote public : tirage à volonté pendant 1min ou exclusion 1 jour' },
-    { id: 'special-tournee-generale', type: 'special', poids: 1/600, nom: 'Tournée générale', desc: 'Tournée générale ! Les cooldowns sont éteints pendant 1 minute' }
+    { id: 'special-tournee-generale', type: 'special', poids: 1/600, nom: 'Tournée générale', desc: 'Tournée générale ! Happy Hour de 30 minutes pour tout le monde (5 min de cooldown)' }
 ];
 
 const ROULETTE_NOMS = Object.fromEntries(ROULETTE_TABLE.map(e => [e.id, e.nom]));
@@ -427,6 +427,7 @@ function initRouletteBridge(b) {
 }
 
 function estHappyHour() {
+    if (Date.now() < rouletteTourneeJusquA) return true;
     const now = new Date();
     const parisDate = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
     return parisDate.getHours() === 20;
@@ -600,7 +601,7 @@ function appliquerTransfos(userId, texte) {
             r = r + ' ' + ROULETTE_AUTOCORRECT_PHRASES[Math.floor(Math.random() * ROULETTE_AUTOCORRECT_PHRASES.length)].trim();
         }
     }
-    if (t.publicite) r = r + ROULETTE_PUBS_SPONSOR[Math.floor(Math.random() * ROULETTE_PUBS_SPONSOR.length)];
+    if (t.publicite && Math.random() < 0.33) r = r + ROULETTE_PUBS_SPONSOR[Math.floor(Math.random() * ROULETTE_PUBS_SPONSOR.length)];
     const max = Math.min(t.limite30 ? 30 : Infinity, t.limite100 ? 100 : Infinity);
     if (max !== Infinity && [...r].length > max) r = [...r].slice(0, max).join('').replace(/<[^>]*$/, '');
     return r;
@@ -1144,8 +1145,13 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             return `**${auteurNom}** est limité·e à **30 caractères** par message pendant **${1 * multTemps}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         case 'special-tournee-generale':
             deverrouillerSucces(member.id, 'tournee-patron', message.channel);
-            rouletteTourneeJusquA = Date.now() + 60 * 1000;
-            return `🍻 **${auteurNom}** paie sa tournée ! **Tous les cooldowns sont éteints pendant 1 minute**, tirez à volonté !`;
+            rouletteTourneeJusquA = Date.now() + 30 * 60 * 1000;
+            for (const [uid, cd] of rouletteCooldowns.entries()) {
+                if (cd > Date.now() + 5 * 60 * 1000) {
+                    rouletteCooldowns.set(uid, Date.now() + 5 * 60 * 1000);
+                }
+            }
+            return `🍻 **${auteurNom}** paie sa tournée ! **Happy Hour exceptionnel de 30 minutes activé pour tout le monde !** (Cooldowns réduits à 5 minutes)`;
         case 'malus-leet': {
             const finLeet = rouletteLeetUntil.get(member.id);
             if (finLeet && Date.now() < finLeet) {
@@ -2011,7 +2017,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     const now = Date.now();
     const finFreeRoll = rouletteFreeRollUntil.get(authorId);
     const chargesTriple = rouletteCoupTripleCharges.get(authorId) || 0;
-    const enFreeRoll = (finFreeRoll && now < finFreeRoll) || now < rouletteTourneeJusquA || chargesTriple > 0;
+    const enFreeRoll = (finFreeRoll && now < finFreeRoll) || chargesTriple > 0;
 
     if (chargesTriple > 0) {
         rouletteCoupTripleCharges.set(authorId, chargesTriple - 1);
@@ -4454,6 +4460,7 @@ async function handleRouletteTransfoMessage(message, client) {
     }
 
     try {
+        const { MessageFlags } = require('discord.js');
         const msgWebhook = await webhook.send({
             content: contenu.slice(0, 2000),
             username: message.member?.displayName ?? message.author.username,
@@ -4461,6 +4468,7 @@ async function handleRouletteTransfoMessage(message, client) {
             files: [...message.attachments.values()].map(a => a.url),
             threadId: message.channel.isThread() ? message.channel.id : undefined,
             allowedMentions: { parse: [] },
+            flags: [MessageFlags.SuppressEmbeds],
             wait: true
         });
         if (msgWebhook?.id) {
