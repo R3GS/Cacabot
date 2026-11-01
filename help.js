@@ -48,6 +48,9 @@ function buildHelpxCategorieEmbed(categorie) {
     if (categorie === 'minijeux') {
         return embed.setTitle('🎮 Commandes Mini-Jeux (Epsys-Only)')
             .addFields(
+                { name: '♻️ **!penduforce**', value: 'Ferme la session de Pendu en cours et en relance une nouvelle immédiatement.' },
+                { name: '♻️ **!rebusforce**', value: 'Ferme la session de Rébus en cours et relance une nouvelle session de 5 manches.' },
+                { name: '♻️ **!motusforce**', value: 'Ferme le Motus en cours et relance immédiatement une nouvelle session.' },
                 { name: '🔤 **!motus set / force [mot]**', value: 'Définit manuellement le mot secret de la prochaine session de Motus.' },
                 { name: '🧩 **!rebus set / force [titre ou emojis réponse]**', value: 'Définit le rébus secret de la prochaine session de Rébus.' },
                 { name: '📊 **!jeupts [@membre]**', value: 'Panneau interactif complet pour modifier les points/victoires de Motus, Rébus et Pendu.' },

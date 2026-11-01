@@ -599,8 +599,8 @@ async function handleMotusMessage(message, response, client, helpers) {
         }
     }
 
-    // Commande de redémarrage d'urgence Motus (Epsys-only)
-    if (cmd === '!motus' && rawContent.split(/\s+/)[1]?.toLowerCase() === 'restart') {
+    // Commande de redémarrage d'urgence / forçage Motus (Epsys-only) : !motusforce ou !motus restart
+    if (cmd === '!motusforce' || (cmd === '!motus' && (rawContent.split(/\s+/)[1]?.toLowerCase() === 'restart' || rawContent.split(/\s+/)[1]?.toLowerCase() === 'relancer'))) {
         if (message.author.id !== EPSYS_ID) {
             await message.reply("Cette commande est réservée à Epsys.");
             return true;
@@ -610,11 +610,11 @@ async function handleMotusMessage(message, response, client, helpers) {
         const heureActuelle = nowParis.getHours();
         const heureSession = (heureActuelle >= 19) ? 19 : 10;
 
-        // Annulation de l'ancienne session
+        // Annulation et fermeture de l'ancienne session
         motusData.termine = true;
         minijeuxBridge.demanderSauvegarde();
 
-        await message.reply(`♻️ **Session Motus précédente annulée !** Relance immédiate d'une nouvelle partie (${heureSession === 19 ? '7 lettres' : '6 lettres'})...`);
+        await message.reply(`♻️ **Session Motus précédente fermée !** Lancement immédiat d'une toute nouvelle session (${heureSession === 19 ? '7 lettres' : '6 lettres'})...`);
         if (message.guild) {
             await envoyerMotusQuotidien(message.guild, heureSession);
         }
@@ -1334,8 +1334,8 @@ async function handleRebusMessage(message, response, client, helpers) {
         return false;
     }
 
-    // Commande de redémarrage d'urgence Rébus (Epsys-only)
-    if (cmd === '!rebus' && rawContent.split(/\s+/)[1]?.toLowerCase() === 'restart') {
+    // Commande de redémarrage d'urgence / forçage Rébus (Epsys-only) : !rebusforce ou !rebus restart
+    if (cmd === '!rebusforce' || (cmd === '!rebus' && (rawContent.split(/\s+/)[1]?.toLowerCase() === 'restart' || rawContent.split(/\s+/)[1]?.toLowerCase() === 'relancer'))) {
         if (message.author.id !== EPSYS_ID) {
             await message.reply("Cette commande est réservée à Epsys.");
             return true;
@@ -1346,7 +1346,7 @@ async function handleRebusMessage(message, response, client, helpers) {
         rebusSession.active = false;
         rebusSession.currentItem = null;
 
-        await message.reply("♻️ **Session Rébus précédente annulée !** Relance immédiate d'une nouvelle partie (5 manches)...");
+        await message.reply("♻️ **Session Rébus précédente fermée !** Lancement immédiat d'une toute nouvelle session (5 manches de 5 min)...");
         if (message.guild) {
             await lancerSessionRebus(message.guild);
         }

@@ -840,18 +840,18 @@ async function handlePenduMessage(message, response, client, helpers) {
         return true;
     }
 
-    // Commande de redémarrage d'urgence Pendu (Epsys-only)
-    if (command === '!pendu' && rawContent.split(/\s+/)[1]?.toLowerCase() === 'restart') {
+    // Commande de redémarrage d'urgence / forçage Pendu (Epsys-only) : !penduforce ou !pendu restart
+    if (command === '!penduforce' || (command === '!pendu' && (rawContent.split(/\s+/)[1]?.toLowerCase() === 'restart' || rawContent.split(/\s+/)[1]?.toLowerCase() === 'relancer'))) {
         if (message.author.id !== EPSYS_ID) {
             await message.reply("Cette commande est réservée à Epsys.");
             return true;
         }
 
-        // Annulation de l'ancienne session
+        // Annulation et fermeture de l'ancienne session
         session.termine = true;
         penduBridge.demanderSauvegarde();
 
-        await message.reply("♻️ **Session Pendu précédente annulée !** Relance immédiate d'une nouvelle partie de 7 lettres...");
+        await message.reply("♻️ **Session Pendu précédente fermée !** Lancement immédiat d'une toute nouvelle partie officielle (7 lettres, 6 erreurs collectives, 1h)...");
         if (message.guild) {
             await lancerPenduQuotidien(message.guild);
         }
