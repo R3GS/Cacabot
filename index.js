@@ -1702,12 +1702,4 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     await handleVoiceStateUpdate(oldState, newState);
 });
 
-client.on('messageReactionAdd', async (reaction, user) => {
-    if (user.bot) return;
-    const authorId = reaction.message.author?.id;
-    if (authorId && authorId !== user.id) {
-        battlePassBridge.trackBattlePassProgress?.(user.id, 'reaction_add', 1, { targetAuthorId: authorId });
-    }
-});
-
 client.login(process.env.TOKEN);
