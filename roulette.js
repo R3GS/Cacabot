@@ -1789,7 +1789,7 @@ async function verifierRoleGamblingAddict(membre) {
     await membre.roles.add(ROULETTE_ROLE_ADDICT_ID, `Gambling addict : ${stats.tirages} rolls`).catch(() => {});
 }
 
-async function envoyerHallOfFame(guild, membre, entry) {
+async function envoyerHallOfFame(guild, membre, entry, lanceur = null, estPartage = false) {
     if (!entry || entry.type !== 'bonus') return;
     const proba = probaReelle(entry);
     if (proba >= ROULETTE_HOF_SEUIL) return;
@@ -1802,30 +1802,54 @@ async function envoyerHallOfFame(guild, membre, entry) {
     const avatar = membre?.user?.displayAvatarURL({ dynamic: true, size: 256 }) ?? membre?.displayAvatarURL?.({ dynamic: true, size: 256 });
     const emoji = ROULETTE_EMOJIS_PAR_ID[entry.id] ?? '🏆';
 
+    const estRedirige = lanceur && lanceur.id !== membre.id;
+    let description = "Le destin a parlé ! Un bonus ultra rare vient d'être décroché sur la roulette !";
+    let titre = '🏆 NOUVEL EXPLOIT AU PANTHÉON !';
+    let messageContent = `🎉 Félicitations à <@${membre.id}> pour ce coup de maître !`;
+
+    if (estPartage) {
+        titre = '🤝 EXPLOIT PARTAGÉ AU PANTHÉON !';
+        description = `<@${lanceur.id}> a décroché un bonus légendaire et a choisi de le partager avec <@${membre.id}> !`;
+        messageContent = `🤝 Un exploit d'une générosité rare : félicitations à <@${lanceur.id}> et <@${membre.id}> !`;
+    } else if (estRedirige) {
+        titre = '🎁 CADEAU LÉGENDAIRE AU PANTHÉON !';
+        description = `<@${lanceur.id}> a décroché un bonus légendaire et l'a offert à <@${membre.id}> !`;
+        messageContent = `🎁 Incroyable coup du destin : <@${lanceur.id}> a offert son bonus ultra rare à <@${membre.id}> !`;
+    }
+
+    const fields = [
+        { name: '👤 Bénéficiaire', value: `<@${membre.id}> (${nom})`, inline: true },
+        { name: `${emoji} Bonus obtenu`, value: `**${entry.nom}**`, inline: true },
+        { name: '\u200b', value: '\u200b', inline: true }
+    ];
+
+    if (estRedirige || estPartage) {
+        fields.push({ name: '🎁 Offert par', value: `<@${lanceur.id}> (${lanceur.displayName || lanceur.user?.username})`, inline: true });
+    }
+
+    fields.push(
+        { name: '🎲 Chance de tirage', value: `**1/${n}** (${pct}%)`, inline: true },
+        { name: '📅 Date de l\'exploit', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+    );
+
     const embed = new EmbedBuilder()
         .setColor(0xffd700)
-        .setTitle('🏆 NOUVEL EXPLOIT AU PANTHÉON !')
-        .setDescription(`Le destin a parlé ! Un bonus ultra rare vient d'être décroché sur la roulette !`)
-        .addFields(
-            { name: '👤 Membre récompensé·e', value: `<@${membre.id}> (${nom})`, inline: true },
-            { name: `${emoji} Bonus obtenu`, value: `**${entry.nom}**`, inline: true },
-            { name: '\u200b', value: '\u200b', inline: true },
-            { name: '🎲 Chance de tirage', value: `**1/${n}** (${pct}%)`, inline: true },
-            { name: '📅 Date de l\'exploit', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
-        )
+        .setTitle(titre)
+        .setDescription(description)
+        .addFields(fields)
         .setFooter({ text: 'Panthéon de la Roulette • Regaïa' })
         .setTimestamp();
 
     if (avatar) embed.setThumbnail(avatar);
     const { MessageFlags } = require('discord.js');
     await salon.send({ 
-        content: `🎉 Félicitations à <@${membre.id}> pour son coup de maître !`, 
+        content: messageContent, 
         embeds: [embed],
         flags: [MessageFlags.SuppressNotifications]
     }).catch(() => {});
 }
 
-async function envoyerHallOfShame(guild, membre, entry) {
+async function envoyerHallOfShame(guild, membre, entry, lanceur = null) {
     if (!entry || entry.type !== 'malus') return;
     if (!ROULETTE_HOS_MALUS_IDS.has(entry.id)) return;
 
@@ -1837,24 +1861,46 @@ async function envoyerHallOfShame(guild, membre, entry) {
     const avatar = membre?.user?.displayAvatarURL({ dynamic: true, size: 256 }) ?? membre?.displayAvatarURL?.({ dynamic: true, size: 256 });
     const emoji = ROULETTE_EMOJIS_PAR_ID[entry.id] ?? '💀';
 
+    const estRedirige = lanceur && lanceur.id !== membre.id;
+    const titre = estRedirige 
+        ? '🎯 NOUVELLE VICTIME PAR RICOCHET ! (MALUS REDIRIGÉ)' 
+        : '💀 NOUVELLE VICTIME AU HALL OF SHAME !';
+
+    const description = estRedirige
+        ? `Le destin s'est acharné par procuration ! <@${lanceur.id}> a tiré ce malus légendaire et l'a envoyé en pleine tête à <@${membre.id}> !`
+        : `Le destin s'est acharné ! Un malus légendaire vient de s'abattre sur la roulette !`;
+
+    const fields = [
+        { name: '👤 Victime', value: `<@${membre.id}> (${nom})`, inline: true },
+        { name: `${emoji} Malus subi`, value: `**${entry.nom}**`, inline: true },
+        { name: '\u200b', value: '\u200b', inline: true }
+    ];
+
+    if (estRedirige) {
+        fields.push({ name: '😈 Redirigé par', value: `<@${lanceur.id}> (${lanceur.displayName || lanceur.user?.username})`, inline: true });
+    }
+
+    fields.push(
+        { name: '🎲 Malchance de tirage', value: `**1/${n}** (${pct}%)`, inline: true },
+        { name: '📅 Date du drame', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
+    );
+
     const embed = new EmbedBuilder()
         .setColor(0x9e0000)
-        .setTitle('💀 NOUVELLE VICTIME AU HALL OF SHAME !')
-        .setDescription(`Le destin s'est acharné ! Un malus légendaire vient de s'abattre sur la roulette !`)
-        .addFields(
-            { name: '👤 Victime', value: `<@${membre.id}> (${nom})`, inline: true },
-            { name: `${emoji} Malus subi`, value: `**${entry.nom}**`, inline: true },
-            { name: '\u200b', value: '\u200b', inline: true },
-            { name: '🎲 Malchance de tirage', value: `**1/${n}** (${pct}%)`, inline: true },
-            { name: '📅 Date du drame', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true }
-        )
+        .setTitle(titre)
+        .setDescription(description)
+        .addFields(fields)
         .setFooter({ text: 'Panthéon de la Honte • Regaïa' })
         .setTimestamp();
 
     if (avatar) embed.setThumbnail(avatar);
     const { MessageFlags } = require('discord.js');
+    const messageContent = estRedirige
+        ? `🎯 Coup dur ! <@${lanceur.id}> a redirigé son malus légendaire droit sur <@${membre.id}>... (cheh)`
+        : `💀 Toutes nos pensées vont à <@${membre.id}> qui vient de toucher le fond... (cheh)`;
+
     await salon.send({ 
-        content: `💀 Toutes nos pensées vont à <@${membre.id}> qui vient de toucher le fond... (cheh)`, 
+        content: messageContent, 
         embeds: [embed],
         flags: [MessageFlags.SuppressNotifications]
     }).catch(() => {});
@@ -2120,8 +2166,6 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     if (entryTiree && entryTiree.type === 'bonus' && probaReelle(entryTiree) < ROULETTE_HOF_SEUIL) {
         deverrouillerSucces(authorId, 'hof', channel);
     }
-    envoyerHallOfFame(guild, membre, entryTiree).catch(() => {});
-    envoyerHallOfShame(guild, membre, entryTiree).catch(() => {});
     verifierRoleGamblingAddict(membre).catch(() => {});
 
     if (entryTiree?.type === 'bonus') {
@@ -2256,6 +2300,10 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
             }
         }
     }
+
+    // Déclenchement du Hall of Fame et Hall of Shame sur la VRAIE cible (avec mention du tireur si redirection)
+    envoyerHallOfFame(guild, cible, entryTiree, membre, Boolean(partenairePartage)).catch(() => {});
+    envoyerHallOfShame(guild, cible, entryTiree, membre).catch(() => {});
 
     const proxy = { member: cible, channel, guild };
     let texte = await appliquerEtDecrireResultat(outcomeId, proxy, cibleNom, failIndex);
@@ -3731,6 +3779,8 @@ async function handleRouletteButton(interaction, client) {
         annulerMalusSurMembre(targetUserId, outcomeId, interaction.member);
 
         // Applique le malus sur la cible
+        const entryMalusVote = ROULETTE_TABLE.find(e => e.id === outcomeId);
+        envoyerHallOfShame(interaction.guild, cible, entryMalusVote, interaction.member).catch(() => {});
         const proxy = { member: cible, channel: interaction.channel, guild: interaction.guild };
         const texteCible = await appliquerEtDecrireResultat(outcomeId, proxy, cible.displayName, 0);
 
