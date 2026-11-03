@@ -102,14 +102,15 @@ const ROULETTE_PUBS_SPONSOR = [
 ];
 
 const ROULETTE_AUTOCORRECT_PHRASES = [
-    ' *(attends je dois d\'abord acheter 12 kilos de courgettes)* ',
-    ' *[erreur T9 : je voulais dire que j\'adore les tractopelles]* ',
-    ' *(non mais en vrai les pigeons nous espionnent)* ',
-    ' *[correction auto : envoyer ma déclaration d\'impôts]* ',
-    ' *(bref tout ça pour dire que j\'ai perdu ma chaussette droite)* ',
-    ' *[T9 : comment faire cuire un pneu dans une poêle]* ',
-    ' *(et dire que pendant ce temps les loutres dorment en se tenant la patte)* ',
-    ' *[auto-remplacement : pardon mon chat a sauté sur le clavier]* '
+    ' strapontin ',
+    ' le caca est cuit ',
+    ' Epsys je t'aime énormément, je suis fan de toi depuis des années 💘 ',
+    ' AAAAAAAAAAH J'AI MARCHÉ SUR UN LEGO ',
+    ' .............................................. ',
+    ' j'ai mangé un pneu ',
+    ' jme suis chié dessus ',
+    ' les gros pieds de feldeup ',
+    ' Mario c'est pas un jeu c'est une license '
 ];
 
 const ROULETTE_ACHIEVEMENTS = [
