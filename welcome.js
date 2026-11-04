@@ -64,12 +64,112 @@ const WELCOME_BACKGROUNDS = [
 
 let welcomeState = {
     getWelcomeData: () => ({ channelId: null, actif: true }),
+    getReactionRolesData: () => ({}),
     demanderSauvegarde: () => {},
     EPSYS_ID: '436218312574107658'
 };
 
 function initWelcomeState(bridge) {
     welcomeState = { ...welcomeState, ...bridge };
+}
+
+// ==========================================
+//  UTILITAIRES DE RATTRAPAGE DES RÔLES-RÉACTIONS
+// ==========================================
+
+function trouverRoleIdPourReaction(rolesMap, reaction) {
+    if (!rolesMap) return null;
+    const name = reaction.emoji.name;
+    const id = reaction.emoji.id;
+    const customKey = id ? `<:${name}:${id}>` : null;
+    const animKey = id ? `<a:${name}:${id}>` : null;
+
+    if (customKey && rolesMap[customKey]) return rolesMap[customKey];
+    if (animKey && rolesMap[animKey]) return rolesMap[animKey];
+    if (id && rolesMap[id]) return rolesMap[id];
+    if (name && rolesMap[name]) return rolesMap[name];
+
+    for (const [key, rId] of Object.entries(rolesMap)) {
+        if (id && key.includes(id)) return rId;
+        if (name && key === name) return rId;
+    }
+    return null;
+}
+
+/**
+ * Scanne tous les messages de rôles-réactions configurés pour un membre spécifique
+ */
+async function synchroniserRolesMembre(member) {
+    const reactionRolesData = welcomeState.getReactionRolesData?.() ?? {};
+    const rolesAjoutes = [];
+    if (!member || !member.guild) return rolesAjoutes;
+
+    for (const [msgId, config] of Object.entries(reactionRolesData)) {
+        if (!config?.channelId || !config?.roles) continue;
+        const channel = member.guild.channels.cache.get(config.channelId) 
+            ?? await member.guild.channels.fetch(config.channelId).catch(() => null);
+        if (!channel?.isTextBased()) continue;
+
+        const msg = await channel.messages.fetch(msgId).catch(() => null);
+        if (!msg) continue;
+
+        for (const reaction of msg.reactions.cache.values()) {
+            const roleId = trouverRoleIdPourReaction(config.roles, reaction);
+            if (!roleId || member.roles.cache.has(roleId)) continue;
+
+            try {
+                const users = await reaction.users.fetch();
+                if (users.has(member.id)) {
+                    await member.roles.add(roleId).catch(() => {});
+                    const roleObj = member.guild.roles.cache.get(roleId);
+                    rolesAjoutes.push(roleObj ? roleObj.name : roleId);
+                }
+            } catch (e) {}
+        }
+    }
+    return rolesAjoutes;
+}
+
+/**
+ * Scanne tous les rôles-réactions du serveur et rattrape tous les membres
+ */
+async function synchroniserTousLesRoles(guild) {
+    const reactionRolesData = welcomeState.getReactionRolesData?.() ?? {};
+    let totalAttribues = 0;
+    const detailsMembres = new Map(); // memberId -> [nomRoles]
+
+    for (const [msgId, config] of Object.entries(reactionRolesData)) {
+        if (!config?.channelId || !config?.roles) continue;
+        const channel = guild.channels.cache.get(config.channelId) 
+            ?? await guild.channels.fetch(config.channelId).catch(() => null);
+        if (!channel?.isTextBased()) continue;
+
+        const msg = await channel.messages.fetch(msgId).catch(() => null);
+        if (!msg) continue;
+
+        for (const reaction of msg.reactions.cache.values()) {
+            const roleId = trouverRoleIdPourReaction(config.roles, reaction);
+            if (!roleId) continue;
+
+            const roleObj = guild.roles.cache.get(roleId);
+            const roleName = roleObj ? roleObj.name : roleId;
+
+            try {
+                const users = await reaction.users.fetch();
+                for (const user of users.values()) {
+                    if (user.bot) continue;
+                    const member = guild.members.cache.get(user.id) ?? await guild.members.fetch(user.id).catch(() => null);
+                    if (member && !member.roles.cache.has(roleId)) {
+                        await member.roles.add(roleId).catch(() => {});
+                        totalAttribues++;
+                        if (!detailsMembres.has(member.id)) detailsMembres.set(member.id, []);
+                        detailsMembres.get(member.id).push(roleName);
+                    }
+                }
+            } catch (e) {}
+        }
+    }
+    return { totalAttribues, detailsMembres };
 }
 
 async function chargerImageSecurisee(variantes) {
@@ -263,7 +363,14 @@ async function buildEmergencyMenuEmbed(guild) {
 function buildEmergencyMenuRows() {
     const userSelect = new UserSelectMenuBuilder()
         .setCustomId('welcome_emergency_select_user')
-        .setPlaceholder('👤 Sélectionne le nouveau membre...');
+        .setPlaceholder('Sélectionne le membre arrivé pendant la coupure...')
+        .setMinValues(1)
+        .setMaxValues(1);
+
+    const syncRolesBtn = new ButtonBuilder()
+        .setCustomId('welcome_emergency_sync_all_rr')
+        .setLabel('🔄 Rattraper tous les rôles-réactions')
+        .setStyle(ButtonStyle.Primary);
 
     const backBtn = new ButtonBuilder()
         .setCustomId('welcome_back_config')
@@ -272,7 +379,7 @@ function buildEmergencyMenuRows() {
 
     return [
         new ActionRowBuilder().addComponents(userSelect),
-        new ActionRowBuilder().addComponents(backBtn)
+        new ActionRowBuilder().addComponents(syncRolesBtn, backBtn)
     ];
 }
 
@@ -496,7 +603,45 @@ async function handleWelcomeInteraction(interaction) {
     }
 
     // ------------------------------------------
-    // 3. EXÉCUTION DU RATTRAPAGE (RÔLE + CANVAS + ENVOI)
+    // 2bis. RATTRAPAGE GLOBAL DES RÔLES-RÉACTIONS
+    // ------------------------------------------
+    if (customId === 'welcome_emergency_sync_all_rr') {
+        await interaction.deferUpdate();
+
+        const resultat = await synchroniserTousLesRoles(interaction.guild);
+
+        let desc = `### 🔄 Scan des rôles-réactions terminé !\n\n`;
+        if (resultat.totalAttribues === 0) {
+            desc += `✅ **Tous les membres sont déjà à jour.** Aucune réaction manquée n'a été détectée.`;
+        } else {
+            desc += `🎉 **${resultat.totalAttribues} rôle(s)** ont été rattrapés pour **${resultat.detailsMembres.size} membre(s)** pendant la coupure :\n\n`;
+            let count = 0;
+            for (const [memberId, roles] of resultat.detailsMembres.entries()) {
+                if (count++ >= 10) {
+                    desc += `*... et d'autres membres.*\n`;
+                    break;
+                }
+                desc += `• <@${memberId}> : +${roles.join(', ')}\n`;
+            }
+        }
+
+        const embedRes = new EmbedBuilder()
+            .setColor(0x57f287)
+            .setTitle('🛡️ Synchronisation des Rôles-Réactions')
+            .setDescription(desc)
+            .setFooter({ text: 'Rattrapage automatique Cacabot' });
+
+        const rowRetour = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('welcome_emergency_menu').setLabel('🚨 Retour Menu d\'urgence').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('welcome_back_config').setLabel('🏠 Retour configuration').setStyle(ButtonStyle.Secondary)
+        );
+
+        await interaction.editReply({ embeds: [embedRes], components: [rowRetour] });
+        return true;
+    }
+
+    // ------------------------------------------
+    // 3. EXÉCUTION DU RATTRAPAGE (RÔLE + RÉACTIONS + CANVAS + ENVOI)
     // ------------------------------------------
     if (customId.startsWith('welcome_emergency_send_chan_') || customId.startsWith('welcome_emergency_send_def_')) {
         await interaction.deferUpdate();
@@ -519,7 +664,7 @@ async function handleWelcomeInteraction(interaction) {
             return true;
         }
 
-        // 1. Attribution du rôle Regaïen.ne
+        // 1. Attribution automatique du rôle Regaïen.ne
         let roleAttribue = false;
         if (!targetMember.roles.cache.has(ROLE_MEMBRE_REGAIEN)) {
             await targetMember.roles.add(ROLE_MEMBRE_REGAIEN, 'Rattrapage d’urgence (Cacabot)').catch((err) => {
@@ -528,7 +673,13 @@ async function handleWelcomeInteraction(interaction) {
             roleAttribue = true;
         }
 
-        // 2. Génération et envoi de l'image
+        // 2. Rattrapage des rôles-réactions cliqués pendant la coupure par ce membre
+        const rolesReactionsRecup = await synchroniserRolesMembre(targetMember);
+        const rolesReactionsTexte = rolesReactionsRecup.length > 0
+            ? `\n• 🎭 **Rôles-réactions rattrapés :** +${rolesReactionsRecup.join(', ')}`
+            : '';
+
+        // 3. Génération et envoi de l'image
         try {
             const avatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512 });
             const cardBuffer = await generateWelcomeImage(avatarUrl, targetMember.displayName);
@@ -543,7 +694,8 @@ async function handleWelcomeInteraction(interaction) {
                 .setDescription(
                     `Tout a été régularisé pour <@${targetMember.id}> :\n\n` +
                     `• 🏷️ **Rôle <@&${ROLE_MEMBRE_REGAIEN}> :** ${roleAttribue ? '✅ Attribué avec succès' : 'ℹ️ Déjà possédé'}\n` +
-                    `• 🖼️ **Affiche Canvas :** ✅ Envoyée dans <#${targetChan.id}>\n\n` +
+                    `• 🖼️ **Affiche Canvas :** ✅ Envoyée dans <#${targetChan.id}>` +
+                    rolesReactionsTexte + `\n\n` +
                     `Le membre est maintenant prêt et intégré au serveur !`
                 )
                 .setFooter({ text: 'Rattrapage d\'urgence terminé' });

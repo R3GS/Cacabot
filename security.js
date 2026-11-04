@@ -257,6 +257,46 @@ async function handleSecurityMessage(message) {
         const args = raw.split(/\s+/);
         const reactionRolesData = securityState.getReactionRolesData();
 
+        if (args[1]?.toLowerCase() === 'sync' || args[1]?.toLowerCase() === 'rattrapage') {
+            const m = await message.reply("🔄 Analyse des rôles-réactions et rattrapage en cours...");
+            let attribues = 0;
+            const touches = new Set();
+
+            for (const [msgId, cfg] of Object.entries(reactionRolesData)) {
+                if (!cfg?.channelId || !cfg?.roles) continue;
+                const ch = message.guild.channels.cache.get(cfg.channelId) ?? await message.guild.channels.fetch(cfg.channelId).catch(() => null);
+                if (!ch?.isTextBased()) continue;
+                const msg = await ch.messages.fetch(msgId).catch(() => null);
+                if (!msg) continue;
+
+                for (const reac of msg.reactions.cache.values()) {
+                    const emojiKey = reac.emoji.id ? `<:${reac.emoji.name}:${reac.emoji.id}>` : reac.emoji.name;
+                    const rId = cfg.roles[emojiKey] || cfg.roles[reac.emoji.name] || (reac.emoji.id && cfg.roles[reac.emoji.id]);
+                    if (!rId) continue;
+
+                    try {
+                        const users = await reac.users.fetch();
+                        for (const u of users.values()) {
+                            if (u.bot) continue;
+                            const mem = message.guild.members.cache.get(u.id) ?? await message.guild.members.fetch(u.id).catch(() => null);
+                            if (mem && !mem.roles.cache.has(rId)) {
+                                await mem.roles.add(rId).catch(() => {});
+                                attribues++;
+                                touches.add(mem.displayName);
+                            }
+                        }
+                    } catch (e) {}
+                }
+            }
+
+            if (attribues > 0) {
+                await m.edit(`✅ **Rattrapage terminé !** ${attribues} rôle(s) attribué(s) à : ${Array.from(touches).join(', ')}.`);
+            } else {
+                await m.edit("ℹ️ Tous les rôles-réactions sont déjà parfaitement synchronisés.");
+            }
+            return true;
+        }
+
         if (args[1]?.toLowerCase() === 'copy' || args[1]?.toLowerCase() === 'duplicate') {
             const sourceId = args[2]?.replace(/^.*\/([0-9]+)$/, '$1');
             const targetId = args[3]?.replace(/^.*\/([0-9]+)$/, '$1');

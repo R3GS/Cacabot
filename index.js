@@ -444,6 +444,7 @@ initQuotesState({
 
 initWelcomeState({
     getWelcomeData: () => welcomeData,
+    getReactionRolesData: () => reactionRolesData,
     demanderSauvegarde,
     EPSYS_ID: '436218312574107658'
 });
