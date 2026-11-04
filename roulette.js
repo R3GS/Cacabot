@@ -104,13 +104,13 @@ const ROULETTE_PUBS_SPONSOR = [
 const ROULETTE_AUTOCORRECT_PHRASES = [
     ' strapontin ',
     ' le caca est cuit ',
-    ' Epsys je t'aime énormément, je suis fan de toi depuis des années 💘 ',
-    ' AAAAAAAAAAH J'AI MARCHÉ SUR UN LEGO ',
+    ' Epsys je t\'aime énormément, je suis fan de toi depuis des années 💘 ',
+    ' AAAAAAAAAAH J\'AI MARCHÉ SUR UN LEGO ',
     ' .............................................. ',
-    ' j'ai mangé un pneu ',
+    ' j\'ai mangé un pneu ',
     ' jme suis chié dessus ',
-    ' les gros pieds de feldeup ',
-    ' Mario c'est pas un jeu c'est une license '
+    ' les gros pieds de feldup ',
+    ' Mario c\'est pas un jeu c\'est une license '
 ];
 
 const ROULETTE_ACHIEVEMENTS = [
