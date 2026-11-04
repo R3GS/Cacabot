@@ -10,9 +10,13 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     ChannelSelectMenuBuilder,
+    UserSelectMenuBuilder,
     ChannelType,
-    ButtonStyle
+    ButtonStyle,
+    MessageFlags
 } = require('discord.js');
+
+const ROLE_MEMBRE_REGAIEN = '720080477926457476';
 const { createCanvas, loadImage, registerFont } = require('canvas');
 
 // ==========================================
@@ -187,7 +191,9 @@ function buildWelcomeConfigEmbed() {
         .setDescription(
             `Configure le salon où Cacabot enverra automatiquement la carte de bienvenue lorsqu'un nouveau membre rejoint le serveur.\n\n` +
             `• **Statut actuel :** ${statutStr}\n` +
-            `• **Salon actuel :** ${salonStr}`
+            `• **Salon actuel :** ${salonStr}\n` +
+            `• **Rôle donné à l'arrivée :** <@&${ROLE_MEMBRE_REGAIEN}> *(Regaïen.ne)*\n\n` +
+            `*💡 Si Cacabot était éteint lors de l'arrivée d'un membre, clique sur le bouton rouge ci-dessous pour le régulariser.*`
         )
         .setFooter({ text: 'Panneau réservé à Epsys' });
 }
@@ -210,9 +216,63 @@ function buildWelcomeConfigRows() {
         .setLabel('🖼️ Tester l\'affiche')
         .setStyle(ButtonStyle.Primary);
 
+    const emergencyBtn = new ButtonBuilder()
+        .setCustomId('welcome_emergency_menu')
+        .setLabel('🚨 Menu d\'urgence (Rattrapage)')
+        .setStyle(ButtonStyle.Danger);
+
     return [
         new ActionRowBuilder().addComponents(channelSelect),
-        new ActionRowBuilder().addComponents(toggleBtn, testBtn)
+        new ActionRowBuilder().addComponents(toggleBtn, testBtn, emergencyBtn)
+    ];
+}
+
+async function buildEmergencyMenuEmbed(guild) {
+    let membres = [];
+    try {
+        const tous = await guild.members.fetch({ limit: 50 }).catch(() => guild.members.cache);
+        membres = Array.from(tous.values())
+            .filter(m => !m.user.bot)
+            .sort((a, b) => (b.joinedTimestamp || 0) - (a.joinedTimestamp || 0))
+            .slice(0, 8);
+    } catch (e) {
+        membres = Array.from(guild.members.cache.values())
+            .filter(m => !m.user.bot)
+            .sort((a, b) => (b.joinedTimestamp || 0) - (a.joinedTimestamp || 0))
+            .slice(0, 8);
+    }
+
+    const desc = membres.map((m, idx) => {
+        const aRole = m.roles.cache.has(ROLE_MEMBRE_REGAIEN);
+        const dateStr = m.joinedTimestamp ? `<t:${Math.floor(m.joinedTimestamp / 1000)}:R>` : 'Inconnue';
+        const roleStatus = aRole ? '`✅ Rôle attribué`' : '`⚠️ Aucun rôle / Non accueilli`';
+        return `**${idx + 1}.** <@${m.id}> (${m.displayName}) — ${dateStr}\n└ ${roleStatus}`;
+    }).join('\n\n');
+
+    return new EmbedBuilder()
+        .setColor(0xe74c3c)
+        .setTitle('🚨 Menu d\'Urgence — Rattrapage des Nouveaux Membres')
+        .setDescription(
+            `Ce menu permet d'accueillir manuellement un membre arrivé pendant une panne de Cacabot.\n\n` +
+            `### 📋 Derniers membres ayant rejoint le serveur :\n${desc || '*Aucun membre trouvé.*'}\n\n` +
+            `👉 **Sélectionne ci-dessous le membre à accueillir / rattraper :**`
+        )
+        .setFooter({ text: 'Étape 1/2 : Sélection du membre' });
+}
+
+function buildEmergencyMenuRows() {
+    const userSelect = new UserSelectMenuBuilder()
+        .setCustomId('welcome_emergency_select_user')
+        .setPlaceholder('👤 Sélectionne le nouveau membre...');
+
+    const backBtn = new ButtonBuilder()
+        .setCustomId('welcome_back_config')
+        .setLabel('⬅️ Retour configuration')
+        .setStyle(ButtonStyle.Secondary);
+
+    return [
+        new ActionRowBuilder().addComponents(userSelect),
+        new ActionRowBuilder().addComponents(backBtn)
     ];
 }
 
@@ -312,11 +372,22 @@ async function handleWelcomeInteraction(interaction) {
     const customId = interaction.customId;
     if (!customId || !customId.startsWith('welcome_')) return false;
 
+    if (interaction.user.id !== welcomeState.EPSYS_ID) {
+        await interaction.reply({ content: "Seule Epsys a accès à ce panneau.", ephemeral: true });
+        return true;
+    }
+
+    // Retour au menu principal
+    if (interaction.isButton() && customId === 'welcome_back_config') {
+        await interaction.update({
+            embeds: [buildWelcomeConfigEmbed()],
+            components: buildWelcomeConfigRows()
+        });
+        return true;
+    }
+
+    // Configuration du salon par défaut
     if (interaction.isChannelSelectMenu() && customId === 'welcome_select_channel') {
-        if (interaction.user.id !== welcomeState.EPSYS_ID) {
-            await interaction.reply({ content: "Seule Epsys peut modifier cela.", ephemeral: true });
-            return true;
-        }
         const data = welcomeState.getWelcomeData();
         data.channelId = interaction.values[0];
         welcomeState.demanderSauvegarde();
@@ -327,11 +398,8 @@ async function handleWelcomeInteraction(interaction) {
         return true;
     }
 
+    // Activer / Désactiver
     if (interaction.isButton() && customId === 'welcome_toggle_active') {
-        if (interaction.user.id !== welcomeState.EPSYS_ID) {
-            await interaction.reply({ content: "Seule Epsys peut modifier cela.", ephemeral: true });
-            return true;
-        }
         const data = welcomeState.getWelcomeData();
         data.actif = !data.actif;
         welcomeState.demanderSauvegarde();
@@ -342,11 +410,8 @@ async function handleWelcomeInteraction(interaction) {
         return true;
     }
 
+    // Tester l'affiche
     if (interaction.isButton() && customId === 'welcome_test_btn') {
-        if (interaction.user.id !== welcomeState.EPSYS_ID) {
-            await interaction.reply({ content: "Seule Epsys peut tester.", ephemeral: true });
-            return true;
-        }
         await interaction.deferReply({ ephemeral: true });
         try {
             const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 512 });
@@ -359,19 +424,168 @@ async function handleWelcomeInteraction(interaction) {
         return true;
     }
 
+    // ------------------------------------------
+    // 1. OUVERTURE DU MENU D'URGENCE
+    // ------------------------------------------
+    if (interaction.isButton() && customId === 'welcome_emergency_menu') {
+        await interaction.deferUpdate();
+        const embed = await buildEmergencyMenuEmbed(interaction.guild);
+        await interaction.editReply({
+            embeds: [embed],
+            components: buildEmergencyMenuRows()
+        });
+        return true;
+    }
+
+    // ------------------------------------------
+    // 2. CHOIX DU MEMBRE -> DEMANDE DU SALON
+    // ------------------------------------------
+    if (interaction.isUserSelectMenu() && customId === 'welcome_emergency_select_user') {
+        const targetUserId = interaction.values[0];
+        const targetMember = await interaction.guild.members.fetch(targetUserId).catch(() => null);
+
+        if (!targetMember) {
+            await interaction.reply({ content: "❌ Impossible de trouver ce membre sur le serveur.", ephemeral: true });
+            return true;
+        }
+
+        const data = welcomeState.getWelcomeData();
+        const aRole = targetMember.roles.cache.has(ROLE_MEMBRE_REGAIEN);
+
+        const stepEmbed = new EmbedBuilder()
+            .setColor(0xf1c40f)
+            .setTitle(`🎯 Rattrapage de Bienvenue : ${targetMember.displayName}`)
+            .setDescription(
+                `Membre sélectionné : <@${targetMember.id}> (\`${targetMember.user.tag}\`)\n` +
+                `• **Arrivé(e) :** ${targetMember.joinedTimestamp ? `<t:${Math.floor(targetMember.joinedTimestamp / 1000)}:R>` : '*Inconnue*'}\n` +
+                `• **Statut rôle Regaïen.ne :** ${aRole ? '✅ Déjà attribué' : '❌ Non attribué'}\n\n` +
+                `**Ce que Cacabot va faire :**\n` +
+                `1. 🏷️ Attribuer le rôle <@&${ROLE_MEMBRE_REGAIEN}> (Regaïen.ne)\n` +
+                `2. 🖼️ Générer la bannière Canvas personnalisée avec son avatar\n` +
+                `3. 🚀 Envoyer le panneau d'accueil dans le salon sélectionné\n\n` +
+                `👉 **Choisis ci-dessous le salon dans lequel envoyer le panneau :**`
+            )
+            .setThumbnail(targetMember.user.displayAvatarURL({ extension: 'png', size: 256 }))
+            .setFooter({ text: 'Étape 2/2 : Destination de l\'affiche' });
+
+        const chanSelect = new ChannelSelectMenuBuilder()
+            .setCustomId(`welcome_emergency_send_chan_${targetMember.id}`)
+            .setPlaceholder('Choisis le salon où envoyer le panneau...')
+            .setChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement);
+
+        const rowButtons = new ActionRowBuilder();
+        if (data.channelId) {
+            rowButtons.addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`welcome_emergency_send_def_${targetMember.id}`)
+                    .setLabel(`🚀 Salon par défaut (<#${data.channelId}>)`)
+                    .setStyle(ButtonStyle.Success)
+            );
+        }
+        rowButtons.addComponents(
+            new ButtonBuilder()
+                .setCustomId('welcome_emergency_menu')
+                .setLabel('⬅️ Choisir un autre membre')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        const rows = [new ActionRowBuilder().addComponents(chanSelect), rowButtons];
+
+        await interaction.update({ embeds: [stepEmbed], components: rows });
+        return true;
+    }
+
+    // ------------------------------------------
+    // 3. EXÉCUTION DU RATTRAPAGE (RÔLE + CANVAS + ENVOI)
+    // ------------------------------------------
+    if (customId.startsWith('welcome_emergency_send_chan_') || customId.startsWith('welcome_emergency_send_def_')) {
+        await interaction.deferUpdate();
+
+        const data = welcomeState.getWelcomeData();
+        const isDefault = customId.startsWith('welcome_emergency_send_def_');
+        const targetUserId = isDefault
+            ? customId.replace('welcome_emergency_send_def_', '')
+            : customId.replace('welcome_emergency_send_chan_', '');
+
+        const targetChanId = isDefault ? data.channelId : interaction.values[0];
+        const targetChan = interaction.guild.channels.cache.get(targetChanId) ?? await interaction.guild.channels.fetch(targetChanId).catch(() => null);
+        const targetMember = await interaction.guild.members.fetch(targetUserId).catch(() => null);
+
+        if (!targetMember || !targetChan) {
+            await interaction.editReply({
+                embeds: [new EmbedBuilder().setColor(0xe74c3c).setTitle('❌ Erreur').setDescription("Impossible de trouver le membre ou le salon cible.")],
+                components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('welcome_emergency_menu').setLabel('⬅️ Recommencer').setStyle(ButtonStyle.Primary))]
+            });
+            return true;
+        }
+
+        // 1. Attribution du rôle Regaïen.ne
+        let roleAttribue = false;
+        if (!targetMember.roles.cache.has(ROLE_MEMBRE_REGAIEN)) {
+            await targetMember.roles.add(ROLE_MEMBRE_REGAIEN, 'Rattrapage d’urgence (Cacabot)').catch((err) => {
+                console.error("[Welcome] Erreur attribution rôle rattrapage :", err.message);
+            });
+            roleAttribue = true;
+        }
+
+        // 2. Génération et envoi de l'image
+        try {
+            const avatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512 });
+            const cardBuffer = await generateWelcomeImage(avatarUrl, targetMember.displayName);
+            await targetChan.send({
+                files: [{ attachment: cardBuffer, name: 'bienvenue.png' }],
+                flags: [MessageFlags.SuppressNotifications]
+            });
+
+            const successEmbed = new EmbedBuilder()
+                .setColor(0x2ecc71)
+                .setTitle('🎉 Rattrapage effectué avec succès !')
+                .setDescription(
+                    `Tout a été régularisé pour <@${targetMember.id}> :\n\n` +
+                    `• 🏷️ **Rôle <@&${ROLE_MEMBRE_REGAIEN}> :** ${roleAttribue ? '✅ Attribué avec succès' : 'ℹ️ Déjà possédé'}\n` +
+                    `• 🖼️ **Affiche Canvas :** ✅ Envoyée dans <#${targetChan.id}>\n\n` +
+                    `Le membre est maintenant prêt et intégré au serveur !`
+                )
+                .setFooter({ text: 'Rattrapage d\'urgence terminé' });
+
+            const rowFin = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('welcome_emergency_menu').setLabel('🚨 Rattraper un autre membre').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('welcome_back_config').setLabel('🏠 Retour configuration').setStyle(ButtonStyle.Secondary)
+            );
+
+            await interaction.editReply({ embeds: [successEmbed], components: [rowFin] });
+        } catch (err) {
+            console.error("[Welcome] Erreur génération image rattrapage :", err);
+            await interaction.editReply({
+                embeds: [new EmbedBuilder().setColor(0xe74c3c).setTitle('❌ Erreur lors de l\'envoi').setDescription(`L'image n'a pas pu être envoyée : \`${err.message}\``)],
+                components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('welcome_emergency_menu').setLabel('⬅️ Recommencer').setStyle(ButtonStyle.Primary))]
+            });
+        }
+
+        return true;
+    }
+
     return false;
 }
 
 // =========================
-//  ARRIVÉE D'UN MEMBRE
+//  ARRIVÉE D'UN MEMBRE (EN DIRECT)
 // =========================
 async function handleWelcomeMemberAdd(member) {
+    if (member.guild.id !== '720057528351850547' || member.user.bot) return;
+
+    // Attribution automatique systématique du rôle Regaïen.ne
+    if (!member.roles.cache.has(ROLE_MEMBRE_REGAIEN)) {
+        await member.roles.add(ROLE_MEMBRE_REGAIEN, 'Arrivée sur le serveur (Rôle Regaïen.ne)').catch((err) => {
+            console.error("[Welcome] Erreur attribution rôle à l'arrivée :", err.message);
+        });
+    }
+
     const data = welcomeState.getWelcomeData();
-    if (member.guild.id === '720057528351850547' && !member.user.bot && data.actif && data.channelId) {
+    if (data.actif && data.channelId) {
         const targetChan = member.guild.channels.cache.get(data.channelId);
         if (targetChan) {
             try {
-                const { MessageFlags } = require('discord.js');
                 const avatarUrl = member.user.displayAvatarURL({ extension: 'png', size: 512 });
                 const cardBuffer = await generateWelcomeImage(avatarUrl, member.displayName);
                 await targetChan.send({ 
