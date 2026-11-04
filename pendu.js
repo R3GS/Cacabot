@@ -125,6 +125,14 @@ function buildPenduEmbed(session) {
         ? session.motsTentes.join(', ')
         : '*Aucun pour l\'instant*';
 
+    // Clavier / Ruban visuel de l'alphabet (A-Z)
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    const clavierVisuel = alphabet.map(l => {
+        if (session.lettresTrouvees.includes(l)) return `🟩${l}`;
+        if (session.lettresFausses && session.lettresFausses.includes(l)) return `🟥${l}`;
+        return `\`${l}\``;
+    }).join(' ');
+
     let dernierCoupTexte = '';
     if (session.dernierCoup) {
         dernierCoupTexte = `🎯 **Dernier coup :** <@${session.dernierCoup.userId}> a tenté **« ${session.dernierCoup.proposition} »** ➔ ${session.dernierCoup.statut}\n\n`;
@@ -137,16 +145,26 @@ function buildPenduEmbed(session) {
         participantsTxt = `👥 **Essais utilisés :** ${liste}\n\n`;
     }
 
+    // Alerte si la potence est presque pleine (à 4 ou 5 erreurs sur 6)
+    let alertePotence = '';
+    if (session.erreursCollectives === 4) {
+        alertePotence = `⚠️ **Attention :** Plus que **2 erreurs** avant le pendu !\n`;
+    } else if (session.erreursCollectives === 5) {
+        alertePotence = `🚨 **DANGER MORTEL :** Plus qu'**UNE SEULE ERREUR** restante !\n`;
+    }
+
     return new EmbedBuilder()
-        .setColor(0x9b59b6)
+        .setColor(session.erreursCollectives >= 4 ? 0xe67e22 : 0x9b59b6)
         .setTitle('🪢 LE PENDU QUOTIDIEN DE REGAÏA (21h00)')
         .setDescription(
             `📢 **Notification :** <@&1559041461230505994>\n\n` +
             `🔤 **Mot de 7 lettres à deviner :**\n# \`${masque}\`\n\n` +
+            `⌨️ **Alphabet :**\n${clavierVisuel}\n\n` +
             `❌ **Lettres refusées :** \`${faussesLettresStr}\`\n` +
             `📝 **Mots tentés :** \`${motsTentesStr}\`\n\n` +
             `${potence}\n` +
-            `⚠️ **Erreurs collectives :** **${session.erreursCollectives}/6**\n\n` +
+            `⚠️ **Erreurs collectives :** **${session.erreursCollectives}/6**\n` +
+            alertePotence + `\n` +
             (dernierCoupTexte || '') +
             (participantsTxt || '') +
             `⏳ **Fin de la session :** <t:${expireTimestamp}:R> (à <t:${expireTimestamp}:t>)\n\n` +
@@ -561,17 +579,16 @@ async function handlePenduMessage(message, response, client, helpers) {
                 if (!session.motsTentes) session.motsTentes = [];
                 if (!session.lettresFausses) session.lettresFausses = [];
 
-                // 2. Vérification : doublons (lettre ou mot déjà proposé) -> pas de pénalité, suppression après 5s
+                // 2. Vérification : doublons (lettre ou mot déjà proposé) -> réaction discrète anti-missclick, aucun spam dans le chat
                 const estDoublonLettre = rawGuess.length === 1 && (session.lettresTrouvees.includes(rawGuess) || session.lettresFausses.includes(rawGuess));
                 const estDoublonMot = rawGuess.length === 7 && session.motsTentes.includes(rawGuess);
 
                 if (estDoublonLettre || estDoublonMot) {
-                    const terme = rawGuess.length === 1 ? `la lettre **« ${rawGuess} »**` : `le mot **« ${rawGuess} »**`;
-                    const mAvert = await message.channel.send(`⚠️ <@${uid}>, ${terme} a déjà été proposé ! Ton essai est conservé.`);
+                    // Tolérance anti-missclick : on réagit avec ⚠️ puis on supprime le message du joueur après 3 secondes sans polluer
+                    await message.react('⚠️').catch(() => {});
                     setTimeout(() => {
-                        mAvert.delete().catch(() => {});
                         message.delete().catch(() => {});
-                    }, 5000);
+                    }, 3000);
                     return true;
                 }
 

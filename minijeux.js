@@ -1102,6 +1102,21 @@ function buildRebusStatsEmbed(cible) {
         .setFooter({ text: 'Rébus Regaïen tous les jours à 15h00 !' });
 }
 
+// Fonction pour calculer la distance d'édition (tolérance 1 faute de frappe)
+function distanceLevenshtein(a, b) {
+    if (!a || !b) return (a || '').length + (b || '').length;
+    const dp = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0));
+    for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+    for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+    for (let i = 1; i <= a.length; i++) {
+        for (let j = 1; j <= b.length; j++) {
+            const cout = a[i - 1] === b[j - 1] ? 0 : 1;
+            dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cout);
+        }
+    }
+    return dp[a.length][b.length];
+}
+
 function buildRebusEmbed(manche, item, expireAt) {
     return new EmbedBuilder()
         .setColor(0xf39c12)
@@ -1113,6 +1128,15 @@ function buildRebusEmbed(manche, item, expireAt) {
             `💬 *Tape directement le titre dans ce salon !*`
         )
         .setFooter({ text: `Manche ${manche}/5 • Le/la premier.e qui trouve marque 1 point` });
+}
+
+function buildRebusRow(manche) {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`rebus_demander_indice_${manche}`)
+            .setLabel('💡 Demander un indice')
+            .setStyle(ButtonStyle.Secondary)
+    );
 }
 
 async function lancerSessionRebus(guild) {
@@ -1181,12 +1205,14 @@ async function passerMancheSuivanteRebus(guild) {
 
     const { MessageFlags } = require('discord.js');
     const embed = buildRebusEmbed(rebusSession.manche, item, rebusSession.expireAt);
-    await channel.send({ embeds: [embed], flags: [MessageFlags.SuppressNotifications] });
+    const rowIndice = buildRebusRow(rebusSession.manche);
+    await channel.send({ embeds: [embed], components: [rowIndice], flags: [MessageFlags.SuppressNotifications] });
 
-    // Indice automatique à 2 min 30 (mi-temps) si personne n'a trouvé
+    // Indice automatique à 2 min 30 (mi-temps) si personne n'a cliqué sur le bouton avant
     const mancheEnCours = rebusSession.manche;
     setTimeout(async () => {
-        if (!rebusSession.active || !rebusSession.currentItem || rebusSession.manche !== mancheEnCours) return;
+        if (!rebusSession.active || !rebusSession.currentItem || rebusSession.manche !== mancheEnCours || rebusSession.indiceAffiche) return;
+        rebusSession.indiceAffiche = true;
         const indice = genererIndiceRebus(item);
         await channel.send(indice);
     }, 150 * 1000);
@@ -1195,7 +1221,18 @@ async function passerMancheSuivanteRebus(guild) {
         if (!rebusSession.active || !rebusSession.currentItem) return;
 
         const titreReponse = item[1].charAt(0).toUpperCase() + item[1].slice(1);
-        await channel.send(`⏰ **Temps écoulé !** Personne n'a trouvé.\nLa réponse était : **${titreReponse}** !`);
+        // Solution masquée avec bouton spoiler pour ne pas gâcher la recherche des retardataires
+        const rowSolution = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`rebus_reveal_${Buffer.from(titreReponse).toString('base64')}`)
+                .setLabel('👁️ Révéler la solution')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        await channel.send({
+            content: `⏰ **Temps écoulé !** Personne n'a trouvé la manche ${mancheEnCours}/5.\n||🤫 Clique ci-dessous pour voir la solution sans spoiler le chat !||`,
+            components: [rowSolution]
+        });
         rebusSession.currentItem = null;
 
         setTimeout(() => passerMancheSuivanteRebus(guild), 4000);
@@ -1218,6 +1255,17 @@ async function verifierReponseRebus(message) {
     const isHSpecial = reponsesValides.includes('h') && (
         guessNorm === 'h' || raw === 'h' || raw === 'la série h' || raw === 'la serie h' || raw === 'série h' || raw === 'serie h'
     );
+
+    // Détection "Tu brûles !" / tolérance d'une petite faute d'orthographe (distance de Levenshtein <= 1 pour les mots de 5+ lettres)
+    if (!reponsesValides.includes(guessNorm) && !isHSpecial && guessNorm.length >= 5) {
+        const estTresProche = reponsesValides.some(rep => {
+            if (Math.abs(rep.length - guessNorm.length) > 1) return false;
+            return distanceLevenshtein(rep, guessNorm) === 1;
+        });
+        if (estTresProche) {
+            await message.react('🔥').catch(() => {});
+        }
+    }
 
     if (reponsesValides.includes(guessNorm) || isHSpecial) {
         clearTimeout(rebusSession.timer);
@@ -1524,6 +1572,31 @@ async function handleRebusButton(interaction) {
         const member = interaction.member;
         const embed = buildRebusStatsEmbed(member);
         await interaction.reply({ embeds: [embed], ephemeral: true });
+        return true;
+    }
+
+    // Gestion du bouton "💡 Demander un indice"
+    if (interaction.customId.startsWith('rebus_demander_indice_')) {
+        if (!rebusSession.active || !rebusSession.currentItem) {
+            return interaction.reply({ content: "Aucune manche active.", ephemeral: true });
+        }
+        const indice = genererIndiceRebus(rebusSession.currentItem);
+        rebusSession.indiceAffiche = true;
+        await interaction.reply({ content: `💡 **Indice débloqué par ${interaction.member.displayName} :**\n${indice}` });
+        return true;
+    }
+
+    // Révélation de la solution pour soi uniquement (bouton spoiler après timeout)
+    if (interaction.customId.startsWith('rebus_reveal_')) {
+        const base64Str = interaction.customId.replace('rebus_reveal_', '');
+        let repClair = 'Inconnue';
+        try {
+            repClair = Buffer.from(base64Str, 'base64').toString('utf-8');
+        } catch (_) {}
+        await interaction.reply({
+            content: `🤫 **Solution du rébus :** **${repClair}**`,
+            ephemeral: true
+        });
         return true;
     }
     return false;

@@ -362,6 +362,7 @@ const rouletteRedirectBonusCharges = new Map();
 const rouletteRedirectBonusChoixCible = new Map();
 const roulettePartageBonusChoixCible = new Map();
 const rouletteDoubleTempsUntil = new Map();
+const rouletteHistoriqueDerniersTirages = []; // Historique des 3 derniers tirages du serveur
 
 function getMultiplicateurMalusTemps(userId) {
     const fin = rouletteDoubleTempsUntil.get(userId);
@@ -1552,8 +1553,13 @@ function buildRoulettePresentationEmbed(authorId, guildId = null) {
     const boostVal = boostCharges > 0 ? (rouletteJackpotBoostValue.get(authorId) || 0.25) : 0;
     const cEstSonAnniv = (authorId && guildId) ? bridge.estAnniversaireAujourdhui(guildId, authorId) : false;
 
+    const historiqueTexte = rouletteHistoriqueDerniersTirages.length > 0
+        ? rouletteHistoriqueDerniersTirages.map(h => `• **${h.nom}** ➔ ${h.gain}`).join('\n')
+        : '*Aucun tirage récent pour le moment.*';
+
     const fields = [
         { name: 'Présentation de la roulette 🍀', value: "La roulette qui te fait gagner des trucs... ou pas.", inline: false },
+        { name: '📜 Derniers tirages du serveur', value: historiqueTexte, inline: false },
         { name: 'Cooldown ⏳', value: "15 minutes", inline: false },
         { name: 'Système de pity 📈', value: `Après **${ROULETTE_PITY_MALUS} malus** ou **${ROULETTE_PITY_NULS} résultats nuls**, bonus garanti au tirage suivant !`, inline: false },
         { name: 'Happy hour 🔥', value: "Tous les soirs de **20h à 21h**, cooldown à **5 minutes** pour tout le monde !", inline: false },
@@ -1790,6 +1796,20 @@ function updateRouletteStats(userId, outcomeId, entry, client) {
         stats.pireSerie = Math.max(stats.pireSerie, stats.serieActuelle);
     }
     rouletteStats.set(userId, stats);
+
+    // Maintien de l'historique des 3 derniers tirages
+    if (client) {
+        const guild = client.guilds.cache.get('720057528351850547') || client.guilds.cache.first();
+        const membreObj = guild?.members.cache.get(userId);
+        const nomAuteur = membreObj?.displayName || 'Membre';
+        let labelGain = '💨 Rien';
+        if (entry?.nom) {
+            const emoji = ROULETTE_EMOJIS_PAR_ID[entry.id] || (entry.type === 'bonus' ? '🎉' : '💀');
+            labelGain = `${emoji} ${entry.nom}`;
+        }
+        rouletteHistoriqueDerniersTirages.unshift({ nom: nomAuteur, gain: labelGain });
+        if (rouletteHistoriqueDerniersTirages.length > 3) rouletteHistoriqueDerniersTirages.pop();
+    }
 }
 
 async function verifierRoleGamblingAddict(membre) {
