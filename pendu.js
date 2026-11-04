@@ -117,9 +117,13 @@ function buildPenduEmbed(session) {
     const erreursIndex = Math.min(session.erreursCollectives, PENDU_DESSINS.length - 1);
     const potence = PENDU_DESSINS[erreursIndex];
 
-    const faussesLettresStr = session.lettresFausses.length > 0 
-        ? session.lettresFausses.sort().join(' ') 
+    const faussesLettresStr = (session.lettresFausses && session.lettresFausses.length > 0)
+        ? [...new Set(session.lettresFausses)].sort().join(' ') 
         : '*Aucune pour l\'instant*';
+
+    const motsTentesStr = (session.motsTentes && session.motsTentes.length > 0)
+        ? session.motsTentes.join(', ')
+        : '*Aucun pour l\'instant*';
 
     let dernierCoupTexte = '';
     if (session.dernierCoup) {
@@ -139,7 +143,8 @@ function buildPenduEmbed(session) {
         .setDescription(
             `📢 **Notification :** <@&1559041461230505994>\n\n` +
             `🔤 **Mot de 7 lettres à deviner :**\n# \`${masque}\`\n\n` +
-            `❌ **Lettres refusées :** \`${faussesLettresStr}\`\n\n` +
+            `❌ **Lettres refusées :** \`${faussesLettresStr}\`\n` +
+            `📝 **Mots tentés :** \`${motsTentesStr}\`\n\n` +
             `${potence}\n` +
             `⚠️ **Erreurs collectives :** **${session.erreursCollectives}/6**\n\n` +
             (dernierCoupTexte || '') +
@@ -164,13 +169,13 @@ async function lancerPenduQuotidien(guild) {
         mot,
         lettresTrouvees: [],
         lettresFausses: [],
+        motsTentes: [], // Liste collective des mots de 7 lettres tentés
         erreursCollectives: 0,
         expireAt,
         termine: false,
         vainqueurId: null,
         tentativesJoueurs: {}, // userId -> totalEssais
         bonnesLettresParJoueur: {}, // userId -> count
-        lettresRefuseesParJoueur: {}, // userId -> [lettres]
         dernierCoup: null,
         compteurMessagesLongs: 0,
         messageId: null
@@ -553,9 +558,12 @@ async function handlePenduMessage(message, response, client, helpers) {
                     return true;
                 }
 
+                if (!session.motsTentes) session.motsTentes = [];
+                if (!session.lettresFausses) session.lettresFausses = [];
+
                 // 2. Vérification : doublons (lettre ou mot déjà proposé) -> pas de pénalité, suppression après 5s
                 const estDoublonLettre = rawGuess.length === 1 && (session.lettresTrouvees.includes(rawGuess) || session.lettresFausses.includes(rawGuess));
-                const estDoublonMot = rawGuess.length === 7 && Object.values(session.lettresRefuseesParJoueur).some(list => list.includes(rawGuess));
+                const estDoublonMot = rawGuess.length === 7 && session.motsTentes.includes(rawGuess);
 
                 if (estDoublonLettre || estDoublonMot) {
                     const terme = rawGuess.length === 1 ? `la lettre **« ${rawGuess} »**` : `le mot **« ${rawGuess} »**`;
@@ -602,7 +610,9 @@ async function handlePenduMessage(message, response, client, helpers) {
                         };
                     } else {
                         session.erreursCollectives++;
-                        session.lettresRefuseesParJoueur[uid].push(rawGuess);
+                        if (!session.motsTentes.includes(rawGuess)) {
+                            session.motsTentes.push(rawGuess);
+                        }
                         session.dernierCoup = {
                             userId: uid,
                             proposition: rawGuess,
@@ -622,9 +632,10 @@ async function handlePenduMessage(message, response, client, helpers) {
                             statut: `🟢 **Bonne lettre !** *(${essaisRestants}/3 essai${pluriel} restant${pluriel})*`
                         };
                     } else {
-                        session.lettresFausses.push(rawGuess);
-                        session.erreursCollectives++;
-                        session.lettresRefuseesParJoueur[uid].push(rawGuess);
+                        if (!session.lettresFausses.includes(rawGuess)) {
+                            session.lettresFausses.push(rawGuess);
+                            session.erreursCollectives++;
+                        }
                         session.dernierCoup = {
                             userId: uid,
                             proposition: rawGuess,
@@ -663,8 +674,6 @@ async function handlePenduMessage(message, response, client, helpers) {
                     const vainqueurs = Object.keys(session.bonnesLettresParJoueur).filter(
                         pId => session.bonnesLettresParJoueur[pId] === maxBonnes && maxBonnes > 0
                     );
-
-                    // Si personne n'avait de point individuel (ex: mot entier deviné direct), le découvreur gagne
                     if (vainqueurs.length === 0) vainqueurs.push(uid);
 
                     session.vainqueurId = vainqueurs[0];
@@ -687,19 +696,26 @@ async function handlePenduMessage(message, response, client, helpers) {
                     }
                     penduBridge.demanderSauvegarde();
 
-                    // Bilan de chaque participant avec couronne 👑 pour TOUS les ex-æquo
+                    // Bilan de chaque participant avec ses essais (sans liste individuelle répétée)
                     const lignesParticipants = Object.keys(session.tentativesJoueurs).map(pId => {
                         const m = message.guild.members.cache.get(pId);
                         const nom = m?.displayName || `<@${pId}>`;
                         const bonnes = session.bonnesLettresParJoueur[pId] || 0;
-                        const refus = session.lettresRefuseesParJoueur[pId]?.join(', ') || 'Aucune';
+                        const essais = session.tentativesJoueurs[pId] || 0;
                         const couronne = vainqueurs.includes(pId) ? ' 👑' : '';
-                        return `• **${nom}**${couronne} : **${bonnes}** bonne(s) lettre(s) | ❌ Refusées : \`${refus}\``;
+                        return `• **${nom}**${couronne} : **${bonnes}** bonne(s) lettre(s) (${essais}/3 essai${essais > 1 ? 's' : ''})`;
                     }).join('\n');
 
                     const texteAnnonceVictoire = vainqueurs.length > 1
                         ? `🤝 **ÉGALITÉ AU SOMMET !** Victoire partagée entre ${vainqueurs.map(id => `<@${id}>`).join(' et ')} (avec **${maxBonnes}** bonne(s) lettre(s) chacun·e) !\n⭐ **Récompense :** +3 points au classement hebdo pour chacun·e !`
                         : `🏆 **Vainqueur de la manche :** <@${vainqueurs[0]}> (avec **${maxBonnes}** bonne(s) lettre(s)) !\n⭐ **Récompense :** +3 points au classement hebdomadaire !`;
+
+                    const faussesLettresFinal = (session.lettresFausses && session.lettresFausses.length > 0)
+                        ? [...new Set(session.lettresFausses)].sort().join(' ') 
+                        : 'Aucune';
+                    const motsTentesFinal = (session.motsTentes && session.motsTentes.length > 0)
+                        ? session.motsTentes.join(', ') 
+                        : 'Aucun';
 
                     const embedVictoire = new EmbedBuilder()
                         .setColor(0x2ecc71)
@@ -707,6 +723,8 @@ async function handlePenduMessage(message, response, client, helpers) {
                         .setDescription(
                             `🔤 **Le mot était bien :** \`${motComplet}\`\n\n` +
                             `${texteAnnonceVictoire}\n\n` +
+                            `❌ **Lettres refusées :** \`${faussesLettresFinal}\`\n` +
+                            `📝 **Mots tentés :** \`${motsTentesFinal}\`\n\n` +
                             `👥 **__Bilan des participant(e)s :__**\n${lignesParticipants || '*Aucun participant*'}`
                         )
                         .setFooter({ text: 'Rendez-vous demain soir à 21h00 pour le prochain Pendu !' });
@@ -739,7 +757,6 @@ async function handlePenduMessage(message, response, client, helpers) {
                     session.termine = true;
                     penduBridge.demanderSauvegarde();
 
-                    // Mise à jour de l'embed principal sur place pour montrer la potence complète
                     if (session.messageId) {
                         const msgEmbed = await message.channel.messages.fetch(session.messageId).catch(() => null);
                         if (msgEmbed) {
@@ -750,9 +767,17 @@ async function handlePenduMessage(message, response, client, helpers) {
                     const lignesDefaite = Object.keys(session.tentativesJoueurs).map(pId => {
                         const m = message.guild.members.cache.get(pId);
                         const nom = m?.displayName || `<@${pId}>`;
-                        const refus = session.lettresRefuseesParJoueur[pId]?.join(', ') || 'Aucune';
-                        return `• **${nom}** : ❌ Refusées : \`${refus}\``;
+                        const bonnes = session.bonnesLettresParJoueur[pId] || 0;
+                        const essais = session.tentativesJoueurs[pId] || 0;
+                        return `• **${nom}** : **${bonnes}** bonne(s) lettre(s) (${essais}/3 essai${essais > 1 ? 's' : ''})`;
                     }).join('\n');
+
+                    const faussesLettresFinal = (session.lettresFausses && session.lettresFausses.length > 0)
+                        ? [...new Set(session.lettresFausses)].sort().join(' ') 
+                        : 'Aucune';
+                    const motsTentesFinal = (session.motsTentes && session.motsTentes.length > 0)
+                        ? session.motsTentes.join(', ') 
+                        : 'Aucun';
 
                     const embedDefaite = new EmbedBuilder()
                         .setColor(0xe74c3c)
@@ -761,7 +786,9 @@ async function handlePenduMessage(message, response, client, helpers) {
                             `${PENDU_DESSINS[6]}\n` +
                             `Le nombre d'erreurs maximal (6/6) a été atteint !\n\n` +
                             `🔤 **Le mot mystère était :** \`${motComplet}\`\n\n` +
-                            `👥 **__Lettres refusées par joueur :__**\n${lignesDefaite || '*Aucune*'}\n\n` +
+                            `❌ **Lettres refusées :** \`${faussesLettresFinal}\`\n` +
+                            `📝 **Mots tentés :** \`${motsTentesFinal}\`\n\n` +
+                            `👥 **__Bilan des participant(e)s :__**\n${lignesDefaite || '*Aucune*'}\n\n` +
                             `Rendez-vous demain soir à **21h00** pour prendre votre revanche !`
                         );
 

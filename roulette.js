@@ -110,6 +110,7 @@ const ROULETTE_AUTOCORRECT_PHRASES = [
     ' j\'ai mangé un pneu ',
     ' jme suis chié dessus ',
     ' les gros pieds de feldup ',
+    ' ...En vrai, quand on y pense, le RN a pas forcément tort, si ? Tout ça pour dire que ',
     ' Mario c\'est pas un jeu c\'est une license '
 ];
 
@@ -1243,6 +1244,10 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             crediterInventaireRoulette(member.id, 'epingleSalon', 1);
             return `📌 **${auteurNom}** a gagné le droit d'**épingler un message** dans ce salon !\n-# 🎒 *Stocké dans ton inventaire (\`!rlt claim\` pour l'utiliser quand tu veux).*`;
         case 'special-vote-immunite-exclusion':
+            // Annulation absolue pour la fondatrice (Epsys)
+            if (member.id === bridge.EPSYS_ID || member.id === '436218312574107658') {
+                return `👑 **Immunité Fondatrice !** Pas de vote public sur **${auteurNom}** : le vote d'exclusion est **immédiatement annulé par décret impérial** ! 😌 Le peuple s'incline.`;
+            }
             message.vote = member;
             return `🗳️ **${auteurNom}** déclenche un **vote public** !`;
         case 'malus-prime': {
@@ -1439,6 +1444,11 @@ function buildVoteRouletteEmbed(membre) {
 }
 
 async function demarrerVoteRoulette(msg, membre) {
+    // Sécurité absolue : jamais de vote sur Epsys
+    if (membre.id === bridge.EPSYS_ID || membre.id === '436218312574107658') {
+        return;
+    }
+
     await msg.react('✅').catch(() => {});
     await msg.react('❌').catch(() => {});
 

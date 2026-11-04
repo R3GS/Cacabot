@@ -886,53 +886,164 @@ let rebusSession = {
     compteurMessages: 0
 };
 
-const REBUS_GENRES = {
-    // Films
-    'un film d\'animation / Disney / Pixar': ['ratatouille', 'le roi lion', 'toy story', 'shrek', 'coco', 'vaiana', 'la haut', 'monstres et cie', 'nemo', 'cars', 'raiponce', 'reine des neiges', 'zootopie', 'vice-versa', 'alerte rouge', 'wall-e'],
-    'un film ou univers de super-héros': ['spider-man', 'batman', 'joker', 'avengers', 'iron man', 'thor', 'captain america', 'deadpool', 'wolverine', 'x-men', 'superman', 'aquaman', 'wonder woman', 'flash', 'suicide squad'],
-    'un film de science-fiction culte': ['star wars', 'matrix', 'inception', 'interstellar', 'alien', 'terminator', 'dune', 'retour vers le futur', 'premier contact', 'gravity', 'jurassic park'],
-    'un film d\'action / braquage': ['fast and furious', 'john wick', 'mission impossible', 'james bond', 'die hard', 'top gun', 'taxi', 'drive', 'taken', 'kingsman'],
-    'un chef-d\'œuvre du Studio Ghibli': ['le voyage de chihiro', 'princesse mononoke', 'mon voisin totoro', 'le chateau ambulant', 'le tombeau des lucioles'],
-    'un film d\'horreur ou épouvante': ['shining', 'saw', 'conjuring', 'annabelle', 'scream', 'halloween', 'ca', 'sans un bruit', 'get out', 'us', 'vendredi 13', 'freddy'],
-
-    // Jeux Vidéo
-    'un FPS / jeu de tir tactique': ['valorant', 'counter strike', 'call of duty', 'battlefield', 'overwatch', 'apex legends', 'rainbow six siege', 'doom', 'halo', 'team fortress 2'],
-    'une franchise ou grand classique Nintendo': ['mario', 'zelda', 'pokemon', 'animal crossing', 'kirby', 'splatoon', 'smash bros', 'donkey kong', 'metroid'],
-    'un Souls-like ou jeu d\'action exigeant': ['dark souls', 'bloodborne', 'elden ring', 'sekiro', 'demon souls', 'hades'],
-    'un jeu de survie / craft': ['minecraft', 'terraria', 'rust', 'the forest', 'ark', 'subnautica', 'raft', 'dont starve', 'palworld'],
-    'un jeu de combat': ['street fighter', 'tekken', 'mortal kombat', 'dragon ball fighterz', 'smash bros'],
-    'un jeu de course': ['mario kart', 'rocket league', 'forza', 'need for speed', 'gran turismo', 'f1'],
-    'un jeu d\'horreur': ['five nights at freddys', 'poppy playtime', 'phasmophobia', 'slender', 'resident evil', 'silent hill', 'outlast', 'dead space', 'dead by daylight'],
-
-    // Séries
-    'une sitcom / comédie': ['friends', 'how i met your mother', 'the big bang theory', 'brooklyn nine-nine', 'the office', 'malcolm', 'kaamelott', 'h', 'camera cafe'],
-    'une série dramatique ou thriller culte': ['breaking bad', 'better call saul', 'peaky blinders', 'squid game', 'la casa de papel', 'dexter', 'prison break', 'sherlock', 'black mirror', 'dark', 'stranger things'],
-    'une série médicale': ['dr house', 'greys anatomy', 'good doctor', 'urgences', 'scrubs', 'h'],
-    'une série médiévale ou fantastique': ['game of thrones', 'house of the dragon', 'the witcher', 'vikings', 'the boys', 'the last of us', 'the walking dead'],
-
-    // Animés
-    'un shōnen d\'action culte': ['naruto', 'one piece', 'dragon ball', 'bleach', 'hunter x hunter', 'jujutsu kaisen', 'demon slayer', 'my hero academia', 'attack on titan', 'chainsaw man', 'black clover'],
-    'un animé de sport': ['haikyuu', 'blue lock', 'kuroko no basket', 'slam dunk', 'initial d', 'captain tsubasa', 'hajime no ippo'],
-    'un animé psychologique ou à mystère': ['death note', 'tokyo ghoul', 'monster', 'psycho-pass', 'code geass', 'steins gate', 'erased', 'detective conan']
+const REBUS_GENRES_PAR_THEME = {
+    animes: {
+        'un shōnen d\'action / aventure culte': [
+            'naruto', 'naruto shippuden', 'one piece', 'dragon ball', 'dragon ball z', 'dbz', 'bleach',
+            'hunter x hunter', 'hxh', 'jujutsu kaisen', 'jjk', 'demon slayer', 'kimetsu no yaiba',
+            'my hero academia', 'mha', 'attack on titan', 'l attaque des titans', 'snk',
+            'chainsaw man', 'black clover', 'fairy tail', 'seven deadly sins', 'fire force',
+            'dr stone', 'soul eater', 'blue exorcist', 'noragami', 'fullmetal alchemist', 'fma'
+        ],
+        'un animé de sport': [
+            'haikyuu', 'haikyu', 'blue lock', 'kuroko no basket', 'kuroko', 'slam dunk', 'initial d',
+            'captain tsubasa', 'olive et tom', 'hajime no ippo'
+        ],
+        'un animé psychologique, thriller ou policier': [
+            'death note', 'tokyo ghoul', 'monster', 'psycho-pass', 'code geass', 'steins gate',
+            'erased', 'detective conan', 'death parade', 'banana fish', 'parasyte', 'danganronpa'
+        ],
+        'un animé tranche de vie, romance ou drame émouvant': [
+            'your lie in april', 'clannad', 'anohana', 'violet evergarden', 'toradora', 'kaguya-sama',
+            'love is war', 'oshi no ko', 'the promised neverland'
+        ],
+        'un animé fantasy, isekai ou aventure fantastique': [
+            'sword art online', 'sao', 'frieren', 're:zero', 'rezero', 'konosuba', 'overlord',
+            'no game no life', 'mushoku tensei', 'moi quand je me reincarne en slime', 'slime',
+            'solo leveling', 'made in abyss', 'vinland saga', 'berserk', 'dororo'
+        ],
+        'un animé classique / mecha / rétro': [
+            'evangelion', 'neon genesis evangelion', 'cowboy bebop', 'akira', 'ghost in the shell',
+            'goldorak', 'saint seiya', 'les chevaliers du zodiaque', 'hokuto no ken', 'ken le survivant',
+            'city hunter', 'nicky larson', 'gto', 'great teacher onizuka', 'gurren lagann'
+        ]
+    },
+    series: {
+        'une sitcom / comédie': [
+            'friends', 'how i met your mother', 'himym', 'the big bang theory', 'tbbt',
+            'brooklyn nine-nine', 'b99', 'the office', 'parks and recreation', 'malcolm',
+            'ma famille d abord', 'tout le monde deteste chris', 'kaamelott', 'h', 'camera cafe',
+            'scenes de menages', 'bref', 'dix pour cent', 'un gars une fille', 'sex education'
+        ],
+        'une série dramatique ou thriller culte': [
+            'breaking bad', 'better call saul', 'peaky blinders', 'squid game', 'la casa de papel',
+            'dexter', 'prison break', 'sherlock', 'black mirror', 'dark', 'stranger things',
+            'ozark', 'mindhunter', 'fargo', 'the wire', 'the sopranos', 'les soprano', 'mad men',
+            'succession', 'chernobyl', 'you', 'narcos'
+        ],
+        'une série médicale': [
+            'dr house', 'house', 'greys anatomy', 'good doctor', 'urgences', 'er', 'scrubs', 'h'
+        ],
+        'une série fantastique, super-héros ou médiévale': [
+            'game of thrones', 'got', 'house of the dragon', 'the witcher', 'vikings', 'the boys',
+            'gen v', 'the last of us', 'tlou', 'the walking dead', 'twd', 'lucifer', 'stranger things',
+            'daredevil', 'the mandalorian', 'loki', 'wandavision', 'mercredi', 'wednesday',
+            'supernatural', 'the vampire diaries', 'teen wolf', 'buffy'
+        ],
+        'une série française ou policière': [
+            'lupin', 'le bureau des legendes', 'baron noir', 'engrenages', 'plus belle la vie', '24'
+        ]
+    },
+    jeux: {
+        'un FPS / jeu de tir tactique': [
+            'valorant', 'counter strike', 'csgo', 'cs2', 'call of duty', 'cod', 'battlefield',
+            'overwatch', 'apex legends', 'apex', 'rainbow six siege', 'r6', 'doom', 'halo',
+            'team fortress 2', 'tf2', 'pubg', 'helldivers', 'helldivers 2'
+        ],
+        'une franchise ou grand classique Nintendo': [
+            'mario', 'super mario', 'mario kart', 'super smash bros', 'smash bros', 'zelda',
+            'breath of the wild', 'tears of the kingdom', 'pokemon', 'animal crossing',
+            'splatoon', 'kirby', 'donkey kong', 'metroid'
+        ],
+        'un Souls-like ou action-RPG exigeant': [
+            'dark souls', 'bloodborne', 'elden ring', 'sekiro', 'demon souls', 'hades',
+            'monster hunter', 'black myth wukong', 'wukong'
+        ],
+        'un jeu de survie / craft / sandbox': [
+            'minecraft', 'terraria', 'rust', 'the forest', 'ark', 'subnautica', 'raft',
+            'dont starve', 'palworld', 'lethal company'
+        ],
+        'un jeu de combat': [
+            'street fighter', 'tekken', 'mortal kombat', 'dragon ball fighterz', 'dbfz', 'sifu'
+        ],
+        'un jeu de course': [
+            'mario kart', 'rocket league', 'forza', 'forza horizon', 'need for speed', 'nfs',
+            'gran turismo', 'f1', 'the crew'
+        ],
+        'un grand jeu d\'action / aventure culte': [
+            'gta', 'grand theft auto', 'red dead redemption', 'rdr2', 'the witcher', 'witcher',
+            'cyberpunk 2077', 'cyberpunk', 'skyrim', 'god of war', 'the last of us', 'tlou',
+            'uncharted', 'spider-man', 'horizon', 'ghost of tsushima', 'portal', 'half-life', 'bioshock'
+        ],
+        'un jeu d\'horreur ou angoissant': [
+            'five nights at freddys', 'fnaf', 'poppy playtime', 'phasmophobia', 'slender',
+            'resident evil', 'silent hill', 'outlast', 'dead space', 'dead by daylight', 'dbd',
+            'amnesia', 'little nightmares', 'limbo', 'inside'
+        ]
+    },
+    films: {
+        'un film d\'animation / Disney / Pixar': [
+            'ratatouille', 'le roi lion', 'roi lion', 'toy story', 'shrek', 'coco', 'vaiana', 'moana',
+            'la haut', 'up', 'monstres et cie', 'le monde de nemo', 'nemo', 'cars', 'raiponce',
+            'la reine des neiges', 'reine des neiges', 'zootopie', 'vice-versa', 'vice versa',
+            'alerte rouge', 'wall-e', 'walle', 'les indestructibles'
+        ],
+        'un film ou univers de super-héros': [
+            'spider-man', 'spiderman', 'batman', 'joker', 'avengers', 'iron man', 'thor',
+            'captain america', 'deadpool', 'wolverine', 'logan', 'x-men', 'superman', 'aquaman',
+            'wonder woman', 'flash', 'shazam', 'suicide squad'
+        ],
+        'un film de science-fiction culte': [
+            'star wars', 'la guerre des etoiles', 'matrix', 'inception', 'interstellar', 'alien',
+            'terminator', 'dune', 'retour vers le futur', 'premier contact', 'gravity',
+            'jurassic park', 'oppenheimer', 'tenet', 'ready player one'
+        ],
+        'un film d\'action / braquage': [
+            'fast and furious', 'john wick', 'mission impossible', 'james bond', '007',
+            'die hard', 'piege de cristal', 'top gun', 'taxi', 'drive', 'taken', 'kingsman',
+            'fight club', 'kill bill', 'pulp fiction', 'gladiator'
+        ],
+        'un chef-d\'œuvre du Studio Ghibli ou animation japonaise': [
+            'le voyage de chihiro', 'princesse mononoke', 'mon voisin totoro', 'totoro',
+            'le chateau ambulant', 'le tombeau des lucioles', 'your name'
+        ],
+        'un film d\'horreur ou épouvante': [
+            'shining', 'saw', 'conjuring', 'annabelle', 'scream', 'halloween', 'ca', 'it',
+            'sans un bruit', 'get out', 'us', 'vendredi 13', 'freddy', 'paranormal activity',
+            'psychose', 'psycho', 'les dents de la mer', 'jaws'
+        ]
+    }
 };
+
+function determinerThemeItem(item) {
+    const itemStr = item[0];
+    if (REBUS_ANIMES.some(i => i[0] === itemStr)) return 'animes';
+    if (REBUS_SERIES.some(i => i[0] === itemStr)) return 'series';
+    if (REBUS_JEUX.some(i => i[0] === itemStr)) return 'jeux';
+    if (REBUS_FILMS.some(i => i[0] === itemStr)) return 'films';
+    return null;
+}
 
 function genererIndiceRebus(item) {
     if (!item) return "Aucun rébus en cours.";
     const reponses = item.slice(1);
     const titrePrincipal = item[1];
+    const themeKey = determinerThemeItem(item);
 
-    // 1. Cherche si l'œuvre correspond à un genre connu
-    for (const [genreLabel, titresDuGenre] of Object.entries(REBUS_GENRES)) {
-        const match = reponses.some(rep => {
-            const norm = normaliserRebus(rep);
-            return titresDuGenre.some(t => norm === normaliserRebus(t) || norm.includes(normaliserRebus(t)));
-        });
-        if (match) {
-            return `💡 **Indice :** C'est **${genreLabel}** !`;
+    // 1. Recherche UNIQUEMENT dans le thème approprié (comparaison stricte, zéro faux positif !)
+    if (themeKey && REBUS_GENRES_PAR_THEME[themeKey]) {
+        for (const [genreLabel, titresDuGenre] of Object.entries(REBUS_GENRES_PAR_THEME[themeKey])) {
+            const match = reponses.some(rep => {
+                const normRep = normaliserRebus(rep);
+                return titresDuGenre.some(t => normRep === normaliserRebus(t));
+            });
+            if (match) {
+                return `💡 **Indice :** C'est **${genreLabel}** !`;
+            }
         }
     }
 
-    // 2. Si aucun genre attribué : masque des initiales de chaque mot
+    // 2. Si aucun sous-genre spécifique : masque des initiales de chaque mot
     const masque = titrePrincipal.split(' ').map(mot => {
         if (mot.length <= 2) return mot;
         return mot[0].toUpperCase() + ' ' + '_ '.repeat(mot.length - 1).trim();
