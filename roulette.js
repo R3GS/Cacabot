@@ -2104,7 +2104,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     if (!ROULETTE_COOLDOWN_EXEMPT.includes(authorId) && !enFreeRoll) {
         const finCooldown = rouletteCooldowns.get(authorId);
         if (finCooldown && now < finCooldown) {
-            return { cooldown: true, reste: Math.ceil((finCooldown - now) / 1000 / 60) };
+            return { cooldown: true, reste: Math.ceil((finCooldown - now) / 1000 / 60), finCooldown };
         }
         const chargesCourt = rouletteCooldownCourtCharges.get(authorId) || 0;
         const charges45 = rouletteCooldown45Charges.get(authorId) || 0;
@@ -3464,8 +3464,10 @@ async function handleRouletteMessage(message, response, client, helpers) {
                     new ButtonBuilder().setCustomId('roulette_notif').setLabel('🔔 Me prévenir').setStyle(ButtonStyle.Secondary),
                     new ButtonBuilder().setCustomId('roulette_notif_mp').setLabel('🔔 Me prévenir par MP').setStyle(ButtonStyle.Secondary)
                 );
+                const tsR = resultat.finCooldown ? `<t:${Math.ceil(resultat.finCooldown / 1000)}:R>` : `dans **${resultat.reste} min**`;
+                const tsT = resultat.finCooldown ? ` (à <t:${Math.ceil(resultat.finCooldown / 1000)}:T>)` : '';
                 await message.reply({ 
-                    content: `Attends la fin du cooldown ! Il te reste **${resultat.reste} minute${resultat.reste > 1 ? 's' : ''}**.`, 
+                    content: `⏳ Attends la fin de ton cooldown ! Tu pourras relancer ${tsR}${tsT}.`, 
                     components: [notifRow],
                     flags: [MessageFlags.SuppressNotifications],
                     allowedMentions: { repliedUser: false }
@@ -3590,7 +3592,9 @@ async function handleRouletteSlash(interaction, client) {
                     new ButtonBuilder().setCustomId('roulette_notif').setLabel('🔔 Me prévenir ici').setStyle(ButtonStyle.Secondary),
                     new ButtonBuilder().setCustomId('roulette_notif_mp').setLabel('🔔 Me prévenir par MP').setStyle(ButtonStyle.Secondary)
                 );
-                await interaction.editReply({ content: `⏳ Cooldown actif ! Il te reste **${res.reste} min**.`, components: [notifRow] });
+                const tsR = res.finCooldown ? `<t:${Math.ceil(res.finCooldown / 1000)}:R>` : `dans **${res.reste} min**`;
+                const tsT = res.finCooldown ? ` (à <t:${Math.ceil(res.finCooldown / 1000)}:T>)` : '';
+                await interaction.editReply({ content: `⏳ Cooldown actif ! Tu pourras relancer ${tsR}${tsT}.`, components: [notifRow] });
                 return true;
             }
             const env = await interaction.editReply({ embeds: res.embeds, components: res.components });
@@ -3867,6 +3871,34 @@ async function handleRouletteButton(interaction, client) {
         }
 
         const itemChoisi = interaction.values[0];
+
+        // Sécurité anti-gaspillage : vérifications avant de consommer l'objet
+        if (itemChoisi === 'ticketSkip') {
+            const finCd = rouletteCooldowns.get(targetUserId);
+            if (!finCd || Date.now() >= finCd) {
+                return interaction.reply({ content: "❌ Tu n'as aucun cooldown actif à réinitialiser ! Ton **Coupe-file** est conservé dans ton inventaire.", ephemeral: true });
+            }
+        } else if (itemChoisi === 'eponge') {
+            const nowCk = Date.now();
+            let aMalus = false;
+            if (rouletteUwuUntil.has(targetUserId) && nowCk < rouletteUwuUntil.get(targetUserId)) aMalus = true;
+            if (rouletteEmojiUntil.has(targetUserId) && nowCk < rouletteEmojiUntil.get(targetUserId)) aMalus = true;
+            if (rouletteLeetUntil.has(targetUserId) && nowCk < rouletteLeetUntil.get(targetUserId)) aMalus = true;
+            if (rouletteEchoUntil.has(targetUserId) && nowCk < rouletteEchoUntil.get(targetUserId)) aMalus = true;
+            if (rouletteLettreInterdite.has(targetUserId) && nowCk < rouletteLettreInterdite.get(targetUserId).until) aMalus = true;
+            for (const fin of Object.values(rouletteTransfos.get(targetUserId) ?? {})) {
+                if (nowCk < fin) aMalus = true;
+            }
+            if (!aMalus) {
+                return interaction.reply({ content: "❌ Tu n'as aucun malus textuel actif à effacer ! Ton **Éponge à malus** est conservée dans ton inventaire.", ephemeral: true });
+            }
+        } else if (itemChoisi === 'freeRoll1Min') {
+            const finFr = rouletteFreeRollUntil.get(targetUserId);
+            if (finFr && Date.now() < finFr) {
+                return interaction.reply({ content: "❌ Ton tirage à volonté est déjà actif en ce moment ! Attends qu'il se termine pour en réactiver un autre.", ephemeral: true });
+            }
+        }
+
         const consomme = consommerInventaireRoulette(targetUserId, itemChoisi);
         if (!consomme) {
             return interaction.reply({ content: "Tu n'as plus cette récompense en réserve ou elle a déjà été activée !", ephemeral: true });
@@ -4188,7 +4220,9 @@ async function handleRouletteButton(interaction, client) {
                 new ButtonBuilder().setCustomId('roulette_notif').setLabel('🔔 Me prévenir ici').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('roulette_notif_mp').setLabel('🔔 Me prévenir par MP').setStyle(ButtonStyle.Secondary)
             );
-            await interaction.reply({ content: `⏳ Cooldown actif ! Il te reste **${res.reste} min**.`, components: [notifRow], ephemeral: true });
+            const tsR = res.finCooldown ? `<t:${Math.ceil(res.finCooldown / 1000)}:R>` : `dans **${res.reste} min**`;
+            const tsT = res.finCooldown ? ` (à <t:${Math.ceil(res.finCooldown / 1000)}:T>)` : '';
+            await interaction.reply({ content: `⏳ Cooldown actif ! Tu pourras relancer ${tsR}${tsT}.`, components: [notifRow], ephemeral: true });
             return true;
         }
         // content: null supprime proprement l'ancien texte de rappel "ton cooldown est terminé..."
@@ -4255,8 +4289,10 @@ async function handleRouletteButton(interaction, client) {
                 new ButtonBuilder().setCustomId(`roulette_notif_${clickerId}`).setLabel('🔔 Me prévenir ici').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId(`roulette_notifmp_${clickerId}`).setLabel('🔔 Me prévenir par MP').setStyle(ButtonStyle.Secondary)
             );
+            const tsR = res.finCooldown ? `<t:${Math.ceil(res.finCooldown / 1000)}:R>` : `dans **${res.reste} min**`;
+            const tsT = res.finCooldown ? ` (à <t:${Math.ceil(res.finCooldown / 1000)}:T>)` : '';
             return interaction.reply({
-                content: `Attends la fin du cooldown ! Il te reste **${res.reste} minute${res.reste > 1 ? 's' : ''}**.`,
+                content: `⏳ Attends la fin de ton cooldown ! Tu pourras relancer ${tsR}${tsT}.`,
                 components: [notifRow],
                 ephemeral: true
             });

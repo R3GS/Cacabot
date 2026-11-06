@@ -32,24 +32,24 @@ const PENDU_DESSINS = [
 
 // Dictionnaire de 150 mots variés de 7 lettres
 const PENDU_DICTIONNAIRE = [
-    "ABRICOT", "ANIMAUX", "BAGARRE", "BATEAUX", "BICYCLE", "BISTROT", "BONHEUR", "BOUTEIL", "BUREAUX", "CAPRICE",
-    "CHATEAU", "CHOCOLA", "CLAVIER", "COFFRET", "COPAINS", "COULEUR", "COURAGE", "COUTEAU", "CUISINE", "DANGERS",
+    "ABRICOT", "ANIMAUX", "BAGARRE", "BATEAUX", "BICYCLE", "BISTROT", "BONHEUR", "BOUQUET", "BUREAUX", "CAPRICE",
+    "CHATEAU", "CHARIOT", "CLAVIER", "COFFRET", "COPAINS", "COULEUR", "COURAGE", "COUTEAU", "CUISINE", "DANGERS",
     "DESTINS", "DIAMANT", "DIPLOME", "DRAPEAU", "ECLIPSE", "ENFANTS", "ENIGMES", "ETOILES", "FAMILLE", "FANTOME",
     "FLAMMES", "FLEUVES", "FORTUNE", "FOUDRES", "FROMAGE", "GALAXIE", "GATEAUX", "GLACONS", "GUITARE", "HORIZON",
     "JOURNAL", "JOURNEE", "JUNGLES", "LANGAGE", "LEGENDE", "LIVRETS", "LUMIERE", "LUNETTE", "MACHINE", "MAISONS",
-    "MANIERE", "MARCHAL", "MESSAGE", "MINUTES", "MIRACLE", "MONSTRE", "MUSIQUE", "MYSTERE", "NATIONS", "NAVIGUE",
-    "NOUVEAU", "NUMEROS", "OCEANS", "OISEAUX", "ORANGES", "PANIERS", "PAQUETS", "PARFUMS", "PATRONS", "PENSEES",
+    "MANIERE", "MARTEAU", "MESSAGE", "MINUTES", "MIRACLE", "MONSTRE", "MUSIQUE", "MYSTERE", "NATIONS", "NAVIGUE",
+    "NOUVEAU", "NUMEROS", "OCTOBRE", "OISEAUX", "ORANGES", "PANIERS", "PAQUETS", "PARFUMS", "PATRONS", "PENSEES",
     "PIERRES", "PLANETE", "POISSON", "POLICES", "POMPIER", "PORTAIL", "POUVOIR", "PRINCES", "PROPOSE", "RACINES",
-    "RAYONS", "REGARDS", "RESEAUX", "RIDEAUX", "RIVAGES", "ROCHERS", "SAISONS", "SALADES", "SECRETS", "SERPENT",
+    "RAYONNE", "REGARDS", "RESEAUX", "RIDEAUX", "RIVAGES", "ROCHERS", "SAISONS", "SALADES", "SECRETS", "SERPENT",
     "SILENCE", "SOLEILS", "SOMMETS", "SOURCES", "TABLEAU", "TALENTS", "TORTUES", "TOURNER", "TRAVAIL", "TRESORS",
-    "TROUPES", "TUNNELS", "VACANCE", "VALEURS", "VALISES", "VAPEURS", "VICTOIR", "VILLAGE", "VISAGES", "VOITURS",
-    "VOYAGES", "VOYANTS", "CIRCULE", "CONSEIL", "CONTACT", "CORRECT", "COURRIER", "CREATIF", "CRISTAL", "CULTURE",
+    "TROUPES", "TUNNELS", "VACANCE", "VALEURS", "VALISES", "VAPEURS", "VERTIGE", "VILLAGE", "VISAGES", "VOITURE",
+    "VOYAGES", "VOYANTS", "CIRCULE", "CONSEIL", "CONTACT", "CORRECT", "COUREUR", "CREATIF", "CRISTAL", "CULTURE",
     "DECIDER", "DEFENSE", "DISCUTE", "ECHELLE", "EMOTION", "ENERGIE", "ESPACES", "ESSENCE", "EXEMPLE", "FACTEUR",
-    "FESTIFS", "FIDELES", "FINALES", "FLEXION", "FORMULE", "FOULEES", "GLISSES", "HABITAT", "HARMONY", "HAUTEUR",
-    "HORREUR", "HUMOURS", "IMPACTY", "INVENTE", "LECTEUR", "LOGIQUE", "LUNAIRE", "MEMOIRE", "MEMBRES", "MENSUEL",
-    "NATURES", "OPINION", "ORGANEZ", "ORIGINE", "PARFUME", "PARTAGE", "PASSION", "PENSEUR", "PISTONS", "POETIQUE",
-    "PORTIER", "POTIONS", "PRESENT", "RAPIDES", "RECOLTE", "REFLETS", "REGULER", "RELIURE", "REPOSER", "ROBOTIC",
-    "SECONDE", "SENTIER", "STATION", "TACTILE", "TEMPLES", "TERRAINS", "THEATRE", "UNIVERS", "VALIDES", "VARIETE"
+    "FESTIFS", "FIDELES", "FINALES", "FLEXION", "FORMULE", "FOULEES", "GLISSES", "HABITAT", "HORLOGE", "HAUTEUR",
+    "HORREUR", "HAMEAUX", "IMPACTS", "INVENTE", "LECTEUR", "LOGIQUE", "LUNAIRE", "MEMOIRE", "MEMBRES", "MENSUEL",
+    "NATURES", "OPINION", "ORGANES", "ORIGINE", "PARFUME", "PARTAGE", "PASSION", "PENSEUR", "PISTONS", "POURPRE",
+    "PORTIER", "POTIONS", "PRESENT", "RAPIDES", "RECOLTE", "REFLETS", "REGULER", "RELIURE", "REPOSER", "ROUTIER",
+    "SECONDE", "SENTIER", "STATION", "TACTILE", "TEMPLES", "TORRENT", "THEATRE", "UNIVERS", "VALIDES", "VARIETE"
 ].filter(m => m.length === 7);
 
 let penduBridge = {
@@ -117,21 +117,28 @@ function buildPenduEmbed(session) {
     const erreursIndex = Math.min(session.erreursCollectives, PENDU_DESSINS.length - 1);
     const potence = PENDU_DESSINS[erreursIndex];
 
-    const faussesLettresStr = (session.lettresFausses && session.lettresFausses.length > 0)
-        ? [...new Set(session.lettresFausses)].sort().join(' ') 
+    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+    const trouvees = session.lettresTrouvees || [];
+    const fausses = session.lettresFausses || [];
+
+    // Lettres disponibles (non encore tentées)
+    const disponibles = alphabet.filter(l => !trouvees.includes(l) && !fausses.includes(l));
+    const disposStr = disponibles.length > 0 ? `\`${disponibles.join(' ')}\`` : '*Toutes les lettres ont été tentées*';
+
+    // Lettres refusées barrées (ex: ~~A~~ • ~~I~~ • ~~M~~)
+    const faussesTriees = [...new Set(fausses)].sort();
+    const faussesStr = faussesTriees.length > 0
+        ? faussesTriees.map(l => `~~${l}~~`).join(' • ')
         : '*Aucune pour l\'instant*';
 
+    // Mots tentés
     const motsTentesStr = (session.motsTentes && session.motsTentes.length > 0)
         ? session.motsTentes.join(', ')
         : '*Aucun pour l\'instant*';
 
-    // Clavier / Ruban visuel de l'alphabet (A-Z)
-    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-    const clavierVisuel = alphabet.map(l => {
-        if (session.lettresTrouvees.includes(l)) return `🟩${l}`;
-        if (session.lettresFausses && session.lettresFausses.includes(l)) return `🟥${l}`;
-        return `\`${l}\``;
-    }).join(' ');
+    // Jauge visuelle de vie (6 étapes)
+    const nbErreurs = Math.min(Math.max(session.erreursCollectives || 0, 0), 6);
+    const jaugeErreurs = '🟥'.repeat(nbErreurs) + '⬜'.repeat(6 - nbErreurs);
 
     let dernierCoupTexte = '';
     if (session.dernierCoup) {
@@ -159,17 +166,16 @@ function buildPenduEmbed(session) {
         .setDescription(
             `📢 **Notification :** <@&1559041461230505994>\n\n` +
             `🔤 **Mot de 7 lettres à deviner :**\n# \`${masque}\`\n\n` +
-            `⌨️ **Alphabet :**\n${clavierVisuel}\n\n` +
-            `❌ **Lettres refusées :** \`${faussesLettresStr}\`\n` +
+            `⌨️ **Disponibles :** ${disposStr}\n` +
+            `❌ **Éliminées :** ${faussesStr}\n` +
             `📝 **Mots tentés :** \`${motsTentesStr}\`\n\n` +
             `${potence}\n` +
-            `⚠️ **Erreurs collectives :** **${session.erreursCollectives}/6**\n` +
+            `⚠️ **Erreurs collectives :** **${session.erreursCollectives}/6**  \`[ ${jaugeErreurs} ]\`\n` +
             alertePotence + `\n` +
             (dernierCoupTexte || '') +
             (participantsTxt || '') +
             `⏳ **Fin de la session :** <t:${expireTimestamp}:R> (à <t:${expireTimestamp}:t>)\n\n` +
-            `🎯 **Règle :** Tu as **3 essais personnels** pour proposer une lettre ou le mot entier de 7 lettres !\n` +
-            `💬 *Écris simplement ta lettre dans ce salon (le bot mettra à jour ce message directement).*`
+            `-# 🎯 **Règle :** 3 essais personnels par joueur (lettre ou mot de 7 lettres) • Écris directement dans ce salon.`
         )
         .setFooter({ text: 'Rendez-vous tous les soirs à 21h00 ! • !pendu pour voir le statut' });
 }
