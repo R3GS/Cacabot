@@ -1047,7 +1047,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             const dureeJours = 7 * multTemps;
             roulettePseudoLock.set(member.id, { until: Date.now() + dureeJours * 24 * 60 * 60 * 1000, pseudo, originalNickname });
             await member.setNickname(pseudo).catch(() => {});
-            return `**${auteurNom}** se retrouve avec le pseudo **${pseudo}**, verrouillé pendant **${dureeJours} jours** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
+            return `<@${member.id}> est renommé·e en **${pseudo}**, verrouillé pendant **${dureeJours} jours** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         }
         case 'malus-pseudo-lock-mois': {
             const pseudo = ROULETTE_NOMS_PSEUDO_LOCK[Math.floor(Math.random() * ROULETTE_NOMS_PSEUDO_LOCK.length)];
@@ -1056,7 +1056,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             const dureeJours = 30 * multTemps;
             roulettePseudoLock.set(member.id, { until: Date.now() + dureeJours * 24 * 60 * 60 * 1000, pseudo, originalNickname });
             await member.setNickname(pseudo).catch(() => {});
-            return `**${auteurNom}** se retrouve avec le pseudo **${pseudo}**, verrouillé pendant **${dureeJours} jours** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
+            return `<@${member.id}> est renommé·e en **${pseudo}**, verrouillé pendant **${dureeJours} jours** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         }
         case 'malus-uwu-24h': {
             const finUwu = rouletteUwuUntil.get(member.id);
@@ -3356,7 +3356,10 @@ async function handleRouletteMessage(message, response, client, helpers) {
                 if (result.multiple) {
                     return bridge.askDisambiguation(message, message.guild, result.candidates, async (user) => {
                         const membre = message.guild.members.cache.get(user.id);
-                        if (membre) message.reply({ embeds: [buildRouletteStateEmbed(membre, message.guild?.id)] });
+                        if (membre) {
+                            const rowUser = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_state_${message.author.id}`, '🔍 Inspecter un autre membre...');
+                            message.reply({ embeds: [buildRouletteStateEmbed(membre, message.guild?.id)], components: rowUser ? [rowUser] : [] });
+                        }
                     });
                 }
                 cible = result.found;
@@ -3364,8 +3367,10 @@ async function handleRouletteMessage(message, response, client, helpers) {
         }
         const { MessageFlags } = require('discord.js');
         if (!cible) { await message.reply("Membre introuvable."); return true; }
+        const rowUser = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_state_${message.author.id}`, '🔍 Inspecter un autre membre...');
         await message.reply({ 
             embeds: [buildRouletteStateEmbed(cible, message.guild?.id)],
+            components: rowUser ? [rowUser] : [],
             flags: [MessageFlags.SuppressNotifications],
             allowedMentions: { repliedUser: false }
         });
@@ -3384,8 +3389,10 @@ async function handleRouletteMessage(message, response, client, helpers) {
                     return bridge.askDisambiguation(message, message.guild, result.candidates, async (user) => {
                         const membre = message.guild.members.cache.get(user.id);
                         if (membre) {
-                            const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`rlt_achs_${membre.id}_0_${message.author.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary));
-                            message.reply({ embeds: [buildRouletteStatsEmbed(membre)], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+                            const rowBtns = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`rlt_achs_${membre.id}_0_${message.author.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary));
+                            const rowUser = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_stats_${message.author.id}`, '🔍 Inspecter un autre membre...');
+                            const components = rowUser ? [rowBtns, rowUser] : [rowBtns];
+                            message.reply({ embeds: [buildRouletteStatsEmbed(membre)], components, flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
                         }
                     });
                 }
@@ -3393,8 +3400,10 @@ async function handleRouletteMessage(message, response, client, helpers) {
             }
         }
         if (!cible) { await message.reply("Membre introuvable."); return true; }
-        const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`rlt_achs_${cible.id}_0_${message.author.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary));
-        await message.reply({ embeds: [buildRouletteStatsEmbed(cible)], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        const rowBtns = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`rlt_achs_${cible.id}_0_${message.author.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary));
+        const rowUser = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_stats_${message.author.id}`, '🔍 Inspecter un autre membre...');
+        const components = rowUser ? [rowBtns, rowUser] : [rowBtns];
+        await message.reply({ embeds: [buildRouletteStatsEmbed(cible)], components, flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
         return true;
     }
 
@@ -3417,7 +3426,11 @@ async function handleRouletteMessage(message, response, client, helpers) {
                         const membre = message.guild.members.cache.get(user.id);
                         if (membre) {
                             const { embed, row } = buildRouletteAchievementsEmbed(membre, 0, message.author.id);
-                            message.reply({ embeds: [embed], components: [row] });
+                            const rowUser = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_succes_${message.author.id}`, '🔍 Inspecter un autre membre...');
+                            const components = [];
+                            if (row) components.push(row);
+                            if (rowUser) components.push(rowUser);
+                            message.reply({ embeds: [embed], components });
                         }
                     });
                 }
@@ -3426,7 +3439,11 @@ async function handleRouletteMessage(message, response, client, helpers) {
         }
         if (!cible) { await message.reply("Membre introuvable."); return true; }
         const { embed, row } = buildRouletteAchievementsEmbed(cible, 0, message.author.id);
-        await message.reply({ embeds: [embed], components: [row] });
+        const rowUser = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_succes_${message.author.id}`, '🔍 Inspecter un autre membre...');
+        const components = [];
+        if (row) components.push(row);
+        if (rowUser) components.push(rowUser);
+        await message.reply({ embeds: [embed], components });
         return true;
     }
 
@@ -4417,7 +4434,7 @@ async function handleRouletteButton(interaction, client) {
         bridge.demanderSauvegarde();
 
         await interaction.reply({
-            content: `✅ **${cible.displayName}** se retrouve avec le pseudo **${nouveauPseudo}**, verrouillé pendant **${labelDuree}** !`,
+            content: `✅ <@${cible.id}> est renommé·e en **${nouveauPseudo}**, verrouillé pendant **${labelDuree}** !`,
             ephemeral: false
         });
         return true;
