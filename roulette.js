@@ -1940,22 +1940,39 @@ async function envoyerHallOfShame(guild, membre, entry, lanceur = null) {
 const ROULETTE_ROLE_JOUEUR_ID = '1558968669751615528';
 
 function buildMenuChoixMembreRoulette(guild, authorId, customId, placeholder) {
-    const membresEligibles = guild.members.cache
-        .filter(m => !m.user.bot && m.id !== authorId && m.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID))
-        .map(m => m);
+    if (!guild?.members?.cache) {
+        return new StringSelectMenuBuilder()
+            .setCustomId(customId)
+            .setPlaceholder(placeholder)
+            .addOptions([{
+                label: 'Aucun joueur disponible',
+                description: 'Impossible de charger la liste des membres',
+                value: 'aucun'
+            }]);
+    }
+
+    const tousMembres = guild.members.cache.values ? Array.from(guild.members.cache.values()) : [];
+    const membresEligibles = tousMembres
+        .filter(m => m && m.user && !m.user.bot && m.id !== authorId && m.roles?.cache?.has?.(ROULETTE_ROLE_JOUEUR_ID));
 
     membresEligibles.sort((a, b) => {
         const topA = bridge.topData?.messages?.[a.id] || 0;
         const topB = bridge.topData?.messages?.[b.id] || 0;
         if (topB !== topA) return topB - topA;
-        return a.displayName.localeCompare(b.displayName);
+        const nomA = a.displayName || a.user?.username || '';
+        const nomB = b.displayName || b.user?.username || '';
+        return nomA.localeCompare(nomB);
     });
 
-    const options = membresEligibles.slice(0, 25).map(m => ({
-        label: m.displayName.slice(0, 100),
-        description: `@${m.user.username}`.slice(0, 100),
-        value: m.id
-    }));
+    const options = membresEligibles.slice(0, 25).map(m => {
+        const nom = (m.displayName || m.user?.username || 'Membre').slice(0, 100);
+        const tag = ('@' + (m.user?.username || m.displayName || 'membre')).slice(0, 100);
+        return {
+            label: nom || 'Membre',
+            description: tag || '@membre',
+            value: m.id
+        };
+    });
 
     if (options.length === 0) {
         options.push({
@@ -1972,10 +1989,12 @@ function buildMenuChoixMembreRoulette(guild, authorId, customId, placeholder) {
 }
 
 function membresTop30Roulette(guild, authorId) {
-    const estEligible = (m) => m && !m.user.bot && m.id !== authorId && m.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID);
+    if (!guild?.members?.cache) return [];
+    const estEligible = (m) => m && m.user && !m.user.bot && m.id !== authorId && m.roles?.cache?.has?.(ROULETTE_ROLE_JOUEUR_ID);
 
-    const candidatsTop = Object.entries(bridge.topData.messages || {})
-        .sort((a, b) => b[1] - a[1])
+    const messages = bridge?.topData?.messages || {};
+    const candidatsTop = Object.entries(messages)
+        .sort((a, b) => (b[1] || 0) - (a[1] || 0))
         .map(([id]) => guild.members.cache.get(id))
         .filter(estEligible)
         .slice(0, 30);
@@ -1983,7 +2002,8 @@ function membresTop30Roulette(guild, authorId) {
     if (candidatsTop.length > 0) return candidatsTop;
 
     // Fallback : n'importe quel membre du serveur qui possède le rôle roulette
-    return [...guild.members.cache.filter(estEligible).values()];
+    const tousMembres = guild.members.cache.values ? Array.from(guild.members.cache.values()) : [];
+    return tousMembres.filter(estEligible);
 }
 
 async function envoyerPingRedirection(channel, resultat) {
@@ -3346,68 +3366,78 @@ async function handleRouletteMessage(message, response, client, helpers) {
     }
 
     if (command === '!roulettestate' || command === '!rltstate') {
-        bridge.trackBattlePassProgress?.(message.author.id, 'rlt_state', 1);
-        const query = raw.split(/\s+/).slice(1).join(" ");
-        let cible = message.mentions.members.first();
-        if (!cible) {
-            if (!query) cible = message.member;
-            else {
-                const result = bridge.findMemberByName(message.guild, query);
-                if (result.multiple) {
-                    return bridge.askDisambiguation(message, message.guild, result.candidates, async (user) => {
-                        const membre = message.guild.members.cache.get(user.id);
-                        if (membre) {
-                            const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_state_${message.author.id}`, '🔍 Inspecter un autre membre...');
-                            const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
-                            message.reply({ embeds: [buildRouletteStateEmbed(membre, message.guild?.id)], components: rowUser ? [rowUser] : [] });
-                        }
-                    });
+        try {
+            bridge.trackBattlePassProgress?.(message.author.id, 'rlt_state', 1);
+            const query = raw.split(/\s+/).slice(1).join(" ");
+            let cible = message.mentions?.members?.first ? message.mentions.members.first() : null;
+            if (!cible) {
+                if (!query) cible = message.member;
+                else {
+                    const result = bridge.findMemberByName ? bridge.findMemberByName(message.guild, query) : null;
+                    if (result?.multiple) {
+                        return bridge.askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const membre = message.guild?.members?.cache?.get(user.id);
+                            if (membre) {
+                                const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_state_${message.author.id}`, '🔍 Inspecter un autre membre...');
+                                const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
+                                message.reply({ embeds: [buildRouletteStateEmbed(membre, message.guild?.id)], components: rowUser ? [rowUser] : [] });
+                            }
+                        });
+                    }
+                    cible = result?.found;
                 }
-                cible = result.found;
             }
+            const { MessageFlags } = require('discord.js');
+            if (!cible) { await message.reply("Membre introuvable."); return true; }
+            const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_state_${message.author.id}`, '🔍 Inspecter un autre membre...');
+            const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
+            await message.reply({ 
+                embeds: [buildRouletteStateEmbed(cible, message.guild?.id)],
+                components: rowUser ? [rowUser] : [],
+                flags: [MessageFlags.SuppressNotifications],
+                allowedMentions: { repliedUser: false }
+            });
+        } catch (err) {
+            console.error('Erreur rltstate:', err);
+            await message.reply("Une erreur est survenue lors de l'affichage de l'état roulette.").catch(() => {});
         }
-        const { MessageFlags } = require('discord.js');
-        if (!cible) { await message.reply("Membre introuvable."); return true; }
-        const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_state_${message.author.id}`, '🔍 Inspecter un autre membre...');
-        const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
-        await message.reply({ 
-            embeds: [buildRouletteStateEmbed(cible, message.guild?.id)],
-            components: rowUser ? [rowUser] : [],
-            flags: [MessageFlags.SuppressNotifications],
-            allowedMentions: { repliedUser: false }
-        });
         return true;
     }
 
     if (command === '!roulettestats' || command === '!rltstats') {
-        const { MessageFlags } = require('discord.js');
-        const query = raw.split(/\s+/).slice(1).join(" ");
-        let cible = message.mentions.members.first();
-        if (!cible) {
-            if (!query) cible = message.member;
-            else {
-                const result = bridge.findMemberByName(message.guild, query);
-                if (result.multiple) {
-                    return bridge.askDisambiguation(message, message.guild, result.candidates, async (user) => {
-                        const membre = message.guild.members.cache.get(user.id);
-                        if (membre) {
-                            const rowBtns = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`rlt_achs_${membre.id}_0_${message.author.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary));
-                            const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_stats_${message.author.id}`, '🔍 Inspecter un autre membre...');
-                            const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
-                            const components = rowUser ? [rowBtns, rowUser] : [rowBtns];
-                            message.reply({ embeds: [buildRouletteStatsEmbed(membre)], components, flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
-                        }
-                    });
+        try {
+            const { MessageFlags } = require('discord.js');
+            const query = raw.split(/\s+/).slice(1).join(" ");
+            let cible = message.mentions?.members?.first ? message.mentions.members.first() : null;
+            if (!cible) {
+                if (!query) cible = message.member;
+                else {
+                    const result = bridge.findMemberByName ? bridge.findMemberByName(message.guild, query) : null;
+                    if (result?.multiple) {
+                        return bridge.askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const membre = message.guild?.members?.cache?.get(user.id);
+                            if (membre) {
+                                const rowBtns = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`rlt_achs_${membre.id}_0_${message.author.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary));
+                                const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_stats_${message.author.id}`, '🔍 Inspecter un autre membre...');
+                                const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
+                                const components = rowUser ? [rowBtns, rowUser] : [rowBtns];
+                                message.reply({ embeds: [buildRouletteStatsEmbed(membre)], components, flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+                            }
+                        });
+                    }
+                    cible = result?.found;
                 }
-                cible = result.found;
             }
+            if (!cible) { await message.reply("Membre introuvable."); return true; }
+            const rowBtns = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`rlt_achs_${cible.id}_0_${message.author.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary));
+            const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_stats_${message.author.id}`, '🔍 Inspecter un autre membre...');
+            const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
+            const components = rowUser ? [rowBtns, rowUser] : [rowBtns];
+            await message.reply({ embeds: [buildRouletteStatsEmbed(cible)], components, flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        } catch (err) {
+            console.error('Erreur rltstats:', err);
+            await message.reply("Une erreur est survenue lors de l'affichage des stats roulette.").catch(() => {});
         }
-        if (!cible) { await message.reply("Membre introuvable."); return true; }
-        const rowBtns = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`rlt_achs_${cible.id}_0_${message.author.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary));
-        const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_stats_${message.author.id}`, '🔍 Inspecter un autre membre...');
-        const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
-        const components = rowUser ? [rowBtns, rowUser] : [rowBtns];
-        await message.reply({ embeds: [buildRouletteStatsEmbed(cible)], components, flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
         return true;
     }
 
@@ -3419,37 +3449,42 @@ async function handleRouletteMessage(message, response, client, helpers) {
     }
 
     if (['!roulettesucces', '!rltsucces', '!roulettesuccess', '!rltsuccess'].includes(command)) {
-        const query = raw.split(/\s+/).slice(1).join(" ");
-        let cible = message.mentions.members.first();
-        if (!cible) {
-            if (!query) cible = message.member;
-            else {
-                const result = bridge.findMemberByName(message.guild, query);
-                if (result.multiple) {
-                    return bridge.askDisambiguation(message, message.guild, result.candidates, async (user) => {
-                        const membre = message.guild.members.cache.get(user.id);
-                        if (membre) {
-                            const { embed, row } = buildRouletteAchievementsEmbed(membre, 0, message.author.id);
-                            const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_succes_${message.author.id}`, '🔍 Inspecter un autre membre...');
-                            const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
-                            const components = [];
-                            if (row) components.push(row);
-                            if (rowUser) components.push(rowUser);
-                            message.reply({ embeds: [embed], components });
-                        }
-                    });
+        try {
+            const query = raw.split(/\s+/).slice(1).join(" ");
+            let cible = message.mentions?.members?.first ? message.mentions.members.first() : null;
+            if (!cible) {
+                if (!query) cible = message.member;
+                else {
+                    const result = bridge.findMemberByName ? bridge.findMemberByName(message.guild, query) : null;
+                    if (result?.multiple) {
+                        return bridge.askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const membre = message.guild?.members?.cache?.get(user.id);
+                            if (membre) {
+                                const { embed, row } = buildRouletteAchievementsEmbed(membre, 0, message.author.id);
+                                const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_succes_${message.author.id}`, '🔍 Inspecter un autre membre...');
+                                const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
+                                const components = [];
+                                if (row) components.push(row);
+                                if (rowUser) components.push(rowUser);
+                                message.reply({ embeds: [embed], components });
+                            }
+                        });
+                    }
+                    cible = result?.found;
                 }
-                cible = result.found;
             }
+            if (!cible) { await message.reply("Membre introuvable."); return true; }
+            const { embed, row } = buildRouletteAchievementsEmbed(cible, 0, message.author.id);
+            const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_succes_${message.author.id}`, '🔍 Inspecter un autre membre...');
+            const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
+            const components = [];
+            if (row) components.push(row);
+            if (rowUser) components.push(rowUser);
+            await message.reply({ embeds: [embed], components });
+        } catch (err) {
+            console.error('Erreur rltsucces:', err);
+            await message.reply("Une erreur est survenue lors de l'affichage des succès roulette.").catch(() => {});
         }
-        if (!cible) { await message.reply("Membre introuvable."); return true; }
-        const { embed, row } = buildRouletteAchievementsEmbed(cible, 0, message.author.id);
-        const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_succes_${message.author.id}`, '🔍 Inspecter un autre membre...');
-        const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
-        const components = [];
-        if (row) components.push(row);
-        if (rowUser) components.push(rowUser);
-        await message.reply({ embeds: [embed], components });
         return true;
     }
 
