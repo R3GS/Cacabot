@@ -3357,7 +3357,8 @@ async function handleRouletteMessage(message, response, client, helpers) {
                     return bridge.askDisambiguation(message, message.guild, result.candidates, async (user) => {
                         const membre = message.guild.members.cache.get(user.id);
                         if (membre) {
-                            const rowUser = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_state_${message.author.id}`, '🔍 Inspecter un autre membre...');
+                            const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_state_${message.author.id}`, '🔍 Inspecter un autre membre...');
+                            const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
                             message.reply({ embeds: [buildRouletteStateEmbed(membre, message.guild?.id)], components: rowUser ? [rowUser] : [] });
                         }
                     });
@@ -3367,7 +3368,8 @@ async function handleRouletteMessage(message, response, client, helpers) {
         }
         const { MessageFlags } = require('discord.js');
         if (!cible) { await message.reply("Membre introuvable."); return true; }
-        const rowUser = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_state_${message.author.id}`, '🔍 Inspecter un autre membre...');
+        const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_state_${message.author.id}`, '🔍 Inspecter un autre membre...');
+        const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
         await message.reply({ 
             embeds: [buildRouletteStateEmbed(cible, message.guild?.id)],
             components: rowUser ? [rowUser] : [],
@@ -3390,7 +3392,8 @@ async function handleRouletteMessage(message, response, client, helpers) {
                         const membre = message.guild.members.cache.get(user.id);
                         if (membre) {
                             const rowBtns = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`rlt_achs_${membre.id}_0_${message.author.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary));
-                            const rowUser = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_stats_${message.author.id}`, '🔍 Inspecter un autre membre...');
+                            const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_stats_${message.author.id}`, '🔍 Inspecter un autre membre...');
+                            const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
                             const components = rowUser ? [rowBtns, rowUser] : [rowBtns];
                             message.reply({ embeds: [buildRouletteStatsEmbed(membre)], components, flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
                         }
@@ -3401,7 +3404,8 @@ async function handleRouletteMessage(message, response, client, helpers) {
         }
         if (!cible) { await message.reply("Membre introuvable."); return true; }
         const rowBtns = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`rlt_achs_${cible.id}_0_${message.author.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary));
-        const rowUser = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_stats_${message.author.id}`, '🔍 Inspecter un autre membre...');
+        const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_stats_${message.author.id}`, '🔍 Inspecter un autre membre...');
+        const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
         const components = rowUser ? [rowBtns, rowUser] : [rowBtns];
         await message.reply({ embeds: [buildRouletteStatsEmbed(cible)], components, flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
         return true;
@@ -3426,7 +3430,8 @@ async function handleRouletteMessage(message, response, client, helpers) {
                         const membre = message.guild.members.cache.get(user.id);
                         if (membre) {
                             const { embed, row } = buildRouletteAchievementsEmbed(membre, 0, message.author.id);
-                            const rowUser = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_succes_${message.author.id}`, '🔍 Inspecter un autre membre...');
+                            const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_succes_${message.author.id}`, '🔍 Inspecter un autre membre...');
+                            const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
                             const components = [];
                             if (row) components.push(row);
                             if (rowUser) components.push(rowUser);
@@ -3439,7 +3444,8 @@ async function handleRouletteMessage(message, response, client, helpers) {
         }
         if (!cible) { await message.reply("Membre introuvable."); return true; }
         const { embed, row } = buildRouletteAchievementsEmbed(cible, 0, message.author.id);
-        const rowUser = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_succes_${message.author.id}`, '🔍 Inspecter un autre membre...');
+        const selectMenu = buildMenuChoixMembreRoulette(message.guild, message.author.id, `rlt_inspect_succes_${message.author.id}`, '🔍 Inspecter un autre membre...');
+        const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
         const components = [];
         if (row) components.push(row);
         if (rowUser) components.push(rowUser);
@@ -3552,7 +3558,8 @@ async function handleRouletteSlash(interaction, client) {
         const rowBtns = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`rlt_achs_${member.id}_0_${interaction.user.id}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary)
         );
-        const rowUser = buildMenuChoixMembreRoulette(interaction.guild, interaction.user.id, `rlt_inspect_stats_${interaction.user.id}`, '🔍 Inspecter un autre membre...');
+        const selectMenu = buildMenuChoixMembreRoulette(interaction.guild, interaction.user.id, `rlt_inspect_stats_${interaction.user.id}`, '🔍 Inspecter un autre membre...');
+        const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
         const components = rowUser ? [rowBtns, rowUser] : [rowBtns];
         await interaction.reply({ embeds: [buildRouletteStatsEmbed(member)], components });
         return true;
@@ -3560,7 +3567,8 @@ async function handleRouletteSlash(interaction, client) {
 
     if (action === 'state') {
         const member = interaction.member;
-        const rowUser = buildMenuChoixMembreRoulette(interaction.guild, interaction.user.id, `rlt_inspect_state_${interaction.user.id}`, '🔍 Inspecter un autre membre...');
+        const selectMenu = buildMenuChoixMembreRoulette(interaction.guild, interaction.user.id, `rlt_inspect_state_${interaction.user.id}`, '🔍 Inspecter un autre membre...');
+        const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
         const components = rowUser ? [rowUser] : [];
         await interaction.reply({ embeds: [buildRouletteStateEmbed(member, interaction.guildId)], components });
         return true;
@@ -3575,7 +3583,8 @@ async function handleRouletteSlash(interaction, client) {
     if (action === 'succes') {
         const member = interaction.member;
         const { embed, row } = buildRouletteAchievementsEmbed(member, 0, interaction.user.id);
-        const rowUser = buildMenuChoixMembreRoulette(interaction.guild, interaction.user.id, `rlt_inspect_succes_${interaction.user.id}`, '🔍 Inspecter un autre membre...');
+        const selectMenu = buildMenuChoixMembreRoulette(interaction.guild, interaction.user.id, `rlt_inspect_succes_${interaction.user.id}`, '🔍 Inspecter un autre membre...');
+        const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
         const components = [];
         if (row) components.push(row);
         if (rowUser) components.push(rowUser);
@@ -4140,10 +4149,12 @@ async function handleRouletteButton(interaction, client) {
         }
 
         const cibleId = interaction.values[0];
+        if (cibleId === 'aucun') return interaction.reply({ content: "Aucun autre joueur éligible à inspecter.", ephemeral: true });
         const cible = interaction.guild.members.cache.get(cibleId);
         if (!cible) return interaction.reply({ content: "Membre introuvable sur le serveur.", ephemeral: true });
 
-        const rowUser = buildMenuChoixMembreRoulette(interaction.guild, authorId, `rlt_inspect_${type}_${authorId}`, '🔍 Inspecter un autre membre...');
+        const selectMenu = buildMenuChoixMembreRoulette(interaction.guild, authorId, `rlt_inspect_${type}_${authorId}`, '🔍 Inspecter un autre membre...');
+        const rowUser = selectMenu ? new ActionRowBuilder().addComponents(selectMenu) : null;
         const componentsUser = rowUser ? [rowUser] : [];
 
         if (type === 'state') {

@@ -136,9 +136,11 @@ function buildPenduEmbed(session) {
         ? session.motsTentes.join(', ')
         : '*Aucun pour l\'instant*';
 
-    // Jauge visuelle de vie (6 étapes)
+    // Jauge visuelle de vie (6 étapes avec tête de mort si dernière vie)
     const nbErreurs = Math.min(Math.max(session.erreursCollectives || 0, 0), 6);
-    const jaugeErreurs = '🟥'.repeat(nbErreurs) + '⬜'.repeat(6 - nbErreurs);
+    const jaugeErreurs = nbErreurs === 5
+        ? '🟥🟥🟥🟥🟥💀'
+        : '🟥'.repeat(nbErreurs) + '⬜'.repeat(6 - nbErreurs);
 
     let dernierCoupTexte = '';
     if (session.dernierCoup) {
@@ -152,16 +154,19 @@ function buildPenduEmbed(session) {
         participantsTxt = `👥 **Essais utilisés :** ${liste}\n\n`;
     }
 
-    // Alerte si la potence est presque pleine (à 4 ou 5 erreurs sur 6)
+    // Alerte et couleur d'ambiance selon le stade de la potence
     let alertePotence = '';
+    let couleurEmbed = 0x9b59b6; // Violet calme au début
     if (session.erreursCollectives === 4) {
+        couleurEmbed = 0xe67e22; // Orange d'avertissement (2 vies restantes)
         alertePotence = `⚠️ **Attention :** Plus que **2 erreurs** avant le pendu !\n`;
-    } else if (session.erreursCollectives === 5) {
-        alertePotence = `🚨 **DANGER MORTEL :** Plus qu'**UNE SEULE ERREUR** restante !\n`;
+    } else if (session.erreursCollectives >= 5) {
+        couleurEmbed = 0xff0000; // Rouge sang d'alarme maximale (dernière vie !)
+        alertePotence = `🚨🚨 **DANGER MORTEL : PLUS QU'UNE SEULE ERREUR !** 🚨🚨\n`;
     }
 
     return new EmbedBuilder()
-        .setColor(session.erreursCollectives >= 4 ? 0xe67e22 : 0x9b59b6)
+        .setColor(couleurEmbed)
         .setTitle('🪢 LE PENDU QUOTIDIEN DE REGAÏA (21h00)')
         .setDescription(
             `📢 **Notification :** <@&1559041461230505994>\n\n` +
@@ -178,6 +183,23 @@ function buildPenduEmbed(session) {
             `-# 🎯 **Règle :** 3 essais personnels par joueur (lettre ou mot de 7 lettres) • Écris directement dans ce salon.`
         )
         .setFooter({ text: 'Rendez-vous tous les soirs à 21h00 ! • !pendu pour voir le statut' });
+}
+
+function buildPenduRow(session) {
+    if (!session || session.termine) return [];
+    const nbVotes = (session.votesPacte || []).length;
+    const estTropDangereux = session.erreursCollectives >= 5;
+    const label = estTropDangereux 
+        ? '💡 Pacte indisponible (1 seule vie restante)' 
+        : `💡 Pacte : Indice (${nbVotes}/3 votes) | Sacrifier 1 vie`;
+
+    const btnPacte = new ButtonBuilder()
+        .setCustomId('pendu_pacte_indice')
+        .setLabel(label)
+        .setStyle(estTropDangereux ? ButtonStyle.Secondary : ButtonStyle.Danger)
+        .setDisabled(estTropDangereux);
+
+    return [new ActionRowBuilder().addComponents(btnPacte)];
 }
 
 async function lancerPenduQuotidien(guild) {
@@ -198,6 +220,8 @@ async function lancerPenduQuotidien(guild) {
         expireAt,
         termine: false,
         vainqueurId: null,
+        coupDePoker: null, // Joueur ayant réussi la prime coup de poker
+        votesPacte: [],    // Votes en cours pour le pacte
         tentativesJoueurs: {}, // userId -> totalEssais
         bonnesLettresParJoueur: {}, // userId -> count
         dernierCoup: null,
@@ -209,7 +233,8 @@ async function lancerPenduQuotidien(guild) {
 
     const sent = await channel.send({
         content: `📢 <@&1559041461230505994> **LE PENDU QUOTIDIEN DE 21H EST LANCÉ !** 🪢\nVenez deviner le mot mystère de 7 lettres !`,
-        embeds: [embed]
+        embeds: [embed],
+        components: buildPenduRow(nouvelleSession)
     });
 
     nouvelleSession.messageId = sent.id;
@@ -624,12 +649,18 @@ async function handlePenduMessage(message, response, client, helpers) {
                 if (rawGuess.length === 7) {
                     if (rawGuess === motComplet) {
                         const restantes = motComplet.split('').filter(l => !session.lettresTrouvees.includes(l));
+                        const estCoupDePoker = restantes.length >= 3;
+                        if (estCoupDePoker) {
+                            session.coupDePoker = uid;
+                        }
                         session.bonnesLettresParJoueur[uid] += Math.max(restantes.length, 1);
                         session.lettresTrouvees = [...new Set(motComplet.split(''))];
                         session.dernierCoup = {
                             userId: uid,
                             proposition: rawGuess,
-                            statut: `🟢 **Mot exact trouvé !** 🎉`
+                            statut: estCoupDePoker
+                                ? `🎰 **COUP DE POKER RÉUSSI !** Mot exact avec **${restantes.length} lettres cachées** (+2 pts bonus) ! 🎉`
+                                : `🟢 **Mot exact trouvé !** 🎉`
                         };
                     } else {
                         session.erreursCollectives++;
@@ -714,6 +745,15 @@ async function handlePenduMessage(message, response, client, helpers) {
                         penduBridge.trackBattlePassProgress?.(vId, 'minijeu_win', 1);
                     }
 
+                    // Attribution du bonus Coup de poker (+2 points pour avoir trouvé le mot complet avec >= 3 lettres cachées)
+                    if (session.coupDePoker) {
+                        const pokerId = session.coupDePoker;
+                        if (!penduStats[pokerId]) penduStats[pokerId] = { victoires: 0, parties: 0, points: 0, hebdo: {} };
+                        penduStats[pokerId].points += 2;
+                        if (!penduStats[pokerId].hebdo) penduStats[pokerId].hebdo = {};
+                        penduStats[pokerId].hebdo[weekKey] = (penduStats[pokerId].hebdo[weekKey] || 0) + 2;
+                    }
+
                     for (const participantId of Object.keys(session.tentativesJoueurs)) {
                         penduBridge.trackBattlePassProgress?.(participantId, 'pendu_victoire_collective', 1);
                     }
@@ -729,9 +769,13 @@ async function handlePenduMessage(message, response, client, helpers) {
                         return `• **${nom}**${couronne} : **${bonnes}** bonne(s) lettre(s) (${essais}/3 essai${essais > 1 ? 's' : ''})`;
                     }).join('\n');
 
-                    const texteAnnonceVictoire = vainqueurs.length > 1
+                    let texteAnnonceVictoire = vainqueurs.length > 1
                         ? `🤝 **ÉGALITÉ AU SOMMET !** Victoire partagée entre ${vainqueurs.map(id => `<@${id}>`).join(' et ')} (avec **${maxBonnes}** bonne(s) lettre(s) chacun·e) !\n⭐ **Récompense :** +3 points au classement hebdo pour chacun·e !`
                         : `🏆 **Vainqueur de la manche :** <@${vainqueurs[0]}> (avec **${maxBonnes}** bonne(s) lettre(s)) !\n⭐ **Récompense :** +3 points au classement hebdomadaire !`;
+
+                    if (session.coupDePoker) {
+                        texteAnnonceVictoire += `\n\n🎰 **PRIME COUP DE POKER :** <@${session.coupDePoker}> a osé tenter et trouver le mot entier alors qu'il restait au moins 3 lettres cachées ! **(+2 points bonus au classement hebdo)** 🔥`;
+                    }
 
                     const faussesLettresFinal = (session.lettresFausses && session.lettresFausses.length > 0)
                         ? [...new Set(session.lettresFausses)].sort().join(' ') 
@@ -823,7 +867,7 @@ async function handlePenduMessage(message, response, client, helpers) {
                 if (session.messageId) {
                     const msgEmbed = await message.channel.messages.fetch(session.messageId).catch(() => null);
                     if (msgEmbed) {
-                        await msgEmbed.edit({ embeds: [buildPenduEmbed(session)] }).catch(() => {});
+                        await msgEmbed.edit({ embeds: [buildPenduEmbed(session)], components: buildPenduRow(session) }).catch(() => {});
                     }
                 }
 
@@ -849,6 +893,7 @@ async function handlePenduMessage(message, response, client, helpers) {
                     const sentRappel = await message.channel.send({
                         content: '🔔 **Rappel du mot à deviner :**',
                         embeds: [embedRappel],
+                        components: buildPenduRow(session),
                         flags: [MessageFlags.SuppressNotifications]
                     });
 
@@ -926,7 +971,8 @@ async function handlePenduMessage(message, response, client, helpers) {
                 const embed = buildPenduEmbed(session);
                 const sent = await message.channel.send({
                     content: '🪢 **Partie de Pendu en cours (remise en bas du salon) :**',
-                    embeds: [embed]
+                    embeds: [embed],
+                    components: buildPenduRow(session)
                 });
 
                 session.messageId = sent.id;
@@ -1049,6 +1095,80 @@ async function handlePenduSlash(interaction) {
 async function handlePenduButton(interaction) {
     if (!interaction.isButton()) return false;
     const customId = interaction.customId;
+
+    // Gestion du Pacte du Pendu (Vote démocratique : 3 votes = 1 vie sacrifiée contre 1 lettre)
+    if (customId === 'pendu_pacte_indice') {
+        const session = penduBridge.getPenduData();
+        if (!session || !session.mot || session.termine) {
+            return interaction.reply({ content: "Aucune partie de Pendu n'est en cours !", ephemeral: true });
+        }
+        if (session.erreursCollectives >= 5) {
+            return interaction.reply({ content: "⚠️ Trop dangereux ! Il ne reste qu'une seule erreur avant le pendu (5/6), vous ne pouvez plus sacrifier de vie !", ephemeral: true });
+        }
+        if (!session.votesPacte) session.votesPacte = [];
+
+        const uid = interaction.user.id;
+        if (session.votesPacte.includes(uid)) {
+            return interaction.reply({ content: "Tu as déjà voté pour ce pacte ! Attends que d'autres joueurs votent.", ephemeral: true });
+        }
+
+        session.votesPacte.push(uid);
+
+        if (session.votesPacte.length < 3) {
+            penduBridge.demanderSauvegarde();
+            if (interaction.message?.editable) {
+                await interaction.update({ components: buildPenduRow(session) }).catch(() => {});
+            } else {
+                await interaction.deferUpdate().catch(() => {});
+            }
+            await interaction.followUp({ content: `🕯️ <@${uid}> a voté pour le **Pacte du Pendu** (${session.votesPacte.length}/3 votes requis pour sacrifier 1 vie contre 1 indice) !`, ephemeral: false });
+            return true;
+        }
+
+        // 3 votes atteints : Pacte scellé !
+        session.votesPacte = [];
+        session.erreursCollectives++;
+
+        const motComplet = session.mot;
+        const lettresRestantes = motComplet.split('').filter(l => !session.lettresTrouvees.includes(l));
+        
+        let lettreOfferte = null;
+        if (lettresRestantes.length > 0) {
+            lettreOfferte = lettresRestantes[Math.floor(Math.random() * lettresRestantes.length)];
+            session.lettresTrouvees.push(lettreOfferte);
+        }
+
+        session.dernierCoup = {
+            userId: uid,
+            proposition: 'PACTE',
+            statut: lettreOfferte ? `🕯️ **Pacte scellé !** (+1 erreur) ➔ Lettre **« ${lettreOfferte} »** offerte !` : `🕯️ **Pacte scellé !** (+1 erreur)`
+        };
+
+        penduBridge.demanderSauvegarde();
+
+        if (interaction.message?.editable) {
+            await interaction.update({ embeds: [buildPenduEmbed(session)], components: buildPenduRow(session) }).catch(() => {});
+        } else {
+            await interaction.deferUpdate().catch(() => {});
+        }
+
+        await interaction.channel.send({
+            content: `🕯️ **LE PACTE DU PENDU A ÉTÉ SCELLÉ !**\n3 membres ont voté : **1 erreur collective a été sacrifiée** (potence à **${session.erreursCollectives}/6**), mais Cacabot vous offre la lettre **« ${lettreOfferte} »** ! 🪢`
+        });
+
+        // Si la lettre révélée par le pacte complète le mot !
+        if (motComplet.split('').every(l => session.lettresTrouvees.includes(l))) {
+            session.termine = true;
+            penduBridge.demanderSauvegarde();
+            if (session.messageId) {
+                const msgEmbed = await interaction.channel.messages.fetch(session.messageId).catch(() => null);
+                if (msgEmbed) await msgEmbed.edit({ embeds: [buildPenduEmbed(session)], components: [] }).catch(() => {});
+            }
+            await interaction.channel.send(`🎉 **LE PACTE A RÉVÉLÉ LA DERNIÈRE LETTRE !** Le mot était **« ${motComplet} »** ! Bravo à toute l'équipe !`);
+        }
+
+        return true;
+    }
 
     if (customId.startsWith('stop_test_pendu_')) {
         if (interaction.user.id !== EPSYS_ID) {
