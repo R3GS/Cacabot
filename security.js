@@ -133,18 +133,19 @@ function buildBantempConfigPanel(sessionId) {
     return { embed, rows: [rowOptions, rowActions] };
 }
 
-// Recherche tolérante d'un membre sur l'ensemble du serveur (par ID, mention ou pseudo)
+// Recherche tolérante d'un membre sur l'ensemble du serveur (par ID direct avec/sans parenthèses, mention ou pseudo)
 async function trouverMembreServeur(guild, query) {
     if (!guild || !query) return null;
-    const cleanId = query.replace(/<@!?|>/g, '').trim();
 
-    // 1. Recherche par ID direct
-    if (/^\d{17,20}$/.test(cleanId)) {
-        const parId = guild.members.cache.get(cleanId) ?? await guild.members.fetch(cleanId).catch(() => null);
+    // 1. Extraction universelle d'un ID Discord (17 à 20 chiffres, même avec parenthèses, crochets ou mention)
+    const idMatch = query.match(/\d{17,20}/);
+    if (idMatch) {
+        const id = idMatch[0];
+        const parId = guild.members.cache.get(id) ?? await guild.members.fetch(id).catch(() => null);
         if (parId) return parId;
     }
 
-    const q = query.toLowerCase().replace(/^@/, '').trim();
+    const q = query.toLowerCase().replace(/[@()]/g, '').trim();
 
     // 2. Recherche exacte sur pseudo, nom d'affichage ou tag
     const exact = guild.members.cache.find(m =>
@@ -182,21 +183,19 @@ async function handleSecurityMessage(message) {
 
         const args = raw.split(/\s+/);
 
-        // Si la commande est tapée sans argument, on propose directement le sélecteur Discord de membres
+        // Si aucun identifiant n'est fourni
         if (!args[1]) {
-            const rowSelect = new ActionRowBuilder().addComponents(
-                new UserSelectMenuBuilder()
-                    .setCustomId(`bt_select_user_${message.author.id}`)
-                    .setPlaceholder('🔍 Choisis ou cherche le membre du serveur...')
+            await message.reply(
+                "⚖️ **Procédure du Tribunal de Regaïa**\n\n" +
+                "**Usage :** `!tribunal [ID_DU_MEMBRE] [raison optionnelle]` (ou `!trib [ID]`)\n\n" +
+                "💡 **Comment faire :**\n" +
+                "1. Fais un clic droit (ou appui long sur téléphone) sur le profil du suspect ➔ **« Copier l'identifiant »**.\n" +
+                "2. Tape ici : `!tribunal 123456789012345678` *(tu peux aussi mettre l'ID entre parenthèses ou son pseudo)*."
             );
-            await message.reply({
-                content: '⚖️ **Sélectionne le membre à envoyer au Tribunal :**',
-                components: [rowSelect]
-            });
             return true;
         }
 
-        // Sinon recherche par mention, ID ou pseudo
+        // Recherche par ID (avec ou sans parenthèses), mention ou pseudo
         let cible = message.mentions?.members?.first ? message.mentions.members.first() : null;
         if (!cible && args[1]) {
             cible = await trouverMembreServeur(message.guild, args[1]);
@@ -204,11 +203,8 @@ async function handleSecurityMessage(message) {
 
         if (!cible) {
             await message.reply(
-                "❌ **Membre introuvable sur le serveur !**\n" +
-                "💡 **Astuces :**\n" +
-                "• Tape simplement `!tribunal` pour choisir le membre dans une liste déroulante.\n" +
-                "• Ou utilise son ID direct : `!tribunal [ID_DU_MEMBRE]`\n" +
-                "• Ou son pseudo : `!tribunal [Pseudo]`"
+                `❌ **Membre introuvable sur le serveur avec l'identifiant / pseudo :** \`${args[1]}\`\n` +
+                "Assure-toi d'avoir bien copié son identifiant numérique (17 à 20 chiffres) et que le compte est encore présent sur le serveur."
             );
             return true;
         }
