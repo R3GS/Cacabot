@@ -32,6 +32,7 @@ function buildHelpxCategorieEmbed(categorie) {
         return embed.setTitle('🤖 Commandes liées à Cacabot & Administration')
             .addFields(
                 { name: '🩺 **!diag / !cacatest**', value: 'Diagnostic complet de l\'état de santé de tous les modules.' },
+                { name: '⚖️ **!tribunal / !trib [@membre]**', value: 'Le tribunal des bannis.' },
                 { name: '📺 **!ytabo config**', value: 'Panneau interactif des abonnements et notifications YouTube.' },
                 { name: '👋 **!welcome / !welcome test**', value: 'Configurer le salon d\'accueil ou tester l\'affiche Canvas.' },
                 { name: '📣 **!say [ID Salon] [message]**', value: 'Envoyer un message dans un salon au nom de Cacabot.' },

@@ -8,11 +8,23 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    ChannelType
+    ChannelType,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+    PermissionFlagsBits
 } = require('discord.js');
 
 const MOD_CHANNEL_ID = '1555402748193669192';
 const MODO_ROLE_ID = '720081311716606004';
+const BANTEMP_AUTHORIZED_CHANNELS = ['720082701192921231', '1555402748193669192'];
+const ROLE_TRIBUNAL_ID = '1569002165836451890';
+const CATEGORIE_MODERATION_ID = '1555402058532659360';
+
+// Trackers pour les sessions de configuration !bantemp et les rôles isolés
+const bantempSessions = new Map();
+const tribunalSavedRoles = new Map();
+
 const STOP_DURATION_MS = 60 * 60 * 1000;
 const CHUT_AUTHORIZED = [
     '738191002187202630',
@@ -74,10 +86,105 @@ function isChannelMuted(channelId) {
 //    MESSAGES (Sécurité & Commandes)
 // =========================
 
+// --- Panneau de configuration pour !bantemp ---
+function buildBantempConfigPanel(sessionId) {
+    const session = bantempSessions.get(sessionId);
+    if (!session) return { embed: null, rows: [] };
+
+    const embed = new EmbedBuilder()
+        .setColor(0xfa5252)
+        .setTitle('⚖️ Tribunal de Regaïa - Configuration Modération')
+        .setDescription(`Procédure d'audition ciblée sur <@${session.targetId}> (\`${session.targetId}\`).`)
+        .addFields(
+            { name: '📩 Prévenir en MP', value: session.mp ? '🟢 **OUI** *(message avec lien du salon)*' : '⚪ **NON**', inline: true },
+            { name: '⚖️ Créer salon Tribunal', value: session.creerTicket ? '🟢 **OUI** *(dans Catégorie Modération)*' : '⚪ **NON**', inline: true },
+            { name: '📝 Raison de la procédure', value: `\`\`\`${session.raison || 'Non spécifiée'}\`\`\``, inline: false }
+        )
+        .setFooter({ text: 'Ajuste les options avec les 3 boutons blancs, puis confirme ou annule.' })
+        .setTimestamp();
+
+    const rowOptions = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`bt_toggle_mp_${sessionId}`)
+            .setLabel(`📩 MP : ${session.mp ? 'OUI' : 'NON'}`)
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`bt_set_reason_${sessionId}`)
+            .setLabel('📝 Modifier la raison')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`bt_toggle_ticket_${sessionId}`)
+            .setLabel(`⚖️ Salon Tribunal : ${session.creerTicket ? 'OUI' : 'NON'}`)
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    const rowActions = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`bt_confirm_${sessionId}`)
+            .setLabel('✅ Confirmer')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId(`bt_cancel_${sessionId}`)
+            .setLabel('❌ Annuler')
+            .setStyle(ButtonStyle.Danger)
+    );
+
+    return { embed, rows: [rowOptions, rowActions] };
+}
+
 async function handleSecurityMessage(message) {
     const channelId = message.channel.id;
     const raw = message.content.trim();
     const command = raw.split(/\s+/)[0]?.toLowerCase();
+
+    // 0. !tribunal / !trib (ou !bantemp) (Modération / Tribunal)
+    if (['!tribunal', '!trib', '!bantemp'].includes(command)) {
+        if (!estModo(message.member)) {
+            await message.reply("❌ Cette commande est réservée aux modérateurs.");
+            return true;
+        }
+
+        if (!BANTEMP_AUTHORIZED_CHANNELS.includes(channelId)) {
+            await message.reply("❌ Cette commande ne peut être utilisée que dans les salons de modération prévus.");
+            return true;
+        }
+
+        const args = raw.split(/\s+/);
+        let cible = message.mentions?.members?.first ? message.mentions.members.first() : null;
+        if (!cible && args[1]) {
+            const cleanId = args[1].replace(/<@!?|>/g, '');
+            cible = message.guild?.members?.cache?.get(cleanId) ?? await message.guild?.members?.fetch(cleanId).catch(() => null);
+        }
+
+        if (!cible) {
+            await message.reply("❌ Membre introuvable. Usage : `!tribunal @membre [raison optionnelle]` (ou `!trib`)");
+            return true;
+        }
+
+        if (cible.id === message.author.id) {
+            await message.reply("❌ Tu ne peux pas lancer une procédure de tribunal contre toi-même !");
+            return true;
+        }
+
+        const initialReason = args.slice(2).join(' ').trim() || "Suspicion de bot / Comportement inadapté";
+        const sessionId = `bt_${Date.now()}_${message.author.id}`;
+
+        bantempSessions.set(sessionId, {
+            authorId: message.author.id,
+            targetId: cible.id,
+            targetTag: cible.user?.tag || cible.displayName,
+            mp: true,
+            raison: initialReason,
+            creerTicket: true
+        });
+
+        // Nettoyage automatique de la session après 10 minutes d'inactivité
+        setTimeout(() => bantempSessions.delete(sessionId), 10 * 60 * 1000);
+
+        const { embed, rows } = buildBantempConfigPanel(sessionId);
+        await message.reply({ embeds: [embed], components: rows });
+        return true;
+    }
 
     // 1. !chut / !unchut
     if (command === '!chut') {
@@ -527,6 +634,323 @@ async function handleSecurityMessage(message) {
 // =========================
 
 async function handleSecurityInteraction(interaction) {
+    // ==========================================
+    //    TRIBUNAL : CONFIGURATION PAR LE MODO
+    // ==========================================
+
+    // Boutons de bascule (MP, Ticket)
+    if (interaction.isButton() && (interaction.customId.startsWith('bt_toggle_mp_') || interaction.customId.startsWith('bt_toggle_ticket_'))) {
+        const isMp = interaction.customId.startsWith('bt_toggle_mp_');
+        const sessionId = interaction.customId.replace(isMp ? 'bt_toggle_mp_' : 'bt_toggle_ticket_', '');
+        const session = bantempSessions.get(sessionId);
+
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) {
+            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande peut modifier ces options.", ephemeral: true });
+        }
+
+        if (isMp) session.mp = !session.mp;
+        else session.creerTicket = !session.creerTicket;
+
+        const { embed, rows } = buildBantempConfigPanel(sessionId);
+        await interaction.update({ embeds: [embed], components: rows });
+        return true;
+    }
+
+    // Bouton pour ouvrir la modale de raison
+    if (interaction.isButton() && interaction.customId.startsWith('bt_set_reason_')) {
+        const sessionId = interaction.customId.replace('bt_set_reason_', '');
+        const session = bantempSessions.get(sessionId);
+
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) {
+            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande peut modifier ces options.", ephemeral: true });
+        }
+
+        const modal = new ModalBuilder()
+            .setCustomId(`bt_modal_reason_${sessionId}`)
+            .setTitle('📝 Raison de la procédure');
+
+        const reasonInput = new TextInputBuilder()
+            .setCustomId('reason_text')
+            .setLabel('Précise la raison ou choisis une suggestion')
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder('Ex : Suspicion de bot / Raid / Insultes / Non-respect du règlement...')
+            .setValue(session.raison || '')
+            .setRequired(true)
+            .setMaxLength(500);
+
+        modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
+        await interaction.showModal(modal);
+        return true;
+    }
+
+    // Réception de la modale de raison
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('bt_modal_reason_')) {
+        const sessionId = interaction.customId.replace('bt_modal_reason_', '');
+        const session = bantempSessions.get(sessionId);
+
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        session.raison = interaction.fields.getTextInputValue('reason_text').trim() || "Suspicion de bot / Comportement inadapté";
+
+        const { embed, rows } = buildBantempConfigPanel(sessionId);
+        await interaction.update({ embeds: [embed], components: rows });
+        return true;
+    }
+
+    // Bouton Annuler
+    if (interaction.isButton() && interaction.customId.startsWith('bt_cancel_')) {
+        const sessionId = interaction.customId.replace('bt_cancel_', '');
+        const session = bantempSessions.get(sessionId);
+
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) {
+            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande peut annuler.", ephemeral: true });
+        }
+
+        bantempSessions.delete(sessionId);
+        await interaction.update({ content: "❌ **Procédure de tribunal annulée.**", embeds: [], components: [] });
+        return true;
+    }
+
+    // Bouton Confirmer : Isolement + Création de salon + MP
+    if (interaction.isButton() && interaction.customId.startsWith('bt_confirm_')) {
+        const sessionId = interaction.customId.replace('bt_confirm_', '');
+        const session = bantempSessions.get(sessionId);
+
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) {
+            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande peut confirmer.", ephemeral: true });
+        }
+
+        await interaction.update({ content: "⏳ **Mise en place de la procédure et isolement en cours...**", embeds: [], components: [] });
+
+        const targetMember = await interaction.guild.members.fetch(session.targetId).catch(() => null);
+        if (!targetMember) {
+            await interaction.editReply({ content: "❌ Le membre est introuvable sur le serveur (il a peut-être quitté)." });
+            bantempSessions.delete(sessionId);
+            return true;
+        }
+
+        // 1. Sauvegarde des rôles initiaux et isolement vers le rôle Tribunal
+        const rolesSauvegardes = targetMember.roles.cache
+            .filter(r => r.id !== interaction.guild.id && !r.managed && r.id !== ROLE_TRIBUNAL_ID)
+            .map(r => r.id);
+
+        tribunalSavedRoles.set(session.targetId, rolesSauvegardes);
+
+        try {
+            if (rolesSauvegardes.length > 0) {
+                await targetMember.roles.remove(rolesSauvegardes, 'Isolement Tribunal de modération').catch(() => {});
+            }
+            await targetMember.roles.add(ROLE_TRIBUNAL_ID, 'Attribution rôle Tribunal').catch(() => {});
+        } catch (e) {
+            console.error('[Tribunal] Erreur rôles:', e);
+        }
+
+        // 2. Création du salon spécial dans la catégorie Modération
+        let salonTribunal = null;
+        if (session.creerTicket) {
+            const rawName = targetMember.user?.username || targetMember.displayName || 'membre';
+            const safeName = rawName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9_-]/g, '').slice(0, 20) || 'membre';
+            const channelName = `⚖️・tribunal-${safeName}`;
+
+            try {
+                salonTribunal = await interaction.guild.channels.create({
+                    name: channelName,
+                    type: ChannelType.GuildText,
+                    parent: CATEGORIE_MODERATION_ID,
+                    permissionOverwrites: [
+                        {
+                            id: interaction.guild.id, // @everyone masqué
+                            deny: [PermissionFlagsBits.ViewChannel]
+                        },
+                        {
+                            id: MODO_ROLE_ID, // Rôle Modération
+                            allow: [
+                                PermissionFlagsBits.ViewChannel,
+                                PermissionFlagsBits.SendMessages,
+                                PermissionFlagsBits.ReadMessageHistory,
+                                PermissionFlagsBits.AttachFiles,
+                                PermissionFlagsBits.EmbedLinks
+                            ]
+                        },
+                        {
+                            id: session.targetId, // Le membre concerné (autorisé explicitement)
+                            allow: [
+                                PermissionFlagsBits.ViewChannel,
+                                PermissionFlagsBits.SendMessages,
+                                PermissionFlagsBits.ReadMessageHistory,
+                                PermissionFlagsBits.AttachFiles,
+                                PermissionFlagsBits.EmbedLinks
+                            ]
+                        },
+                        {
+                            id: interaction.client.user.id, // Cacabot
+                            allow: [
+                                PermissionFlagsBits.ViewChannel,
+                                PermissionFlagsBits.SendMessages,
+                                PermissionFlagsBits.ReadMessageHistory,
+                                PermissionFlagsBits.ManageChannels
+                            ]
+                        }
+                    ]
+                });
+
+                // Premier message dans le salon avec boutons de résolution
+                const embedTribunal = new EmbedBuilder()
+                    .setColor(0xe03131)
+                    .setTitle('⚖️ AUDITION DU TRIBUNAL DE REGAÏA')
+                    .setDescription(
+                        `Bonjour <@${session.targetId}>,\n\n` +
+                        `Tu as été temporairement placé.e dans ce salon d'audition réservé à la modération.\n` +
+                        `Ce salon permet d'éclaircir la situation (suspicion de bot ou souci de comportement) afin de décider avec l'équipe si tu réintègres le serveur.`
+                    )
+                    .addFields(
+                        { name: '📋 Raison invoquée', value: `\`\`\`${session.raison}\`\`\``, inline: false },
+                        { name: '🛡️ Modérateur responsable', value: `<@${interaction.user.id}>`, inline: true },
+                        { name: '📌 Consignes pour le membre', value: 'Merci de répondre aux questions des modérateurs ci-dessous pour lever les doutes.', inline: false }
+                    )
+                    .setFooter({ text: 'Dès que le cas est résolu, utilisez les boutons ci-dessous pour statuer.' })
+                    .setTimestamp();
+
+                const rowVerdict = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`tribunal_innocent_${session.targetId}`)
+                        .setLabel('✅ Innocenter / Réintégrer')
+                        .setStyle(ButtonStyle.Success),
+                    new ButtonBuilder()
+                        .setCustomId(`tribunal_ban_${session.targetId}`)
+                        .setLabel('🔨 Bannir définitivement')
+                        .setStyle(ButtonStyle.Danger),
+                    new ButtonBuilder()
+                        .setCustomId(`tribunal_kick_${session.targetId}`)
+                        .setLabel('👢 Expulser (Kick)')
+                        .setStyle(ButtonStyle.Secondary),
+                    new ButtonBuilder()
+                        .setCustomId(`tribunal_close_${session.targetId}`)
+                        .setLabel('🗑️ Fermer le salon')
+                        .setStyle(ButtonStyle.Secondary)
+                );
+
+                await salonTribunal.send({
+                    content: `🔔 <@${session.targetId}> | <@&${MODO_ROLE_ID}>`,
+                    embeds: [embedTribunal],
+                    components: [rowVerdict]
+                });
+            } catch (err) {
+                console.error('[Tribunal] Erreur création salon:', err);
+            }
+        }
+
+        // 3. Notification en MP (si demandée)
+        if (session.mp) {
+            const lienSalon = salonTribunal ? `https://discord.com/channels/${interaction.guild.id}/${salonTribunal.id}` : '';
+            const msgMp = salonTribunal
+                ? `Tu fais l'objet d'une procédure de modération sur Regaïa, un salon privé a été ouvert : ${lienSalon} (<#${salonTribunal.id}>)\n\n**Raison :** ${session.raison}`
+                : `Tu fais l'objet d'une procédure de modération sur Regaïa.\n\n**Raison :** ${session.raison}`;
+
+            await targetMember.send(msgMp).catch(() => {
+                if (salonTribunal) {
+                    salonTribunal.send("ℹ️ *Les MP du membre sont désactivés ou fermés, le message privé n'a pas pu lui être remis.*").catch(() => {});
+                }
+            });
+        }
+
+        // 4. Rapport final dans le salon de commande modo
+        await interaction.editReply({
+            content:
+                `✅ **Procédure du Tribunal initiée avec succès pour <@${session.targetId}> !**\n` +
+                `• **Rôle Tribunal :** attribué\n` +
+                `• **MP envoyé :** ${session.mp ? 'Oui' : 'Non'}\n` +
+                `• **Salon d'audition :** ${salonTribunal ? `<#${salonTribunal.id}>` : '*Désactivé*'}`
+        });
+
+        bantempSessions.delete(sessionId);
+        return true;
+    }
+
+    // ==========================================
+    //    TRIBUNAL : VERDICTS DANS LE SALON
+    // ==========================================
+    if (interaction.isButton() && interaction.customId.startsWith('tribunal_')) {
+        if (!estModo(interaction.member)) {
+            return interaction.reply({ content: "❌ Seuls les modérateurs peuvent utiliser ces boutons.", ephemeral: true });
+        }
+
+        const [, action, targetId] = interaction.customId.split('_');
+        const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
+
+        if (action === 'innocent') {
+            await interaction.deferReply();
+            if (targetMember) {
+                // Retrait du rôle tribunal
+                await targetMember.roles.remove(ROLE_TRIBUNAL_ID, 'Innocenté.e par le Tribunal').catch(() => {});
+                // Restauration des anciens rôles
+                const savedRoles = tribunalSavedRoles.get(targetId) || [];
+                if (savedRoles.length > 0) {
+                    await targetMember.roles.add(savedRoles, 'Rétablissement suite au Tribunal').catch(() => {});
+                }
+                tribunalSavedRoles.delete(targetId);
+
+                await targetMember.send("✅ La procédure de modération à ton encontre sur Regaïa est terminée : tu as été innocenté.e et tes accès ont été rétablis. Bon retour parmi nous !").catch(() => {});
+            }
+
+            await interaction.editReply("✅ **Le/la membre a été innocenté et réintégré avec succès.**\nCe salon sera supprimé automatiquement dans **5 secondes**...");
+            setTimeout(() => {
+                interaction.channel.delete("Clôture Tribunal : membre innocenté").catch(() => {});
+            }, 5000);
+            return true;
+        }
+
+        if (action === 'ban') {
+            await interaction.deferReply();
+            try {
+                await interaction.guild.members.ban(targetId, {
+                    reason: `Décision du Tribunal de modération par ${interaction.user.tag}`
+                });
+                tribunalSavedRoles.delete(targetId);
+                await interaction.editReply(`🔨 **<@${targetId}> a été banni.e définitivement.**\nCe salon sera supprimé automatiquement dans **5 secondes**...`);
+            } catch (err) {
+                await interaction.editReply(`❌ Impossible de bannir ce.tte membre (${err.message}).`);
+                return true;
+            }
+            setTimeout(() => {
+                interaction.channel.delete("Clôture Tribunal : membre banni").catch(() => {});
+            }, 5000);
+            return true;
+        }
+
+        if (action === 'kick') {
+            await interaction.deferReply();
+            if (targetMember) {
+                try {
+                    await targetMember.kick(`Décision du Tribunal de modération par ${interaction.user.tag}`);
+                    tribunalSavedRoles.delete(targetId);
+                    await interaction.editReply(`👢 **<@${targetId}> a été expulsé.e du serveur.**\nCe salon sera supprimé automatiquement dans **5 secondes**...`);
+                } catch (err) {
+                    await interaction.editReply(`❌ Impossible d'expulser ce.tte membre (${err.message}).`);
+                    return true;
+                }
+            } else {
+                await interaction.editReply("ℹ️ Le/la membre n'est déjà plus sur le serveur.\nSuppression du salon dans **5 secondes**...");
+            }
+            setTimeout(() => {
+                interaction.channel.delete("Clôture Tribunal : membre expulsé").catch(() => {});
+            }, 5000);
+            return true;
+        }
+
+        if (action === 'close') {
+            await interaction.reply("🗑️ **Fermeture et suppression du salon tribunal en cours...**");
+            tribunalSavedRoles.delete(targetId);
+            setTimeout(() => {
+                interaction.channel.delete(`Fermé manuellement par ${interaction.user.tag}`).catch(() => {});
+            }, 2000);
+            return true;
+        }
+    }
+
     // Bouton de rôle interactif
     if (interaction.isButton() && interaction.customId.startsWith('rolebtn_')) {
         const roleId = interaction.customId.replace('rolebtn_', '');
