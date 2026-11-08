@@ -12,7 +12,8 @@ const {
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
-    PermissionFlagsBits
+    PermissionFlagsBits,
+    UserSelectMenuBuilder
 } = require('discord.js');
 
 const MOD_CHANNEL_ID = '1555402748193669192';
@@ -132,6 +133,36 @@ function buildBantempConfigPanel(sessionId) {
     return { embed, rows: [rowOptions, rowActions] };
 }
 
+// Recherche tolérante d'un membre sur l'ensemble du serveur (par ID, mention ou pseudo)
+async function trouverMembreServeur(guild, query) {
+    if (!guild || !query) return null;
+    const cleanId = query.replace(/<@!?|>/g, '').trim();
+
+    // 1. Recherche par ID direct
+    if (/^\d{17,20}$/.test(cleanId)) {
+        const parId = guild.members.cache.get(cleanId) ?? await guild.members.fetch(cleanId).catch(() => null);
+        if (parId) return parId;
+    }
+
+    const q = query.toLowerCase().replace(/^@/, '').trim();
+
+    // 2. Recherche exacte sur pseudo, nom d'affichage ou tag
+    const exact = guild.members.cache.find(m =>
+        (m.user?.username && m.user.username.toLowerCase() === q) ||
+        (m.user?.globalName && m.user.globalName.toLowerCase() === q) ||
+        (m.displayName && m.displayName.toLowerCase() === q)
+    );
+    if (exact) return exact;
+
+    // 3. Recherche partielle (commence par ou contient)
+    const partiel = guild.members.cache.find(m =>
+        (m.user?.username && m.user.username.toLowerCase().includes(q)) ||
+        (m.user?.globalName && m.user.globalName.toLowerCase().includes(q)) ||
+        (m.displayName && m.displayName.toLowerCase().includes(q))
+    );
+    return partiel || null;
+}
+
 async function handleSecurityMessage(message) {
     const channelId = message.channel.id;
     const raw = message.content.trim();
@@ -150,14 +181,35 @@ async function handleSecurityMessage(message) {
         }
 
         const args = raw.split(/\s+/);
+
+        // Si la commande est tapée sans argument, on propose directement le sélecteur Discord de membres
+        if (!args[1]) {
+            const rowSelect = new ActionRowBuilder().addComponents(
+                new UserSelectMenuBuilder()
+                    .setCustomId(`bt_select_user_${message.author.id}`)
+                    .setPlaceholder('🔍 Choisis ou cherche le membre du serveur...')
+            );
+            await message.reply({
+                content: '⚖️ **Sélectionne le membre à envoyer au Tribunal :**',
+                components: [rowSelect]
+            });
+            return true;
+        }
+
+        // Sinon recherche par mention, ID ou pseudo
         let cible = message.mentions?.members?.first ? message.mentions.members.first() : null;
         if (!cible && args[1]) {
-            const cleanId = args[1].replace(/<@!?|>/g, '');
-            cible = message.guild?.members?.cache?.get(cleanId) ?? await message.guild?.members?.fetch(cleanId).catch(() => null);
+            cible = await trouverMembreServeur(message.guild, args[1]);
         }
 
         if (!cible) {
-            await message.reply("❌ Membre introuvable. Usage : `!tribunal @membre [raison optionnelle]` (ou `!trib`)");
+            await message.reply(
+                "❌ **Membre introuvable sur le serveur !**\n" +
+                "💡 **Astuces :**\n" +
+                "• Tape simplement `!tribunal` pour choisir le membre dans une liste déroulante.\n" +
+                "• Ou utilise son ID direct : `!tribunal [ID_DU_MEMBRE]`\n" +
+                "• Ou son pseudo : `!tribunal [Pseudo]`"
+            );
             return true;
         }
 
@@ -178,7 +230,6 @@ async function handleSecurityMessage(message) {
             creerTicket: true
         });
 
-        // Nettoyage automatique de la session après 10 minutes d'inactivité
         setTimeout(() => bantempSessions.delete(sessionId), 10 * 60 * 1000);
 
         const { embed, rows } = buildBantempConfigPanel(sessionId);
@@ -637,6 +688,40 @@ async function handleSecurityInteraction(interaction) {
     // ==========================================
     //    TRIBUNAL : CONFIGURATION PAR LE MODO
     // ==========================================
+
+    // Choix du membre depuis le menu déroulant natif Discord
+    if (interaction.isUserSelectMenu() && interaction.customId.startsWith('bt_select_user_')) {
+        const authorId = interaction.customId.replace('bt_select_user_', '');
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande peut sélectionner le membre.", ephemeral: true });
+        }
+
+        const selectedUserId = interaction.values[0];
+        if (selectedUserId === interaction.user.id) {
+            return interaction.reply({ content: "❌ Tu ne peux pas lancer une procédure contre toi-même !", ephemeral: true });
+        }
+
+        const cible = interaction.guild?.members?.cache?.get(selectedUserId) ?? await interaction.guild?.members?.fetch(selectedUserId).catch(() => null);
+        if (!cible) {
+            return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
+        }
+
+        const sessionId = `bt_${Date.now()}_${interaction.user.id}`;
+        bantempSessions.set(sessionId, {
+            authorId: interaction.user.id,
+            targetId: cible.id,
+            targetTag: cible.user?.tag || cible.displayName,
+            mp: true,
+            raison: "Suspicion de bot / Comportement inadapté",
+            creerTicket: true
+        });
+
+        setTimeout(() => bantempSessions.delete(sessionId), 10 * 60 * 1000);
+
+        const { embed, rows } = buildBantempConfigPanel(sessionId);
+        await interaction.update({ content: null, embeds: [embed], components: rows });
+        return true;
+    }
 
     // Boutons de bascule (MP, Ticket)
     if (interaction.isButton() && (interaction.customId.startsWith('bt_toggle_mp_') || interaction.customId.startsWith('bt_toggle_ticket_'))) {
