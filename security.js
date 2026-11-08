@@ -22,9 +22,10 @@ const BANTEMP_AUTHORIZED_CHANNELS = ['720082701192921231', '1555402748193669192'
 const ROLE_TRIBUNAL_ID = '1569002165836451890';
 const CATEGORIE_MODERATION_ID = '1555402058532659360';
 
-// Trackers pour les sessions de configuration !bantemp et les rôles isolés
+// Trackers pour les sessions de configuration !tribunal et les salons actifs
 const bantempSessions = new Map();
 const tribunalSavedRoles = new Map();
+const tribunalActiveCases = new Map(); // targetId => { channelId, targetTag }
 
 const STOP_DURATION_MS = 60 * 60 * 1000;
 const CHUT_AUTHORIZED = [
@@ -65,8 +66,57 @@ let securityState = {
     EPSYS_ID: '436218312574107658'
 };
 
+// Alerte automatique si le membre ciblé quitte ou est banni pendant le tribunal
+async function handleTribunalMemberRemove(memberOrUser, guildParam = null) {
+    const userId = memberOrUser.id;
+    const caseInfo = tribunalActiveCases.get(userId);
+    if (!caseInfo || !caseInfo.channelId) return;
+
+    const guild = memberOrUser.guild || guildParam || securityState.client?.guilds?.cache?.get('720057528351850547');
+    if (!guild) return;
+
+    const channel = guild.channels.cache.get(caseInfo.channelId) ?? await guild.channels.fetch(caseInfo.channelId).catch(() => null);
+    if (!channel) return;
+
+    const nom = memberOrUser.displayName || memberOrUser.username || caseInfo.targetTag || 'Le membre';
+
+    const embed = new EmbedBuilder()
+        .setColor(0xff9900)
+        .setTitle('⚠️ Membre absent du serveur')
+        .setDescription(
+            `**${nom}** a quitté le serveur ou a été expulsé.e.\n\n` +
+            `Le salon est donc inutile, vous pouvez :\n` +
+            `• Supprimer manuellement le salon\n` +
+            `• Cliquer sur le bouton ci-dessous pour fermer le salon automatiquement\n` +
+            `• Ne rien faire`
+        )
+        .setTimestamp();
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tribunal_force_close_${userId}`)
+            .setLabel('🗑️ Fermer le salon automatiquement')
+            .setStyle(ButtonStyle.Danger)
+    );
+
+    await channel.send({
+        content: `🔔 <@&${MODO_ROLE_ID}>`,
+        embeds: [embed],
+        components: [row]
+    }).catch(() => {});
+}
+
 function initSecurityState(bridge) {
     securityState = { ...securityState, ...bridge };
+    if (securityState.client && !securityState.client._tribunalListenerAttached) {
+        securityState.client._tribunalListenerAttached = true;
+        securityState.client.on('guildMemberRemove', async (member) => {
+            await handleTribunalMemberRemove(member);
+        });
+        securityState.client.on('guildBanAdd', async (ban) => {
+            await handleTribunalMemberRemove(ban.user, ban.guild);
+        });
+    }
 }
 
 function estModo(member) {
@@ -919,6 +969,12 @@ async function handleSecurityInteraction(interaction) {
                     embeds: [embedTribunal],
                     components: [rowVerdict]
                 });
+
+                // Enregistrement du salon actif pour la surveillance des départs
+                tribunalActiveCases.set(session.targetId, {
+                    channelId: salonTribunal.id,
+                    targetTag: session.targetTag
+                });
             } catch (err) {
                 console.error('[Tribunal] Erreur création salon:', err);
             }
@@ -964,6 +1020,7 @@ async function handleSecurityInteraction(interaction) {
 
         if (action === 'innocent') {
             await interaction.deferReply();
+            tribunalActiveCases.delete(targetId);
             if (targetMember) {
                 // Retrait du rôle tribunal
                 await targetMember.roles.remove(ROLE_TRIBUNAL_ID, 'Innocenté.e par le Tribunal').catch(() => {});
@@ -986,6 +1043,7 @@ async function handleSecurityInteraction(interaction) {
 
         if (action === 'ban') {
             await interaction.deferReply();
+            tribunalActiveCases.delete(targetId);
             try {
                 await interaction.guild.members.ban(targetId, {
                     reason: `Décision du Tribunal de modération par ${interaction.user.tag}`
@@ -1004,6 +1062,7 @@ async function handleSecurityInteraction(interaction) {
 
         if (action === 'kick') {
             await interaction.deferReply();
+            tribunalActiveCases.delete(targetId);
             if (targetMember) {
                 try {
                     await targetMember.kick(`Décision du Tribunal de modération par ${interaction.user.tag}`);
@@ -1023,13 +1082,42 @@ async function handleSecurityInteraction(interaction) {
         }
 
         if (action === 'close') {
+            // Vérification si le membre est toujours sur le serveur
+            const cibleActuelle = await interaction.guild.members.fetch(targetId).catch(() => null);
+
+            // Si le membre est encore là et possède toujours le rôle Tribunal : on bloque fermement la fermeture
+            if (cibleActuelle && cibleActuelle.roles.cache.has(ROLE_TRIBUNAL_ID)) {
+                const nomMembre = cibleActuelle.displayName || cibleActuelle.user?.username || 'ce membre';
+                return interaction.reply({
+                    content: `⚠️ <@${interaction.user.id}> **Action impossible !** Le salon ne peut être fermé, car <@${targetId}> est toujours dans ce salon. Si le salon se ferme, **${nomMembre}** n'aura aucune permission pour avoir accès à l'ensemble du serveur !`,
+                    allowedMentions: { users: [interaction.user.id] }
+                });
+            }
+
+            // Si le membre n'a plus le rôle tribunal ou a quitté le serveur, on autorise la fermeture
             await interaction.reply("🗑️ **Fermeture et suppression du salon tribunal en cours...**");
+            tribunalActiveCases.delete(targetId);
             tribunalSavedRoles.delete(targetId);
             setTimeout(() => {
                 interaction.channel.delete(`Fermé manuellement par ${interaction.user.tag}`).catch(() => {});
             }, 2000);
             return true;
         }
+    }
+
+    // Bouton de fermeture automatique si le membre a quitté le serveur
+    if (interaction.isButton() && interaction.customId.startsWith('tribunal_force_close_')) {
+        if (!estModo(interaction.member)) {
+            return interaction.reply({ content: "❌ Seuls les modérateurs peuvent utiliser ce bouton.", ephemeral: true });
+        }
+        const targetId = interaction.customId.replace('tribunal_force_close_', '');
+        await interaction.reply("🗑️ **Suppression automatique du salon tribunal en cours...**");
+        tribunalActiveCases.delete(targetId);
+        tribunalSavedRoles.delete(targetId);
+        setTimeout(() => {
+            interaction.channel.delete(`Fermeture automatique après départ par ${interaction.user.tag}`).catch(() => {});
+        }, 2000);
+        return true;
     }
 
     // Bouton de rôle interactif
