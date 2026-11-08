@@ -106,6 +106,42 @@ async function handleTribunalMemberRemove(memberOrUser, guildParam = null) {
     }).catch(() => {});
 }
 
+// Rattrapage automatique des salons de tribunal déjà ouverts au démarrage / redémarrage
+async function synchroniserTribunauxExistants() {
+    if (!securityState.client) return;
+    try {
+        const guild = securityState.client.guilds.cache.get('720057528351850547') ?? securityState.client.guilds.cache.first();
+        if (!guild) return;
+
+        const salonsTribunal = guild.channels.cache.filter(c =>
+            c.parentId === CATEGORIE_MODERATION_ID &&
+            c.name.startsWith('⚖') &&
+            c.isTextBased()
+        );
+
+        for (const channel of salonsTribunal.values()) {
+            const overwriteMembre = channel.permissionOverwrites?.cache?.find(po =>
+                po.id !== securityState.client.user.id &&
+                po.id !== guild.id &&
+                po.id !== MODO_ROLE_ID
+            );
+
+            if (overwriteMembre) {
+                const targetId = overwriteMembre.id;
+                const member = guild.members.cache.get(targetId) ?? await guild.members.fetch(targetId).catch(() => null);
+                const tag = member?.user?.tag || member?.displayName || 'Membre';
+                tribunalActiveCases.set(targetId, {
+                    channelId: channel.id,
+                    targetTag: tag
+                });
+                console.log(`[Tribunal] Salon reconnecté : ${channel.name} pour ${tag} (${targetId})`);
+            }
+        }
+    } catch (err) {
+        console.warn('[Tribunal] Erreur synchro tribunaux existants:', err);
+    }
+}
+
 function initSecurityState(bridge) {
     securityState = { ...securityState, ...bridge };
     if (securityState.client && !securityState.client._tribunalListenerAttached) {
@@ -116,6 +152,13 @@ function initSecurityState(bridge) {
         securityState.client.on('guildBanAdd', async (ban) => {
             await handleTribunalMemberRemove(ban.user, ban.guild);
         });
+
+        // Reconnexion immédiate des tribunaux en cours (même créés avant la mise à jour)
+        if (securityState.client.isReady()) {
+            synchroniserTribunauxExistants();
+        } else {
+            securityState.client.once('ready', () => synchroniserTribunauxExistants());
+        }
     }
 }
 
