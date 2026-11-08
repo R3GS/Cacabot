@@ -3,6 +3,8 @@
  * Anti-phishing, Anti-spam, Anti-raid, Slowmode d'urgence, Chut/Stop, Rôles Réactions
  */
 
+const fs = require('fs');
+const path = require('path');
 const {
     EmbedBuilder,
     ActionRowBuilder,
@@ -13,7 +15,9 @@ const {
     TextInputBuilder,
     TextInputStyle,
     PermissionFlagsBits,
-    UserSelectMenuBuilder
+    UserSelectMenuBuilder,
+    StringSelectMenuBuilder,
+    AttachmentBuilder
 } = require('discord.js');
 
 const MOD_CHANNEL_ID = '1555402748193669192';
@@ -25,7 +29,242 @@ const CATEGORIE_MODERATION_ID = '1555402058532659360';
 // Trackers pour les sessions de configuration !tribunal et les salons actifs
 const bantempSessions = new Map();
 const tribunalSavedRoles = new Map();
-const tribunalActiveCases = new Map(); // targetId => { channelId, targetTag }
+const tribunalActiveCases = new Map(); // targetId => { channelId, targetTag, raison, modoId, modoTag, openedAt }
+
+// --- GESTIONNAIRE D'ARCHIVES JUDICIAIRES (.TXT & JSON) ---
+const ARCHIVES_DIR = path.join(__dirname, 'data', 'archives_tribunaux');
+const ARCHIVES_INDEX_FILE = path.join(__dirname, 'data', 'archives_tribunaux.json');
+const ITEMS_PER_PAGE = 10;
+
+try {
+    if (!fs.existsSync(ARCHIVES_DIR)) {
+        fs.mkdirSync(ARCHIVES_DIR, { recursive: true });
+    }
+} catch (e) {
+    console.warn('[Archives] Impossible de créer le dossier data/archives_tribunaux:', e);
+}
+
+function chargerArchives() {
+    try {
+        if (fs.existsSync(ARCHIVES_INDEX_FILE)) {
+            const raw = fs.readFileSync(ARCHIVES_INDEX_FILE, 'utf-8');
+            return JSON.parse(raw);
+        }
+    } catch (e) {
+        console.warn('[Archives] Erreur lecture archives_tribunaux.json:', e);
+    }
+    return [];
+}
+
+function sauvegarderArchives(liste) {
+    try {
+        const dir = path.dirname(ARCHIVES_INDEX_FILE);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(ARCHIVES_INDEX_FILE, JSON.stringify(liste, null, 2), 'utf-8');
+    } catch (e) {
+        console.error('[Archives] Erreur sauvegarde archives_tribunaux.json:', e);
+    }
+}
+
+// Génération de la retranscription .txt et archivage
+async function genererEtSauvegarderTranscript({
+    channel,
+    targetId,
+    targetTag,
+    decision,
+    verdictEmoji,
+    modoUser,
+    guild
+}) {
+    if (!channel || !channel.isTextBased()) return null;
+
+    let messages = [];
+    try {
+        const fetched = await channel.messages.fetch({ limit: 100 });
+        messages = Array.from(fetched.values()).sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+    } catch (e) {
+        console.warn('[Transcript] Erreur récupération messages:', e);
+    }
+
+    const caseInfo = tribunalActiveCases.get(targetId) || {};
+    const finalTargetTag = targetTag || caseInfo.targetTag || 'Membre';
+    const initialRaison = caseInfo.raison || 'Non spécifiée';
+    const dateNow = new Date();
+    const dateStr = dateNow.toLocaleString('fr-FR', { timeZone: 'Europe/Paris' });
+    const fileTimestamp = dateNow.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+
+    const archives = chargerArchives();
+    const dossierNum = archives.length + 1;
+    const safeTag = finalTargetTag.toLowerCase().replace(/[^a-z0-9_-]/g, '_').slice(0, 15) || 'membre';
+    const fileName = `dossier_${dossierNum}_${safeTag}_${fileTimestamp}.txt`;
+    const filePath = path.join(ARCHIVES_DIR, fileName);
+
+    let content = `================================================================================\n`;
+    content += `                    🏛️ ARCHIVES DU TRIBUNAL DE REGAÏA\n`;
+    content += `                             DOSSIER N°${dossierNum}\n`;
+    content += `================================================================================\n\n`;
+    content += `• Salon archivé : #${channel.name} (${channel.id})\n`;
+    content += `• Accusé(e)     : ${finalTargetTag} (ID: ${targetId})\n`;
+    content += `• Motif initial : ${initialRaison}\n`;
+    content += `• Date clôture  : ${dateStr}\n`;
+    content += `• Décision      : ${decision}\n`;
+    content += `• Modérateur    : ${modoUser?.tag || 'Inconnu'} (ID: ${modoUser?.id || 'N/A'})\n`;
+    content += `• Messages      : ${messages.length}\n`;
+    content += `\n--------------------------- RETRANSCRIPTION COMPLÈTE ---------------------------\n\n`;
+
+    for (const msg of messages) {
+        const time = new Date(msg.createdTimestamp).toLocaleTimeString('fr-FR', { timeZone: 'Europe/Paris' });
+        const authorTag = msg.author?.tag || msg.author?.username || 'Inconnu';
+        let body = msg.cleanContent || msg.content || '';
+
+        if (msg.attachments && msg.attachments.size > 0) {
+            const attList = msg.attachments.map(a => `[Fichier: ${a.name} (${a.url})]`).join(' ');
+            body += (body ? ' ' : '') + attList;
+        }
+
+        if (msg.embeds && msg.embeds.length > 0 && !body) {
+            const embTitles = msg.embeds.map(e => `[Embed: ${e.title || e.description || 'Aperçu'}]`).join(' ');
+            body += (body ? ' ' : '') + embTitles;
+        }
+
+        content += `[${time}] [${authorTag}] : ${body}\n`;
+    }
+
+    content += `\n--------------------------------- FIN DU DOSSIER --------------------------------\n`;
+
+    // 1. Écriture du fichier .txt sur le disque
+    try {
+        fs.writeFileSync(filePath, content, 'utf-8');
+    } catch (e) {
+        console.error('[Archives] Erreur écriture fichier .txt:', e);
+    }
+
+    // 2. Indexation JSON
+    const archiveEntry = {
+        id: dossierNum,
+        fileName: fileName,
+        targetId: targetId,
+        targetTag: finalTargetTag,
+        raison: initialRaison,
+        decision: decision,
+        verdictEmoji: verdictEmoji || '📁',
+        modoId: modoUser?.id || null,
+        modoTag: modoUser?.tag || 'Modo',
+        date: dateStr,
+        timestamp: Date.now(),
+        messageCount: messages.length
+    };
+
+    archives.unshift(archiveEntry);
+    sauvegarderArchives(archives);
+
+    // 3. Envoi d'un exemplaire dans le salon des logs staff MOD_CHANNEL_ID
+    try {
+        const modChannel = guild.channels.cache.get(MOD_CHANNEL_ID) ?? await guild.channels.fetch(MOD_CHANNEL_ID).catch(() => null);
+        if (modChannel && modChannel.isTextBased()) {
+            const attachment = new AttachmentBuilder(Buffer.from(content, 'utf-8'), { name: fileName });
+            const recapEmbed = new EmbedBuilder()
+                .setColor(decision.includes('Banni') ? 0xd63031 : decision.includes('Innocenté') ? 0x00b894 : 0x0984e3)
+                .setTitle(`📁 Archivage Dossier #${dossierNum} — Tribunal de Regaïa`)
+                .setDescription(
+                    `Le salon d'audition a été clôturé et son audience a été archivée avec succès.\n\n` +
+                    `• **Accusé(e) :** \`${finalTargetTag}\` (<@${targetId}>)\n` +
+                    `• **Verdict :** ${verdictEmoji || '⚖️'} **${decision}**\n` +
+                    `• **Par :** <@${modoUser?.id}>\n` +
+                    `• **Motif initial :** \`${initialRaison}\`\n` +
+                    `• **Échanges :** \`${messages.length} messages retranscrits\``
+                )
+                .setFooter({ text: `Consultable à tout moment via !tribunal list ou !archives` })
+                .setTimestamp();
+
+            await modChannel.send({
+                embeds: [recapEmbed],
+                files: [attachment]
+            }).catch(() => {});
+        }
+    } catch (e) {
+        console.warn('[Archives] Impossible denvoyer au salon staff:', e);
+    }
+
+    return archiveEntry;
+}
+
+// Construction de la vue avec pagination & menu déroulant
+function buildArchivesView(page = 1, filterTargetId = null) {
+    let archives = chargerArchives();
+    if (filterTargetId) {
+        archives = archives.filter(a =>
+            a.targetId === filterTargetId ||
+            a.targetTag.toLowerCase().includes(filterTargetId.toLowerCase())
+        );
+    }
+
+    const totalPages = Math.max(1, Math.ceil(archives.length / ITEMS_PER_PAGE));
+    const currentPage = Math.min(Math.max(1, page), totalPages);
+
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const pageItems = archives.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+    const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle('🏛️ Archives Judiciaires de Regaïa')
+        .setDescription(
+            `Consultez l'historique complet des auditions du Tribunal.\n` +
+            `Sélectionnez un dossier dans le menu ci-dessous pour obtenir sa retranscription **.txt**.\n\n` +
+            (filterTargetId ? `🔍 *Filtre actif :* \`${filterTargetId}\`\n\n` : '') +
+            (pageItems.length === 0
+                ? "*Aucune archive enregistrée pour le moment.*"
+                : pageItems.map(item => {
+                    return `📁 **Dossier #${item.id}** — \`${item.date}\`\n` +
+                           `• **Accusé(e) :** \`${item.targetTag}\` (<@${item.targetId}>)\n` +
+                           `• **Verdict :** ${item.verdictEmoji || '⚖️'} **${item.decision}** (par <@${item.modoId}>)\n` +
+                           `• **Motif :** ${item.raison}`;
+                }).join('\n\n')
+            )
+        )
+        .setFooter({ text: `Page ${currentPage} sur ${totalPages} • Total : ${archives.length} dossier(s)` })
+        .setTimestamp();
+
+    const components = [];
+
+    // Ligne 1 : Boutons Précédent / Suivant
+    const navRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`arch_page_${currentPage - 1}_${filterTargetId || 'all'}`)
+            .setLabel('◀️ Précédent')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(currentPage <= 1),
+        new ButtonBuilder()
+            .setCustomId(`arch_indicator`)
+            .setLabel(`${currentPage}/${totalPages}`)
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(true),
+        new ButtonBuilder()
+            .setCustomId(`arch_page_${currentPage + 1}_${filterTargetId || 'all'}`)
+            .setLabel('➡️ Suivant')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(currentPage >= totalPages)
+    );
+    components.push(navRow);
+
+    // Ligne 2 : Menu contextuel pour choisir le .txt
+    if (pageItems.length > 0) {
+        const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId(`arch_select_${currentPage}`)
+            .setPlaceholder('📥 Choisir un dossier pour télécharger la retranscription .txt...')
+            .addOptions(
+                pageItems.map(item => ({
+                    label: `Dossier #${item.id} — ${item.targetTag.slice(0, 30)}`,
+                    description: `${item.decision.slice(0, 40)} • ${item.date}`.slice(0, 100),
+                    value: String(item.id),
+                    emoji: item.verdictEmoji || '📁'
+                }))
+            );
+        components.push(new ActionRowBuilder().addComponents(selectMenu));
+    }
+
+    return { embed, components };
+}
 
 const STOP_DURATION_MS = 60 * 60 * 1000;
 const CHUT_AUTHORIZED = [
@@ -262,8 +501,8 @@ async function handleSecurityMessage(message) {
     const raw = message.content.trim();
     const command = raw.split(/\s+/)[0]?.toLowerCase();
 
-    // 0. !tribunal / !trib (ou !bantemp) (Modération / Tribunal)
-    if (['!tribunal', '!trib', '!bantemp'].includes(command)) {
+    // 0. !tribunal / !trib (ou !bantemp) / !archives
+    if (['!tribunal', '!trib', '!bantemp', '!archives', '!archive'].includes(command)) {
         if (!estModo(message.member)) {
             await message.reply("❌ Cette commande est réservée aux modérateurs.");
             return true;
@@ -275,15 +514,31 @@ async function handleSecurityMessage(message) {
         }
 
         const args = raw.split(/\s+/);
+        const subCommand = args[1]?.toLowerCase();
 
-        // Si aucun identifiant n'est fourni
+        // Distributeur automatique d'Archives (!tribunal list, !trib list, !archives, !tribunal archives)
+        if (['!archives', '!archive'].includes(command) || ['list', 'liste', 'archives', 'archive'].includes(subCommand)) {
+            let filter = null;
+            if (['!archives', '!archive'].includes(command) && args[1]) {
+                filter = args[1].replace(/[<@!>]/g, '').trim();
+            } else if (args[2]) {
+                filter = args[2].replace(/[<@!>]/g, '').trim();
+            }
+
+            const { embed, components } = buildArchivesView(1, filter);
+            await message.reply({ embeds: [embed], components });
+            return true;
+        }
+
+        // Si aucun identifiant n'est fourni pour lancer un tribunal
         if (!args[1]) {
             await message.reply(
                 "⚖️ **Procédure du Tribunal de Regaïa**\n\n" +
                 "**Usage :** `!tribunal [ID_DU_MEMBRE] [raison optionnelle]` (ou `!trib [ID]`)\n\n" +
                 "💡 **Comment faire :**\n" +
                 "1. Fais un clic droit (ou appui long sur téléphone) sur le profil du suspect ➔ **« Copier l'identifiant »**.\n" +
-                "2. Tape ici : `!tribunal 123456789012345678` *(tu peux aussi mettre l'ID entre parenthèses ou son pseudo)*."
+                "2. Tape ici : `!tribunal 123456789012345678` *(tu peux aussi mettre l'ID entre parenthèses ou son pseudo)*.\n\n" +
+                "📁 **Pour consulter les archives :** `!tribunal list` (ou `!archives`)"
             );
             return true;
         }
@@ -1013,10 +1268,14 @@ async function handleSecurityInteraction(interaction) {
                     components: [rowVerdict]
                 });
 
-                // Enregistrement du salon actif pour la surveillance des départs
+                // Enregistrement du salon actif pour la surveillance des départs et l'archivage
                 tribunalActiveCases.set(session.targetId, {
                     channelId: salonTribunal.id,
-                    targetTag: session.targetTag
+                    targetTag: session.targetTag,
+                    raison: session.raison,
+                    modoId: interaction.user.id,
+                    modoTag: interaction.user.tag,
+                    openedAt: Date.now()
                 });
             } catch (err) {
                 console.error('[Tribunal] Erreur création salon:', err);
@@ -1063,6 +1322,16 @@ async function handleSecurityInteraction(interaction) {
 
         if (action === 'innocent') {
             await interaction.deferReply();
+            const caseInfo = tribunalActiveCases.get(targetId);
+            await genererEtSauvegarderTranscript({
+                channel: interaction.channel,
+                targetId: targetId,
+                targetTag: targetMember?.displayName || caseInfo?.targetTag || 'Membre',
+                decision: 'Innocenté.e & Réintégré.e',
+                verdictEmoji: '✅',
+                modoUser: interaction.user,
+                guild: interaction.guild
+            });
             tribunalActiveCases.delete(targetId);
             if (targetMember) {
                 // Retrait du rôle tribunal
@@ -1077,7 +1346,7 @@ async function handleSecurityInteraction(interaction) {
                 await targetMember.send("✅ La procédure de modération à ton encontre sur Regaïa est terminée : tu as été innocenté.e et tes accès ont été rétablis. Bon retour parmi nous !").catch(() => {});
             }
 
-            await interaction.editReply("✅ **Le/la membre a été innocenté et réintégré avec succès.**\nCe salon sera supprimé automatiquement dans **5 secondes**...");
+            await interaction.editReply("✅ **Le/la membre a été innocenté et réintégré avec succès.**\nAudition archivée en `.txt` dans les logs staff.\nCe salon sera supprimé automatiquement dans **5 secondes**...");
             setTimeout(() => {
                 interaction.channel.delete("Clôture Tribunal : membre innocenté").catch(() => {});
             }, 5000);
@@ -1086,13 +1355,23 @@ async function handleSecurityInteraction(interaction) {
 
         if (action === 'ban') {
             await interaction.deferReply();
+            const caseInfo = tribunalActiveCases.get(targetId);
+            await genererEtSauvegarderTranscript({
+                channel: interaction.channel,
+                targetId: targetId,
+                targetTag: targetMember?.displayName || caseInfo?.targetTag || 'Membre',
+                decision: 'Banni.e définitivement',
+                verdictEmoji: '🔨',
+                modoUser: interaction.user,
+                guild: interaction.guild
+            });
             tribunalActiveCases.delete(targetId);
             try {
                 await interaction.guild.members.ban(targetId, {
                     reason: `Décision du Tribunal de modération par ${interaction.user.tag}`
                 });
                 tribunalSavedRoles.delete(targetId);
-                await interaction.editReply(`🔨 **<@${targetId}> a été banni.e définitivement.**\nCe salon sera supprimé automatiquement dans **5 secondes**...`);
+                await interaction.editReply(`🔨 **<@${targetId}> a été banni.e définitivement.**\nAudition archivée en \`.txt\` dans les logs staff.\nCe salon sera supprimé automatiquement dans **5 secondes**...`);
             } catch (err) {
                 await interaction.editReply(`❌ Impossible de bannir ce.tte membre (${err.message}).`);
                 return true;
@@ -1105,18 +1384,28 @@ async function handleSecurityInteraction(interaction) {
 
         if (action === 'kick') {
             await interaction.deferReply();
+            const caseInfo = tribunalActiveCases.get(targetId);
+            await genererEtSauvegarderTranscript({
+                channel: interaction.channel,
+                targetId: targetId,
+                targetTag: targetMember?.displayName || caseInfo?.targetTag || 'Membre',
+                decision: 'Expulsé.e (Kick)',
+                verdictEmoji: '👢',
+                modoUser: interaction.user,
+                guild: interaction.guild
+            });
             tribunalActiveCases.delete(targetId);
             if (targetMember) {
                 try {
                     await targetMember.kick(`Décision du Tribunal de modération par ${interaction.user.tag}`);
                     tribunalSavedRoles.delete(targetId);
-                    await interaction.editReply(`👢 **<@${targetId}> a été expulsé.e du serveur.**\nCe salon sera supprimé automatiquement dans **5 secondes**...`);
+                    await interaction.editReply(`👢 **<@${targetId}> a été expulsé.e du serveur.**\nAudition archivée en \`.txt\` dans les logs staff.\nCe salon sera supprimé automatiquement dans **5 secondes**...`);
                 } catch (err) {
                     await interaction.editReply(`❌ Impossible d'expulser ce.tte membre (${err.message}).`);
                     return true;
                 }
             } else {
-                await interaction.editReply("ℹ️ Le/la membre n'est déjà plus sur le serveur.\nSuppression du salon dans **5 secondes**...");
+                await interaction.editReply("ℹ️ Le/la membre n'est déjà plus sur le serveur.\nAudition archivée en `.txt` dans les logs staff.\nSuppression du salon dans **5 secondes**...");
             }
             setTimeout(() => {
                 interaction.channel.delete("Clôture Tribunal : membre expulsé").catch(() => {});
@@ -1138,7 +1427,17 @@ async function handleSecurityInteraction(interaction) {
             }
 
             // Si le membre n'a plus le rôle tribunal ou a quitté le serveur, on autorise la fermeture
-            await interaction.reply("🗑️ **Fermeture et suppression du salon tribunal en cours...**");
+            await interaction.reply("🗑️ **Archivage et fermeture du salon tribunal en cours...**");
+            const caseInfo = tribunalActiveCases.get(targetId);
+            await genererEtSauvegarderTranscript({
+                channel: interaction.channel,
+                targetId: targetId,
+                targetTag: cibleActuelle?.displayName || caseInfo?.targetTag || 'Membre',
+                decision: 'Fermé manuellement',
+                verdictEmoji: '🗑️',
+                modoUser: interaction.user,
+                guild: interaction.guild
+            });
             tribunalActiveCases.delete(targetId);
             tribunalSavedRoles.delete(targetId);
             setTimeout(() => {
@@ -1154,12 +1453,87 @@ async function handleSecurityInteraction(interaction) {
             return interaction.reply({ content: "❌ Seuls les modérateurs peuvent utiliser ce bouton.", ephemeral: true });
         }
         const targetId = interaction.customId.replace('tribunal_force_close_', '');
-        await interaction.reply("🗑️ **Suppression automatique du salon tribunal en cours...**");
+        await interaction.reply("🗑️ **Archivage et suppression automatique du salon tribunal en cours...**");
+        const caseInfo = tribunalActiveCases.get(targetId);
+        await genererEtSauvegarderTranscript({
+            channel: interaction.channel,
+            targetId: targetId,
+            targetTag: caseInfo?.targetTag || 'Membre absent',
+            decision: 'Départ / Expulsion externe',
+            verdictEmoji: '⚠️',
+            modoUser: interaction.user,
+            guild: interaction.guild
+        });
         tribunalActiveCases.delete(targetId);
         tribunalSavedRoles.delete(targetId);
         setTimeout(() => {
             interaction.channel.delete(`Fermeture automatique après départ par ${interaction.user.tag}`).catch(() => {});
         }, 2000);
+        return true;
+    }
+
+    // ==========================================
+    //    ARCHIVES DU TRIBUNAL : NAVIGATION & SÉLECTION
+    // ==========================================
+    // Changement de page dans la liste des archives
+    if (interaction.isButton() && interaction.customId.startsWith('arch_page_')) {
+        if (!estModo(interaction.member)) {
+            return interaction.reply({ content: "❌ Seuls les modérateurs peuvent naviguer dans les archives.", ephemeral: true });
+        }
+
+        const parts = interaction.customId.split('_');
+        const targetPage = parseInt(parts[2], 10) || 1;
+        const filter = parts.slice(3).join('_');
+        const filterTargetId = (filter === 'all' || !filter) ? null : filter;
+
+        const { embed, components } = buildArchivesView(targetPage, filterTargetId);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    // Sélection d'une archive dans le menu contextuel
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('arch_select_')) {
+        if (!estModo(interaction.member)) {
+            return interaction.reply({ content: "❌ Seuls les modérateurs peuvent consulter les archives.", ephemeral: true });
+        }
+
+        const selectedId = parseInt(interaction.values[0], 10);
+        const archives = chargerArchives();
+        const archive = archives.find(a => a.id === selectedId);
+
+        if (!archive) {
+            return interaction.reply({ content: `❌ Dossier #${selectedId} introuvable dans l'index.`, ephemeral: true });
+        }
+
+        const filePath = path.join(ARCHIVES_DIR, archive.fileName);
+        if (!fs.existsSync(filePath)) {
+            return interaction.reply({ content: `❌ Le fichier texte \`${archive.fileName}\` est introuvable sur le disque.`, ephemeral: true });
+        }
+
+        await interaction.deferReply();
+
+        const recap = new EmbedBuilder()
+            .setColor(0x00b894)
+            .setTitle(`📄 Retranscription du Dossier #${archive.id} — Tribunal`)
+            .setDescription(
+                `Voici la retranscription demandée par <@${interaction.user.id}> :\n\n` +
+                `• **Accusé(e) :** \`${archive.targetTag}\` (<@${archive.targetId}>)\n` +
+                `• **Date de clôture :** \`${archive.date}\`\n` +
+                `• **Verdict :** ${archive.verdictEmoji || '⚖️'} **${archive.decision}**\n` +
+                `• **Modérateur :** <@${archive.modoId}>\n` +
+                `• **Motif initial :** \`${archive.raison}\`\n` +
+                `• **Messages enregistrés :** \`${archive.messageCount || 0}\`\n\n` +
+                `📎 *Le fichier .txt complet est attaché ci-dessous :*`
+            )
+            .setFooter({ text: 'Tribunal de Regaïa • Système d’archivage' })
+            .setTimestamp();
+
+        const attachment = new AttachmentBuilder(filePath, { name: archive.fileName });
+
+        await interaction.editReply({
+            embeds: [recap],
+            files: [attachment]
+        });
         return true;
     }
 
