@@ -33,6 +33,7 @@ function buildHelpxCategorieEmbed(categorie) {
             .addFields(
                 { name: '🩺 **!diag / !cacatest**', value: 'Diagnostic complet de l\'état de santé de tous les modules.' },
                 { name: '⚖️ **!tribunal / !trib [@membre]**', value: 'Le tribunal des bannis.' },
+                { name: '📄 **!archives / !tribunal archives**', value: 'Pour avoir accès aux archives des tribunaux (fichiers en .txt).' },
                 { name: '📺 **!ytabo config**', value: 'Panneau interactif des abonnements et notifications YouTube.' },
                 { name: '👋 **!welcome / !welcome test**', value: 'Configurer le salon d\'accueil ou tester l\'affiche Canvas.' },
                 { name: '📣 **!say [ID Salon] [message]**', value: 'Envoyer un message dans un salon au nom de Cacabot.' },
