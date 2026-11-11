@@ -85,7 +85,8 @@ function scheduleRappel(channelId, targetId, texte, ms, imageUrl = null) {
 
     const timeout = setTimeout(async () => {
         pendingRappels.delete(id);
-        const channel = toolsState.client?.channels.cache.get(channelId);
+        const channel = toolsState.client?.channels.cache.get(channelId) 
+            || await toolsState.client?.channels.fetch(channelId).catch(() => null);
         if (!channel) return;
 
         const row = new ActionRowBuilder().addComponents(
