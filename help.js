@@ -120,17 +120,25 @@ function buildHelpHomeEmbed(user, botAvatarUrl = null) {
         .setDescription(
             `Bienvenue sur le guide officiel de **Cacabot** !\n` +
             `Toutes les commandes s'utilisent avec le préfixe **\`!\`** ou directement en commande slash **\`/\`**.\n\n` +
+            `🔒 **Accès aux jeux & salons** :\n` +
+            `Pour accéder aux salons du **Motus**, du **Pendu**, de la **Roulette** et des **Rébus**, pense à récupérer tes rôles dans <#1559082682313474059> ou <#1559324422165373008> !\n\n` +
+            `────────────────────────────────────────\n\n` +
             `### 🧭 Thématiques disponibles\n\n` +
             `🎰 **Roulette & Battle Pass**\n` +
             `-# Casino toutes les 15 min, inventaire, quêtes et 25 paliers mensuels.\n\n` +
+            `────────────────────────────────────────\n\n` +
             `🎮 **Rendez-vous & Jeux Quotidiens**\n` +
             `-# Sessions automatiques : Motus (10h/19h), Rébus (15h) et Pendu (21h).\n\n` +
+            `────────────────────────────────────────\n\n` +
             `👥 **Profils & Vie du Serveur**\n` +
             `-# Fiches membres, podiums d'activité, anniversaires et citations mythiques.\n\n` +
+            `────────────────────────────────────────\n\n` +
             `🎭 **Interactions Sociales**\n` +
             `-# Actions animées : bisous, câlins, rizz, bagarres et réactions.\n\n` +
+            `────────────────────────────────────────\n\n` +
             `🔮 **Oracles, Débats & Fun**\n` +
             `-# Horoscope, destin, animal spirituel, dilemmes et pile ou face.\n\n` +
+            `────────────────────────────────────────\n\n` +
             `🛠️ **Utilitaires du Quotidien**\n` +
             `-# Rappels personnels avec snooze, Pomodoro, météo et YouTube.\n\n` +
             `────────────────────────────────────────\n` +
@@ -151,7 +159,8 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
             .setColor(0xf1c40f)
             .setTitle('🎰 Roulette & Battle Pass')
             .setDescription(
-                `Le système de casino et de progression communautaire de Regaïa.\n\n` +
+                `Le système de casino et de progression communautaire de Regaïa.\n` +
+                `-# 🔒 Accès : Nécessite le rôle Roulette à récupérer dans <#1559082682313474059> ou <#1559324422165373008> !\n\n` +
                 `### 🎲 La Roulette Regaïenne\n` +
                 `Tente ta chance toutes les 15 minutes pour remporter des bonus ou subir des malus éphémères.\n` +
                 `-# ⏱️ Cooldown réduit à **5 min en Happy Hour (20h00)** !\n\n` +
@@ -175,6 +184,7 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
             .setDescription(
                 `Cacabot anime des sessions automatiques à heures fixes dans les salons dédiés.\n` +
                 `*Pas besoin de commande pour jouer : écris directement ta proposition dans le salon !*\n\n` +
+                `-# 🔒 Accès : Récupère tes rôles de jeux dans <#1559082682313474059> ou <#1559324422165373008> pour voir les salons et participer !\n\n` +
                 `### 🟩 Le Motus\n` +
                 `📅 Tous les jours à **10h00** (6 lettres) et **19h00** (7 lettres).\n` +
                 `Écris simplement ton mot dans le chat pendant la session.\n` +
@@ -221,7 +231,7 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
             .setTitle('🎭 Interactions Sociales & Actions RP')
             .setDescription(
                 `Toutes les commandes animées pour interagir avec les membres du serveur.\n` +
-                `*Mentionne un membre (ex: \`!kiss @Epsys\`) ou utilise la commande solo.*\n\n` +
+                `*Mentionne un membre (ex: \`!kiss @membre\`) ou utilise la commande solo.*\n\n` +
                 `### 💖 Affection & Rizz\n` +
                 `\`kiss\` • \`hug\` • \`danse\` • \`rizz\` • \`lovecalc @user1 @user2\`\n\n` +
                 `### 💥 Bagarre & Provoc\n` +
@@ -249,7 +259,7 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
                 `### 🎲 Hasard & Mascottes\n` +
                 `\`!flip [mise]\` • Pile ou face *(solo ou duel de pari face à un membre)*\n` +
                 `\`!blague\` • Blague aléatoire *(Soft, Classique, Humour Noir)*\n` +
-                `\`!sylvain\` • \`!epsys\` • \`!bougetoi\` • Les mascottes cultes de Regaïa`
+                `\`!sylvain\` • \`!epsys\` • \`!bougetoi\` • Parce que`
             );
     }
 
@@ -271,7 +281,7 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
                 `\`!stats [chaîne]\` • Statistiques complètes d'une chaîne YouTube\n` +
                 `\`!aternos\` • Statut et adresse IP du serveur Minecraft Regaïa\n\n` +
                 `### 🤖 Vie de Cacabot\n` +
-                `\`!botinfo\` *(ou \`!about\`)* • Version, temps d'activité (uptime) et mémoire\n` +
+                `\`!botinfo\` *(ou \`!about\`)* • Version, temps d\'activité (uptime) et mémoire\n` +
                 `\`!ping\` • Mesure de la latence de réponse API et WebSocket\n` +
                 `\`!stop\` / \`!unstop\` • Mettre en pause ou relancer les répliques automatiques`
             );
@@ -284,9 +294,9 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
 //   COMPOSANTS (MENUS & BOUTONS)
 // =========================
 
-function buildHelpMenu(authorId, currentCategory = 'home') {
+function buildHelpMenu(authorId, currentCategory = 'home', originalMessageId = '') {
     return new StringSelectMenuBuilder()
-        .setCustomId(`help_menu_${authorId}`)
+        .setCustomId(`help_menu_${authorId}_${originalMessageId}`)
         .setPlaceholder('Choisis une thématique...')
         .addOptions(
             {
@@ -396,7 +406,7 @@ async function runHelpMessage(message, response) {
     if (response?.data || response?.needsHelp) {
         const botAvatarUrl = message.client?.user?.displayAvatarURL({ dynamic: true });
         const embed = buildHelpHomeEmbed(message.author, botAvatarUrl);
-        const menuRow = new ActionRowBuilder().addComponents(buildHelpMenu(message.author.id, 'home'));
+        const menuRow = new ActionRowBuilder().addComponents(buildHelpMenu(message.author.id, 'home', message.id));
         const btnRow = buildHelpButtons(message.author.id, 'home', message.id);
         return message.reply({ embeds: [embed], components: [menuRow, btnRow] });
     }
@@ -412,8 +422,8 @@ async function runHelpInteraction(interaction) {
     // 1. Commande Slash /help
     if (interaction.isChatInputCommand && interaction.isChatInputCommand()) {
         const embed = buildHelpHomeEmbed(interaction.user, botAvatarUrl);
-        const menuRow = new ActionRowBuilder().addComponents(buildHelpMenu(interaction.user.id, 'home'));
-        const btnRow = buildHelpButtons(interaction.user.id, 'home');
+        const menuRow = new ActionRowBuilder().addComponents(buildHelpMenu(interaction.user.id, 'home', ''));
+        const btnRow = buildHelpButtons(interaction.user.id, 'home', '');
         return interaction.reply({ embeds: [embed], components: [menuRow, btnRow] });
     }
 
@@ -430,15 +440,17 @@ async function runHelpInteraction(interaction) {
 
     // 3. Menu déroulant principal (!help)
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_menu_')) {
-        const authorId = interaction.customId.split('_')[2];
+        const parts = interaction.customId.split('_');
+        const authorId = parts[2];
+        const originalMessageId = parts[3] || '';
         if (interaction.user.id !== authorId) {
             return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
         }
 
         const category = interaction.values[0];
         const embed = buildHelpCategoryEmbed(category, interaction.user, botAvatarUrl);
-        const menuRow = new ActionRowBuilder().addComponents(buildHelpMenu(authorId, category));
-        const btnRow = buildHelpButtons(authorId, category);
+        const menuRow = new ActionRowBuilder().addComponents(buildHelpMenu(authorId, category, originalMessageId));
+        const btnRow = buildHelpButtons(authorId, category, originalMessageId);
         return interaction.update({ embeds: [embed], components: [menuRow, btnRow] });
     }
 
@@ -452,7 +464,7 @@ async function runHelpInteraction(interaction) {
         }
 
         const embed = buildHelpHomeEmbed(interaction.user, botAvatarUrl);
-        const menuRow = new ActionRowBuilder().addComponents(buildHelpMenu(authorId, 'home'));
+        const menuRow = new ActionRowBuilder().addComponents(buildHelpMenu(authorId, 'home', originalMessageId));
         const btnRow = buildHelpButtons(authorId, 'home', originalMessageId);
         return interaction.update({ embeds: [embed], components: [menuRow, btnRow] });
     }
