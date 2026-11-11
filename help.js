@@ -120,27 +120,25 @@ function buildHelpHomeEmbed(user, botAvatarUrl = null) {
         .setDescription(
             `Bienvenue sur le guide officiel de **Cacabot** !\n` +
             `Toutes les commandes s'utilisent avec le préfixe **\`!\`** ou directement en commande slash **\`/\`**.\n\n` +
-            `🔒 **Accès aux jeux & salons** :\n` +
-            `Pour accéder aux salons du **Motus**, du **Pendu**, de la **Roulette** et des **Rébus**, pense à récupérer tes rôles dans <#1559082682313474059> ou <#1559324422165373008> !\n\n` +
-            `────────────────────────────────────────\n\n` +
+            `────────────────────────────────────────\n` +
             `### 🧭 Thématiques disponibles\n\n` +
             `🎰 **Roulette & Battle Pass**\n` +
             `-# Casino toutes les 15 min, inventaire, quêtes et 25 paliers mensuels.\n\n` +
-            `────────────────────────────────────────\n\n` +
+            `────────────────────────────────────────\n` +
             `🎮 **Rendez-vous & Jeux Quotidiens**\n` +
             `-# Sessions automatiques : Motus (10h/19h), Rébus (15h) et Pendu (21h).\n\n` +
-            `────────────────────────────────────────\n\n` +
+            `────────────────────────────────────────\n` +
             `👥 **Profils & Vie du Serveur**\n` +
             `-# Fiches membres, podiums d'activité, anniversaires et citations mythiques.\n\n` +
-            `────────────────────────────────────────\n\n` +
+            `────────────────────────────────────────\n` +
             `🎭 **Interactions Sociales**\n` +
-            `-# Actions animées : bisous, câlins, rizz, bagarres et réactions.\n\n` +
-            `────────────────────────────────────────\n\n` +
+            `-# Actions animées : bisous, câlins, rizz, bagarres et réactions.\n` +
+            `────────────────────────────────────────\n` +
             `🔮 **Oracles, Débats & Fun**\n` +
             `-# Horoscope, destin, animal spirituel, dilemmes et pile ou face.\n\n` +
-            `────────────────────────────────────────\n\n` +
+            `────────────────────────────────────────\n` +
             `🛠️ **Utilitaires du Quotidien**\n` +
-            `-# Rappels personnels avec snooze, Pomodoro, météo et YouTube.\n\n` +
+            `-# Rappels personnels avec snooze, Pomodoro, météo et YouTube.\n` +
             `────────────────────────────────────────\n` +
             `-# 💡 Sélectionne une catégorie dans le menu déroulant ci-dessous 👇`
         )
