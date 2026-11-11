@@ -259,6 +259,13 @@ function aJoueALaRoulette(userId) {
     return stats && stats.tirages > 0;
 }
 
+function getYesterdayKey() {
+    const d = new Date();
+    const paris = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    paris.setDate(paris.getDate() - 1);
+    return `${paris.getFullYear()}-${String(paris.getMonth() + 1).padStart(2, '0')}-${String(paris.getDate()).padStart(2, '0')}`;
+}
+
 function getOuCreerProfilBP(userId, autoActif = false) {
     const bpData = bpBridge.getBattlePassData();
     const currentMonth = getMonthKey();
@@ -275,9 +282,9 @@ function getOuCreerProfilBP(userId, autoActif = false) {
 
     let p = bpData.joueurs[userId];
     if (!p) {
-        const estActifParDefaut = autoActif || aJoueALaRoulette(userId);
+        // Actif par défaut pour tout participant du serveur pour ne jamais perdre de progression
         p = {
-            actif: estActifParDefaut,
+            actif: true,
             niveau: 1,
             xp: 0,
             paliersReclames: [],
@@ -287,25 +294,20 @@ function getOuCreerProfilBP(userId, autoActif = false) {
             semaineActuelle: null,
             quetesDuJour: [],
             quetesHebdo: [],
-            notifs: 'desactive', // Alertes à zéro par défaut pour éviter tout MP intrusif
+            notifs: 'desactive', // 0 MP intrusif par défaut
             mpBloques: false
         };
         bpData.joueurs[userId] = p;
     }
 
-    // Sécurité : s'il n'avait pas le champ actif mais a déjà joué à la roulette
-    if (p.actif === undefined) {
-        p.actif = aJoueALaRoulette(userId) || (p.xp > 0) || (p.niveau > 1);
-    }
+    p.actif = true;
 
-    // Reset Quotidien
+    // Reset Quotidien fiable avec heure de Paris
     if (p.dernierJourDate !== today) {
         if (p.dernierJourDate) {
-            const hier = new Date();
-            hier.setDate(hier.getDate() - 1);
-            const hierKey = `${hier.getFullYear()}-${String(hier.getMonth() + 1).padStart(2, '0')}-${String(hier.getDate()).padStart(2, '0')}`;
+            const hierKey = getYesterdayKey();
             if (p.dernierJourStreak !== hierKey && p.dernierJourStreak !== today) {
-                p.streak = 0; // Série brisée
+                p.streak = 0; // Série brisée seulement si hier n'a pas été validé
             }
         }
         p.dernierJourDate = today;
@@ -358,7 +360,110 @@ function getOuCreerProfilBP(userId, autoActif = false) {
         }
     }
 
+    synchroniserQuetesProgression(userId, p);
     return p;
+}
+
+function synchroniserQuetesProgression(userId, p) {
+    if (!p) return;
+    const today = getTodayKey();
+    let modifie = false;
+
+    const actualiserUneQuete = (q, isDaily) => {
+        if (q.terminee) return;
+        const ancienneProg = q.progression || 0;
+
+        if (q.type === 'salons_diff') {
+            q.progression = Math.min(q.objectif, (p.dailySalons || []).length);
+        } else if (q.type === 'salons_diff_hebdo') {
+            q.progression = Math.min(q.objectif, (p.weeklySalons || []).length);
+        } else if (q.type === 'heures_diff') {
+            const h = p.dailyHours || [];
+            if (h.length >= 2 && (Math.max(...h) - Math.min(...h) >= 2)) q.progression = 2;
+            else if (h.length >= 1) q.progression = 1;
+            else q.progression = 0;
+        } else if (q.type === 'message_jours') {
+            q.progression = Math.min(q.objectif, (p.weeklyDays || []).length);
+        } else if (q.type === 'message_matin_jours') {
+            q.progression = Math.min(q.objectif, (p.weeklyMatinDays || []).length);
+        } else if (q.type === 'message_nuit_jours') {
+            q.progression = Math.min(q.objectif, (p.weeklyNuitDays || []).length);
+        } else if (q.type === 'message_regulier') {
+            q.progression = Math.min(q.objectif, (p.weeklyDays15Msgs || []).length);
+        } else if (q.type === 'debatteur_jours') {
+            q.progression = Math.min(q.objectif, (p.weeklyDebatteurDays || []).length);
+        } else if (q.type === 'hh_jours') {
+            q.progression = Math.min(q.objectif, (p.weeklyHH || []).length);
+        } else if (q.type === 'vocal_jours') {
+            q.progression = Math.min(q.objectif, (p.weeklyVocalDays || []).length);
+        } else if (q.type === 'vocal_jours_20') {
+            q.progression = Math.min(q.objectif, (p.weeklyVocal20Days || []).length);
+        } else if (q.type === 'vocal_groupe' && q.id === 'bande_complet') {
+            q.progression = Math.min(q.objectif, (p.weeklyVocalGroupeDays || []).length);
+        } else if (q.type === 'rebus_jours') {
+            q.progression = Math.min(q.objectif, (p.weeklyRebusDays || []).length);
+        } else if (q.type === 'pendu_jours') {
+            q.progression = Math.min(q.objectif, (p.weeklyPenduDays || []).length);
+        } else if (q.type === 'motus_double_session') {
+            if (q.id === 'presence_deux_services') q.progression = Math.min(q.objectif, (p.weeklyDoubleMotusDays || []).length);
+            else q.progression = Math.min(q.objectif, (p.dailyMotusSessions || []).length);
+        } else if (q.type === 'minijeu_part_jours') {
+            q.progression = Math.min(q.objectif, (p.weeklyMotusAndRebusDays || []).length);
+        } else if (q.type === 'grand_chelem_minijeux') {
+            q.progression = Math.min(q.objectif, (p.weeklyGrandChelemMinijeuxDays || []).length);
+        } else if (q.type === 'bonus_diff') {
+            q.progression = Math.min(q.objectif, (p.weeklyBonuses || []).length);
+        } else if (q.type === 'malus_diff') {
+            q.progression = Math.min(q.objectif, (p.weeklyMalusSubis || []).length);
+        } else if (q.type === 'reaction_add') {
+            q.progression = Math.min(q.objectif, (p.dailyReactedMembers || []).length);
+        } else if (q.type === 'streak_hebdo' || q.type === 'streak_hebdo_5') {
+            q.progression = Math.min(q.objectif, p.streak || 0);
+        } else if (q.type === 'bouclier_actif') {
+            const rawB = bpBridge.rouletteBouclierActif?.get(userId);
+            const nbB = typeof rawB === 'number' ? rawB : (rawB ? 1 : 0);
+            if (nbB > 0) q.progression = 1;
+        } else if (q.type === 'message_salon_unique') {
+            const maxDansUnSalon = Math.max(...Object.values(p.dailySalonCounts || {}), 0);
+            q.progression = Math.min(q.objectif, maxDansUnSalon);
+        } else if (q.type === 'quetes_daily_validees') {
+            q.progression = Math.min(q.objectif, p.weeklyDailyCount || 0);
+        }
+
+        if (q.progression !== ancienneProg) modifie = true;
+
+        // Auto-validation immédiate si l'objectif est atteint
+        if (q.progression >= q.objectif && !q.terminee) {
+            q.terminee = true;
+            q.reclamee = true;
+            modifie = true;
+            if (isDaily && p.dernierJourStreak !== today) {
+                p.streak = (p.streak || 0) + 1;
+                p.dernierJourStreak = today;
+                checkStreakRewards(userId, p.streak);
+            }
+            ajouterXpEtMonteeDeNiveau(userId, p, q.xp, q.desc);
+
+            if (isDaily) {
+                p.weeklyDailyCount = (p.weeklyDailyCount || 0) + 1;
+                for (const hq of (p.quetesHebdo || [])) {
+                    if (!hq.terminee && hq.type === 'quetes_daily_validees') {
+                        hq.progression = Math.min(hq.objectif, p.weeklyDailyCount);
+                        if (hq.progression >= hq.objectif) {
+                            hq.terminee = true;
+                            hq.reclamee = true;
+                            ajouterXpEtMonteeDeNiveau(userId, p, hq.xp, hq.desc);
+                        }
+                    }
+                }
+            }
+        }
+    };
+
+    for (const q of (p.quetesDuJour || [])) actualiserUneQuete(q, true);
+    for (const q of (p.quetesHebdo || [])) actualiserUneQuete(q, false);
+
+    if (modifie) bpBridge.demanderSauvegarde();
 }
 
 function getMultiplicateurStreak(streak) {
@@ -541,44 +646,38 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
 
         if (p.dailyMessageCount >= 15) {
             if (!p.weeklyDays15Msgs.includes(today)) p.weeklyDays15Msgs.push(today);
-            typesActifs.add('message_regulier');
         }
+        typesActifs.add('message_regulier');
 
         if (meta.hasCooldown) typesActifs.add('msg_sous_cooldown');
         if (meta.hasCouronne) typesActifs.add('couronne_msg');
         if (meta.muteSurvecu) typesActifs.add('mute_survecu');
 
-        // Suivi des heures distinctes
+        // Suivi des heures distinctes (toujours actif pour afficher 1/2 puis 2/2)
         if (!p.dailyHours.includes(heure)) {
             p.dailyHours.push(heure);
         }
-        if (p.dailyHours.length >= 2) typesActifs.add('heures_diff');
+        typesActifs.add('heures_diff');
 
-        // Suivi des salons distincts (quotidien et hebdo)
-        if (meta.channelId) {
-            if (!p.dailySalons.includes(meta.channelId)) {
-                p.dailySalons.push(meta.channelId);
-            }
-            if (p.dailySalons.length >= 2) typesActifs.add('salons_diff');
+        // Suivi des salons distincts (résolution flexible)
+        const channelId = meta.channelId || meta.channel?.id || (typeof meta === 'string' ? meta : null);
+        if (channelId) {
+            if (!p.dailySalons.includes(channelId)) p.dailySalons.push(channelId);
+            if (!p.weeklySalons.includes(channelId)) p.weeklySalons.push(channelId);
 
-            if (!p.weeklySalons.includes(meta.channelId)) {
-                p.weeklySalons.push(meta.channelId);
-            }
-            if (p.weeklySalons.length >= 4) typesActifs.add('salons_diff_hebdo');
-
-            p.dailySalonCounts[meta.channelId] = (p.dailySalonCounts[meta.channelId] || 0) + 1;
-            if (p.dailySalonCounts[meta.channelId] >= 15) typesActifs.add('message_salon_unique');
-            if (p.dailySalonCounts[meta.channelId] >= 25) {
-                if (!p.weeklyDebatteurDays.includes(today)) p.weeklyDebatteurDays.push(today);
-                typesActifs.add('debatteur_jours');
+            p.dailySalonCounts[channelId] = (p.dailySalonCounts[channelId] || 0) + 1;
+            if (p.dailySalonCounts[channelId] >= 25 && !p.weeklyDebatteurDays.includes(today)) {
+                p.weeklyDebatteurDays.push(today);
             }
         }
+        typesActifs.add('salons_diff');
+        typesActifs.add('salons_diff_hebdo');
+        typesActifs.add('message_salon_unique');
+        typesActifs.add('debatteur_jours');
 
-        // Suivi des jours actifs dans la semaine
-        if (!p.weeklyDays.includes(today)) {
-            p.weeklyDays.push(today);
-            typesActifs.add('message_jours');
-        }
+        // Suivi des jours actifs
+        if (!p.weeklyDays.includes(today)) p.weeklyDays.push(today);
+        typesActifs.add('message_jours');
     }
 
     // 2. Déclencheurs Roulette & Pity
@@ -587,20 +686,23 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
         if (meta.sansEffetActif) typesActifs.add('roulette_neutre');
         if (meta.malusCumules >= 2) typesActifs.add('roll_sous_malus_cumules');
 
-        if (meta.isHappyHour && !p.weeklyHH.includes(today)) {
-            p.weeklyHH.push(today);
-            if (p.weeklyHH.length >= 3) typesActifs.add('hh_jours');
+        if (meta.isHappyHour) {
+            typesActifs.add('happy_hour_roll');
+            if (!p.weeklyHH.includes(today)) p.weeklyHH.push(today);
         }
+        typesActifs.add('hh_jours');
     }
 
     if (type === 'bonus_diff') {
         const bId = meta.bonusId || meta.outcomeId || ('bonus_' + Date.now());
         if (!p.weeklyBonuses.includes(bId)) p.weeklyBonuses.push(bId);
+        typesActifs.add('bonus_diff');
     }
 
     if (type === 'malus_diff') {
         const mId = meta.malusId || meta.outcomeId || ('malus_' + Date.now());
         if (!p.weeklyMalusSubis.includes(mId)) p.weeklyMalusSubis.push(mId);
+        typesActifs.add('malus_diff');
     }
 
     // 3. Déclencheurs Vocal & Endurance
@@ -615,22 +717,21 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
         if (heure >= 14 && heure < 18) typesActifs.add('vocal_aprem');
         if (dayOfWeek === 0 || dayOfWeek === 6) typesActifs.add('vocal_weekend');
 
-        if (meta.groupeCount >= 3) {
+        const nbPersonnes = meta.groupeCount || (typeof meta === 'number' ? meta : 0);
+        if (nbPersonnes >= 3) {
             typesActifs.add('vocal_groupe');
             if (!p.weeklyVocalGroupeDays.includes(today)) {
                 p.weeklyVocalGroupeDays.push(today);
             }
         }
 
-        if (!p.weeklyVocalDays.includes(today)) {
-            p.weeklyVocalDays.push(today);
-            if (p.weeklyVocalDays.length >= 3) typesActifs.add('vocal_jours');
-        }
+        if (!p.weeklyVocalDays.includes(today)) p.weeklyVocalDays.push(today);
+        typesActifs.add('vocal_jours');
 
-        if (p.dailyVocalMinutes >= 20) {
-            if (!p.weeklyVocal20Days.includes(today)) p.weeklyVocal20Days.push(today);
-            typesActifs.add('vocal_jours_20');
+        if (p.dailyVocalMinutes >= 20 && !p.weeklyVocal20Days.includes(today)) {
+            p.weeklyVocal20Days.push(today);
         }
+        typesActifs.add('vocal_jours_20');
     }
 
     // 4. Déclencheurs Mini-Jeux combinés
@@ -639,21 +740,17 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
         const sessionCourante = heure >= 18 ? '19h' : '10h';
         if (!p.dailyMotusSessions.includes(sessionCourante)) {
             p.dailyMotusSessions.push(sessionCourante);
-            if (p.dailyMotusSessions.length >= 2) {
-                typesActifs.add('motus_double_session');
-                if (!p.weeklyDoubleMotusDays.includes(today)) {
-                    p.weeklyDoubleMotusDays.push(today);
-                }
+            if (p.dailyMotusSessions.length >= 2 && !p.weeklyDoubleMotusDays.includes(today)) {
+                p.weeklyDoubleMotusDays.push(today);
             }
         }
+        typesActifs.add('motus_double_session');
     }
 
     if (type === 'rebus_part') {
         if (!p.dailyMinigames.includes('rebus')) p.dailyMinigames.push('rebus');
-        if (!p.weeklyRebusDays.includes(today)) {
-            p.weeklyRebusDays.push(today);
-            if (p.weeklyRebusDays.length >= 3) typesActifs.add('rebus_jours');
-        }
+        if (!p.weeklyRebusDays.includes(today)) p.weeklyRebusDays.push(today);
+        typesActifs.add('rebus_jours');
     }
 
     if (type === 'pendu_essai') {
@@ -662,6 +759,7 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
 
     if (type === 'pendu_jours') {
         if (!p.weeklyPenduDays.includes(today)) p.weeklyPenduDays.push(today);
+        typesActifs.add('pendu_jours');
     }
 
     // Combinaisons mini-jeux hebdos
@@ -678,12 +776,16 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
     // 5. Réactions
     if (type === 'reaction_add') {
         const target = meta.targetAuthorId || ('target_' + Math.random());
-        if (!p.dailyReactedMembers.includes(target)) p.dailyReactedMembers.push(target);
+        if (target !== userId && !p.dailyReactedMembers.includes(target)) {
+            p.dailyReactedMembers.push(target);
+        }
+        typesActifs.add('reaction_add');
     }
 
-    // 6. Streaks Hebdos & Quotidiennes
-    if (p.streak >= 7) typesActifs.add('streak_hebdo');
-    if (p.streak >= 5) typesActifs.add('streak_hebdo_5');
+    // 6. Streaks Hebdos & Boucliers
+    typesActifs.add('streak_hebdo');
+    typesActifs.add('streak_hebdo_5');
+    typesActifs.add('bouclier_actif');
 
     const validerQuete = (q, amt) => {
         // Pour les quêtes de comptage d'ensembles uniques (salons, jours, streaks, etc.)
@@ -871,6 +973,7 @@ function getProchainPalierMajeurText(niveau) {
 
 function buildBPQuestsEmbed(membre) {
     const p = getOuCreerProfilBP(membre.id);
+    synchroniserQuetesProgression(membre.id, p);
 
     const quotidiennesLignes = p.quetesDuJour.map(q => {
         const icon = q.terminee ? '✅' : '⏳';

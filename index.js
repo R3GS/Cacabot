@@ -866,9 +866,8 @@ async function disableButtons(interaction) {
 
         // 1. Quête messages simples avec métadonnées de salon et d'état
         if (message.content.trim().length >= 4 && !message.content.startsWith('!')) {
-            const hasCooldown = (ROULETTE_ETATS.cooldowns.get(uid) > Date.now());
-            const hasCouronne = (ROULETTE_ETATS.couronne.get(uid) > Date.now());
-
+            const hasCooldown = (ROULETTE_ETATS.cooldowns?.get(uid) > Date.now());
+            const hasCouronne = (ROULETTE_ETATS.couronne?.get(uid) > Date.now());
             trackBattlePassProgress(uid, 'message', 1, {
                 channelId: message.channel.id,
                 hasCooldown,

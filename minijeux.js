@@ -1480,6 +1480,7 @@ async function handleRebusMessage(message, response, client, helpers) {
     // 1. Détection des réponses en cours dans le salon Rébus
     if (message.channel.id === REBUS_CHANNEL_ID && rebusSession.active && rebusSession.currentItem && !message.content.startsWith('!')) {
         if (await verifierReponseRebus(message)) return true;
+        minijeuxBridge.trackBattlePassProgress?.(message.author.id, 'rebus_part', 1);
 
         rebusSession.compteurMessages = (rebusSession.compteurMessages || 0) + 1;
         if (rebusSession.compteurMessages >= 15) {

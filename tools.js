@@ -79,8 +79,8 @@ function getCommitCount() {
 // =========================
 //        RAPPELS
 // =========================
-function scheduleRappel(channelId, targetId, texte, ms) {
-    const id = `${targetId}_${Date.now()}`;
+function scheduleRappel(channelId, targetId, texte, ms, imageUrl = null) {
+    const id = `${targetId}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     const triggerAt = Date.now() + ms;
 
     const timeout = setTimeout(async () => {
@@ -95,18 +95,83 @@ function scheduleRappel(channelId, targetId, texte, ms) {
                 .setStyle(ButtonStyle.Secondary)
         );
 
-        const sent = await channel.send({
+        const payload = {
             content: `⏰ <@${targetId}> ! **Rappel :** ${texte}`,
             components: [row]
-        }).catch(() => null);
+        };
+
+        if (imageUrl) {
+            const embed = new EmbedBuilder()
+                .setColor(0x5865f2)
+                .setTitle('⏰ Ton Rappel')
+                .setDescription(texte && texte !== '*(Image ci-jointe)*' ? texte : null)
+                .setImage(imageUrl)
+                .setFooter({ text: 'Cacabot Rappels' })
+                .setTimestamp();
+            payload.embeds = [embed];
+        }
+
+        const sent = await channel.send(payload).catch(() => null);
 
         if (sent) {
-            rappelReports.set(sent.id, { channelId, targetId, texte, sentAt: Date.now() });
+            rappelReports.set(sent.id, { channelId, targetId, texte, imageUrl, sentAt: Date.now() });
             setTimeout(() => rappelReports.delete(sent.id), 24 * 60 * 60 * 1000);
         }
     }, ms);
 
-    pendingRappels.set(id, { targetId, texte, channelId, triggerAt, timeout });
+    pendingRappels.set(id, { id, targetId, texte, channelId, triggerAt, timeout, imageUrl });
+}
+
+function buildRappelsListPayload(userId) {
+    const mine = [...pendingRappels.entries()].filter(([, r]) => r.targetId === userId);
+    if (mine.length === 0) {
+        const embedVide = new EmbedBuilder()
+            .setColor(0x5865f2)
+            .setTitle('⏰ Tes rappels')
+            .setDescription("Tu n'as aucun rappel en attente pour le moment !");
+        return { embeds: [embedVide], components: [] };
+    }
+
+    const fields = mine.sort((a, b) => a[1].triggerAt - b[1].triggerAt).slice(0, 25).map(([, r]) => {
+        const remainingMs = r.triggerAt - Date.now();
+        const mins = Math.max(0, Math.floor(remainingMs / 60000));
+        const secs = Math.max(0, Math.floor((remainingMs % 60000) / 1000));
+        const nomRappel = (r.texte || 'Image').slice(0, 250);
+        const imgIcon = r.imageUrl ? ' 🖼️' : '';
+        return { 
+            name: `${nomRappel}${imgIcon}`, 
+            value: mins > 0 ? `dans **${mins}min ${secs}s** (<t:${Math.floor(r.triggerAt / 1000)}:R>)` : `dans **${secs}s**`, 
+            inline: false 
+        };
+    });
+
+    const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle(`⏰ Tes rappels (${mine.length})`)
+        .addFields(fields);
+
+    if (mine.length > 25) {
+        embed.setFooter({ text: `Affichage des 25 premiers rappels sur ${mine.length}.` });
+    }
+
+    const options = mine.slice(0, 25).map(([id, r]) => {
+        const remainingMs = r.triggerAt - Date.now();
+        const mins = Math.max(0, Math.floor(remainingMs / 60000));
+        const libelle = (r.texte || 'Image').slice(0, 80);
+        return {
+            label: `❌ ${libelle}`.slice(0, 100),
+            description: mins > 0 ? `Expire dans environ ${mins} min` : 'Expire sous peu',
+            value: id
+        };
+    });
+
+    const menu = new StringSelectMenuBuilder()
+        .setCustomId(`rappel_delete_menu_${userId}`)
+        .setPlaceholder('🗑️ Choisir un rappel à supprimer...')
+        .addOptions(options);
+
+    const row = new ActionRowBuilder().addComponents(menu);
+    return { embeds: [embed], components: [row] };
 }
 
 // =========================
@@ -344,26 +409,8 @@ async function handleToolsMessage(message, response, client) {
         const sub = args[1]?.toLowerCase();
 
         if (sub === 'list') {
-            const mine = [...pendingRappels.entries()].filter(([, r]) => r.targetId === message.author.id);
-            if (mine.length === 0) return message.reply("Tu n'as aucun rappel en attente !");
-
-            const fields = mine.sort((a, b) => a[1].triggerAt - b[1].triggerAt).slice(0, 25).map(([, r]) => {
-                const remainingMs = r.triggerAt - Date.now();
-                const mins = Math.max(0, Math.floor(remainingMs / 60000));
-                const secs = Math.max(0, Math.floor((remainingMs % 60000) / 1000));
-                return { name: r.texte.slice(0, 256), value: mins > 0 ? `dans ${mins}min ${secs}s` : `dans ${secs}s`, inline: false };
-            });
-
-            const embed = new EmbedBuilder()
-                .setColor(0x5865f2)
-                .setTitle('⏰ Tes rappels')
-                .addFields(fields);
-
-            if (mine.length > 25) {
-                embed.setFooter({ text: `Affichage des 25 premiers rappels sur ${mine.length}.` });
-            }
-
-            return message.reply({ embeds: [embed] });
+            const payload = buildRappelsListPayload(message.author.id);
+            return message.reply({ embeds: payload.embeds, components: payload.components });
         }
 
         if (sub === 'remove') {
@@ -377,8 +424,27 @@ async function handleToolsMessage(message, response, client) {
             return message.reply(`🗑️ Rappel supprimé : **${match[1].texte}**`);
         }
 
+        // Récupération de l'image (soit jointe, soit issue du message cité)
+        let imageUrl = message.attachments.first()?.url || null;
+        let texteCible = null;
+
+        if (message.reference?.messageId) {
+            const cibleMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+            if (cibleMsg) {
+                if (!imageUrl && cibleMsg.attachments.size > 0) {
+                    imageUrl = cibleMsg.attachments.first().url;
+                }
+                if (!imageUrl && cibleMsg.embeds.length > 0 && cibleMsg.embeds[0].image) {
+                    imageUrl = cibleMsg.embeds[0].image.url;
+                }
+                if (cibleMsg.content) {
+                    texteCible = cibleMsg.content;
+                }
+            }
+        }
+
         const isEpsys = message.author.id === EPSYS_ID;
-        const looksLikeId = args[1] && /^\d{17,19}$/.test(args[1]);
+        const looksLikeId = args[1] && /^\d{17,20}$/.test(args[1]);
         let targetId = message.author.id, timeStr, texte;
 
         if (looksLikeId && isEpsys) {
@@ -398,11 +464,30 @@ async function handleToolsMessage(message, response, client) {
         const ms = valeurTemps * (uniteTemps === 'min' ? 60 * 1000 : uniteTemps === 'h' ? 60 * 60 * 1000 : 1000);
 
         if (!Number.isSafeInteger(ms) || ms <= 0 || ms > 24 * 60 * 60 * 1000) return message.reply('Durée invalide (maximum 24h) !');
-        if (!texte?.trim()) return message.reply('Ajoute le texte du rappel. Exemple : `!rappel 10min sortir le gâteau`');
 
-        texte = texte.trim();
-        await message.reply(`⏰ Rappel enregistré ! Je ping <@${targetId}> dans **${timeStr}**.`);
-        scheduleRappel(message.channel.id, targetId, texte, ms);
+        texte = texte?.trim();
+        if (!texte && !imageUrl) {
+            if (texteCible) {
+                texte = texteCible.slice(0, 200);
+            } else {
+                return message.reply('Ajoute le texte ou une image pour ton rappel. Exemple : `!rappel 10min sortir le gâteau`');
+            }
+        } else if (!texte && imageUrl) {
+            texte = texteCible ? `« ${texteCible.slice(0, 150)} »` : '*(Image ci-jointe)*';
+        }
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`rappel_viewlist_${targetId}`)
+                .setLabel('📋 Mes rappels')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        await message.reply({
+            content: `⏰ Rappel enregistré ! Je ping <@${targetId}> dans **${timeStr}**.${imageUrl ? ' 🖼️' : ''}`,
+            components: [row]
+        });
+        scheduleRappel(message.channel.id, targetId, texte, ms, imageUrl);
         return true;
     }
 
@@ -777,15 +862,8 @@ async function handleToolsSlash(interaction, client) {
     if (commandName === 'rappel') {
         const sub = interaction.options.getSubcommand();
         if (sub === 'list') {
-            const mine = [...pendingRappels.entries()].filter(([, r]) => r.targetId === interaction.user.id);
-            if (mine.length === 0) return interaction.reply({ content: "Aucun rappel en attente !", ephemeral: true });
-            const fields = mine.sort((a, b) => a[1].triggerAt - b[1].triggerAt).slice(0, 25).map(([, r]) => {
-                const rem = r.triggerAt - Date.now();
-                const m = Math.max(0, Math.floor(rem / 60000));
-                const s = Math.max(0, Math.floor((rem % 60000) / 1000));
-                return { name: r.texte, value: m > 0 ? `dans ${m}min ${s}s` : `dans ${s}s`, inline: false };
-            });
-            return interaction.reply({ embeds: [new EmbedBuilder().setColor(0x5865f2).setTitle('⏰ Tes rappels').addFields(fields)] });
+            const payload = buildRappelsListPayload(interaction.user.id);
+            return interaction.reply({ embeds: payload.embeds, components: payload.components });
         }
         if (sub === 'remove') {
             const query = interaction.options.getString('nom').trim().toLowerCase();
@@ -915,7 +993,7 @@ async function handleToolsInteraction(interaction, client) {
         return interaction.update({ content: 'Choisis quand le rappel sera renvoyé :', components: [new ActionRowBuilder().addComponents(delayMenu)] });
     }
 
-    // Menu Délai Rappel
+    // Menu Délai Rappel (Reporter)
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('rappel_delay_')) {
         const targetId = interaction.customId.replace('rappel_delay_', '');
         if (interaction.user.id !== targetId) return interaction.reply({ content: "Ce rappel n'est pas pour toi !", ephemeral: true });
@@ -928,7 +1006,41 @@ async function handleToolsInteraction(interaction, client) {
         else if (value.endsWith('h')) ms = parseInt(value) * 60 * 60 * 1000;
 
         await interaction.update({ content: `⏰ Rappel reporté dans **${value}**.`, components: [] });
-        scheduleRappel(data.channelId, targetId, data.texte, ms);
+        scheduleRappel(data.channelId, targetId, data.texte, ms, data.imageUrl);
+        return true;
+    }
+
+    // Bouton Voir la liste des rappels (modifie le message sur place pour limiter le spam)
+    if (interaction.isButton() && interaction.customId.startsWith('rappel_viewlist_')) {
+        const targetId = interaction.customId.replace('rappel_viewlist_', '');
+        if (interaction.user.id !== targetId) {
+            return interaction.reply({ content: "Ce n'est pas ta liste de rappels !", ephemeral: true });
+        }
+        const payload = buildRappelsListPayload(targetId);
+        await interaction.update({ content: null, embeds: payload.embeds, components: payload.components });
+        return true;
+    }
+
+    // Menu contextuel de suppression d'un rappel
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('rappel_delete_menu_')) {
+        const targetId = interaction.customId.replace('rappel_delete_menu_', '');
+        if (interaction.user.id !== targetId) {
+            return interaction.reply({ content: "Ce n'est pas ta liste de rappels !", ephemeral: true });
+        }
+
+        const idToDelete = interaction.values[0];
+        const match = pendingRappels.get(idToDelete);
+        if (match) {
+            clearTimeout(match.timeout);
+            pendingRappels.delete(idToDelete);
+        }
+
+        const payload = buildRappelsListPayload(targetId);
+        await interaction.update({ embeds: payload.embeds, components: payload.components });
+        await interaction.followUp({ 
+            content: `🗑️ Rappel **${match ? match.texte : 'sélectionné'}** annulé avec succès !`, 
+            ephemeral: true 
+        });
         return true;
     }
 
@@ -1051,7 +1163,7 @@ function restaurerRappels() {
         if (restant <= 0) {
             pendingRappels.delete(id);
         } else {
-            scheduleRappel(r.channelId, r.targetId, r.texte, restant);
+            scheduleRappel(r.channelId, r.targetId, r.texte, restant, r.imageUrl);
         }
     }
 }

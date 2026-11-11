@@ -424,8 +424,11 @@ let bridge = {
     askDisambiguation: () => {}
 };
 
+let rouletteClient = null;
+
 function initRouletteBridge(b) {
     bridge = { ...bridge, ...b };
+    if (b.client) rouletteClient = b.client;
     if (b.suggestionsData) ROULETTE_ETATS.suggestions = b.suggestionsData;
 }
 
@@ -500,6 +503,16 @@ async function deverrouillerSucces(userId, achId, channel) {
     }
     if (userAchs[achId]) return;
 
+    // Résolution garantie du salon pour ne jamais rater l'affichage d'un succès
+    let targetChannel = channel;
+    if (!targetChannel) {
+        const client = rouletteClient || bridge?.client;
+        targetChannel = client?.channels?.cache?.get(ROULETTE_SALON_ID);
+        if (!targetChannel && client?.channels?.fetch) {
+            targetChannel = await client.channels.fetch(ROULETTE_SALON_ID).catch(() => null);
+        }
+    }
+
     userAchs[achId] = Date.now();
     rouletteAchievements.set(userId, userAchs);
     bridge.demanderSauvegarde();
@@ -517,7 +530,7 @@ async function deverrouillerSucces(userId, achId, channel) {
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`rlt_achs_${userId}_0_${userId}`).setLabel('🎖️ Succès').setStyle(ButtonStyle.Secondary)
     );
-    await channel?.send({ 
+    await targetChannel?.send({ 
         embeds: [embed], 
         components: [row],
         flags: [MessageFlags.SuppressNotifications]
@@ -935,7 +948,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'bonus-coup-triple': {
             rouletteCooldowns.delete(member.id);
             const chargesActuelles = rouletteCoupTripleCharges.get(member.id) || 0;
-            const totalCharges = chargesActuelles + 2;
+            const totalCharges = chargesActuelles + 3;
             rouletteCoupTripleCharges.set(member.id, totalCharges);
             return `🎰 **${auteurNom}** décroche le **COUP TRIPLE** ! **3 tirages supplémentaires** immédiats et sans aucun cooldown (${totalCharges} en réserve) !`;
         }
@@ -2150,10 +2163,9 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     }
     const auteurNom = membre?.displayName ?? 'Quelqu\'un';
 
+    if (client) rouletteClient = client;
     const pityAvant = roulettePity.get(authorId) ?? { malus: 0, nuls: 0 };
-    if (pityAvant.malus >= ROULETTE_PITY_MALUS || pityAvant.nuls >= ROULETTE_PITY_NULS) {
-        deverrouillerSucces(authorId, 'le-sauvetage', channel);
-    }
+    const estPityActive = (pityAvant.malus >= ROULETTE_PITY_MALUS || pityAvant.nuls >= ROULETTE_PITY_NULS);
 
     const outcomeId = tirerRoulette(authorId, guild?.id);
 
@@ -2220,6 +2232,10 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     verifierRoleGamblingAddict(membre).catch(() => {});
 
     if (entryTiree?.type === 'bonus') {
+        // Le succès Sauvetage ne se déclenche que si le bonus a RÉELLEMENT été sauvé par la pity
+        if (estPityActive) {
+            deverrouillerSucces(authorId, 'le-sauvetage', channel);
+        }
         if (bridge.trackBattlePassProgress) {
             bridge.trackBattlePassProgress(authorId, 'bonus_gagne', 1);
             bridge.trackBattlePassProgress(authorId, 'bonus_diff', 1);
@@ -2371,25 +2387,42 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         }).catch(() => {});
     }
 
-    const tTransfo = rouletteTransfos.get(cible.id);
-    if (tTransfo?.boomer && tTransfo?.bebe && Date.now() < tTransfo.boomer && Date.now() < tTransfo.bebe) {
-        deverrouillerSucces(cible.id, 'crise-quarantaine', channel);
+    // Crise de la quarantaine : vérifié uniquement si le tirage vient d'ajouter le mode boomer ou bébé
+    if (outcomeId === 'malus-boomer' || outcomeId === 'malus-bebe') {
+        const tTransfo = rouletteTransfos.get(cible.id);
+        if (tTransfo?.boomer && tTransfo?.bebe && Date.now() < tTransfo.boomer && Date.now() < tTransfo.bebe) {
+            deverrouillerSucces(cible.id, 'crise-quarantaine', channel);
+        }
     }
+
     if (texte.includes('Miracle !')) {
         deverrouillerSucces(cible.id, 'pharmacien', channel);
         bridge.trackBattlePassProgress?.(cible.id, 'contre_poison', 1);
     }
 
-    const nowCheck = Date.now();
-    let malusTexteCumules = 0;
-    if (rouletteUwuUntil.has(cible.id) && nowCheck < rouletteUwuUntil.get(cible.id)) malusTexteCumules++;
-    if (rouletteLettreInterdite.has(cible.id) && nowCheck < rouletteLettreInterdite.get(cible.id).until) malusTexteCumules++;
-    if (rouletteEmojiUntil.has(cible.id) && nowCheck < rouletteEmojiUntil.get(cible.id)) malusTexteCumules++;
-    if (rouletteLeetUntil.has(cible.id) && nowCheck < rouletteLeetUntil.get(cible.id)) malusTexteCumules++;
-    for (const fin of Object.values(rouletteTransfos.get(cible.id) ?? {})) {
-        if (nowCheck < fin) malusTexteCumules++;
+    // L'Incompréhensible : vérifié UNIQUEMENT si le tirage actuel est un malus textuel
+    const estMalusTexte = [
+        'malus-boomer', 'malus-bebe', 'malus-uwu', 'malus-emoji', 'malus-leet',
+        'malus-chuchotement', 'malus-majuscules', 'malus-caps', 'malus-sans-voyelle',
+        'malus-sans-consonne', 'malus-sans-e', 'malus-question-existencielle',
+        'malus-existentiel', 'malus-accent-quebecois', 'malus-verlan', 'malus-alexandrin',
+        'malus-rime-en-a', 'malus-sans-espace', 'malus-aboiement', 'malus-miaou',
+        'malus-perroquet', 'malus-latin', 'malus-linkedin', 'malus-echo', 'malus-censure',
+        'malus-mots-melanges', 'malus-lettres-melangees'
+    ].includes(outcomeId);
+
+    if (estMalusTexte) {
+        const nowCheck = Date.now();
+        let malusTexteCumules = 0;
+        if (rouletteUwuUntil.has(cible.id) && nowCheck < rouletteUwuUntil.get(cible.id)) malusTexteCumules++;
+        if (rouletteLettreInterdite.has(cible.id) && nowCheck < rouletteLettreInterdite.get(cible.id).until) malusTexteCumules++;
+        if (rouletteEmojiUntil.has(cible.id) && nowCheck < rouletteEmojiUntil.get(cible.id)) malusTexteCumules++;
+        if (rouletteLeetUntil.has(cible.id) && nowCheck < rouletteLeetUntil.get(cible.id)) malusTexteCumules++;
+        for (const fin of Object.values(rouletteTransfos.get(cible.id) ?? {})) {
+            if (nowCheck < fin) malusTexteCumules++;
+        }
+        if (malusTexteCumules >= 3) deverrouillerSucces(cible.id, 'incomprehensible', channel);
     }
-    if (malusTexteCumules >= 3) deverrouillerSucces(cible.id, 'incomprehensible', channel);
 
     if (outcomeId === 'bonus-coup-triple') {
         rouletteCoupTripleScore.set(authorId, 0);
@@ -3953,10 +3986,12 @@ async function handleRouletteButton(interaction, client) {
         if (itemChoisi === 'bouclier_1') {
             const tot = (rouletteBouclierActif.get(targetUserId) || 0) + 1;
             rouletteBouclierActif.set(targetUserId, tot);
+            if (tot >= 10) deverrouillerSucces(targetUserId, 'forteresse', interaction.channel);
             messageConfirmation = `🛡️ **BOUCLIER ACTIVÉ !** +1 charge de bouclier ajoutée (${tot} en réserve) !`;
         } else if (itemChoisi === 'bouclier_5') {
             const tot = (rouletteBouclierActif.get(targetUserId) || 0) + 5;
             rouletteBouclierActif.set(targetUserId, tot);
+            if (tot >= 10) deverrouillerSucces(targetUserId, 'forteresse', interaction.channel);
             messageConfirmation = `🔰 **PACK DÉFENSE ACTIVÉ !** +5 charges de bouclier ajoutées (${tot} en réserve) !`;
         } else if (itemChoisi === 'freeRoll1Min') {
             rouletteFreeRollUntil.set(targetUserId, Date.now() + 60 * 1000);
@@ -3992,11 +4027,12 @@ async function handleRouletteButton(interaction, client) {
         } else if (itemChoisi === 'coupTriple') {
             rouletteCooldowns.delete(targetUserId);
             const actuelles = rouletteCoupTripleCharges.get(targetUserId) || 0;
-            rouletteCoupTripleCharges.set(targetUserId, actuelles + 2);
+            rouletteCoupTripleCharges.set(targetUserId, actuelles + 3);
             messageConfirmation = `🎰 **COUP TRIPLE ACTIVÉ !** 3 tirages immédiats sans aucun cooldown ajoutés !`;
         } else if (itemChoisi === 'superBouclier') {
             const tot = (rouletteBouclierActif.get(targetUserId) || 0) + 3;
             rouletteBouclierActif.set(targetUserId, tot);
+            if (tot >= 10) deverrouillerSucces(targetUserId, 'forteresse', interaction.channel);
             messageConfirmation = `🔰 **SUPER BOUCLIER ACTIVÉ !** +3 charges de bouclier ajoutées (${tot} en réserve) !`;
         } else if (itemChoisi === 'redirectChoix5') {
             const tot = (rouletteRedirectCharges.get(targetUserId) || 0) + 5;
