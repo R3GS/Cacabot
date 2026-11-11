@@ -113,172 +113,201 @@ function buildHelpxCategorieEmbed(categorie) {
 
 function buildHelpHomeEmbed(user, botAvatarUrl = null) {
     const displayName = user?.displayName || user?.username || 'Membre';
-    const embed = new EmbedBuilder()
+    return new EmbedBuilder()
         .setColor(0x5865f2)
-        .setTitle('💩 Cacabot — Guide des commandes')
+        .setAuthor({ name: 'Cacabot • Guide de Regaïa', iconURL: botAvatarUrl || undefined })
+        .setTitle('💩 Guide des Commandes & Fonctionnalités')
         .setDescription(
-            `> *Bienvenue sur le guide de **Cacabot**, le bot compagnon de **Regaïa** !*\n` +
-            `> *Toutes les commandes fonctionnent avec le préfixe \`!\` ou en slash \`/\`.*\n\n` +
-            `### 🧭 Que souhaites-tu faire ?\n` +
-            `Sélectionne une thématique dans le **menu déroulant ci-dessous** pour afficher ses commandes et astuces 👇\n\n` +
-            `-# 💡 Tu peux naviguer librement d'une page à l'autre ou fermer ce guide avec 🗑️.`
+            `Bienvenue sur le guide de **Cacabot**, le bot compagnon de **Regaïa** !\n` +
+            `Toutes les commandes fonctionnent avec le préfixe **\`!\`** ou en commande slash **\`/\`**.\n\n` +
+            `### 🧭 Choisis une thématique dans le menu déroulant :\n` +
+            `🎰 **Roulette & Battle Pass** — *Casino, inventaire, bonus et 25 paliers*\n` +
+            `🎮 **Rendez-vous & Jeux** — *Motus (10h/19h), Rébus (15h), Pendu (21h)*\n` +
+            `👥 **Profils & Vie du Serveur** — *Fiches, classements, anniversaires, citations*\n` +
+            `🎭 **Interactions Sociales** — *Actions RP, câlins, baffes, rizz et drama*\n` +
+            `🔮 **Oracles, Débats & Fun** — *Horoscope, destin, animal spirituel, dilemmes*\n` +
+            `🛠️ **Utilitaires du Quotidien** — *Rappels (avec snooze), Pomodoro, météo, YouTube*\n\n` +
+            `-# 💡 Sélectionne une catégorie ci-dessous pour ouvrir ses commandes 👇`
         )
         .setFooter({ text: `Regaïa • Demandé par ${displayName}` });
-
-    if (botAvatarUrl) embed.setThumbnail(botAvatarUrl);
-    return embed;
 }
 
 function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
     const displayName = user?.displayName || user?.username || 'Membre';
-    const embed = new EmbedBuilder().setFooter({ text: `Regaïa • Demandé par ${displayName}` });
-    if (botAvatarUrl) embed.setThumbnail(botAvatarUrl);
+    const embed = new EmbedBuilder()
+        .setAuthor({ name: 'Cacabot • Guide de Regaïa', iconURL: botAvatarUrl || undefined })
+        .setFooter({ text: `Regaïa • Demandé par ${displayName}` });
 
-    if (category === 'minijeux') {
-        return embed
-            .setColor(0x2ecc71)
-            .setTitle('🎮 Mini-Jeux Quotidiens')
-            .setDescription('> *Des rendez-vous à heures fixes chaque jour sur Regaïa pour faire travailler tes méninges !*')
-            .addFields(
-                {
-                    name: '🟩 Le Motus • 10h00 & 19h00',
-                    value:
-                        '> **`!motus [mot]`**\n' +
-                        '-# ↳ 6 lettres à 10h, 7 lettres à 19h. Propose ton mot dans le salon de jeu !\n' +
-                        '📊 Stats : `!motustats` • 🏆 Podium : `!motustop`'
-                },
-                {
-                    name: '🧩 Le Rébus Regaïen • 15h00',
-                    value:
-                        '> **`!rebus [réponse]`**\n' +
-                        '-# ↳ 5 manches chronométrées de 5 minutes avec énigmes visuelles.\n' +
-                        '📊 Stats : `!rebusstats` • 🏆 Podium : `!rebustop`'
-                },
-                {
-                    name: '🪢 Le Pendu Quotidien • 21h00',
-                    value:
-                        '> **`!pendu [lettre ou mot]`**\n' +
-                        '-# ↳ 3 essais max par joueur pour deviner le mot secret de 7 lettres.\n' +
-                        '📊 Stats : `!pendustats` • 🏆 Podium : `!pendutop`'
-                }
-            );
-    }
-
+    // 1. ROULETTE & BATTLE PASS
     if (category === 'roulette') {
         return embed
             .setColor(0xf1c40f)
             .setTitle('🎰 Roulette & Battle Pass')
-            .setDescription('> *Tente ta chance au casino de Regaïa et fais monter ton pass de combat mensuel !*')
+            .setDescription('Le cœur du divertissement et de la progression communautaire sur Regaïa.')
             .addFields(
                 {
                     name: '🎲 La Roulette Regaïenne',
                     value:
-                        '> **`!rlt`** *(alias: `!roulette`)*\n' +
-                        '-# ⏱️ Cooldown : 15 min • Réduit à **5 min en Happy Hour (20h)** !\n' +
-                        '🎒 **`!rlt claim`** — Inventaire (boucliers, relances & récompenses)\n' +
-                        '✨ **`!rlt state`** — Consulter tes bonus, malus et transformations actives\n' +
-                        '📊 **`!rlt stats [@membre]`** & 🏆 **`!rlttop`** — Bilan et Panthéon des succès'
+                        '**`!rlt`** *(ou `!roulette`)* — Tente ta chance toutes les 15 min\n' +
+                        '-# ↳ Réduit à **5 min en Happy Hour (20h)** ! Plein d\'effets et malus loufoques.\n' +
+                        '🎒 **`!rlt claim`** — Inventaire (boucliers, relances et récompenses stockées)\n' +
+                        '✨ **`!rlt state`** — Consulter tes transformations et effets actifs\n' +
+                        '📊 **`!rlt stats [@membre]`** — Bilan complet des tirages (gains, pertes, nuls)\n' +
+                        '🏆 **`!rlttop`** — Le Panthéon des chasseurs de succès'
                 },
                 {
                     name: '🎫 Le Battle Pass Mensuel',
                     value:
-                        '> **`!bp`** *(alias: `!pass`)*\n' +
-                        '-# ↳ Quêtes quotidiennes & hebdomadaires, 25 paliers de récompenses à débloquer.\n' +
-                        '🎁 Bouton **Tout récupérer** disponible directement sous le pass pour claim tes paliers d\'un coup !'
+                        '**`!bp`** *(ou `!pass`)* — Consulter tes quêtes de la saison et tes paliers\n' +
+                        '-# ↳ Quêtes quotidiennes et hebdos pour débloquer 25 paliers de récompenses.\n' +
+                        '🎁 Bouton **Tout récupérer** disponible sous le pass pour claim tes gains en un clic !'
                 }
             );
     }
 
+    // 2. RENDEZ-VOUS & JEUX QUOTIDIENS
+    if (category === 'minijeux') {
+        return embed
+            .setColor(0x2ecc71)
+            .setTitle('🎮 Rendez-vous & Jeux Quotidiens')
+            .setDescription(
+                'Cacabot lance automatiquement les parties dans les salons dédiés.\n' +
+                '**Pas besoin de commande pour jouer** : écris simplement ta proposition dans le salon pendant la session !'
+            )
+            .addFields(
+                {
+                    name: '🟩 Le Motus • Salon dédié',
+                    value:
+                        '⏰ Sessions chaque jour à **10h00** (6 lettres) et **19h00** (7 lettres)\n' +
+                        '-# ↳ Propose ton mot directement dans le chat. Lettres bien placées en vert, mal placées en jaune !\n' +
+                        '📊 Stats : **`!motustats [@membre]`** • 🏆 Classement : **`!motustop`**'
+                },
+                {
+                    name: '🧩 Le Rébus Regaïen • Salon dédié',
+                    value:
+                        '⏰ Session chaque jour à **15h00** *(5 manches chronométrées de 5 minutes)*\n' +
+                        '-# ↳ Déchiffre l\'énigme visuelle et écris la réponse exacte dans le chat pour marquer les points.\n' +
+                        '📊 Stats : **`!rebusstats [@membre]`** • 🏆 Classement : **`!rebustop`**'
+                },
+                {
+                    name: '🪢 Le Pendu Quotidien • Salon dédié',
+                    value:
+                        '⏰ Session chaque soir à **21h00** *(mot de 7 lettres, 3 essais max par joueur)*\n' +
+                        '-# ↳ Propose une lettre ou tente le mot complet directement dans le salon !\n' +
+                        '📊 Stats : **`!pendustats [@membre]`** • 🏆 Classement : **`!pendutop`**'
+                }
+            );
+    }
+
+    // 3. PROFILS & VIE DU SERVEUR
     if (category === 'serveur') {
         return embed
             .setColor(0x3498db)
-            .setTitle('👥 Vie du Serveur & Profils')
-            .setDescription('> *Tout ce qui concerne ton activité, les membres et la vie sur Regaïa.*')
+            .setTitle('👥 Profils & Vie du Serveur')
+            .setDescription('Tout ce qui concerne ton activité, ton identité et la communauté de Regaïa.')
             .addFields(
                 {
-                    name: '👤 Profils & Activité',
+                    name: '👤 Fiches Membre & Activité',
                     value:
-                        '> **`!profil`** `[@membre]`\n' +
-                        '-# ↳ Rang d\'activité, succès débloqués, statistiques et date d\'arrivée.\n' +
-                        '🖼️ **`!avatar`** `[@membre]` — Affiche la photo de profil en haute définition\n' +
-                        '🏆 **`!top`** — Classement historique des membres les plus bavards\n' +
-                        '⚡ **`!actif`** — Podiums des plus actifs *(Aujourd\'hui, Semaine, Mois)*'
+                        '**`!profil [@membre]`** — Carte complète : rang, niveau, succès et date d\'arrivée\n' +
+                        '**`!avatar [@membre]`** — Affiche la photo de profil en haute définition\n' +
+                        '**`!top`** — Classement historique des membres les plus bavards\n' +
+                        '**`!actif`** — Podiums des plus actifs *(Aujourd\'hui, Cette semaine, Ce mois-ci)*'
                 },
                 {
-                    name: '🎂 Les Anniversaires',
+                    name: '🎂 Anniversaires',
                     value:
-                        '> **`!anniv set`** `[JJ/MM]` — Enregistre ta date pour qu\'on te le fête\n' +
-                        '-# ↳ `!anniv show [@membre]` • `!anniv list` • `!anniv next`'
+                        '**`!anniv set JJ/MM`** — Enregistre ta date pour qu\'on te le fête avec alerte\n' +
+                        '**`!anniv show [@membre]`** — Date d\'anniversaire et compte à rebours\n' +
+                        '**`!anniv list`** / **`!anniv next`** — Liste complète et prochain anniversaire à fêter'
                 },
                 {
-                    name: '🏛️ Regaïa & Communauté',
+                    name: '🏛️ Vie de Regaïa',
                     value:
-                        '📜 **`!quote`** `[numéro / recherche]` — Citation mythique archivée *(ou aléatoire)*\n' +
-                        '💡 **`!suggestion`** `[idée]` — Soumettre une proposition au vote communautaire\n' +
-                        '🏠 **`!serveur`** — Statistiques complètes (membres, boosts, date de création)'
+                        '📜 **`!quote [numéro / recherche]`** — Citations cultes archivées du serveur\n' +
+                        '💡 **`!suggestion [idée]`** — Soumettre une proposition au vote communautaire\n' +
+                        '🏠 **`!serveur`** — Statistiques complètes du serveur (membres, boosts, création)'
                 }
             );
     }
 
-    if (category === 'fun') {
+    // 4. INTERACTIONS SOCIALES & RP
+    if (category === 'social') {
         return embed
             .setColor(0xe91e63)
-            .setTitle('🎭 Social, Fun & Oracles')
-            .setDescription('> *Pour animer le chat, titiller tes potes ou tester ton avenir.*')
+            .setTitle('🎭 Interactions Sociales & Actions RP')
+            .setDescription('Des commandes animées pour interagir avec les membres et mettre de l\'ambiance !')
             .addFields(
                 {
-                    name: '💖 Affection & Rire',
+                    name: '💖 Affection & Rizz',
                     value:
-                        '💋 **`!kiss`** `[@membre]`\n' +
-                        '🫂 **`!hug`** `[@membre]`\n' +
-                        '💃 **`!danse`** `[@membre]`\n' +
-                        '🗿 **`!rizz`** `[@membre]`\n' +
-                        '😆 **`!rire`** • 😭 **`!cry`**',
-                    inline: true
+                        '💋 **`!kiss [@membre]`** — Embrasse quelqu\'un tendrement\n' +
+                        '🫂 **`!hug [@membre]`** — Fais un câlin réconfortant\n' +
+                        '💃 **`!danse [@membre]`** — Danse avec un partenaire ou solo\n' +
+                        '🗿 **`!rizz [@membre]`** — Tente ton approche avec ton plus gros charme\n' +
+                        '💕 **`!lovecalc @user1 @user2`** — Calcule la compatibilité amoureuse avec carte générée'
                 },
                 {
-                    name: '💥 Bagarre & Drama',
+                    name: '💥 Bagarre, Provoc & Drama',
                     value:
-                        '👊 **`!punch`** `[@membre]`\n' +
-                        '🔫 **`!bang`** `[@membre]`\n' +
-                        '🗯️ **`!insult`** `[@membre]`\n' +
-                        '🔨 **`!ban`** `[@membre]`\n' +
-                        '😛 **`!bait`** `[@membre]`',
-                    inline: true
+                        '👊 **`!punch [@membre]`** — Décoche une baffe sans pitié\n' +
+                        '🔫 **`!bang [@membre]`** — Tire sur un membre\n' +
+                        '🗯️ **`!insult [@membre]`** — Tacle gentiment (ou pas) quelqu\'un\n' +
+                        '🔨 **`!ban [@membre]`** — Bannis symboliquement un membre\n' +
+                        '😛 **`!bait [@membre]`** — Ragebait quelqu\'un en direct'
                 },
                 {
-                    name: '🔮 Oracles & Hasard',
+                    name: '😆 Humeurs & Réactions',
                     value:
-                        '> **`!horoscope`** — L\'horoscope cosmique quotidien de ton signe astral\n' +
-                        '> **`!destin`** — Prédictions absurdes et loufoques sur ton avenir\n' +
-                        '> **`!animal`** — Découvre ton animal spirituel parmi des milliers de combinaisons\n' +
-                        '🪙 **`!flip [mise]`** — Pile ou face *(solo ou duel de pari face à un membre)*\n' +
-                        '🤣 **`!blague`** — Raconte une blague aléatoire *(Soft, Classique, Humour Noir)*',
-                    inline: false
+                        '**`!rire`** • **`!cry`** • **`!die`** • **`!explode`** • **`!run`**\n' +
+                        '**`!palaref`** • **`!jailaref`**'
+                }
+            );
+    }
+
+    // 5. ORACLES, DÉBATS & FUN
+    if (category === 'fun') {
+        return embed
+            .setColor(0x9b59b6)
+            .setTitle('🔮 Oracles, Débats & Fun')
+            .setDescription('Jeux de hasard, prédictions absurdes et questions pour animer le salon.')
+            .addFields(
+                {
+                    name: '🔮 Oracles & Mystères',
+                    value:
+                        '**`!horoscope`** — L\'horoscope cosmique quotidien selon ton signe astral\n' +
+                        '**`!destin`** — Prédictions absurdes et loufoques sur ton avenir\n' +
+                        '**`!animal`** — Découvre ton animal spirituel parmi 7000 combinaisons'
                 },
                 {
                     name: '⚖️ Débats & Gastronomie',
                     value:
                         '❓ **`!question`** — Question de débat du soir parmi 6 thématiques\n' +
-                        '⚖️ **`!choix [option 1 ou 2]`** — Cacabot tranche un dilemme cornélien\n' +
-                        '👨‍🍳 **`!topchef [nom/photo]`** — Note gastronomique sans pitié de Cacabot\n' +
-                        '💕 **`!lovecalc [@user1 @user2]`** — Test de compatibilité amoureuse',
-                    inline: false
+                        '⚖️ **`!choix [option 1 ou option 2]`** — Cacabot tranche un dilemme cornélien\n' +
+                        '👨‍🍳 **`!topchef [nom ou photo]`** — La note gastronomique sans filtre de Cacabot'
+                },
+                {
+                    name: '🎲 Hasard & Mascottes',
+                    value:
+                        '🪙 **`!flip [mise]`** — Lance une pièce *(solo ou duel de pari face à un membre)*\n' +
+                        '🤣 **`!blague`** — Raconte une blague aléatoire *(Soft, Classique, Humour Noir)*\n' +
+                        '🐒 **`!sylvain`** • 👗 **`!epsys`** • 🎬 **`!bougetoi`**'
                 }
             );
     }
 
+    // 6. UTILITAIRES DU QUOTIDIEN
     if (category === 'util') {
         return embed
             .setColor(0x95a5a6)
-            .setTitle('🛠️ Utilitaires & Pratique')
-            .setDescription('> *Des outils pratiques pour ton quotidien et la gestion de tes sessions.*')
+            .setTitle('🛠️ Utilitaires & Quotidien')
+            .setDescription('Des outils pratiques pour ton quotidien, tes sessions de travail et la gestion du bot.')
             .addFields(
                 {
-                    name: '⏰ Organisation & Concentration',
+                    name: '⏰ Organisation & Focus',
                     value:
-                        '> **`!rappel [durée] [motif]`**\n' +
-                        '-# ↳ Boutons sous le rappel pour reporter de **+10 min** ou **+1h** en un clic !\n' +
+                        '**`!rappel [durée] [motif]`** — Programme un rappel personnel *(ex: `!rappel 20min four`)*\n' +
+                        '-# ↳ Boutons interactifs sous le rappel pour reporter de **+10 min** ou **+1h** en un clic !\n' +
                         '🍅 **`!pomodoro [travail] [pause]`** — Minuteur Pomodoro *(ex: `!pomodoro 25 5`)*\n' +
                         '🌦️ **`!meteo [ville]`** — Bulletin météo, température et ressenti en direct'
                 },
@@ -286,7 +315,7 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
                     name: '📺 Médias & Minecraft',
                     value:
                         '🔍 **`!youtube [recherche]`** — Recherche interactive YouTube avec lecteur intégré\n' +
-                        '🎬 **`!last [chaîne]`** & 📈 **`!stats [chaîne]`** — Dernier upload et stats YouTube\n' +
+                        '🎬 **`!last [chaîne]`** & 📈 **`!stats [chaîne]`** — Dernier upload et stats d\'une chaîne\n' +
                         '⛏️ **`!aternos`** — Statut et adresse IP du serveur Minecraft Regaïa'
                 },
                 {
@@ -294,7 +323,7 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
                     value:
                         'ℹ️ **`!botinfo`** *(alias `!about`)* — Version, temps d\'activité (uptime) et mémoire\n' +
                         '🏓 **`!ping`** — Mesure de la latence API et WebSocket\n' +
-                        '🤫 **`!stop`** / **`!unstop`** — Mettre en pause ou réactiver les répliques automatiques'
+                        '🤫 **`!stop`** / **`!unstop`** — Mettre en pause ou relancer les répliques automatiques'
                 }
             );
     }
@@ -309,33 +338,40 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
 function buildHelpMenu(authorId, currentCategory = 'home') {
     return new StringSelectMenuBuilder()
         .setCustomId(`help_menu_${authorId}`)
-        .setPlaceholder('Choisis une catégorie...')
+        .setPlaceholder('Choisis une thématique...')
         .addOptions(
             {
-                label: 'Mini-Jeux Quotidiens',
-                description: 'Motus, Rébus, Pendu, classements et stats',
-                emoji: '🎮',
-                value: 'minijeux',
-                default: currentCategory === 'minijeux'
-            },
-            {
                 label: 'Roulette & Battle Pass',
-                description: 'Tirages, inventaire, quêtes et 25 paliers',
+                description: 'Casino, inventaire, bonus actifs et 25 paliers',
                 emoji: '🎰',
                 value: 'roulette',
                 default: currentCategory === 'roulette'
             },
             {
-                label: 'Vie du Serveur & Profils',
-                description: 'Fiches membres, tops, anniversaires, citations',
+                label: 'Rendez-vous & Jeux Quotidiens',
+                description: 'Motus (10h/19h), Rébus (15h), Pendu (21h) et tops',
+                emoji: '🎮',
+                value: 'minijeux',
+                default: currentCategory === 'minijeux'
+            },
+            {
+                label: 'Profils & Vie du Serveur',
+                description: 'Fiches membres, tops d\'activité, anniversaires, quotes',
                 emoji: '👥',
                 value: 'serveur',
                 default: currentCategory === 'serveur'
             },
             {
-                label: 'Social, Fun & Oracles',
-                description: 'Interactions, horoscope, destin, pile ou face',
+                label: 'Interactions Sociales & RP',
+                description: 'Affection, clash, bagarres, duels et réactions',
                 emoji: '🎭',
+                value: 'social',
+                default: currentCategory === 'social'
+            },
+            {
+                label: 'Oracles, Débats & Fun',
+                description: 'Horoscope, destin, animal spirituel, débats et blagues',
+                emoji: '🔮',
                 value: 'fun',
                 default: currentCategory === 'fun'
             },
