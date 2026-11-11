@@ -727,8 +727,9 @@ function buildRowResultatRoulette(authorId, outcomeId, failIndex) {
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('roulette_tour').setLabel('🎲 À mon tour !').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('📊 Probabilités').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`roulette_claim_btn_${authorId}`).setLabel('🎒 Mon Inventaire').setStyle(ButtonStyle.Primary),
         new ButtonBuilder().setCustomId(`roulette_notif_${authorId}`).setLabel('🔔 Me prévenir ici').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`roulette_notifmp_${authorId}`).setLabel('🔔 Me prévenir par MP').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`roulette_notifmp_${authorId}`).setLabel('🔔 MP').setStyle(ButtonStyle.Secondary)
     );
 }
 
@@ -4364,6 +4365,16 @@ async function handleRouletteButton(interaction, client) {
         await interaction.reply({ content: `🔔 Noté ! Je te ping ici <t:${Math.ceil(fin / 1000)}:R>.`, ephemeral: true });
         return true;
     }
+    if (customId.startsWith('roulette_claim_btn_')) {
+        const member = interaction.member;
+        const { embed, row } = buildInventaireEmbed(member);
+        return interaction.reply({
+            embeds: [embed],
+            components: row ? [row] : [],
+            ephemeral: true
+        });
+    }
+
     if (customId === 'roulette_tour') {
         const clickerId = interaction.user.id;
         const res = await tirerEtConstruireResultatRoulette(clickerId, interaction.guild, interaction.channel, client);

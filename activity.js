@@ -141,7 +141,9 @@ function buildTopEmbed(page, authorId, guild) {
         if (!member) return null;
         const rank = start + i;
         const medal = rank < 3 ? medals[rank] : `**${rank + 1}.**`;
-        return { name: `${medal} ${member.displayName}`, value: `${count} messages`, inline: false };
+        const estAuteur = uid === authorId;
+        const nomAffiche = estAuteur ? `👉 **${member.displayName} (Toi)**` : member.displayName;
+        return { name: `${medal} ${nomAffiche}`, value: `${count} messages`, inline: false };
     }).filter(Boolean);
 
     const userRank = allSorted.findIndex(([uid]) => uid === authorId);
@@ -171,17 +173,29 @@ function buildTopRow(page, authorId) {
     const allSorted = Object.entries(activityState.topData.messages).sort((a, b) => b[1] - a[1]);
     const totalPages = Math.ceil(allSorted.length / PAGE_SIZE) || 1;
 
+    const userRank = allSorted.findIndex(([uid]) => uid === authorId);
+    const userPage = userRank !== -1 ? Math.floor(userRank / PAGE_SIZE) : 0;
+    const estSurSaPage = page === userPage;
+
     const prev = new ButtonBuilder()
         .setCustomId(`top_prev_${authorId}_${page}`)
         .setLabel('⬅️ Arrière')
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(page === 0);
+
+    const myRankBtn = new ButtonBuilder()
+        .setCustomId(`top_myrank_${authorId}_${userPage}`)
+        .setLabel(userRank !== -1 ? `🎯 Mon rang (#${userRank + 1})` : '🎯 Mon rang')
+        .setStyle(estSurSaPage ? ButtonStyle.Primary : ButtonStyle.Success)
+        .setDisabled(userRank === -1 || estSurSaPage);
+
     const next = new ButtonBuilder()
         .setCustomId(`top_next_${authorId}_${page}`)
         .setLabel('Suivant ➡️')
         .setStyle(ButtonStyle.Secondary)
         .setDisabled(page >= totalPages - 1);
-    return new ActionRowBuilder().addComponents(prev, next);
+
+    return new ActionRowBuilder().addComponents(prev, myRankBtn, next);
 }
 
 function buildProfilRow(cibleId, authorId, ongletActuel = 'profil') {
@@ -559,21 +573,25 @@ async function handleActivityButton(interaction) {
         });
     }
 
-    // Boutons Top
-    if (interaction.isButton() && (interaction.customId.startsWith('top_prev_') || interaction.customId.startsWith('top_next_'))) {
+    // Boutons Top (Navigation & Téléportation "Mon rang")
+    if (interaction.isButton() && (interaction.customId.startsWith('top_prev_') || interaction.customId.startsWith('top_next_') || interaction.customId.startsWith('top_myrank_'))) {
         const parts = interaction.customId.split('_');
-        const direction = parts[1];
+        const action = parts[1];
         const authorId = parts[2];
-        const currentPage = parseInt(parts[3]);
+        const pageArg = parseInt(parts[3], 10) || 0;
 
         if (interaction.user.id !== authorId) {
             return interaction.reply({ content: "Ce bouton ne t'est pas destiné !", ephemeral: true });
         }
 
-        const newPage = direction === 'next' ? currentPage + 1 : currentPage - 1;
+        let targetPage = pageArg;
+        if (action === 'next') targetPage = pageArg + 1;
+        else if (action === 'prev') targetPage = pageArg - 1;
+        else if (action === 'myrank') targetPage = pageArg;
+
         return interaction.update({
-            embeds: [buildTopEmbed(newPage, authorId, interaction.guild)],
-            components: [buildTopRow(newPage, authorId)]
+            embeds: [buildTopEmbed(targetPage, authorId, interaction.guild)],
+            components: [buildTopRow(targetPage, authorId)]
         });
     }
 

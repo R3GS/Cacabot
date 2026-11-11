@@ -1151,6 +1151,7 @@ function buildBPButtons(authorId, targetId = null) {
     );
 
     const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`bp_claim_all_${authorId}`).setLabel('🎁 Tout récupérer').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`bp_rules_${authorId}_${tid}`).setLabel('📜 Règles').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`bp_notifs_${authorId}`).setLabel('🔔 Notifications MP').setStyle(ButtonStyle.Secondary)
     );
@@ -1703,6 +1704,30 @@ async function handleBattlePassInteraction(interaction) {
 
     if (interaction.user.id !== authorId) {
         return interaction.reply({ content: "Ce n'est pas ton menu 😌", ephemeral: true });
+    }
+
+    // Clic sur "🎁 Tout récupérer"
+    if (action === 'claim' && parts[2] === 'all') {
+        const claimResult = reclamerRecompensesEtXP(interaction.member);
+
+        let descFeedback = '';
+        if (claimResult.xpGagne > 0 || claimResult.paliersDebloques.length > 0) {
+            descFeedback = `🎉 **Tout a été récupéré avec succès !**\n\n`;
+            if (claimResult.quetesValidees.length > 0) {
+                descFeedback += `• **Quêtes validées :** +${claimResult.xpGagne} XP\n> ${claimResult.quetesValidees.join('\n> ')}\n\n`;
+            }
+            if (claimResult.paliersDebloques.length > 0) {
+                descFeedback += `• **Paliers débloqués :**\n> ${claimResult.paliersDebloques.join('\n> ')}\n\n` +
+                                `-# 🎒 *Tes récompenses ont été déposées dans ton inventaire (\`!rlt claim\`) !*`;
+            }
+        } else {
+            descFeedback = `✅ **Tout est déjà à jour !**\nToutes tes quêtes terminées et tes récompenses de palier atteintes ont déjà été collectées dans ton inventaire (\`!rlt claim\`).`;
+        }
+
+        const embedMaj = buildBPHomeEmbed(interaction.member);
+        await interaction.update({ embeds: [embedMaj], components: buildBPButtons(authorId) });
+        await interaction.followUp({ content: descFeedback, ephemeral: true });
+        return true;
     }
 
     // Clic sur "Activer le battle pass ! ✅"

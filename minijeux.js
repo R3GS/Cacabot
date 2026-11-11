@@ -876,12 +876,17 @@ const REBUS_ANIMES = [
 
 let rebusSession = {
     active: false,
+    enPause: false,
+    aEuActiviteManche: false,
     manche: 0,
     themeNom: '',
+    themeCouleur: 0xf39c12,
     items: [],
     currentItem: null,
     expireAt: 0,
     timer: null,
+    limite16hTimer: null,
+    limite16hTimestamp: 0,
     scores: {},
     compteurMessages: 0
 };
@@ -1156,8 +1161,21 @@ async function lancerSessionRebus(guild) {
         delete motusDataRef.prochainRebusForce;
     }
 
+    if (rebusSession.timer) clearTimeout(rebusSession.timer);
+    if (rebusSession.limite16hTimer) clearTimeout(rebusSession.limite16hTimer);
+
+    // Calcul de la fin de session à 16h00 (heure de Paris)
+    const now = new Date();
+    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const cible16h = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    cible16h.setHours(16, 0, 0, 0);
+    let msAvant16h = cible16h.getTime() - parisNow.getTime();
+    if (msAvant16h <= 0) msAvant16h = 60 * 60 * 1000;
+
     rebusSession = {
         active: true,
+        enPause: false,
+        aEuActiviteManche: false,
         manche: 0,
         themeNom: theme.nom,
         themeCouleur: theme.couleur,
@@ -1165,6 +1183,8 @@ async function lancerSessionRebus(guild) {
         currentItem: null,
         expireAt: 0,
         timer: null,
+        limite16hTimestamp: Date.now() + msAvant16h,
+        limite16hTimer: setTimeout(() => verifierFin16hRebus(guild), msAvant16h),
         scores: {},
         compteurMessages: 0
     };
@@ -1175,10 +1195,11 @@ async function lancerSessionRebus(guild) {
         .setDescription(
             `📢 **Notification :** <@&1559041004114542592>\n\n` +
             `🎭 **Thème du jour :** ${theme.nom}\n` +
-            `🎯 **5 manches au programme** • **5 minutes** par manche !\n\n` +
+            `🎯 **5 manches au programme** • **5 minutes** par manche !\n` +
+            `⏳ **Session ouverte jusqu'à 16h00 pile !**\n\n` +
             `*La première manche commence dans quelques secondes...*`
         )
-        .setFooter({ text: 'Rébus Regaïen tous les jours à 15h00' });
+        .setFooter({ text: 'Rébus Regaïen tous les jours à 15h00 • Clôture à 16h00' });
 
     await channel.send({
         content: `📢 <@&1559041004114542592> **Le Rébus Regaïen de 15h00 commence !**`,
@@ -1188,9 +1209,70 @@ async function lancerSessionRebus(guild) {
     setTimeout(() => passerMancheSuivanteRebus(guild), 4000);
 }
 
+function mettreEnPauseSessionRebus(channel, guild, mancheTerminee) {
+    if (!rebusSession.active) return;
+    rebusSession.enPause = true;
+    rebusSession.currentItem = null;
+
+    const rowPause = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('rebus_reprendre')
+            .setLabel('▶️ Reprendre le Rébus')
+            .setStyle(ButtonStyle.Success)
+    );
+
+    const embedPause = new EmbedBuilder()
+        .setColor(0xe67e22)
+        .setTitle('⏸️ SESSION RÉBUS EN PAUSE (Inactivité)')
+        .setDescription(
+            `Aucun membre n'a participé à la manche ${mancheTerminee}/5.\n\n` +
+            `Pour ne pas dérouler la session dans le vide, **le Rébus est mis en pause** !\n\n` +
+            `👉 Cliquez sur **« Reprendre le Rébus »** (ou écrivez un message ici) pour lancer la manche suivante.\n` +
+            `⏳ *Si la session n'est pas reprise avant **16h00**, elle sera automatiquement annulée.*`
+        )
+        .setFooter({ text: 'Régulation anti-ghosting • Annulation automatique à 16h00' });
+
+    channel.send({ embeds: [embedPause], components: [rowPause] }).catch(() => {});
+}
+
+function verifierFin16hRebus(guild) {
+    if (!rebusSession.active) return;
+    const channel = guild.channels.cache.get(REBUS_CHANNEL_ID);
+    if (!channel) return;
+
+    if (rebusSession.timer) clearTimeout(rebusSession.timer);
+    if (rebusSession.limite16hTimer) clearTimeout(rebusSession.limite16hTimer);
+
+    const scoresList = Object.entries(rebusSession.scores);
+    if (scoresList.length > 0) {
+        channel.send("⏰ **Il est 16h00 !** Clôture officielle de la session du Rébus Regaïen :").catch(() => {});
+        terminerSessionRebus(channel);
+    } else {
+        rebusSession.active = false;
+        rebusSession.enPause = false;
+        rebusSession.currentItem = null;
+        minijeuxBridge.demanderSauvegarde();
+
+        const embedAnnulation = new EmbedBuilder()
+            .setColor(0xe74c3c)
+            .setTitle('⏰ 16h00 — Session Rébus annulée')
+            .setDescription(
+                `Il est 16h00 et la session n'a pas été terminée !\n\n` +
+                `La session du jour est annulée. Rendez-vous demain à **15h00** pour une nouvelle session !`
+            )
+            .setFooter({ text: 'Rébus Regaïen tous les jours à 15h00' });
+
+        channel.send({ embeds: [embedAnnulation] }).catch(() => {});
+    }
+}
+
 async function passerMancheSuivanteRebus(guild) {
     const channel = guild.channels.cache.get(REBUS_CHANNEL_ID);
     if (!channel) return;
+
+    if (Date.now() >= rebusSession.limite16hTimestamp) {
+        return verifierFin16hRebus(guild);
+    }
 
     rebusSession.manche++;
 
@@ -1202,6 +1284,9 @@ async function passerMancheSuivanteRebus(guild) {
     rebusSession.currentItem = item;
     rebusSession.expireAt = Date.now() + 5 * 60 * 1000;
     rebusSession.compteurMessages = 0;
+    rebusSession.aEuActiviteManche = false;
+    rebusSession.indiceAffiche = false;
+    rebusSession.enPause = false;
 
     const { MessageFlags } = require('discord.js');
     const embed = buildRebusEmbed(rebusSession.manche, item, rebusSession.expireAt);
@@ -1221,21 +1306,25 @@ async function passerMancheSuivanteRebus(guild) {
         if (!rebusSession.active || !rebusSession.currentItem) return;
 
         const titreReponse = item[1].charAt(0).toUpperCase() + item[1].slice(1);
-        // Solution masquée avec bouton spoiler pour ne pas gâcher la recherche des retardataires
-        const rowSolution = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`rebus_reveal_${Buffer.from(titreReponse).toString('base64')}`)
-                .setLabel('👁️ Révéler la solution')
-                .setStyle(ButtonStyle.Secondary)
-        );
-
-        await channel.send({
-            content: `⏰ **Temps écoulé !** Personne n'a trouvé la manche ${mancheEnCours}/5.\n||🤫 Clique ci-dessous pour voir la solution sans spoiler le chat !||`,
-            components: [rowSolution]
-        });
         rebusSession.currentItem = null;
 
-        setTimeout(() => passerMancheSuivanteRebus(guild), 4000);
+        await channel.send({
+            content: `⏰ **Temps écoulé !** Personne n'a trouvé la manche ${mancheEnCours}/5, c'était **${titreReponse}** !`
+        });
+
+        // Dernière manche atteinte : fin normale de la session
+        if (mancheEnCours >= 5) {
+            setTimeout(() => terminerSessionRebus(channel), 4000);
+            return;
+        }
+
+        // Activité détectée pendant la manche : on enchaîne normalement
+        if (rebusSession.aEuActiviteManche) {
+            setTimeout(() => passerMancheSuivanteRebus(guild), 4000);
+        } else {
+            // Inactivité totale : mise en PAUSE pour éviter de dérouler dans le vide
+            mettreEnPauseSessionRebus(channel, guild, mancheEnCours);
+        }
     }, 5 * 60 * 1000);
 }
 
@@ -1246,6 +1335,7 @@ async function verifierReponseRebus(message) {
     const guessNorm = normaliserRebus(raw);
     if (!guessNorm || guessNorm.length < 1) return false;
 
+    rebusSession.aEuActiviteManche = true;
     minijeuxBridge.trackBattlePassProgress?.(message.author.id, 'rebus_part', 1);
 
     const item = rebusSession.currentItem;
@@ -1477,8 +1567,22 @@ async function handleRebusMessage(message, response, client, helpers) {
         }
     }
 
-    // 1. Détection des réponses en cours dans le salon Rébus
+    // 1. Détection si la session était en pause pour inactivité et qu'un membre écrit dans le salon
+    if (message.channel.id === REBUS_CHANNEL_ID && rebusSession.active && rebusSession.enPause && !message.content.startsWith('!')) {
+        if (Date.now() >= rebusSession.limite16hTimestamp) {
+            verifierFin16hRebus(message.guild);
+            return false;
+        }
+
+        rebusSession.enPause = false;
+        await message.channel.send(`▶️ Un membre est présent ! <@${message.author.id}> relance la partie. La manche **${rebusSession.manche + 1}/5** commence dans 4 secondes...`);
+        setTimeout(() => passerMancheSuivanteRebus(message.guild), 4000);
+        return false;
+    }
+
+    // 2. Détection des réponses en cours dans le salon Rébus
     if (message.channel.id === REBUS_CHANNEL_ID && rebusSession.active && rebusSession.currentItem && !message.content.startsWith('!')) {
+        rebusSession.aEuActiviteManche = true;
         if (await verifierReponseRebus(message)) return true;
         minijeuxBridge.trackBattlePassProgress?.(message.author.id, 'rebus_part', 1);
 
@@ -1500,7 +1604,9 @@ async function handleRebusMessage(message, response, client, helpers) {
 
         // Annulation et nettoyage complet de l'ancienne session
         if (rebusSession.timer) clearTimeout(rebusSession.timer);
+        if (rebusSession.limite16hTimer) clearTimeout(rebusSession.limite16hTimer);
         rebusSession.active = false;
+        rebusSession.enPause = false;
         rebusSession.currentItem = null;
 
         await message.reply("♻️ **Session Rébus précédente fermée !** Lancement immédiat d'une toute nouvelle session (5 manches de 5 min)...");
@@ -1510,14 +1616,19 @@ async function handleRebusMessage(message, response, client, helpers) {
         return true;
     }
 
-    // 2. Commande !rebus
+    // 3. Commande !rebus
     if (cmd === '!rebus' || cmd === '!decodeur' || cmd === '!emojis' || response?.needsRebus) {
         const { jourStr, h, m, timestamp } = tempsAvantProchainRebus();
         let desc = `Le prochain Rébus Regaïen aura lieu **${jourStr} à 15h00** (dans **${h}h ${m}min**, <t:${timestamp}:R>) !\n\n` +
                    `📍 **Salon officiel :** <#${REBUS_CHANNEL_ID}>\n` +
                    `-# *Thème mystère révélé au début de la partie.*`;
 
-        if (rebusSession.active && rebusSession.currentItem) {
+        if (rebusSession.active && rebusSession.enPause) {
+            desc = `⏸️ **Le Rébus Regaïen est EN PAUSE pour inactivité !**\n\n` +
+                   `📍 **Salon officiel :** <#${REBUS_CHANNEL_ID}>\n` +
+                   `📍 **Prochaine manche :** ${rebusSession.manche + 1}/5\n` +
+                   `👉 Rendez-vous dans le salon et écrivez un message (ou cliquez sur le bouton) pour relancer la partie avant **16h00** !`;
+        } else if (rebusSession.active && rebusSession.currentItem) {
             const expireTimestamp = Math.floor(rebusSession.expireAt / 1000);
             desc = `🎮 **Le Rébus Regaïen est EN COURS !**\n\n` +
                    `📍 **Joue directement dans :** <#${REBUS_CHANNEL_ID}>\n` +
@@ -1576,30 +1687,35 @@ async function handleRebusButton(interaction) {
         return true;
     }
 
+    // Bouton de reprise de session mise en pause pour inactivité
+    if (interaction.customId === 'rebus_reprendre') {
+        if (!rebusSession.active || !rebusSession.enPause) {
+            return interaction.reply({ content: "La session n'est pas en pause actuellement.", ephemeral: true });
+        }
+        if (Date.now() >= rebusSession.limite16hTimestamp) {
+            await interaction.reply({ content: "⏰ Il est 16h00 passé, la session de rébus d'aujourd'hui est terminée !", ephemeral: true });
+            verifierFin16hRebus(interaction.guild);
+            return true;
+        }
+
+        rebusSession.enPause = false;
+        await interaction.reply({ content: `▶️ <@${interaction.user.id}> relance le Rébus ! La manche **${rebusSession.manche + 1}/5** commence dans 4 secondes...` });
+        setTimeout(() => passerMancheSuivanteRebus(interaction.guild), 4000);
+        return true;
+    }
+
     // Gestion du bouton "💡 Demander un indice"
     if (interaction.customId.startsWith('rebus_demander_indice_')) {
         if (!rebusSession.active || !rebusSession.currentItem) {
             return interaction.reply({ content: "Aucune manche active.", ephemeral: true });
         }
+        rebusSession.aEuActiviteManche = true;
         const indice = genererIndiceRebus(rebusSession.currentItem);
         rebusSession.indiceAffiche = true;
         await interaction.reply({ content: `💡 **Indice débloqué par ${interaction.member.displayName} :**\n${indice}` });
         return true;
     }
 
-    // Révélation de la solution pour soi uniquement (bouton spoiler après timeout)
-    if (interaction.customId.startsWith('rebus_reveal_')) {
-        const base64Str = interaction.customId.replace('rebus_reveal_', '');
-        let repClair = 'Inconnue';
-        try {
-            repClair = Buffer.from(base64Str, 'base64').toString('utf-8');
-        } catch (_) {}
-        await interaction.reply({
-            content: `🤫 **Solution du rébus :** **${repClair}**`,
-            ephemeral: true
-        });
-        return true;
-    }
     return false;
 }
 

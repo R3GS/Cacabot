@@ -90,8 +90,16 @@ function scheduleRappel(channelId, targetId, texte, ms, imageUrl = null) {
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
+                .setCustomId(`rappel_snooze_${targetId}_10min`)
+                .setLabel('💤 +10 min')
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId(`rappel_snooze_${targetId}_1h`)
+                .setLabel('⏰ +1h')
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
                 .setCustomId(`rappel_report_${targetId}`)
-                .setLabel('⏰ Reporter')
+                .setLabel('⏱️ Autre délai...')
                 .setStyle(ButtonStyle.Secondary)
         );
 
@@ -972,7 +980,31 @@ async function handleToolsInteraction(interaction, client) {
         return true;
     }
 
-    // Bouton Rappel Reporter
+    // Boutons Snooze Instantané (+10 min et +1h)
+    if (interaction.isButton() && interaction.customId.startsWith('rappel_snooze_')) {
+        const parts = interaction.customId.split('_');
+        const targetId = parts[2];
+        const delayStr = parts[3]; // '10min' ou '1h'
+
+        if (interaction.user.id !== targetId) {
+            return interaction.reply({ content: "Ce rappel n'est pas pour toi !", ephemeral: true });
+        }
+        const data = rappelReports.get(interaction.message.id);
+        if (!data) return interaction.reply({ content: "Ce rappel a expiré !", ephemeral: true });
+
+        const ms = delayStr === '10min' ? 10 * 60 * 1000 : 60 * 60 * 1000;
+        const libelleTemps = delayStr === '10min' ? '10 minutes' : '1 heure';
+
+        await interaction.update({
+            content: `⏰ Rappel reporté de **${libelleTemps}** ! (<t:${Math.floor((Date.now() + ms) / 1000)}:R>)`,
+            components: []
+        });
+
+        scheduleRappel(data.channelId, targetId, data.texte, ms, data.imageUrl);
+        return true;
+    }
+
+    // Bouton Rappel Reporter (Menu personnalisé)
     if (interaction.isButton() && interaction.customId.startsWith('rappel_report_')) {
         const targetId = interaction.customId.replace('rappel_report_', '');
         if (interaction.user.id !== targetId) {
@@ -983,12 +1015,14 @@ async function handleToolsInteraction(interaction, client) {
 
         const delayMenu = new StringSelectMenuBuilder()
             .setCustomId(`rappel_delay_${targetId}`)
-            .setPlaceholder('Choisis un délai...')
+            .setPlaceholder('Choisis un délai personnalisé...')
             .addOptions(
+                { label: '5 minutes', value: '5min' },
                 { label: '15 minutes', value: '15min' },
                 { label: '30 minutes', value: '30min' },
                 { label: '1 heure', value: '1h' },
-                { label: '2 heures', value: '2h' }
+                { label: '2 heures', value: '2h' },
+                { label: '4 heures', value: '4h' }
             );
         return interaction.update({ content: 'Choisis quand le rappel sera renvoyé :', components: [new ActionRowBuilder().addComponents(delayMenu)] });
     }
