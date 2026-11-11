@@ -119,23 +119,23 @@ function buildHelpHomeEmbed(user, botAvatarUrl = null) {
         .setTitle('💩 Centre d\'Aide & Commandes')
         .setDescription(
             `Bienvenue sur le guide officiel de **Cacabot** !\n` +
-            `Toutes les commandes s'utilisent avec le préfixe **\`!\`** ou directement en commande slash **\`/\`**.\n\n` +
+            `Toutes les commandes s'utilisent avec le préfixe **\`!\`** ou directement en commande slash **\`/\`**.\n` +
             `────────────────────────────────────────\n` +
-            `### 🧭 Thématiques disponibles\n\n` +
+            `### 🧭 Thématiques disponibles\n` +
             `🎰 **Roulette & Battle Pass**\n` +
-            `-# Casino toutes les 15 min, inventaire, quêtes et 25 paliers mensuels.\n\n` +
+            `-# Casino toutes les 15 min, inventaire, quêtes et 25 paliers mensuels.\n` +
             `────────────────────────────────────────\n` +
             `🎮 **Rendez-vous & Jeux Quotidiens**\n` +
-            `-# Sessions automatiques : Motus (10h/19h), Rébus (15h) et Pendu (21h).\n\n` +
+            `-# Sessions automatiques : Motus (10h/19h), Rébus (15h) et Pendu (21h).\n` +
             `────────────────────────────────────────\n` +
             `👥 **Profils & Vie du Serveur**\n` +
-            `-# Fiches membres, podiums d'activité, anniversaires et citations mythiques.\n\n` +
+            `-# Fiches membres, podiums d'activité, anniversaires et citations mythiques.\n` +
             `────────────────────────────────────────\n` +
             `🎭 **Interactions Sociales**\n` +
             `-# Actions animées : bisous, câlins, rizz, bagarres et réactions.\n` +
             `────────────────────────────────────────\n` +
             `🔮 **Oracles, Débats & Fun**\n` +
-            `-# Horoscope, destin, animal spirituel, dilemmes et pile ou face.\n\n` +
+            `-# Horoscope, destin, animal spirituel, dilemmes et pile ou face.\n` +
             `────────────────────────────────────────\n` +
             `🛠️ **Utilitaires du Quotidien**\n` +
             `-# Rappels personnels avec snooze, Pomodoro, météo et YouTube.\n` +
