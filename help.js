@@ -108,19 +108,276 @@ function buildHelpxCategorieEmbed(categorie) {
 }
 
 // =========================
+//   BUILDERS DE PAGES !HELP
+// =========================
+
+function buildHelpHomeEmbed(user) {
+    const displayName = user?.displayName || user?.username || 'Membre';
+    return new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle('💩 Cacabot — Guide des commandes')
+        .setDescription(
+            `Salut **${displayName}** ! Je suis **Cacabot**, le bot officiel de **Regaïa**.\n` +
+            `Toutes mes commandes fonctionnent avec le préfixe \`!\` ou en commande slash \`/\`.\n\n` +
+            `Choisis une catégorie dans le menu ci-dessous pour découvrir les fonctionnalités 👇`
+        )
+        .addFields(
+            {
+                name: '🎮 Mini-Jeux Quotidiens',
+                value: 'Le Motus (10h & 19h), le Rébus Regaïen (15h), le Pendu (21h), ainsi que leurs classements et statistiques.'
+            },
+            {
+                name: '🎰 Roulette & Battle Pass',
+                value: 'La Roulette Regaïenne toutes les 15 min (5 min en Happy Hour à 20h), inventaire de récompenses et 25 paliers du Battle Pass.'
+            },
+            {
+                name: '👥 Vie du Serveur & Profils',
+                value: 'Fiches membres, tops des plus bavards, gestion des anniversaires, citations mythiques et suggestions.'
+            },
+            {
+                name: '🎭 Social, Fun & Oracles',
+                value: 'Interactions sociales animées (bisous, baffes, rizz), prophéties loufoques, horoscope du jour, pile ou face et débats.'
+            },
+            {
+                name: '🛠️ Utilitaires du Quotidien',
+                value: 'Rappels avec boutons snooze (+10m, +1h), minuteur Pomodoro, météo en direct, lecteur YouTube et statut du serveur.'
+            }
+        )
+        .setFooter({ text: `Regaïa • Demandé par ${displayName}` });
+}
+
+function buildHelpCategoryEmbed(category, user) {
+    const displayName = user?.displayName || user?.username || 'Membre';
+    const embed = new EmbedBuilder().setFooter({ text: `Regaïa • Demandé par ${displayName}` });
+
+    if (category === 'minijeux') {
+        return embed
+            .setColor(0x2ecc71)
+            .setTitle('🎮 Mini-Jeux Quotidiens')
+            .setDescription('Rendez-vous à heures fixes pour faire travailler vos méninges et marquer des points !')
+            .addFields(
+                {
+                    name: '🟩 Le Motus (10h00 & 19h00)',
+                    value:
+                        '`!motus [mot]` — Proposer un mot *(6 lettres à 10h, 7 lettres à 19h)*\n' +
+                        '`!motustats [@membre]` — Taux de réussite et séries de victoires\n' +
+                        '`!motustop` — Classement général des meilleurs joueurs'
+                },
+                {
+                    name: '🧩 Le Rébus Regaïen (15h00)',
+                    value:
+                        '`!rebus [titre ou emojis]` — Proposer la solution *(5 manches de 5 min)*\n' +
+                        '`!rebusstats` / `!rebustop` — Points individuels et podium de la semaine'
+                },
+                {
+                    name: '🪢 Le Pendu (21h00)',
+                    value:
+                        '`!pendu [lettre ou mot]` — Proposer une lettre ou le mot *(3 essais max, mot de 7 lettres)*\n' +
+                        '`!pendustats` / `!pendutop` — Statistiques personnelles et classement hebdomadaire'
+                }
+            );
+    }
+
+    if (category === 'roulette') {
+        return embed
+            .setColor(0xf1c40f)
+            .setTitle('🎰 Roulette & Battle Pass')
+            .setDescription('Tente ta chance au casino de Regaïa et fais progresser ton pass de combat mensuel.')
+            .addFields(
+                {
+                    name: '🎲 La Roulette Regaïenne',
+                    value:
+                        '`!rlt` *(ou `!roulette`)* — Tente ta chance *(cooldown 15 min, réduit à 5 min en Happy Hour à 20h)*\n' +
+                        '`!rlt claim` — Ouvre ton inventaire pour consommer boucliers, relances et récompenses\n' +
+                        '`!rlt state` — Liste tes bonus, malus et transformations actives\n' +
+                        '`!rlt stats [@membre]` — Bilan complet des tirages (gains, pertes, nuls)\n' +
+                        '`!rlttop` — Le Panthéon des chasseurs de succès'
+                },
+                {
+                    name: '🎫 Le Battle Pass Mensuel',
+                    value:
+                        '`!bp` *(ou `!pass`)* — Visualise tes quêtes quotidiennes/hebdos et réclame tes 25 paliers de récompenses'
+                }
+            );
+    }
+
+    if (category === 'serveur') {
+        return embed
+            .setColor(0x3498db)
+            .setTitle('👥 Vie du Serveur & Profils')
+            .setDescription('Tout ce qui concerne ton activité, les membres et la vie sur Regaïa.')
+            .addFields(
+                {
+                    name: '📊 Profils & Activité',
+                    value:
+                        '`!profil [@membre]` — Fiche complète : rang, stats, succès et date d\'arrivée\n' +
+                        '`!top` — Classement historique des membres les plus bavards\n' +
+                        '`!actif` — Podium des plus actifs *(Aujourd\'hui, Cette semaine, Ce mois-ci)*\n' +
+                        '`!avatar [@membre]` — Affiche la photo de profil en haute définition'
+                },
+                {
+                    name: '🎂 Anniversaires',
+                    value:
+                        '`!anniv set [JJ/MM]` — Enregistre ta date d\'anniversaire\n' +
+                        '`!anniv show [@membre]` — Date d\'anniversaire et compte à rebours\n' +
+                        '`!anniv list` / `!anniv next` — Liste des anniversaires ou prochain à fêter'
+                },
+                {
+                    name: '🏛️ Vie de Regaïa',
+                    value:
+                        '`!quote [numéro / recherche]` — Citation mythique archivée *(ou au hasard si vide)*\n' +
+                        '`!suggestion [idée]` — Soumettre une idée au vote communautaire\n' +
+                        '`!serveur` — Statistiques complètes du serveur (membres, boosts, création)'
+                }
+            );
+    }
+
+    if (category === 'fun') {
+        return embed
+            .setColor(0xe91e63)
+            .setTitle('🎭 Social, Fun & Oracles')
+            .setDescription('Pour animer le chat, titiller tes potes ou tester ton avenir.')
+            .addFields(
+                {
+                    name: '👆 Interactions Sociales',
+                    value:
+                        '**Tendresse** : `!kiss`, `!hug`, `!danse`, `!rizz` [@membre]\n' +
+                        '**Bagarre** : `!punch`, `!bang`, `!insult`, `!ban`, `!bait` [@membre]\n' +
+                        '**Humeurs** : `!rire`, `!cry`, `!die`, `!explode`, `!run`, `!palaref`, `!jailaref`'
+                },
+                {
+                    name: '🔮 Oracles & Hasard',
+                    value:
+                        '`!horoscope` — L\'horoscope cosmique quotidien de ton signe astrologique\n' +
+                        '`!destin` — Prédictions loufoques sur ton avenir\n' +
+                        '`!animal` — Découvre ton animal spirituel parmi des milliers de combinaisons\n' +
+                        '`!flip [mise]` — Lance une pièce *(solo ou duel de pari face à un membre)*\n' +
+                        '`!blague` — Blague aléatoire *(Soft, Classique, Humour Noir)*'
+                },
+                {
+                    name: '⚖️ Débats & Gastronomie',
+                    value:
+                        '`!question` — Question de débat du soir parmi 6 thématiques\n' +
+                        '`!choix [option 1 ou option 2]` — Laisse Cacabot trancher un dilemme cornélien\n' +
+                        '`!topchef [nom ou photo]` — Critique gastronomique sans pitié de Cacabot\n' +
+                        '`!lovecalc [@user1 @user2]` — Test d\'affinité amoureuse avec carte personnalisée'
+                }
+            );
+    }
+
+    if (category === 'util') {
+        return embed
+            .setColor(0x95a5a6)
+            .setTitle('🛠️ Utilitaires & Pratique')
+            .setDescription('Des outils pratiques pour ton quotidien et la gestion de tes sessions.')
+            .addFields(
+                {
+                    name: '⏰ Organisation & Travail',
+                    value:
+                        '`!rappel [durée] [motif]` — Programme un rappel personnel *(ex: `!rappel 20min four`)* avec boutons snooze (+10m, +1h)\n' +
+                        '`!pomodoro [travail] [pause]` — Lance une session de travail Pomodoro *(ex: `!pomodoro 25 5`)*\n' +
+                        '`!meteo [ville]` — Météo, température et conditions en direct'
+                },
+                {
+                    name: '📺 Médias & Minecraft',
+                    value:
+                        '`!youtube [recherche]` — Recherche interactive YouTube avec lecteur\n' +
+                        '`!last [chaîne]` / `!stats [chaîne]` — Dernier upload et stats d\'une chaîne\n' +
+                        '`!aternos` — Statut et adresse IP du serveur Minecraft Regaïa'
+                },
+                {
+                    name: '🤖 Cacabot',
+                    value:
+                        '`!botinfo` *(ou `!about`)* — Version, temps d\'activité (uptime) et statistiques\n' +
+                        '`!ping` — Mesure la latence API et WebSocket\n' +
+                        '`!stop` / `!unstop` — Mettre en pause ou réactiver les répliques automatiques'
+                }
+            );
+    }
+
+    return embed.setTitle('❓ Inconnu').setDescription('Catégorie introuvable.');
+}
+
+// =========================
+//   COMPOSANTS (MENUS & BOUTONS)
+// =========================
+
+function buildHelpMenu(authorId, currentCategory = 'home') {
+    return new StringSelectMenuBuilder()
+        .setCustomId(`help_menu_${authorId}`)
+        .setPlaceholder('Choisis une catégorie...')
+        .addOptions(
+            {
+                label: 'Mini-Jeux Quotidiens',
+                description: 'Motus, Rébus, Pendu, classements et stats',
+                emoji: '🎮',
+                value: 'minijeux',
+                default: currentCategory === 'minijeux'
+            },
+            {
+                label: 'Roulette & Battle Pass',
+                description: 'Tirages, inventaire, quêtes et 25 paliers',
+                emoji: '🎰',
+                value: 'roulette',
+                default: currentCategory === 'roulette'
+            },
+            {
+                label: 'Vie du Serveur & Profils',
+                description: 'Fiches membres, tops, anniversaires, citations',
+                emoji: '👥',
+                value: 'serveur',
+                default: currentCategory === 'serveur'
+            },
+            {
+                label: 'Social, Fun & Oracles',
+                description: 'Interactions, horoscope, destin, pile ou face',
+                emoji: '🎭',
+                value: 'fun',
+                default: currentCategory === 'fun'
+            },
+            {
+                label: 'Utilitaires du Quotidien',
+                description: 'Rappels avec snooze, pomodoro, météo, youtube',
+                emoji: '🛠️',
+                value: 'util',
+                default: currentCategory === 'util'
+            }
+        );
+}
+
+function buildHelpButtons(authorId, currentCategory = 'home', originalMessageId = '') {
+    const row = new ActionRowBuilder();
+
+    if (currentCategory !== 'home') {
+        row.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`help_home_${authorId}_${originalMessageId}`)
+                .setLabel('Accueil')
+                .setEmoji('🏠')
+                .setStyle(ButtonStyle.Secondary)
+        );
+    }
+
+    row.addComponents(
+        new ButtonBuilder()
+            .setCustomId(`help_delete_${authorId}_${originalMessageId}`)
+            .setLabel('Fermer')
+            .setEmoji('🗑️')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    return row;
+}
+
+// =========================
 //   DÉTECTION DES COMMANDES
 // =========================
 
 function getHelpResponse(command) {
     if (command === "!help" || command === "!aide") {
         return {
-            data: new EmbedBuilder()
-                .setColor(0x00ffff)
-                .setTitle("💩 GUIDE D'AIDE DE CACABOT")
-                .setDescription(
-                    "Hey ! Voici Cacabot, le bot à tout faire de Regaïa !\n\n" +
-                    "Choisis une catégorie dans le menu ci-dessous pour découvrir toutes les commandes disponibles 👇"
-                )
+            needsHelp: true,
+            data: buildHelpHomeEmbed()
         };
     }
 
@@ -136,7 +393,7 @@ function getHelpResponse(command) {
 // =========================
 
 async function runHelpMessage(message, response) {
-    // !helpx
+    // !helpx (Epsys-Only)
     if (response?.needsHelpx) {
         if (message.author.id !== '436218312574107658') {
             return message.reply("Tu n'es pas autorisé(e) à faire cette commande.");
@@ -147,25 +404,28 @@ async function runHelpMessage(message, response) {
     }
 
     // !help
-    if (response?.data) {
-        const menu = new StringSelectMenuBuilder()
-            .setCustomId(`help_menu_${message.author.id}_${message.id}`)
-            .setPlaceholder('Choisis une catégorie...')
-            .addOptions(
-                { label: '🎉 Fun & Mini-jeux', description: 'Pendu, Motus, Rébus, Roulette, Battle Pass...', emoji: '🎉', value: 'fun' },
-                { label: '🛠️ Utilitaires & Serveur', description: 'Discord, Profil, Top, YouTube, Météo...', emoji: '🛠️', value: 'util' },
-            );
-
-        const row = new ActionRowBuilder().addComponents(menu);
-        return message.reply({ embeds: [response.data], components: [row] });
+    if (response?.data || response?.needsHelp) {
+        const embed = buildHelpHomeEmbed(message.author);
+        const menuRow = new ActionRowBuilder().addComponents(buildHelpMenu(message.author.id, 'home'));
+        const btnRow = buildHelpButtons(message.author.id, 'home', message.id);
+        return message.reply({ embeds: [embed], components: [menuRow, btnRow] });
     }
 }
 
 // =========================
-//   MENUS ET BOUTONS
+//   INTERACTIONS (MENUS & BOUTONS & SLASH)
 // =========================
 
 async function runHelpInteraction(interaction) {
+    // 1. Commande Slash /help
+    if (interaction.isChatInputCommand && interaction.isChatInputCommand()) {
+        const embed = buildHelpHomeEmbed(interaction.user);
+        const menuRow = new ActionRowBuilder().addComponents(buildHelpMenu(interaction.user.id, 'home'));
+        const btnRow = buildHelpButtons(interaction.user.id, 'home');
+        return interaction.reply({ embeds: [embed], components: [menuRow, btnRow] });
+    }
+
+    // 2. Menu déroulant Epsys (!helpx)
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('helpx_menu_')) {
         const authorId = interaction.customId.split('_')[2];
         if (interaction.user.id !== authorId) {
@@ -176,390 +436,50 @@ async function runHelpInteraction(interaction) {
         return interaction.update({ embeds: [embed], components: [row] });
     }
 
-    // MENU SELECT FUN
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_fun_')) {
-        const funParts = interaction.customId.split('_');
-        const helpAuthorId = funParts[2];
-        const helpMessageId = funParts[3] ?? null;
-        if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
-        }
-
-        const value = interaction.values[0];
-        let embed;
-
-        if (value === 'minijeux') {
-            embed = new EmbedBuilder()
-                .setColor(0x9b59b6)
-                .setDescription("# 🎮 Mini-Jeux & Pass de Combat")
-                .addFields(
-                    { name: "🪢 !pendu / !pendustats / !pendutop", value: "Le Pendu Quotidien à **21h00** (7 lettres, 3 essais), stats et classement hebdo !" },
-                    { name: "🟩 !motus / !motustats", value: "Le Motus Quotidien à **10h00** (6 lettres) et **19h00** (7 lettres) !" },
-                    { name: "🧩 !rebus / !rebusstats", value: "Le Rébus Regaïen à **15h00** (5 manches de 5 minutes) !" },
-                    { name: "🎫 !pass / !bp", value: "Le Battle Pass mensuel de Regaïa : quêtes quotidiennes, hebdos et 25 paliers de récompenses !" },
-                    { name: "🎰 !roulette / !rlt [go/claim/state/stats]", value: "La Roulette Regaïenne : tente ta chance toutes les 15 min (5 min en Happy Hour à 20h) !" },
-                    { name: "🏆 !rlttop", value: "Le Panthéon des chasseurs de succès de la roulette !" }
-                );
-        }
-
-        if (value === 'interact') {
-            embed = new EmbedBuilder()
-                .setColor(0xffdc5d)
-                .setDescription("# 👆 Interactions Sociales")
-                .addFields(
-                    { name: "💋 !kiss / !bisou", value: "Embrasse quelqu'un sur le serveur !" },
-                    { name: "🫂 !hug / !calin", value: "Fais un câlin chaleureux !" },
-                    { name: "💃 !danse / !dance", value: "Danse solo ou avec un partenaire !" },
-                    { name: "🗯️ !insult", value: "Insulte gentiment (ou pas) un membre !" },
-                    { name: "👊 !punch / !frappe", value: "Frappe un membre !" },
-                    { name: "🔫 !bang / !tir / !pan", value: "Tire sur un membre !" },
-                    { name: "🗿 !rizz", value: "Tente de séduire avec ton meilleur rizz !" },
-                    { name: "🏃 !run / !court", value: "Prends la fuite !" },
-                    { name: "😆 !rire", value: "Ris de bon cœur !" },
-                    { name: "😭 !cry / !pleure", value: "Pleure un bon coup..." },
-                    { name: "☠️ !die", value: "Meurs en direct." },
-                    { name: "🔨 !ban", value: "Bannis symboliquement quelqu'un !" },
-                    { name: "😛 !bait", value: "Ragebait quelqu'un !" },
-                    { name: "💥 !explode", value: "Explose sans raison." },
-                    { name: "😐 !palaref / 😎 !jailaref", value: "Avoue que t'as pas la ref... ou affirme le contraire !" }
-                );
-        }
-
-        if (value === 'discussion') {
-            embed = new EmbedBuilder()
-                .setColor(0x6bb5ff)
-                .setDescription("# 💬 Discussion & Dilemmes")
-                .addFields(
-                    { name: "❓ !question", value: "Pose une question de débat du soir parmi 6 catégories !" },
-                    { name: "⚖️ !choix [option 1 ou option 2]", value: "Laisse Cacabot trancher un dilemme cornélien !" },
-                    { name: "👨‍🍳 !topchef", value: "Le verdict et la note gastronomique sans pitié de Cacabot sur un plat !" },
-                    { name: "💕 !lovecalc [@user1 @user2]", value: "Calcule le pourcentage d'amour et génère une carte personnalisée !" }
-                );
-        }
-
-        if (value === 'random') {
-            embed = new EmbedBuilder()
-                .setColor(0xf5f8fa)
-                .setDescription("# 🔮 Hasard & Fun")
-                .addFields(
-                    { name: "🔮 !horoscope", value: "L'horoscope cosmique quotidien de tous les signes !" },
-                    { name: "🧠 !destin", value: "Prédictions loufoques sur ton avenir." },
-                    { name: "🐕 !animal", value: "Découvre ton animal spirituel parmi 7000 combinaisons !" },
-                    { name: "🪙 !flip", value: "Lance une pièce à pile ou face (solo ou duel de pari) !" },
-                    { name: "🤣 !blague", value: "Raconte une blague (Soft, Classique, Humour Noir) !" },
-                    { name: "🎬 !bougetoi", value: "Rappelle à Epsys d'aller monter sa vidéo !" },
-                    { name: "🐒 !sylvain", value: "Singe fort ensemble (Sylvain Lévy) !" },
-                    { name: "👗 !epsys", value: "GIF aléatoire d'Epsys !" }
-                );
-        }
-
-        if (value === 'anniversaire') {
-            embed = new EmbedBuilder()
-                .setColor(0xff69b4)
-                .setDescription("# 🎂 Anniversaires")
-                .addFields(
-                    { name: "📅 !anniversaire set JJ/MM", value: "Enregistre ton anniversaire." },
-                    { name: "👀 !anniversaire show [@membre]", value: "Affiche un anniversaire et le compte à rebours." },
-                    { name: "📋 !anniversaire list", value: "Liste tous les anniversaires (classique ou chronologique)." },
-                    { name: "🎉 !anniversaire next", value: "Affiche le prochain anniversaire à fêter !" },
-                    { name: "🗑️ !anniversaire remove", value: "Supprime ton anniversaire." }
-                );
-        }
-
-        const backButton = new ButtonBuilder()
-            .setCustomId(`help_fun_back_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('⬅️ Retour')
-            .setStyle(ButtonStyle.Secondary);
-        const deleteButton = new ButtonBuilder()
-            .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('❌ Supprimer')
-            .setStyle(ButtonStyle.Secondary);
-        const backRow = new ActionRowBuilder().addComponents(backButton, deleteButton);
-        return interaction.update({ embeds: [embed], components: [backRow] });
-    }
-
-    // BOUTON RETOUR FUN
-    if (interaction.isButton() && interaction.customId.startsWith('help_fun_back_')) {
-        const funBackParts = interaction.customId.split('_');
-        const helpAuthorId = funBackParts[3];
-        const helpMessageId = funBackParts[4] ?? null;
-        if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
-        }
-
-        const funEmbed = new EmbedBuilder()
-            .setColor(0xffcc00)
-            .setDescription(
-                "# 🎉 Fun & Divertissement\n" +
-                "*Toutes les commandes pour animer le serveur et jouer ensemble.*\n\n" +
-                "🎮 **Mini-Jeux & Pass** — Pendu, Motus, Rébus, Roulette, Battle Pass\n" +
-                "👆 **Interact** — Interagis avec les membres\n" +
-                "💬 **Discussion** — Débats, dilemmes, lovecalc et cuisine\n" +
-                "🎂 **Anniversaire** — Gestion des anniversaires de Regaïa\n" +
-                "🔮 **Hasard & Fun** — Horoscope, destin, animal spirituel, blagues..."
-            );
-
-        const funMenu = new StringSelectMenuBuilder()
-            .setCustomId(`help_fun_${helpAuthorId}`)
-            .setPlaceholder('Choisis une sous-catégorie...')
-            .addOptions(
-                { label: '🎮 Mini-Jeux & Pass', description: 'pendu, motus, rebus, roulette, pass', value: 'minijeux' },
-                { label: '👆 Interactions', description: 'kiss, hug, insult, die, punch, bang, rizz...', value: 'interact' },
-                { label: '💬 Discussion', description: 'question, choix, topchef, lovecalc', value: 'discussion' },
-                { label: '🎂 Anniversaires', description: 'set, show, list, next, remove', value: 'anniversaire' },
-                { label: '🔮 Hasard & Fun', description: 'horoscope, destin, animal, blague...', value: 'random' }
-            );
-
-        const funBackButton = new ButtonBuilder()
-            .setCustomId(`help_back_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('⬅️ Retour Accueil')
-            .setStyle(ButtonStyle.Secondary);
-        const funDeleteButton = new ButtonBuilder()
-            .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('❌ Supprimer')
-            .setStyle(ButtonStyle.Secondary);
-        const funRow = new ActionRowBuilder().addComponents(funMenu);
-        const funBackRow = new ActionRowBuilder().addComponents(funBackButton, funDeleteButton);
-        return interaction.update({ embeds: [funEmbed], components: [funRow, funBackRow] });
-    }
-
-    // MENU SELECT UTIL
-    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_util_')) {
-        const helpAuthorId = interaction.customId.split('_')[2];
-        const helpMessageId = interaction.customId.split('_')[3] ?? null;
-        if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
-        }
-
-        const value = interaction.values[0];
-        let embed;
-
-        if (value === 'discord') {
-            embed = new EmbedBuilder()
-                .setColor(0xbdddf4)
-                .setDescription("# 💬 Vie du Serveur & Activité")
-                .addFields(
-                    { name: "👤 !profil [@membre]", value: "Affiche le profil complet, messages, stats et succès débloqués !" },
-                    { name: "🖼️ !avatar [@membre]", value: "Affiche l'avatar d'un membre en haute résolution." },
-                    { name: "🏆 !top", value: "Classement général des membres les plus bavards." },
-                    { name: "📊 !actif", value: "Podium des plus actifs du jour, de la semaine et du mois !" },
-                    { name: "📜 !quote [numéro/recherche]", value: "Affiche une citation mythique archivée du serveur." },
-                    { name: "💡 !suggestion [idée]", value: "Soumettre une proposition au vote dans #suggestions !" },
-                    { name: "🏠 !serveur", value: "Informations complètes sur Regaïa (création, membres, boost...)." }
-                );
-        }
-
-        if (value === 'youtube') {
-            embed = new EmbedBuilder()
-                .setColor(0xff0000)
-                .setDescription("# 📺 YouTube")
-                .addFields(
-                    { name: "🔍 !youtube [recherche]", value: "Recherche de vidéos avec lecteur interactif." },
-                    { name: "🎬 !last [chaîne]", value: "Affiche la dernière vidéo publiée d'une chaîne." },
-                    { name: "📈 !stats [chaîne]", value: "Statistiques complètes d'une chaîne YouTube." }
-                );
-        }
-
-        if (value === 'autres') {
-            embed = new EmbedBuilder()
-                .setColor(0x95a5a6)
-                .setDescription("# 📝 Utilitaires du quotidien")
-                .addFields(
-                    { name: "⏰ !rappel [temps] [message]", value: "Programmer un rappel (ex : `!rappel 15min gâteau au four`)." },
-                    { name: "🍅 !pomodoro", value: "Configurer et lancer une session de concentration Pomodoro." },
-                    { name: "🌦️ !météo [ville]", value: "Météo et température en direct d'une ville." },
-                    { name: "⛏️ !aternos", value: "Obtenir l'adresse IP du serveur Minecraft de Regaïa." },
-                    { name: "🧹 !prune [nombre]", value: "Supprimer rapidement les derniers messages (permission requise)." }
-                );
-        }
-
-        if (value === 'cacabot') {
-            embed = new EmbedBuilder()
-                .setColor(0x5865f2)
-                .setDescription("# 🤖 Cacabot")
-                .addFields(
-                    { name: "ℹ️ !botinfo / !about", value: "Informations techniques, version et uptime du bot." },
-                    { name: "🏓 !ping", value: "Affiche la latence de réponse et du WebSocket Discord." },
-                    { name: "🤫 !stop / !unstop", value: "Faire taire temporairement les répliques réflexes de Cacabot." }
-                );
-        }
-
-        const backButton = new ButtonBuilder()
-            .setCustomId(`help_back_util_${helpAuthorId}`)
-            .setLabel('⬅️ Retour')
-            .setStyle(ButtonStyle.Secondary);
-        const deleteButton = new ButtonBuilder()
-            .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setLabel('❌ Supprimer')
-            .setStyle(ButtonStyle.Secondary);
-        const backRow = new ActionRowBuilder().addComponents(backButton, deleteButton);
-        return interaction.update({ embeds: [embed], components: [backRow] });
-    }
-
-    // BOUTON RETOUR UTIL
-    if (interaction.isButton() && interaction.customId.startsWith('help_back_util_')) {
-        const helpAuthorId = interaction.customId.replace('help_back_util_', '');
-        if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
-        }
-
-        const utilEmbed = new EmbedBuilder()
-            .setColor(0x3498db)
-            .setTitle("🛠️ Utilitaires")
-            .setDescription(
-                "💬 **Vie du Serveur** — Profils, classements, citations, suggestions...\n" +
-                "📺 **YouTube** — Recherches et statistiques de chaînes\n" +
-                "🤖 **Cacabot** — Informations, ping et gestion du bot\n" +
-                "📝 **Quotidien** — Rappels, météo, pomodoro, aternos..."
-            );
-
-        const utilMenu = new StringSelectMenuBuilder()
-            .setCustomId(`help_util_${helpAuthorId}`)
-            .setPlaceholder('Choisis une sous-catégorie...')
-            .addOptions(
-                { label: '💬 Vie du Serveur', description: 'profil, top, actif, quote, suggestion, serveur', value: 'discord' },
-                { label: '📺 YouTube', description: 'youtube, stats, last', value: 'youtube' },
-                { label: '🤖 Cacabot', description: 'botinfo, ping, stop', value: 'cacabot' },
-                { label: '📝 Quotidien', description: 'rappel, météo, pomodoro, aternos, prune', value: 'autres' }
-            );
-
-        const utilBackButton = new ButtonBuilder()
-            .setCustomId(`help_back_${helpAuthorId}`)
-            .setLabel('⬅️ Retour Accueil')
-            .setStyle(ButtonStyle.Secondary);
-        const utilDeleteButton = new ButtonBuilder()
-            .setCustomId(`help_delete_${helpAuthorId}_`)
-            .setLabel('❌ Supprimer')
-            .setStyle(ButtonStyle.Secondary);
-        const utilRow = new ActionRowBuilder().addComponents(utilMenu);
-        const utilBackRow = new ActionRowBuilder().addComponents(utilBackButton, utilDeleteButton);
-        return interaction.update({ embeds: [utilEmbed], components: [utilRow, utilBackRow] });
-    }
-
-    // MENU SELECT ACCUEIL (!help)
+    // 3. Menu déroulant principal (!help)
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_menu_')) {
-        const parts = interaction.customId.split('_');
-        const helpAuthorId = parts[2];
-        const helpMessageId = parts[3] ?? null;
-        if (interaction.user.id !== helpAuthorId) {
+        const authorId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== authorId) {
             return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
         }
 
-        const value = interaction.values[0];
-
-        if (value === 'fun') {
-            const funEmbed = new EmbedBuilder()
-                .setColor(0xffcc00)
-                .setDescription(
-                    "# 🎉 Fun & Divertissement\n" +
-                    "*Toutes les commandes pour animer le serveur et jouer ensemble.*\n\n" +
-                    "🎮 **Mini-Jeux & Pass** — Pendu, Motus, Rébus, Roulette, Battle Pass\n" +
-                    "👆 **Interact** — Interagis avec les membres\n" +
-                    "💬 **Discussion** — Débats, dilemmes, lovecalc et cuisine\n" +
-                    "🎂 **Anniversaire** — Gestion des anniversaires de Regaïa\n" +
-                    "🔮 **Hasard & Fun** — Horoscope, destin, animal spirituel, blagues..."
-                );
-
-            const funMenu = new StringSelectMenuBuilder()
-                .setCustomId(`help_fun_${helpAuthorId}`)
-                .setPlaceholder('Choisis une sous-catégorie...')
-                .addOptions(
-                    { label: '🎮 Mini-Jeux & Pass', description: 'pendu, motus, rebus, roulette, pass', value: 'minijeux' },
-                    { label: '👆 Interactions', description: 'kiss, hug, insult, die, punch, bang, rizz...', value: 'interact' },
-                    { label: '💬 Discussion', description: 'question, choix, topchef, lovecalc', value: 'discussion' },
-                    { label: '🎂 Anniversaires', description: 'set, show, list, next, remove', value: 'anniversaire' },
-                    { label: '🔮 Hasard & Fun', description: 'horoscope, destin, animal, blague...', value: 'random' }
-                );
-
-            const funBackButton = new ButtonBuilder()
-                .setCustomId(`help_back_${helpAuthorId}_${helpMessageId ?? ''}`)
-                .setLabel('⬅️ Retour Accueil')
-                .setStyle(ButtonStyle.Secondary);
-            const funDeleteButton = new ButtonBuilder()
-                .setCustomId(`help_delete_${helpAuthorId}_${helpMessageId ?? ''}`)
-                .setLabel('❌ Supprimer')
-                .setStyle(ButtonStyle.Secondary);
-            const funRow = new ActionRowBuilder().addComponents(funMenu);
-            const funBackRow = new ActionRowBuilder().addComponents(funBackButton, funDeleteButton);
-            return interaction.update({ embeds: [funEmbed], components: [funRow, funBackRow] });
-        }
-
-        if (value === 'util') {
-            const utilEmbed = new EmbedBuilder()
-                .setColor(0x3498db)
-                .setTitle("🛠️ Utilitaires")
-                .setDescription(
-                    "💬 **Vie du Serveur** — Profils, classements, citations, suggestions...\n" +
-                    "📺 **YouTube** — Recherches et statistiques de chaînes\n" +
-                    "🤖 **Cacabot** — Informations, ping et gestion du bot\n" +
-                    "📝 **Quotidien** — Rappels, météo, pomodoro, aternos..."
-                );
-
-            const utilMenu = new StringSelectMenuBuilder()
-                .setCustomId(`help_util_${helpAuthorId}`)
-                .setPlaceholder('Choisis une sous-catégorie...')
-                .addOptions(
-                    { label: '💬 Vie du Serveur', description: 'profil, top, actif, quote, suggestion, serveur', value: 'discord' },
-                    { label: '📺 YouTube', description: 'youtube, stats, last', value: 'youtube' },
-                    { label: '🤖 Cacabot', description: 'botinfo, ping, stop', value: 'cacabot' },
-                    { label: '📝 Quotidien', description: 'rappel, météo, pomodoro, aternos, prune', value: 'autres' }
-                );
-
-            const utilBackButton = new ButtonBuilder()
-                .setCustomId(`help_back_${helpAuthorId}`)
-                .setLabel('⬅️ Retour Accueil')
-                .setStyle(ButtonStyle.Secondary);
-            const utilDeleteButton = new ButtonBuilder()
-                .setCustomId(`help_delete_${helpAuthorId}_`)
-                .setLabel('❌ Supprimer')
-                .setStyle(ButtonStyle.Secondary);
-            const utilRow = new ActionRowBuilder().addComponents(utilMenu);
-            const utilBackRow = new ActionRowBuilder().addComponents(utilBackButton, utilDeleteButton);
-            return interaction.update({ embeds: [utilEmbed], components: [utilRow, utilBackRow] });
-        }
+        const category = interaction.values[0];
+        const embed = buildHelpCategoryEmbed(category, interaction.user);
+        const menuRow = new ActionRowBuilder().addComponents(buildHelpMenu(authorId, category));
+        const btnRow = buildHelpButtons(authorId, category);
+        return interaction.update({ embeds: [embed], components: [menuRow, btnRow] });
     }
 
-    // BOUTON SUPPRIMER
+    // 4. Bouton Retour Accueil (!help)
+    if (interaction.isButton() && interaction.customId.startsWith('help_home_')) {
+        const parts = interaction.customId.split('_');
+        const authorId = parts[2];
+        const originalMessageId = parts[3] || '';
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
+        }
+
+        const embed = buildHelpHomeEmbed(interaction.user);
+        const menuRow = new ActionRowBuilder().addComponents(buildHelpMenu(authorId, 'home'));
+        const btnRow = buildHelpButtons(authorId, 'home', originalMessageId);
+        return interaction.update({ embeds: [embed], components: [menuRow, btnRow] });
+    }
+
+    // 5. Bouton Supprimer / Fermer (!help)
     if (interaction.isButton() && interaction.customId.startsWith('help_delete_')) {
-        const delParts = interaction.customId.split('_');
-        const helpAuthorId = delParts[2];
-        const helpMessageId = delParts[3] ?? null;
-        if (interaction.user.id !== helpAuthorId) {
+        const parts = interaction.customId.split('_');
+        const authorId = parts[2];
+        const originalMessageId = parts[3] || '';
+        if (interaction.user.id !== authorId) {
             return interaction.reply({ content: "Tu ne peux pas supprimer ce message !", ephemeral: true });
         }
+
         await interaction.message.delete().catch(() => {});
-        if (helpMessageId && helpMessageId !== '') {
-            const originalMsg = await interaction.channel.messages.fetch(helpMessageId).catch(() => null);
+        if (originalMessageId && originalMessageId !== '') {
+            const originalMsg = await interaction.channel.messages.fetch(originalMessageId).catch(() => null);
             if (originalMsg) await originalMsg.delete().catch(() => {});
         }
         return;
-    }
-
-    // BOUTON RETOUR ACCUEIL
-    if (interaction.isButton() && interaction.customId.startsWith('help_back_')) {
-        const backParts = interaction.customId.split('_');
-        const helpAuthorId = backParts[2];
-        const helpMessageId = backParts[3] ?? null;
-        if (interaction.user.id !== helpAuthorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
-        }
-        const embed = new EmbedBuilder()
-            .setColor(0x00ffff)
-            .setTitle("💩 GUIDE D'AIDE DE CACABOT")
-            .setDescription(
-                "Hey ! Voici Cacabot, le bot à tout faire de Regaïa !\n\n" +
-                "Choisis une catégorie dans le menu ci-dessous pour découvrir toutes les commandes disponibles 👇"
-            );
-
-        const menu = new StringSelectMenuBuilder()
-            .setCustomId(`help_menu_${helpAuthorId}_${helpMessageId ?? ''}`)
-            .setPlaceholder('Choisis une catégorie...')
-            .addOptions(
-                { label: '🎉 Fun & Mini-jeux', description: 'Pendu, Motus, Rébus, Roulette, Battle Pass...', emoji: '🎉', value: 'fun' },
-                { label: '🛠️ Utilitaires & Serveur', description: 'Discord, Profil, Top, YouTube, Météo...', emoji: '🛠️', value: 'util' }
-            );
-        const row = new ActionRowBuilder().addComponents(menu);
-        return interaction.update({ embeds: [embed], components: [row] });
     }
 }
 
@@ -568,14 +488,16 @@ async function runHelpInteraction(interaction) {
 // =========================
 
 async function handleHelpMessage(message, response) {
-    if (!response?.needsHelpx && !response?.data) return false;
+    if (!response?.needsHelpx && !response?.data && !response?.needsHelp) return false;
     await runHelpMessage(message, response);
     return true;
 }
 
 async function handleHelpInteraction(interaction) {
-    if (!interaction.isButton() && !interaction.isStringSelectMenu()) return false;
-    if (!/^helpx?_/.test(interaction.customId)) return false;
+    const isSlashHelp = interaction.isChatInputCommand && interaction.isChatInputCommand() && interaction.commandName === 'help';
+    const isHelpComponent = (interaction.isButton() || interaction.isStringSelectMenu()) && /^helpx?_/.test(interaction.customId);
+
+    if (!isSlashHelp && !isHelpComponent) return false;
     await runHelpInteraction(interaction);
     return true;
 }
