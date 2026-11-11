@@ -1116,6 +1116,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             if (basculerTransfo(member.id, 'caps', 2 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur les **MAJUSCULES** alors qu'elles étaient encore actives : le malus est **annulé** !`;
             return `**${auteurNom}** doit **PARLER EN MAJUSCULES** pendant **${2 * multTemps}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         case 'malus-boomer':
+            case 'malus-boomer':
             if (basculerTransfo(member.id, 'boomer', 2 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur le **mode Boomer** alors qu'il était encore actif : le malus est **annulé** !`;
             return `🧓 **${auteurNom}** passe en **mode Boomer** pendant **${2 * multTemps}h** *(environ 1 message sur 3)* ..... A bon entendeur ... !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         case 'malus-brise-bouclier': {

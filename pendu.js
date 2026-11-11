@@ -440,11 +440,17 @@ async function handlePenduMessage(message, response, client, helpers) {
     if (penduTestSessions.has(message.channel.id) && !message.content.startsWith('!')) {
         const sTest = penduTestSessions.get(message.channel.id);
         if (sTest && !sTest.termine && Date.now() < sTest.expireAt) {
+            // Une proposition au Pendu doit obligatoirement être un mot unique (pas une phrase de discussion)
+            const motsMessage = message.content.trim().split(/\s+/);
+            if (motsMessage.length !== 1) {
+                return false;
+            }
+
             const rawGuess = message.content.trim().toUpperCase()
                 .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                 .replace(/[^A-Z]/g, "");
 
-            // Si c'est juste une phrase ou un message de discussion : on ne touche pas au jeu !
+            // Si ce n'est ni 1 lettre ni un mot de 7 lettres : on ne touche pas au jeu !
             if (rawGuess.length !== 1 && rawGuess.length !== 7) {
                 return false;
             }
@@ -580,6 +586,10 @@ async function handlePenduMessage(message, response, client, helpers) {
     // 1. Détection des propositions dans le salon officiel #pendu
     if (message.channel.id === PENDU_CHANNEL_ID && !message.content.startsWith('!')) {
         if (session.mot && !session.termine && session.expireAt && now < session.expireAt) {
+            // Une proposition au Pendu doit être un mot unique (évite que "c'est bon" ou "ah ouais" fassent 7 lettres)
+            const motsMessage = message.content.trim().split(/\s+/);
+            const estMotUnique = (motsMessage.length === 1);
+
             const rawGuess = message.content.trim().toUpperCase()
                 .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                 .replace(/[^A-Z]/g, "");
@@ -591,8 +601,8 @@ async function handlePenduMessage(message, response, client, helpers) {
 
             const uid = message.author.id;
 
-            // Cas A : Le joueur propose 1 seule lettre OU le mot entier de 7 lettres
-            if (rawGuess.length === 1 || rawGuess.length === 7) {
+            // Cas A : Le joueur propose 1 seule lettre OU le mot entier de 7 lettres (UN SEUL MOT uniquement)
+            if (estMotUnique && (rawGuess.length === 1 || rawGuess.length === 7)) {
                 if (!session.tentativesJoueurs[uid]) session.tentativesJoueurs[uid] = 0;
                 if (!session.bonnesLettresParJoueur[uid]) session.bonnesLettresParJoueur[uid] = 0;
                 if (!session.lettresRefuseesParJoueur[uid]) session.lettresRefuseesParJoueur[uid] = [];

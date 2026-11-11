@@ -377,6 +377,19 @@ const {
     handleRoulettePseudoLock
 } = require('./roulette.js');
 
+// Vérifie si un membre a un malus textuel en cours (message remplacé par webhook puis supprimé)
+function aMalusTextuelActif(userId) {
+    if (!userId || !ROULETTE_ETATS) return false;
+    const tf = ROULETTE_ETATS.transfos?.get(userId);
+    if (tf && Object.values(tf).some(fin => typeof fin === 'number' && fin > Date.now())) return true;
+    if (ROULETTE_ETATS.uwu?.get(userId) > Date.now()) return true;
+    if (ROULETTE_ETATS.lettreInterdite?.get(userId)?.until > Date.now()) return true;
+    if (ROULETTE_ETATS.emoji?.get(userId) > Date.now()) return true;
+    if (ROULETTE_ETATS.leet?.get(userId) > Date.now()) return true;
+    if (ROULETTE_ETATS.echo?.get(userId) > Date.now()) return true;
+    return false;
+}
+
 ///embeds.js
 const {
     handleEmbedMessage,
@@ -835,9 +848,10 @@ async function disableButtons(interaction) {
     // =========================
     if (await handleRouletteMessage(message, null, client, { findMemberByName, askDisambiguation })) return;
 
-    // Ping Cacabot seul -> "Quoi ? (Feur)" (Silencieux)
+    // Ping Cacabot seul -> "Quoi ? (Feur)" (Silencieux - ignoré si malus textuel pour éviter de répondre à un message supprimé)
     const strippedMsg = message.content.replace(/<@!?1503495713097519355>/g, '').trim();
     if (!isChannelMuted(message.channel.id) && message.content.includes('1503495713097519355') && strippedMsg.length === 0) {
+        if (aMalusTextuelActif(message.author.id)) return;
         const finAf = rouletteAntiFeurUntil.get(message.author.id);
         if (finAf && Date.now() < finAf) {
             const d = (rouletteAntiFeurDodges.get(message.author.id) || 0) + 1;
@@ -848,10 +862,12 @@ async function disableButtons(interaction) {
         }
         return message.reply({ content: 'Quoi ? (Feur)', flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
     }
-    // Cheh (Silencieux)
+
+    // Cheh (Silencieux - ignoré si malus textuel)
     const cleanedCheh = message.content.toLowerCase().trim();
     if (!isChannelMuted(message.channel.id) && pendingCheh.has(message.channel.id) && (cleanedCheh.includes('ntm') || cleanedCheh.includes('tg') || cleanedCheh.includes('nique ta') || cleanedCheh.includes('ta gueule') || cleanedCheh.includes('jte bz') || cleanedCheh.includes('bztmr') || cleanedCheh.includes('va te faire enculer') || cleanedCheh.includes('la ferme') || cleanedCheh.includes('tais-toi') || cleanedCheh.includes('mange tes'))) {
         pendingCheh.delete(message.channel.id);
+        if (aMalusTextuelActif(message.author.id)) return;
         return message.reply({ content: CHEH_GIF, flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
     }
 
@@ -927,9 +943,10 @@ async function disableButtons(interaction) {
         monthlyData[monthKey][uid]++;
     }
 
-    const response = FEUR_IMMUNE.includes(message.author.id) ? null : await getResponse(message.content);
-
     const isExplicitCommand = message.content.trim().startsWith('!');
+    const sousMalusTexte = !isExplicitCommand && aMalusTextuelActif(message.author.id);
+    const response = (FEUR_IMMUNE.includes(message.author.id) || sousMalusTexte) ? null : await getResponse(message.content);
+
     if (isChannelMuted(message.channel.id) && !isExplicitCommand) {
         return;
     }
@@ -1651,7 +1668,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
         }
     }
 
-    trackBattlePassProgress(user.id, 'reaction_add', 1);
+    trackBattlePassProgress(user.id, 'reaction_add', 1, { targetAuthorId: reaction.message?.author?.id });
     if (reaction.emoji.name !== '🖕' && reaction.emoji.name !== 'middle_finger') return;
 
     const msg = reaction.message;

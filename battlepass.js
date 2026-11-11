@@ -787,7 +787,7 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
     typesActifs.add('streak_hebdo_5');
     typesActifs.add('bouclier_actif');
 
-    const validerQuete = (q, amt) => {
+    const validerQuete = (q, amt, isDaily = false) => {
         // Pour les quêtes de comptage d'ensembles uniques (salons, jours, streaks, etc.)
         if (q.type === 'salons_diff') {
             q.progression = Math.min(q.objectif, p.dailySalons.length);
@@ -843,37 +843,39 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
         if (q.progression >= q.objectif && !q.terminee) {
             q.terminee = true;
             q.reclamee = true;
-            if (p.dernierJourStreak !== today) {
+            if (isDaily && p.dernierJourStreak !== today) {
                 p.streak = (p.streak || 0) + 1;
                 p.dernierJourStreak = today;
                 checkStreakRewards(userId, p.streak);
             }
             ajouterXpEtMonteeDeNiveau(userId, p, q.xp, q.desc);
 
-            // Méta-quêtes hebdos : nombre de quotidiennes validées
-            p.weeklyDailyCount = (p.weeklyDailyCount || 0) + 1;
-            for (const hq of p.quetesHebdo) {
-                if (!hq.terminee && hq.type === 'quetes_daily_validees') {
-                    hq.progression = Math.min(hq.objectif, p.weeklyDailyCount);
-                    if (hq.progression >= hq.objectif) {
-                        hq.terminee = true;
-                        hq.reclamee = true;
-                        ajouterXpEtMonteeDeNiveau(userId, p, hq.xp, hq.desc);
-                    }
-                }
-            }
-
-            // Méta-quête Grand Chelem (4/4 quotidiennes)
-            const toutesTerminees = p.quetesDuJour.length > 0 && p.quetesDuJour.every(dq => dq.terminee);
-            if (toutesTerminees && p.dernierGrandChelem !== today) {
-                p.dernierGrandChelem = today;
+            if (isDaily) {
+                // Méta-quêtes hebdos : nombre de quotidiennes validées
+                p.weeklyDailyCount = (p.weeklyDailyCount || 0) + 1;
                 for (const hq of p.quetesHebdo) {
-                    if (!hq.terminee && hq.type === 'full_daily') {
-                        hq.progression = Math.min(hq.objectif, hq.progression + 1);
+                    if (!hq.terminee && hq.type === 'quetes_daily_validees') {
+                        hq.progression = Math.min(hq.objectif, p.weeklyDailyCount);
                         if (hq.progression >= hq.objectif) {
                             hq.terminee = true;
                             hq.reclamee = true;
                             ajouterXpEtMonteeDeNiveau(userId, p, hq.xp, hq.desc);
+                        }
+                    }
+                }
+
+                // Méta-quête Grand Chelem (4/4 quotidiennes)
+                const toutesTerminees = p.quetesDuJour.length > 0 && p.quetesDuJour.every(dq => dq.terminee);
+                if (toutesTerminees && p.dernierGrandChelem !== today) {
+                    p.dernierGrandChelem = today;
+                    for (const hq of p.quetesHebdo) {
+                        if (!hq.terminee && hq.type === 'full_daily') {
+                            hq.progression = Math.min(hq.objectif, hq.progression + 1);
+                            if (hq.progression >= hq.objectif) {
+                                hq.terminee = true;
+                                hq.reclamee = true;
+                                ajouterXpEtMonteeDeNiveau(userId, p, hq.xp, hq.desc);
+                            }
                         }
                     }
                 }
@@ -885,7 +887,7 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
     for (const q of p.quetesDuJour) {
         if (q.terminee) continue;
         if (typesActifs.has(q.type)) {
-            validerQuete(q, amount);
+            validerQuete(q, amount, true);
             modifie = true;
         }
     }
@@ -894,7 +896,7 @@ function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
     for (const q of p.quetesHebdo) {
         if (q.terminee) continue;
         if (typesActifs.has(q.type)) {
-            validerQuete(q, amount);
+            validerQuete(q, amount, false);
             modifie = true;
         }
     }
