@@ -111,69 +111,55 @@ function buildHelpxCategorieEmbed(categorie) {
 //   BUILDERS DE PAGES !HELP
 // =========================
 
-function buildHelpHomeEmbed(user) {
+function buildHelpHomeEmbed(user, botAvatarUrl = null) {
     const displayName = user?.displayName || user?.username || 'Membre';
-    return new EmbedBuilder()
+    const embed = new EmbedBuilder()
         .setColor(0x5865f2)
         .setTitle('💩 Cacabot — Guide des commandes')
         .setDescription(
-            `Salut **${displayName}** ! Je suis **Cacabot**, le bot officiel de **Regaïa**.\n` +
-            `Toutes mes commandes fonctionnent avec le préfixe \`!\` ou en commande slash \`/\`.\n\n` +
-            `Choisis une catégorie dans le menu ci-dessous pour découvrir les fonctionnalités 👇`
-        )
-        .addFields(
-            {
-                name: '🎮 Mini-Jeux Quotidiens',
-                value: 'Le Motus (10h & 19h), le Rébus Regaïen (15h), le Pendu (21h), ainsi que leurs classements et statistiques.'
-            },
-            {
-                name: '🎰 Roulette & Battle Pass',
-                value: 'La Roulette Regaïenne toutes les 15 min (5 min en Happy Hour à 20h), inventaire de récompenses et 25 paliers du Battle Pass.'
-            },
-            {
-                name: '👥 Vie du Serveur & Profils',
-                value: 'Fiches membres, tops des plus bavards, gestion des anniversaires, citations mythiques et suggestions.'
-            },
-            {
-                name: '🎭 Social, Fun & Oracles',
-                value: 'Interactions sociales animées (bisous, baffes, rizz), prophéties loufoques, horoscope du jour, pile ou face et débats.'
-            },
-            {
-                name: '🛠️ Utilitaires du Quotidien',
-                value: 'Rappels avec boutons snooze (+10m, +1h), minuteur Pomodoro, météo en direct, lecteur YouTube et statut du serveur.'
-            }
+            `> *Bienvenue sur le guide de **Cacabot**, le bot compagnon de **Regaïa** !*\n` +
+            `> *Toutes les commandes fonctionnent avec le préfixe \`!\` ou en slash \`/\`.*\n\n` +
+            `### 🧭 Que souhaites-tu faire ?\n` +
+            `Sélectionne une thématique dans le **menu déroulant ci-dessous** pour afficher ses commandes et astuces 👇\n\n` +
+            `-# 💡 Tu peux naviguer librement d'une page à l'autre ou fermer ce guide avec 🗑️.`
         )
         .setFooter({ text: `Regaïa • Demandé par ${displayName}` });
+
+    if (botAvatarUrl) embed.setThumbnail(botAvatarUrl);
+    return embed;
 }
 
-function buildHelpCategoryEmbed(category, user) {
+function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
     const displayName = user?.displayName || user?.username || 'Membre';
     const embed = new EmbedBuilder().setFooter({ text: `Regaïa • Demandé par ${displayName}` });
+    if (botAvatarUrl) embed.setThumbnail(botAvatarUrl);
 
     if (category === 'minijeux') {
         return embed
             .setColor(0x2ecc71)
             .setTitle('🎮 Mini-Jeux Quotidiens')
-            .setDescription('Rendez-vous à heures fixes pour faire travailler vos méninges et marquer des points !')
+            .setDescription('> *Des rendez-vous à heures fixes chaque jour sur Regaïa pour faire travailler tes méninges !*')
             .addFields(
                 {
-                    name: '🟩 Le Motus (10h00 & 19h00)',
+                    name: '🟩 Le Motus • 10h00 & 19h00',
                     value:
-                        '`!motus [mot]` — Proposer un mot *(6 lettres à 10h, 7 lettres à 19h)*\n' +
-                        '`!motustats [@membre]` — Taux de réussite et séries de victoires\n' +
-                        '`!motustop` — Classement général des meilleurs joueurs'
+                        '> **`!motus [mot]`**\n' +
+                        '-# ↳ 6 lettres à 10h, 7 lettres à 19h. Propose ton mot dans le salon de jeu !\n' +
+                        '📊 Stats : `!motustats` • 🏆 Podium : `!motustop`'
                 },
                 {
-                    name: '🧩 Le Rébus Regaïen (15h00)',
+                    name: '🧩 Le Rébus Regaïen • 15h00',
                     value:
-                        '`!rebus [titre ou emojis]` — Proposer la solution *(5 manches de 5 min)*\n' +
-                        '`!rebusstats` / `!rebustop` — Points individuels et podium de la semaine'
+                        '> **`!rebus [réponse]`**\n' +
+                        '-# ↳ 5 manches chronométrées de 5 minutes avec énigmes visuelles.\n' +
+                        '📊 Stats : `!rebusstats` • 🏆 Podium : `!rebustop`'
                 },
                 {
-                    name: '🪢 Le Pendu (21h00)',
+                    name: '🪢 Le Pendu Quotidien • 21h00',
                     value:
-                        '`!pendu [lettre ou mot]` — Proposer une lettre ou le mot *(3 essais max, mot de 7 lettres)*\n' +
-                        '`!pendustats` / `!pendutop` — Statistiques personnelles et classement hebdomadaire'
+                        '> **`!pendu [lettre ou mot]`**\n' +
+                        '-# ↳ 3 essais max par joueur pour deviner le mot secret de 7 lettres.\n' +
+                        '📊 Stats : `!pendustats` • 🏆 Podium : `!pendutop`'
                 }
             );
     }
@@ -182,21 +168,23 @@ function buildHelpCategoryEmbed(category, user) {
         return embed
             .setColor(0xf1c40f)
             .setTitle('🎰 Roulette & Battle Pass')
-            .setDescription('Tente ta chance au casino de Regaïa et fais progresser ton pass de combat mensuel.')
+            .setDescription('> *Tente ta chance au casino de Regaïa et fais monter ton pass de combat mensuel !*')
             .addFields(
                 {
                     name: '🎲 La Roulette Regaïenne',
                     value:
-                        '`!rlt` *(ou `!roulette`)* — Tente ta chance *(cooldown 15 min, réduit à 5 min en Happy Hour à 20h)*\n' +
-                        '`!rlt claim` — Ouvre ton inventaire pour consommer boucliers, relances et récompenses\n' +
-                        '`!rlt state` — Liste tes bonus, malus et transformations actives\n' +
-                        '`!rlt stats [@membre]` — Bilan complet des tirages (gains, pertes, nuls)\n' +
-                        '`!rlttop` — Le Panthéon des chasseurs de succès'
+                        '> **`!rlt`** *(alias: `!roulette`)*\n' +
+                        '-# ⏱️ Cooldown : 15 min • Réduit à **5 min en Happy Hour (20h)** !\n' +
+                        '🎒 **`!rlt claim`** — Inventaire (boucliers, relances & récompenses)\n' +
+                        '✨ **`!rlt state`** — Consulter tes bonus, malus et transformations actives\n' +
+                        '📊 **`!rlt stats [@membre]`** & 🏆 **`!rlttop`** — Bilan et Panthéon des succès'
                 },
                 {
                     name: '🎫 Le Battle Pass Mensuel',
                     value:
-                        '`!bp` *(ou `!pass`)* — Visualise tes quêtes quotidiennes/hebdos et réclame tes 25 paliers de récompenses'
+                        '> **`!bp`** *(alias: `!pass`)*\n' +
+                        '-# ↳ Quêtes quotidiennes & hebdomadaires, 25 paliers de récompenses à débloquer.\n' +
+                        '🎁 Bouton **Tout récupérer** disponible directement sous le pass pour claim tes paliers d\'un coup !'
                 }
             );
     }
@@ -205,29 +193,29 @@ function buildHelpCategoryEmbed(category, user) {
         return embed
             .setColor(0x3498db)
             .setTitle('👥 Vie du Serveur & Profils')
-            .setDescription('Tout ce qui concerne ton activité, les membres et la vie sur Regaïa.')
+            .setDescription('> *Tout ce qui concerne ton activité, les membres et la vie sur Regaïa.*')
             .addFields(
                 {
-                    name: '📊 Profils & Activité',
+                    name: '👤 Profils & Activité',
                     value:
-                        '`!profil [@membre]` — Fiche complète : rang, stats, succès et date d\'arrivée\n' +
-                        '`!top` — Classement historique des membres les plus bavards\n' +
-                        '`!actif` — Podium des plus actifs *(Aujourd\'hui, Cette semaine, Ce mois-ci)*\n' +
-                        '`!avatar [@membre]` — Affiche la photo de profil en haute définition'
+                        '> **`!profil`** `[@membre]`\n' +
+                        '-# ↳ Rang d\'activité, succès débloqués, statistiques et date d\'arrivée.\n' +
+                        '🖼️ **`!avatar`** `[@membre]` — Affiche la photo de profil en haute définition\n' +
+                        '🏆 **`!top`** — Classement historique des membres les plus bavards\n' +
+                        '⚡ **`!actif`** — Podiums des plus actifs *(Aujourd\'hui, Semaine, Mois)*'
                 },
                 {
-                    name: '🎂 Anniversaires',
+                    name: '🎂 Les Anniversaires',
                     value:
-                        '`!anniv set [JJ/MM]` — Enregistre ta date d\'anniversaire\n' +
-                        '`!anniv show [@membre]` — Date d\'anniversaire et compte à rebours\n' +
-                        '`!anniv list` / `!anniv next` — Liste des anniversaires ou prochain à fêter'
+                        '> **`!anniv set`** `[JJ/MM]` — Enregistre ta date pour qu\'on te le fête\n' +
+                        '-# ↳ `!anniv show [@membre]` • `!anniv list` • `!anniv next`'
                 },
                 {
-                    name: '🏛️ Vie de Regaïa',
+                    name: '🏛️ Regaïa & Communauté',
                     value:
-                        '`!quote [numéro / recherche]` — Citation mythique archivée *(ou au hasard si vide)*\n' +
-                        '`!suggestion [idée]` — Soumettre une idée au vote communautaire\n' +
-                        '`!serveur` — Statistiques complètes du serveur (membres, boosts, création)'
+                        '📜 **`!quote`** `[numéro / recherche]` — Citation mythique archivée *(ou aléatoire)*\n' +
+                        '💡 **`!suggestion`** `[idée]` — Soumettre une proposition au vote communautaire\n' +
+                        '🏠 **`!serveur`** — Statistiques complètes (membres, boosts, date de création)'
                 }
             );
     }
@@ -236,31 +224,46 @@ function buildHelpCategoryEmbed(category, user) {
         return embed
             .setColor(0xe91e63)
             .setTitle('🎭 Social, Fun & Oracles')
-            .setDescription('Pour animer le chat, titiller tes potes ou tester ton avenir.')
+            .setDescription('> *Pour animer le chat, titiller tes potes ou tester ton avenir.*')
             .addFields(
                 {
-                    name: '👆 Interactions Sociales',
+                    name: '💖 Affection & Rire',
                     value:
-                        '**Tendresse** : `!kiss`, `!hug`, `!danse`, `!rizz` [@membre]\n' +
-                        '**Bagarre** : `!punch`, `!bang`, `!insult`, `!ban`, `!bait` [@membre]\n' +
-                        '**Humeurs** : `!rire`, `!cry`, `!die`, `!explode`, `!run`, `!palaref`, `!jailaref`'
+                        '💋 **`!kiss`** `[@membre]`\n' +
+                        '🫂 **`!hug`** `[@membre]`\n' +
+                        '💃 **`!danse`** `[@membre]`\n' +
+                        '🗿 **`!rizz`** `[@membre]`\n' +
+                        '😆 **`!rire`** • 😭 **`!cry`**',
+                    inline: true
+                },
+                {
+                    name: '💥 Bagarre & Drama',
+                    value:
+                        '👊 **`!punch`** `[@membre]`\n' +
+                        '🔫 **`!bang`** `[@membre]`\n' +
+                        '🗯️ **`!insult`** `[@membre]`\n' +
+                        '🔨 **`!ban`** `[@membre]`\n' +
+                        '😛 **`!bait`** `[@membre]`',
+                    inline: true
                 },
                 {
                     name: '🔮 Oracles & Hasard',
                     value:
-                        '`!horoscope` — L\'horoscope cosmique quotidien de ton signe astrologique\n' +
-                        '`!destin` — Prédictions loufoques sur ton avenir\n' +
-                        '`!animal` — Découvre ton animal spirituel parmi des milliers de combinaisons\n' +
-                        '`!flip [mise]` — Lance une pièce *(solo ou duel de pari face à un membre)*\n' +
-                        '`!blague` — Blague aléatoire *(Soft, Classique, Humour Noir)*'
+                        '> **`!horoscope`** — L\'horoscope cosmique quotidien de ton signe astral\n' +
+                        '> **`!destin`** — Prédictions absurdes et loufoques sur ton avenir\n' +
+                        '> **`!animal`** — Découvre ton animal spirituel parmi des milliers de combinaisons\n' +
+                        '🪙 **`!flip [mise]`** — Pile ou face *(solo ou duel de pari face à un membre)*\n' +
+                        '🤣 **`!blague`** — Raconte une blague aléatoire *(Soft, Classique, Humour Noir)*',
+                    inline: false
                 },
                 {
                     name: '⚖️ Débats & Gastronomie',
                     value:
-                        '`!question` — Question de débat du soir parmi 6 thématiques\n' +
-                        '`!choix [option 1 ou option 2]` — Laisse Cacabot trancher un dilemme cornélien\n' +
-                        '`!topchef [nom ou photo]` — Critique gastronomique sans pitié de Cacabot\n' +
-                        '`!lovecalc [@user1 @user2]` — Test d\'affinité amoureuse avec carte personnalisée'
+                        '❓ **`!question`** — Question de débat du soir parmi 6 thématiques\n' +
+                        '⚖️ **`!choix [option 1 ou 2]`** — Cacabot tranche un dilemme cornélien\n' +
+                        '👨‍🍳 **`!topchef [nom/photo]`** — Note gastronomique sans pitié de Cacabot\n' +
+                        '💕 **`!lovecalc [@user1 @user2]`** — Test de compatibilité amoureuse',
+                    inline: false
                 }
             );
     }
@@ -269,28 +272,29 @@ function buildHelpCategoryEmbed(category, user) {
         return embed
             .setColor(0x95a5a6)
             .setTitle('🛠️ Utilitaires & Pratique')
-            .setDescription('Des outils pratiques pour ton quotidien et la gestion de tes sessions.')
+            .setDescription('> *Des outils pratiques pour ton quotidien et la gestion de tes sessions.*')
             .addFields(
                 {
-                    name: '⏰ Organisation & Travail',
+                    name: '⏰ Organisation & Concentration',
                     value:
-                        '`!rappel [durée] [motif]` — Programme un rappel personnel *(ex: `!rappel 20min four`)* avec boutons snooze (+10m, +1h)\n' +
-                        '`!pomodoro [travail] [pause]` — Lance une session de travail Pomodoro *(ex: `!pomodoro 25 5`)*\n' +
-                        '`!meteo [ville]` — Météo, température et conditions en direct'
+                        '> **`!rappel [durée] [motif]`**\n' +
+                        '-# ↳ Boutons sous le rappel pour reporter de **+10 min** ou **+1h** en un clic !\n' +
+                        '🍅 **`!pomodoro [travail] [pause]`** — Minuteur Pomodoro *(ex: `!pomodoro 25 5`)*\n' +
+                        '🌦️ **`!meteo [ville]`** — Bulletin météo, température et ressenti en direct'
                 },
                 {
                     name: '📺 Médias & Minecraft',
                     value:
-                        '`!youtube [recherche]` — Recherche interactive YouTube avec lecteur\n' +
-                        '`!last [chaîne]` / `!stats [chaîne]` — Dernier upload et stats d\'une chaîne\n' +
-                        '`!aternos` — Statut et adresse IP du serveur Minecraft Regaïa'
+                        '🔍 **`!youtube [recherche]`** — Recherche interactive YouTube avec lecteur intégré\n' +
+                        '🎬 **`!last [chaîne]`** & 📈 **`!stats [chaîne]`** — Dernier upload et stats YouTube\n' +
+                        '⛏️ **`!aternos`** — Statut et adresse IP du serveur Minecraft Regaïa'
                 },
                 {
-                    name: '🤖 Cacabot',
+                    name: '🤖 Vie de Cacabot',
                     value:
-                        '`!botinfo` *(ou `!about`)* — Version, temps d\'activité (uptime) et statistiques\n' +
-                        '`!ping` — Mesure la latence API et WebSocket\n' +
-                        '`!stop` / `!unstop` — Mettre en pause ou réactiver les répliques automatiques'
+                        'ℹ️ **`!botinfo`** *(alias `!about`)* — Version, temps d\'activité (uptime) et mémoire\n' +
+                        '🏓 **`!ping`** — Mesure de la latence API et WebSocket\n' +
+                        '🤫 **`!stop`** / **`!unstop`** — Mettre en pause ou réactiver les répliques automatiques'
                 }
             );
     }
@@ -405,7 +409,8 @@ async function runHelpMessage(message, response) {
 
     // !help
     if (response?.data || response?.needsHelp) {
-        const embed = buildHelpHomeEmbed(message.author);
+        const botAvatarUrl = message.client?.user?.displayAvatarURL({ dynamic: true });
+        const embed = buildHelpHomeEmbed(message.author, botAvatarUrl);
         const menuRow = new ActionRowBuilder().addComponents(buildHelpMenu(message.author.id, 'home'));
         const btnRow = buildHelpButtons(message.author.id, 'home', message.id);
         return message.reply({ embeds: [embed], components: [menuRow, btnRow] });
@@ -417,9 +422,11 @@ async function runHelpMessage(message, response) {
 // =========================
 
 async function runHelpInteraction(interaction) {
+    const botAvatarUrl = interaction.client?.user?.displayAvatarURL({ dynamic: true });
+
     // 1. Commande Slash /help
     if (interaction.isChatInputCommand && interaction.isChatInputCommand()) {
-        const embed = buildHelpHomeEmbed(interaction.user);
+        const embed = buildHelpHomeEmbed(interaction.user, botAvatarUrl);
         const menuRow = new ActionRowBuilder().addComponents(buildHelpMenu(interaction.user.id, 'home'));
         const btnRow = buildHelpButtons(interaction.user.id, 'home');
         return interaction.reply({ embeds: [embed], components: [menuRow, btnRow] });
@@ -444,7 +451,7 @@ async function runHelpInteraction(interaction) {
         }
 
         const category = interaction.values[0];
-        const embed = buildHelpCategoryEmbed(category, interaction.user);
+        const embed = buildHelpCategoryEmbed(category, interaction.user, botAvatarUrl);
         const menuRow = new ActionRowBuilder().addComponents(buildHelpMenu(authorId, category));
         const btnRow = buildHelpButtons(authorId, category);
         return interaction.update({ embeds: [embed], components: [menuRow, btnRow] });
@@ -459,7 +466,7 @@ async function runHelpInteraction(interaction) {
             return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
         }
 
-        const embed = buildHelpHomeEmbed(interaction.user);
+        const embed = buildHelpHomeEmbed(interaction.user, botAvatarUrl);
         const menuRow = new ActionRowBuilder().addComponents(buildHelpMenu(authorId, 'home'));
         const btnRow = buildHelpButtons(authorId, 'home', originalMessageId);
         return interaction.update({ embeds: [embed], components: [menuRow, btnRow] });
