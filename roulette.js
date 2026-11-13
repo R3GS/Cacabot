@@ -3958,6 +3958,7 @@ function transfererMalus(sourceId, destId, malusKey, guild) {
 async function handleRouletteButton(interaction, client) {
     client = client || interaction.client;
     const customId = interaction.customId;
+    if (!customId) return false;
 
     if (interaction.isButton() && (customId === 'rlt_vote_pour' || customId === 'rlt_vote_contre')) {
         const msgId = interaction.message.id;

@@ -4,108 +4,239 @@
 
 const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 
-function buildHelpxPresentationEmbed() {
+// =========================
+//   BUILDERS DE PAGES !HELPX
+// =========================
+
+function buildHelpxHomeEmbed(user, botAvatarUrl = null) {
+    const displayName = user?.displayName || user?.username || 'Epsys';
     return new EmbedBuilder()
         .setColor(0x5865f2)
-        .setTitle('👑 Commandes Epsys-Only')
-        .setDescription("Commandes exclusivement accessibles par <@436218312574107658>.\n\nChoisis une catégorie dans le menu ci-dessous 👇");
+        .setAuthor({ name: 'Cacabot • Administration Regaïa', iconURL: botAvatarUrl || undefined })
+        .setTitle('👑 Centre d\'Administration (Epsys-Only)')
+        .setDescription(
+            `Panneau privé réservé à <@436218312574107658> *(et aux Modos pour les commandes marquées)*.\n` +
+            `────────────────────────────────────────\n` +
+            `### 🧭 Thématiques disponibles\n` +
+            `🤖 **Cacabot, Admin & Serveur**\n` +
+            `-# Diagnostic, saves, messages du bot, modération, embeds, rôles & YouTube.\n` +
+            `────────────────────────────────────────\n` +
+            `🎮 **Mini-Jeux & Arbitrage**\n` +
+            `-# Relances d'urgence, mots/rébus forcés, indices, scores & parties de test.\n` +
+            `────────────────────────────────────────\n` +
+            `🎰 **Roulette (Admin)**\n` +
+            `-# Édition des stats, succès, cooldowns, effets forcés & nettoyages.\n` +
+            `────────────────────────────────────────\n` +
+            `🎫 **Battle Pass (Admin)**\n` +
+            `-# Ajout d'XP, validation de quêtes, dons d'items & aperçu onboarding.\n` +
+            `────────────────────────────────────────\n` +
+            `🧪 **Tests & Générateurs**\n` +
+            `-# Simulations d'anniversaire, stream Twitch & envois manuels.\n` +
+            `────────────────────────────────────────\n` +
+            `👥 **Pour les Autres Membres**\n` +
+            `-# Rappels ciblés, compteurs de messages, anniversaires & modération quotes.\n` +
+            `────────────────────────────────────────\n` +
+            `-# 💡 Sélectionne une catégorie dans le menu déroulant ci-dessous 👇`
+        )
+        .setFooter({ text: `Regaïa • Panel privé de ${displayName}` });
 }
 
-function buildHelpxMenu(authorId) {
-    return new StringSelectMenuBuilder()
-        .setCustomId(`helpx_menu_${authorId}`)
-        .setPlaceholder('Choisis une catégorie')
-        .addOptions(
-            { label: 'Cacabot & Admin', emoji: '🤖', value: 'cacabot' },
-            { label: 'Mini-jeux', emoji: '🎮', value: 'minijeux' },
-            { label: 'Générateurs & Tests', emoji: '🧪', value: 'generateurs' },
-            { label: 'Pour les autres', emoji: '👥', value: 'autres' },
-            { label: 'Roulette', emoji: '🎰', value: 'roulette' },
-            { label: 'Battle Pass', emoji: '🎫', value: 'battlepass' }
-        );
-}
+function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
+    const displayName = user?.displayName || user?.username || 'Epsys';
+    const embed = new EmbedBuilder()
+        .setAuthor({ name: 'Cacabot • Panel Epsys-Only', iconURL: botAvatarUrl || undefined })
+        .setFooter({ text: `Regaïa • Panel privé de ${displayName}` });
 
-function buildHelpxCategorieEmbed(categorie) {
-    const embed = new EmbedBuilder().setColor(0x5865f2);
-
-    if (categorie === 'cacabot') {
-        return embed.setTitle('🤖 Commandes liées à Cacabot & Administration')
-            .addFields(
-                { name: '🩺 **!diag / !cacatest**', value: 'Diagnostic complet de l\'état de santé de tous les modules.' },
-                { name: '⚖️ **!tribunal / !trib [@membre]**', value: 'Le tribunal des bannis.' },
-                { name: '📄 **!archives / !tribunal archives**', value: 'Pour avoir accès aux archives des tribunaux (fichiers en .txt).' },
-                { name: '📺 **!ytabo config**', value: 'Panneau interactif des abonnements et notifications YouTube.' },
-                { name: '👋 **!welcome / !welcome test**', value: 'Configurer le salon d\'accueil ou tester l\'affiche Canvas.' },
-                { name: '📣 **!say [ID Salon] [message]**', value: 'Envoyer un message dans un salon au nom de Cacabot.' },
-                { name: '💬 **!reply [ID_message] [texte]**', value: 'Répondre directement à un message sous le nom de Cacabot.' },
-                { name: '✏️ **!edit [ID_message] [texte]**', value: 'Modifier un message envoyé par Cacabot.' },
-                { name: '🆙 **!up [en réponse ou ID/lien]** *(Modos)*', value: 'Remonte une suggestion ou un vote de roulette tout en bas du salon sans perdre les votes.' },
-                { name: '🐛 **!bug / !bug resolve [N]**', value: 'Répondre à un message avec `!bug` pour le répertorier dans la liste des bugs.' },
-                { name: '🖼️ **!embed / !embed modify [ID]**', value: 'Créateur et modificateur interactif d\'embeds complets.' },
-                { name: '🎭 **!rolereac / !rolebtn**', value: 'Gérer les rôles réactions et boutons de rôles.' },
-                { name: '🤐 **!chut [temps] / !unchut**', value: 'Faire taire Cacabot temporairement sur un salon.' },
-                { name: '💾 **!save / !lastsave**', value: 'Forcer une sauvegarde ou consulter l\'heure de la dernière sauvegarde.' }
+    // 1. CACABOT, ADMIN & SERVEUR
+    if (category === 'cacabot') {
+        return embed
+            .setColor(0x5865f2)
+            .setTitle('🤖 Cacabot, Admin & Serveur')
+            .setDescription(
+                `Gestion complète du bot, de ses messages, des salons et des configurations.\n\n` +
+                `### 🩺 Santé & Sauvegardes\n` +
+                `\`!diag\` *(ou \`!cacatest\`)* • Diagnostic complet de tous les modules et APIs\n` +
+                `\`!save\` • \`!lastsave\` • Forcer un backup \`#json\` ou voir l'heure du dernier\n\n` +
+                `### 🛡️ Modération & Voix de Cacabot\n` +
+                `\`!up [réponse / ID / lien]\` *(Modos)* • Remonte une suggestion ou un vote roulette\n` +
+                `-# ↳ Aussi disponible via \`/up\` et \`Clic droit -> Applications -> 🆙 Remonter (up)\`\n` +
+                `\`!prune [1-100]\` *(Modos)* • Suppression en masse de messages récents\n` +
+                `\`!say [#salon/ID] [texte]\` • Envoyer un message au nom de Cacabot\n` +
+                `\`!reply [ID] [texte]\` • \`!edit [ID] [texte]\` • Répondre ou éditer un message du bot\n` +
+                `\`!chut [durée]\` / \`!unchut\` • Couper ou réactiver les répliques dans le salon\n` +
+                `\`!bug\` *(en réponse)* • \`!bug resolve [N]\` • \`!bug clear\` • Gérer la liste des bugs\n\n` +
+                `### ⚙️ Configuration & Communauté\n` +
+                `\`!embed\` / \`!embed modify [ID]\` • Créateur et éditeur interactif d'embeds\n` +
+                `\`!rolereac\` • \`!rolebtn\` • \`!rolembed\` • Gérer rôles-réactions, boutons & panneaux\n` +
+                `\`!ytabo config\` • Panneau interactif des abonnements YouTube\n` +
+                `\`!welcome\` / \`!welcome test\` • Configurer l'accueil et tester l'affiche Canvas\n` +
+                `\`!tribunal [@membre]\` *(ou \`!trib\` / \`!archives\`)* • Tribunal des bannis & logs \`.txt\``
             );
     }
 
-    if (categorie === 'minijeux') {
-        return embed.setTitle('🎮 Commandes Mini-Jeux (Epsys-Only)')
-            .addFields(
-                { name: '♻️ **!penduforce**', value: 'Ferme la session de Pendu en cours et en relance une nouvelle immédiatement.' },
-                { name: '♻️ **!rebusforce**', value: 'Ferme la session de Rébus en cours et relance une nouvelle session de 5 manches.' },
-                { name: '♻️ **!motusforce**', value: 'Ferme le Motus en cours et relance immédiatement une nouvelle session.' },
-                { name: '🔤 **!motus set / force [mot]**', value: 'Définit manuellement le mot secret de la prochaine session de Motus.' },
-                { name: '🧩 **!rebus set / force [titre ou emojis réponse]**', value: 'Définit le rébus secret de la prochaine session de Rébus.' },
-                { name: '📊 **!jeupts [@membre]**', value: 'Panneau interactif complet pour modifier les points/victoires de Motus, Rébus et Pendu.' },
-                { name: '🟩 **!motustest [6/7]**', value: 'Lancer un Motus solo de test dans le salon actuel.' },
-                { name: '🧩 **!rebustest**', value: 'Lancer une manche solo de test du Rébus dans le salon actuel.' },
-                { name: '🪢 **!pendutest**', value: 'Lancer une partie solo de test du Pendu dans le salon actuel.' }
+    // 2. MINI-JEUX & ARBITRAGE
+    if (category === 'minijeux') {
+        return embed
+            .setColor(0x2ecc71)
+            .setTitle('🎮 Mini-Jeux & Arbitrage')
+            .setDescription(
+                `Contrôle des sessions quotidiennes, trucages, indices et tests isolés.\n\n` +
+                `### ♻️ Relances d'urgence\n` +
+                `\`!motusforce\` *(ou \`!motus restart\`)* • Ferme le Motus en cours et en relance un neuf\n` +
+                `\`!rebusforce\` *(ou \`!rebus restart\`)* • Ferme le Rébus et relance 5 nouvelles manches\n` +
+                `\`!penduforce\` *(ou \`!pendu restart\`)* • Ferme le Pendu et relance une partie officielle\n\n` +
+                `### 🎯 Contenu forcé, Indices & Scores\n` +
+                `\`!motus set [mot]\` • Impose le mot secret du prochain Motus\n` +
+                `\`!rebus set [titre ou emojis rép]\` • Impose le rébus secret de la prochaine session\n` +
+                `\`!rebus indice\` • \`!pendu indice\` • Révèle un indice immédiat sur la partie en cours\n` +
+                `\`!jeupts [@membre]\` *(ou \`!points\`)* • Panneau interactif des points Motus, Rébus & Pendu\n\n` +
+                `### 🧪 Sessions Solo de Test\n` +
+                `\`!motustest [6/7]\` • \`!rebustest\` • \`!pendutest\` • Parties de test dans le salon actuel`
             );
     }
 
-    if (categorie === 'generateurs') {
-        return embed.setTitle('🧪 Générateurs & Tests en solo')
-            .addFields(
-                { name: '🎂 **!anniversairetest**', value: 'Tester l\'alerte et le GIF d\'anniversaire.' },
-                { name: '🟣 **!streamtest**', value: 'Tester l\'embed d\'alerte de live Twitch.' },
-                { name: '🔮 **!horoscope [ID_salon]**', value: 'Forcer l\'envoi de l\'horoscope du jour dans un salon spécifique.' },
+    // 3. ROULETTE (ADMIN)
+    if (category === 'roulette') {
+        return embed
+            .setColor(0xf1c40f)
+            .setTitle('🎰 Roulette (Administration)')
+            .setDescription(
+                `Gestion des statistiques, succès, cooldowns et effets spéciaux.\n\n` +
+                `### 📊 Statistiques & Succès\n` +
+                `\`!stats set [@membre]\` • Panneau complet pour modifier tirages, gains, bonus & malus\n` +
+                `\`!successgive [@membre]\` • Menu pour réattribuer des succès perdus\n` +
+                `\`!rltsuccesforce [id/test] [@membre]\` • Débloque un succès de force ou teste une carte\n\n` +
+                `### 🎛️ Effets & Cooldowns\n` +
+                `\`!reroll [@membre]\` • Réinitialise immédiatement le cooldown d'un·e membre\n` +
+                `\`!bonusforce [id] [@membre]\` / \`!malusforce [id] [@membre]\` • Impose un tirage\n` +
+                `\`!rltid\` *(ou \`!rouletteid\`)* • Liste triée des IDs bonus, malus & spéciaux\n` +
+                `\`!removestate [@membre] [nom]\` • Retire un seul effet actif *(pseudo, mute, transfo...)*\n` +
+                `\`!resetrlt [@membre]\` *(ou \`!resetroulettestate\`)* • Remise à zéro de tout l'état actif`
             );
     }
 
-    if (categorie === 'autres') {
-        return embed.setTitle('👥 Commandes pour les autres membres')
-            .addFields(
-                { name: '⏰ **!rappel [ID] Xmin/h [message]**', value: 'Programmer un rappel pour un membre précis par son ID.' },
-                { name: '📝 **!setmessages @Membre [nombre]**', value: 'Définir manuellement le compteur de messages d\'un membre.' }
+    // 4. BATTLE PASS (ADMIN)
+    if (category === 'battlepass') {
+        return embed
+            .setColor(0xe67e22)
+            .setTitle('🎫 Battle Pass (Administration)')
+            .setDescription(
+                `Outils d'inspection, d'attribution de récompenses et de test du pass.\n\n` +
+                `### ⚡ XP, Quêtes & Inventaire\n` +
+                `\`!bp [@membre]\` *(ou \`!pass\`)* • Inspecter le pass d'un membre + bouton **⚡ Ajouter XP**\n` +
+                `\`!bp questforce [@membre]\` • Menu déroulant pour valider de force une quête en cours\n` +
+                `\`!bpgive [@membre] [id] [qté]\` • Déposer un bonus dans l'inventaire roulette d'un membre\n` +
+                `\`!bpgiveid\` • Liste complète des identifiants compatibles avec \`!bpgive\`\n\n` +
+                `### 🔍 Prévisualisation\n` +
+                `\`!bp embedtest\` • Aperçu de l'embed d'activation vu par les nouveaux membres`
             );
     }
 
-    if (categorie === 'roulette') {
-        return embed.setColor(0xffd20a).setTitle('🎰 Commandes Roulette (Epsys-Only)')
-            .addFields(
-                { name: '📊 **!stats set [membre]**', value: 'Panneau interactif complet pour modifier les stats roulette (tirages, bonus, malus, rien, plus gros gain, etc.).' },
-                { name: '🎖️ **!successgive [membre]**', value: 'Panneau interactif avec menus contextuels pour redonner des succès perdus à un membre.' },
-                { name: '🔄 **!reroll [membre]**', value: 'Réinitialise le cooldown d\'un·e membre.' },
-                { name: '🎉/💀 **!bonusforce / !malusforce [id] [membre]**', value: 'Impose un bonus ou un malus à un·e membre.' },
-                { name: '📋 **!rouletteid / !rltid**', value: 'Affiche tous les identifiants de bonus/malus/spécial, triés par bouton.' },
-                { name: '♻️ **!resetroulettestate / !resetrlt [membre]**', value: 'Réinitialise tout l\'état roulette d\'un·e membre.' },
-                { name: '🗑️ **!removestate [membre] [nom]**', value: 'Retire un seul effet actif d\'un·e membre (pseudo, mute, transfos, etc.).' },
-                { name: '🎖️ **!rltsuccesforce [id/test] [membre]**', value: 'Débloque de force un succès de la roulette ou lance une carte de test.' }
+    // 5. TESTS & GÉNÉRATEURS
+    if (category === 'generateurs') {
+        return embed
+            .setColor(0x9b59b6)
+            .setTitle('🧪 Tests & Générateurs')
+            .setDescription(
+                `Déclenchements manuels, simulations d'alertes et réglages de salons.\n\n` +
+                `### 🎉 Alertes & Envois manuels\n` +
+                `\`!anniversairetest\` • Tester l'embed, le GIF et l'alerte d'anniversaire\n` +
+                `\`!streamtest\` • Tester l'embed d'annonce de live Twitch\n` +
+                `\`!horoscope [ID_salon]\` • Forcer l'envoi de l'horoscope du jour dans un salon précis\n` +
+                `\`!anniversaire room [ID_salon]\` • Définir le salon officiel des anniversaires`
             );
     }
 
-    if (categorie === 'battlepass') {
-        return embed.setColor(0x2ecc71).setTitle('🎫 Commandes Battle Pass (Epsys-Only)')
-            .addFields(
-                { name: '⚡ **!bp [membre]**', value: 'Inspecter le Battle Pass d\'un membre avec le bouton **⚡ Ajouter XP**.' },
-                { name: '🛠️ **!bp questforce [membre]**', value: 'Menu déroulant pour compléter de force une quête en cours.' },
-                { name: '🎁 **!bpgive [membre] [id] [qte]**', value: 'Déposer directement un bonus de palier dans l\'inventaire d\'un membre.' },
-                { name: '📋 **!bpgiveid**', value: 'Liste de tous les identifiants de bonus à donner avec !bpgive.' },
-                { name: '🔍 **!bp embedtest**', value: 'Prévisualiser l\'embed d\'onboarding que voient les nouveaux membres.' }
+    // 6. POUR LES AUTRES MEMBRES
+    if (category === 'autres') {
+        return embed
+            .setColor(0x3498db)
+            .setTitle('👥 Pour les Autres Membres')
+            .setDescription(
+                `Commandes d'édition ou d'action ciblée sur le profil d'un membre.\n\n` +
+                `### 🔧 Actions & Modération\n` +
+                `\`!rappel [ID_membre] [durée] [motif]\` • Programmer un rappel pour quelqu'un d'autre\n` +
+                `\`!setmessages [@membre / ID] [nombre]\` • Définir le compteur de messages \`!top\`\n` +
+                `\`!anniv set [pseudo] JJ/MM\` / \`remove [pseudo]\` *(Modos)* • Gérer l'anniv d'un membre\n` +
+                `\`!quote remove [ID]\` *(Modos)* • Supprimer n'importe quelle citation des archives`
             );
     }
 
     return embed.setTitle('❓ Inconnu').setDescription('Catégorie introuvable.');
+}
+
+function buildHelpxMenu(authorId, currentCategory = 'home', originalMessageId = '') {
+    return new StringSelectMenuBuilder()
+        .setCustomId(`helpx_menu_${authorId}_${originalMessageId}`)
+        .setPlaceholder('Choisis une thématique admin...')
+        .addOptions(
+            {
+                label: 'Cacabot, Admin & Serveur',
+                description: 'Diag, saves, say/reply/edit, up, embeds, rôles & tribunal',
+                emoji: '🤖',
+                value: 'cacabot',
+                default: currentCategory === 'cacabot'
+            },
+            {
+                label: 'Mini-Jeux & Arbitrage',
+                description: 'Relances force, mots/rébus forcés, indices, jeupts & tests',
+                emoji: '🎮',
+                value: 'minijeux',
+                default: currentCategory === 'minijeux'
+            },
+            {
+                label: 'Roulette (Admin)',
+                description: 'Stats set, successgive, reroll, bonus/malusforce & reset',
+                emoji: '🎰',
+                value: 'roulette',
+                default: currentCategory === 'roulette'
+            },
+            {
+                label: 'Battle Pass (Admin)',
+                description: 'Ajout XP, questforce, bpgive, bpgiveid & embedtest',
+                emoji: '🎫',
+                value: 'battlepass',
+                default: currentCategory === 'battlepass'
+            },
+            {
+                label: 'Tests & Générateurs',
+                description: 'Anniv test, stream test, horoscope forcé & salon anniv',
+                emoji: '🧪',
+                value: 'generateurs',
+                default: currentCategory === 'generateurs'
+            },
+            {
+                label: 'Pour les Autres Membres',
+                description: 'Rappels ciblés, setmessages, anniv & quotes modo',
+                emoji: '👥',
+                value: 'autres',
+                default: currentCategory === 'autres'
+            }
+        );
+}
+
+function buildHelpxButtons(authorId, currentCategory = 'home', originalMessageId = '') {
+    const row = new ActionRowBuilder();
+
+    if (currentCategory !== 'home') {
+        row.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`helpx_home_${authorId}_${originalMessageId}`)
+                .setLabel('Accueil')
+                .setEmoji('🏠')
+                .setStyle(ButtonStyle.Secondary)
+        );
+    }
+
+    row.addComponents(
+        new ButtonBuilder()
+            .setCustomId(`helpx_delete_${authorId}_${originalMessageId}`)
+            .setLabel('Fermer')
+            .setEmoji('🗑️')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    return row;
 }
 
 // =========================
@@ -396,9 +527,11 @@ async function runHelpMessage(message, response) {
         if (message.author.id !== '436218312574107658') {
             return message.reply("Tu n'es pas autorisé(e) à faire cette commande.");
         }
-        const embed = buildHelpxPresentationEmbed();
-        const row = new ActionRowBuilder().addComponents(buildHelpxMenu(message.author.id));
-        return message.reply({ embeds: [embed], components: [row] });
+        const botAvatarUrl = message.client?.user?.displayAvatarURL({ dynamic: true });
+        const embed = buildHelpxHomeEmbed(message.author, botAvatarUrl);
+        const menuRow = new ActionRowBuilder().addComponents(buildHelpxMenu(message.author.id, 'home', message.id));
+        const btnRow = buildHelpxButtons(message.author.id, 'home', message.id);
+        return message.reply({ embeds: [embed], components: [menuRow, btnRow] });
     }
 
     // !help
@@ -428,13 +561,50 @@ async function runHelpInteraction(interaction) {
 
     // 2. Menu déroulant Epsys (!helpx)
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('helpx_menu_')) {
-        const authorId = interaction.customId.split('_')[2];
+        const parts = interaction.customId.split('_');
+        const authorId = parts[2];
+        const originalMessageId = parts[3] || '';
         if (interaction.user.id !== authorId) {
             return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
         }
-        const embed = buildHelpxCategorieEmbed(interaction.values[0]);
-        const row = new ActionRowBuilder().addComponents(buildHelpxMenu(authorId));
-        return interaction.update({ embeds: [embed], components: [row] });
+
+        const category = interaction.values[0];
+        const embed = buildHelpxCategoryEmbed(category, interaction.user, botAvatarUrl);
+        const menuRow = new ActionRowBuilder().addComponents(buildHelpxMenu(authorId, category, originalMessageId));
+        const btnRow = buildHelpxButtons(authorId, category, originalMessageId);
+        return interaction.update({ embeds: [embed], components: [menuRow, btnRow] });
+    }
+
+    // 2b. Bouton Retour Accueil (!helpx)
+    if (interaction.isButton() && interaction.customId.startsWith('helpx_home_')) {
+        const parts = interaction.customId.split('_');
+        const authorId = parts[2];
+        const originalMessageId = parts[3] || '';
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+        }
+
+        const embed = buildHelpxHomeEmbed(interaction.user, botAvatarUrl);
+        const menuRow = new ActionRowBuilder().addComponents(buildHelpxMenu(authorId, 'home', originalMessageId));
+        const btnRow = buildHelpxButtons(authorId, 'home', originalMessageId);
+        return interaction.update({ embeds: [embed], components: [menuRow, btnRow] });
+    }
+
+    // 2c. Bouton Supprimer / Fermer (!helpx)
+    if (interaction.isButton() && interaction.customId.startsWith('helpx_delete_')) {
+        const parts = interaction.customId.split('_');
+        const authorId = parts[2];
+        const originalMessageId = parts[3] || '';
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Tu ne peux pas supprimer ce message !", ephemeral: true });
+        }
+
+        await interaction.message.delete().catch(() => {});
+        if (originalMessageId && originalMessageId !== '') {
+            const originalMsg = await interaction.channel.messages.fetch(originalMessageId).catch(() => null);
+            if (originalMsg) await originalMsg.delete().catch(() => {});
+        }
+        return;
     }
 
     // 3. Menu déroulant principal (!help)

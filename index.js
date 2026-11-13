@@ -1216,6 +1216,17 @@ try {
         if (await handleEmbedSlash(interaction, client)) return;
     }
 
+    // =========================
+    //   MENUS CONTEXTUELS (Clic droit -> Applications)
+    // =========================
+    if (interaction.isMessageContextMenuCommand()) {
+        if (interaction.guildId !== '720057528351850547') {
+            return interaction.reply({ content: "Les commandes de Cacabot sont exclusivement réservées au serveur Regaïa !", ephemeral: true });
+        }
+        if (await handleToolsInteraction(interaction, client)) return;
+        return;
+    }
+
     // Bouton pour tirer une autre citation au hasard
     if (await handleQuotesButton(interaction)) return;
 
