@@ -1686,7 +1686,7 @@ async function handleInteractionSlash(interaction, client) {
         explose: 'explode'
     };
     const cmd = aliasMap[interaction.commandName] || interaction.commandName;
-    const slashInteractions = ['kiss', 'hug', 'run', 'danse', 'insult', 'rire', 'rizz', 'bang', 'punch', 'die', 'palaref', 'jailaref', 'explode', 'bait', 'ban'];
+    const slashInteractions = ['kiss', 'hug', 'run', 'danse', 'insult', 'rire', 'rizz', 'bang', 'punch', 'die', 'cry', 'palaref', 'jailaref', 'explode', 'bait', 'ban'];
     if (!slashInteractions.includes(cmd)) return false;
 
     const auteurNom = interaction.member?.displayName ?? interaction.user.username;
@@ -1789,6 +1789,164 @@ async function handleInteractionSlash(interaction, client) {
         const row = new ActionRowBuilder().addComponents(bouton);
 
         return interaction.reply({ embeds: [embed], components: [row] });
+    }
+    if (cmd === 'palaref') {
+        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://tenor.com/view/vilebrequin-vilebrequin-sylvain-levy-vilebrequin-sylvain-vilebrequin-levy-sylvain-levy-gif-24319115", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://klipy.com/gifs/tuc-gian-3", "https://cdn.discordapp.com/attachments/1480756332373213275/1548362733408362578/michel-palareff-v0-r9ywzo3614u31.png?ex=6aa6c8aa&is=6aa5772a&hm=20f2c75585bd442371e0095f00b4f1ffbf94e00b2e5ed5b1e56c5b3fd2c0b313&", "https://klipy.com/gifs/fnaf-215", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
+        const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
+
+        let description;
+        if (!cibleUser) {
+            description = `😐 **${auteurNom}** n'a pas la ref...`;
+        } else if (cibleUser.id === auteurId) {
+            return interaction.reply({ content: "Tu n'as pas ta propre ref ? ...Hein ?", ephemeral: true });
+        } else if (cibleUser.id === client.user.id) {
+            description = `😐 **${auteurNom}** n'a pas ma ref...`;
+        } else {
+            description = `😐 **${auteurNom}** n'a pas la ref de **${cibleNom}**...`;
+        }
+
+        const btn = new ButtonBuilder()
+            .setCustomId(`palaref_aussi_${auteurId}_${auteurNom}_${cibleUser?.id ?? 'none'}`)
+            .setLabel('😐 Pas la ref non plus')
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(btn);
+        const embed = new EmbedBuilder()
+            .setColor(0x503649)
+            .setDescription(description)
+            .setImage(gif);
+        return interaction.reply({ embeds: [embed], components: [row] });
+    }
+    if (cmd === 'jailaref') {
+        const jailarefGifs = ["https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/f1/7d/7y2QyYzWIYksGnnK.gif", "https://cdn.discordapp.com/attachments/720079691041472572/1548362421079646481/caf5c232438734937f6e1cf4c7bc5411.png", "https://media1.tenor.com/m/13XpzbwtVnYAAAAC/dway-the-roc.gif", "https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/14/44/oqcpwYRAEpXGYqfyw.gif", "https://static2.klipy.com/ii/50d7c955398dfd7e3c8ba5281154280f/79/6d/eoUS3shzyQLpKm.gif", "https://static2.klipy.com/ii/d7aec6f6f171607374b2065c836f92f4/3d/31/08K8MgEk.gif", "https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/64/b0/SdnOajVDadHUy.gif", "https://cdn.discordapp.com/attachments/720079691041472572/1548366731666268250/image2.gif", "https://static2.klipy.com/ii/9294a2e836d178ddc22430dd7765727e/44/86/6QBidjUuV1oBpAnHIw7o.gif"];
+        const gif = jailarefGifs[Math.floor(Math.random() * jailarefGifs.length)];
+
+        let description;
+        if (!cibleUser) {
+            description = `😎 **${auteurNom}** a la ref !`;
+        } else if (cibleUser.id === auteurId) {
+            return interaction.reply({ content: "Bah oui, t'as forcément ta propre ref...", ephemeral: true });
+        } else if (cibleUser.id === client.user.id) {
+            description = `😎 **${auteurNom}** a ma ref !`;
+        } else {
+            description = `😎 **${auteurNom}** a la ref de **${cibleNom}** !`;
+        }
+
+        const btn = new ButtonBuilder()
+            .setCustomId(`jailaref_with_${auteurId}_${auteurNom}_${cibleUser?.id ?? 'none'}`)
+            .setLabel("😎 J'ai la ref aussi")
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(btn);
+        const embed = new EmbedBuilder()
+            .setColor(0x503649)
+            .setDescription(description)
+            .setImage(gif);
+        return interaction.reply({ embeds: [embed], components: [row] });
+    }
+    if (cmd === 'explode') {
+        const explodeGifs = [
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564402697375794/cat-cats.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564403230183599/cat-explosion_1.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564403653804153/floop-flop.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564404031426661/cat-explodes.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564404400521267/cat-funny.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564404882870292/spideyvivi.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564405281194064/cat-explode-cat-meme.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564405847298150/explosion-missile.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564406224781373/exploding-cat-cat-blowing-up.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564406799532052/cat-gato.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564412172570664/boomshakalaka.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564412763836466/elgatitolover-cat.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564413376335962/cat-explosion-ellie-cat-explosion.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564413795635311/exploding-car-explode.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505564414147825774/cat-explosion.gif"
+        ];
+        const gif = explodeGifs[Math.floor(Math.random() * explodeGifs.length)];
+
+        let titre;
+        if (cibleUser && cibleUser.id === client.user.id) {
+            titre = `**${auteurNom}** explose à cause de moi ! Nooon !`;
+        } else if (cibleUser && cibleUser.id !== auteurId) {
+            titre = `💥 **${auteurNom}** explose à cause de **${cibleNom}** !`;
+        } else {
+            titre = `💥 **${auteurNom}** explose !`;
+        }
+
+        const explodeBtn = new ButtonBuilder()
+            .setCustomId(`explode_with_${auteurId}_${auteurNom}`)
+            .setLabel("💥 Exploser avec")
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(explodeBtn);
+        const embed = new EmbedBuilder()
+            .setColor(0xec0f6e)
+            .setDescription(titre)
+            .setImage(gif);
+        return interaction.reply({ embeds: [embed], components: [row] });
+    }
+    if (cmd === 'bait') {
+        if (!cibleUser) return interaction.reply({ content: "Choisis quelqu'un que tu veux ragebait !", ephemeral: true });
+        if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te ragebait toi-même !", ephemeral: true });
+
+        const baitGifs = [
+            "https://cdn.discordapp.com/attachments/1072299294519988345/1304467586746028193/brandbird_4.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570790706253864/tadc-bubble-tadc.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570791683522760/tadc-the-amazing-digital-circus.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570792279379988/tadc-caine-tadc.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570793021505736/flight-flightreacts.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570793718022226/superman-superman-flying.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570795160731728/f8957342b4d99638.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570795974295672/down-syndrome.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570796981194822/flight.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505570797979172964/catreacts-ragebait.gif"
+        ];
+        const gif = baitGifs[Math.floor(Math.random() * baitGifs.length)];
+
+        if (cibleUser.id === client.user.id) {
+            const embed = new EmbedBuilder()
+                .setColor(0xffb14a)
+                .setDescription(`😜 **${auteurNom}** me ragebait ! Gngngngn...`)
+                .setImage(gif);
+            return interaction.reply({ embeds: [embed] });
+        }
+
+        const vengBtn = new ButtonBuilder()
+            .setCustomId(`bait_venge_${cibleUser.id}_${auteurId}_${auteurNom}`)
+            .setLabel("💢 SE VENGER !")
+            .setStyle(ButtonStyle.Secondary);
+        const row = new ActionRowBuilder().addComponents(vengBtn);
+        const embed = new EmbedBuilder()
+            .setColor(0xffb14a)
+            .setDescription(`😜 **${auteurNom}** ragebait **${cibleNom}** !`)
+            .setImage(gif);
+        return interaction.reply({ embeds: [embed], components: [row] });
+    }
+    if (cmd === 'ban') {
+        if (!cibleUser) return interaction.reply({ content: "Choisis quelqu'un que tu veux bannir !", ephemeral: true });
+        if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te bannir toi-même ! Demande aux modos pour ça.", ephemeral: true });
+
+        const banGifs = [
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557423686029352/cat-screaming-cat-disappearing.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557409148567572/ahh-kid-turns-blue-and-vanishes.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424092741764/duck-disappears.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424491462856/tom-skot.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557424805777428/atoms-cry.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425288380576/sr-pelo-screaming.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557425690775683/cat-scream.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426043355278/meme-quarantine.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426433294437/flight-flights.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557426881958020/nikocado-avocado-nikocado.gif",
+            "https://cdn.discordapp.com/attachments/1128032964924670053/1505557427209109544/moist-moist-critical.gif"
+        ];
+        const gif = banGifs[Math.floor(Math.random() * banGifs.length)];
+
+        const titre = cibleUser.id === client.user.id
+            ? `**${auteurNom}** me bannit... Pas cool.`
+            : `🔨 **${auteurNom}** bannit **${cibleNom}** !`;
+
+        const embed = new EmbedBuilder()
+            .setColor(0xcdc9dc)
+            .setDescription(titre)
+            .setImage(gif);
+        return interaction.reply({ embeds: [embed] });
     }
     return false;
 }

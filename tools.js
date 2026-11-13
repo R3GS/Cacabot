@@ -13,17 +13,142 @@ const {
 } = require('discord.js');
 
 const EPSYS_ID = '436218312574107658';
+const MODO_ROLE_ID = '720081311716606004';
 
 let toolsState = {
     client: null,
     getTopData: () => ({ messages: {} }),
-    getVersionString: () => '2.001'
+    getVersionString: () => '2.001',
+    demanderSauvegarde: () => {},
+    estModo: () => false,
+    getSuggestionsData: () => new Map(),
+    getRouletteVotesPublics: () => new Map(),
+    buildVoteRouletteRow: null,
+    migrateVoteRouletteMessage: () => {}
 };
 
 function initToolsState(bridge) {
     toolsState.client = bridge.client;
     if (bridge.getTopData) toolsState.getTopData = bridge.getTopData;
     if (bridge.getVersionString) toolsState.getVersionString = bridge.getVersionString;
+    if (bridge.demanderSauvegarde) toolsState.demanderSauvegarde = bridge.demanderSauvegarde;
+    if (bridge.estModo) toolsState.estModo = bridge.estModo;
+    if (bridge.getSuggestionsData) toolsState.getSuggestionsData = bridge.getSuggestionsData;
+    if (bridge.getRouletteVotesPublics) toolsState.getRouletteVotesPublics = bridge.getRouletteVotesPublics;
+    if (bridge.buildVoteRouletteRow) toolsState.buildVoteRouletteRow = bridge.buildVoteRouletteRow;
+    if (bridge.migrateVoteRouletteMessage) toolsState.migrateVoteRouletteMessage = bridge.migrateVoteRouletteMessage;
+}
+
+function estModoAutoriseUp(member, userId) {
+    if (userId === EPSYS_ID) return true;
+    if (member?.roles?.cache?.has(MODO_ROLE_ID)) return true;
+    return Boolean(toolsState.estModo?.(member));
+}
+
+async function resolveMessagePourUp(rawRef, currentChannel, guild, client) {
+    if (!rawRef) return null;
+    const clean = rawRef.trim();
+
+    const linkMatch = clean.match(/discord\.com\/channels\/\d+\/(\d{17,20})\/(\d{17,20})/);
+    if (linkMatch) {
+        const ch = guild?.channels.cache.get(linkMatch[1])
+            || await client.channels.fetch(linkMatch[1]).catch(() => null);
+        if (ch?.isTextBased()) {
+            return await ch.messages.fetch(linkMatch[2]).catch(() => null);
+        }
+        return null;
+    }
+
+    if (/^\d{17,20}$/.test(clean)) {
+        let cible = await currentChannel?.messages?.fetch(clean).catch(() => null);
+        if (!cible && guild) {
+            for (const ch of guild.channels.cache.values()) {
+                if (ch.isTextBased()) {
+                    cible = await ch.messages.fetch(clean).catch(() => null);
+                    if (cible) break;
+                }
+            }
+        }
+        return cible;
+    }
+
+    return null;
+}
+
+async function remonterMessageUtile(cibleMsg, client) {
+    if (!cibleMsg) {
+        return { ok: false, error: "❌ Message introuvable." };
+    }
+    if (cibleMsg.author?.id !== client.user.id) {
+        return { ok: false, error: "❌ Je ne peux remonter que les messages envoyés par Cacabot !" };
+    }
+
+    const suggestionsData = toolsState.getSuggestionsData?.() || new Map();
+    const votesPublics = toolsState.getRouletteVotesPublics?.() || new Map();
+
+    const estSuggestionEnMap = suggestionsData.has(cibleMsg.id);
+    const estSuggestionEmbed = cibleMsg.embeds?.some(e => e.title?.includes('SUGGESTION DU SERVEUR'));
+    const estVoteRouletteEnMap = votesPublics.has(cibleMsg.id);
+    const estVoteRouletteEmbed = cibleMsg.embeds?.some(e => e.title?.includes('VOTE PUBLIC !'));
+
+    const estSuggestion = estSuggestionEnMap || estSuggestionEmbed;
+    const estVoteRoulette = estVoteRouletteEnMap || estVoteRouletteEmbed;
+
+    if (!estSuggestion && !estVoteRoulette) {
+        return { ok: false, error: "❌ `!up` est uniquement utilisable sur les **suggestions** et les **votes publics de roulette** !" };
+    }
+
+    const embeds = (cibleMsg.embeds || []).map(e => EmbedBuilder.from(e));
+    const files = [...(cibleMsg.attachments?.values() || [])].map(a => a.url);
+
+    let components = [];
+    if (estVoteRouletteEnMap && typeof toolsState.buildVoteRouletteRow === 'function') {
+        const voteData = votesPublics.get(cibleMsg.id);
+        components = [
+            toolsState.buildVoteRouletteRow(
+                voteData.pour?.length || 0,
+                voteData.contre?.length || 0,
+                Boolean(voteData.cloture)
+            )
+        ];
+    } else if (cibleMsg.components?.length > 0) {
+        components = cibleMsg.components.map(r => ActionRowBuilder.from(r));
+    }
+
+    const newMsg = await cibleMsg.channel.send({
+        content: cibleMsg.content || undefined,
+        embeds: embeds.length > 0 ? embeds : undefined,
+        components: components.length > 0 ? components : undefined,
+        files: files.length > 0 ? files : undefined
+    }).catch(() => null);
+
+    if (!newMsg) {
+        return { ok: false, error: "❌ Impossible de reposter le message dans ce salon." };
+    }
+
+    if (estSuggestionEnMap) {
+        const suggData = suggestionsData.get(cibleMsg.id);
+        suggestionsData.delete(cibleMsg.id);
+        suggestionsData.set(newMsg.id, suggData);
+        toolsState.demanderSauvegarde?.();
+    }
+
+    if (estVoteRouletteEnMap) {
+        toolsState.migrateVoteRouletteMessage?.(cibleMsg.id, newMsg.id);
+    } else if (client.activeVotes?.has(cibleMsg.id)) {
+        const accusedId = client.activeVotes.get(cibleMsg.id);
+        client.activeVotes.delete(cibleMsg.id);
+        client.activeVotes.set(newMsg.id, accusedId);
+    }
+
+    if (estSuggestion) {
+        if (cibleMsg.components?.length > 0) {
+            await cibleMsg.edit({ components: [] }).catch(() => {});
+        }
+    } else {
+        await cibleMsg.delete().catch(() => {});
+    }
+    return { ok: true, newMsg };
 }
 
 // =========================
@@ -669,6 +794,7 @@ async function handleToolsMessage(message, response, client) {
 
         if (sub === 'clear' || sub === 'reset') {
             bugsList.length = 0;
+            toolsState.demanderSauvegarde?.();
             return message.reply("🧹 **Liste des bugs réinitialisée !**");
         }
 
@@ -678,6 +804,7 @@ async function handleToolsMessage(message, response, client) {
                 return message.reply("Usage : `!bug resolve [numéro]` (ex: `!bug resolve 1`).");
             }
             const supprime = bugsList.splice(indexToRemove, 1)[0];
+            toolsState.demanderSauvegarde?.();
             return message.reply(`✅ **Bug n°${indexToRemove + 1} résolu :**\n> *« ${supprime.content ? supprime.content.slice(0, 80) : 'Image/Fichier'} »* de **${supprime.author}**`);
         }
 
@@ -722,6 +849,7 @@ async function handleToolsMessage(message, response, client) {
                 hasImage: hasImage,
                 timestamp: Date.now()
             });
+            toolsState.demanderSauvegarde?.();
         }
 
         const embedListe = buildBugListEmbed(bugsList);
@@ -729,6 +857,32 @@ async function handleToolsMessage(message, response, client) {
             content: "🐛 **Bug répertorié dans la liste avec succès !**",
             embeds: [embedListe]
         });
+        return true;
+    }
+
+    // !up (Modos + Epsys)
+    if (command === '!up' || response?.needsUp) {
+        if (!estModoAutoriseUp(message.member, message.author.id)) {
+            await message.reply("🛡️ Seuls les modérateurs peuvent utiliser `!up` !");
+            return true;
+        }
+
+        const args = raw.split(/\s+/);
+        let cibleMsg = null;
+
+        if (message.reference?.messageId) {
+            cibleMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+        } else if (args[1]) {
+            cibleMsg = await resolveMessagePourUp(args[1], message.channel, message.guild, client);
+        } else {
+            await message.reply("Usage : réponds à une suggestion ou à un vote roulette avec `!up` (ou `!up [ID / lien du message]`).");
+            return true;
+        }
+
+        const res = await remonterMessageUtile(cibleMsg, client);
+        if (!res.ok) {
+            await message.reply(res.error);
+        }
         return true;
     }
 
@@ -940,6 +1094,23 @@ async function handleToolsSlash(interaction, client) {
         return interaction.reply({ embeds: [embed] });
     }
 
+    if (commandName === 'up') {
+        if (!estModoAutoriseUp(interaction.member, interaction.user.id)) {
+            return interaction.reply({ content: "🛡️ Seuls les modérateurs peuvent utiliser `/up` !", ephemeral: true });
+        }
+
+        const ref = interaction.options.getString('message');
+        await interaction.deferReply({ ephemeral: true });
+
+        const cibleMsg = await resolveMessagePourUp(ref, interaction.channel, interaction.guild, client);
+        const res = await remonterMessageUtile(cibleMsg, client);
+
+        if (!res.ok) {
+            return interaction.editReply({ content: res.error });
+        }
+        return interaction.editReply({ content: "🆙 Message remonté tout en bas du salon !" });
+    }
+
     return false;
 }
 
@@ -947,6 +1118,22 @@ async function handleToolsSlash(interaction, client) {
 //    HANDLER INTERACTIONS
 // =========================
 async function handleToolsInteraction(interaction, client) {
+    // Menu contextuel Discord (clic droit -> Applications -> 🆙 Remonter (up))
+    if (interaction.isMessageContextMenuCommand() && interaction.commandName === '🆙 Remonter (up)') {
+        if (!estModoAutoriseUp(interaction.member, interaction.user.id)) {
+            return interaction.reply({ content: "🛡️ Seuls les modérateurs peuvent utiliser cette action !", ephemeral: true });
+        }
+
+        await interaction.deferReply({ ephemeral: true });
+        const cibleMsg = interaction.targetMessage;
+        const res = await remonterMessageUtile(cibleMsg, client);
+
+        if (!res.ok) {
+            return interaction.editReply({ content: res.error });
+        }
+        return interaction.editReply({ content: "🆙 Message remonté tout en bas du salon !" });
+    }
+
     // Résolution d'un bug en 1 clic via le menu
     if (interaction.isStringSelectMenu() && interaction.customId === 'bug_resolve_select') {
         if (interaction.user.id !== EPSYS_ID) {

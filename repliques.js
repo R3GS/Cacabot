@@ -200,6 +200,7 @@ async function getResponse(raw) {
     if (command === "!say") return { needsSay: true };
     if (command === "!edit") return { needsEdit: true };
     if (command === "!reply") return { needsReply: true };
+    if (command === "!up") return { needsUp: true };
     if (command === "!bug" || command === "!bugs") return { needsBug: true };
     if (command === "!embed") return { needsEmbed: true };
     if (command === "!rolereac" || command === "!rr") return { needsRoleReac: true };

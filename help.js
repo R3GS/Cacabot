@@ -39,6 +39,7 @@ function buildHelpxCategorieEmbed(categorie) {
                 { name: '📣 **!say [ID Salon] [message]**', value: 'Envoyer un message dans un salon au nom de Cacabot.' },
                 { name: '💬 **!reply [ID_message] [texte]**', value: 'Répondre directement à un message sous le nom de Cacabot.' },
                 { name: '✏️ **!edit [ID_message] [texte]**', value: 'Modifier un message envoyé par Cacabot.' },
+                { name: '🆙 **!up [en réponse ou ID/lien]** *(Modos)*', value: 'Remonte une suggestion ou un vote de roulette tout en bas du salon sans perdre les votes.' },
                 { name: '🐛 **!bug / !bug resolve [N]**', value: 'Répondre à un message avec `!bug` pour le répertorier dans la liste des bugs.' },
                 { name: '🖼️ **!embed / !embed modify [ID]**', value: 'Créateur et modificateur interactif d\'embeds complets.' },
                 { name: '🎭 **!rolereac / !rolebtn**', value: 'Gérer les rôles réactions et boutons de rôles.' },

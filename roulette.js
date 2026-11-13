@@ -358,6 +358,8 @@ const notifsEnvoyeesRecent = new Set();
 let dernierEnvoiHappyHour = null;
 const rouletteVoteRedirectCharges = new Map();
 const rouletteVoteVotants = new Map();
+const rouletteVotesPublics = new Map();
+const rouletteVoteTimers = new Map();
 const rouletteRedirectBonusCharges = new Map();
 const rouletteRedirectBonusChoixCible = new Map();
 const roulettePartageBonusChoixCible = new Map();
@@ -384,6 +386,7 @@ const ROULETTE_ETATS = {
     doubleTemps: rouletteDoubleTempsUntil,
     voteRedirect: rouletteVoteRedirectCharges,
     voteVotants: rouletteVoteVotants,
+    votesPublics: rouletteVotesPublics,
     pity: roulettePity,
     uwu: rouletteUwuUntil,
     lettreInterdite: rouletteLettreInterdite,
@@ -1117,7 +1120,6 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             if (basculerTransfo(member.id, 'caps', 2 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur les **MAJUSCULES** alors qu'elles étaient encore actives : le malus est **annulé** !`;
             return `**${auteurNom}** doit **PARLER EN MAJUSCULES** pendant **${2 * multTemps}h** !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         case 'malus-boomer':
-            case 'malus-boomer':
             if (basculerTransfo(member.id, 'boomer', 2 * 60 * 60 * 1000 * multTemps)) return `✨ **Miracle !** **${auteurNom}** retombe sur le **mode Boomer** alors qu'il était encore actif : le malus est **annulé** !`;
             return `🧓 **${auteurNom}** passe en **mode Boomer** pendant **${2 * multTemps}h** *(environ 1 message sur 3)* ..... A bon entendeur ... !${multTemps > 1 ? ' *(Durée x2 appliquée !)*' : ''}`;
         case 'malus-brise-bouclier': {
@@ -1459,107 +1461,193 @@ function buildVoteRouletteEmbed(membre) {
         .setDescription(`Que mérite <@${membre.id}> ?\n\n✅ **Victoire :** Redirection de ses **3 prochains malus au choix** vers qui iel veut !\n❌ **Défaite :** Exclusion pendant **1 jour**\n\nVote ouvert pendant **2h**.\n-# *(L'accusé.e n'a pas le droit de voter sur son propre sort)*`);
 }
 
+function buildVoteRouletteRow(pourCount = 0, contreCount = 0, disabled = false) {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('rlt_vote_pour')
+            .setLabel(`Pour (${pourCount})`)
+            .setEmoji('✅')
+            .setStyle(ButtonStyle.Success)
+            .setDisabled(disabled),
+        new ButtonBuilder()
+            .setCustomId('rlt_vote_contre')
+            .setLabel(`Contre (${contreCount})`)
+            .setEmoji('❌')
+            .setStyle(ButtonStyle.Danger)
+            .setDisabled(disabled)
+    );
+}
+
+async function cloturerVoteRoulette(timerEntry, client) {
+    const msgId = timerEntry.currentMsgId;
+    if (timerEntry.interval) clearInterval(timerEntry.interval);
+    rouletteVoteTimers.delete(msgId);
+
+    const voteData = rouletteVotesPublics.get(msgId);
+    if (!voteData || voteData.cloture) return;
+    voteData.cloture = true;
+    rouletteVotesPublics.set(msgId, voteData);
+
+    client?.activeVotes?.delete(msgId);
+
+    try {
+        const channel = client?.channels.cache.get(voteData.channelId)
+            || await client?.channels.fetch(voteData.channelId).catch(() => null);
+        const guild = channel?.guild
+            || (voteData.guildId ? client?.guilds.cache.get(voteData.guildId) : null)
+            || client?.guilds.cache.first();
+
+        const targetMsg = channel ? await channel.messages.fetch(msgId).catch(() => null) : null;
+        const votantsValidesOui = (Array.isArray(voteData.pour) ? voteData.pour : []).filter(id => id !== voteData.targetId);
+        const votantsValidesNon = (Array.isArray(voteData.contre) ? voteData.contre : []).filter(id => id !== voteData.targetId);
+        const tousLesVotants = [...new Set([...votantsValidesOui, ...votantsValidesNon])];
+        const oui = votantsValidesOui.length;
+        const non = votantsValidesNon.length;
+
+        if (targetMsg) {
+            await targetMsg.edit({ components: [buildVoteRouletteRow(oui, non, true)] }).catch(() => {});
+        }
+
+        const membre = guild
+            ? (guild.members.cache.get(voteData.targetId) || await guild.members.fetch(voteData.targetId).catch(() => null))
+            : null;
+        const salonRoulette = guild?.channels.cache.get(ROULETTE_SALON_ID) || channel;
+
+        if (!salonRoulette) {
+            bridge.demanderSauvegarde();
+            return;
+        }
+
+        const posterReponse = async (texte) => {
+            await salonRoulette.send(texte).catch(() => {});
+        };
+
+        if (oui >= non) {
+            const chargesActuelles = rouletteVoteRedirectCharges.get(voteData.targetId) || 0;
+            rouletteVoteRedirectCharges.set(voteData.targetId, chargesActuelles + 3);
+            rouletteVoteVotants.set(voteData.targetId, {
+                oui: votantsValidesOui,
+                non: votantsValidesNon,
+                tous: [...tousLesVotants]
+            });
+            deverrouillerSucces(voteData.targetId, 'innocente', salonRoulette);
+
+            const ciblesNon = votantsValidesNon.length > 0 ? votantsValidesNon.map(id => `<@${id}>`).join(', ') : '*Aucun (personne n\'a voté contre toi !)*';
+            const ciblesOui = votantsValidesOui.length > 0 ? votantsValidesOui.map(id => `<@${id}>`).join(', ') : '*Aucun*';
+
+            const embedVictoire = new EmbedBuilder()
+                .setColor(0x00bf19)
+                .setTitle(`🕊️ JUGEMENT POPULAIRE : INNOCENTÉ.E !`)
+                .setDescription(
+                    `La plèbe a parlé avec sagesse (${oui} pour vs ${non} contre) !\n\n` +
+                    `🎉 <@${voteData.targetId}>, tu es acquitté.e et tu remportes **3 Redirections de malus au choix** !\n\n` +
+                    `🎯 **Comment les utiliser ?**\n` +
+                    `Lors de tes 3 prochains malus roulette, un **menu déroulant** s'affichera directement sous le tirage pour envoyer le malus à la personne de ton choix.\n\n` +
+                    `😈 **Suggestions de cibles parmi les votant.es :**\n` +
+                    `> ❌ **Celleux qui voulaient ta peau :** ${ciblesNon}\n` +
+                    `> ✅ **Celleux qui t'ont soutenu.e :** ${ciblesOui}\n\n` +
+                    `*À toi de choisir si tu veux te venger ou tester la loyauté de ton entourage...*`
+                );
+
+            const { MessageFlags } = require('discord.js');
+            await salonRoulette.send({
+                content: `🔔 <@${voteData.targetId}>, le vote est terminé ! Tu as triomphé !`,
+                embeds: [embedVictoire],
+                flags: [MessageFlags.SuppressNotifications]
+            }).catch(() => {});
+        } else {
+            deverrouillerSucces(voteData.targetId, 'condamne-plebe', salonRoulette);
+            if (membre && bridge.estModo(membre)) {
+                rouletteCooldowns.set(voteData.targetId, Date.now() + 24 * 60 * 60 * 1000);
+                await posterReponse(`❌ Le vote a tranché (${non} contre vs ${oui} pour) : <@${voteData.targetId}> est Modo, exclusion changée en cooldown de **1 jour**.`);
+            } else {
+                if (membre) await membre.timeout(24 * 60 * 60 * 1000, 'Roulette - vote').catch(() => {});
+                rouletteTimeoutUntil.set(voteData.targetId, Date.now() + 24 * 60 * 60 * 1000);
+                await posterReponse(`❌ Le vote a tranché (${non} contre vs ${oui} pour) : <@${voteData.targetId}> est exclu.e pendant 1 jour.`);
+            }
+        }
+        bridge.demanderSauvegarde();
+    } catch (e) {
+        console.error('Erreur lors de la conclusion du vote roulette :', e);
+        const salonSecours = client?.channels.cache.get(ROULETTE_SALON_ID) || client?.channels.cache.get(voteData.channelId);
+        await salonSecours?.send(`⚠️ Une erreur est survenue lors du dépouillement du vote pour <@${voteData.targetId}>.`).catch(() => {});
+    }
+}
+
+function armerTimersVoteRoulette(msgId, voteData, client) {
+    const restantMs = Math.max(1000, voteData.expireAt - Date.now());
+    const timerEntry = { currentMsgId: msgId, interval: null, timeout: null };
+
+    timerEntry.interval = setInterval(async () => {
+        const currentId = timerEntry.currentMsgId;
+        const ch = client?.channels.cache.get(voteData.channelId)
+            || await client?.channels.fetch(voteData.channelId).catch(() => null);
+        const currentMsg = ch ? await ch.messages.fetch(currentId).catch(() => null) : null;
+        if (currentMsg) await currentMsg.reply('🆙').catch(() => {});
+    }, 55 * 60 * 1000);
+
+    timerEntry.timeout = setTimeout(() => {
+        cloturerVoteRoulette(timerEntry, client);
+    }, restantMs);
+
+    rouletteVoteTimers.set(msgId, timerEntry);
+}
+
+function migrateVoteRouletteMessage(oldMsgId, newMsgId) {
+    const voteData = rouletteVotesPublics.get(oldMsgId);
+    if (voteData) {
+        rouletteVotesPublics.delete(oldMsgId);
+        voteData.msgId = newMsgId;
+        rouletteVotesPublics.set(newMsgId, voteData);
+    }
+
+    const timerEntry = rouletteVoteTimers.get(oldMsgId);
+    if (timerEntry) {
+        rouletteVoteTimers.delete(oldMsgId);
+        timerEntry.currentMsgId = newMsgId;
+        rouletteVoteTimers.set(newMsgId, timerEntry);
+    }
+
+    const client = rouletteClient || bridge?.client;
+    if (client?.activeVotes?.has(oldMsgId)) {
+        const accusedId = client.activeVotes.get(oldMsgId);
+        client.activeVotes.delete(oldMsgId);
+        client.activeVotes.set(newMsgId, accusedId);
+    }
+
+    bridge.demanderSauvegarde();
+}
+
+function restaurerVotesRoulette(client) {
+    if (!client) return;
+    for (const [msgId, voteData] of rouletteVotesPublics.entries()) {
+        if (!voteData || voteData.cloture) continue;
+        if (rouletteVoteTimers.has(msgId)) continue;
+        armerTimersVoteRoulette(msgId, voteData, client);
+    }
+}
+
 async function demarrerVoteRoulette(msg, membre) {
     // Sécurité absolue : jamais de vote sur Epsys
     if (membre.id === bridge.EPSYS_ID || membre.id === '436218312574107658') {
         return;
     }
 
-    await msg.react('✅').catch(() => {});
-    await msg.react('❌').catch(() => {});
+    const voteData = {
+        msgId: msg.id,
+        targetId: membre.id,
+        channelId: msg.channel.id,
+        guildId: msg.guild?.id || null,
+        expireAt: Date.now() + 2 * 60 * 60 * 1000,
+        pour: [],
+        contre: [],
+        cloture: false
+    };
 
-    // Enregistrement du message de vote pour l'anti-triche immédiat
-    if (!msg.client.activeVotes) msg.client.activeVotes = new Map();
-    msg.client.activeVotes.set(msg.id, membre.id);
-
-    const rappels = setInterval(() => { msg.reply('🆙').catch(() => {}); }, 55 * 60 * 1000);
-
-    setTimeout(async () => {
-        clearInterval(rappels);
-        msg.client.activeVotes?.delete(msg.id);
-        try {
-            const fresh = await msg.channel.messages.fetch(msg.id).catch(() => null);
-            const targetMsg = fresh || msg;
-
-            const reactionOui = targetMsg.reactions.cache.find(r => r.emoji.name?.includes('✅'));
-            const reactionNon = targetMsg.reactions.cache.find(r => r.emoji.name?.includes('❌'));
-
-            const usersOui = reactionOui ? await reactionOui.users.fetch().catch(() => new Map()) : new Map();
-            const usersNon = reactionNon ? await reactionNon.users.fetch().catch(() => new Map()) : new Map();
-
-            // Anti-triche : on exclut formellement les votes de l'accusé.e
-            const idsOui = [...usersOui.values()].filter(u => !u.bot && u.id !== membre.id).map(u => u.id);
-            const idsNon = [...usersNon.values()].filter(u => !u.bot && u.id !== membre.id).map(u => u.id);
-            const doubles = new Set(idsOui.filter(id => idsNon.includes(id)));
-            const votantsValidesOui = idsOui.filter(id => !doubles.has(id));
-            const votantsValidesNon = idsNon.filter(id => !doubles.has(id));
-            const tousLesVotants = [...new Set([...votantsValidesOui, ...votantsValidesNon])];
-            const oui = votantsValidesOui.length;
-            const non = votantsValidesNon.length;
-
-            // Progression Battle Pass pour tous les votants valides
-            for (const vId of tousLesVotants) {
-                bridge.trackBattlePassProgress?.(vId, 'vote_public_part', 1);
-            }
-
-            // Envoi garanti UNIQUEMENT dans le salon de la roulette
-            const salonRoulette = msg.guild?.channels.cache.get(ROULETTE_SALON_ID) || targetMsg.channel;
-
-            const posterReponse = async (texte) => {
-                await salonRoulette.send(texte).catch(() => {});
-            };
-
-            if (oui >= non) {
-                const chargesActuelles = rouletteVoteRedirectCharges.get(membre.id) || 0;
-                rouletteVoteRedirectCharges.set(membre.id, chargesActuelles + 3);
-                rouletteVoteVotants.set(membre.id, {
-                    oui: votantsValidesOui,
-                    non: votantsValidesNon,
-                    tous: [...tousLesVotants]
-                });
-                deverrouillerSucces(membre.id, 'innocente', salonRoulette);
-
-                const ciblesNon = votantsValidesNon.length > 0 ? votantsValidesNon.map(id => `<@${id}>`).join(', ') : '*Aucun (personne n\'a voté contre toi !)*';
-                const ciblesOui = votantsValidesOui.length > 0 ? votantsValidesOui.map(id => `<@${id}>`).join(', ') : '*Aucun*';
-
-                const embedVictoire = new EmbedBuilder()
-                    .setColor(0x00bf19)
-                    .setTitle(`🕊️ JUGEMENT POPULAIRE : INNOCENTÉ.E !`)
-                    .setDescription(
-                        `La plèbe a parlé avec sagesse (${oui} pour vs ${non} contre) !\n\n` +
-                        `🎉 <@${membre.id}>, tu es acquitté.e et tu remportes **3 Redirections de malus au choix** !\n\n` +
-                        `🎯 **Comment les utiliser ?**\n` +
-                        `Lors de tes 3 prochains malus roulette, un **menu déroulant** s'affichera directement sous le tirage pour envoyer le malus à la personne de ton choix.\n\n` +
-                        `😈 **Suggestions de cibles parmi les votant.es :**\n` +
-                        `> ❌ **Celleux qui voulaient ta peau :** ${ciblesNon}\n` +
-                        `> ✅ **Celleux qui t'ont soutenu.e :** ${ciblesOui}\n\n` +
-                        `*À toi de choisir si tu veux te venger ou tester la loyauté de ton entourage...*`
-                    );
-
-                const { MessageFlags } = require('discord.js');
-                await salonRoulette.send({
-                    content: `🔔 <@${membre.id}>, le vote est terminé ! Tu as triomphé !`,
-                    embeds: [embedVictoire],
-                    flags: [MessageFlags.SuppressNotifications]
-                }).catch(() => {});
-            } else {
-                deverrouillerSucces(membre.id, 'condamne-plebe', salonRoulette);
-                if (bridge.estModo(membre)) {
-                    rouletteCooldowns.set(membre.id, Date.now() + 24 * 60 * 60 * 1000);
-                    await posterReponse(`❌ Le vote a tranché (${non} contre vs ${oui} pour) : <@${membre.id}> est Modo, exclusion changée en cooldown de **1 jour**.`);
-                } else {
-                    await membre.timeout(24 * 60 * 60 * 1000, 'Roulette - vote').catch(() => {});
-                    rouletteTimeoutUntil.set(membre.id, Date.now() + 24 * 60 * 60 * 1000);
-                    await posterReponse(`❌ Le vote a tranché (${non} contre vs ${oui} pour) : <@${membre.id}> est exclu.e pendant 1 jour.`);
-                }
-            }
-            bridge.demanderSauvegarde();
-        } catch (e) {
-            console.error('Erreur lors de la conclusion du vote roulette :', e);
-            const salonSecours = msg.guild?.channels.cache.get(ROULETTE_SALON_ID) || msg.channel;
-            await salonSecours.send(`⚠️ Une erreur est survenue lors du dépouillement du vote pour <@${membre.id}>.`).catch(() => {});
-        }
-    }, 2 * 60 * 60 * 1000);
+    rouletteVotesPublics.set(msg.id, voteData);
+    await msg.edit({ components: [buildVoteRouletteRow(0, 0, false)] }).catch(() => {});
+    armerTimersVoteRoulette(msg.id, voteData, msg.client);
+    bridge.demanderSauvegarde();
 }
 
 function buildRoulettePresentationEmbed(authorId, guildId = null) {
@@ -2478,7 +2566,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
 
     return {
         embeds: proxy.vote ? [buildVoteRouletteEmbed(proxy.vote)] : [embed],
-        components: resultComponents,
+        components: proxy.vote ? [buildVoteRouletteRow(0, 0, false)] : resultComponents,
         vote: proxy.vote ?? null,
         pingCible: pingRedirection ? {
             id: pingRedirection.id,
@@ -3247,7 +3335,10 @@ async function handleRouletteMessage(message, response, client, helpers) {
             if (attendBonus) envoyerHallOfFame(message.guild, cible, entryForcee).catch(() => {});
             else envoyerHallOfShame(message.guild, cible, entryForcee).catch(() => {});
             if (proxy.vote) {
-                const envoye = await message.reply({ embeds: [buildVoteRouletteEmbed(proxy.vote)] });
+                const envoye = await message.reply({
+                    embeds: [buildVoteRouletteEmbed(proxy.vote)],
+                    components: [buildVoteRouletteRow(0, 0, false)]
+                });
                 await demarrerVoteRoulette(envoye, proxy.vote);
                 return true;
             }
@@ -3867,6 +3958,61 @@ function transfererMalus(sourceId, destId, malusKey, guild) {
 async function handleRouletteButton(interaction, client) {
     client = client || interaction.client;
     const customId = interaction.customId;
+
+    if (interaction.isButton() && (customId === 'rlt_vote_pour' || customId === 'rlt_vote_contre')) {
+        const msgId = interaction.message.id;
+        const voteData = rouletteVotesPublics.get(msgId);
+
+        if (!voteData) {
+            return interaction.reply({ content: "Ce vote est trop ancien ou introuvable.", ephemeral: true });
+        }
+        if (voteData.cloture || Date.now() >= voteData.expireAt) {
+            return interaction.reply({ content: "Ce vote public est déjà clôturé !", ephemeral: true });
+        }
+        if (interaction.user.id === voteData.targetId) {
+            return interaction.reply({ content: "Tu n'as pas le droit de voter sur ton propre sort 😌", ephemeral: true });
+        }
+
+        if (!Array.isArray(voteData.pour)) voteData.pour = [];
+        if (!Array.isArray(voteData.contre)) voteData.contre = [];
+
+        const userId = interaction.user.id;
+        const dejaPour = voteData.pour.includes(userId);
+        const dejaContre = voteData.contre.includes(userId);
+        const votePour = customId === 'rlt_vote_pour';
+        let feedback = '';
+
+        if (votePour) {
+            if (dejaPour) {
+                voteData.pour = voteData.pour.filter(id => id !== userId);
+                feedback = '❌ Vote « Pour » retiré !';
+            } else {
+                voteData.pour.push(userId);
+                voteData.contre = voteData.contre.filter(id => id !== userId);
+                feedback = '✅ Tu as voté « Pour » !';
+                if (!dejaContre) bridge.trackBattlePassProgress?.(userId, 'vote_public_part', 1);
+            }
+        } else {
+            if (dejaContre) {
+                voteData.contre = voteData.contre.filter(id => id !== userId);
+                feedback = '❌ Vote « Contre » retiré !';
+            } else {
+                voteData.contre.push(userId);
+                voteData.pour = voteData.pour.filter(id => id !== userId);
+                feedback = '❌ Tu as voté « Contre » !';
+                if (!dejaPour) bridge.trackBattlePassProgress?.(userId, 'vote_public_part', 1);
+            }
+        }
+
+        rouletteVotesPublics.set(msgId, voteData);
+        bridge.demanderSauvegarde();
+
+        await interaction.update({
+            components: [buildVoteRouletteRow(voteData.pour.length, voteData.contre.length, false)]
+        });
+        await interaction.followUp({ content: feedback, ephemeral: true });
+        return true;
+    }
 
     if (customId.startsWith('rlt_vote_redirect_')) {
         const parts = customId.split('_');
@@ -4755,6 +4901,11 @@ module.exports = {
     rouletteRedirectCharges,
     rouletteInventaire,
     crediterInventaireRoulette,
+    buildRouletteStateEmbed,
+    rouletteVotesPublics,
+    buildVoteRouletteRow,
+    migrateVoteRouletteMessage,
+    restaurerVotesRoulette,
     handleRouletteMessage,
     handleRouletteSlash,
     handleRouletteButton,

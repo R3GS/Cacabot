@@ -250,6 +250,8 @@ const {
     ChannelType,
     ButtonStyle,
     SlashCommandBuilder,
+    ContextMenuCommandBuilder,
+    ApplicationCommandType,
     REST,
     Routes,
     MessageFlags
@@ -369,6 +371,11 @@ const {
     rouletteBouclierActif,
     rouletteRedirectCharges,
     crediterInventaireRoulette,
+    buildRouletteStateEmbed,
+    rouletteVotesPublics,
+    buildVoteRouletteRow,
+    migrateVoteRouletteMessage,
+    restaurerVotesRoulette,
     handleRouletteMessage,
     handleRouletteSlash,
     handleRouletteButton,
@@ -534,7 +541,13 @@ const client = new Client({
 initToolsState({
     client,
     getTopData: () => topData,
-    getVersionString
+    getVersionString,
+    demanderSauvegarde,
+    estModo,
+    getSuggestionsData: () => suggestionsData,
+    getRouletteVotesPublics: () => rouletteVotesPublics,
+    buildVoteRouletteRow,
+    migrateVoteRouletteMessage
 });
 
 initYoutubeState({
@@ -1467,7 +1480,12 @@ client.once('ready', async () => {
         new SlashCommandBuilder().setName('prune').setDescription('Supprimer les derniers messages')
             .addIntegerOption(opt => opt.setName('nombre').setDescription('Nombre de messages à supprimer').setRequired(true)),
         new SlashCommandBuilder().setName('embed').setDescription('Créateur ou modificateur d\'embed (Epsys-only)')
-            .addStringOption(opt => opt.setName('modifier').setDescription('ID du message contenant l\'embed à modifier'))
+            .addStringOption(opt => opt.setName('modifier').setDescription('ID du message contenant l\'embed à modifier')),
+        new SlashCommandBuilder().setName('up').setDescription('Remonter une suggestion ou un vote de roulette en bas du salon (Modos)')
+            .addStringOption(opt => opt.setName('message').setDescription('ID ou lien du message de Cacabot à remonter').setRequired(true)),
+        new ContextMenuCommandBuilder()
+            .setName('🆙 Remonter (up)')
+            .setType(ApplicationCommandType.Message)
     ].map(cmd => cmd.toJSON());
 
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -1487,8 +1505,9 @@ client.once('ready', async () => {
     // Chargement immédiat des données sans attendre
     await loadAll();
 
-    // Réarmement des alertes roulette et des rappels
+    // Réarmement des alertes roulette, votes publics et des rappels
     for (const [uid, chId] of rouletteNotifs) armerNotifRoulette(uid, chId, client);
+    if (typeof restaurerVotesRoulette === 'function') restaurerVotesRoulette(client);
     if (typeof restaurerRappels === 'function') restaurerRappels();
 
     // Envoi immédiat du message de retour à la seconde où les commandes sont opérationnelles
