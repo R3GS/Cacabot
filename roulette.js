@@ -936,14 +936,14 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                     rouletteTimeoutUntil.set(member.id, Date.now() + 7 * 24 * 60 * 60 * 1000);
                 });
         case 'bonus-gif-ou-audio': {
-            const { MessageFlags } = require('discord.js');
             const todayStr = new Date().toDateString();
             const rec = roulettePapayouDaily.get(member.id) ?? { date: todayStr, count: 0 };
             rec.count = rec.date === todayStr ? rec.count + 1 : 1;
             rec.date = todayStr;
             roulettePapayouDaily.set(member.id, rec);
             if (rec.count >= 3) deverrouillerSucces(member.id, 'fan-carlos', message.channel);
-            await message.channel.send({ files: ["./PAPAYOU.mp3"], flags: [MessageFlags.SuppressNotifications] }).catch(() => {});
+            if (!Array.isArray(message.files)) message.files = [];
+            if (!message.files.includes('./PAPAYOU.mp3')) message.files.push('./PAPAYOU.mp3');
             return `**${auteurNom}** a fait spawn un petit cadeau !`;
         }
         case 'bonus-anti-feur':
@@ -2130,14 +2130,53 @@ function libelleProbaRoulette(outcomeId) {
     return `1/${n} | ${pct}%`;
 }
 
-function buildRouletteResultEmbed(outcomeId, texte, authorId = null, auteurNom = null) {
-    let delaiTexte = '15 minutes';
-    if (authorId) {
-        if ((rouletteCooldown45Charges.get(authorId) || 0) > 0) delaiTexte = '45 minutes';
-        else if ((rouletteCooldownCourtCharges.get(authorId) || 0) > 0 || estHappyHour()) delaiTexte = '5 minutes';
+function formaterEchecRoulette(texte, cooldownMinutes) {
+    if (cooldownMinutes === 0) {
+        return texte
+            .replace(/'Fin pas tout de suite mais dans 15 minutes/gi, "'Fin en fait tout de suite")
+            .replace(/dans 15 minutes/gi, 'tout de suite')
+            .replace(/dans 15min/gi, 'tout de suite');
+    }
+    const libelleMin = `${cooldownMinutes} minute${cooldownMinutes > 1 ? 's' : ''}`;
+    return texte
+        .replace(/15 minutes/gi, libelleMin)
+        .replace(/15min/gi, `${cooldownMinutes}min`);
+}
+
+function buildRouletteResultEmbed(outcomeId, texte, authorId = null, auteurNom = null, cooldownMinutes = null) {
+    let minsEffectives = cooldownMinutes;
+    if (minsEffectives === null) {
+        const now = Date.now();
+        const finFreeRoll = authorId ? rouletteFreeRollUntil.get(authorId) : null;
+        const chargesTriple = authorId ? (rouletteCoupTripleCharges.get(authorId) || 0) : 0;
+        if (authorId && (ROULETTE_COOLDOWN_EXEMPT.includes(authorId) || (finFreeRoll && now < finFreeRoll) || chargesTriple > 0)) {
+            minsEffectives = 0;
+        } else if (authorId) {
+            const finCd = rouletteCooldowns.get(authorId);
+            if (finCd && finCd > now) {
+                minsEffectives = Math.max(1, Math.ceil((finCd - now) / 60000));
+            } else if ((rouletteCooldownCourtCharges.get(authorId) || 0) > 0 || estHappyHour()) {
+                minsEffectives = 5;
+            } else if ((rouletteLooongCooldownCharges.get(authorId) || 0) > 0) {
+                minsEffectives = 60;
+            } else if ((rouletteCooldown45Charges.get(authorId) || 0) > 0) {
+                minsEffectives = 45;
+            } else {
+                minsEffectives = Math.round(ROULETTE_COOLDOWN_MS / 60000);
+            }
+        } else {
+            minsEffectives = Math.round(ROULETTE_COOLDOWN_MS / 60000);
+        }
     }
 
-    const texteFinal = outcomeId === 'aucun-resultat' ? `${texte}\n\n*Échec du tirage, reviens dans ${delaiTexte} !*` : texte;
+    let texteFinal = texte;
+    if (outcomeId === 'aucun-resultat') {
+        const texteAjuste = formaterEchecRoulette(texte, minsEffectives);
+        const phraseRelance = minsEffectives === 0
+            ? `*Échec du tirage, tu peux retenter tout de suite !*`
+            : `*Échec du tirage, reviens dans ${minsEffectives} minute${minsEffectives > 1 ? 's' : ''} !*`;
+        texteFinal = `${texteAjuste}\n\n${phraseRelance}`;
+    }
     const estContrePoison = texte.includes('Miracle !');
     const entry = ROULETTE_TABLE.find(e => e.id === outcomeId);
     const couleurs = { bonus: 0x00bf19, malus: 0x9e0000, special: 0xdb6600 };
@@ -2224,6 +2263,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         if (chargesTriple - 1 === 0) rouletteCoupTripleCharges.delete(authorId);
     }
 
+    let cooldownMinutes = 0;
     if (!ROULETTE_COOLDOWN_EXEMPT.includes(authorId) && !enFreeRoll) {
         const finCooldown = rouletteCooldowns.get(authorId);
         if (finCooldown && now < finCooldown) {
@@ -2233,16 +2273,23 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         const charges45 = rouletteCooldown45Charges.get(authorId) || 0;
         const chargesLooong = rouletteLooongCooldownCharges.get(authorId) || 0;
         if (chargesCourt > 0) {
-            rouletteCooldownCourtCharges.set(authorId, chargesCourt - 1);
+            if (chargesCourt - 1 <= 0) rouletteCooldownCourtCharges.delete(authorId);
+            else rouletteCooldownCourtCharges.set(authorId, chargesCourt - 1);
+            cooldownMinutes = 5;
             rouletteCooldowns.set(authorId, now + 5 * 60 * 1000);
         } else if (chargesLooong > 0) {
-            rouletteLooongCooldownCharges.set(authorId, chargesLooong - 1);
+            if (chargesLooong - 1 <= 0) rouletteLooongCooldownCharges.delete(authorId);
+            else rouletteLooongCooldownCharges.set(authorId, chargesLooong - 1);
+            cooldownMinutes = 60;
             rouletteCooldowns.set(authorId, now + 60 * 60 * 1000);
         } else if (charges45 > 0) {
-            rouletteCooldown45Charges.set(authorId, charges45 - 1);
+            if (charges45 - 1 <= 0) rouletteCooldown45Charges.delete(authorId);
+            else rouletteCooldown45Charges.set(authorId, charges45 - 1);
+            cooldownMinutes = 45;
             rouletteCooldowns.set(authorId, now + 45 * 60 * 1000);
         } else {
             const dureeCooldown = estHappyHour() ? 5 * 60 * 1000 : ROULETTE_COOLDOWN_MS;
+            cooldownMinutes = Math.round(dureeCooldown / 60000);
             rouletteCooldowns.set(authorId, now + dureeCooldown);
         }
     }
@@ -2549,7 +2596,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         menuVoteRedirectRow = new ActionRowBuilder().addComponents(menuRedirection);
     }
 
-    const embed = buildRouletteResultEmbed(outcomeId, prefixeRedirect + texte + extraVoteTexte, authorId, auteurNom);
+    const embed = buildRouletteResultEmbed(outcomeId, prefixeRedirect + texte + extraVoteTexte, authorId, auteurNom, cooldownMinutes);
     const roleMaxId = ROULETTE_RANGS[ROULETTE_RANGS.length - 1].id;
     const dejaMaxRole = (outcomeId === 'bonus-role-superieur' || outcomeId === 'bonus-legendaire') && cible.roles.cache.has(roleMaxId);
 
@@ -2557,6 +2604,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         return {
             embeds: [embed],
             components: [buildMenuFallbackRoulette(authorId), buildRowResultatRoulette(authorId, outcomeId, failIndex)],
+            files: proxy.files ?? [],
             attenteChoix: true
         };
     }
@@ -2567,6 +2615,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     return {
         embeds: proxy.vote ? [buildVoteRouletteEmbed(proxy.vote)] : [embed],
         components: proxy.vote ? [buildVoteRouletteRow(0, 0, false)] : resultComponents,
+        files: proxy.files ?? [],
         vote: proxy.vote ?? null,
         pingCible: pingRedirection ? {
             id: pingRedirection.id,
@@ -2576,7 +2625,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         } : null,
         differe: differe ? async () => {
             await differe.action();
-            return buildRouletteResultEmbed(outcomeId, prefixeRedirect + differe.texteFinal + extraVoteTexte, authorId, auteurNom);
+            return buildRouletteResultEmbed(outcomeId, prefixeRedirect + differe.texteFinal + extraVoteTexte, authorId, auteurNom, cooldownMinutes);
         } : null
     };
 }
@@ -3342,7 +3391,7 @@ async function handleRouletteMessage(message, response, client, helpers) {
                 await demarrerVoteRoulette(envoye, proxy.vote);
                 return true;
             }
-            await message.reply({ embeds: [buildRouletteResultEmbed(outcomeId, texte)] });
+            await message.reply({ embeds: [buildRouletteResultEmbed(outcomeId, texte)], files: proxy.files ?? [] });
             return true;
         }
         if (adminSuccesAliases.includes(command)) {
@@ -3646,12 +3695,14 @@ async function handleRouletteMessage(message, response, client, helpers) {
             const envoye = await message.reply({ 
                 embeds: resultat.embeds, 
                 components: resultat.components,
+                files: resultat.files ?? [],
                 flags: [MessageFlags.SuppressNotifications],
                 allowedMentions: { repliedUser: false },
                 failIfNotExists: false 
             }).catch(() => message.channel.send({ 
                 embeds: resultat.embeds, 
                 components: resultat.components,
+                files: resultat.files ?? [],
                 flags: [MessageFlags.SuppressNotifications]
             }).catch(() => null));
 
@@ -3767,7 +3818,7 @@ async function handleRouletteSlash(interaction, client) {
                 await interaction.editReply({ content: `⏳ Cooldown actif ! Tu pourras relancer ${tsR}${tsT}.`, components: [notifRow] });
                 return true;
             }
-            const env = await interaction.editReply({ embeds: res.embeds, components: res.components });
+            const env = await interaction.editReply({ embeds: res.embeds, components: res.components, files: res.files ?? [] });
             await envoyerPingRedirection(interaction.channel, res);
             memoriserResultatRoulette(env.id, res.embeds[0]);
             if (res.attenteChoix) rouletteChoixEnAttente.add(env.id);
@@ -4457,7 +4508,12 @@ async function handleRouletteButton(interaction, client) {
             return true;
         }
         // content: null supprime proprement l'ancien texte de rappel "ton cooldown est terminé..."
-        await interaction.update({ content: null, embeds: res.embeds, components: res.components });
+        if (res.files?.length) {
+            await interaction.deferUpdate();
+            await interaction.editReply({ content: null, embeds: res.embeds, components: res.components, files: res.files });
+        } else {
+            await interaction.update({ content: null, embeds: res.embeds, components: res.components });
+        }
         await envoyerPingRedirection(interaction.channel, res);
         memoriserResultatRoulette(interaction.message.id, res.embeds[0]);
         if (res.attenteChoix) rouletteChoixEnAttente.add(interaction.message.id);
@@ -4474,17 +4530,19 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('roulette_fallback_')) {
         const authorId = customId.split('_')[2];
         if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
+        await interaction.deferUpdate();
         const outcomeId = interaction.values[0];
         const auteurNom = interaction.member?.displayName ?? interaction.user.username;
-        const texte = await appliquerEtDecrireResultat(outcomeId, interaction, auteurNom, 0);
-        const embed = buildRouletteResultEmbed(outcomeId, texte);
+        const proxy = { member: interaction.member, channel: interaction.channel, guild: interaction.guild };
+        const texte = await appliquerEtDecrireResultat(outcomeId, proxy, auteurNom, 0);
+        const embed = buildRouletteResultEmbed(outcomeId, texte, authorId, auteurNom);
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_0`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId(`roulette_notif_${authorId}`).setLabel('🔔 Me prévenir').setStyle(ButtonStyle.Secondary)
         );
         rouletteChoixEnAttente.delete(interaction.message.id);
         memoriserResultatRoulette(interaction.message.id, embed);
-        await interaction.update({ embeds: [embed], components: [row] });
+        await interaction.editReply({ embeds: [embed], components: [row], files: proxy.files ?? [] });
         return true;
     }
     if (customId.startsWith('roulette_notif_mp') || customId.startsWith('roulette_notifmp_')) {
@@ -4539,14 +4597,16 @@ async function handleRouletteButton(interaction, client) {
             });
         }
 
+        await interaction.reply({ content: "🎲 Tirage envoyé dans le salon !", ephemeral: true }).catch(() => {});
+
         const { MessageFlags } = require('discord.js');
         const envoye = await interaction.channel.send({
             embeds: res.embeds,
             components: res.components,
+            files: res.files ?? [],
             flags: [MessageFlags.SuppressNotifications]
-        });
-
-        await interaction.reply({ content: "🎲 Tirage envoyé dans le salon !", ephemeral: true }).catch(() => {});
+        }).catch(() => null);
+        if (!envoye) return true;
 
         await envoyerPingRedirection(interaction.channel, res);
         memoriserResultatRoulette(envoye.id, res.embeds[0]);
@@ -4733,7 +4793,7 @@ async function handleRouletteButton(interaction, client) {
             const auteurNom = interaction.guild?.members.cache.get(authorId)?.displayName ?? interaction.user.username;
             const nom = ROULETTE_NOMS[outcomeId] ?? outcomeId;
             const texte = outcomeId === 'aucun-resultat' ? ROULETTE_FAILS[parseInt(failIndex, 10)] : `**${auteurNom}** est tombé·e sur **${nom}**.`;
-            embed = buildRouletteResultEmbed(outcomeId, texte);
+            embed = buildRouletteResultEmbed(outcomeId, texte, authorId, auteurNom);
         }
         const row = buildRowResultatRoulette(authorId, outcomeId, failIndex);
         const components = rouletteChoixEnAttente.has(interaction.message.id) ? [buildMenuFallbackRoulette(authorId), row] : [row];
