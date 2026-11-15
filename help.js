@@ -402,7 +402,7 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
                 `Des outils pratiques pour ton quotidien, tes sessions de travail et la gestion du bot.\n\n` +
                 `### ⏰ Organisation & Focus\n` +
                 `\`!rappel [durée] [motif]\` • Programme un rappel personnel *(ex: \`!rappel 20min four\`)*\n` +
-                `-# ↳ Boutons sous le message pour reporter instantanément de **+10 min** ou **+1h** !\n` +
+                `\`!checklist\` • Gère tes checklists interactives *(créer, cocher et rayer les tâches)*\n` +
                 `\`!pomodoro [travail] [pause]\` • Minuteur Pomodoro de concentration *(ex: \`!pomodoro 25 5\`)*\n` +
                 `\`!meteo [ville]\` • Bulletin météo, température et conditions en direct\n\n` +
                 `### 📺 Médias & Minecraft\n` +

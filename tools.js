@@ -8,6 +8,9 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     StringSelectMenuBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
     ButtonStyle,
     ChannelType
 } = require('discord.js');
@@ -158,6 +161,276 @@ const pendingRappels = new Map();
 const rappelReports = new Map();
 const pomodoroSessions = new Map();
 const bugsList = [];
+const checklistsMap = new Map(); // userId -> [{ id, title, createdAt, tasks: [{ id, text, done, author, url, hasImage, createdAt }] }]
+
+function generateChecklistId(prefix = 'cl') {
+    return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function getUserChecklists(userId) {
+    if (!checklistsMap.has(userId)) {
+        checklistsMap.set(userId, []);
+    }
+    return checklistsMap.get(userId);
+}
+
+function serializeChecklistsMap() {
+    const out = {};
+    for (const [uid, list] of checklistsMap.entries()) {
+        if (Array.isArray(list) && list.length > 0) {
+            out[uid] = list;
+        }
+    }
+    return out;
+}
+
+function loadChecklistsFromObject(obj) {
+    checklistsMap.clear();
+    if (!obj || typeof obj !== 'object') return;
+    for (const [uid, list] of Object.entries(obj)) {
+        if (Array.isArray(list) && list.length > 0) {
+            checklistsMap.set(uid, list);
+        }
+    }
+}
+
+function buildChecklistProgressBar(done, total) {
+    if (total === 0) return '⬜⬜⬜⬜⬜';
+    const filled = Math.round((done / total) * 5);
+    return '🟩'.repeat(filled) + '⬜'.repeat(5 - filled);
+}
+
+function buildChecklistsOverviewPayload(userId, user = null) {
+    const lists = getUserChecklists(userId);
+    const nomUser = user?.displayName || user?.username;
+
+    const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle(lists.length > 0 ? `📋 Checklists actives (${lists.length})` : '📋 Checklists actives')
+        .setTimestamp();
+
+    if (nomUser) {
+        embed.setAuthor({
+            name: `Checklists de ${nomUser}`,
+            iconURL: typeof user?.displayAvatarURL === 'function' ? user.displayAvatarURL({ dynamic: true }) : undefined
+        });
+    }
+
+    if (lists.length === 0) {
+        embed.setDescription(
+            "📭 **Aucune checklist active pour le moment !**\n\n" +
+            "Clique sur **➕ Nouvelle checklist** ci-dessous pour en créer une, " +
+            "ou tape `!checklist new [nom]`."
+        );
+    } else {
+        let desc = `Tu as actuellement **${lists.length}** checklist${lists.length > 1 ? 's' : ''} active${lists.length > 1 ? 's' : ''} :\n\n`;
+
+        lists.forEach((cl, idx) => {
+            const total = cl.tasks.length;
+            const done = cl.tasks.filter(t => t.done).length;
+            const toutFini = total > 0 && done === total;
+            const icone = toutFini ? '✅' : '📋';
+            const prochaine = cl.tasks.find(t => !t.done);
+            const apercu = total === 0
+                ? '*(Aucune tâche pour le moment)*'
+                : toutFini
+                    ? '*(Toutes les tâches sont terminées !)*'
+                    : `Prochaine : *${prochaine.text.slice(0, 60)}${prochaine.text.length > 60 ? '...' : ''}*`;
+
+            desc += `**${idx + 1}.** ${icone} **${cl.title}** — \`${done}/${total}\` ${buildChecklistProgressBar(done, total)}\n` +
+                    `> ${apercu}\n\n`;
+        });
+
+        if (desc.length > 3950) {
+            desc = desc.slice(0, 3947) + '...';
+        }
+
+        embed.setDescription(desc);
+    }
+
+    embed.setFooter({ text: 'Sélectionne une checklist pour l\'ouvrir • !checklist new [nom] • Réponds à un message avec !checklist' });
+
+    const components = [];
+
+    if (lists.length > 0) {
+        const selectOptions = lists.slice(0, 25).map((cl, idx) => {
+            const total = cl.tasks.length;
+            const done = cl.tasks.filter(t => t.done).length;
+            const toutFini = total > 0 && done === total;
+            return {
+                label: `${idx + 1}. ${cl.title}`.slice(0, 100),
+                description: `${done}/${total} tâche${total > 1 ? 's' : ''} terminée${done > 1 ? 's' : ''}`,
+                emoji: toutFini ? '✅' : '📋',
+                value: cl.id
+            };
+        });
+
+        const deleteOptions = lists.slice(0, 25).map((cl, idx) => {
+            const total = cl.tasks.length;
+            return {
+                label: `${idx + 1}. ${cl.title}`.slice(0, 100),
+                description: `Supprimer (${total} tâche${total > 1 ? 's' : ''})`,
+                emoji: '🗑️',
+                value: cl.id
+            };
+        });
+
+        components.push(
+            new ActionRowBuilder().addComponents(
+                new StringSelectMenuBuilder()
+                    .setCustomId(`checklist_select_${userId}`)
+                    .setPlaceholder('📂 Sélectionner une checklist à ouvrir...')
+                    .addOptions(selectOptions)
+            )
+        );
+
+        components.push(
+            new ActionRowBuilder().addComponents(
+                new StringSelectMenuBuilder()
+                    .setCustomId(`checklist_delete_${userId}`)
+                    .setPlaceholder('🗑️ Enlever une checklist...')
+                    .addOptions(deleteOptions)
+            )
+        );
+    }
+
+    components.push(
+        new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`checklist_newbtn_${userId}`)
+                .setLabel('➕ Nouvelle checklist')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId(`checklist_close_${userId}`)
+                .setLabel('Fermer')
+                .setEmoji('✖️')
+                .setStyle(ButtonStyle.Secondary)
+        )
+    );
+
+    return { embeds: [embed], components };
+}
+
+function buildChecklistDetailPayload(userId, checklistId, user = null) {
+    const lists = getUserChecklists(userId);
+    const cl = lists.find(c => c.id === checklistId);
+    if (!cl) {
+        return buildChecklistsOverviewPayload(userId, user);
+    }
+
+    const total = cl.tasks.length;
+    const done = cl.tasks.filter(t => t.done).length;
+    const toutFini = total > 0 && done === total;
+
+    const embed = new EmbedBuilder()
+        .setColor(toutFini ? 0x2ecc71 : 0x5865f2)
+        .setTitle(`${toutFini ? '✅' : '📋'} Checklist : ${cl.title}`)
+        .setTimestamp();
+
+    if (total === 0) {
+        embed.setDescription(
+            "📭 **Aucune tâche dans cette checklist !**\n\n" +
+            "Clique sur **➕ Ajouter une tâche** ci-dessous (ou réponds à un message avec `!checklist " + cl.title + "`)."
+        );
+    } else {
+        let desc = `Progression : **${done}/${total}** tâche${total > 1 ? 's' : ''} terminée${done > 1 ? 's' : ''} ${buildChecklistProgressBar(done, total)}\n\n`;
+
+        cl.tasks.forEach((t, idx) => {
+            const rawText = (t.text || '').replace(/\n/g, ' ').replace(/~~/g, '').trim();
+            const truncated = rawText.length > 200 ? rawText.slice(0, 197) + '...' : rawText;
+
+            if (t.done) {
+                let line = `✅ **${idx + 1}.** ~~${truncated || 'Image / Média'}~~`;
+                if (t.url) {
+                    line += `\n— ${t.author ? `~~**${t.author}**~~ • ` : ''}([Aller au message](${t.url}))`;
+                }
+                desc += `${line}\n\n`;
+            } else {
+                let citation = '';
+                if (truncated) {
+                    citation = t.url ? `> *« ${truncated} »*` : truncated;
+                }
+                if (t.hasImage && t.url) {
+                    citation += (citation ? '\n' : '') + `> 🖼️ [Lien vers le message avec image](${t.url})`;
+                } else if (!citation && t.url) {
+                    citation = `> [Accéder au message](${t.url})`;
+                }
+                let line = `⬜ **${idx + 1}.** ${citation}`;
+                if (t.url) {
+                    line += `\n— ${t.author ? `**${t.author}** • ` : ''}([Aller au message](${t.url}))`;
+                }
+                desc += `${line}\n\n`;
+            }
+        });
+
+        if (desc.length > 3950) {
+            desc = desc.slice(0, 3947) + '...';
+        }
+        embed.setDescription(desc);
+    }
+
+    embed.setFooter({
+        text: total > 25
+            ? 'Menu limité aux 25 premières tâches • Sélectionne une tâche pour la rayer/dérayer'
+            : 'Sélectionne une tâche en bas pour la marquer comme terminée (elle sera rayée)'
+    });
+
+    const components = [];
+
+    if (total > 0) {
+        const taskOptions = cl.tasks.slice(0, 25).map((t, idx) => {
+            const cleanText = (t.text || 'Image / Média').replace(/\n/g, ' ');
+            return {
+                label: `${idx + 1}. ${cleanText}`.slice(0, 100),
+                description: t.done ? 'Terminée — cliquer pour décocher' : 'En cours — cliquer pour rayer',
+                emoji: t.done ? '↩️' : '✅',
+                value: t.id
+            };
+        });
+
+        components.push(
+            new ActionRowBuilder().addComponents(
+                new StringSelectMenuBuilder()
+                    .setCustomId(`checklist_toggle_${userId}_${cl.id}`)
+                    .setPlaceholder('✅ Indiquer une tâche terminée (ou à refaire)...')
+                    .setMinValues(1)
+                    .setMaxValues(taskOptions.length)
+                    .addOptions(taskOptions)
+            )
+        );
+    }
+
+    const btnRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`checklist_addbtn_${userId}_${cl.id}`)
+            .setLabel('➕ Ajouter une tâche')
+            .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+            .setCustomId(`checklist_back_${userId}`)
+            .setLabel('⬅️ Toutes les checklists')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    if (done > 0) {
+        btnRow.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`checklist_cleardone_${userId}_${cl.id}`)
+                .setLabel('🧹 Purger les rayées')
+                .setStyle(ButtonStyle.Secondary)
+        );
+    }
+
+    btnRow.addComponents(
+        new ButtonBuilder()
+            .setCustomId(`checklist_delone_${userId}_${cl.id}`)
+            .setLabel('🗑️ Supprimer')
+            .setStyle(ButtonStyle.Danger)
+    );
+
+    components.push(btnRow);
+
+    return { embeds: [embed], components };
+}
 
 function buildBugListEmbed(bugs) {
     const embed = new EmbedBuilder()
@@ -860,6 +1133,167 @@ async function handleToolsMessage(message, response, client) {
         return true;
     }
 
+    // !checklist / !cl
+    if (command === '!checklist' || command === '!checklists' || command === '!cl') {
+        const userId = message.author.id;
+        const userChecklists = getUserChecklists(userId);
+        const rest = raw.slice(command.length).trim();
+        const args = rest ? rest.split(/\s+/) : [];
+        const sub = args[0]?.toLowerCase();
+        const repliedMsgId = message.reference?.messageId;
+
+        if (repliedMsgId) {
+            const cibleMsg = await message.channel.messages.fetch(repliedMsgId).catch(() => null);
+            if (!cibleMsg) {
+                return message.reply("❌ Impossible de récupérer le message répondu.");
+            }
+
+            let targetChecklist = null;
+            if (rest) {
+                targetChecklist = userChecklists.find(c => c.title.toLowerCase() === rest.toLowerCase());
+                if (!targetChecklist) {
+                    targetChecklist = {
+                        id: generateChecklistId('cl'),
+                        title: rest.slice(0, 80),
+                        createdAt: Date.now(),
+                        tasks: []
+                    };
+                    userChecklists.push(targetChecklist);
+                }
+            } else if (userChecklists.length === 1) {
+                targetChecklist = userChecklists[0];
+            } else {
+                targetChecklist = userChecklists.find(c => c.title.toLowerCase() === 'général');
+                if (!targetChecklist) {
+                    targetChecklist = {
+                        id: generateChecklistId('cl'),
+                        title: 'Général',
+                        createdAt: Date.now(),
+                        tasks: []
+                    };
+                    userChecklists.push(targetChecklist);
+                }
+            }
+
+            const membreAuteur = cibleMsg.member?.displayName ?? cibleMsg.author.username;
+            const hasImage = cibleMsg.attachments.size > 0;
+            const dejaPresent = targetChecklist.tasks.some(t => t.url && t.url === cibleMsg.url);
+
+            if (!dejaPresent) {
+                targetChecklist.tasks.push({
+                    id: generateChecklistId('t'),
+                    text: cibleMsg.content || (hasImage ? 'Image / Média' : 'Message'),
+                    done: false,
+                    author: membreAuteur,
+                    url: cibleMsg.url,
+                    hasImage,
+                    createdAt: Date.now()
+                });
+                toolsState.demanderSauvegarde?.();
+            }
+
+            const payload = buildChecklistDetailPayload(userId, targetChecklist.id, message.member || message.author);
+            await message.reply({
+                content: `📋 Tâche ajoutée à la checklist **${targetChecklist.title}** !`,
+                ...payload
+            });
+            return true;
+        }
+
+        if (sub === 'new' || sub === 'create' || sub === 'creer' || sub === 'créer') {
+            const nom = args.slice(1).join(' ').trim();
+            if (!nom) {
+                return message.reply("Usage : `!checklist new [nom]` (ou clique sur **➕ Nouvelle checklist** après `!checklist`).");
+            }
+            const existante = userChecklists.find(c => c.title.toLowerCase() === nom.toLowerCase());
+            if (existante) {
+                const payload = buildChecklistDetailPayload(userId, existante.id, message.member || message.author);
+                return message.reply({ content: `📋 La checklist **${existante.title}** existe déjà, la voici :`, ...payload });
+            }
+            const nouvelle = {
+                id: generateChecklistId('cl'),
+                title: nom.slice(0, 80),
+                createdAt: Date.now(),
+                tasks: []
+            };
+            userChecklists.push(nouvelle);
+            toolsState.demanderSauvegarde?.();
+            const payload = buildChecklistDetailPayload(userId, nouvelle.id, message.member || message.author);
+            return message.reply({ content: `✅ Checklist **${nouvelle.title}** créée !`, ...payload });
+        }
+
+        if (sub === 'add' || sub === 'ajouter') {
+            const body = args.slice(1).join(' ').trim();
+            if (!body) {
+                return message.reply("Usage : `!checklist add [nom] | [tâche]` (ou `!checklist add [tâche]` si tu n'as qu'une checklist).");
+            }
+
+            let targetChecklist = null;
+            let taskText = '';
+
+            if (body.includes('|')) {
+                const [nomPart, ...taskParts] = body.split('|');
+                const nom = nomPart.trim();
+                taskText = taskParts.join('|').trim();
+                if (!nom || !taskText) {
+                    return message.reply("Usage : `!checklist add [nom] | [tâche]`");
+                }
+                targetChecklist = userChecklists.find(c => c.title.toLowerCase() === nom.toLowerCase());
+                if (!targetChecklist) {
+                    targetChecklist = {
+                        id: generateChecklistId('cl'),
+                        title: nom.slice(0, 80),
+                        createdAt: Date.now(),
+                        tasks: []
+                    };
+                    userChecklists.push(targetChecklist);
+                }
+            } else {
+                taskText = body;
+                if (userChecklists.length === 1) {
+                    targetChecklist = userChecklists[0];
+                } else {
+                    targetChecklist = userChecklists.find(c => c.title.toLowerCase() === 'général');
+                    if (!targetChecklist) {
+                        targetChecklist = {
+                            id: generateChecklistId('cl'),
+                            title: 'Général',
+                            createdAt: Date.now(),
+                            tasks: []
+                        };
+                        userChecklists.push(targetChecklist);
+                    }
+                }
+            }
+
+            targetChecklist.tasks.push({
+                id: generateChecklistId('t'),
+                text: taskText.slice(0, 300),
+                done: false,
+                author: null,
+                url: null,
+                hasImage: false,
+                createdAt: Date.now()
+            });
+            toolsState.demanderSauvegarde?.();
+
+            const payload = buildChecklistDetailPayload(userId, targetChecklist.id, message.member || message.author);
+            return message.reply({ content: `➕ Tâche ajoutée à **${targetChecklist.title}** !`, ...payload });
+        }
+
+        if (rest) {
+            const match = userChecklists.find(c => c.title.toLowerCase() === rest.toLowerCase())
+                || userChecklists.find(c => c.title.toLowerCase().includes(rest.toLowerCase()));
+            if (match) {
+                const payload = buildChecklistDetailPayload(userId, match.id, message.member || message.author);
+                return message.reply(payload);
+            }
+        }
+
+        const payload = buildChecklistsOverviewPayload(userId, message.member || message.author);
+        return message.reply(payload);
+    }
+
     // !up (Modos + Epsys)
     if (command === '!up' || response?.needsUp) {
         if (!estModoAutoriseUp(message.member, message.author.id)) {
@@ -1168,6 +1602,275 @@ async function handleToolsInteraction(interaction, client) {
         return true;
     }
 
+    // =========================
+    //        CHECKLISTS
+    // =========================
+
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('checklist_select_')) {
+        const ownerId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== ownerId) {
+            return interaction.reply({ content: "Ce n'est pas ta checklist ! Tape `!checklist` pour gérer les tiennes.", ephemeral: true });
+        }
+
+        const checklistId = interaction.values[0];
+        const payload = buildChecklistDetailPayload(ownerId, checklistId, interaction.member || interaction.user);
+        await interaction.update({ content: null, ...payload });
+        return true;
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('checklist_delete_')) {
+        const ownerId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== ownerId) {
+            return interaction.reply({ content: "Ce n'est pas ta checklist !", ephemeral: true });
+        }
+
+        const checklistId = interaction.values[0];
+        const lists = getUserChecklists(ownerId);
+        const idx = lists.findIndex(c => c.id === checklistId);
+        if (idx === -1) {
+            return interaction.reply({ content: "Checklist introuvable ou déjà supprimée.", ephemeral: true });
+        }
+
+        const supprimee = lists.splice(idx, 1)[0];
+        toolsState.demanderSauvegarde?.();
+
+        const payload = buildChecklistsOverviewPayload(ownerId, interaction.member || interaction.user);
+        await interaction.update({ content: null, ...payload });
+        await interaction.followUp({ content: `🗑️ Checklist **${supprimee.title}** supprimée.`, ephemeral: true });
+        return true;
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('checklist_toggle_')) {
+        const parts = interaction.customId.split('_');
+        const ownerId = parts[2];
+        const checklistId = parts[3];
+
+        if (interaction.user.id !== ownerId) {
+            return interaction.reply({ content: "Ce n'est pas ta checklist !", ephemeral: true });
+        }
+
+        const lists = getUserChecklists(ownerId);
+        const cl = lists.find(c => c.id === checklistId);
+        if (!cl) {
+            return interaction.reply({ content: "Cette checklist n'existe plus.", ephemeral: true });
+        }
+
+        for (const taskId of interaction.values) {
+            const task = cl.tasks.find(t => t.id === taskId);
+            if (task) {
+                task.done = !task.done;
+            }
+        }
+        toolsState.demanderSauvegarde?.();
+
+        const payload = buildChecklistDetailPayload(ownerId, checklistId, interaction.member || interaction.user);
+        await interaction.update({ content: null, ...payload });
+        return true;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('checklist_back_')) {
+        const ownerId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== ownerId) {
+            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
+        }
+
+        const payload = buildChecklistsOverviewPayload(ownerId, interaction.member || interaction.user);
+        await interaction.update({ content: null, ...payload });
+        return true;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('checklist_close_')) {
+        const ownerId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== ownerId) {
+            return interaction.reply({ content: "Tu ne peux pas fermer ce panneau !", ephemeral: true });
+        }
+        await interaction.message.delete().catch(() => {});
+        return true;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('checklist_cleardone_')) {
+        const parts = interaction.customId.split('_');
+        const ownerId = parts[2];
+        const checklistId = parts[3];
+
+        if (interaction.user.id !== ownerId) {
+            return interaction.reply({ content: "Ce n'est pas ta checklist !", ephemeral: true });
+        }
+
+        const cl = getUserChecklists(ownerId).find(c => c.id === checklistId);
+        if (!cl) return interaction.reply({ content: "Checklist introuvable.", ephemeral: true });
+
+        const avant = cl.tasks.length;
+        cl.tasks = cl.tasks.filter(t => !t.done);
+        const retirees = avant - cl.tasks.length;
+        toolsState.demanderSauvegarde?.();
+
+        const payload = buildChecklistDetailPayload(ownerId, checklistId, interaction.member || interaction.user);
+        await interaction.update({ content: null, ...payload });
+        await interaction.followUp({ content: `🧹 **${retirees}** tâche${retirees > 1 ? 's' : ''} terminée${retirees > 1 ? 's' : ''} retirée${retirees > 1 ? 's' : ''}.`, ephemeral: true });
+        return true;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('checklist_delone_')) {
+        const parts = interaction.customId.split('_');
+        const ownerId = parts[2];
+        const checklistId = parts[3];
+
+        if (interaction.user.id !== ownerId) {
+            return interaction.reply({ content: "Ce n'est pas ta checklist !", ephemeral: true });
+        }
+
+        const lists = getUserChecklists(ownerId);
+        const idx = lists.findIndex(c => c.id === checklistId);
+        if (idx === -1) return interaction.reply({ content: "Checklist introuvable.", ephemeral: true });
+
+        const supprimee = lists.splice(idx, 1)[0];
+        toolsState.demanderSauvegarde?.();
+
+        const payload = buildChecklistsOverviewPayload(ownerId, interaction.member || interaction.user);
+        await interaction.update({ content: null, ...payload });
+        await interaction.followUp({ content: `🗑️ Checklist **${supprimee.title}** supprimée.`, ephemeral: true });
+        return true;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('checklist_newbtn_')) {
+        const ownerId = interaction.customId.split('_')[2];
+        if (interaction.user.id !== ownerId) {
+            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
+        }
+
+        const modal = new ModalBuilder()
+            .setCustomId(`checklist_modal_new_${ownerId}`)
+            .setTitle('📋 Nouvelle checklist');
+
+        const titleInput = new TextInputBuilder()
+            .setCustomId('cl_title')
+            .setLabel('Nom de la checklist')
+            .setStyle(TextInputStyle.Short)
+            .setPlaceholder('Ex: Regaïa TCG, Bugfixes, Courses...')
+            .setMaxLength(80)
+            .setRequired(true);
+
+        const tasksInput = new TextInputBuilder()
+            .setCustomId('cl_tasks')
+            .setLabel('Tâches de départ (optionnel, 1 par ligne)')
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder('Finir le design de la carte\nTester !checklist')
+            .setRequired(false);
+
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(titleInput),
+            new ActionRowBuilder().addComponents(tasksInput)
+        );
+
+        await interaction.showModal(modal);
+        return true;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('checklist_addbtn_')) {
+        const parts = interaction.customId.split('_');
+        const ownerId = parts[2];
+        const checklistId = parts[3];
+
+        if (interaction.user.id !== ownerId) {
+            return interaction.reply({ content: "Ce n'est pas ta checklist !", ephemeral: true });
+        }
+
+        const cl = getUserChecklists(ownerId).find(c => c.id === checklistId);
+        if (!cl) return interaction.reply({ content: "Checklist introuvable.", ephemeral: true });
+
+        const modal = new ModalBuilder()
+            .setCustomId(`checklist_modal_add_${ownerId}_${checklistId}`)
+            .setTitle(`➕ Ajouter à ${cl.title}`.slice(0, 45));
+
+        const tasksInput = new TextInputBuilder()
+            .setCustomId('cl_tasks')
+            .setLabel('Tâche(s) à ajouter (1 par ligne)')
+            .setStyle(TextInputStyle.Paragraph)
+            .setPlaceholder('Écrire une ou plusieurs tâches...')
+            .setRequired(true);
+
+        modal.addComponents(new ActionRowBuilder().addComponents(tasksInput));
+        await interaction.showModal(modal);
+        return true;
+    }
+
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('checklist_modal_new_')) {
+        const ownerId = interaction.customId.split('_')[3];
+        if (interaction.user.id !== ownerId) {
+            return interaction.reply({ content: "Action non autorisée.", ephemeral: true });
+        }
+
+        const title = interaction.fields.getTextInputValue('cl_title').trim();
+        const rawTasks = interaction.fields.getTextInputValue('cl_tasks') || '';
+        const lines = rawTasks.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+        const nouvelle = {
+            id: generateChecklistId('cl'),
+            title: title.slice(0, 80),
+            createdAt: Date.now(),
+            tasks: lines.map(text => ({
+                id: generateChecklistId('t'),
+                text: text.slice(0, 300),
+                done: false,
+                author: null,
+                url: null,
+                hasImage: false,
+                createdAt: Date.now()
+            }))
+        };
+
+        getUserChecklists(ownerId).push(nouvelle);
+        toolsState.demanderSauvegarde?.();
+
+        const payload = buildChecklistDetailPayload(ownerId, nouvelle.id, interaction.member || interaction.user);
+        if (interaction.isFromMessage?.() && interaction.message) {
+            await interaction.update({ content: null, ...payload });
+        } else {
+            await interaction.reply(payload);
+        }
+        return true;
+    }
+
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('checklist_modal_add_')) {
+        const parts = interaction.customId.split('_');
+        const ownerId = parts[3];
+        const checklistId = parts[4];
+
+        if (interaction.user.id !== ownerId) {
+            return interaction.reply({ content: "Action non autorisée.", ephemeral: true });
+        }
+
+        const cl = getUserChecklists(ownerId).find(c => c.id === checklistId);
+        if (!cl) {
+            return interaction.reply({ content: "Checklist introuvable.", ephemeral: true });
+        }
+
+        const rawTasks = interaction.fields.getTextInputValue('cl_tasks') || '';
+        const lines = rawTasks.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+        for (const text of lines) {
+            cl.tasks.push({
+                id: generateChecklistId('t'),
+                text: text.slice(0, 300),
+                done: false,
+                author: null,
+                url: null,
+                hasImage: false,
+                createdAt: Date.now()
+            });
+        }
+        toolsState.demanderSauvegarde?.();
+
+        const payload = buildChecklistDetailPayload(ownerId, checklistId, interaction.member || interaction.user);
+        if (interaction.isFromMessage?.() && interaction.message) {
+            await interaction.update({ content: null, ...payload });
+        } else {
+            await interaction.reply(payload);
+        }
+        return true;
+    }
+
     // Boutons Snooze Instantané (+10 min et +1h)
     if (interaction.isButton() && interaction.customId.startsWith('rappel_snooze_')) {
         const parts = interaction.customId.split('_');
@@ -1395,8 +2098,24 @@ module.exports = {
     handleToolsMessage,
     handleToolsSlash,
     handleToolsInteraction,
-    getBugsList: () => bugsList,
-    setBugsList: (l) => { bugsList.length = 0; bugsList.push(...l); },
+    getBugsList: () => {
+        const serialized = serializeChecklistsMap();
+        if (Object.keys(serialized).length === 0) return bugsList;
+        return [...bugsList, { __type: 'checklists_store', data: serialized }];
+    },
+    setBugsList: (l) => {
+        bugsList.length = 0;
+        checklistsMap.clear();
+        if (!Array.isArray(l)) return;
+        for (const item of l) {
+            if (item && item.__type === 'checklists_store' && item.data) {
+                loadChecklistsFromObject(item.data);
+            } else if (item) {
+                bugsList.push(item);
+            }
+        }
+    },
+    getChecklistsMap: () => checklistsMap,
     getPendingRappels: () => pendingRappels,
     restaurerRappels
 };
