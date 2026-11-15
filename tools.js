@@ -1747,7 +1747,7 @@ async function handleToolsInteraction(interaction, client) {
             .setCustomId('cl_title')
             .setLabel('Nom de la checklist')
             .setStyle(TextInputStyle.Short)
-            .setPlaceholder('Ex: Regaïa TCG, Bugfixes, Courses...')
+            .setPlaceholder('Ex: Ménage, Devoirs, Courses...')
             .setMaxLength(80)
             .setRequired(true);
 
@@ -1755,7 +1755,7 @@ async function handleToolsInteraction(interaction, client) {
             .setCustomId('cl_tasks')
             .setLabel('Tâches de départ (optionnel, 1 par ligne)')
             .setStyle(TextInputStyle.Paragraph)
-            .setPlaceholder('Finir le design de la carte\nTester !checklist')
+            .setPlaceholder('Acheter des coquillettes\nAssassiner Jordan Bardella\nRemplir cette checklist')
             .setRequired(false);
 
         modal.addComponents(
