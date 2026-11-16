@@ -22,6 +22,7 @@ let activityState = {
     getMotusStats: () => ({}),
     getRebusStats: () => ({}),
     getQuotesData: () => [],
+    getBattlePassData: () => ({}),
     demanderSauvegarde: () => {},
     saveAll: async () => {},
     findMemberByName: null,
@@ -246,7 +247,7 @@ function buildProfilSubEmbed(cibleUser, guild, tab) {
     }
 
     if (tab === 'bp') {
-        const bpData = activityState.client?.battlePassData || {};
+        const bpData = activityState.getBattlePassData?.() || {};
         const p = bpData.joueurs?.[cibleUser.id] ?? { niveau: 1, xp: 0, streak: 0, actif: false, quetesDuJour: [] };
         const barre = '🟩'.repeat(Math.min(10, Math.round((p.xp / 500) * 10))) + '⬜'.repeat(Math.max(0, 10 - Math.min(10, Math.round((p.xp / 500) * 10))));
 

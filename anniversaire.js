@@ -295,9 +295,11 @@ if (!isDate) {
             const nom = message.guild?.members.cache.get(cible.id)?.displayName ?? cible.username ?? cible.id;
             if (!date) { await message.reply(`🎂 **${nom}** n'a pas encore enregistré son anniversaire.`); return true; }
             const [d, m] = date.split('/').map(Number);
-            const now = new Date(); const next = new Date(now.getFullYear(), m - 1, d);
-            if (next < now) next.setFullYear(now.getFullYear() + 1);
-            const diffDays = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
+            const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const next = new Date(now.getFullYear(), m - 1, d);
+            if (next < todayStart) next.setFullYear(now.getFullYear() + 1);
+            const diffDays = Math.round((next - todayStart) / (1000 * 60 * 60 * 24));
             const joursStr = diffDays === 0 ? "c'est aujourd'hui 🎉 !" : diffDays === 1 ? "c'est demain 🎉 !" : `dans **${diffDays} jours** !`;
             await message.reply(`🎂 L'anniversaire de **${nom}** est le **${date}** — ${joursStr}`);
             return true;
@@ -305,9 +307,11 @@ if (!isDate) {
         const date = getGuildBirthdays(message.guild.id)[message.author.id];
         if (!date) { await message.reply("Tu n'as pas encore enregistré ton anniversaire ! Utilise `!anniversaire set JJ/MM`."); return true; }
         const [d, m] = date.split('/').map(Number);
-        const now = new Date(); const next = new Date(now.getFullYear(), m - 1, d);
-        if (next < now) next.setFullYear(now.getFullYear() + 1);
-        const diffDays = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
+        const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const next = new Date(now.getFullYear(), m - 1, d);
+        if (next < todayStart) next.setFullYear(now.getFullYear() + 1);
+        const diffDays = Math.round((next - todayStart) / (1000 * 60 * 60 * 24));
         const joursStr = diffDays === 0 ? "c'est aujourd'hui 🎉 !" : diffDays === 1 ? "c'est demain 🎉 !" : `dans **${diffDays} jours** !`;
         await message.reply(`🎂 Ton anniversaire est le **${date}** — ${joursStr}`);
         return true;
@@ -321,14 +325,15 @@ if (!isDate) {
 
         const sortEntries = (ordre) => {
             if (ordre === 'chrono') {
-                const now = new Date();
+                const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+                const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 return [...entries].sort((a, b) => {
                     const [da, ma] = a[1].split('/').map(Number);
                     const [db, mb] = b[1].split('/').map(Number);
                     const dateA = new Date(now.getFullYear(), ma - 1, da);
                     const dateB = new Date(now.getFullYear(), mb - 1, db);
-                    if (dateA < now) dateA.setFullYear(now.getFullYear() + 1);
-                    if (dateB < now) dateB.setFullYear(now.getFullYear() + 1);
+                    if (dateA < todayStart) dateA.setFullYear(now.getFullYear() + 1);
+                    if (dateB < todayStart) dateB.setFullYear(now.getFullYear() + 1);
                     return dateA - dateB;
                 });
             } else {
@@ -366,18 +371,20 @@ if (!isDate) {
     if (sub === 'next') {
         const entries = Object.entries(getGuildBirthdays(message.guild.id));
         if (entries.length === 0) { await message.reply("Aucun anniversaire enregistré !"); return true; }
-        const now = new Date();
+        const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const toDate = (str) => {
             const [d, m] = str.split('/').map(Number);
-            const year = (m < now.getMonth() + 1 || (m === now.getMonth() + 1 && d < now.getDate())) ? now.getFullYear() + 1 : now.getFullYear();
-            return new Date(year, m - 1, d);
+            const dt = new Date(now.getFullYear(), m - 1, d);
+            if (dt < todayStart) dt.setFullYear(now.getFullYear() + 1);
+            return dt;
         };
         const next = entries.sort((a, b) => toDate(a[1]) - toDate(b[1]))[0];
         const member = message.guild?.members.cache.get(next[0]);
         const name = member?.displayName ?? `<@${next[0]}>`;
         const nextDate = toDate(next[1]);
-        const diffMs = nextDate - now;
-        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        const diffMs = nextDate - todayStart;
+        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
         const joursStr = diffDays === 0 ? "c'est aujourd'hui 🎉" : diffDays === 1 ? "demain 🎉" : `dans **${diffDays} jours**`;
         await message.reply(`🎂 Le prochain anniversaire est celui de **${name}** le **${next[1]}** — ${joursStr} !`);
         return true;
@@ -425,9 +432,11 @@ async function handleAnniversaireSlash(interaction) {
         const nom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
         if (!date) return interaction.reply({ content: `🎂 **${nom}** n'a pas encore enregistré son anniversaire.`, ephemeral: true });
         const [d, m] = date.split('/').map(Number);
-        const now = new Date(); const next = new Date(now.getFullYear(), m - 1, d);
-        if (next < now) next.setFullYear(now.getFullYear() + 1);
-        const diffDays = Math.ceil((next - now) / (1000 * 60 * 60 * 24));
+        const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const next = new Date(now.getFullYear(), m - 1, d);
+        if (next < todayStart) next.setFullYear(now.getFullYear() + 1);
+        const diffDays = Math.round((next - todayStart) / (1000 * 60 * 60 * 24));
         const joursStr = diffDays === 0 ? "c'est aujourd'hui 🎉 !" : diffDays === 1 ? "c'est demain 🎉 !" : `dans **${diffDays} jours** !`;
         return interaction.reply(`🎂 L'anniversaire de **${nom}** est le **${date}** — ${joursStr}`);
     }
@@ -488,18 +497,20 @@ async function handleAnniversaireSlash(interaction) {
     if (sub === 'next') {
         const entries = Object.entries(guildBirthdays);
         if (entries.length === 0) return interaction.reply({ content: "Aucun anniversaire enregistré !", ephemeral: true });
-        const now = new Date();
+        const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const toDate = (str) => {
             const [d, m] = str.split('/').map(Number);
-            const year = (m < now.getMonth() + 1 || (m === now.getMonth() + 1 && d < now.getDate())) ? now.getFullYear() + 1 : now.getFullYear();
-            return new Date(year, m - 1, d);
+            const dt = new Date(now.getFullYear(), m - 1, d);
+            if (dt < todayStart) dt.setFullYear(now.getFullYear() + 1);
+            return dt;
         };
         const next = entries.sort((a, b) => toDate(a[1]) - toDate(b[1]))[0];
         const member = interaction.guild?.members.cache.get(next[0]);
         const name = member?.displayName ?? `<@${next[0]}>`;
         const nextDate = toDate(next[1]);
-        const diffMs = nextDate - now;
-        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        const diffMs = nextDate - todayStart;
+        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
         const joursStr = diffDays === 0 ? "c'est aujourd'hui 🎉" : diffDays === 1 ? "demain 🎉" : `dans **${diffDays} jours**`;
         return interaction.reply(`🎂 Le prochain anniversaire est celui de **${name}** le **${next[1]}** — ${joursStr} !`);
     }
@@ -589,14 +600,15 @@ async function handleAnniversaireButton(interaction) {
 
     const sortEntries = (o) => {
         if (o === 'chrono') {
-            const now = new Date();
+            const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
             return [...entries].sort((a, b) => {
                 const [da, ma] = a[1].split('/').map(Number);
                 const [db, mb] = b[1].split('/').map(Number);
                 const dateA = new Date(now.getFullYear(), ma - 1, da);
                 const dateB = new Date(now.getFullYear(), mb - 1, db);
-                if (dateA < now) dateA.setFullYear(now.getFullYear() + 1);
-                if (dateB < now) dateB.setFullYear(now.getFullYear() + 1);
+                if (dateA < todayStart) dateA.setFullYear(now.getFullYear() + 1);
+                if (dateB < todayStart) dateB.setFullYear(now.getFullYear() + 1);
                 return dateA - dateB;
             });
         } else {

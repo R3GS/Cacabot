@@ -207,6 +207,14 @@ function buildMotusEmbed(mot, dateKey, longueur = 6, manche = 1, totalManches = 
         .setFooter({ text: `Manche ${manche}/${totalManches} • Difficulté : ${diffStr} • !motus pour le statut` });
 }
 
+function getMinijeuxWeekKey() {
+    const d = new Date();
+    const paris = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const onejan = new Date(paris.getFullYear(), 0, 1);
+    const week = Math.ceil((((paris.getTime() - onejan.getTime()) / 86400000) + onejan.getDay() + 1) / 7);
+    return `${paris.getFullYear()}-W${week}`;
+}
+
 function buildMotusStatsEmbed(cible, interactionUser) {
     const motusStats = minijeuxBridge.getMotusStats();
     const s = motusStats[cible.id] ?? { victoires: 0, parties: 0 };
@@ -220,6 +228,27 @@ function buildMotusStatsEmbed(cible, interactionUser) {
             { name: '📈 Taux de réussite', value: `**${pct}%**`, inline: true }
         )
         .setFooter({ text: 'Motus 10h & 19h • Regaïa' });
+}
+
+function buildMotusTopEmbed(guild) {
+    const motusStats = minijeuxBridge.getMotusStats();
+    const medailles = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+    const top = Object.entries(motusStats)
+        .filter(([, s]) => (s?.victoires || 0) > 0)
+        .sort((a, b) => (b[1].victoires - a[1].victoires) || ((a[1].parties || 0) - (b[1].parties || 0)))
+        .slice(0, 10);
+
+    const lignes = top.map(([uid, s], i) => {
+        const nom = guild?.members.cache.get(uid)?.displayName ?? `<@${uid}>`;
+        const pct = s.parties > 0 ? Math.round((s.victoires / s.parties) * 100) : 0;
+        return `${medailles[i]} **${nom}** — **${s.victoires}** victoire${s.victoires > 1 ? 's' : ''} *(${s.parties} parties • ${pct}%)*`;
+    });
+
+    return new EmbedBuilder()
+        .setColor(0x00b0f4)
+        .setTitle('🏆 CLASSEMENT MOTUS — TOP 10')
+        .setDescription(lignes.length > 0 ? lignes.join('\n') : '*Aucune victoire enregistrée pour le moment.*')
+        .setFooter({ text: 'Motus 10h & 19h • !pendutop pour le classement combiné' });
 }
 
 async function envoyerMotusQuotidien(guild, heureSession = 10) {
@@ -498,7 +527,10 @@ async function handleMotusMessage(message, response, client, helpers) {
 
             const { MessageFlags } = require('discord.js');
             if (rawGuess === motDuJour) {
+                const weekKey = getMinijeuxWeekKey();
                 motusStats[message.author.id].victoires++;
+                if (!motusStats[message.author.id].hebdo) motusStats[message.author.id].hebdo = {};
+                motusStats[message.author.id].hebdo[weekKey] = (motusStats[message.author.id].hebdo[weekKey] || 0) + 1;
                 minijeuxBridge.trackBattlePassProgress?.(message.author.id, 'motus_win', 1);
                 minijeuxBridge.trackBattlePassProgress?.(message.author.id, 'minijeu_win', 1);
 
@@ -646,6 +678,11 @@ async function handleMotusMessage(message, response, client, helpers) {
         return true;
     }
 
+    if (cmd === '!motustop') {
+        await message.reply({ embeds: [buildMotusTopEmbed(message.guild)] });
+        return true;
+    }
+
     if (response?.needsMotusStats) {
         let cible = message.mentions.members.first();
         if (!cible) {
@@ -737,6 +774,10 @@ async function handleMotusSlash(interaction) {
         const cible = interaction.options.getUser('membre') ?? interaction.user;
         const member = interaction.guild?.members.cache.get(cible.id) ?? interaction.member;
         return interaction.reply({ embeds: [buildMotusStatsEmbed(member, interaction.user)] });
+    }
+
+    if (commandName === 'motustop') {
+        return interaction.reply({ embeds: [buildMotusTopEmbed(interaction.guild)] });
     }
 
     return false;
@@ -1061,7 +1102,7 @@ function normaliserRebus(str) {
     if (!str) return '';
     return str.toLowerCase()
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-        .replace(/^(le|la|les|l'|un|une|des|the|a|an)\s+/i, '')
+        .replace(/^(le|la|les|un|une|des|the|a|an|l)\s+|^l['’]\s*/i, '')
         .replace(/[^a-z0-9]/g, "");
 }
 
@@ -1105,6 +1146,26 @@ function buildRebusStatsEmbed(cible) {
             { name: '🎮 Sessions jouées', value: `**${s.parties}**`, inline: true }
         )
         .setFooter({ text: 'Rébus Regaïen tous les jours à 15h00 !' });
+}
+
+function buildRebusTopEmbed(guild) {
+    const rebusStats = minijeuxBridge.getRebusStats();
+    const medailles = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+    const top = Object.entries(rebusStats)
+        .filter(([, s]) => (s?.points || 0) > 0)
+        .sort((a, b) => (b[1].points - a[1].points) || ((b[1].victoires || 0) - (a[1].victoires || 0)))
+        .slice(0, 10);
+
+    const lignes = top.map(([uid, s], i) => {
+        const nom = guild?.members.cache.get(uid)?.displayName ?? `<@${uid}>`;
+        return `${medailles[i]} **${nom}** — **${s.points} pt${s.points > 1 ? 's' : ''}** *(${s.victoires} victoire${s.victoires > 1 ? 's' : ''} • ${s.parties} sessions)*`;
+    });
+
+    return new EmbedBuilder()
+        .setColor(0xf39c12)
+        .setTitle('🏆 CLASSEMENT RÉBUS REGAÏEN — TOP 10')
+        .setDescription(lignes.length > 0 ? lignes.join('\n') : '*Aucun point enregistré pour le moment.*')
+        .setFooter({ text: 'Rébus tous les jours à 15h00 • !pendutop pour le classement combiné' });
 }
 
 // Fonction pour calculer la distance d'édition (tolérance 1 faute de frappe)
@@ -1399,10 +1460,13 @@ async function terminerSessionRebus(channel) {
     }
 
     const maxScore = scoresList[0][1];
+    const weekKey = getMinijeuxWeekKey();
     for (const [uid, pts] of scoresList) {
-        if (!rebusStats[uid]) rebusStats[uid] = { victoires: 0, points: 0, parties: 0 };
+        if (!rebusStats[uid]) rebusStats[uid] = { victoires: 0, points: 0, parties: 0, hebdo: {} };
         rebusStats[uid].points += pts;
         rebusStats[uid].parties++;
+        if (!rebusStats[uid].hebdo) rebusStats[uid].hebdo = {};
+        rebusStats[uid].hebdo[weekKey] = (rebusStats[uid].hebdo[weekKey] || 0) + pts;
         if (pts === maxScore) rebusStats[uid].victoires++;
     }
     minijeuxBridge.demanderSauvegarde();
@@ -1584,7 +1648,6 @@ async function handleRebusMessage(message, response, client, helpers) {
     if (message.channel.id === REBUS_CHANNEL_ID && rebusSession.active && rebusSession.currentItem && !message.content.startsWith('!')) {
         rebusSession.aEuActiviteManche = true;
         if (await verifierReponseRebus(message)) return true;
-        minijeuxBridge.trackBattlePassProgress?.(message.author.id, 'rebus_part', 1);
 
         rebusSession.compteurMessages = (rebusSession.compteurMessages || 0) + 1;
         if (rebusSession.compteurMessages >= 15) {
@@ -1643,6 +1706,11 @@ async function handleRebusMessage(message, response, client, helpers) {
             .setDescription(desc);
 
         await message.reply({ embeds: [embed] });
+        return true;
+    }
+
+    if (cmd === '!rebustop') {
+        await message.reply({ embeds: [buildRebusTopEmbed(message.guild)] });
         return true;
     }
 
@@ -1747,6 +1815,10 @@ async function handleRebusSlash(interaction) {
         const cible = interaction.options.getUser('membre') ?? interaction.user;
         const member = interaction.guild?.members.cache.get(cible.id) ?? interaction.member;
         return interaction.reply({ embeds: [buildRebusStatsEmbed(member)] });
+    }
+
+    if (commandName === 'rebustop') {
+        return interaction.reply({ embeds: [buildRebusTopEmbed(interaction.guild)] });
     }
 
     return false;

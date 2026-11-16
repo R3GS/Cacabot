@@ -277,9 +277,9 @@ function buildClassementHebdomadaireEmbed(guild, authorId) {
 
     const table = [];
     for (const uid of membresIds) {
-        const pPendu = (penduStats[uid]?.hebdo?.[weekKey] ?? penduStats[uid]?.points) || 0;
-        const pMotus = (motusStats[uid]?.victoires || 0) * 3;
-        const pRebus = rebusStats[uid]?.points || 0;
+        const pPendu = penduStats[uid]?.hebdo?.[weekKey] || 0;
+        const pMotus = (motusStats[uid]?.hebdo?.[weekKey] || 0) * 3;
+        const pRebus = rebusStats[uid]?.hebdo?.[weekKey] || 0;
         const total = pPendu + pMotus + pRebus;
 
         if (total > 0) {

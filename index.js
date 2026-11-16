@@ -606,6 +606,7 @@ initActivityState({
     getMotusStats: () => motusStats,
     getRebusStats: () => rebusStats,
     getQuotesData: () => quotesData,
+    getBattlePassData: () => battlePassData,
     demanderSauvegarde,
     saveAll,
     findMemberByName,
@@ -1053,10 +1054,7 @@ async function disableButtons(interaction) {
         return message.reply(`\ud83d\udcbe Derni\u00e8re sauvegarde : **${dateStr}** (il y a ${mins}min ${secs}s)`);
     }
 
-    // !embed & !rolembed (Epsys-only)
-    if (message.content.trim().toLowerCase().startsWith('!rolembed')) {
-        if (await handleRolembedMessage(message)) return;
-    }
+    // !embed (Epsys-only)
     if (await handleEmbedMessage(message, response, client)) return;
 
     // !question est pris en charge par handleSocialMessage
@@ -1145,12 +1143,12 @@ try {
         const commandName = aliasMap[interaction.commandName] || interaction.commandName;
 
         // Commandes Motus
-        if (commandName === 'motus' || commandName === 'motustats') {
+        if (commandName === 'motus' || commandName === 'motustats' || commandName === 'motustop') {
             return await handleMotusSlash(interaction);
         }
 
         // Commandes Rébus Regaïen
-        if (commandName === 'rebus' || commandName === 'decodeur' || commandName === 'rebusstats') {
+        if (commandName === 'rebus' || commandName === 'decodeur' || commandName === 'rebusstats' || commandName === 'rebustop') {
             return await handleRebusSlash(interaction);
         }
 
@@ -1357,10 +1355,12 @@ client.once('ready', async () => {
         new SlashCommandBuilder().setName('motus').setDescription('Statut du Motus du jour (10h et 19h) et compte à rebours'),
         new SlashCommandBuilder().setName('motustats').setDescription('Consulter les victoires et parties au Motus')
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
+        new SlashCommandBuilder().setName('motustop').setDescription('Classement général du Motus'),
         new SlashCommandBuilder().setName('rebus').setDescription('Statut du Rébus Regaïen du jour (15h00) et compte à rebours'),
         new SlashCommandBuilder().setName('decodeur').setDescription('Statut du Rébus Regaïen (raccourci)'),
         new SlashCommandBuilder().setName('rebusstats').setDescription('Consulter les victoires et points au Rébus Regaïen')
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
+        new SlashCommandBuilder().setName('rebustop').setDescription('Classement général du Rébus Regaïen'),
         new SlashCommandBuilder().setName('pendu').setDescription('Statut du Pendu Quotidien (21h00) et mot en cours'),
         new SlashCommandBuilder().setName('pendustats').setDescription('Consulter les statistiques du Pendu')
             .addUserOption(opt => opt.setName('membre').setDescription('Le membre à inspecter')),
@@ -1754,6 +1754,10 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
+    if (oldState.channelId && !newState.channelId) {
+        const bpJoueur = battlePassData?.joueurs?.[newState.id];
+        if (bpJoueur) bpJoueur.vocalCurrentSessionMinutes = 0;
+    }
     await handleVoiceStateUpdate(oldState, newState);
 });
 

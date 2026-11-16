@@ -114,7 +114,16 @@ async function resolveChannelId(query) {
     const handle = urlMatch ? urlMatch[1] : null;
 
     if (query.includes('youtube.com/channel/')) {
-        return query.split('channel/')[1].split(/[/?]/)[0];
+        const channelId = query.split('channel/')[1].split(/[/?&#]/)[0];
+        if (!channelId) return null;
+        try {
+            const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${encodeURIComponent(channelId)}&key=${process.env.YOUTUBE_API_KEY}`);
+            const data = await res.json();
+            const title = data.items?.[0]?.snippet?.title || channelId;
+            return { id: channelId, title };
+        } catch (e) {
+            return { id: channelId, title: channelId };
+        }
     }
 
     const searchTerm = handle ?? query;

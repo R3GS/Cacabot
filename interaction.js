@@ -157,7 +157,6 @@ const danceGifsSolo = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505045016324739084/jdg-dance.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505045505678512268/cat.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505046876494237746/je-suis-jeune-misterjday.gif",
-    "https://tenor.com/view/granny-dance-gif-11638418557026172594",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505047149082316932/misterjday-jday.gif"
 ];
 
@@ -196,7 +195,6 @@ function buildDanceEmbed(description, solo) {
 const insultGifs = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505057050491879594/springtrap-middle.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505057050965708810/zooble-amazing-digital-circus.gif",
-    "https://tenor.com/view/vilebrequin-vilebrequin-sylvain-levy-vilebrequin-sylvain-vilebrequin-levy-sylvain-levy-gif-21866498",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505057051502706838/fuck-off-fuck-you.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505057052093841618/birdie.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505057052597424178/dog-middle-finger.gif",
@@ -228,7 +226,6 @@ function buildInsultEmbed(description) {
 
 const laughGifs = [
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505063705681854595/jdg-joueur-du-grenier.gif",
-    "https://tenor.com/view/sylvain-sylvain-rire-rire-vilebrequin-sylvain-lyve-gif-8633655158314530858",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505063706151882812/mr-jday-mdr.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505063706428571760/misterjday-mdr.gif",
     "https://cdn.discordapp.com/attachments/1128032964924670053/1505065995864244334/laughing-emoji-laughing.gif",
@@ -391,10 +388,10 @@ function buildCryEmbed(description) {
 //   COMMANDES (messages)
 // =========================
 
-async function runInteractionMessage(message, response, client, { findMemberByName, askDisambiguation }) {
+async function runInteractionMessage(message, response, client, { findMemberByName, askDisambiguation }, forcedCible = null) {
     // Résolution automatique de la cible via message répondu (Reply Discord direct ou sans ping)
-    let replyCible = message.mentions.repliedUser || null;
-    if (!replyCible && message.reference?.messageId) {
+    let replyCible = forcedCible || message.mentions.repliedUser || null;
+    if (!replyCible && !forcedCible && message.reference?.messageId) {
         try {
             const repliedMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
             if (repliedMsg?.author) replyCible = repliedMsg.author;
@@ -411,7 +408,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
             if (args.length > 0) {
                 const result = findMemberByName(message.guild, args);
                 if (result.multiple) {
-                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    askDisambiguation(message, message.guild, result.candidates, (user) => runInteractionMessage(message, response, client, { findMemberByName, askDisambiguation }, user));
                     return;
                 }
                 if (result.found) cible = result.found.user;
@@ -452,7 +449,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
         if (args.length > 0) {
             const result = findMemberByName(message.guild, args);
             if (result.multiple) {
-                askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                askDisambiguation(message, message.guild, result.candidates, (user) => runInteractionMessage(message, response, client, { findMemberByName, askDisambiguation }, user));
                 return;
             }
             if (result.found) cible = result.found.user;
@@ -504,7 +501,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
             if (args.length > 0) {
                 const result = findMemberByName(message.guild, args);
                 if (result.multiple) {
-                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    askDisambiguation(message, message.guild, result.candidates, (user) => runInteractionMessage(message, response, client, { findMemberByName, askDisambiguation }, user));
                     return;
                 }
                 if (result.found) cible = result.found.user;
@@ -546,7 +543,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
             if (args.length > 0) {
                 const result = findMemberByName(message.guild, args);
                 if (result.multiple) {
-                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    askDisambiguation(message, message.guild, result.candidates, (user) => runInteractionMessage(message, response, client, { findMemberByName, askDisambiguation }, user));
                     return;
                 }
                 if (result.found) cible = result.found.user;
@@ -589,7 +586,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
             if (args.length > 0) {
                 const result = findMemberByName(message.guild, args);
                 if (result.multiple) {
-                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    askDisambiguation(message, message.guild, result.candidates, (user) => runInteractionMessage(message, response, client, { findMemberByName, askDisambiguation }, user));
                     return;
                 }
                 if (result.found) cible = result.found.user;
@@ -629,7 +626,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
             if (args.length > 0) {
                 const result = findMemberByName(message.guild, args);
                 if (result.multiple) {
-                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    askDisambiguation(message, message.guild, result.candidates, (user) => runInteractionMessage(message, response, client, { findMemberByName, askDisambiguation }, user));
                     return;
                 }
                 if (result.found) cible = result.found.user;
@@ -666,7 +663,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
             if (args.length > 0) {
                 const result = findMemberByName(message.guild, args);
                 if (result.multiple) {
-                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    askDisambiguation(message, message.guild, result.candidates, (user) => runInteractionMessage(message, response, client, { findMemberByName, askDisambiguation }, user));
                     return;
                 }
                 if (result.found) cible = result.found.user;
@@ -700,7 +697,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
 
     // !palaref
     if (response?.needsPalaref) {
-        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://tenor.com/view/vilebrequin-vilebrequin-sylvain-levy-vilebrequin-sylvain-vilebrequin-levy-sylvain-levy-gif-24319115", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://klipy.com/gifs/tuc-gian-3", "https://cdn.discordapp.com/attachments/1480756332373213275/1548362733408362578/michel-palareff-v0-r9ywzo3614u31.png?ex=6aa6c8aa&is=6aa5772a&hm=20f2c75585bd442371e0095f00b4f1ffbf94e00b2e5ed5b1e56c5b3fd2c0b313&", "https://klipy.com/gifs/fnaf-215", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
+        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1480756332373213275/1548362733408362578/michel-palareff-v0-r9ywzo3614u31.png?ex=6aa6c8aa&is=6aa5772a&hm=20f2c75585bd442371e0095f00b4f1ffbf94e00b2e5ed5b1e56c5b3fd2c0b313&", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
         const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
         const auteurNom = message.member?.displayName ?? message.author.username;
         let cible = message.mentions.users.first() || replyCible;
@@ -737,7 +734,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
         if (!cible) {
             description = `😐 **${auteurNom}** n'a pas la ref...`;
         } else if (cible.id === message.author.id) {
-            return message.reply({ content: "Tu n'as pas ta propre ref ? ...Hein ?", ephemeral: true });
+            return message.reply({ content: "Tu n'as pas ta propre ref ? ...Hein ?" });
         } else if (cible.id === client.user.id) {
             description = `😐 **${auteurNom}** n'a pas ma ref...`;
         } else {
@@ -796,7 +793,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
         if (!cible) {
             description = `😎 **${auteurNom}** a la ref !`;
         } else if (cible.id === message.author.id) {
-            return message.reply({ content: "Bah oui, t'as forcément ta propre ref...", ephemeral: true });
+            return message.reply({ content: "Bah oui, t'as forcément ta propre ref..." });
         } else if (cible.id === client.user.id) {
             description = `😎 **${auteurNom}** a ma ref !`;
         } else {
@@ -982,7 +979,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
             if (args.length > 0) {
                 const result = findMemberByName(message.guild, args);
                 if (result.multiple) {
-                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    askDisambiguation(message, message.guild, result.candidates, (user) => runInteractionMessage(message, response, client, { findMemberByName, askDisambiguation }, user));
                     return;
                 }
                 if (result.found) cible = result.found.user;
@@ -1024,7 +1021,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
             if (args.length > 0) {
                 const result = findMemberByName(message.guild, args);
                 if (result.multiple) {
-                    askDisambiguation(message, message.guild, result.candidates, (user) => { cible = user; message.client.emit('messageCreate', message); });
+                    askDisambiguation(message, message.guild, result.candidates, (user) => runInteractionMessage(message, response, client, { findMemberByName, askDisambiguation }, user));
                     return;
                 }
                 if (result.found) cible = result.found.user;
@@ -1260,10 +1257,13 @@ async function runInteractionButton(interaction) {
     // =========================
 
     if (interaction.isButton() && interaction.customId.startsWith("run_join_")) {
-        const parts = interaction.customId.split("_");
-        const originalAuthorId = parts[2];
-        const originalAuthorNom = parts[3];
-        const cibleId = parts[4] ?? null;
+        const parts = interaction.customId.slice("run_join_".length).split("_");
+        const originalAuthorId = parts[0];
+        const lastPart = parts[parts.length - 1];
+        const hasCible = parts.length >= 3 && /^\d{17,20}$/.test(lastPart);
+        const cibleId = hasCible ? lastPart : null;
+        const rawAuthorNom = (hasCible ? parts.slice(1, -1) : parts.slice(1)).join("_");
+        const originalAuthorNom = interaction.guild?.members.cache.get(originalAuthorId)?.displayName || rawAuthorNom;
 
         if (interaction.user.id === originalAuthorId) {
             return interaction.reply({ content: "Tu es déjà en fuite !", ephemeral: true });
@@ -1514,9 +1514,7 @@ async function runInteractionButton(interaction) {
     if (interaction.isButton() && (interaction.customId.startsWith('palaref_aussi_') || interaction.customId.startsWith('palaref_with_'))) {
         const parts = interaction.customId.split('_');
         const originalAuthorId = parts[2];
-        const originalAuthorNom = parts[3];
-        const targetId = parts[4];
-        const targetNom = parts[5];
+        const targetId = parts[parts.length - 1];
 
         if (interaction.user.id === originalAuthorId) {
             return interaction.reply({ content: "On a compris que t'avais pas la ref :(", ephemeral: true });
@@ -1525,7 +1523,7 @@ async function runInteractionButton(interaction) {
             return interaction.reply({ content: "Bah c'est ta ref", ephemeral: true });
         }
 
-        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://klipy.com/gifs/tuc-gian-3", "https://cdn.discordapp.com/attachments/1480756332373213275/1548362733408362578/michel-palareff-v0-r9ywzo3614u31.png?ex=6aa6c8aa&is=6aa5772a&hm=20f2c75585bd442371e0095f00b4f1ffbf94e00b2e5ed5b1e56c5b3fd2c0b313&", "https://klipy.com/gifs/fnaf-215", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
+        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1480756332373213275/1548362733408362578/michel-palareff-v0-r9ywzo3614u31.png?ex=6aa6c8aa&is=6aa5772a&hm=20f2c75585bd442371e0095f00b4f1ffbf94e00b2e5ed5b1e56c5b3fd2c0b313&", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
         const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
         const clickerNom = interaction.member?.displayName ?? interaction.user.username;
 
@@ -1544,7 +1542,7 @@ async function runInteractionButton(interaction) {
     if (interaction.isButton() && interaction.customId.startsWith('jailaref_with_')) {
         const parts = interaction.customId.split('_');
         const originalAuthorId = parts[2];
-        const targetId = parts[4];
+        const targetId = parts[parts.length - 1];
 
         if (interaction.user.id === originalAuthorId) {
             return interaction.reply({ content: "On a compris que t'avais la ref :)", ephemeral: true });
@@ -1791,7 +1789,7 @@ async function handleInteractionSlash(interaction, client) {
         return interaction.reply({ embeds: [embed], components: [row] });
     }
     if (cmd === 'palaref') {
-        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://tenor.com/view/vilebrequin-vilebrequin-sylvain-levy-vilebrequin-sylvain-vilebrequin-levy-sylvain-levy-gif-24319115", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://klipy.com/gifs/tuc-gian-3", "https://cdn.discordapp.com/attachments/1480756332373213275/1548362733408362578/michel-palareff-v0-r9ywzo3614u31.png?ex=6aa6c8aa&is=6aa5772a&hm=20f2c75585bd442371e0095f00b4f1ffbf94e00b2e5ed5b1e56c5b3fd2c0b313&", "https://klipy.com/gifs/fnaf-215", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
+        const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1480756332373213275/1548362733408362578/michel-palareff-v0-r9ywzo3614u31.png?ex=6aa6c8aa&is=6aa5772a&hm=20f2c75585bd442371e0095f00b4f1ffbf94e00b2e5ed5b1e56c5b3fd2c0b313&", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
         const gif = palarefGifs[Math.floor(Math.random() * palarefGifs.length)];
 
         let description;

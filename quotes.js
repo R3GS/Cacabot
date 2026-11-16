@@ -307,7 +307,7 @@ async function handleQuotesButton(interaction) {
 
     if (filterId.startsWith('search_')) {
         const kw = decodeURIComponent(filterId.replace('search_', ''));
-        pool = quotesData.filter(q => q.texte?.toLowerCase().includes(kw));
+        pool = quotesData.filter(q => q.texte?.toLowerCase().includes(kw) || q.authorName?.toLowerCase().includes(kw));
     } else if (filterId !== 'all') {
         pool = quotesData.filter(q => q.authorId === filterId);
     }

@@ -4908,8 +4908,6 @@ async function handleRouletteTransfoMessage(message, client) {
         return;
     }
 
-    bridge.trackBattlePassProgress?.(id, 'malus_msg', 1);
-
     const salonWebhook = message.channel.isThread() ? message.channel.parent : message.channel;
     const webhook = await assurerWebhookRoulette(salonWebhook);
     if (!webhook) {
