@@ -4,6 +4,9 @@
 
 const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 
+const EPSYS_ID = '436218312574107658';
+const MODO_ROLE_ID = '720081311716606004';
+
 // =========================
 //   BUILDERS DE PAGES !HELPX
 // =========================
@@ -231,6 +234,150 @@ function buildHelpxButtons(authorId, currentCategory = 'home', originalMessageId
     row.addComponents(
         new ButtonBuilder()
             .setCustomId(`helpx_delete_${authorId}_${originalMessageId}`)
+            .setLabel('Fermer')
+            .setEmoji('🗑️')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    return row;
+}
+
+// =========================
+//   BUILDERS DE PAGES !HELPM (MODOS)
+// =========================
+
+function buildHelpmHomeEmbed(user, botAvatarUrl = null) {
+    const displayName = user?.displayName || user?.username || 'Modo';
+    return new EmbedBuilder()
+        .setColor(0xe74c3c)
+        .setAuthor({ name: 'Cacabot • Modération Regaïa', iconURL: botAvatarUrl || undefined })
+        .setTitle('🛡️ Centre de Modération (Modos)')
+        .setDescription(
+            `Panneau réservé aux membres possédant le rôle <@&${MODO_ROLE_ID}> *(et à <@${EPSYS_ID}>)*.\n` +
+            `────────────────────────────────────────\n` +
+            `### 🧭 Thématiques disponibles\n` +
+            `🛡️ **Modération & Sécurité**\n` +
+            `-# Tribunal des bannis, archives .txt, prune, chut/unchut & boutons d'alertes.\n` +
+            `────────────────────────────────────────\n` +
+            `🧰 **Gestion & Communauté**\n` +
+            `-# Remontée !up, gestion des anniversaires & suppression de quotes.\n` +
+            `────────────────────────────────────────\n` +
+            `📋 **Tout afficher**\n` +
+            `-# Vue complète de toutes les commandes accessibles aux modérateurs.\n` +
+            `────────────────────────────────────────\n` +
+            `-# 💡 Sélectionne une catégorie dans le menu déroulant ci-dessous 👇`
+        )
+        .setFooter({ text: `Regaïa • Panel Modération de ${displayName}` });
+}
+
+function buildHelpmCategoryEmbed(category, user, botAvatarUrl = null) {
+    const displayName = user?.displayName || user?.username || 'Modo';
+    const embed = new EmbedBuilder()
+        .setAuthor({ name: 'Cacabot • Panel Modération', iconURL: botAvatarUrl || undefined })
+        .setFooter({ text: `Regaïa • Panel Modération de ${displayName}` });
+
+    const moderationSection =
+        `### ⚖️ Tribunal & Archives\n` +
+        `\`!tribunal [ID / @membre] [raison]\` *(ou \`!trib\` / \`!bantemp\`)* • Ouvre le tribunal *(salons de modération uniquement)*\n` +
+        `\`!archives\` *(ou \`!archive\` / \`!tribunal list\`)* • Télécharge les logs \`.txt\` des tribunaux\n\n` +
+        `### 🧹 Nettoyage & Silence\n` +
+        `\`!prune [1-100]\` *(ou \`/prune\`)* • Supprime en masse les derniers messages *(perm. Gérer les messages)*\n` +
+        `\`!chut [durée]\` • \`!unchut\` • Coupe ou réactive les répliques de Cacabot dans un salon *(ex: \`!chut 10min\`, accès restreint)*\n\n` +
+        `### 🚨 Alertes automatiques de sécurité\n` +
+        `Boutons rapides sur les alertes anti-raid / spam : **🔨 Bannir**, **👢 Expulser**, **✅ Ignorer**`;
+
+    const gestionSection =
+        `### 📌 Remontée de messages\n` +
+        `\`!up [réponse / ID / lien]\` • Remonte une suggestion ou un vote roulette\n` +
+        `-# ↳ Aussi dispo via \`/up\` et \`Clic droit -> Applications -> 🆙 Remonter (up)\`\n\n` +
+        `### 🎂 Anniversaires des membres\n` +
+        `\`!anniversaire set [Pseudo] [JJ/MM]\` • Enregistre l'anniversaire d'un autre membre\n` +
+        `\`!anniversaire remove [Pseudo]\` • Supprime l'anniversaire d'un autre membre\n` +
+        `-# ↳ Aussi disponible via les commandes slash \`/anniversaire\`\n\n` +
+        `### 📜 Citations archivées\n` +
+        `\`!quote remove [ID]\` • Supprime n'importe quelle citation des archives\n` +
+        `-# ↳ Bouton **🗑️ Supprimer** également actif sur les embeds de \`!quote\``;
+
+    // 1. MODÉRATION & SÉCURITÉ
+    if (category === 'moderation') {
+        return embed
+            .setColor(0xe74c3c)
+            .setTitle('🛡️ Modération & Sécurité')
+            .setDescription(
+                `Sanctions, nettoyage de salons, silence de Cacabot et suivi des alertes.\n\n` +
+                moderationSection
+            );
+    }
+
+    // 2. GESTION & COMMUNAUTÉ
+    if (category === 'gestion') {
+        return embed
+            .setColor(0x3498db)
+            .setTitle('🧰 Gestion & Communauté')
+            .setDescription(
+                `Commandes d'édition et d'entretien communautaire réservées aux modérateurs.\n\n` +
+                gestionSection
+            );
+    }
+
+    // 3. TOUT AFFICHER
+    if (category === 'all') {
+        return embed
+            .setColor(0xe67e22)
+            .setTitle('📋 Toutes les commandes Modération')
+            .setDescription(
+                moderationSection + `\n\n` + gestionSection
+            );
+    }
+
+    return embed.setTitle('❓ Inconnu').setDescription('Catégorie introuvable.');
+}
+
+function buildHelpmMenu(authorId, currentCategory = 'home', originalMessageId = '') {
+    return new StringSelectMenuBuilder()
+        .setCustomId(`helpm_menu_${authorId}_${originalMessageId}`)
+        .setPlaceholder('Choisis une thématique modo...')
+        .addOptions(
+            {
+                label: 'Modération & Sécurité',
+                description: 'Tribunal, archives, prune, chut/unchut & alertes',
+                emoji: '🛡️',
+                value: 'moderation',
+                default: currentCategory === 'moderation'
+            },
+            {
+                label: 'Gestion & Communauté',
+                description: 'Up, anniversaires des membres & quotes remove',
+                emoji: '🧰',
+                value: 'gestion',
+                default: currentCategory === 'gestion'
+            },
+            {
+                label: 'Tout afficher',
+                description: 'Toutes les commandes modérateurs sur une seule page',
+                emoji: '📋',
+                value: 'all',
+                default: currentCategory === 'all'
+            }
+        );
+}
+
+function buildHelpmButtons(authorId, currentCategory = 'home', originalMessageId = '') {
+    const row = new ActionRowBuilder();
+
+    if (currentCategory !== 'home') {
+        row.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`helpm_home_${authorId}_${originalMessageId}`)
+                .setLabel('Accueil')
+                .setEmoji('🏠')
+                .setStyle(ButtonStyle.Secondary)
+        );
+    }
+
+    row.addComponents(
+        new ButtonBuilder()
+            .setCustomId(`helpm_delete_${authorId}_${originalMessageId}`)
             .setLabel('Fermer')
             .setEmoji('🗑️')
             .setStyle(ButtonStyle.Secondary)
@@ -514,6 +661,10 @@ function getHelpResponse(command) {
         return { needsHelpx: true };
     }
 
+    if (command === "!helpm") {
+        return { needsHelpm: true };
+    }
+
     return null;
 }
 
@@ -524,13 +675,26 @@ function getHelpResponse(command) {
 async function runHelpMessage(message, response) {
     // !helpx (Epsys-Only)
     if (response?.needsHelpx) {
-        if (message.author.id !== '436218312574107658') {
+        if (message.author.id !== EPSYS_ID) {
             return message.reply("Tu n'es pas autorisé(e) à faire cette commande.");
         }
         const botAvatarUrl = message.client?.user?.displayAvatarURL({ dynamic: true });
         const embed = buildHelpxHomeEmbed(message.author, botAvatarUrl);
         const menuRow = new ActionRowBuilder().addComponents(buildHelpxMenu(message.author.id, 'home', message.id));
         const btnRow = buildHelpxButtons(message.author.id, 'home', message.id);
+        return message.reply({ embeds: [embed], components: [menuRow, btnRow] });
+    }
+
+    // !helpm (Modos + Epsys)
+    if (response?.needsHelpm) {
+        const isAllowed = message.author.id === EPSYS_ID || message.member?.roles?.cache?.has(MODO_ROLE_ID);
+        if (!isAllowed) {
+            return message.reply("Tu n'es pas autorisé(e) à faire cette commande.");
+        }
+        const botAvatarUrl = message.client?.user?.displayAvatarURL({ dynamic: true });
+        const embed = buildHelpmHomeEmbed(message.author, botAvatarUrl);
+        const menuRow = new ActionRowBuilder().addComponents(buildHelpmMenu(message.author.id, 'home', message.id));
+        const btnRow = buildHelpmButtons(message.author.id, 'home', message.id);
         return message.reply({ embeds: [embed], components: [menuRow, btnRow] });
     }
 
@@ -607,6 +771,54 @@ async function runHelpInteraction(interaction) {
         return;
     }
 
+    // 2d. Menu déroulant Modération (!helpm)
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('helpm_menu_')) {
+        const parts = interaction.customId.split('_');
+        const authorId = parts[2];
+        const originalMessageId = parts[3] || '';
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+        }
+
+        const category = interaction.values[0];
+        const embed = buildHelpmCategoryEmbed(category, interaction.user, botAvatarUrl);
+        const menuRow = new ActionRowBuilder().addComponents(buildHelpmMenu(authorId, category, originalMessageId));
+        const btnRow = buildHelpmButtons(authorId, category, originalMessageId);
+        return interaction.update({ embeds: [embed], components: [menuRow, btnRow] });
+    }
+
+    // 2e. Bouton Retour Accueil (!helpm)
+    if (interaction.isButton() && interaction.customId.startsWith('helpm_home_')) {
+        const parts = interaction.customId.split('_');
+        const authorId = parts[2];
+        const originalMessageId = parts[3] || '';
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+        }
+
+        const embed = buildHelpmHomeEmbed(interaction.user, botAvatarUrl);
+        const menuRow = new ActionRowBuilder().addComponents(buildHelpmMenu(authorId, 'home', originalMessageId));
+        const btnRow = buildHelpmButtons(authorId, 'home', originalMessageId);
+        return interaction.update({ embeds: [embed], components: [menuRow, btnRow] });
+    }
+
+    // 2f. Bouton Supprimer / Fermer (!helpm)
+    if (interaction.isButton() && interaction.customId.startsWith('helpm_delete_')) {
+        const parts = interaction.customId.split('_');
+        const authorId = parts[2];
+        const originalMessageId = parts[3] || '';
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: "Tu ne peux pas supprimer ce message !", ephemeral: true });
+        }
+
+        await interaction.message.delete().catch(() => {});
+        if (originalMessageId && originalMessageId !== '') {
+            const originalMsg = await interaction.channel.messages.fetch(originalMessageId).catch(() => null);
+            if (originalMsg) await originalMsg.delete().catch(() => {});
+        }
+        return;
+    }
+
     // 3. Menu déroulant principal (!help)
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('help_menu_')) {
         const parts = interaction.customId.split('_');
@@ -661,14 +873,20 @@ async function runHelpInteraction(interaction) {
 // =========================
 
 async function handleHelpMessage(message, response) {
-    if (!response?.needsHelpx && !response?.data && !response?.needsHelp) return false;
+    const cmd = message.content?.trim().split(/\s+/)[0]?.toLowerCase();
+    if (cmd === '!helpm') {
+        await runHelpMessage(message, { ...response, needsHelpm: true });
+        return true;
+    }
+
+    if (!response?.needsHelpm && !response?.needsHelpx && !response?.data && !response?.needsHelp) return false;
     await runHelpMessage(message, response);
     return true;
 }
 
 async function handleHelpInteraction(interaction) {
     const isSlashHelp = interaction.isChatInputCommand && interaction.isChatInputCommand() && interaction.commandName === 'help';
-    const isHelpComponent = (interaction.isButton() || interaction.isStringSelectMenu()) && /^helpx?_/.test(interaction.customId);
+    const isHelpComponent = (interaction.isButton() || interaction.isStringSelectMenu()) && /^help[xm]?_/.test(interaction.customId);
 
     if (!isSlashHelp && !isHelpComponent) return false;
     await runHelpInteraction(interaction);
