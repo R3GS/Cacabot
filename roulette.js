@@ -544,10 +544,9 @@ function finitParUnEmoji(texte) {
     return /\p{Extended_Pictographic}\uFE0F?$/u.test(texte.trim());
 }
 
-function estMessageExempte(texte, mentionneBot) {
+function estMessageExempte(texte) {
     const t = texte.trim();
     if (/^[!\/]/.test(t)) return true;
-    if (mentionneBot || /caca\s?bot/i.test(t)) return true;
     if (/^https?:\/\/\S+$/i.test(t) && /(tenor\.com|giphy\.com|klipy\.com|\.gif(\?|$))/i.test(t)) return true;
     if (/^(?:\p{Extended_Pictographic}|\p{Emoji_Modifier}|\p{Regional_Indicator}|[0-9#*]\uFE0F?\u20E3|[\uFE0F\u200D\u20E3]|<a?:\w+:\d+>|\s)+$/u.test(t)) return true;
     return false;
@@ -4844,7 +4843,7 @@ async function handleRouletteTransfoMessage(message, client) {
     if (message.webhookId || message.author.bot || !message.guild) return;
     if (!message.content) return;
     if (ROULETTE_WEBHOOK_EXCLUS.has(message.channel.id) || ROULETTE_WEBHOOK_EXCLUS.has(message.channel.parentId)) return;
-    if (estMessageExempte(message.content, message.mentions.users.has(client.user.id))) return;
+    if (estMessageExempte(message.content)) return;
 
     const id = message.author.id;
     const now = Date.now();
