@@ -254,10 +254,14 @@ function buildHelpmHomeEmbed(user, botAvatarUrl = null) {
         .setTitle('🛡️ Centre de Modération (Modos)')
         .setDescription(
             `Panneau réservé aux membres possédant le rôle <@&${MODO_ROLE_ID}> *(et à <@${EPSYS_ID}>)*.\n` +
+            `-# 💡 Astuce : la plupart des commandes fonctionnent aussi en **répondant (reply)** au message du fautif !\n` +
             `────────────────────────────────────────\n` +
             `### 🧭 Thématiques disponibles\n` +
-            `🛡️ **Modération & Sécurité**\n` +
-            `-# Tribunal des bannis, archives .txt, prune, chut/unchut & boutons d'alertes.\n` +
+            `⚖️ **Sanctions & Casier**\n` +
+            `-# !bannir, !unban, !kick, !mute, !unmute, !warn (paliers auto), !warns & !unwarn.\n` +
+            `────────────────────────────────────────\n` +
+            `🛡️ **Sécurité, Salons & Tribunal**\n` +
+            `-# !tribunal, !archives, !lock/!unlock, !slowmode, !prune, !chut/!unchut & alertes.\n` +
             `────────────────────────────────────────\n` +
             `🧰 **Gestion & Communauté**\n` +
             `-# Remontée !up, gestion des anniversaires & suppression de quotes.\n` +
@@ -265,7 +269,7 @@ function buildHelpmHomeEmbed(user, botAvatarUrl = null) {
             `📋 **Tout afficher**\n` +
             `-# Vue complète de toutes les commandes accessibles aux modérateurs.\n` +
             `────────────────────────────────────────\n` +
-            `-# 💡 Sélectionne une catégorie dans le menu déroulant ci-dessous 👇`
+            `-# 👇 Sélectionne une catégorie dans le menu déroulant ci-dessous`
         )
         .setFooter({ text: `Regaïa • Panel Modération de ${displayName}` });
 }
@@ -276,58 +280,64 @@ function buildHelpmCategoryEmbed(category, user, botAvatarUrl = null) {
         .setAuthor({ name: 'Cacabot • Panel Modération', iconURL: botAvatarUrl || undefined })
         .setFooter({ text: `Regaïa • Panel Modération de ${displayName}` });
 
+    const sanctionsSection =
+        `### 🔨 Sanctions directes *(utilisables en reply !)*\n` +
+        `\`!bannir [@membre / ID] [raison]\` • Confirmation + choix de purge *(0/1h/6h/12h/24h)*\n` +
+        `\`!unban [ID] [raison]\` • Débannir un compte via son identifiant\n` +
+        `\`!kick [@membre / ID] [raison]\` *(ou \`!expulser\`)* • Expulser un membre *(avec MP)*\n` +
+        `\`!mute [@membre / ID] [durée] [raison]\` • Mute instantané *(ou menu déroulant si sans durée)*\n` +
+        `\`!unmute [@membre / ID] [raison]\` • Retirer un mute immédiatement\n\n` +
+        `### ⚠️ Avertissements & Casier\n` +
+        `\`!warn [@membre / ID] [raison]\` • Enregistre un warn avec **paliers auto (1→6)**\n` +
+        `-# ↳ **2 :** mute 30m • **3 :** 6h • **4 :** 24h • **5 :** alerte décision • **6 :** ban def *(rappel auto à 60j)*\n` +
+        `\`!warns [@membre / ID]\` *(ou \`!casier\`)* • Consulter le casier complet\n` +
+        `\`!unwarn [@membre / ID / Pseudo]\` • Retirer un avertissement via panneau de confirmation`;
+
     const moderationSection =
         `### ⚖️ Tribunal & Archives\n` +
-        `\`!tribunal [ID / @membre] [raison]\` *(ou \`!trib\` / \`!bantemp\`)* • Ouvre le tribunal *(salons de modération uniquement)*\n` +
+        `\`!tribunal [ID / @membre] [raison]\` *(ou \`!trib\` / \`!bantemp\`)* • Ouvre le tribunal *(salons modération)*\n` +
         `\`!archives\` *(ou \`!archive\` / \`!tribunal list\`)* • Télécharge les logs \`.txt\` des tribunaux\n\n` +
-        `### 🧹 Nettoyage & Silence\n` +
-        `\`!prune [1-100]\` *(ou \`/prune\`)* • Supprime en masse les derniers messages *(perm. Gérer les messages)*\n` +
-        `\`!chut [durée]\` • \`!unchut\` • Coupe ou réactive les répliques de Cacabot dans un salon *(ex: \`!chut 10min\`, accès restreint)*\n\n` +
-        `### 🚨 Alertes automatiques de sécurité\n` +
-        `Boutons rapides sur les alertes anti-raid / spam : **🔨 Bannir**, **👢 Expulser**, **✅ Ignorer**`;
+        `### 🔒 Contrôle des salons & Silence\n` +
+        `\`!lock [raison]\` • \`!unlock\` • Verrouiller ou déverrouiller l'envoi de messages dans un salon\n` +
+        `\`!slowmode [durée / off]\` • Régler le mode lent *(ex: \`!slowmode 10\`, menu si vide)*\n` +
+        `\`!prune [1-100]\` *(ou \`/prune\`)* • Suppression en masse *(perm. Gérer les messages)*\n` +
+        `\`!chut [durée]\` • \`!unchut\` • Couper ou réactiver les répliques *(accès restreint)*`;
 
     const gestionSection =
         `### 📌 Remontée de messages\n` +
         `\`!up [réponse / ID / lien]\` • Remonte une suggestion ou un vote roulette\n` +
         `-# ↳ Aussi dispo via \`/up\` et \`Clic droit -> Applications -> 🆙 Remonter (up)\`\n\n` +
         `### 🎂 Anniversaires des membres\n` +
-        `\`!anniversaire set [Pseudo] [JJ/MM]\` • Enregistre l'anniversaire d'un autre membre\n` +
-        `\`!anniversaire remove [Pseudo]\` • Supprime l'anniversaire d'un autre membre\n` +
-        `-# ↳ Aussi disponible via les commandes slash \`/anniversaire\`\n\n` +
+        `\`!anniversaire set [Pseudo] [JJ/MM]\` • \`remove [Pseudo]\` *(ou \`/anniversaire\`)*\n\n` +
         `### 📜 Citations archivées\n` +
-        `\`!quote remove [ID]\` • Supprime n'importe quelle citation des archives\n` +
-        `-# ↳ Bouton **🗑️ Supprimer** également actif sur les embeds de \`!quote\``;
+        `\`!quote remove [ID]\` • Supprimer une citation *(+ bouton **🗑️ Supprimer** sur les embeds)*`;
 
-    // 1. MODÉRATION & SÉCURITÉ
+    if (category === 'sanctions') {
+        return embed
+            .setColor(0xe03131)
+            .setTitle('⚖️ Sanctions & Casier')
+            .setDescription(sanctionsSection);
+    }
+
     if (category === 'moderation') {
         return embed
             .setColor(0xe74c3c)
-            .setTitle('🛡️ Modération & Sécurité')
-            .setDescription(
-                `Sanctions, nettoyage de salons, silence de Cacabot et suivi des alertes.\n\n` +
-                moderationSection
-            );
+            .setTitle('🛡️ Sécurité, Salons & Tribunal')
+            .setDescription(moderationSection);
     }
 
-    // 2. GESTION & COMMUNAUTÉ
     if (category === 'gestion') {
         return embed
             .setColor(0x3498db)
             .setTitle('🧰 Gestion & Communauté')
-            .setDescription(
-                `Commandes d'édition et d'entretien communautaire réservées aux modérateurs.\n\n` +
-                gestionSection
-            );
+            .setDescription(gestionSection);
     }
 
-    // 3. TOUT AFFICHER
     if (category === 'all') {
         return embed
             .setColor(0xe67e22)
             .setTitle('📋 Toutes les commandes Modération')
-            .setDescription(
-                moderationSection + `\n\n` + gestionSection
-            );
+            .setDescription(`${sanctionsSection}\n\n${moderationSection}\n\n${gestionSection}`);
     }
 
     return embed.setTitle('❓ Inconnu').setDescription('Catégorie introuvable.');
@@ -339,8 +349,15 @@ function buildHelpmMenu(authorId, currentCategory = 'home', originalMessageId = 
         .setPlaceholder('Choisis une thématique modo...')
         .addOptions(
             {
-                label: 'Modération & Sécurité',
-                description: 'Tribunal, archives, prune, chut/unchut & alertes',
+                label: 'Sanctions & Casier',
+                description: 'Bannir, unban, kick, mute, unmute, warn, warns & unwarn',
+                emoji: '⚖️',
+                value: 'sanctions',
+                default: currentCategory === 'sanctions'
+            },
+            {
+                label: 'Sécurité, Salons & Tribunal',
+                description: 'Tribunal, archives, lock/unlock, slowmode, prune & chut',
                 emoji: '🛡️',
                 value: 'moderation',
                 default: currentCategory === 'moderation'

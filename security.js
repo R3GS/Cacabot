@@ -17,7 +17,8 @@ const {
     PermissionFlagsBits,
     UserSelectMenuBuilder,
     StringSelectMenuBuilder,
-    AttachmentBuilder
+    AttachmentBuilder,
+    MessageFlags
 } = require('discord.js');
 
 const MOD_CHANNEL_ID = '1555402748193669192';
@@ -30,6 +31,22 @@ const CATEGORIE_MODERATION_ID = '1555402058532659360';
 const bantempSessions = new Map();
 const tribunalSavedRoles = new Map();
 const tribunalActiveCases = new Map(); // targetId => { channelId, targetTag, raison, modoId, modoTag, openedAt }
+
+// Trackers pour la modération directe (!bannir, !kick, !mute, !lock, !warn)
+const banSessions = new Map();
+const kickSessions = new Map();
+const muteSessions = new Map();
+const channelLocks = new Map();
+
+const WARN_REMINDER_AGE_MS = 60 * 24 * 60 * 60 * 1000; // 60 jours
+const WARN_STEPS_DESC = [
+    '1️⃣ **Warn 1 :** Avertissement officiel + MP',
+    '2️⃣ **Warn 2 :** Mute automatique **30 min**',
+    '3️⃣ **Warn 3 :** Mute automatique **6 heures**',
+    '4️⃣ **Warn 4 :** Mute automatique **24 heures**',
+    '5️⃣ **Warn 5 :** Alerte interactive staff (décision du modo)',
+    '6️⃣ **Warn 6 :** Bannissement définitif automatique'
+];
 
 // --- GESTIONNAIRE D'ARCHIVES JUDICIAIRES (.TXT & JSON) ---
 const ARCHIVES_DIR = path.join(__dirname, 'data', 'archives_tribunaux');
@@ -300,6 +317,7 @@ const RAID_ESCALATION_WINDOW_MS = 15 * 60 * 1000;
 
 let securityState = {
     getReactionRolesData: () => ({}),
+    getWarnsData: () => ({}),
     demanderSauvegarde: () => {},
     client: null,
     EPSYS_ID: '436218312574107658'
@@ -395,14 +413,465 @@ function initSecurityState(bridge) {
         // Reconnexion immédiate des tribunaux en cours (même créés avant la mise à jour)
         if (securityState.client.isReady()) {
             synchroniserTribunauxExistants();
+            setTimeout(() => verifierWarnsExpires(), 15000);
         } else {
-            securityState.client.once('ready', () => synchroniserTribunauxExistants());
+            securityState.client.once('ready', () => {
+                synchroniserTribunauxExistants();
+                setTimeout(() => verifierWarnsExpires(), 15000);
+            });
         }
+
+        // Vérification toutes les heures des warns ayant atteint 60 jours
+        setInterval(() => verifierWarnsExpires(), 60 * 60 * 1000);
     }
 }
 
 function estModo(member) {
     return member?.roles?.cache?.has(MODO_ROLE_ID) ?? false;
+}
+
+function peutModerer(member) {
+    if (!member) return false;
+    return member.id === securityState.EPSYS_ID || estModo(member);
+}
+
+// --- HELPERS MODÉRATION DIRECTE ---
+
+function getWarnsMap() {
+    return securityState.getWarnsData?.() || {};
+}
+
+function getUserWarns(userId) {
+    const all = getWarnsMap();
+    if (!Array.isArray(all[userId])) all[userId] = [];
+    return all[userId];
+}
+
+function parseDurationMs(str) {
+    if (!str) return null;
+    const match = str.toLowerCase().trim().match(/^(\d+)\s*(s|sec|secs|m|min|mins|h|hr|hrs|j|d|jour|jours)$/);
+    if (!match) return null;
+    const val = parseInt(match[1], 10);
+    if (isNaN(val) || val <= 0) return null;
+    const unit = match[2];
+    if (unit.startsWith('s')) return val * 1000;
+    if (unit.startsWith('m')) return val * 60 * 1000;
+    if (unit.startsWith('h')) return val * 60 * 60 * 1000;
+    if (unit.startsWith('j') || unit === 'd') return val * 24 * 60 * 60 * 1000;
+    return null;
+}
+
+function formatDurationFr(ms) {
+    const totalSec = Math.round(ms / 1000);
+    if (totalSec < 60) return `${totalSec} seconde${totalSec > 1 ? 's' : ''}`;
+    const totalMin = Math.round(totalSec / 60);
+    if (totalMin < 60) return `${totalMin} minute${totalMin > 1 ? 's' : ''}`;
+    const totalH = Math.round(totalMin / 60);
+    if (totalH < 24) return `${totalH} heure${totalH > 1 ? 's' : ''}`;
+    const totalJ = Math.round(totalH / 24);
+    return `${totalJ} jour${totalJ > 1 ? 's' : ''}`;
+}
+
+function getPurgeLabel(seconds) {
+    if (!seconds || seconds <= 0) return '🚫 Désactivée *(messages conservés)*';
+    if (seconds === 3600) return '🕒 Dernière **1 heure**';
+    if (seconds === 21600) return '🕕 Dernières **6 heures**';
+    if (seconds === 43200) return '🕛 Dernières **12 heures**';
+    if (seconds === 86400) return '🗑️ Dernières **24 heures**';
+    return `${seconds} secondes`;
+}
+
+// Logs staff silencieux par défaut pour ne pas spammer de notifications
+async function logModerationStaff(guild, embed, { silent = true, content = undefined, components = undefined } = {}) {
+    if (!guild) return null;
+    const modChan = guild.channels.cache.get(MOD_CHANNEL_ID) ?? await guild.channels.fetch(MOD_CHANNEL_ID).catch(() => null);
+    if (!modChan || !modChan.isTextBased()) return null;
+
+    const payload = { embeds: [embed] };
+    if (content) payload.content = content;
+    if (components) payload.components = components;
+    if (silent) payload.flags = [MessageFlags.SuppressNotifications];
+
+    return modChan.send(payload).catch(() => null);
+}
+
+// MP systématique au membre sanctionné (avant kick/ban si applicable)
+async function envoyerMpSanction(userOrMember, embedOrText) {
+    if (!userOrMember) return false;
+    try {
+        const target = userOrMember.user ?? userOrMember;
+        if (typeof embedOrText === 'string') {
+            await target.send({ content: embedOrText });
+        } else {
+            await target.send({ embeds: [embedOrText] });
+        }
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+// Vérification hiérarchique complète
+function verifierHierarchieSanction(executorMember, targetMember, targetId, { checkAction = null } = {}) {
+    if (!targetId) return "❌ Membre introuvable.";
+    if (targetId === executorMember?.id) return "❌ Tu ne peux pas appliquer cette sanction sur toi-même !";
+    if (targetId === securityState.client?.user?.id) return "❌ Tu ne peux pas sanctionner Cacabot !";
+    if (targetId === securityState.EPSYS_ID) return "❌ Impossible de sanctionner Epsys !";
+
+    if (targetMember) {
+        if (estModo(targetMember) && executorMember.id !== securityState.EPSYS_ID) {
+            return "❌ Protection hiérarchique : impossible de sanctionner un(e) autre modérateur(trice) !";
+        }
+        if (
+            executorMember.id !== securityState.EPSYS_ID &&
+            executorMember.roles?.highest &&
+            targetMember.roles?.highest &&
+            targetMember.roles.highest.position >= executorMember.roles.highest.position
+        ) {
+            return "❌ Protection hiérarchique : ce membre possède un rôle supérieur ou égal au tien.";
+        }
+        if (checkAction === 'ban' && targetMember.bannable === false) {
+            return "❌ Je n'ai pas les permissions (ou mon rôle est trop bas) pour bannir ce membre.";
+        }
+        if (checkAction === 'kick' && targetMember.kickable === false) {
+            return "❌ Je n'ai pas les permissions (ou mon rôle est trop bas) pour expulser ce membre.";
+        }
+        if (checkAction === 'mute' && targetMember.moderatable === false) {
+            return "❌ Je n'ai pas les permissions (ou mon rôle est trop bas) pour mute ce membre.";
+        }
+    }
+    return null;
+}
+
+// Extraction intelligente de la cible (supporte le reply ET @mention / ID / pseudo)
+async function extraireCibleEtReste(message, raw, { allowOfflineId = false, allowSpaceUsername = false } = {}) {
+    const args = raw.split(/\s+/);
+    let targetMember = null;
+    let targetUser = null;
+    let resteArgs = [];
+
+    if (message.reference?.messageId) {
+        const refMsg = await message.channel.messages.fetch(message.reference.messageId).catch(() => null);
+        if (refMsg?.author) {
+            const firstArgIsExplicitTarget = args[1] && (/^<@!?\d+>$/.test(args[1]) || /^\d{17,20}$/.test(args[1]));
+            if (!firstArgIsExplicitTarget) {
+                targetUser = refMsg.author;
+                targetMember = message.guild.members.cache.get(refMsg.author.id)
+                    ?? await message.guild.members.fetch(refMsg.author.id).catch(() => null);
+                resteArgs = args.slice(1);
+                return { targetMember, targetUser, targetId: targetUser.id, resteArgs, fromReply: true };
+            }
+        }
+    }
+
+    if (!args[1]) {
+        return { targetMember: null, targetUser: null, targetId: null, resteArgs: [], fromReply: false };
+    }
+
+    targetMember = await trouverMembreServeur(message.guild, args[1]);
+    if (targetMember) {
+        targetUser = targetMember.user;
+        resteArgs = args.slice(2);
+        return { targetMember, targetUser, targetId: targetMember.id, resteArgs, fromReply: false };
+    }
+
+    if (allowSpaceUsername && args.length > 2) {
+        const fullQuery = args.slice(1).join(' ');
+        targetMember = await trouverMembreServeur(message.guild, fullQuery);
+        if (targetMember) {
+            return { targetMember, targetUser: targetMember.user, targetId: targetMember.id, resteArgs: [], fromReply: false };
+        }
+    }
+
+    if (allowOfflineId) {
+        const idMatch = args[1].match(/\d{17,20}/);
+        if (idMatch) {
+            targetUser = await securityState.client?.users?.fetch(idMatch[0]).catch(() => null);
+            if (targetUser) {
+                resteArgs = args.slice(2);
+                return { targetMember: null, targetUser, targetId: targetUser.id, resteArgs, fromReply: false };
+            }
+        }
+    }
+
+    return { targetMember: null, targetUser: null, targetId: null, resteArgs: args.slice(2), notFoundQuery: args[1], fromReply: false };
+}
+
+// --- BUILDERS DES PANNEAUX INTERACTIFS ---
+
+function buildBanConfirmPanel(sessionId) {
+    const session = banSessions.get(sessionId);
+    if (!session) return { embed: null, components: [] };
+
+    const embed = new EmbedBuilder()
+        .setColor(0xe03131)
+        .setTitle('🔨 Confirmation de bannissement')
+        .setDescription(`Tu es sur le point de bannir définitivement <@${session.targetId}> (\`${session.targetTag}\`).`)
+        .setThumbnail(session.targetAvatar || null)
+        .addFields(
+            { name: '👤 Cible', value: `<@${session.targetId}> (\`${session.targetId}\`)`, inline: true },
+            { name: '🧹 Purge des messages', value: getPurgeLabel(session.purgeSeconds), inline: true },
+            { name: '📝 Raison', value: `\`\`\`${session.raison}\`\`\``, inline: false }
+        )
+        .setFooter({ text: 'Choisis la durée de purge ci-dessous puis confirme ou annule.' })
+        .setTimestamp();
+
+    const purgeMenu = new StringSelectMenuBuilder()
+        .setCustomId(`ban_purge_${sessionId}`)
+        .setPlaceholder('🧹 Purge des messages récents...')
+        .addOptions(
+            { label: 'Purge désactivée (0h)', description: 'Ne supprimer aucun message récent', emoji: '🚫', value: '0', default: session.purgeSeconds === 0 },
+            { label: 'Purger 1 heure', description: 'Supprimer les messages envoyés depuis 1h', emoji: '🕒', value: '3600', default: session.purgeSeconds === 3600 },
+            { label: 'Purger 6 heures', description: 'Supprimer les messages envoyés depuis 6h', emoji: '🕕', value: '21600', default: session.purgeSeconds === 21600 },
+            { label: 'Purger 12 heures', description: 'Supprimer les messages envoyés depuis 12h', emoji: '🕛', value: '43200', default: session.purgeSeconds === 43200 },
+            { label: 'Purger 24 heures', description: 'Supprimer les messages envoyés depuis 24h', emoji: '🗑️', value: '86400', default: session.purgeSeconds === 86400 }
+        );
+
+    const btnRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`ban_confirm_${sessionId}`)
+            .setLabel('🔨 Confirmer le ban')
+            .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+            .setCustomId(`ban_reason_${sessionId}`)
+            .setLabel('📝 Modifier la raison')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`ban_cancel_${sessionId}`)
+            .setLabel('❌ Annuler')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    return {
+        embed,
+        components: [new ActionRowBuilder().addComponents(purgeMenu), btnRow]
+    };
+}
+
+function buildMuteDurationPanel(sessionId) {
+    const session = muteSessions.get(sessionId);
+    if (!session) return { embed: null, components: [] };
+
+    const embed = new EmbedBuilder()
+        .setColor(0xf39c12)
+        .setTitle('🔇 Mise en sourdine — Durée requise')
+        .setDescription(`Précise pendant combien de temps tu veux mute <@${session.targetId}> (\`${session.targetTag}\`).`)
+        .setThumbnail(session.targetAvatar || null)
+        .addFields(
+            { name: '👤 Membre ciblé', value: `<@${session.targetId}>`, inline: true },
+            { name: '📝 Raison', value: `\`${session.raison}\``, inline: true }
+        )
+        .setFooter({ text: 'Sélectionne une durée dans le menu déroulant pour appliquer le mute immédiatement.' })
+        .setTimestamp();
+
+    const durationMenu = new StringSelectMenuBuilder()
+        .setCustomId(`mute_duration_${sessionId}`)
+        .setPlaceholder('⏱️ Choisis la durée du mute...')
+        .addOptions(
+            { label: '5 minutes', emoji: '⏱️', value: '5min' },
+            { label: '10 minutes', emoji: '⏱️', value: '10min' },
+            { label: '15 minutes', emoji: '⏱️', value: '15min' },
+            { label: '30 minutes', emoji: '⏱️', value: '30min' },
+            { label: '1 heure', emoji: '🕒', value: '1h' },
+            { label: '6 heures', emoji: '🕕', value: '6h' },
+            { label: '12 heures', emoji: '🕛', value: '12h' },
+            { label: '24 heures (1 jour)', emoji: '📅', value: '24h' },
+            { label: '3 jours', emoji: '📆', value: '3j' },
+            { label: '7 jours (1 semaine)', emoji: '🗓️', value: '7j' }
+        );
+
+    const btnRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`mute_reason_${sessionId}`)
+            .setLabel('📝 Modifier la raison')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`mute_cancel_${sessionId}`)
+            .setLabel('❌ Annuler')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    return {
+        embed,
+        components: [new ActionRowBuilder().addComponents(durationMenu), btnRow]
+    };
+}
+
+function formatWarnsListLines(warns, highlightId = null) {
+    if (!warns || warns.length === 0) return '*Aucun avertissement actif.*';
+    return warns.slice(-10).map(w => {
+        const tsSec = Math.floor((w.timestamp || Date.now()) / 1000);
+        const prefix = highlightId && String(w.id) === String(highlightId) ? '👉 ' : '';
+        return `${prefix}**#${w.id}** • <t:${tsSec}:d> (<t:${tsSec}:R>) — par <@${w.modoId}>\n└ *${w.reason}*`;
+    }).join('\n');
+}
+
+function buildWarnsCasierEmbed(targetUser, targetId, warns) {
+    const count = warns.length;
+    const nextStep = count >= 6
+        ? '🔨 Ban définitif déjà atteint'
+        : WARN_STEPS_DESC[count] || '🔨 Ban définitif';
+
+    return new EmbedBuilder()
+        .setColor(count === 0 ? 0x2ecc71 : count >= 4 ? 0xe74c3c : 0xf1c40f)
+        .setTitle(`📋 Casier des avertissements — ${targetUser?.displayName || targetUser?.username || targetId}`)
+        .setThumbnail(targetUser?.displayAvatarURL?.({ dynamic: true }) || null)
+        .setDescription(
+            `• **Membre :** <@${targetId}> (\`${targetId}\`)\n` +
+            `• **Total actuel :** \`${count} / 6\` avertissement(s)\n` +
+            `• **Prochain palier :** ${nextStep}\n\n` +
+            `### 📜 Historique des warns\n` +
+            formatWarnsListLines(warns)
+        )
+        .setFooter({ text: 'Utilise !unwarn @membre pour retirer un avertissement.' })
+        .setTimestamp();
+}
+
+function buildUnwarnConfirmPanel(targetUser, targetId, selectedWarnId = null, isSixtyDaysAlert = false) {
+    const warns = getUserWarns(targetId);
+    if (warns.length === 0) {
+        const emptyEmbed = new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle('✅ Casier vierge')
+            .setDescription(`<@${targetId}> ne possède aucun avertissement actif.`)
+            .setTimestamp();
+        return { embed: emptyEmbed, components: [] };
+    }
+
+    const targetWarn = warns.find(w => String(w.id) === String(selectedWarnId)) || warns[0];
+    const tsSec = Math.floor((targetWarn.timestamp || Date.now()) / 1000);
+
+    const embed = new EmbedBuilder()
+        .setColor(isSixtyDaysAlert ? 0x9b59b6 : 0xe67e22)
+        .setTitle(isSixtyDaysAlert ? '⏳ Avertissement vieux de 60+ jours' : '🧹 Retrait d\'avertissement — Confirmation')
+        .setThumbnail(targetUser?.displayAvatarURL?.({ dynamic: true }) || null)
+        .setDescription(
+            (isSixtyDaysAlert
+                ? `Un avertissement de <@${targetId}> a atteint **60 jours**. Souhaitez-vous le retirer ou le conserver ?\n\n`
+                : `Casier de <@${targetId}> (\`${warns.length}/6\` warn(s)). Confirme l'action pour l'avertissement sélectionné :\n\n`) +
+            `### 🎯 Avertissement ciblé (#${targetWarn.id})\n` +
+            `• **Date :** <t:${tsSec}:F> (<t:${tsSec}:R>)\n` +
+            `• **Modérateur :** <@${targetWarn.modoId}>\n` +
+            `• **Raison :** \`${targetWarn.reason}\`\n\n` +
+            `### 📜 Tous les avertissements du membre (${warns.length})\n` +
+            formatWarnsListLines(warns, targetWarn.id)
+        )
+        .setFooter({ text: isSixtyDaysAlert ? 'Utilisable par tous les modérateurs' : 'Confirmation requise par un modérateur' })
+        .setTimestamp();
+
+    const components = [];
+    if (!isSixtyDaysAlert && warns.length > 1) {
+        const select = new StringSelectMenuBuilder()
+            .setCustomId(`unwarn_pick_${targetId}`)
+            .setPlaceholder('Choisir un autre avertissement dans la liste...')
+            .addOptions(
+                warns.slice(0, 25).map(w => ({
+                    label: `Warn #${w.id} — ${String(w.reason).slice(0, 60)}`,
+                    description: `Par ${w.modoTag || 'Modo'} le ${new Date(w.timestamp).toLocaleDateString('fr-FR')}`.slice(0, 100),
+                    value: String(w.id),
+                    default: String(w.id) === String(targetWarn.id)
+                }))
+            );
+        components.push(new ActionRowBuilder().addComponents(select));
+    }
+
+    const prefix = isSixtyDaysAlert ? 'warn60' : 'unwarn';
+    const btnRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`${prefix}_remove_${targetId}_${targetWarn.id}`)
+            .setLabel('🗑️ Enlever l\'avertissement')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId(`${prefix}_keep_${targetId}_${targetWarn.id}`)
+            .setLabel('📌 Garder l\'avertissement')
+            .setStyle(ButtonStyle.Secondary)
+    );
+    components.push(btnRow);
+
+    return { embed, components };
+}
+
+// Vérification automatique des warns ayant atteint 60 jours
+async function verifierWarnsExpires() {
+    if (!securityState.client) return;
+    try {
+        const guild = securityState.client.guilds.cache.get('720057528351850547') ?? securityState.client.guilds.cache.first();
+        if (!guild) return;
+        const modChan = guild.channels.cache.get(MOD_CHANNEL_ID) ?? await guild.channels.fetch(MOD_CHANNEL_ID).catch(() => null);
+        if (!modChan || !modChan.isTextBased()) return;
+
+        const allWarns = getWarnsMap();
+        const now = Date.now();
+        let changed = false;
+
+        for (const [targetId, warns] of Object.entries(allWarns)) {
+            if (!Array.isArray(warns) || warns.length === 0) continue;
+            for (const warn of warns) {
+                if (!warn.expiredNotified && warn.timestamp && (now - warn.timestamp >= WARN_REMINDER_AGE_MS)) {
+                    warn.expiredNotified = true;
+                    changed = true;
+
+                    const targetMember = guild.members.cache.get(targetId) ?? await guild.members.fetch(targetId).catch(() => null);
+                    const targetUser = targetMember?.user ?? await securityState.client.users.fetch(targetId).catch(() => null);
+                    const { embed, components } = buildUnwarnConfirmPanel(targetMember || targetUser, targetId, warn.id, true);
+
+                    await modChan.send({
+                        content: `🔔 <@&${MODO_ROLE_ID}> • Un avertissement de <@${targetId}> vient d'atteindre **60 jours**.`,
+                        embeds: [embed],
+                        components
+                    }).catch(() => {});
+                }
+            }
+        }
+
+        if (changed) securityState.demanderSauvegarde();
+    } catch (err) {
+        console.warn('[Warns 60j] Erreur vérification:', err);
+    }
+}
+
+// Application du mute (utilisée en instantané et depuis le menu contextuel)
+async function executerMute({ guild, channel, executorUser, targetMember, durationMs, durationLabel, raison }) {
+    const finSec = Math.floor((Date.now() + durationMs) / 1000);
+    await targetMember.timeout(durationMs, `${raison} (par ${executorUser.tag})`);
+
+    const mpEmbed = new EmbedBuilder()
+        .setColor(0xf39c12)
+        .setTitle('🔇 Tu as été mis(e) en sourdine sur Regaïa')
+        .setDescription(
+            `• **Durée :** **${durationLabel}** *(fin <t:${finSec}:R>)*\n` +
+            `• **Raison :** \`${raison}\``
+        )
+        .setTimestamp();
+    const mpOk = await envoyerMpSanction(targetMember, mpEmbed);
+
+    const publicEmbed = new EmbedBuilder()
+        .setColor(0xf39c12)
+        .setTitle('🔇 Membre mis en sourdine')
+        .setDescription(`<@${targetMember.id}> a été mute pendant **${durationLabel}**.`)
+        .addFields(
+            { name: '⏱️ Fin prévue', value: `<t:${finSec}:F> (<t:${finSec}:R>)`, inline: true },
+            { name: '🛡️ Modérateur', value: `<@${executorUser.id}>`, inline: true },
+            { name: '📝 Raison', value: `\`${raison}\``, inline: false }
+        )
+        .setFooter({ text: mpOk ? '📩 Membre prévenu en MP' : '⚠️ MP fermés' })
+        .setTimestamp();
+
+    const logEmbed = new EmbedBuilder()
+        .setColor(0xf39c12)
+        .setTitle('🔇 Log — Mute (!mute)')
+        .setDescription(
+            `• **Cible :** <@${targetMember.id}> (\`${targetMember.id}\`)\n` +
+            `• **Modérateur :** <@${executorUser.id}>\n` +
+            `• **Durée :** **${durationLabel}** (fin <t:${finSec}:R>)\n` +
+            `• **Salon :** <#${channel.id}>\n` +
+            `• **Raison :** \`${raison}\`\n` +
+            `• **MP remis :** ${mpOk ? 'Oui' : 'Non'}`
+        )
+        .setTimestamp();
+    await logModerationStaff(guild, logEmbed, { silent: true });
+
+    return publicEmbed;
 }
 
 function isChannelMuted(channelId) {
@@ -500,6 +969,738 @@ async function handleSecurityMessage(message) {
     const channelId = message.channel.id;
     const raw = message.content.trim();
     const command = raw.split(/\s+/)[0]?.toLowerCase();
+
+    // 00. COMMANDES DE MODÉRATION DIRECTE (Modos + Epsys, utilisables dans tout salon)
+    const MOD_COMMANDS = [
+        '!bannir', '!unban', '!kick', '!expulser',
+        '!mute', '!unmute',
+        '!warn', '!warns', '!casier', '!unwarn',
+        '!slowmode', '!lock', '!unlock'
+    ];
+    if (MOD_COMMANDS.includes(command)) {
+        if (!message.guild) {
+            await message.reply("❌ Cette commande est uniquement utilisable sur le serveur.");
+            return true;
+        }
+        if (!peutModerer(message.member)) {
+            await message.reply("❌ Cette commande est réservée aux modérateurs et à Epsys.");
+            return true;
+        }
+
+        // --- !bannir [@membre/ID/reply] [raison] ---
+        if (command === '!bannir') {
+            const info = await extraireCibleEtReste(message, raw, { allowOfflineId: true });
+            if (info.notFoundQuery) {
+                await message.reply(`❌ Membre introuvable avec \`${info.notFoundQuery}\` *(essaie une mention, un pseudo exact ou son ID)*.`);
+                return true;
+            }
+            if (!info.targetId) {
+                const sessionId = `${Date.now()}_${message.author.id}`;
+                banSessions.set(sessionId, {
+                    authorId: message.author.id,
+                    channelId: message.channel.id,
+                    messageId: message.id,
+                    targetId: null,
+                    targetTag: null,
+                    targetAvatar: null,
+                    raison: 'Aucune raison précisée',
+                    purgeSeconds: 0
+                });
+                setTimeout(() => banSessions.delete(sessionId), 5 * 60 * 1000);
+
+                const selectEmbed = new EmbedBuilder()
+                    .setColor(0xe03131)
+                    .setTitle('🔨 Bannir un membre')
+                    .setDescription('Sélectionne le membre à bannir dans le menu ci-dessous *(ou réponds à un message avec `!bannir [raison]`)*.')
+                    .setTimestamp();
+                const userRow = new ActionRowBuilder().addComponents(
+                    new UserSelectMenuBuilder().setCustomId(`ban_select_user_${sessionId}`).setPlaceholder('👤 Choisir le membre à bannir...')
+                );
+                const cancelRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`ban_cancel_${sessionId}`).setLabel('❌ Annuler').setStyle(ButtonStyle.Secondary)
+                );
+                await message.reply({ embeds: [selectEmbed], components: [userRow, cancelRow] });
+                return true;
+            }
+
+            const errHier = verifierHierarchieSanction(message.member, info.targetMember, info.targetId, { checkAction: 'ban' });
+            if (errHier) {
+                await message.reply(errHier);
+                return true;
+            }
+
+            const existingBan = await message.guild.bans.fetch(info.targetId).catch(() => null);
+            if (existingBan) {
+                await message.reply(`ℹ️ <@${info.targetId}> est déjà banni(e) du serveur.`);
+                return true;
+            }
+
+            const raison = info.resteArgs.join(' ').trim() || 'Aucune raison précisée';
+            const sessionId = `${Date.now()}_${message.author.id}`;
+            banSessions.set(sessionId, {
+                authorId: message.author.id,
+                channelId: message.channel.id,
+                messageId: message.id,
+                targetId: info.targetId,
+                targetTag: info.targetUser?.tag || info.targetMember?.displayName || info.targetId,
+                targetAvatar: info.targetUser?.displayAvatarURL?.({ dynamic: true }) || null,
+                raison,
+                purgeSeconds: 0
+            });
+            setTimeout(() => banSessions.delete(sessionId), 5 * 60 * 1000);
+
+            const { embed, components } = buildBanConfirmPanel(sessionId);
+            await message.reply({ embeds: [embed], components });
+            return true;
+        }
+
+        // --- !unban [ID] [raison] ---
+        if (command === '!unban') {
+            const args = raw.split(/\s+/);
+            const idMatch = args[1]?.match(/\d{17,20}/);
+            if (!idMatch) {
+                const usageEmbed = new EmbedBuilder()
+                    .setColor(0x3498db)
+                    .setTitle('🔓 Débannir un membre')
+                    .setDescription('**Usage :** `!unban [ID_du_membre] [raison optionnelle]`\nExemple : `!unban 123456789012345678 Erreur de ban`');
+                await message.reply({ embeds: [usageEmbed] });
+                return true;
+            }
+
+            const targetId = idMatch[0];
+            const banEntry = await message.guild.bans.fetch(targetId).catch(() => null);
+            if (!banEntry) {
+                await message.reply(`❌ Aucun bannissement actif trouvé pour l'ID \`${targetId}\`.`);
+                return true;
+            }
+
+            const raison = args.slice(2).join(' ').trim() || 'Débannissement manuel';
+            try {
+                await message.guild.members.unban(targetId, `${raison} (par ${message.author.tag})`);
+                const unbanEmbed = new EmbedBuilder()
+                    .setColor(0x2ecc71)
+                    .setTitle('🔓 Membre débanni')
+                    .setDescription(`<@${targetId}> (\`${banEntry.user?.tag || targetId}\`) a été débanni(e) par <@${message.author.id}>.`)
+                    .addFields({ name: '📝 Raison', value: `\`${raison}\`` })
+                    .setTimestamp();
+                await message.reply({ embeds: [unbanEmbed] });
+
+                const logEmbed = new EmbedBuilder()
+                    .setColor(0x2ecc71)
+                    .setTitle('🔓 Log — Débannissement (!unban)')
+                    .setDescription(
+                        `• **Cible :** <@${targetId}> (\`${banEntry.user?.tag || targetId}\`)\n` +
+                        `• **Modérateur :** <@${message.author.id}>\n` +
+                        `• **Raison :** \`${raison}\``
+                    )
+                    .setTimestamp();
+                await logModerationStaff(message.guild, logEmbed, { silent: true });
+            } catch (err) {
+                await message.reply(`❌ Impossible de débannir ce compte (${err.message}).`);
+            }
+            return true;
+        }
+
+        // --- !kick / !expulser [@membre/ID/reply] [raison] ---
+        if (command === '!kick' || command === '!expulser') {
+            const info = await extraireCibleEtReste(message, raw);
+            if (info.notFoundQuery) {
+                await message.reply(`❌ Membre introuvable sur le serveur avec \`${info.notFoundQuery}\`.`);
+                return true;
+            }
+            if (!info.targetMember) {
+                const sessionId = `${Date.now()}_${message.author.id}`;
+                kickSessions.set(sessionId, {
+                    authorId: message.author.id,
+                    channelId: message.channel.id,
+                    messageId: message.id,
+                    targetId: null,
+                    targetTag: null,
+                    raison: 'Aucune raison précisée'
+                });
+                setTimeout(() => kickSessions.delete(sessionId), 5 * 60 * 1000);
+
+                const selectEmbed = new EmbedBuilder()
+                    .setColor(0xe67e22)
+                    .setTitle('👢 Expulser un membre')
+                    .setDescription('Sélectionne le membre à expulser dans le menu ci-dessous *(ou réponds à un message avec `!kick [raison]`)*.')
+                    .setTimestamp();
+                const userRow = new ActionRowBuilder().addComponents(
+                    new UserSelectMenuBuilder().setCustomId(`kick_select_user_${sessionId}`).setPlaceholder('👤 Choisir le membre à expulser...')
+                );
+                const cancelRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`kick_cancel_${sessionId}`).setLabel('❌ Annuler').setStyle(ButtonStyle.Secondary)
+                );
+                await message.reply({ embeds: [selectEmbed], components: [userRow, cancelRow] });
+                return true;
+            }
+
+            const errHier = verifierHierarchieSanction(message.member, info.targetMember, info.targetId, { checkAction: 'kick' });
+            if (errHier) {
+                await message.reply(errHier);
+                return true;
+            }
+
+            const raison = info.resteArgs.join(' ').trim() || 'Aucune raison précisée';
+            const mpEmbed = new EmbedBuilder()
+                .setColor(0xe67e22)
+                .setTitle('👢 Tu as été expulsé(e) du serveur Regaïa')
+                .setDescription(`• **Raison :** \`${raison}\``)
+                .setTimestamp();
+            const mpOk = await envoyerMpSanction(info.targetMember, mpEmbed);
+
+            try {
+                await info.targetMember.kick(`${raison} (par ${message.author.tag})`);
+                const kickEmbed = new EmbedBuilder()
+                    .setColor(0xe67e22)
+                    .setTitle('👢 Membre expulsé')
+                    .setDescription(`<@${info.targetId}> (\`${info.targetUser?.tag || info.targetMember.displayName}\`) a été expulsé(e) par <@${message.author.id}>.`)
+                    .addFields({ name: '📝 Raison', value: `\`${raison}\`` })
+                    .setFooter({ text: mpOk ? '📩 Membre prévenu en MP' : '⚠️ MP fermés' })
+                    .setTimestamp();
+                await message.reply({ embeds: [kickEmbed] });
+
+                const logEmbed = new EmbedBuilder()
+                    .setColor(0xe67e22)
+                    .setTitle('👢 Log — Expulsion (!kick)')
+                    .setDescription(
+                        `• **Cible :** <@${info.targetId}> (\`${info.targetId}\`)\n` +
+                        `• **Modérateur :** <@${message.author.id}>\n` +
+                        `• **Salon :** <#${message.channel.id}>\n` +
+                        `• **Raison :** \`${raison}\`\n` +
+                        `• **MP remis :** ${mpOk ? 'Oui' : 'Non'}`
+                    )
+                    .setTimestamp();
+                await logModerationStaff(message.guild, logEmbed, { silent: true });
+            } catch (err) {
+                await message.reply(`❌ Impossible d'expulser ce membre (${err.message}).`);
+            }
+            return true;
+        }
+
+        // --- !mute [@membre/ID/reply] [durée] [raison] ---
+        if (command === '!mute') {
+            const info = await extraireCibleEtReste(message, raw);
+            if (info.notFoundQuery) {
+                await message.reply(`❌ Membre introuvable sur le serveur avec \`${info.notFoundQuery}\`.`);
+                return true;
+            }
+
+            // Cas 1 : !mute tout court (sans cible ni reply) -> sélecteur de membre
+            if (!info.targetMember) {
+                const sessionId = `${Date.now()}_${message.author.id}`;
+                muteSessions.set(sessionId, {
+                    authorId: message.author.id,
+                    channelId: message.channel.id,
+                    targetId: null,
+                    targetTag: null,
+                    targetAvatar: null,
+                    raison: 'Comportement inadapté'
+                });
+                setTimeout(() => muteSessions.delete(sessionId), 5 * 60 * 1000);
+
+                const selectEmbed = new EmbedBuilder()
+                    .setColor(0xf39c12)
+                    .setTitle('🔇 Mettre un membre en sourdine')
+                    .setDescription('Sélectionne le membre à mute dans le menu ci-dessous *(ou utilise `!mute @membre 15min [raison]`)*.')
+                    .setTimestamp();
+                const userRow = new ActionRowBuilder().addComponents(
+                    new UserSelectMenuBuilder().setCustomId(`mute_select_user_${sessionId}`).setPlaceholder('👤 Choisir le membre à mute...')
+                );
+                const cancelRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId(`mute_cancel_${sessionId}`).setLabel('❌ Annuler').setStyle(ButtonStyle.Secondary)
+                );
+                await message.reply({ embeds: [selectEmbed], components: [userRow, cancelRow] });
+                return true;
+            }
+
+            const errHier = verifierHierarchieSanction(message.member, info.targetMember, info.targetId, { checkAction: 'mute' });
+            if (errHier) {
+                await message.reply(errHier);
+                return true;
+            }
+
+            const maybeDur = info.resteArgs[0];
+            const parsedMs = parseDurationMs(maybeDur);
+
+            // Cas 2 : Cible donnée mais pas de durée valide -> menu contextuel de durée
+            if (!parsedMs) {
+                const raison = info.resteArgs.join(' ').trim() || 'Comportement inadapté';
+                const sessionId = `${Date.now()}_${message.author.id}`;
+                muteSessions.set(sessionId, {
+                    authorId: message.author.id,
+                    channelId: message.channel.id,
+                    targetId: info.targetId,
+                    targetTag: info.targetUser?.tag || info.targetMember.displayName,
+                    targetAvatar: info.targetUser?.displayAvatarURL?.({ dynamic: true }) || null,
+                    raison
+                });
+                setTimeout(() => muteSessions.delete(sessionId), 5 * 60 * 1000);
+
+                const { embed, components } = buildMuteDurationPanel(sessionId);
+                await message.reply({ embeds: [embed], components });
+                return true;
+            }
+
+            // Cas 3 : Durée précisée -> mute instantané
+            if (parsedMs < 10 * 1000 || parsedMs > 28 * 24 * 60 * 60 * 1000) {
+                await message.reply('❌ La durée d\'un mute doit être comprise entre **10 secondes** et **28 jours**.');
+                return true;
+            }
+
+            const raison = info.resteArgs.slice(1).join(' ').trim() || 'Comportement inadapté';
+            try {
+                const publicEmbed = await executerMute({
+                    guild: message.guild,
+                    channel: message.channel,
+                    executorUser: message.author,
+                    targetMember: info.targetMember,
+                    durationMs: parsedMs,
+                    durationLabel: formatDurationFr(parsedMs),
+                    raison
+                });
+                await message.reply({ embeds: [publicEmbed] });
+            } catch (err) {
+                await message.reply(`❌ Impossible de mute ce membre (${err.message}).`);
+            }
+            return true;
+        }
+
+        // --- !unmute [@membre/ID/reply] [raison] ---
+        if (command === '!unmute') {
+            const info = await extraireCibleEtReste(message, raw);
+            if (info.notFoundQuery) {
+                await message.reply(`❌ Membre introuvable sur le serveur avec \`${info.notFoundQuery}\`.`);
+                return true;
+            }
+            if (!info.targetMember) {
+                const selectEmbed = new EmbedBuilder()
+                    .setColor(0x2ecc71)
+                    .setTitle('🔊 Retirer une sourdine')
+                    .setDescription('Sélectionne le membre à démute ci-dessous *(ou utilise `!unmute @membre`)*.')
+                    .setTimestamp();
+                const userRow = new ActionRowBuilder().addComponents(
+                    new UserSelectMenuBuilder().setCustomId(`unmute_select_user_${message.author.id}`).setPlaceholder('👤 Choisir le membre à unmute...')
+                );
+                await message.reply({ embeds: [selectEmbed], components: [userRow] });
+                return true;
+            }
+
+            if (!info.targetMember.isCommunicationDisabled()) {
+                await message.reply(`ℹ️ <@${info.targetId}> n'est pas en sourdine actuellement.`);
+                return true;
+            }
+
+            const raison = info.resteArgs.join(' ').trim() || 'Levée manuelle du mute';
+            try {
+                await info.targetMember.timeout(null, `${raison} (par ${message.author.tag})`);
+                const mpEmbed = new EmbedBuilder()
+                    .setColor(0x2ecc71)
+                    .setTitle('🔊 Ta sourdine sur Regaïa a été levée')
+                    .setDescription(`• **Raison :** \`${raison}\``)
+                    .setTimestamp();
+                const mpOk = await envoyerMpSanction(info.targetMember, mpEmbed);
+
+                const unmuteEmbed = new EmbedBuilder()
+                    .setColor(0x2ecc71)
+                    .setTitle('🔊 Sourdine levée')
+                    .setDescription(`<@${info.targetId}> peut à nouveau parler *(démute par <@${message.author.id}>)*.`)
+                    .addFields({ name: '📝 Raison', value: `\`${raison}\`` })
+                    .setFooter({ text: mpOk ? '📩 Membre prévenu en MP' : '⚠️ MP fermés' })
+                    .setTimestamp();
+                await message.reply({ embeds: [unmuteEmbed] });
+
+                const logEmbed = new EmbedBuilder()
+                    .setColor(0x2ecc71)
+                    .setTitle('🔊 Log — Unmute (!unmute)')
+                    .setDescription(
+                        `• **Cible :** <@${info.targetId}> (\`${info.targetId}\`)\n` +
+                        `• **Modérateur :** <@${message.author.id}>\n` +
+                        `• **Raison :** \`${raison}\``
+                    )
+                    .setTimestamp();
+                await logModerationStaff(message.guild, logEmbed, { silent: true });
+            } catch (err) {
+                await message.reply(`❌ Impossible de démute ce membre (${err.message}).`);
+            }
+            return true;
+        }
+
+        // --- !warn [@membre/ID/reply] [raison] ---
+        if (command === '!warn') {
+            const info = await extraireCibleEtReste(message, raw, { allowOfflineId: true });
+            if (info.notFoundQuery) {
+                await message.reply(`❌ Membre introuvable avec \`${info.notFoundQuery}\`.`);
+                return true;
+            }
+            if (!info.targetId) {
+                const usageEmbed = new EmbedBuilder()
+                    .setColor(0xf1c40f)
+                    .setTitle('⚠️ Avertir un membre (!warn)')
+                    .setDescription(
+                        '**Usages :**\n' +
+                        '• `!warn @membre [raison]`\n' +
+                        '• Ou réponds directement au message du membre avec `!warn [raison]`'
+                    );
+                await message.reply({ embeds: [usageEmbed] });
+                return true;
+            }
+
+            const errHier = verifierHierarchieSanction(message.member, info.targetMember, info.targetId);
+            if (errHier) {
+                await message.reply(errHier);
+                return true;
+            }
+
+            const raison = info.resteArgs.join(' ').trim();
+            if (!raison) {
+                await message.reply('❌ Merci de préciser la raison de l\'avertissement (ex : `!warn @membre Propos déplacés`).');
+                return true;
+            }
+
+            const warns = getUserWarns(info.targetId);
+            const nextId = warns.reduce((max, w) => Math.max(max, Number(w.id) || 0), 0) + 1;
+            const newWarn = {
+                id: nextId,
+                reason: raison,
+                modoId: message.author.id,
+                modoTag: message.author.tag,
+                timestamp: Date.now(),
+                expiredNotified: false
+            };
+            warns.push(newWarn);
+            securityState.demanderSauvegarde();
+
+            const count = warns.length;
+            let sanctionLabel = 'Avertissement officiel enregistré *(aucun mute auto)*';
+            let color = 0xf1c40f;
+
+            // Application automatique selon le palier
+            if (count === 2) {
+                color = 0xf39c12;
+                if (info.targetMember) {
+                    await info.targetMember.timeout(30 * 60 * 1000, `2ème warn : ${raison}`).catch(() => {});
+                    sanctionLabel = '🔇 **Mute automatique de 30 minutes** *(Palier 2/6)*';
+                } else {
+                    sanctionLabel = '⚠️ Palier 2/6 atteint *(membre hors serveur, mute ignoré)*';
+                }
+            } else if (count === 3) {
+                color = 0xe67e22;
+                if (info.targetMember) {
+                    await info.targetMember.timeout(6 * 60 * 60 * 1000, `3ème warn : ${raison}`).catch(() => {});
+                    sanctionLabel = '🔇 **Mute automatique de 6 heures** *(Palier 3/6)*';
+                } else {
+                    sanctionLabel = '⚠️ Palier 3/6 atteint *(membre hors serveur, mute ignoré)*';
+                }
+            } else if (count === 4) {
+                color = 0xd35400;
+                if (info.targetMember) {
+                    await info.targetMember.timeout(24 * 60 * 60 * 1000, `4ème warn : ${raison}`).catch(() => {});
+                    sanctionLabel = '🔇 **Mute automatique de 24 heures** *(Palier 4/6)*';
+                } else {
+                    sanctionLabel = '⚠️ Palier 4/6 atteint *(membre hors serveur, mute ignoré)*';
+                }
+            } else if (count === 5) {
+                color = 0xe74c3c;
+                sanctionLabel = `🚨 **Palier 5/6 atteint !** Décision envoyée à <@${message.author.id}> dans <#${MOD_CHANNEL_ID}>.`;
+            } else if (count >= 6) {
+                color = 0x992d22;
+                sanctionLabel = '🔨 **Bannissement définitif automatique** *(Palier 6/6)*';
+            }
+
+            // MP au membre (toujours envoyé AVANT le ban du palier 6)
+            const mpEmbed = new EmbedBuilder()
+                .setColor(color)
+                .setTitle(`⚠️ Tu as reçu un avertissement sur Regaïa (${count}/6)`)
+                .setDescription(
+                    `• **Raison :** \`${raison}\`\n` +
+                    `• **Conséquence :** ${sanctionLabel}\n\n` +
+                    `*Attention : les avertissements s'accumulent jusqu'au palier 6 (bannissement définitif).*`
+                )
+                .setTimestamp();
+            const mpOk = await envoyerMpSanction(info.targetMember || info.targetUser, mpEmbed);
+
+            // Exécution du ban automatique au 6ème warn
+            if (count >= 6) {
+                await message.guild.members.ban(info.targetId, {
+                    reason: `6ème avertissement atteint (${raison}) — par ${message.author.tag}`
+                }).catch(() => {});
+            }
+
+            // Échelle des paliers pour le recul immédiat
+            const echelleTxt = WARN_STEPS_DESC.map((ligne, idx) => {
+                const palier = idx + 1;
+                if (palier === count) return `👉 ${ligne} **(Actuel)**`;
+                if (palier < count) return `~~${ligne}~~`;
+                return ligne;
+            }).join('\n');
+
+            const warnEmbed = new EmbedBuilder()
+                .setColor(color)
+                .setTitle(`⚠️ Avertissement #${newWarn.id} — ${info.targetUser?.username || info.targetId} (${count}/6)`)
+                .setThumbnail(info.targetUser?.displayAvatarURL?.({ dynamic: true }) || null)
+                .setDescription(
+                    `• **Membre :** <@${info.targetId}> (\`${info.targetId}\`)\n` +
+                    `• **Modérateur :** <@${message.author.id}>\n` +
+                    `• **Motif :** \`${raison}\`\n` +
+                    `• **Sanction appliquée :** ${sanctionLabel}`
+                )
+                .addFields(
+                    { name: `📜 Historique de ses warns (${count})`, value: formatWarnsListLines(warns, newWarn.id).slice(0, 1024), inline: false },
+                    { name: '📈 Échelle & Prochaines punitions', value: echelleTxt, inline: false }
+                )
+                .setFooter({ text: mpOk ? '📩 Membre prévenu en MP • Sauvegardé dans #json' : '⚠️ MP fermés • Sauvegardé dans #json' })
+                .setTimestamp();
+            await message.reply({ embeds: [warnEmbed] });
+
+            // Palier 5 : Embed spécial NON silencieux dans MOD_CHANNEL_ID utilisable uniquement par le modo auteur
+            if (count === 5) {
+                const alert5Embed = new EmbedBuilder()
+                    .setColor(0xe74c3c)
+                    .setTitle('🚨 PALIER 5/6 ATTEINT — Décision requise !')
+                    .setThumbnail(info.targetUser?.displayAvatarURL?.({ dynamic: true }) || null)
+                    .setDescription(
+                        `<@${info.targetId}> vient de recevoir son **5ème avertissement** pour :\n` +
+                        `\`\`\`${raison}\`\`\`\n` +
+                        `<@${message.author.id}>, quelle sanction veux-tu appliquer *(tu es le/la seul(e) à pouvoir utiliser ces boutons)* ?`
+                    )
+                    .addFields({ name: '📜 Historique complet (5/6)', value: formatWarnsListLines(warns, newWarn.id).slice(0, 1024) })
+                    .setFooter({ text: 'Prochain avertissement (6/6) = Ban définitif automatique' })
+                    .setTimestamp();
+
+                const row5 = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`warn5_ban_${message.author.id}_${info.targetId}`)
+                        .setLabel('🔨 Bannir définitivement')
+                        .setStyle(ButtonStyle.Danger),
+                    new ButtonBuilder()
+                        .setCustomId(`warn5_kick_${message.author.id}_${info.targetId}`)
+                        .setLabel('👢 Expulser')
+                        .setStyle(ButtonStyle.Secondary),
+                    new ButtonBuilder()
+                        .setCustomId(`warn5_mute7d_${message.author.id}_${info.targetId}`)
+                        .setLabel('🔇 Mute 7 jours')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId(`warn5_ignore_${message.author.id}_${info.targetId}`)
+                        .setLabel('✅ Laisser passer')
+                        .setStyle(ButtonStyle.Success)
+                );
+
+                await logModerationStaff(message.guild, alert5Embed, {
+                    silent: false,
+                    content: `🔔 <@${message.author.id}> — Action requise suite au 5ème warn de <@${info.targetId}> !`,
+                    components: [row5]
+                });
+            } else {
+                const logEmbed = new EmbedBuilder()
+                    .setColor(color)
+                    .setTitle(`⚠️ Log — Warn #${newWarn.id} (${count}/6)`)
+                    .setDescription(
+                        `• **Cible :** <@${info.targetId}> (\`${info.targetId}\`)\n` +
+                        `• **Modérateur :** <@${message.author.id}>\n` +
+                        `• **Salon :** <#${message.channel.id}>\n` +
+                        `• **Raison :** \`${raison}\`\n` +
+                        `• **Sanction :** ${sanctionLabel}\n` +
+                        `• **MP remis :** ${mpOk ? 'Oui' : 'Non'}`
+                    )
+                    .setTimestamp();
+                await logModerationStaff(message.guild, logEmbed, { silent: true });
+            }
+            return true;
+        }
+
+        // --- !warns / !casier [@membre/ID/Pseudo/reply] ---
+        if (command === '!warns' || command === '!casier') {
+            const info = await extraireCibleEtReste(message, raw, { allowOfflineId: true, allowSpaceUsername: true });
+            if (info.notFoundQuery) {
+                await message.reply(`❌ Membre introuvable avec \`${info.notFoundQuery}\`.`);
+                return true;
+            }
+            if (!info.targetId) {
+                const selectEmbed = new EmbedBuilder()
+                    .setColor(0x5865f2)
+                    .setTitle('📋 Consulter un casier')
+                    .setDescription('Sélectionne le membre dont tu veux voir les avertissements ci-dessous *(ou utilise `!warns @membre`)*.')
+                    .setTimestamp();
+                const userRow = new ActionRowBuilder().addComponents(
+                    new UserSelectMenuBuilder().setCustomId(`warns_select_user_${message.author.id}`).setPlaceholder('👤 Choisir un membre...')
+                );
+                await message.reply({ embeds: [selectEmbed], components: [userRow] });
+                return true;
+            }
+
+            const warns = getUserWarns(info.targetId);
+            const casierEmbed = buildWarnsCasierEmbed(info.targetMember || info.targetUser, info.targetId, warns);
+            await message.reply({ embeds: [casierEmbed] });
+            return true;
+        }
+
+        // --- !unwarn [@membre/ID/Pseudo/reply] [ID_warn optionnel] ---
+        if (command === '!unwarn') {
+            const info = await extraireCibleEtReste(message, raw, { allowOfflineId: true, allowSpaceUsername: true });
+            if (info.notFoundQuery) {
+                await message.reply(`❌ Membre introuvable avec \`${info.notFoundQuery}\`.`);
+                return true;
+            }
+            if (!info.targetId) {
+                const selectEmbed = new EmbedBuilder()
+                    .setColor(0xe67e22)
+                    .setTitle('🧹 Retirer un avertissement')
+                    .setDescription('Sélectionne le membre dans le menu ci-dessous *(ou utilise `!unwarn @membre / ID / Pseudo`)*.')
+                    .setTimestamp();
+                const userRow = new ActionRowBuilder().addComponents(
+                    new UserSelectMenuBuilder().setCustomId(`unwarn_select_user_${message.author.id}`).setPlaceholder('👤 Choisir un membre...')
+                );
+                await message.reply({ embeds: [selectEmbed], components: [userRow] });
+                return true;
+            }
+
+            const selectedWarnId = info.resteArgs[0]?.replace('#', '') || null;
+            const { embed, components } = buildUnwarnConfirmPanel(info.targetMember || info.targetUser, info.targetId, selectedWarnId, false);
+            await message.reply({ embeds: [embed], components });
+            return true;
+        }
+
+        // --- !slowmode [secondes / off] ---
+        if (command === '!slowmode') {
+            const args = raw.split(/\s+/);
+            const arg = args[1]?.toLowerCase();
+
+            if (!arg) {
+                const current = message.channel.rateLimitPerUser || 0;
+                const smEmbed = new EmbedBuilder()
+                    .setColor(0x3498db)
+                    .setTitle('🐢 Mode lent du salon')
+                    .setDescription(
+                        `• **Salon :** <#${message.channel.id}>\n` +
+                        `• **Slowmode actuel :** ${current > 0 ? `**${formatDurationFr(current * 1000)}**` : '**Désactivé (0s)**'}\n\n` +
+                        `Choisis une valeur ci-dessous ou tape \`!slowmode [secondes / off]\`.`
+                    )
+                    .setTimestamp();
+                const menu = new StringSelectMenuBuilder()
+                    .setCustomId(`slowmode_select_${message.author.id}`)
+                    .setPlaceholder('🐢 Régler le slowmode...')
+                    .addOptions(
+                        { label: 'Désactiver (0s)', emoji: '✅', value: '0', default: current === 0 },
+                        { label: '5 secondes', emoji: '🐢', value: '5', default: current === 5 },
+                        { label: '10 secondes', emoji: '🐢', value: '10', default: current === 10 },
+                        { label: '30 secondes', emoji: '🐢', value: '30', default: current === 30 },
+                        { label: '1 minute', emoji: '🕒', value: '60', default: current === 60 },
+                        { label: '5 minutes', emoji: '🕕', value: '300', default: current === 300 },
+                        { label: '15 minutes', emoji: '🕛', value: '900', default: current === 900 }
+                    );
+                await message.reply({ embeds: [smEmbed], components: [new ActionRowBuilder().addComponents(menu)] });
+                return true;
+            }
+
+            let seconds = 0;
+            if (['off', 'stop', '0', 'disable'].includes(arg)) {
+                seconds = 0;
+            } else if (/^\d+$/.test(arg)) {
+                seconds = parseInt(arg, 10);
+            } else {
+                const ms = parseDurationMs(arg);
+                if (!ms) {
+                    await message.reply('❌ Format invalide ! Exemple : `!slowmode 10`, `!slowmode 2min` ou `!slowmode off`.');
+                    return true;
+                }
+                seconds = Math.round(ms / 1000);
+            }
+
+            if (seconds < 0 || seconds > 21600) {
+                await message.reply('❌ Le slowmode Discord doit être compris entre **0** et **21600 secondes (6 heures)**.');
+                return true;
+            }
+
+            await message.channel.setRateLimitPerUser(seconds, `Slowmode défini par ${message.author.tag}`).catch(() => {});
+            const resEmbed = new EmbedBuilder()
+                .setColor(seconds === 0 ? 0x2ecc71 : 0x3498db)
+                .setTitle(seconds === 0 ? '✅ Slowmode désactivé' : '🐢 Slowmode activé')
+                .setDescription(
+                    seconds === 0
+                        ? `Le mode lent a été retiré dans <#${message.channel.id}> par <@${message.author.id}>.`
+                        : `Le mode lent est désormais de **${formatDurationFr(seconds * 1000)}** dans <#${message.channel.id}> *(par <@${message.author.id}>)*.`
+                )
+                .setTimestamp();
+            await message.reply({ embeds: [resEmbed] });
+
+            const logEmbed = new EmbedBuilder()
+                .setColor(seconds === 0 ? 0x2ecc71 : 0x3498db)
+                .setTitle('🐢 Log — Slowmode (!slowmode)')
+                .setDescription(
+                    `• **Salon :** <#${message.channel.id}>\n` +
+                    `• **Modérateur :** <@${message.author.id}>\n` +
+                    `• **Valeur :** ${seconds === 0 ? 'Désactivé' : formatDurationFr(seconds * 1000)}`
+                )
+                .setTimestamp();
+            await logModerationStaff(message.guild, logEmbed, { silent: true });
+            return true;
+        }
+
+        // --- !lock [raison] ---
+        if (command === '!lock') {
+            const raison = raw.split(/\s+/).slice(1).join(' ').trim() || 'Verrouillage d\'urgence par la modération';
+            const everyoneRole = message.guild.roles.everyone;
+            const currentOverwrite = message.channel.permissionOverwrites.cache.get(everyoneRole.id);
+            if (!channelLocks.has(channelId)) {
+                const prevSend = currentOverwrite
+                    ? (currentOverwrite.allow.has(PermissionFlagsBits.SendMessages) ? true : currentOverwrite.deny.has(PermissionFlagsBits.SendMessages) ? false : null)
+                    : null;
+                channelLocks.set(channelId, prevSend);
+            }
+
+            await message.channel.permissionOverwrites.edit(everyoneRole, { SendMessages: false }, { reason: `Verrouillé par ${message.author.tag} : ${raison}` }).catch(() => {});
+            await message.channel.permissionOverwrites.edit(MODO_ROLE_ID, { SendMessages: true }, { reason: 'Maintien accès modération' }).catch(() => {});
+
+            const lockEmbed = new EmbedBuilder()
+                .setColor(0xe74c3c)
+                .setTitle('🔒 Salon verrouillé')
+                .setDescription(`L'envoi de messages a été temporairement bloqué par <@${message.author.id}>.`)
+                .addFields({ name: '📝 Raison', value: `\`${raison}\`` })
+                .setTimestamp();
+            const unlockBtn = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`channel_unlock_${channelId}`).setLabel('🔓 Déverrouiller').setStyle(ButtonStyle.Success)
+            );
+            await message.reply({ embeds: [lockEmbed], components: [unlockBtn] });
+
+            const logEmbed = new EmbedBuilder()
+                .setColor(0xe74c3c)
+                .setTitle('🔒 Log — Verrouillage (!lock)')
+                .setDescription(
+                    `• **Salon :** <#${channelId}>\n` +
+                    `• **Modérateur :** <@${message.author.id}>\n` +
+                    `• **Raison :** \`${raison}\``
+                )
+                .setTimestamp();
+            await logModerationStaff(message.guild, logEmbed, { silent: true });
+            return true;
+        }
+
+        // --- !unlock ---
+        if (command === '!unlock') {
+            const everyoneRole = message.guild.roles.everyone;
+            const prevSend = channelLocks.has(channelId) ? channelLocks.get(channelId) : null;
+            channelLocks.delete(channelId);
+
+            await message.channel.permissionOverwrites.edit(everyoneRole, { SendMessages: prevSend }, { reason: `Déverrouillé par ${message.author.tag}` }).catch(() => {});
+
+            const unlockEmbed = new EmbedBuilder()
+                .setColor(0x2ecc71)
+                .setTitle('🔓 Salon déverrouillé')
+                .setDescription(`Le salon <#${channelId}> a été rouvert par <@${message.author.id}>.`)
+                .setTimestamp();
+            await message.reply({ embeds: [unlockEmbed] });
+
+            const logEmbed = new EmbedBuilder()
+                .setColor(0x2ecc71)
+                .setTitle('🔓 Log — Déverrouillage (!unlock)')
+                .setDescription(`• **Salon :** <#${channelId}>\n• **Modérateur :** <@${message.author.id}>`)
+                .setTimestamp();
+            await logModerationStaff(message.guild, logEmbed, { silent: true });
+            return true;
+        }
+    }
 
     // 0. !tribunal / !trib (ou !bantemp) / !archives
     if (['!tribunal', '!trib', '!bantemp', '!archives', '!archive'].includes(command)) {
@@ -1588,6 +2789,595 @@ async function handleSecurityInteraction(interaction) {
                 .catch(() => interaction.reply({ content: "Impossible de bannir ce membre.", ephemeral: true }));
             return;
         }
+    }
+
+    // ==========================================
+    //    MODÉRATION DIRECTE (!bannir, !kick, !mute, !warn, !unwarn, !slowmode, !lock)
+    // ==========================================
+
+    // --- Bouton Fermer générique sur annonce de ban (supprime embed + message !bannir du modo) ---
+    if (interaction.isButton() && interaction.customId.startsWith('mod_close_')) {
+        const parts = interaction.customId.split('_');
+        const authorId = parts[2];
+        const originalMsgId = parts[3] || '';
+        if (interaction.user.id !== authorId && interaction.user.id !== securityState.EPSYS_ID) {
+            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande (ou Epsys) peut fermer ce message.", ephemeral: true });
+        }
+        await interaction.message.delete().catch(() => {});
+        if (originalMsgId) {
+            const origMsg = await interaction.channel?.messages?.fetch(originalMsgId).catch(() => null);
+            if (origMsg) await origMsg.delete().catch(() => {});
+        }
+        return true;
+    }
+
+    // --- !bannir : Sélection de membre depuis menu utilisateur ---
+    if (interaction.isUserSelectMenu() && interaction.customId.startsWith('ban_select_user_')) {
+        const sessionId = interaction.customId.replace('ban_select_user_', '');
+        const session = banSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", ephemeral: true });
+
+        const targetId = interaction.values[0];
+        const targetMember = interaction.guild.members.cache.get(targetId) ?? await interaction.guild.members.fetch(targetId).catch(() => null);
+        const errHier = verifierHierarchieSanction(interaction.member, targetMember, targetId, { checkAction: 'ban' });
+        if (errHier) return interaction.reply({ content: errHier, ephemeral: true });
+
+        session.targetId = targetId;
+        session.targetTag = targetMember?.user?.tag || targetMember?.displayName || targetId;
+        session.targetAvatar = targetMember?.user?.displayAvatarURL?.({ dynamic: true }) || null;
+
+        const { embed, components } = buildBanConfirmPanel(sessionId);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    // --- !bannir : Choix durée de purge ---
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('ban_purge_')) {
+        const sessionId = interaction.customId.replace('ban_purge_', '');
+        const session = banSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur de la commande peut modifier cette option.", ephemeral: true });
+
+        session.purgeSeconds = parseInt(interaction.values[0], 10) || 0;
+        const { embed, components } = buildBanConfirmPanel(sessionId);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    // --- !bannir : Modale modifier la raison ---
+    if (interaction.isButton() && interaction.customId.startsWith('ban_reason_')) {
+        const sessionId = interaction.customId.replace('ban_reason_', '');
+        const session = banSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur de la commande peut modifier la raison.", ephemeral: true });
+
+        const modal = new ModalBuilder().setCustomId(`ban_modal_reason_${sessionId}`).setTitle('📝 Raison du bannissement');
+        const input = new TextInputBuilder()
+            .setCustomId('reason_text')
+            .setLabel('Précise la raison du bannissement')
+            .setStyle(TextInputStyle.Paragraph)
+            .setValue(session.raison || '')
+            .setRequired(true)
+            .setMaxLength(400);
+        modal.addComponents(new ActionRowBuilder().addComponents(input));
+        await interaction.showModal(modal);
+        return true;
+    }
+
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('ban_modal_reason_')) {
+        const sessionId = interaction.customId.replace('ban_modal_reason_', '');
+        const session = banSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        session.raison = interaction.fields.getTextInputValue('reason_text').trim() || 'Aucune raison précisée';
+        const { embed, components } = buildBanConfirmPanel(sessionId);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    // --- !bannir : Annuler / Confirmer ---
+    if (interaction.isButton() && interaction.customId.startsWith('ban_cancel_')) {
+        const sessionId = interaction.customId.replace('ban_cancel_', '');
+        const session = banSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut annuler.", ephemeral: true });
+
+        banSessions.delete(sessionId);
+        const cancelEmbed = new EmbedBuilder().setColor(0x95a5a6).setTitle('❌ Bannissement annulé').setDescription('Aucune action n\'a été effectuée.');
+        const closeRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`mod_close_${session.authorId}_${session.messageId}`).setLabel('🗑️ Fermer').setStyle(ButtonStyle.Secondary)
+        );
+        await interaction.update({ embeds: [cancelEmbed], components: [closeRow] });
+        return true;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('ban_confirm_')) {
+        const sessionId = interaction.customId.replace('ban_confirm_', '');
+        const session = banSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut confirmer ce ban.", ephemeral: true });
+
+        const targetMember = await interaction.guild.members.fetch(session.targetId).catch(() => null);
+        const targetUser = targetMember?.user ?? await interaction.client.users.fetch(session.targetId).catch(() => null);
+
+        const mpEmbed = new EmbedBuilder()
+            .setColor(0xe03131)
+            .setTitle('🔨 Tu as été banni(e) du serveur Regaïa')
+            .setDescription(`• **Raison :** \`${session.raison}\``)
+            .setTimestamp();
+        const mpOk = await envoyerMpSanction(targetMember || targetUser, mpEmbed);
+
+        try {
+            await interaction.guild.members.ban(session.targetId, {
+                deleteMessageSeconds: session.purgeSeconds || 0,
+                reason: `${session.raison} (par ${interaction.user.tag})`
+            });
+
+            const publicBanEmbed = new EmbedBuilder()
+                .setColor(0xe03131)
+                .setTitle('🔨 Membre banni définitivement')
+                .setThumbnail(session.targetAvatar || null)
+                .setDescription(`<@${session.targetId}> (\`${session.targetTag}\`) a été banni(e) par <@${interaction.user.id}>.`)
+                .addFields(
+                    { name: '📝 Raison', value: `\`${session.raison}\``, inline: false },
+                    { name: '🧹 Purge appliquée', value: getPurgeLabel(session.purgeSeconds), inline: true }
+                )
+                .setFooter({ text: mpOk ? '📩 Membre prévenu en MP' : '⚠️ MP fermés' })
+                .setTimestamp();
+
+            const closeRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`mod_close_${session.authorId}_${session.messageId}`)
+                    .setLabel('🗑️ Fermer')
+                    .setStyle(ButtonStyle.Secondary)
+            );
+            await interaction.update({ embeds: [publicBanEmbed], components: [closeRow] });
+
+            const logEmbed = new EmbedBuilder()
+                .setColor(0xe03131)
+                .setTitle('🔨 Log — Bannissement (!bannir)')
+                .setDescription(
+                    `• **Cible :** <@${session.targetId}> (\`${session.targetId}\`)\n` +
+                    `• **Modérateur :** <@${interaction.user.id}>\n` +
+                    `• **Salon :** <#${interaction.channel.id}>\n` +
+                    `• **Purge :** ${getPurgeLabel(session.purgeSeconds)}\n` +
+                    `• **Raison :** \`${session.raison}\`\n` +
+                    `• **MP remis :** ${mpOk ? 'Oui' : 'Non'}`
+                )
+                .setTimestamp();
+            await logModerationStaff(interaction.guild, logEmbed, { silent: true });
+            banSessions.delete(sessionId);
+        } catch (err) {
+            await interaction.reply({ content: `❌ Impossible de bannir ce membre (${err.message}).`, ephemeral: true });
+        }
+        return true;
+    }
+
+    // --- !kick : Menu de sélection + confirmation ---
+    if (interaction.isUserSelectMenu() && interaction.customId.startsWith('kick_select_user_')) {
+        const sessionId = interaction.customId.replace('kick_select_user_', '');
+        const session = kickSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", ephemeral: true });
+
+        const targetId = interaction.values[0];
+        const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
+        if (!targetMember) return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
+
+        const errHier = verifierHierarchieSanction(interaction.member, targetMember, targetId, { checkAction: 'kick' });
+        if (errHier) return interaction.reply({ content: errHier, ephemeral: true });
+
+        session.targetId = targetId;
+        session.targetTag = targetMember.user?.tag || targetMember.displayName;
+
+        const confirmEmbed = new EmbedBuilder()
+            .setColor(0xe67e22)
+            .setTitle('👢 Confirmer l\'expulsion')
+            .setDescription(`Expulser <@${targetId}> (\`${session.targetTag}\`) ?\n• **Raison :** \`${session.raison}\``)
+            .setTimestamp();
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`kick_confirm_${sessionId}`).setLabel('👢 Expulser').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId(`kick_cancel_${sessionId}`).setLabel('❌ Annuler').setStyle(ButtonStyle.Secondary)
+        );
+        await interaction.update({ embeds: [confirmEmbed], components: [row] });
+        return true;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('kick_cancel_')) {
+        const sessionId = interaction.customId.replace('kick_cancel_', '');
+        const session = kickSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut annuler.", ephemeral: true });
+        kickSessions.delete(sessionId);
+        await interaction.update({ embeds: [new EmbedBuilder().setColor(0x95a5a6).setTitle('❌ Expulsion annulée')], components: [] });
+        return true;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('kick_confirm_')) {
+        const sessionId = interaction.customId.replace('kick_confirm_', '');
+        const session = kickSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut confirmer.", ephemeral: true });
+
+        const targetMember = await interaction.guild.members.fetch(session.targetId).catch(() => null);
+        if (!targetMember) return interaction.reply({ content: "❌ Membre déjà parti.", ephemeral: true });
+
+        const mpEmbed = new EmbedBuilder().setColor(0xe67e22).setTitle('👢 Tu as été expulsé(e) de Regaïa').setDescription(`• **Raison :** \`${session.raison}\``).setTimestamp();
+        const mpOk = await envoyerMpSanction(targetMember, mpEmbed);
+
+        try {
+            await targetMember.kick(`${session.raison} (par ${interaction.user.tag})`);
+            const resEmbed = new EmbedBuilder()
+                .setColor(0xe67e22)
+                .setTitle('👢 Membre expulsé')
+                .setDescription(`<@${session.targetId}> (\`${session.targetTag}\`) a été expulsé(e) par <@${interaction.user.id}>.`)
+                .addFields({ name: '📝 Raison', value: `\`${session.raison}\`` })
+                .setFooter({ text: mpOk ? '📩 Membre prévenu en MP' : '⚠️ MP fermés' })
+                .setTimestamp();
+            await interaction.update({ embeds: [resEmbed], components: [] });
+
+            const logEmbed = new EmbedBuilder()
+                .setColor(0xe67e22)
+                .setTitle('👢 Log — Expulsion (!kick)')
+                .setDescription(`• **Cible :** <@${session.targetId}> (\`${session.targetId}\`)\n• **Modérateur :** <@${interaction.user.id}>\n• **Raison :** \`${session.raison}\``)
+                .setTimestamp();
+            await logModerationStaff(interaction.guild, logEmbed, { silent: true });
+            kickSessions.delete(sessionId);
+        } catch (err) {
+            await interaction.reply({ content: `❌ Impossible d'expulser ce membre (${err.message}).`, ephemeral: true });
+        }
+        return true;
+    }
+
+    // --- !mute : Sélection membre + menu contextuel durée + raison ---
+    if (interaction.isUserSelectMenu() && interaction.customId.startsWith('mute_select_user_')) {
+        const sessionId = interaction.customId.replace('mute_select_user_', '');
+        const session = muteSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", ephemeral: true });
+
+        const targetId = interaction.values[0];
+        const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
+        if (!targetMember) return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
+
+        const errHier = verifierHierarchieSanction(interaction.member, targetMember, targetId, { checkAction: 'mute' });
+        if (errHier) return interaction.reply({ content: errHier, ephemeral: true });
+
+        session.targetId = targetId;
+        session.targetTag = targetMember.user?.tag || targetMember.displayName;
+        session.targetAvatar = targetMember.user?.displayAvatarURL?.({ dynamic: true }) || null;
+
+        const { embed, components } = buildMuteDurationPanel(sessionId);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('mute_reason_')) {
+        const sessionId = interaction.customId.replace('mute_reason_', '');
+        const session = muteSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut modifier la raison.", ephemeral: true });
+
+        const modal = new ModalBuilder().setCustomId(`mute_modal_reason_${sessionId}`).setTitle('📝 Raison du mute');
+        const input = new TextInputBuilder()
+            .setCustomId('reason_text')
+            .setLabel('Précise la raison')
+            .setStyle(TextInputStyle.Short)
+            .setValue(session.raison || '')
+            .setRequired(true)
+            .setMaxLength(300);
+        modal.addComponents(new ActionRowBuilder().addComponents(input));
+        await interaction.showModal(modal);
+        return true;
+    }
+
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('mute_modal_reason_')) {
+        const sessionId = interaction.customId.replace('mute_modal_reason_', '');
+        const session = muteSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        session.raison = interaction.fields.getTextInputValue('reason_text').trim() || 'Comportement inadapté';
+        const { embed, components } = buildMuteDurationPanel(sessionId);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('mute_cancel_')) {
+        const sessionId = interaction.customId.replace('mute_cancel_', '');
+        const session = muteSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut annuler.", ephemeral: true });
+        muteSessions.delete(sessionId);
+        await interaction.update({ embeds: [new EmbedBuilder().setColor(0x95a5a6).setTitle('❌ Mute annulé')], components: [] });
+        return true;
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('mute_duration_')) {
+        const sessionId = interaction.customId.replace('mute_duration_', '');
+        const session = muteSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur de la commande peut choisir la durée.", ephemeral: true });
+
+        const targetMember = await interaction.guild.members.fetch(session.targetId).catch(() => null);
+        if (!targetMember) return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
+
+        const ms = parseDurationMs(interaction.values[0]);
+        if (!ms) return interaction.reply({ content: "❌ Durée invalide.", ephemeral: true });
+
+        try {
+            const publicEmbed = await executerMute({
+                guild: interaction.guild,
+                channel: interaction.channel,
+                executorUser: interaction.user,
+                targetMember,
+                durationMs: ms,
+                durationLabel: formatDurationFr(ms),
+                raison: session.raison
+            });
+            muteSessions.delete(sessionId);
+            await interaction.update({ embeds: [publicEmbed], components: [] });
+        } catch (err) {
+            await interaction.reply({ content: `❌ Impossible de mute ce membre (${err.message}).`, ephemeral: true });
+        }
+        return true;
+    }
+
+    // --- !unmute : Sélection membre ---
+    if (interaction.isUserSelectMenu() && interaction.customId.startsWith('unmute_select_user_')) {
+        const authorId = interaction.customId.replace('unmute_select_user_', '');
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", ephemeral: true });
+
+        const targetId = interaction.values[0];
+        const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
+        if (!targetMember) return interaction.reply({ content: "❌ Membre introuvable.", ephemeral: true });
+        if (!targetMember.isCommunicationDisabled()) {
+            return interaction.update({ embeds: [new EmbedBuilder().setColor(0x95a5a6).setDescription(`ℹ️ <@${targetId}> n'est pas en sourdine actuellement.`)], components: [] });
+        }
+
+        await targetMember.timeout(null, `Unmute par ${interaction.user.tag}`).catch(() => {});
+        const mpOk = await envoyerMpSanction(targetMember, new EmbedBuilder().setColor(0x2ecc71).setTitle('🔊 Ta sourdine sur Regaïa a été levée').setTimestamp());
+
+        const embed = new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle('🔊 Sourdine levée')
+            .setDescription(`<@${targetId}> a été démute par <@${interaction.user.id}>.`)
+            .setFooter({ text: mpOk ? '📩 Membre prévenu en MP' : '⚠️ MP fermés' })
+            .setTimestamp();
+        await interaction.update({ embeds: [embed], components: [] });
+
+        const logEmbed = new EmbedBuilder().setColor(0x2ecc71).setTitle('🔊 Log — Unmute (!unmute)').setDescription(`• **Cible :** <@${targetId}>\n• **Modérateur :** <@${interaction.user.id}>`).setTimestamp();
+        await logModerationStaff(interaction.guild, logEmbed, { silent: true });
+        return true;
+    }
+
+    // --- !warns : Sélection membre ---
+    if (interaction.isUserSelectMenu() && interaction.customId.startsWith('warns_select_user_')) {
+        const authorId = interaction.customId.replace('warns_select_user_', '');
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", ephemeral: true });
+
+        const targetId = interaction.values[0];
+        const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
+        const targetUser = targetMember?.user ?? await interaction.client.users.fetch(targetId).catch(() => null);
+        const casierEmbed = buildWarnsCasierEmbed(targetMember || targetUser, targetId, getUserWarns(targetId));
+        await interaction.update({ embeds: [casierEmbed], components: [] });
+        return true;
+    }
+
+    // --- !unwarn & alerte 60 jours ---
+    if (interaction.isUserSelectMenu() && interaction.customId.startsWith('unwarn_select_user_')) {
+        const authorId = interaction.customId.replace('unwarn_select_user_', '');
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", ephemeral: true });
+
+        const targetId = interaction.values[0];
+        const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
+        const targetUser = targetMember?.user ?? await interaction.client.users.fetch(targetId).catch(() => null);
+        const { embed, components } = buildUnwarnConfirmPanel(targetMember || targetUser, targetId, null, false);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('unwarn_pick_')) {
+        if (!peutModerer(interaction.member)) return interaction.reply({ content: "❌ Réservé aux modérateurs.", ephemeral: true });
+        const targetId = interaction.customId.replace('unwarn_pick_', '');
+        const selectedWarnId = interaction.values[0];
+        const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
+        const targetUser = targetMember?.user ?? await interaction.client.users.fetch(targetId).catch(() => null);
+        const { embed, components } = buildUnwarnConfirmPanel(targetMember || targetUser, targetId, selectedWarnId, false);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    if (interaction.isButton() && (interaction.customId.startsWith('unwarn_remove_') || interaction.customId.startsWith('warn60_remove_'))) {
+        if (!peutModerer(interaction.member)) return interaction.reply({ content: "❌ Seuls les modérateurs peuvent retirer un avertissement.", ephemeral: true });
+
+        const is60 = interaction.customId.startsWith('warn60_remove_');
+        const parts = interaction.customId.split('_');
+        const targetId = parts[2];
+        const warnId = parts[3];
+
+        const warns = getUserWarns(targetId);
+        const idx = warns.findIndex(w => String(w.id) === String(warnId));
+        if (idx === -1) {
+            return interaction.update({ embeds: [new EmbedBuilder().setColor(0x95a5a6).setDescription('ℹ️ Cet avertissement a déjà été retiré.')], components: [] });
+        }
+
+        const [removed] = warns.splice(idx, 1);
+        if (warns.length === 0) delete getWarnsMap()[targetId];
+        securityState.demanderSauvegarde();
+
+        const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
+        const targetUser = targetMember?.user ?? await interaction.client.users.fetch(targetId).catch(() => null);
+        const mpEmbed = new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle('✅ Avertissement retiré sur Regaïa')
+            .setDescription(
+                `Un avertissement (**#${removed.id}** : \`${removed.reason}\`) a été retiré de ton casier${is60 ? ' après 60 jours' : ''}.\n` +
+                `• **Avertissements restants :** \`${warns.length}/6\``
+            )
+            .setTimestamp();
+        const mpOk = await envoyerMpSanction(targetMember || targetUser, mpEmbed);
+
+        const doneEmbed = new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle('🗑️ Avertissement retiré')
+            .setDescription(
+                `L'avertissement **#${removed.id}** (\`${removed.reason}\`) de <@${targetId}> a été supprimé par <@${interaction.user.id}>.\n` +
+                `• **Casier actuel :** \`${warns.length}/6\` avertissement(s)`
+            )
+            .setFooter({ text: mpOk ? '📩 Membre prévenu en MP' : '⚠️ MP fermés' })
+            .setTimestamp();
+        await interaction.update({ embeds: [doneEmbed], components: [] });
+
+        if (!is60) {
+            const logEmbed = new EmbedBuilder()
+                .setColor(0x2ecc71)
+                .setTitle('🗑️ Log — Retrait d\'avertissement (!unwarn)')
+                .setDescription(
+                    `• **Cible :** <@${targetId}> (\`${targetId}\`)\n` +
+                    `• **Warn retiré :** #${removed.id} (\`${removed.reason}\`)\n` +
+                    `• **Modérateur :** <@${interaction.user.id}>\n` +
+                    `• **Restants :** \`${warns.length}/6\``
+                )
+                .setTimestamp();
+            await logModerationStaff(interaction.guild, logEmbed, { silent: true });
+        }
+        return true;
+    }
+
+    if (interaction.isButton() && (interaction.customId.startsWith('unwarn_keep_') || interaction.customId.startsWith('warn60_keep_'))) {
+        if (!peutModerer(interaction.member)) return interaction.reply({ content: "❌ Seuls les modérateurs peuvent utiliser ce bouton.", ephemeral: true });
+
+        const parts = interaction.customId.split('_');
+        const targetId = parts[2];
+        const warnId = parts[3];
+
+        const keepEmbed = new EmbedBuilder()
+            .setColor(0x5865f2)
+            .setTitle('📌 Avertissement conservé')
+            .setDescription(`L'avertissement **#${warnId}** de <@${targetId}> a été maintenu dans le casier par <@${interaction.user.id}>.`)
+            .setTimestamp();
+        await interaction.update({ embeds: [keepEmbed], components: [] });
+        return true;
+    }
+
+    // --- Palier 5/6 : Boutons exclusifs au modo qui a lancé le 5ème !warn ---
+    if (interaction.isButton() && interaction.customId.startsWith('warn5_')) {
+        const parts = interaction.customId.split('_');
+        const action = parts[1];
+        const authorId = parts[2];
+        const targetId = parts[3];
+
+        if (interaction.user.id !== authorId) {
+            return interaction.reply({ content: `❌ Seul(e) <@${authorId}> (auteur du 5ème warn) peut décider de cette sanction !`, ephemeral: true });
+        }
+
+        const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
+        const targetUser = targetMember?.user ?? await interaction.client.users.fetch(targetId).catch(() => null);
+
+        if (action === 'ignore') {
+            const embed = new EmbedBuilder()
+                .setColor(0x95a5a6)
+                .setTitle('✅ Palier 5/6 — Classé sans sanction immédiate')
+                .setDescription(`<@${authorId}> a choisi de ne pas ajouter de sanction supplémentaire pour <@${targetId}> pour le moment.`)
+                .setTimestamp();
+            await interaction.update({ content: null, embeds: [embed], components: [] });
+            return true;
+        }
+
+        if (action === 'mute7d') {
+            if (!targetMember) return interaction.reply({ content: "❌ Ce membre n'est plus sur le serveur.", ephemeral: true });
+            const ms = 7 * 24 * 60 * 60 * 1000;
+            await targetMember.timeout(ms, `Palier 5/6 warn — décision de ${interaction.user.tag}`).catch(() => {});
+            await envoyerMpSanction(targetMember, new EmbedBuilder().setColor(0xe74c3c).setTitle('🔇 Sanction Palier 5/6 sur Regaïa').setDescription('Suite à ton 5ème avertissement, tu as reçu un mute de **7 jours**.').setTimestamp());
+
+            const embed = new EmbedBuilder()
+                .setColor(0xf39c12)
+                .setTitle('🔇 Palier 5/6 — Mute 7 jours appliqué')
+                .setDescription(`<@${targetId}> a été mis(e) en sourdine **7 jours** par <@${authorId}>.`)
+                .setTimestamp();
+            await interaction.update({ content: null, embeds: [embed], components: [] });
+            return true;
+        }
+
+        if (action === 'kick') {
+            if (!targetMember) return interaction.reply({ content: "❌ Ce membre n'est déjà plus sur le serveur.", ephemeral: true });
+            await envoyerMpSanction(targetMember, new EmbedBuilder().setColor(0xe67e22).setTitle('👢 Sanction Palier 5/6 sur Regaïa').setDescription('Suite à ton 5ème avertissement, tu as été expulsé(e) du serveur.').setTimestamp());
+            try {
+                await targetMember.kick(`Palier 5/6 warn — décision de ${interaction.user.tag}`);
+                const embed = new EmbedBuilder().setColor(0xe67e22).setTitle('👢 Palier 5/6 — Membre expulsé').setDescription(`<@${targetId}> a été expulsé(e) par <@${authorId}>.`).setTimestamp();
+                await interaction.update({ content: null, embeds: [embed], components: [] });
+            } catch (err) {
+                await interaction.reply({ content: `❌ Impossible d'expulser (${err.message}).`, ephemeral: true });
+            }
+            return true;
+        }
+
+        if (action === 'ban') {
+            await envoyerMpSanction(targetMember || targetUser, new EmbedBuilder().setColor(0xe03131).setTitle('🔨 Sanction Palier 5/6 sur Regaïa').setDescription('Suite à ton 5ème avertissement, la modération a décidé ton bannissement définitif.').setTimestamp());
+            try {
+                await interaction.guild.members.ban(targetId, { reason: `Palier 5/6 warn — décision de ${interaction.user.tag}` });
+                const embed = new EmbedBuilder().setColor(0xe03131).setTitle('🔨 Palier 5/6 — Membre banni').setDescription(`<@${targetId}> a été banni(e) définitivement par <@${authorId}>.`).setTimestamp();
+                await interaction.update({ content: null, embeds: [embed], components: [] });
+            } catch (err) {
+                await interaction.reply({ content: `❌ Impossible de bannir (${err.message}).`, ephemeral: true });
+            }
+            return true;
+        }
+    }
+
+    // --- !slowmode : menu contextuel ---
+    if (interaction.isStringSelectMenu() && interaction.customId.startsWith('slowmode_select_')) {
+        const authorId = interaction.customId.replace('slowmode_select_', '');
+        if (interaction.user.id !== authorId && !peutModerer(interaction.member)) {
+            return interaction.reply({ content: "❌ Réservé aux modérateurs.", ephemeral: true });
+        }
+        const seconds = parseInt(interaction.values[0], 10) || 0;
+        await interaction.channel.setRateLimitPerUser(seconds, `Slowmode défini par ${interaction.user.tag}`).catch(() => {});
+
+        const resEmbed = new EmbedBuilder()
+            .setColor(seconds === 0 ? 0x2ecc71 : 0x3498db)
+            .setTitle(seconds === 0 ? '✅ Slowmode désactivé' : '🐢 Slowmode activé')
+            .setDescription(
+                seconds === 0
+                    ? `Le mode lent a été retiré dans <#${interaction.channel.id}> par <@${interaction.user.id}>.`
+                    : `Le mode lent est désormais de **${formatDurationFr(seconds * 1000)}** dans <#${interaction.channel.id}> *(par <@${interaction.user.id}>)*.`
+            )
+            .setTimestamp();
+        await interaction.update({ embeds: [resEmbed], components: [] });
+
+        const logEmbed = new EmbedBuilder()
+            .setColor(seconds === 0 ? 0x2ecc71 : 0x3498db)
+            .setTitle('🐢 Log — Slowmode (!slowmode)')
+            .setDescription(`• **Salon :** <#${interaction.channel.id}>\n• **Modérateur :** <@${interaction.user.id}>\n• **Valeur :** ${seconds === 0 ? 'Désactivé' : formatDurationFr(seconds * 1000)}`)
+            .setTimestamp();
+        await logModerationStaff(interaction.guild, logEmbed, { silent: true });
+        return true;
+    }
+
+    // --- Bouton Déverrouiller sous l'embed de !lock ---
+    if (interaction.isButton() && interaction.customId.startsWith('channel_unlock_')) {
+        if (!peutModerer(interaction.member)) {
+            return interaction.reply({ content: "❌ Seuls les modérateurs peuvent déverrouiller ce salon.", ephemeral: true });
+        }
+        const targetChanId = interaction.customId.replace('channel_unlock_', '');
+        const everyoneRole = interaction.guild.roles.everyone;
+        const prevSend = channelLocks.has(targetChanId) ? channelLocks.get(targetChanId) : null;
+        channelLocks.delete(targetChanId);
+
+        await interaction.channel.permissionOverwrites.edit(everyoneRole, { SendMessages: prevSend }, { reason: `Déverrouillé par ${interaction.user.tag}` }).catch(() => {});
+        const unlockEmbed = new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle('🔓 Salon déverrouillé')
+            .setDescription(`Le salon <#${targetChanId}> a été rouvert par <@${interaction.user.id}>.`)
+            .setTimestamp();
+        await interaction.update({ embeds: [unlockEmbed], components: [] });
+
+        const logEmbed = new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle('🔓 Log — Déverrouillage (!unlock)')
+            .setDescription(`• **Salon :** <#${targetChanId}>\n• **Modérateur :** <@${interaction.user.id}>`)
+            .setTimestamp();
+        await logModerationStaff(interaction.guild, logEmbed, { silent: true });
+        return true;
     }
 
     // Bouton de bannissement rapide anti-phishing

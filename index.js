@@ -15,6 +15,7 @@ let penduStats = {};
 let twitchLiveEnCours = false;
 let quotesData = []; // [{ id, texte, authorId, authorName, addedById, timestamp, channelId }]
 let welcomeData = { channelId: null, actif: true };
+let warnsData = {}; // userId -> [{ id, reason, modoId, modoTag, timestamp, expiredNotified }]
 let dernierCommitSha = null;
 let numeroBuild = 1;
 let battlePassData = {};
@@ -80,6 +81,7 @@ async function loadAll() {
         penduStats = jsonRecord.penduStats ?? {};
         quotesData = jsonRecord.quotes ?? [];
         welcomeData = jsonRecord.welcomeData ?? { channelId: null, actif: true };
+        warnsData = jsonRecord.warns ?? {};
         dernierCommitSha = jsonRecord.dernierCommitSha ?? null;
         if (jsonRecord.numeroBuild) numeroBuild = jsonRecord.numeroBuild;
         if (jsonRecord.battlePassData) battlePassData = jsonRecord.battlePassData;
@@ -146,6 +148,7 @@ async function saveAll() {
             penduStats: penduStats,
             quotes: quotesData,
             welcomeData: welcomeData,
+            warns: warnsData,
             dernierCommitSha: dernierCommitSha,
             numeroBuild: numeroBuild,
             battlePassData: battlePassData,
@@ -610,6 +613,7 @@ initActivityState({
 
 initSecurityState({
     getReactionRolesData: () => reactionRolesData,
+    getWarnsData: () => warnsData,
     demanderSauvegarde,
     client,
     EPSYS_ID: '436218312574107658'
