@@ -37,6 +37,10 @@ const banSessions = new Map();
 const kickSessions = new Map();
 const muteSessions = new Map();
 const channelLocks = new Map();
+const destiSessions = new Map();
+
+const DESTITUTION_DURATION_MS = 48 * 60 * 60 * 1000; // 48 heures
+const DESTITUTION_MIN_VOTES = 4; // Quorum minimum de 4 votes
 
 const WARN_REMINDER_AGE_MS = 60 * 24 * 60 * 60 * 1000; // 60 jours
 const WARN_STEPS_DESC = [
@@ -318,6 +322,7 @@ const RAID_ESCALATION_WINDOW_MS = 15 * 60 * 1000;
 let securityState = {
     getReactionRolesData: () => ({}),
     getWarnsData: () => ({}),
+    getDestitutionVotesData: () => ({}),
     demanderSauvegarde: () => {},
     client: null,
     EPSYS_ID: '436218312574107658'
@@ -414,15 +419,19 @@ function initSecurityState(bridge) {
         if (securityState.client.isReady()) {
             synchroniserTribunauxExistants();
             setTimeout(() => verifierWarnsExpires(), 15000);
+            setTimeout(() => verifierDestitutionsExpirees(), 15000);
         } else {
             securityState.client.once('ready', () => {
                 synchroniserTribunauxExistants();
                 setTimeout(() => verifierWarnsExpires(), 15000);
+                setTimeout(() => verifierDestitutionsExpirees(), 15000);
             });
         }
 
         // Vérification toutes les heures des warns ayant atteint 60 jours
         setInterval(() => verifierWarnsExpires(), 60 * 60 * 1000);
+        // Vérification chaque minute des votes de destitution expirés
+        setInterval(() => verifierDestitutionsExpirees(), 60 * 1000);
     }
 }
 
@@ -872,6 +881,251 @@ async function executerMute({ guild, channel, executorUser, targetMember, durati
     await logModerationStaff(guild, logEmbed, { silent: true });
 
     return publicEmbed;
+}
+
+// --- HELPERS VOTE DE DESTITUTION (!destituation / !desti / !antimodo) ---
+
+function getDestitutionVotesMap() {
+    return securityState.getDestitutionVotesData?.() || {};
+}
+
+function buildDestiConfirmPanel(sessionId) {
+    const session = destiSessions.get(sessionId);
+    if (!session) return { embed: null, components: [] };
+
+    const embed = new EmbedBuilder()
+        .setColor(0xd63031)
+        .setTitle('⚖️ Confirmation — Vote de destitution de Modérateur')
+        .setThumbnail(session.targetAvatar || null)
+        .setDescription(
+            `Tu t'apprêtes à ouvrir un **vote exceptionnel anonyme de 48h** visant à décider si <@${session.targetId}> (\`${session.targetTag}\`) conserve son rôle de modérateur.\n\n` +
+            `⚠️ **Attention :** La confirmation va **mentionner tous les modérateurs (<@&${MODO_ROLE_ID}>)** dans ce salon.`
+        )
+        .addFields(
+            { name: '👤 Modérateur visé', value: `<@${session.targetId}> (\`${session.targetId}\`)`, inline: true },
+            { name: '⏱️ Durée & Quorum', value: '**48 heures** • Min. **4 votes**', inline: true },
+            { name: '📝 Motif invoqué', value: `\`\`\`${session.raison}\`\`\``, inline: false }
+        )
+        .setFooter({ text: 'Relis bien les informations avant de lancer le vote.' })
+        .setTimestamp();
+
+    const btnRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`desti_confirm_${sessionId}`)
+            .setLabel('🗳️ Lancer le vote & Ping Modos')
+            .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+            .setCustomId(`desti_reason_${sessionId}`)
+            .setLabel('📝 Modifier la raison')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`desti_cancel_${sessionId}`)
+            .setLabel('❌ Annuler')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    return { embed, components: [btnRow] };
+}
+
+function buildDestiVoteEmbed(voteData, ended = false, outcomeText = null) {
+    const endSec = Math.floor((voteData.endsAt || Date.now()) / 1000);
+    const totalVotes = (voteData.pour?.length || 0) + (voteData.contre?.length || 0);
+
+    const embed = new EmbedBuilder()
+        .setColor(ended ? 0x2d3436 : 0xd63031)
+        .setTitle(ended ? '⚖️ VOTE DE DESTITUTION CLÔTURÉ' : '⚖️ VOTE EXCEPTIONNEL — DESTITUTION DE MODÉRATEUR')
+        .setThumbnail(voteData.targetAvatar || null)
+        .setDescription(
+            `Un vote anonyme a été ouvert par <@${voteData.authorId}> concernant le maintien du rôle modérateur de <@${voteData.targetId}> (\`${voteData.targetTag}\`).\n\n` +
+            `• **Motif invoqué :**\n\`\`\`${voteData.raison}\`\`\`\n` +
+            `📌 **Règles du scrutin :**\n` +
+            `• **Votes 100% anonymes** réservés à l'équipe de modération *(seuls les totaux sont affichés)*.\n` +
+            `• **<@${voteData.targetId}>** ne peut pas voter pour son propre sort.\n` +
+            `• **Conditions de destitution :** minimum **${DESTITUTION_MIN_VOTES} votes** au total ET majorité pour le retrait (\`Retirer > Garder\`).\n` +
+            (ended
+                ? `\n🏁 **Résultat final :**\n${outcomeText}`
+                : `\n⏳ **Clôture automatique :** <t:${endSec}:F> (<t:${endSec}:R>)`)
+        )
+        .addFields(
+            { name: '🚪 Retirer le rôle', value: `**${voteData.pour?.length || 0}** vote(s)`, inline: true },
+            { name: '🛡️ Garder modo', value: `**${voteData.contre?.length || 0}** vote(s)`, inline: true },
+            { name: '📊 Participation', value: `**${totalVotes}** / ${DESTITUTION_MIN_VOTES} min.`, inline: true }
+        )
+        .setFooter({ text: ended ? 'Scrutin terminé • Votes anonymes' : 'Seul Epsys peut clôturer manuellement avant les 48h' })
+        .setTimestamp();
+
+    return embed;
+}
+
+function buildDestiVoteRow(voteData, disabled = false) {
+    const pourCount = voteData.pour?.length || 0;
+    const contreCount = voteData.contre?.length || 0;
+
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('desti_vote_remove')
+            .setLabel(`Retirer le rôle (${pourCount})`)
+            .setEmoji('🚪')
+            .setStyle(ButtonStyle.Danger)
+            .setDisabled(disabled),
+        new ButtonBuilder()
+            .setCustomId('desti_vote_keep')
+            .setLabel(`Garder modo (${contreCount})`)
+            .setEmoji('🛡️')
+            .setStyle(ButtonStyle.Success)
+            .setDisabled(disabled),
+        new ButtonBuilder()
+            .setCustomId('desti_vote_close')
+            .setLabel('Clôturer (Epsys)')
+            .setEmoji('🔒')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(disabled)
+    );
+}
+
+async function cloturerVoteDestitution(msgId, closedByUser = null) {
+    const allVotes = getDestitutionVotesMap();
+    const voteData = allVotes[msgId];
+    if (!voteData || voteData.cloture) return;
+    voteData.cloture = true;
+
+    const client = securityState.client;
+    if (!client) return;
+
+    const channel = client.channels.cache.get(voteData.channelId) ?? await client.channels.fetch(voteData.channelId).catch(() => null);
+    const guild = channel?.guild ?? client.guilds.cache.get('720057528351850547') ?? client.guilds.cache.first();
+
+    const pourCount = (voteData.pour || []).filter(id => id !== voteData.targetId).length;
+    const contreCount = (voteData.contre || []).filter(id => id !== voteData.targetId).length;
+    const totalVotes = pourCount + contreCount;
+
+    const quorumAtteint = totalVotes >= DESTITUTION_MIN_VOTES;
+    const destitue = quorumAtteint && pourCount > contreCount;
+
+    let outcomeText;
+    if (!quorumAtteint) {
+        outcomeText = `🛡️ **Rôle conservé** — Le minimum de **${DESTITUTION_MIN_VOTES} votes** n'a pas été atteint (**${totalVotes}** votant(s)).`;
+    } else if (destitue) {
+        outcomeText = `🚪 **Rôle modérateur retiré** — Majorité atteinte (**${pourCount}** contre **${contreCount}**).`;
+    } else {
+        outcomeText = `🛡️ **Rôle conservé** — La majorité (ou égalité) maintient <@${voteData.targetId}> dans l'équipe (**${contreCount}** Garder vs **${pourCount}** Retirer).`;
+    }
+
+    if (closedByUser) {
+        outcomeText += `\n*(Clôturé manuellement par <@${closedByUser.id}>)*`;
+    }
+
+    if (channel && channel.isTextBased()) {
+        const voteMsg = await channel.messages.fetch(msgId).catch(() => null);
+        if (voteMsg) {
+            await voteMsg.edit({
+                embeds: [buildDestiVoteEmbed(voteData, true, outcomeText)],
+                components: [buildDestiVoteRow(voteData, true)]
+            }).catch(() => {});
+        }
+    }
+
+    const targetMember = guild ? (guild.members.cache.get(voteData.targetId) ?? await guild.members.fetch(voteData.targetId).catch(() => null)) : null;
+    const targetUser = targetMember?.user ?? await client.users.fetch(voteData.targetId).catch(() => null);
+
+    if (destitue) {
+        let retraitOk = false;
+        if (targetMember && targetMember.roles.cache.has(MODO_ROLE_ID)) {
+            await targetMember.roles.remove(MODO_ROLE_ID, `Vote de destitution adopté (${pourCount} vs ${contreCount})`).then(() => {
+                retraitOk = true;
+            }).catch(() => {});
+        }
+
+        const mpEmbed = new EmbedBuilder()
+            .setColor(0xd63031)
+            .setTitle('⚖️ Décision de l\'équipe de modération (Regaïa)')
+            .setDescription(
+                `À l'issue d'un vote anonyme de l'équipe de modération, **ton rôle de modérateur a été retiré**.\n\n` +
+                `• **Résultat :** ${pourCount} vote(s) pour le retrait / ${contreCount} vote(s) pour le maintien\n` +
+                `• **Motif du vote :** \`${voteData.raison}\``
+            )
+            .setTimestamp();
+        const mpOk = await envoyerMpSanction(targetMember || targetUser, mpEmbed);
+
+        // Alerte dans le salon du vote avec mention du concerné
+        if (channel && channel.isTextBased()) {
+            const alertEmbed = new EmbedBuilder()
+                .setColor(0xd63031)
+                .setTitle('🚨 Rôle Modérateur retiré suite au vote')
+                .setDescription(
+                    `<@${voteData.targetId}> s'est vu retirer le rôle <@&${MODO_ROLE_ID}> suite au scrutin (${pourCount} Retirer vs ${contreCount} Garder).\n` +
+                    `• **Statut du rôle :** ${retraitOk ? '✅ Retiré automatiquement' : '⚠️ Membre absent ou rôle déjà retiré'}\n` +
+                    `• **Notification MP :** ${mpOk ? '📩 Envoyée' : '⚠️ MP fermés'}`
+                )
+                .setTimestamp();
+            await channel.send({
+                content: `🔔 <@${voteData.targetId}> | <@${securityState.EPSYS_ID}>`,
+                embeds: [alertEmbed]
+            }).catch(() => {});
+        }
+
+        // Log dans MOD_CHANNEL_ID (1555402748193669192)
+        if (guild) {
+            const logEmbed = new EmbedBuilder()
+                .setColor(0xd63031)
+                .setTitle('⚖️ Log — Destitution appliquée')
+                .setDescription(
+                    `• **Membre concerné :** <@${voteData.targetId}> (\`${voteData.targetTag}\`)\n` +
+                    `• **Vote lancé par :** <@${voteData.authorId}>\n` +
+                    `• **Salon du vote :** <#${voteData.channelId}>\n` +
+                    `• **Score final :** **${pourCount}** Retirer vs **${contreCount}** Garder\n` +
+                    `• **Motif :** \`${voteData.raison}\`\n` +
+                    `• **MP remis :** ${mpOk ? 'Oui' : 'Non'}`
+                )
+                .setTimestamp();
+            await logModerationStaff(guild, logEmbed, { silent: true });
+        }
+    } else {
+        if (channel && channel.isTextBased()) {
+            const keepEmbed = new EmbedBuilder()
+                .setColor(0x00b894)
+                .setTitle('🛡️ Vote terminé — Statut modérateur maintenu')
+                .setDescription(
+                    `Le vote concernant <@${voteData.targetId}> est clôturé.\n${outcomeText}`
+                )
+                .setTimestamp();
+            await channel.send({
+                embeds: [keepEmbed],
+                flags: [MessageFlags.SuppressNotifications]
+            }).catch(() => {});
+        }
+
+        if (guild && voteData.channelId !== MOD_CHANNEL_ID) {
+            const logEmbed = new EmbedBuilder()
+                .setColor(0x00b894)
+                .setTitle('⚖️ Log — Vote destitution (Maintien)')
+                .setDescription(
+                    `• **Membre concerné :** <@${voteData.targetId}> (\`${voteData.targetTag}\`)\n` +
+                    `• **Score final :** **${pourCount}** Retirer vs **${contreCount}** Garder (${totalVotes} votes)\n` +
+                    `• **Motif :** \`${voteData.raison}\``
+                )
+                .setTimestamp();
+            await logModerationStaff(guild, logEmbed, { silent: true });
+        }
+    }
+
+    delete allVotes[msgId];
+    securityState.demanderSauvegarde();
+}
+
+async function verifierDestitutionsExpirees() {
+    try {
+        const allVotes = getDestitutionVotesMap();
+        const now = Date.now();
+        for (const [msgId, voteData] of Object.entries(allVotes)) {
+            if (!voteData || voteData.cloture) continue;
+            if (now >= (voteData.endsAt || 0)) {
+                await cloturerVoteDestitution(msgId, null);
+            }
+        }
+    } catch (err) {
+        console.warn('[Destitution] Erreur vérification expiration:', err);
+    }
 }
 
 function isChannelMuted(channelId) {
@@ -1700,6 +1954,82 @@ async function handleSecurityMessage(message) {
             await logModerationStaff(message.guild, logEmbed, { silent: true });
             return true;
         }
+    }
+
+    // 0b. !destituation / !desti / !antimodo (Salons staff uniquement, utilisable par tout le monde sauf contre Epsys)
+    if (['!destituation', '!destitution', '!desti', '!antimodo'].includes(command)) {
+        if (!message.guild) {
+            await message.reply("❌ Cette commande est uniquement utilisable sur le serveur.");
+            return true;
+        }
+        if (!BANTEMP_AUTHORIZED_CHANNELS.includes(channelId)) {
+            await message.reply("❌ Cette commande exceptionnelle ne peut être lancée que dans les salons du staff.");
+            return true;
+        }
+
+        const info = await extraireCibleEtReste(message, raw);
+        if (info.notFoundQuery) {
+            await message.reply(`❌ Membre introuvable sur le serveur avec \`${info.notFoundQuery}\`.`);
+            return true;
+        }
+
+        if (!info.targetMember) {
+            const sessionId = `desti_${Date.now()}_${message.author.id}`;
+            destiSessions.set(sessionId, {
+                authorId: message.author.id,
+                channelId: message.channel.id,
+                messageId: message.id,
+                targetId: null,
+                targetTag: null,
+                targetAvatar: null,
+                raison: 'Comportement incompatible avec le rôle de modérateur'
+            });
+            setTimeout(() => destiSessions.delete(sessionId), 10 * 60 * 1000);
+
+            const selectEmbed = new EmbedBuilder()
+                .setColor(0xd63031)
+                .setTitle('⚖️ Lancer un vote de destitution')
+                .setDescription('Sélectionne le **modérateur** concerné dans le menu ci-dessous *(ou tape `!destituation @modo [raison]`)*.')
+                .setTimestamp();
+            const userRow = new ActionRowBuilder().addComponents(
+                new UserSelectMenuBuilder().setCustomId(`desti_select_user_${sessionId}`).setPlaceholder('👤 Choisir le modérateur visé...')
+            );
+            const cancelRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`desti_cancel_${sessionId}`).setLabel('❌ Annuler').setStyle(ButtonStyle.Secondary)
+            );
+            await message.reply({ embeds: [selectEmbed], components: [userRow, cancelRow] });
+            return true;
+        }
+
+        if (info.targetId === securityState.EPSYS_ID) {
+            await message.reply("❌ Impossible de lancer un vote de destitution contre **Epsys** !");
+            return true;
+        }
+        if (info.targetId === message.client?.user?.id) {
+            await message.reply("❌ Impossible de viser Cacabot !");
+            return true;
+        }
+        if (!estModo(info.targetMember)) {
+            await message.reply(`❌ <@${info.targetId}> ne possède pas le rôle modérateur (<@&${MODO_ROLE_ID}>).`);
+            return true;
+        }
+
+        const raison = info.resteArgs.join(' ').trim() || 'Comportement incompatible avec le rôle de modérateur';
+        const sessionId = `desti_${Date.now()}_${message.author.id}`;
+        destiSessions.set(sessionId, {
+            authorId: message.author.id,
+            channelId: message.channel.id,
+            messageId: message.id,
+            targetId: info.targetId,
+            targetTag: info.targetUser?.tag || info.targetMember.displayName,
+            targetAvatar: info.targetUser?.displayAvatarURL?.({ dynamic: true }) || null,
+            raison
+        });
+        setTimeout(() => destiSessions.delete(sessionId), 10 * 60 * 1000);
+
+        const { embed, components } = buildDestiConfirmPanel(sessionId);
+        await message.reply({ embeds: [embed], components });
+        return true;
     }
 
     // 0. !tribunal / !trib (ou !bantemp) / !archives
@@ -3377,6 +3707,160 @@ async function handleSecurityInteraction(interaction) {
             .setDescription(`• **Salon :** <#${targetChanId}>\n• **Modérateur :** <@${interaction.user.id}>`)
             .setTimestamp();
         await logModerationStaff(interaction.guild, logEmbed, { silent: true });
+        return true;
+    }
+
+    // ==========================================
+    //    VOTE DE DESTITUTION (!destituation / !desti / !antimodo)
+    // ==========================================
+
+    if (interaction.isUserSelectMenu() && interaction.customId.startsWith('desti_select_user_')) {
+        const sessionId = interaction.customId.replace('desti_select_user_', '');
+        const session = destiSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", ephemeral: true });
+
+        const targetId = interaction.values[0];
+        if (targetId === securityState.EPSYS_ID) return interaction.reply({ content: "❌ Impossible de viser **Epsys** !", ephemeral: true });
+        if (targetId === interaction.client?.user?.id) return interaction.reply({ content: "❌ Impossible de viser Cacabot !", ephemeral: true });
+
+        const targetMember = interaction.guild.members.cache.get(targetId) ?? await interaction.guild.members.fetch(targetId).catch(() => null);
+        if (!targetMember || !estModo(targetMember)) {
+            return interaction.reply({ content: `❌ <@${targetId}> ne possède pas le rôle modérateur.`, ephemeral: true });
+        }
+
+        session.targetId = targetId;
+        session.targetTag = targetMember.user?.tag || targetMember.displayName;
+        session.targetAvatar = targetMember.user?.displayAvatarURL?.({ dynamic: true }) || null;
+
+        const { embed, components } = buildDestiConfirmPanel(sessionId);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('desti_reason_')) {
+        const sessionId = interaction.customId.replace('desti_reason_', '');
+        const session = destiSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut modifier la raison.", ephemeral: true });
+
+        const modal = new ModalBuilder().setCustomId(`desti_modal_reason_${sessionId}`).setTitle('📝 Motif du vote de destitution');
+        const input = new TextInputBuilder()
+            .setCustomId('reason_text')
+            .setLabel('Explique la raison de ce vote')
+            .setStyle(TextInputStyle.Paragraph)
+            .setValue(session.raison || '')
+            .setRequired(true)
+            .setMaxLength(500);
+        modal.addComponents(new ActionRowBuilder().addComponents(input));
+        await interaction.showModal(modal);
+        return true;
+    }
+
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('desti_modal_reason_')) {
+        const sessionId = interaction.customId.replace('desti_modal_reason_', '');
+        const session = destiSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        session.raison = interaction.fields.getTextInputValue('reason_text').trim() || 'Comportement incompatible avec le rôle de modérateur';
+        const { embed, components } = buildDestiConfirmPanel(sessionId);
+        await interaction.update({ embeds: [embed], components });
+        return true;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('desti_cancel_')) {
+        const sessionId = interaction.customId.replace('desti_cancel_', '');
+        const session = destiSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut annuler.", ephemeral: true });
+        destiSessions.delete(sessionId);
+        await interaction.update({ content: "❌ **Vote de destitution annulé.**", embeds: [], components: [] });
+        return true;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('desti_confirm_')) {
+        const sessionId = interaction.customId.replace('desti_confirm_', '');
+        const session = destiSessions.get(sessionId);
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut lancer le vote.", ephemeral: true });
+
+        destiSessions.delete(sessionId);
+        await interaction.deferUpdate();
+        await interaction.message.delete().catch(() => {});
+
+        const voteData = {
+            targetId: session.targetId,
+            targetTag: session.targetTag,
+            targetAvatar: session.targetAvatar,
+            authorId: session.authorId,
+            channelId: session.channelId,
+            raison: session.raison,
+            pour: [],
+            contre: [],
+            endsAt: Date.now() + DESTITUTION_DURATION_MS,
+            cloture: false
+        };
+
+        const voteMsg = await interaction.channel.send({
+            content: `🚨 <@&${MODO_ROLE_ID}> • **Un vote exceptionnel de destitution vient d'être ouvert !**`,
+            embeds: [buildDestiVoteEmbed(voteData, false)],
+            components: [buildDestiVoteRow(voteData, false)]
+        });
+
+        getDestitutionVotesMap()[voteMsg.id] = voteData;
+        securityState.demanderSauvegarde();
+        return true;
+    }
+
+    // Votes anonymes & clôture manuelle Epsys
+    if (interaction.isButton() && ['desti_vote_remove', 'desti_vote_keep', 'desti_vote_close'].includes(interaction.customId)) {
+        const allVotes = getDestitutionVotesMap();
+        const voteData = allVotes[interaction.message.id];
+
+        if (!voteData || voteData.cloture) {
+            return interaction.reply({ content: "ℹ️ Ce vote est déjà clôturé ou introuvable.", ephemeral: true });
+        }
+
+        if (interaction.customId === 'desti_vote_close') {
+            if (interaction.user.id !== securityState.EPSYS_ID) {
+                return interaction.reply({ content: "❌ Seul **Epsys** peut clôturer ce vote manuellement avant la fin des 48h.", ephemeral: true });
+            }
+            await interaction.deferUpdate();
+            await cloturerVoteDestitution(interaction.message.id, interaction.user);
+            return true;
+        }
+
+        if (!peutModerer(interaction.member)) {
+            return interaction.reply({ content: "❌ Seuls les modérateurs (et Epsys) peuvent participer à ce vote.", ephemeral: true });
+        }
+
+        if (interaction.user.id === voteData.targetId) {
+            return interaction.reply({ content: "❌ Tu ne peux pas voter sur ta propre destitution !", ephemeral: true });
+        }
+
+        const voterId = interaction.user.id;
+        voteData.pour = (voteData.pour || []).filter(id => id !== voterId);
+        voteData.contre = (voteData.contre || []).filter(id => id !== voterId);
+
+        let choixLabel;
+        if (interaction.customId === 'desti_vote_remove') {
+            voteData.pour.push(voterId);
+            choixLabel = '🚪 Retirer le rôle Modo';
+        } else {
+            voteData.contre.push(voterId);
+            choixLabel = '🛡️ Garder modo';
+        }
+
+        securityState.demanderSauvegarde();
+
+        await interaction.update({
+            embeds: [buildDestiVoteEmbed(voteData, false)],
+            components: [buildDestiVoteRow(voteData, false)]
+        });
+
+        await interaction.followUp({
+            content: `🗳️ Ton vote anonyme (**${choixLabel}**) a bien été enregistré *(tu peux modifier ton choix jusqu'à la fin des 48h)*.`,
+            ephemeral: true
+        }).catch(() => {});
         return true;
     }
 

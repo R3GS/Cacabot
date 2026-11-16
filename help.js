@@ -294,9 +294,10 @@ function buildHelpmCategoryEmbed(category, user, botAvatarUrl = null) {
         `\`!unwarn [@membre / ID / Pseudo]\` • Retirer un avertissement via panneau de confirmation`;
 
     const moderationSection =
-        `### ⚖️ Tribunal & Archives\n` +
+        `### ⚖️ Tribunal, Destitution & Archives\n` +
         `\`!tribunal [ID / @membre] [raison]\` *(ou \`!trib\` / \`!bantemp\`)* • Ouvre le tribunal *(salons modération)*\n` +
-        `\`!archives\` *(ou \`!archive\` / \`!tribunal list\`)* • Télécharge les logs \`.txt\` des tribunaux\n\n` +
+        `\`!archives\` *(ou \`!archive\` / \`!tribunal list\`)* • Télécharge les logs \`.txt\` des tribunaux\n` +
+        `\`!destituation [@modo] [raison]\` *(ou \`!desti\` / \`!antimodo\`)* • Vote anonyme d'exclusion d'un modo *(48h, salons staff)*\n\n` +
         `### 🔒 Contrôle des salons & Silence\n` +
         `\`!lock [raison]\` • \`!unlock\` • Verrouiller ou déverrouiller l'envoi de messages dans un salon\n` +
         `\`!slowmode [durée / off]\` • Régler le mode lent *(ex: \`!slowmode 10\`, menu si vide)*\n` +

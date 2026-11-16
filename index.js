@@ -16,6 +16,7 @@ let twitchLiveEnCours = false;
 let quotesData = []; // [{ id, texte, authorId, authorName, addedById, timestamp, channelId }]
 let welcomeData = { channelId: null, actif: true };
 let warnsData = {}; // userId -> [{ id, reason, modoId, modoTag, timestamp, expiredNotified }]
+let destitutionVotesData = {}; // messageId -> { targetId, targetTag, authorId, channelId, raison, pour: [], contre: [], endsAt, cloture }
 let dernierCommitSha = null;
 let numeroBuild = 1;
 let battlePassData = {};
@@ -82,6 +83,7 @@ async function loadAll() {
         quotesData = jsonRecord.quotes ?? [];
         welcomeData = jsonRecord.welcomeData ?? { channelId: null, actif: true };
         warnsData = jsonRecord.warns ?? {};
+        destitutionVotesData = jsonRecord.destitutionVotes ?? {};
         dernierCommitSha = jsonRecord.dernierCommitSha ?? null;
         if (jsonRecord.numeroBuild) numeroBuild = jsonRecord.numeroBuild;
         if (jsonRecord.battlePassData) battlePassData = jsonRecord.battlePassData;
@@ -149,6 +151,7 @@ async function saveAll() {
             quotes: quotesData,
             welcomeData: welcomeData,
             warns: warnsData,
+            destitutionVotes: destitutionVotesData,
             dernierCommitSha: dernierCommitSha,
             numeroBuild: numeroBuild,
             battlePassData: battlePassData,
@@ -614,6 +617,7 @@ initActivityState({
 initSecurityState({
     getReactionRolesData: () => reactionRolesData,
     getWarnsData: () => warnsData,
+    getDestitutionVotesData: () => destitutionVotesData,
     demanderSauvegarde,
     client,
     EPSYS_ID: '436218312574107658'
