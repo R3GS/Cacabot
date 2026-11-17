@@ -61,7 +61,7 @@ function getHoroscopeForSign(signIndex, dateKey) {
         "Mercure est dans ta merde aujourd'hui. Littéralement.", "Tu vas te lever du mauvais pied, trébucher, et te faire chier la gueule. Bonne journée.",
         "L'univers t'envoie un message : va te faire foutre, mais avec amour.", "Ton chakra du cul est particulièrement actif aujourd'hui. Évite les chaises en plastique.",
         "Tu vas péter au mauvais moment. Les planètes étaient au courant.", "Saturne te dit d'aller niquer ta mère. Saturne est en colère ce matin.",
-        "Tu vas te chier dessous de rire. Ou juste te chier dessous. Les astres sont flous là-dessus.", "Venus est en opposition avec ton cerveau. Ton cerveau perd.",
+        "Tu vas te chier dessus de rire. Ou juste te chier dessus. Les astres sont flous là-dessus.", "Venus est en opposition avec ton cerveau. Ton cerveau perd.",
         "Tu vas dire une connerie monumentale avec une confiance absolue. Les étoiles applaudissent.", "Ton avenir pue. Pas métaphoriquement. Il pue vraiment.",
         "Un inconnu va te faire chier aujourd'hui. Tu pourras rien dire.", "Les constellations forment aujourd'hui un grand doigt d'honneur en ta direction.",
         "Tu vas rater quelque chose d'important parce que t'étais en train de te gratter les fesses.", "Mercure rétrograde dans tes couilles/ovaires. Ça explique tout.",
