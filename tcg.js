@@ -185,6 +185,8 @@ let assetPaths = {
     bgB: null
 };
 
+const MAX_IMAGE_CACHE = 12;
+const MAX_THUMB_CACHE = 150;
 const imageCache = new Map();
 const thumbCache = new Map();
 const boostersEnCours = new Set();
@@ -978,9 +980,18 @@ function drawRoundRect(ctx, x, y, w, h, r) {
 
 async function loadCachedImage(filePath) {
     if (!filePath || !fs.existsSync(filePath)) return null;
-    if (imageCache.has(filePath)) return imageCache.get(filePath);
+    if (imageCache.has(filePath)) {
+        const existing = imageCache.get(filePath);
+        imageCache.delete(filePath);
+        imageCache.set(filePath, existing);
+        return existing;
+    }
     try {
         const img = await loadImage(filePath);
+        if (imageCache.size >= MAX_IMAGE_CACHE) {
+            const oldestKey = imageCache.keys().next().value;
+            imageCache.delete(oldestKey);
+        }
         imageCache.set(filePath, img);
         return img;
     } catch {
@@ -991,15 +1002,28 @@ async function loadCachedImage(filePath) {
 async function getCachedThumb(filePath, targetW, targetH) {
     if (!filePath) return null;
     const key = `${filePath}|${targetW}x${targetH}`;
-    if (thumbCache.has(key)) return thumbCache.get(key);
-    const img = await loadCachedImage(filePath);
-    if (!img) return null;
-    const c = createCanvas(targetW, targetH);
-    const cctx = c.getContext('2d');
-    cctx.drawImage(img, 0, 0, targetW, targetH);
-    if (thumbCache.size > 400) thumbCache.clear();
-    thumbCache.set(key, c);
-    return c;
+    if (thumbCache.has(key)) {
+        const existing = thumbCache.get(key);
+        thumbCache.delete(key);
+        thumbCache.set(key, existing);
+        return existing;
+    }
+    try {
+        // On utilise l'image HD si déjà en cache, sinon on la charge juste le temps de créer la miniature sans saturer imageCache
+        const img = imageCache.get(filePath) || (fs.existsSync(filePath) ? await loadImage(filePath) : null);
+        if (!img) return null;
+        const c = createCanvas(targetW, targetH);
+        const cctx = c.getContext('2d');
+        cctx.drawImage(img, 0, 0, targetW, targetH);
+        if (thumbCache.size >= MAX_THUMB_CACHE) {
+            const oldestKey = thumbCache.keys().next().value;
+            thumbCache.delete(oldestKey);
+        }
+        thumbCache.set(key, c);
+        return c;
+    } catch {
+        return null;
+    }
 }
 
 function drawCoverImage(ctx, img, w, h) {
@@ -2336,6 +2360,19 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             message: sentMsg
         };
         boosterSessions.set(sentMsg.id, session);
+
+        // Libérer le buffer image du récap après 15 min, et la session après 2h
+        const recapCleanTimer = setTimeout(() => {
+            session.recapBuffer = null;
+        }, 15 * 60 * 1000);
+        recapCleanTimer.unref?.();
+
+        const sessionExpireTimer = setTimeout(() => {
+            clearBoosterInspectTimeout(session);
+            session.recapBuffer = null;
+            boosterSessions.delete(sentMsg.id);
+        }, 2 * 60 * 60 * 1000);
+        sessionExpireTimer.unref?.();
 
         setTimeout(async () => {
             boostersEnCours.delete(userId);
