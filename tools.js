@@ -779,7 +779,7 @@ async function handleToolsMessage(message, response, client) {
             .setTitle('🤖 Infos de Cacabot')
             .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
             .addFields(
-                { name: '💻 Commandes', value: `30`, inline: true },
+                { name: '💻 Commandes', value: `69`, inline: true },
                 { name: '💬 Messages de Cacabot', value: `${toolsState.getTopData().messages?.['1503495713097519355'] || 0}`, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
                 { name: '👑 Créatrice', value: 'Epsys', inline: true },
@@ -1514,7 +1514,7 @@ async function handleToolsSlash(interaction, client) {
             .setTitle('🤖 Infos de Cacabot')
             .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
             .addFields(
-                { name: '💻 Commandes', value: `30`, inline: true },
+                { name: '💻 Commandes', value: `69`, inline: true },
                 { name: '💬 Messages envoyés', value: `${toolsState.getTopData().messages?.['1503495713097519355'] || 0}`, inline: true },
                 { name: '\u200b', value: '\u200b', inline: true },
                 { name: '👑 Créatrice', value: 'Epsys', inline: true },
