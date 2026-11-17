@@ -421,7 +421,80 @@ function getTcgCardsCount() {
 //   PROFIL JOUEUR, COOLDOWN & NOTIFICATIONS
 // ==========================================
 
+const TCGX_SANDBOX_ID = 'tcgx_epsys';
+let tcgxSandboxUser = null;
+
+function isSandboxId(id) {
+    return id === TCGX_SANDBOX_ID;
+}
+
+function canControlTcgOwner(interactionUserId, ownerId) {
+    if (isSandboxId(ownerId)) return interactionUserId === EPSYS_ID;
+    return interactionUserId === ownerId;
+}
+
+function buildTcgMemberProxy(realMember, userId) {
+    if (!isSandboxId(userId)) return realMember;
+    const baseName = realMember?.displayName || realMember?.user?.username || 'Epsys';
+    return {
+        id: TCGX_SANDBOX_ID,
+        displayName: `${baseName} [MODE TEST !tcgx]`,
+        username: realMember?.user?.username || 'Epsys',
+        user: realMember?.user || realMember,
+        displayAvatarURL: (opts) => (realMember?.user || realMember)?.displayAvatarURL?.(opts) || null,
+        roles: realMember?.roles
+    };
+}
+
+function getOrCreateTcgxSandbox(forceReset = false) {
+    if (!tcgxSandboxUser || forceReset) {
+        const cards = {};
+        for (const c of cardCatalog) {
+            cards[c.id] = 5;
+        }
+        tcgxSandboxUser = {
+            points: 999999,
+            msgProgress: 0,
+            vocalMinutes: 0,
+            cards,
+            freeBoosters: MAX_FREE_BOOSTERS,
+            lastFreeRechargeAt: Date.now(),
+            currentRechargeMs: BOOSTER_COOLDOWN_MS,
+            inventory: {
+                booster: 999,
+                luckyBooster: 99,
+                holoTransform: 99,
+                halfCooldown: 99
+            },
+            activeBonuses: {
+                luckyBooster: false,
+                halfCooldown: false
+            },
+            pityRare: false,
+            theme: 'B',
+            favoriteCardId: cardCatalog[0]?.id || null,
+            stats: {
+                boostersOpened: 0,
+                tradesCompleted: 0,
+                duplicatesObtained: 0
+            }
+        };
+    } else {
+        for (const c of cardCatalog) {
+            if ((tcgxSandboxUser.cards[c.id] || 0) < 1) {
+                tcgxSandboxUser.cards[c.id] = 5;
+            }
+        }
+        if (tcgxSandboxUser.points < 900000) tcgxSandboxUser.points = 999999;
+        if ((tcgxSandboxUser.inventory?.booster || 0) < 50) tcgxSandboxUser.inventory.booster = 999;
+    }
+    return tcgxSandboxUser;
+}
+
 function getOrCreateTcgUser(userId) {
+    if (isSandboxId(userId)) {
+        return getOrCreateTcgxSandbox(false);
+    }
     const data = getStoreData();
     if (!data.users[userId]) {
         data.users[userId] = {
@@ -1962,14 +2035,16 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
         u.stats.boostersOpened = (u.stats.boostersOpened || 0) + 1;
         u.stats.duplicatesObtained = (u.stats.duplicatesObtained || 0) + duplicatesInPack;
 
-        tcgBridge.trackBattlePassProgress(userId, 'tcg_booster', 1);
-        if (duplicatesInPack > 0) {
-            tcgBridge.trackBattlePassProgress(userId, 'tcg_doublon', duplicatesInPack);
-        }
+        if (!isSandboxId(userId)) {
+            tcgBridge.trackBattlePassProgress(userId, 'tcg_booster', 1);
+            if (duplicatesInPack > 0) {
+                tcgBridge.trackBattlePassProgress(userId, 'tcg_doublon', duplicatesInPack);
+            }
 
-        const data = getStoreData();
-        if (data.notifs?.[userId]) armerNotifBooster(userId, client);
-        tcgBridge.demanderSauvegarde();
+            const data = getStoreData();
+            if (data.notifs?.[userId]) armerNotifBooster(userId, client);
+            tcgBridge.demanderSauvegarde();
+        }
 
         const gifEmbed = new EmbedBuilder()
             .setColor(0xf1c40f)
@@ -2377,7 +2452,9 @@ async function handleFlexCommand(targetResponder, authorMember, guild, rawArg) {
         return sendFlexPicker(targetResponder, authorMember, 0);
     }
 
-    tcgBridge.trackBattlePassProgress(authorMember.id, 'tcg_flex', 1);
+    if (!isSandboxId(authorMember.id)) {
+        tcgBridge.trackBattlePassProgress(authorMember.id, 'tcg_flex', 1);
+    }
 
     const meta = RARITY_META[fav.rarity] || RARITY_META['Commune'];
     const embed = new EmbedBuilder()
@@ -3077,6 +3154,83 @@ async function handleTcgMessage(message) {
 
     if (await handleAdminTcgCommand(message, raw.toLowerCase())) return true;
 
+    if (/^!tcgx(?:\s|$)/i.test(raw)) {
+        if (message.author.id !== EPSYS_ID) return true;
+        const restRaw = raw.replace(/^!tcgx\s*/i, '').trim();
+        const [subToken = 'hub', ...argTokens] = restRaw ? restRaw.split(/\s+/) : [];
+        let sub = (subToken || 'hub').toLowerCase();
+        let rest = argTokens.join(' ').trim();
+
+        if (sub === 'collection') sub = 'classeur';
+        if (sub === 'flexmodify') {
+            sub = 'flex';
+            rest = `modify ${rest}`.trim();
+        }
+
+        if (sub === 'reset') {
+            getOrCreateTcgxSandbox(true);
+            await replySilent(message, '🧪 **Compte test `!tcgx` réinitialisé !** (`109/109` cartes en `x5`, `999 999 pts`, `999` boosters en inventaire).');
+            return true;
+        }
+
+        if (sub === 'trade') {
+            await replySilent(message, '❌ Les échanges sont désactivés en mode test `!tcgx` pour préserver le fair-play du serveur.');
+            return true;
+        }
+
+        const sandboxMember = buildTcgMemberProxy(message.member, TCGX_SANDBOX_ID);
+        const su = getOrCreateTcgUser(TCGX_SANDBOX_ID);
+
+        if (sub === 'hub') {
+            await replySilent(message, buildHubPayload(sandboxMember, su));
+            return true;
+        }
+        if (sub === 'guide') {
+            await replySilent(message, buildGuidePayload(TCGX_SANDBOX_ID, false));
+            return true;
+        }
+        if (sub === 'credits') {
+            await replySilent(message, buildCreditsPayload(TCGX_SANDBOX_ID, false));
+            return true;
+        }
+        if (sub === 'open' || sub === 'booster') {
+            await replySilent(message, buildOpenPromptPayload(sandboxMember, su, false));
+            return true;
+        }
+        if (sub === 'store') {
+            await replySilent(message, buildStorePayload(sandboxMember, su, false));
+            return true;
+        }
+        if (sub === 'claim') {
+            await replySilent(message, buildClaimPayload(sandboxMember, su, false));
+            return true;
+        }
+        if (sub === 'top') {
+            await replySilent(message, {
+                embeds: [buildTopEmbed(message.guild, 'total')],
+                components: buildTopComponents(TCGX_SANDBOX_ID, 'total', false)
+            });
+            return true;
+        }
+        if (sub === 'classeur') {
+            const sent = await replySilent(message, '📖 Chargement du classeur test `!tcgx`...');
+            const payload = await buildBinderReplyPayload(sandboxMember, TCGX_SANDBOX_ID, { fromHub: false });
+            await sent.edit({ content: null, ...payload });
+            return true;
+        }
+        if (sub === 'carte') {
+            await handleCarteCommand(message, sandboxMember, rest, message.channel);
+            return true;
+        }
+        if (sub === 'flex') {
+            await handleFlexCommand(message, sandboxMember, message.guild, rest);
+            return true;
+        }
+
+        await replySilent(message, buildHubPayload(sandboxMember, su));
+        return true;
+    }
+
     const parsed = parseTcgCommand(raw);
     if (!parsed) return false;
 
@@ -3303,15 +3457,16 @@ async function handleTcgInteraction(interaction) {
     // ----- RETOUR ACCUEIL HUB -----
     if (action === 'hub' && interaction.isButton()) {
         const ownerId = parts[2];
-        if (interaction.user.id !== ownerId) {
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
             return true;
         }
         await interaction.deferUpdate();
         const u = getOrCreateTcgUser(ownerId);
+        const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
         await interaction.editReply({
             content: null,
-            ...buildHubPayload(interaction.member, u),
+            ...buildHubPayload(actorMember, u),
             attachments: []
         });
         return true;
@@ -3321,7 +3476,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'guide' && interaction.isButton()) {
         const ownerId = parts[2];
         const fromHub = parts[3] === '1';
-        if (interaction.user.id !== ownerId) {
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
             return true;
         }
@@ -3338,7 +3493,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'credits' && interaction.isButton()) {
         const ownerId = parts[2];
         const fromHub = parts[3] === '1';
-        if (interaction.user.id !== ownerId) {
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
             return true;
         }
@@ -3355,11 +3510,12 @@ async function handleTcgInteraction(interaction) {
     if (action === 'open' && interaction.isButton()) {
         const ownerId = parts[2];
         const fromHub = parts[3] === '1';
-        if (interaction.user.id !== ownerId) {
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({ content: "Ce bouton ne t'est pas destiné !", ephemeral: true });
             return true;
         }
-        await startBoosterOpening(interaction, interaction.member, client, fromHub);
+        const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+        await startBoosterOpening(interaction, actorMember, client, fromHub);
         return true;
     }
 
@@ -3367,7 +3523,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'bstep' && interaction.isButton()) {
         const dir = parts[2];
         const ownerId = parts[3];
-        if (interaction.user.id !== ownerId) {
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({ content: "Ce booster ne t'appartient pas !", ephemeral: true });
             return true;
         }
@@ -3382,11 +3538,12 @@ async function handleTcgInteraction(interaction) {
         else if (dir === 'recap') session.step = 3;
 
         await interaction.deferUpdate();
+        const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
         if (session.step === 3) {
-            const recapPayload = await buildBoosterRecapPayload(interaction.member, session);
+            const recapPayload = await buildBoosterRecapPayload(actorMember, session);
             await interaction.editReply({ content: null, ...recapPayload, attachments: [] });
         } else {
-            const cardPayload = buildBoosterCardEmbed(interaction.member, session, session.step);
+            const cardPayload = buildBoosterCardEmbed(actorMember, session, session.step);
             await interaction.editReply({ content: null, ...cardPayload, attachments: [] });
         }
         return true;
@@ -3397,8 +3554,12 @@ async function handleTcgInteraction(interaction) {
         const sub = parts[2];
         const ownerId = parts[3];
         const fromHub = parts[4] === '1';
-        if (interaction.user.id !== ownerId) {
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            return true;
+        }
+        if (isSandboxId(ownerId)) {
+            await interaction.reply({ content: "ℹ️ Mode test `!tcgx` : les notifications sont désactivées *(boosters déjà illimités)*.", ephemeral: true });
             return true;
         }
         const data = getStoreData();
@@ -3496,14 +3657,15 @@ async function handleTcgInteraction(interaction) {
     // ----- THÈME HUB -----
     if (action === 'theme' && interaction.isButton()) {
         const ownerId = parts[2];
-        if (interaction.user.id !== ownerId) {
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({ content: "Ce bouton ne t'est pas destiné !", ephemeral: true });
             return true;
         }
         const u = getOrCreateTcgUser(ownerId);
         u.theme = u.theme === 'W' ? 'B' : 'W';
-        tcgBridge.demanderSauvegarde();
-        await interaction.update({ embeds: [buildHubEmbed(interaction.member, u)], components: buildHubComponents(ownerId, u) });
+        if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
+        const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+        await interaction.update({ embeds: [buildHubEmbed(actorMember, u)], components: buildHubComponents(ownerId, u) });
         return true;
     }
 
@@ -3511,9 +3673,10 @@ async function handleTcgInteraction(interaction) {
     if (action === 'store' && interaction.isButton()) {
         const ownerId = parts[3];
         const fromHub = parts[4] === '1';
-        if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
         const u = getOrCreateTcgUser(ownerId);
-        const payload = buildStorePayload(interaction.member, u, fromHub);
+        const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+        const payload = buildStorePayload(actorMember, u, fromHub);
         if (fromHub) {
             await interaction.update({ content: null, files: [], attachments: [], ...payload });
         } else {
@@ -3525,9 +3688,10 @@ async function handleTcgInteraction(interaction) {
     if (action === 'claim' && interaction.isButton()) {
         const ownerId = parts[3];
         const fromHub = parts[4] === '1';
-        if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
         const u = getOrCreateTcgUser(ownerId);
-        const payload = buildClaimPayload(interaction.member, u, fromHub);
+        const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+        const payload = buildClaimPayload(actorMember, u, fromHub);
         if (fromHub) {
             await interaction.update({ content: null, files: [], attachments: [], ...payload });
         } else {
@@ -3541,7 +3705,7 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[3];
         const fromHub = parts[4] === '1';
         const hubSuffix = fromHub ? ':1' : '';
-        if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
 
         const price = STORE_PRICES[itemKey];
         const u = getOrCreateTcgUser(ownerId);
@@ -3553,10 +3717,12 @@ async function handleTcgInteraction(interaction) {
         u.points -= price;
         u.inventory[itemKey] = (u.inventory[itemKey] || 0) + 1;
 
-        if (itemKey !== 'booster') {
-            tcgBridge.trackBattlePassProgress(ownerId, 'tcg_store_buy', 1);
+        if (!isSandboxId(ownerId)) {
+            if (itemKey !== 'booster') {
+                tcgBridge.trackBattlePassProgress(ownerId, 'tcg_store_buy', 1);
+            }
+            tcgBridge.demanderSauvegarde();
         }
-        tcgBridge.demanderSauvegarde();
 
         const labels = {
             booster: '🎁 Booster Set 1',
@@ -3609,7 +3775,8 @@ async function handleTcgInteraction(interaction) {
         const itemKey = parts[3];
         const ownerId = parts[4];
         const fromHub = parts[5] === '1';
-        if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
 
         const backRows = fromHub
             ? [new ActionRowBuilder().addComponents(
@@ -3637,7 +3804,7 @@ async function handleTcgInteraction(interaction) {
 
         if (itemKey === 'booster') {
             if (!fromHub) await interaction.message.edit({ components: [] }).catch(() => {});
-            await startBoosterOpening(interaction, interaction.member, client, fromHub);
+            await startBoosterOpening(interaction, actorMember, client, fromHub);
             return true;
         }
         if (itemKey === 'luckyBooster') {
@@ -3647,7 +3814,7 @@ async function handleTcgInteraction(interaction) {
             }
             u.inventory.luckyBooster -= 1;
             u.activeBonuses.luckyBooster = true;
-            tcgBridge.demanderSauvegarde();
+            if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
             await interaction.update({
                 content: "🍀 **Prochain booster chanceux activé !** Aucune carte Commune ne tombera dans ton prochain booster.",
                 embeds: [],
@@ -3664,7 +3831,7 @@ async function handleTcgInteraction(interaction) {
             }
             u.inventory.halfCooldown -= 1;
             u.activeBonuses.halfCooldown = true;
-            tcgBridge.demanderSauvegarde();
+            if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
             await interaction.update({
                 content: "⚡ **Demi-cooldown armé !** Dès l'ouverture de ton prochain booster, le suivant mettra **3h** au lieu de 6h.",
                 embeds: [],
@@ -3675,7 +3842,7 @@ async function handleTcgInteraction(interaction) {
             return true;
         }
         if (itemKey === 'holoTransform') {
-            await sendHoloTransformPicker(interaction, interaction.member, 0, fromHub);
+            await sendHoloTransformPicker(interaction, actorMember, 0, fromHub);
             return true;
         }
     }
@@ -3684,16 +3851,17 @@ async function handleTcgInteraction(interaction) {
         const itemKey = parts[2];
         const ownerId = parts[3];
         const fromHub = parts[4] === '1';
-        if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
         const u = getOrCreateTcgUser(ownerId);
         if ((u.inventory[itemKey] || 0) <= 0) return interaction.reply({ content: "❌ Stock insuffisant.", ephemeral: true }), true;
+        const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
 
         if (itemKey === 'luckyBooster') {
             if (u.activeBonuses.luckyBooster) return interaction.reply({ content: "⚠️ Déjà actif sur ton prochain booster !", ephemeral: true }), true;
             u.inventory.luckyBooster -= 1;
             u.activeBonuses.luckyBooster = true;
-            tcgBridge.demanderSauvegarde();
-            await interaction.update(buildClaimPayload(interaction.member, u, fromHub));
+            if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
+            await interaction.update(buildClaimPayload(actorMember, u, fromHub));
             await interaction.followUp({ content: "🍀 **Prochain booster chanceux activé !**", ephemeral: true });
             return true;
         }
@@ -3701,13 +3869,13 @@ async function handleTcgInteraction(interaction) {
             if (u.activeBonuses.halfCooldown) return interaction.reply({ content: "⚠️ Déjà armé sur ton prochain booster !", ephemeral: true }), true;
             u.inventory.halfCooldown -= 1;
             u.activeBonuses.halfCooldown = true;
-            tcgBridge.demanderSauvegarde();
-            await interaction.update(buildClaimPayload(interaction.member, u, fromHub));
+            if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
+            await interaction.update(buildClaimPayload(actorMember, u, fromHub));
             await interaction.followUp({ content: "⚡ **Demi-cooldown armé !**", ephemeral: true });
             return true;
         }
         if (itemKey === 'holoTransform') {
-            await sendHoloTransformPicker(interaction, interaction.member, 0, fromHub);
+            await sendHoloTransformPicker(interaction, actorMember, 0, fromHub);
             return true;
         }
     }
@@ -3716,15 +3884,16 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[2];
         const page = parseInt(parts[3], 10) || 0;
         const fromHub = parts[4] === '1';
-        if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
-        await sendHoloTransformPicker(interaction, interaction.member, page, fromHub);
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+        await sendHoloTransformPicker(interaction, actorMember, page, fromHub);
         return true;
     }
 
     if (action === 'holopick' && interaction.isStringSelectMenu()) {
         const ownerId = parts[2];
         const fromHub = parts[3] === '1';
-        if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
 
         const baseId = interaction.values[0];
         const baseCard = cardById.get(baseId);
@@ -3740,7 +3909,7 @@ async function handleTcgInteraction(interaction) {
         u.cards[baseId] -= 1;
         if (u.cards[baseId] === 0) delete u.cards[baseId];
         u.cards[holoCard.id] = (u.cards[holoCard.id] || 0) + 1;
-        tcgBridge.demanderSauvegarde();
+        if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
 
         const embed = new EmbedBuilder()
             .setColor(RARITY_META[holoCard.rarity]?.color || 0xf1c40f)
@@ -3769,16 +3938,18 @@ async function handleTcgInteraction(interaction) {
 
         if (sub === 'pickuser' && interaction.isUserSelectMenu()) {
             const viewerId = parts[3];
-            if (interaction.user.id !== viewerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+            if (!canControlTcgOwner(interaction.user.id, viewerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
             const targetId = interaction.values[0];
             if (targetId === viewerId) {
                 await deferReplySilent(interaction);
-                const payload = await buildBinderReplyPayload(interaction.member, viewerId, { fromHub: false });
+                const actorMember = buildTcgMemberProxy(interaction.member, viewerId);
+                const payload = await buildBinderReplyPayload(actorMember, viewerId, { fromHub: false });
                 await interaction.editReply(payload);
                 return true;
             }
+            const realRequesterId = isSandboxId(viewerId) ? interaction.user.id : viewerId;
             const targetMember = await interaction.guild.members.fetch(targetId).catch(() => ({ id: targetId, displayName: 'ce membre' }));
-            await sendBinderAccessWarning(interaction, viewerId, targetMember);
+            await sendBinderAccessWarning(interaction, realRequesterId, targetMember);
             return true;
         }
 
@@ -3846,16 +4017,18 @@ async function handleTcgInteraction(interaction) {
             const ownerId = parts[3];
             const viewerId = parts[4];
             const fromHub = parts[5] === '1';
-            if (interaction.user.id !== viewerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+            if (!canControlTcgOwner(interaction.user.id, viewerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+
+            const ownerMember = isSandboxId(ownerId)
+                ? buildTcgMemberProxy(interaction.member, TCGX_SANDBOX_ID)
+                : await interaction.guild.members.fetch(ownerId).catch(() => interaction.member);
 
             if (fromHub) {
                 await interaction.deferUpdate();
-                const ownerMember = await interaction.guild.members.fetch(ownerId).catch(() => interaction.member);
                 const payload = await buildBinderReplyPayload(ownerMember, viewerId, { fromHub: true });
                 await interaction.editReply({ content: null, ...payload, attachments: [] });
             } else {
                 await deferReplySilent(interaction);
-                const ownerMember = await interaction.guild.members.fetch(ownerId).catch(() => interaction.member);
                 const payload = await buildBinderReplyPayload(ownerMember, viewerId, { fromHub: false });
                 await interaction.editReply(payload);
             }
@@ -3911,24 +4084,26 @@ async function handleTcgInteraction(interaction) {
             page = parseInt(parts[6], 10) || 0;
             sortMode = parts[7];
             fromHub = parts[8] === '1';
-            if (interaction.user.id !== ownerId) {
+            if (!canControlTcgOwner(interaction.user.id, ownerId)) {
                 await interaction.reply({ content: "❌ Seul le propriétaire du classeur peut changer son thème Clair/Nuit.", ephemeral: true });
                 return true;
             }
             const uOwner = getOrCreateTcgUser(ownerId);
             uOwner.theme = uOwner.theme === 'W' ? 'B' : 'W';
-            tcgBridge.demanderSauvegarde();
+            if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
         } else {
             return false;
         }
 
-        if (interaction.user.id !== viewerId && interaction.user.id !== ownerId) {
+        if (!canControlTcgOwner(interaction.user.id, viewerId) && !canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({ content: "Ce classeur ne t'est pas ouvert !", ephemeral: true });
             return true;
         }
 
         await interaction.deferUpdate();
-        const ownerMember = await interaction.guild.members.fetch(ownerId).catch(() => interaction.member);
+        const ownerMember = isSandboxId(ownerId)
+            ? buildTcgMemberProxy(interaction.member, TCGX_SANDBOX_ID)
+            : await interaction.guild.members.fetch(ownerId).catch(() => interaction.member);
         const payload = await buildBinderReplyPayload(ownerMember, viewerId, { category, perPageMode, page, sortMode, fromHub });
         await interaction.editReply({ content: null, ...payload, attachments: [] });
         return true;
@@ -3937,7 +4112,7 @@ async function handleTcgInteraction(interaction) {
     // ----- SÉLECTION CARTE (!carte) & FLEX -----
     if (action === 'cartesel' && interaction.isStringSelectMenu()) {
         const ownerId = parts[2];
-        if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
         const card = cardById.get(interaction.values[0]);
         const u = getOrCreateTcgUser(ownerId);
         if (!card || (u.cards?.[card.id] || 0) <= 0) {
@@ -3952,14 +4127,15 @@ async function handleTcgInteraction(interaction) {
     if (action === 'flexpage' && interaction.isButton()) {
         const ownerId = parts[2];
         const page = parseInt(parts[3], 10) || 0;
-        if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
-        await sendFlexPicker(interaction, interaction.member, page);
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+        await sendFlexPicker(interaction, actorMember, page);
         return true;
     }
 
     if (action === 'flexset' && interaction.isStringSelectMenu()) {
         const ownerId = parts[2];
-        if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
         const card = cardById.get(interaction.values[0]);
         const u = getOrCreateTcgUser(ownerId);
         if (!card || (u.cards[card.id] || 0) <= 0) {
@@ -3967,7 +4143,7 @@ async function handleTcgInteraction(interaction) {
             return true;
         }
         u.favoriteCardId = card.id;
-        tcgBridge.demanderSauvegarde();
+        if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
         await interaction.update({ content: `⭐ Ta carte préférée est maintenant **${card.id} • ${card.name}** ! Tape \`!tcg flex\` pour frimer !`, embeds: [], components: [], files: [], attachments: [] });
         return true;
     }
@@ -3977,7 +4153,7 @@ async function handleTcgInteraction(interaction) {
         const mode = parts[2];
         const ownerId = parts[3];
         const fromHub = parts[4] === '1';
-        if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
         const payload = {
             content: null,
             files: [],
