@@ -1529,7 +1529,7 @@ function buildHelpPayload(userId) {
             `────────────────────────────────────────\n` +
             `### 🃏 Menu & Infos\n` +
             `• \`!tcg\` • \`!regadex\` • \`!rgdx\` — Ouvrir le **Tableau de bord**\n` +
-            `• \`!tcg help\` • \`!tcghelp\` *(ou avec `regadex`/`rgdx`)* — Afficher ce mémo\n` +
+            `• \`!tcg help\` • \`!tcghelp\` *(ou avec \`regadex\`/\`rgdx\`)* — Afficher ce mémo\n` +
             `• \`!tcg guide\` — Règles détaillées & taux de tirage\n` +
             `• \`!tcg credits\` — Crédits & remerciements\n\n` +
             `### 🎁 Boosters & Alertes\n` +
