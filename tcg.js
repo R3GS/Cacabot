@@ -15,7 +15,8 @@ const {
     TextInputBuilder,
     TextInputStyle,
     ChannelType,
-    AttachmentBuilder
+    AttachmentBuilder,
+    MessageFlags
 } = require('discord.js');
 const { createCanvas, loadImage } = require('canvas');
 
@@ -49,6 +50,14 @@ const STORE_PRICES = {
     halfCooldown: 25
 };
 
+const CREDITS_LINKS = {
+    texturelabs: 'https://texturelabs.org/',
+    vectorstock: 'https://www.vectorstock.com/',
+    magnific: 'https://magnific.ai/',
+    pngimg: 'https://pngimg.com/',
+    metalforge: 'https://metalforge.xyz/'
+};
+
 const RARITY_LIST = ['Commune', 'Rare', 'Épique', 'Légendaire', 'Full Art', 'Négative'];
 const RARITY_ORDER = {
     'Commune': 0,
@@ -76,6 +85,47 @@ const RARITY_META = {
 };
 
 const CATEGORIES = ['Items', 'Personnages', 'Références'];
+
+// ==========================================
+//   HELPERS SILENCIEUX (ZERO NOTIFS / PUSH)
+// ==========================================
+
+function withSilent(payload) {
+    const obj = typeof payload === 'string' ? { content: payload } : { ...payload };
+    if (obj.ephemeral || (Array.isArray(obj.flags) && obj.flags.includes(MessageFlags.Ephemeral))) {
+        return obj;
+    }
+    const flags = Array.isArray(obj.flags)
+        ? [...obj.flags]
+        : (obj.flags ? [obj.flags] : []);
+    if (!flags.includes(MessageFlags.SuppressNotifications)) {
+        flags.push(MessageFlags.SuppressNotifications);
+    }
+    obj.flags = flags;
+    if (!obj.allowedMentions) {
+        obj.allowedMentions = { repliedUser: false };
+    }
+    return obj;
+}
+
+async function replySilent(target, payload) {
+    const data = withSilent(payload);
+    if (target.isRepliable?.()) {
+        if (target.deferred || target.replied) {
+            return target.followUp(data);
+        }
+        return target.reply(data);
+    }
+    return target.reply(data);
+}
+
+async function sendSilent(channel, payload) {
+    return channel.send(withSilent(payload));
+}
+
+async function deferReplySilent(interaction) {
+    return interaction.deferReply({ flags: [MessageFlags.SuppressNotifications] });
+}
 
 // ==========================================
 //   BRIDGE AVEC INDEX.JS
@@ -129,9 +179,6 @@ const boostersEnCours = new Set();
 const boosterSessions = new Map(); // messageId -> session
 const pendingConfirms = new Map(); // confirmId -> payload
 const notifTimers = new Map(); // userId -> Timeout
-const holoPickerSessions = new Map(); // sessionId -> { userId, page }
-const flexPickerSessions = new Map(); // sessionId -> { userId, page }
-const tradeOfferMenuSessions = new Map(); // sessionId -> { threadId, userId, mode, page }
 
 function normalizeText(str) {
     return String(str || '')
@@ -430,7 +477,7 @@ function syncFreeBoosters(u) {
         return;
     }
 
-    let stepMs = u.currentRechargeMs || BOOSTER_COOLDOWN_MS;
+    const stepMs = u.currentRechargeMs || BOOSTER_COOLDOWN_MS;
     let elapsed = now - (u.lastFreeRechargeAt || now);
 
     if (elapsed >= stepMs) {
@@ -463,19 +510,6 @@ function getNextBoosterTimestamp(u) {
 function getTotalAvailableBoosters(u) {
     syncFreeBoosters(u);
     return (u.freeBoosters || 0) + (u.inventory?.booster || 0);
-}
-
-function formatDurationMs(ms) {
-    if (ms <= 0) return '0s';
-    const totalSec = Math.ceil(ms / 1000);
-    const h = Math.floor(totalSec / 3600);
-    const m = Math.floor((totalSec % 3600) / 60);
-    const s = totalSec % 60;
-    const parts = [];
-    if (h > 0) parts.push(`${h}h`);
-    if (m > 0 || h > 0) parts.push(`${String(m).padStart(2, '0')}m`);
-    if (h === 0) parts.push(`${String(s).padStart(2, '0')}s`);
-    return parts.join(' ');
 }
 
 function armerNotifBooster(userId, client) {
@@ -520,7 +554,16 @@ function armerNotifBooster(userId, client) {
             const text = `🃏 <@${userId}>, ton **Booster gratuit Set 1** est prêt ! Tu as actuellement **${userObj.freeBoosters}/${MAX_FREE_BOOSTERS}** booster(s) gratuit(s) disponible(s) dans <#${TCG_CHANNEL_ID}>.`;
             if (latestNotif.mode === 'dm') {
                 const user = await c.users.fetch(userId).catch(() => null);
-                if (user) await user.send(text).catch(() => {});
+                let dmOk = false;
+                if (user) {
+                    dmOk = await user.send(text).then(() => true).catch(() => false);
+                }
+                if (!dmOk) {
+                    const fallbackCh = await c.channels.fetch(latestNotif.channelId || TCG_CHANNEL_ID).catch(() => null);
+                    if (fallbackCh) {
+                        await fallbackCh.send(`${text} *(Tes MP Discord étant fermés, je te préviens ici)*`).catch(() => {});
+                    }
+                }
             } else {
                 const ch = await c.channels.fetch(latestNotif.channelId || TCG_CHANNEL_ID).catch(() => null);
                 if (ch) await ch.send(text).catch(() => {});
@@ -536,6 +579,26 @@ function restaurerNotifsTcg(client) {
     if (!data.notifs) return;
     for (const uid of Object.keys(data.notifs)) {
         armerNotifBooster(uid, client);
+    }
+}
+
+async function disableNotifButtonsOnMessage(message) {
+    if (!message || !Array.isArray(message.components) || message.components.length === 0) return;
+    let modified = false;
+    const updatedRows = message.components.map(row => {
+        const newRow = new ActionRowBuilder();
+        for (const comp of row.components) {
+            const json = comp.toJSON();
+            if (json.custom_id && (json.custom_id.startsWith('tcg:notif:here:') || json.custom_id.startsWith('tcg:notif:dm:'))) {
+                json.disabled = true;
+                modified = true;
+            }
+            newRow.addComponents(ButtonBuilder.from(json));
+        }
+        return newRow;
+    });
+    if (modified) {
+        await message.edit({ components: updatedRows }).catch(() => {});
     }
 }
 
@@ -589,25 +652,25 @@ function isAllowedTcgChannel(channel) {
     return false;
 }
 
-function formatCardCode(card) {
-    return card.id; // ex: 1-48, 1-Ø12
-}
-
-function getCardDisplayLabel(card) {
-    return `${card.id} • ${card.name}`;
-}
-
 function getUserCompletionStats(u) {
     let uniqueCount = 0;
     let totalCopies = 0;
+    const byCategory = {
+        'Items': { owned: 0, total: 0 },
+        'Personnages': { owned: 0, total: 0 },
+        'Références': { owned: 0, total: 0 }
+    };
+
     for (const c of cardCatalog) {
+        if (byCategory[c.category]) byCategory[c.category].total++;
         const q = u.cards?.[c.id] || 0;
         if (q > 0) {
             uniqueCount++;
             totalCopies += q;
+            if (byCategory[c.category]) byCategory[c.category].owned++;
         }
     }
-    return { uniqueCount, totalCopies, totalSet: cardCatalog.length || 109 };
+    return { uniqueCount, totalCopies, totalSet: cardCatalog.length || 109, byCategory };
 }
 
 function resolveCardQuery(rawQuery) {
@@ -655,7 +718,7 @@ async function resolveMemberArg(message, rawArg, onResolved) {
     if (/^\d{17,20}$/.test(clean)) {
         const m = await message.guild.members.fetch(clean).catch(() => null);
         if (m) return onResolved(m);
-        return message.reply('❌ Membre introuvable avec cet ID.');
+        return replySilent(message, '❌ Membre introuvable avec cet ID.');
     }
 
     const res = tcgBridge.findMemberByName(message.guild, clean);
@@ -666,7 +729,7 @@ async function resolveMemberArg(message, rawArg, onResolved) {
             await onResolved(m || chosenUser);
         });
     }
-    return message.reply(`❌ Aucun membre trouvé pour \`${clean}\`.`);
+    return replySilent(message, `❌ Aucun membre trouvé pour \`${clean}\`.`);
 }
 
 // ==========================================
@@ -763,7 +826,7 @@ function drawBoosterCards(u) {
 }
 
 // ==========================================
-//   RENDU CANVAS (POLYFILL + CLASSEUR + RECAPS)
+//   RENDU CANVAS (LEMON MILK BOLD + POLYFILL)
 // ==========================================
 
 function drawRoundRect(ctx, x, y, w, h, r) {
@@ -876,7 +939,7 @@ async function renderBinderCanvas(targetUser, u, options) {
     const safePage = Math.max(0, Math.min(page, totalPages - 1));
     const slice = cardsList.slice(safePage * grid.perPage, (safePage + 1) * grid.perPage);
 
-    // En-tête
+    // En-tête (LEMON MILK Bold)
     const ownedInView = cardsList.filter(c => (u.cards?.[c.id] || 0) > 0).length;
     const pct = cardsList.length > 0 ? Math.round((ownedInView / cardsList.length) * 100) : 0;
     const headerLabel = category === 'complet' ? 'RegaDex • Set 1 Complet' : `RegaDex • ${category}`;
@@ -886,15 +949,15 @@ async function renderBinderCanvas(targetUser, u, options) {
     ctx.fill();
 
     ctx.fillStyle = textColor;
-    ctx.font = 'bold 34px Sans';
+    ctx.font = 'bold 30px "LemonMilk", "Sans"';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     const displayName = targetUser.displayName || targetUser.username || 'Collectionneur';
-    ctx.fillText(`${headerLabel} — ${displayName}`, 68, 59);
+    ctx.fillText(`${headerLabel} — ${displayName}`, 68, 59, W * 0.56);
 
     ctx.textAlign = 'right';
-    ctx.font = 'bold 28px Sans';
-    ctx.fillText(`${ownedInView}/${cardsList.length} (${pct}%)  •  Page ${safePage + 1}/${totalPages}`, W - 68, 59);
+    ctx.font = 'bold 24px "LemonMilk", "Sans"';
+    ctx.fillText(`${ownedInView}/${cardsList.length} (${pct}%)  •  Page ${safePage + 1}/${totalPages}`, W - 68, 59, W * 0.34);
 
     // Zone grille
     const padX = 48;
@@ -907,7 +970,7 @@ async function renderBinderCanvas(targetUser, u, options) {
     const labelH = grid.rows >= 6 ? 22 : (grid.rows >= 4 ? 26 : 34);
     const maxCardH = cellH - labelH - 8;
     const maxCardW = cellW - 14;
-    const cardRatio = 500 / 700; // largeur / hauteur standard carte TCG
+    const cardRatio = 500 / 700;
 
     let cardH = maxCardH;
     let cardW = cardH * cardRatio;
@@ -918,7 +981,7 @@ async function renderBinderCanvas(targetUser, u, options) {
     cardW = Math.floor(cardW);
     cardH = Math.floor(cardH);
 
-    const fontSize = grid.rows >= 6 ? 15 : (grid.rows >= 4 ? 19 : 25);
+    const fontSize = grid.rows >= 6 ? 14 : (grid.rows >= 4 ? 18 : 23);
     const mysteryThumb = await getCachedThumb(assetPaths.mysteryCard, cardW, cardH);
 
     for (let idx = 0; idx < slice.length; idx++) {
@@ -956,13 +1019,12 @@ async function renderBinderCanvas(targetUser, u, options) {
             ctx.restore();
         }
 
-        // Texte sous la carte (noir sur W, blanc sur B)
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        ctx.font = `bold ${fontSize}px Sans`;
+        ctx.font = `bold ${fontSize}px "LemonMilk", "Sans"`;
         ctx.fillStyle = owned ? textColor : subTextColor;
         const labelText = owned ? `#${card.numCode} • x${count}` : `#${card.numCode} • x0`;
-        ctx.fillText(labelText, cx, cardY + cardH + 4);
+        ctx.fillText(labelText, cx, cardY + cardH + 4, cellW - 8);
     }
 
     return {
@@ -994,10 +1056,10 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
     ctx.fill();
 
     ctx.fillStyle = isLight ? '#111111' : '#FFFFFF';
-    ctx.font = 'bold 34px Sans';
+    ctx.font = 'bold 31px "LemonMilk", "Sans"';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('Récapitulatif du Booster Set 1', W / 2, 55);
+    ctx.fillText('Récapitulatif du Booster Set 1', W / 2, 55, W - 120);
 
     // Triangle inversé : 2 cartes en haut, 1 centrée en bas
     const cardW = 285;
@@ -1028,10 +1090,10 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
 
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        ctx.font = 'bold 20px Sans';
+        ctx.font = 'bold 18px "LemonMilk", "Sans"';
         ctx.fillStyle = isLight ? '#111111' : '#FFFFFF';
-        const statusTxt = isNewFlags[i] ? 'NOUVELLE !' : 'DOUBLON (+3 pts)';
-        ctx.fillText(`${card.id} • ${card.rarity} • ${statusTxt}`, pos.x + cardW / 2, pos.y + cardH + 10);
+        const statusTxt = isNewFlags[i] ? 'NOUVELLE !' : 'DOUBLON (+3 PTS)';
+        ctx.fillText(`${card.id} • ${card.rarity} • ${statusTxt}`, pos.x + cardW / 2, pos.y + cardH + 10, cardW + 90);
     }
 
     return canvas.toBuffer('image/png');
@@ -1051,14 +1113,14 @@ async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
     ctx.fill();
 
     ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 30px Sans';
+    ctx.font = 'bold 28px "LemonMilk", "Sans"';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`Échange RegaDex terminé`, W / 2, 68);
+    ctx.fillText('Échange RegaDex terminé', W / 2, 68, W - 120);
 
-    // Flèche centrale
+    // Flèche centrale en Sans pour garantir le glyphe Unicode ⇄
     ctx.fillStyle = '#2ECC71';
-    ctx.font = 'bold 46px Sans';
+    ctx.font = 'bold 46px "Sans"';
     ctx.fillText('⇄', W / 2, H / 2 + 10);
 
     const drawSide = async (title, list, startX, boxW) => {
@@ -1067,14 +1129,14 @@ async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
         ctx.fill();
 
         ctx.fillStyle = '#F1C40F';
-        ctx.font = 'bold 24px Sans';
+        ctx.font = 'bold 22px "LemonMilk", "Sans"';
         ctx.textAlign = 'center';
-        ctx.fillText(`Offre de ${title}`, startX + boxW / 2, 146);
+        ctx.fillText(`Offre de ${title}`, startX + boxW / 2, 146, boxW - 40);
 
         if (list.length === 0) {
             ctx.fillStyle = '#AAAAAA';
-            ctx.font = '22px Sans';
-            ctx.fillText('Aucune carte', startX + boxW / 2, H / 2 + 10);
+            ctx.font = 'bold 20px "LemonMilk", "Sans"';
+            ctx.fillText('Aucune carte', startX + boxW / 2, H / 2 + 10, boxW - 40);
             return;
         }
 
@@ -1093,9 +1155,9 @@ async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
             if (img) ctx.drawImage(img, x, y, cW, cH);
 
             ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 16px Sans';
+            ctx.font = 'bold 15px "LemonMilk", "Sans"';
             ctx.textAlign = 'center';
-            ctx.fillText(card.id, x + cW / 2, y + cH + 18);
+            ctx.fillText(card.id, x + cW / 2, y + cH + 18, cW + 10);
         }
     };
 
@@ -1106,41 +1168,98 @@ async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
 }
 
 // ==========================================
-//   EMBEDS & MENUS PRINCIPAUX (HUB, STORE, TOP)
+//   EMBEDS & MENUS PRINCIPAUX (HUB, STORE, TOP, CRÉDITS)
 // ==========================================
+
+function buildAccueilButton(userId) {
+    return new ButtonBuilder()
+        .setCustomId(`tcg:hub:${userId}`)
+        .setLabel('Accueil')
+        .setEmoji('🏠')
+        .setStyle(ButtonStyle.Secondary);
+}
+
+function buildProgressBar(current, total, length = 14) {
+    if (!total || total <= 0) return '▱'.repeat(length);
+    const ratio = Math.max(0, Math.min(1, current / total));
+    const filled = Math.round(ratio * length);
+    return '▰'.repeat(filled) + '▱'.repeat(length - filled);
+}
 
 function buildHubEmbed(member, u) {
     const comp = getUserCompletionStats(u);
     const nextTs = getNextBoosterTimestamp(u);
     const totalAvail = getTotalAvailableBoosters(u);
     const pct = comp.totalSet > 0 ? Math.round((comp.uniqueCount / comp.totalSet) * 100) : 0;
+    const bar = buildProgressBar(comp.uniqueCount, comp.totalSet, 14);
 
     const freeLine = u.freeBoosters >= MAX_FREE_BOOSTERS
-        ? `**${u.freeBoosters}/${MAX_FREE_BOOSTERS}** *(stock max atteint)*`
+        ? `**${u.freeBoosters}/${MAX_FREE_BOOSTERS}** *(stock max prêt)*`
         : `**${u.freeBoosters}/${MAX_FREE_BOOSTERS}** *(prochain <t:${Math.floor(nextTs / 1000)}:R>)*`;
 
     const activeBonusList = [];
-    if (u.activeBonuses?.luckyBooster) activeBonusList.push('🍀 Prochain booster chanceux *(sans Communes)*');
-    if (u.activeBonuses?.halfCooldown) activeBonusList.push('⚡ Demi-cooldown *(3h à la prochaine ouverture)*');
-    if (u.pityRare) activeBonusList.push('✨ Pity active *(Rare garantie au prochain booster)*');
+    if (u.activeBonuses?.luckyBooster) activeBonusList.push('🍀 **Booster chanceux** *(sans Communes)*');
+    if (u.activeBonuses?.halfCooldown) activeBonusList.push('⚡ **Demi-cooldown** *(3h après la prochaine ouverture)*');
+    if (u.pityRare) activeBonusList.push('✨ **Pity active** *(Rare garantie au prochain booster)*');
 
-    const favCard = u.favoriteCardId ? cardById.get(u.favoriteCardId) : null;
+    const favCard = u.favoriteCardId && (u.cards?.[u.favoriteCardId] || 0) > 0
+        ? cardById.get(u.favoriteCardId)
+        : null;
 
-    return new EmbedBuilder()
-        .setColor(0xf1c40f)
-        .setAuthor({ name: `RegaDex TCG • ${member.displayName}`, iconURL: member.displayAvatarURL({ dynamic: true }) })
-        .setTitle('🃏 Hub RegaDex — Set 1')
+    const embed = new EmbedBuilder()
+        .setColor(0xF5B041)
+        .setAuthor({
+            name: `RegaDex TCG • ${member.displayName}`,
+            iconURL: member.displayAvatarURL({ dynamic: true })
+        })
+        .setTitle('🃏 REGADEX TCG — SET 1 : ÉDITION REGAÏA')
         .setDescription(
-            `Collectionne les **${comp.totalSet} cartes** du serveur Regaïa, ouvre des boosters et échange tes doublons !\n\n` +
-            `📚 **Complétion Set 1 :** \`${comp.uniqueCount}/${comp.totalSet}\` cartes uniques (**${pct}%**) • \`${comp.totalCopies}\` cartes au total\n` +
-            `🪙 **Points RegaDex :** \`${u.points} pts\` *(1 pt / 15 msgs, 10 min vocal, 1 roulette • +5 / booster • +3 / doublon)*\n` +
-            `🎁 **Boosters gratuits :** ${freeLine}\n` +
-            `🎒 **Boosters en inventaire :** \`${u.inventory?.booster || 0}\` *(Total prêt : **${totalAvail}**)*\n` +
-            `🎨 **Thème du classeur :** ${u.theme === 'W' ? '☀️ Clair (Blanc)' : '🌙 Nuit (Noir)'}\n` +
-            `⭐ **Carte préférée :** ${favCard ? `\`${favCard.id}\` ${favCard.name}` : '*Aucune définie (`!tcg flex`)*'}` +
-            (activeBonusList.length > 0 ? `\n\n🔥 **Effets actifs :**\n${activeBonusList.map(x => `• ${x}`).join('\n')}` : '')
+            `*Collectionne les **${comp.totalSet} cartes** de Regaïa, traque les Holographiques & Négatives et échange tes doublons avec la communauté !*\n\n` +
+            `📚 **Complétion du Set 1**\n` +
+            `\`${bar}\` **${pct}%** • **\`${comp.uniqueCount}/${comp.totalSet}\`** uniques • **\`${comp.totalCopies}\`** cartes au total`
         )
-        .setFooter({ text: 'RegaDex Set 1 • Cacabot' });
+        .addFields(
+            {
+                name: '🎁 Boosters',
+                value:
+                    `• Prêts à ouvrir : **\`${totalAvail}\`**\n` +
+                    `• Gratuits : ${freeLine}\n` +
+                    `• Inventaire : **\`${u.inventory?.booster || 0}\`**`,
+                inline: true
+            },
+            {
+                name: '🪙 Économie & Profil',
+                value:
+                    `• Solde : **\`${u.points} pts\`**\n` +
+                    `• Thème : ${u.theme === 'W' ? '☀️ Clair (W)' : '🌙 Nuit (B)'}\n` +
+                    `• Flex : ${favCard ? `\`${favCard.id}\` **${favCard.name}**` : '*Aucun (`!tcg flex`)*'}`,
+                inline: true
+            },
+            {
+                name: '📂 Progression par Catégorie',
+                value:
+                    `🧰 **Items :** \`${comp.byCategory['Items'].owned}/${comp.byCategory['Items'].total}\`  •  ` +
+                    `🧑 **Personnages :** \`${comp.byCategory['Personnages'].owned}/${comp.byCategory['Personnages'].total}\`  •  ` +
+                    `🎬 **Références :** \`${comp.byCategory['Références'].owned}/${comp.byCategory['Références'].total}\`\n` +
+                    `-# 💡 Commandes : \`!open\` • \`!classeur\` • \`!carte [n°/nom]\` • \`!trade [@]\` • \`!tcg flex\``,
+                inline: false
+            }
+        )
+        .setFooter({ text: 'RegaDex Set 1 • 1 pt / 15 msgs, 10 min vocal, 1 roulette • +5 pts / booster • +3 pts / doublon' });
+
+    if (activeBonusList.length > 0) {
+        embed.addFields({
+            name: '🔥 Effets actifs sur ton prochain tirage',
+            value: activeBonusList.join('\n'),
+            inline: false
+        });
+    }
+
+    if (assetPaths.boosterPng && fs.existsSync(assetPaths.boosterPng)) {
+        embed.setThumbnail('attachment://booster_set1.png');
+    }
+
+    return embed;
 }
 
 function buildHubComponents(userId, u) {
@@ -1150,23 +1269,23 @@ function buildHubComponents(userId, u) {
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`tcg:open:${userId}`)
-            .setLabel(`Ouvrir un booster (${totalAvail})`)
+            .setCustomId(`tcg:open:${userId}:1`)
+            .setLabel(`Ouvrir (${totalAvail})`)
             .setEmoji('🎁')
             .setStyle(ButtonStyle.Success)
             .setDisabled(totalAvail <= 0),
         new ButtonBuilder()
-            .setCustomId(`tcg:binder:open:${userId}:${userId}`)
+            .setCustomId(`tcg:binder:open:${userId}:${userId}:1`)
             .setLabel('Mon Classeur')
             .setEmoji('📖')
             .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
-            .setCustomId(`tcg:store:open:${userId}`)
+            .setCustomId(`tcg:store:open:${userId}:1`)
             .setLabel('RegaDex Store')
             .setEmoji('🛒')
             .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
-            .setCustomId(`tcg:claim:open:${userId}`)
+            .setCustomId(`tcg:claim:open:${userId}:1`)
             .setLabel('Inventaire')
             .setEmoji('🎒')
             .setStyle(ButtonStyle.Secondary)
@@ -1174,30 +1293,82 @@ function buildHubComponents(userId, u) {
 
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`tcg:top:total:${userId}`)
+            .setCustomId(`tcg:top:total:${userId}:1`)
             .setLabel('Classement')
             .setEmoji('🏆')
             .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
-            .setCustomId(`tcg:notif:menu:${userId}`)
-            .setLabel(hasNotif ? 'Alerte Booster (Active)' : 'Me prévenir')
+            .setCustomId(`tcg:notif:menu:${userId}:1`)
+            .setLabel(hasNotif ? 'Alerte Active' : 'Me prévenir')
             .setEmoji('🔔')
             .setStyle(hasNotif ? ButtonStyle.Primary : ButtonStyle.Secondary),
         new ButtonBuilder()
             .setCustomId(`tcg:theme:${userId}`)
-            .setLabel(u.theme === 'W' ? 'Passer en Nuit (B)' : 'Passer en Clair (W)')
+            .setLabel(u.theme === 'W' ? 'Mode Nuit (B)' : 'Mode Clair (W)')
             .setEmoji(u.theme === 'W' ? '🌙' : '☀️')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`tcg:credits:${userId}:1`)
+            .setLabel('Crédits')
+            .setEmoji('📜')
             .setStyle(ButtonStyle.Secondary)
     );
 
     return [row1, row2];
 }
 
-function buildOpenPromptPayload(member, u) {
+function buildHubPayload(member, u) {
+    const embed = buildHubEmbed(member, u);
+    const components = buildHubComponents(member.id, u);
+    const files = [];
+    if (assetPaths.boosterPng && fs.existsSync(assetPaths.boosterPng)) {
+        files.push(new AttachmentBuilder(assetPaths.boosterPng, { name: 'booster_set1.png' }));
+    }
+    return { embeds: [embed], components, files };
+}
+
+function buildCreditsPayload(userId, fromHub = true) {
+    const embed = new EmbedBuilder()
+        .setColor(0xE67E22)
+        .setTitle('📜 Crédits & Remerciements — RegaDex TCG')
+        .setDescription(
+            `Merci infiniment à toutes les personnes qui ouvrent des boosters, complètent leur classeur et font vivre le **RegaDex** sur **Regaïa** ! 💛\n` +
+            `Chaque carte du Set 1 a été imaginée et montée avec soin pour la communauté. — <@${EPSYS_ID}>`
+        )
+        .addFields(
+            {
+                name: '🎨 Sites & Ressources utilisés pour les assets',
+                value:
+                    `• **[TextureLabs](${CREDITS_LINKS.texturelabs})** — Textures et effets graphiques\n` +
+                    `• **[VectorStock](${CREDITS_LINKS.vectorstock})** — Éléments vectoriels\n` +
+                    `• **[Magnific](${CREDITS_LINKS.magnific})** — FX haute définition\n` +
+                    `• **[PNGimg](${CREDITS_LINKS.pngimg})** — Ressources PNG détourées\n` +
+                    `• **[MetalForge](${CREDITS_LINKS.metalforge})** — Effets et textures métalliques`,
+                inline: false
+            },
+            {
+                name: '⚠️ Note de prévention — Utilisation d\'IA',
+                value:
+                    `De l'intelligence artificielle a pu être utilisée sur certaines cartes **purement à des fins d'upscaling** *(amélioration de la résolution et de la netteté)*.\n` +
+                    `**Aucune carte n'a été imaginée, modifiée ou générée à 100 % par intelligence artificielle.**`,
+                inline: false
+            }
+        )
+        .setFooter({ text: 'RegaDex Set 1 • Créé par Epsys pour Regaïa' });
+
+    const components = fromHub
+        ? [new ActionRowBuilder().addComponents(buildAccueilButton(userId))]
+        : [];
+
+    return { embeds: [embed], components };
+}
+
+function buildOpenPromptPayload(member, u, fromHub = false) {
     const totalAvail = getTotalAvailableBoosters(u);
     const nextTs = getNextBoosterTimestamp(u);
     const data = getStoreData();
     const hasNotif = Boolean(data.notifs?.[member.id]);
+    const hubSuffix = fromHub ? ':1' : '';
 
     const desc = totalAvail > 0
         ? `### Vous avez **${totalAvail} booster${totalAvail > 1 ? 's' : ''} disponible${totalAvail > 1 ? 's' : ''}** !\nEn ouvrir un maintenant ?\n\n` +
@@ -1221,29 +1392,88 @@ function buildOpenPromptPayload(member, u) {
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`tcg:open:${member.id}`)
+            .setCustomId(`tcg:open:${member.id}${hubSuffix}`)
             .setLabel('Ouvrir un booster')
             .setEmoji('✨')
             .setStyle(ButtonStyle.Success)
             .setDisabled(totalAvail <= 0),
         new ButtonBuilder()
-            .setCustomId(`tcg:notif:here:${member.id}`)
+            .setCustomId(`tcg:notif:here:${member.id}${hubSuffix}`)
             .setLabel('Me prévenir ici')
             .setEmoji('🔔')
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(!nextTs || hasNotif),
         new ButtonBuilder()
-            .setCustomId(`tcg:notif:dm:${member.id}`)
+            .setCustomId(`tcg:notif:dm:${member.id}${hubSuffix}`)
             .setLabel('Me prévenir en MP')
             .setEmoji('📩')
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(!nextTs || hasNotif)
     );
 
+    if (fromHub) {
+        row.addComponents(buildAccueilButton(member.id));
+    }
+
     return { embeds: [embed], components: [row], files };
 }
 
-function buildStorePayload(member, u) {
+function buildNotifMenuPayload(member, u, fromHub = false, statusNote = null) {
+    const nextTs = getNextBoosterTimestamp(u);
+    const data = getStoreData();
+    const currentNotif = data.notifs?.[member.id];
+    const hubSuffix = fromHub ? ':1' : '';
+
+    let statusText = '🔕 **Alerte actuelle :** Désactivée';
+    if (currentNotif) {
+        statusText = currentNotif.mode === 'dm'
+            ? '📩 **Alerte actuelle :** Active en **Message Privé**'
+            : '🔔 **Alerte actuelle :** Active **dans ce salon**';
+    }
+
+    const embed = new EmbedBuilder()
+        .setColor(currentNotif ? 0x3498db : 0x95a5a6)
+        .setAuthor({ name: `Alertes Booster • ${member.displayName}`, iconURL: member.displayAvatarURL({ dynamic: true }) })
+        .setTitle('🔔 Prévenir à l\'arrivée du prochain booster')
+        .setDescription(
+            (nextTs
+                ? `⏱️ Prochain booster gratuit prêt **<t:${Math.floor(nextTs / 1000)}:R>**.\n\n`
+                : `✅ Ta jauge de boosters gratuits est déjà pleine (**${u.freeBoosters}/${MAX_FREE_BOOSTERS}**).\n\n`) +
+            statusText +
+            (statusNote ? `\n\n${statusNote}` : '')
+        );
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tcg:notif:here:${member.id}${hubSuffix}`)
+            .setLabel('Me prévenir ici')
+            .setEmoji('🔔')
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(!nextTs),
+        new ButtonBuilder()
+            .setCustomId(`tcg:notif:dm:${member.id}${hubSuffix}`)
+            .setLabel('Me prévenir en MP')
+            .setEmoji('📩')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(!nextTs),
+        new ButtonBuilder()
+            .setCustomId(`tcg:notif:off:${member.id}${hubSuffix}`)
+            .setLabel('Désactiver')
+            .setEmoji('🔕')
+            .setStyle(ButtonStyle.Danger)
+            .setDisabled(!currentNotif)
+    );
+
+    if (fromHub) {
+        row.addComponents(buildAccueilButton(member.id));
+    }
+
+    return { embeds: [embed], components: [row] };
+}
+
+function buildStorePayload(member, u, fromHub = false) {
+    const hubSuffix = fromHub ? ':1' : '';
+
     const embed = new EmbedBuilder()
         .setColor(0x9b59b6)
         .setAuthor({ name: `RegaDex Store • ${member.displayName}`, iconURL: member.displayAvatarURL({ dynamic: true }) })
@@ -1256,32 +1486,32 @@ function buildStorePayload(member, u) {
             `🍀 **Prochain booster chanceux** — \`${STORE_PRICES.luckyBooster} pts\`\n` +
             `-# Supprime toutes les cartes **Communes** de ton prochain booster.\n\n` +
             `✨ **Transformer une carte en Holographique** — \`${STORE_PRICES.holoTransform} pts\`\n` +
-            `-# Transforme 1 de tes cartes compatibles possédées en sa version **Holo** !\n\n` +
+            `-# Transforme 1 de tes cartes compatibles possédées en sa version **holographique** !\n\n` +
             `⚡ **Diviser le cooldown par 2** — \`${STORE_PRICES.halfCooldown} pts\`\n` +
             `-# Activé dès l'ouverture du prochain booster : celui d'après prendra **3h** au lieu de 6h.`
         );
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`tcg:buy:booster:${member.id}`)
+            .setCustomId(`tcg:buy:booster:${member.id}${hubSuffix}`)
             .setLabel(`Booster (${STORE_PRICES.booster} pts)`)
             .setEmoji('🎁')
             .setStyle(ButtonStyle.Primary)
             .setDisabled(u.points < STORE_PRICES.booster),
         new ButtonBuilder()
-            .setCustomId(`tcg:buy:luckyBooster:${member.id}`)
+            .setCustomId(`tcg:buy:luckyBooster:${member.id}${hubSuffix}`)
             .setLabel(`Chanceux (${STORE_PRICES.luckyBooster} pts)`)
             .setEmoji('🍀')
             .setStyle(ButtonStyle.Primary)
             .setDisabled(u.points < STORE_PRICES.luckyBooster),
         new ButtonBuilder()
-            .setCustomId(`tcg:buy:holoTransform:${member.id}`)
+            .setCustomId(`tcg:buy:holoTransform:${member.id}${hubSuffix}`)
             .setLabel(`Holo (${STORE_PRICES.holoTransform} pts)`)
             .setEmoji('✨')
             .setStyle(ButtonStyle.Primary)
             .setDisabled(u.points < STORE_PRICES.holoTransform),
         new ButtonBuilder()
-            .setCustomId(`tcg:buy:halfCooldown:${member.id}`)
+            .setCustomId(`tcg:buy:halfCooldown:${member.id}${hubSuffix}`)
             .setLabel(`Cooldown /2 (${STORE_PRICES.halfCooldown} pts)`)
             .setEmoji('⚡')
             .setStyle(ButtonStyle.Primary)
@@ -1290,23 +1520,28 @@ function buildStorePayload(member, u) {
 
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`tcg:claim:open:${member.id}`)
-            .setLabel('Mon Inventaire (!regadex claim)')
+            .setCustomId(`tcg:claim:open:${member.id}${hubSuffix}`)
+            .setLabel('Mon Inventaire')
             .setEmoji('🎒')
             .setStyle(ButtonStyle.Secondary)
     );
+    if (fromHub) {
+        row2.addComponents(buildAccueilButton(member.id));
+    }
 
     return { embeds: [embed], components: [row, row2] };
 }
 
-function buildClaimPayload(member, u) {
+function buildClaimPayload(member, u, fromHub = false) {
     const inv = u.inventory || {};
+    const hubSuffix = fromHub ? ':1' : '';
+
     const embed = new EmbedBuilder()
         .setColor(0x3498db)
         .setAuthor({ name: `Inventaire RegaDex • ${member.displayName}`, iconURL: member.displayAvatarURL({ dynamic: true }) })
         .setTitle('🎒 Inventaire RegaDex (`!regadex claim`)')
         .setDescription(
-            `Voici tes boosters et bonus en réserve (stock illimité) :\n\n` +
+            `Voici tes boosters et bonus en réserve *(stock illimité)* :\n\n` +
             `🎁 **Booster Set 1 :** \`${inv.booster || 0}\`\n` +
             `🍀 **Prochain booster chanceux :** \`${inv.luckyBooster || 0}\` ${u.activeBonuses?.luckyBooster ? '*(Déjà actif sur le prochain booster !)*' : ''}\n` +
             `✨ **Transformation Holographique :** \`${inv.holoTransform || 0}\`\n` +
@@ -1315,32 +1550,46 @@ function buildClaimPayload(member, u) {
 
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`tcg:open:${member.id}`)
+            .setCustomId(`tcg:open:${member.id}${hubSuffix}`)
             .setLabel(`Ouvrir Booster (${getTotalAvailableBoosters(u)})`)
             .setEmoji('🎁')
             .setStyle(ButtonStyle.Success)
             .setDisabled(getTotalAvailableBoosters(u) <= 0),
         new ButtonBuilder()
-            .setCustomId(`tcg:use:luckyBooster:${member.id}`)
+            .setCustomId(`tcg:use:luckyBooster:${member.id}${hubSuffix}`)
             .setLabel(`Activer Chanceux (${inv.luckyBooster || 0})`)
             .setEmoji('🍀')
             .setStyle(ButtonStyle.Primary)
             .setDisabled((inv.luckyBooster || 0) <= 0 || Boolean(u.activeBonuses?.luckyBooster)),
         new ButtonBuilder()
-            .setCustomId(`tcg:use:holoTransform:${member.id}`)
+            .setCustomId(`tcg:use:holoTransform:${member.id}${hubSuffix}`)
             .setLabel(`Transformer Holo (${inv.holoTransform || 0})`)
             .setEmoji('✨')
             .setStyle(ButtonStyle.Primary)
             .setDisabled((inv.holoTransform || 0) <= 0),
         new ButtonBuilder()
-            .setCustomId(`tcg:use:halfCooldown:${member.id}`)
+            .setCustomId(`tcg:use:halfCooldown:${member.id}${hubSuffix}`)
             .setLabel(`Activer CD /2 (${inv.halfCooldown || 0})`)
             .setEmoji('⚡')
             .setStyle(ButtonStyle.Primary)
             .setDisabled((inv.halfCooldown || 0) <= 0 || Boolean(u.activeBonuses?.halfCooldown))
     );
 
-    return { embeds: [embed], components: [row] };
+    const components = [row];
+    if (fromHub) {
+        components.push(
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`tcg:store:open:${member.id}:1`)
+                    .setLabel('RegaDex Store')
+                    .setEmoji('🛒')
+                    .setStyle(ButtonStyle.Secondary),
+                buildAccueilButton(member.id)
+            )
+        );
+    }
+
+    return { embeds: [embed], components };
 }
 
 function buildTopEmbed(guild, mode = 'total') {
@@ -1387,21 +1636,24 @@ function buildTopEmbed(guild, mode = 'total') {
         .setFooter({ text: 'RegaDex Set 1 • Cacabot' });
 }
 
-function buildTopComponents(authorId, mode = 'total') {
-    return [
-        new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`tcg:top:total:${authorId}`)
-                .setLabel('Total de cartes')
-                .setEmoji('🃏')
-                .setStyle(mode === 'total' ? ButtonStyle.Primary : ButtonStyle.Secondary),
-            new ButtonBuilder()
-                .setCustomId(`tcg:top:completion:${authorId}`)
-                .setLabel('Complétion Set 1 (/109)')
-                .setEmoji('📚')
-                .setStyle(mode === 'completion' ? ButtonStyle.Primary : ButtonStyle.Secondary)
-        )
-    ];
+function buildTopComponents(authorId, mode = 'total', fromHub = false) {
+    const hubSuffix = fromHub ? ':1' : '';
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tcg:top:total:${authorId}${hubSuffix}`)
+            .setLabel('Total de cartes')
+            .setEmoji('🃏')
+            .setStyle(mode === 'total' ? ButtonStyle.Primary : ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`tcg:top:completion:${authorId}${hubSuffix}`)
+            .setLabel('Complétion Set 1 (/109)')
+            .setEmoji('📚')
+            .setStyle(mode === 'completion' ? ButtonStyle.Primary : ButtonStyle.Secondary)
+    );
+    if (fromHub) {
+        row.addComponents(buildAccueilButton(authorId));
+    }
+    return [row];
 }
 
 // ==========================================
@@ -1464,6 +1716,11 @@ function buildBoosterCardEmbed(member, session, stepIndex) {
 async function buildBoosterRecapPayload(member, session) {
     const u = getOrCreateTcgUser(session.userId);
     const buffer = await renderBoosterRecapCanvas(session.cards, session.isNewFlags, u.theme);
+    const nextTs = getNextBoosterTimestamp(u);
+    const data = getStoreData();
+    const hasNotif = Boolean(data.notifs?.[session.userId]);
+    const totalAvail = getTotalAvailableBoosters(u);
+    const hubSuffix = session.fromHub ? ':1' : '';
 
     const lines = session.cards.map((c, i) => {
         const meta = RARITY_META[c.rarity] || RARITY_META['Commune'];
@@ -1477,6 +1734,10 @@ async function buildBoosterRecapPayload(member, session) {
     if (session.halfCdUsed) bonusInfo.push('⚡ Demi-cooldown activé (3h)');
     if (session.triggeredNextPity) bonusInfo.push('🛡️ 3 Communes : ton **prochain** booster aura une **Rare** garantie !');
 
+    const cooldownLine = nextTs
+        ? `\n⏱️ **Prochain booster gratuit :** <t:${Math.floor(nextTs / 1000)}:R>`
+        : `\n✅ **Jauge gratuite pleine :** \`${u.freeBoosters}/${MAX_FREE_BOOSTERS}\``;
+
     const embed = new EmbedBuilder()
         .setColor(0x2ecc71)
         .setAuthor({ name: `Booster Set 1 de ${member.displayName}`, iconURL: member.displayAvatarURL({ dynamic: true }) })
@@ -1484,12 +1745,13 @@ async function buildBoosterRecapPayload(member, session) {
         .setDescription(
             lines.join('\n') +
             `\n\n🪙 **Points RegaDex gagnés :** **+${session.ptsEarned} pts** *(Solde : ${u.points} pts)*` +
+            cooldownLine +
             (bonusInfo.length > 0 ? `\n\n${bonusInfo.join('\n')}` : '')
         )
         .setImage('attachment://recap_booster.png')
-        .setFooter({ text: `Boosters restants : ${getTotalAvailableBoosters(u)}` });
+        .setFooter({ text: `Boosters restants : ${totalAvail}` });
 
-    const row = new ActionRowBuilder().addComponents(
+    const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`tcg:bstep:back3:${session.userId}`)
             .setLabel('Arrière')
@@ -1497,46 +1759,69 @@ async function buildBoosterRecapPayload(member, session) {
             .setStyle(ButtonStyle.Secondary)
     );
 
-    if (getTotalAvailableBoosters(u) > 0) {
-        row.addComponents(
+    if (totalAvail > 0) {
+        row1.addComponents(
             new ButtonBuilder()
-                .setCustomId(`tcg:open:${session.userId}`)
-                .setLabel(`Ouvrir un autre (${getTotalAvailableBoosters(u)})`)
+                .setCustomId(`tcg:open:${session.userId}${hubSuffix}`)
+                .setLabel(`Ouvrir un autre (${totalAvail})`)
                 .setEmoji('🎁')
                 .setStyle(ButtonStyle.Success)
         );
     }
 
+    if (session.fromHub) {
+        row1.addComponents(buildAccueilButton(session.userId));
+    }
+
+    const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tcg:notif:here:${session.userId}`)
+            .setLabel('Me prévenir ici')
+            .setEmoji('🔔')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(!nextTs || hasNotif),
+        new ButtonBuilder()
+            .setCustomId(`tcg:notif:dm:${session.userId}`)
+            .setLabel('Me prévenir en MP')
+            .setEmoji('📩')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(!nextTs || hasNotif)
+    );
+
     return {
         embeds: [embed],
-        components: [row],
+        components: [row1, row2],
         files: [new AttachmentBuilder(buffer, { name: 'recap_booster.png' })]
     };
 }
 
-async function startBoosterOpening(targetResponder, member, client) {
+async function startBoosterOpening(targetResponder, member, client, fromHub = false) {
     const userId = member.id;
     if (cardCatalog.length === 0) {
         const msg = "❌ Les cartes Set 1 ne sont pas encore chargées.";
         return targetResponder.replied || targetResponder.deferred
             ? targetResponder.followUp({ content: msg, ephemeral: true })
-            : targetResponder.reply(msg);
+            : replySilent(targetResponder, msg);
     }
 
     if (boostersEnCours.has(userId)) {
         const msg = "⏳ Tu as déjà une ouverture de booster en cours ! Attends la fin de l'animation.";
         return targetResponder.isRepliable?.()
             ? targetResponder.reply({ content: msg, ephemeral: true })
-            : targetResponder.reply(msg);
+            : replySilent(targetResponder, msg);
     }
 
     const u = getOrCreateTcgUser(userId);
     const totalAvail = getTotalAvailableBoosters(u);
     if (totalAvail <= 0) {
-        const payload = buildOpenPromptPayload(member, u);
+        const payload = buildOpenPromptPayload(member, u, fromHub);
+        if (fromHub && targetResponder.isButton?.()) {
+            await targetResponder.deferUpdate();
+            return targetResponder.editReply({ content: null, ...payload, attachments: [] });
+        }
         return targetResponder.isRepliable?.()
             ? targetResponder.reply({ ...payload, ephemeral: true })
-            : targetResponder.reply(payload);
+            : replySilent(targetResponder, payload);
     }
 
     boostersEnCours.add(userId);
@@ -1616,15 +1901,23 @@ async function startBoosterOpening(targetResponder, member, client) {
         }
 
         let sentMsg;
-        if (targetResponder.isRepliable?.()) {
+        if (fromHub && targetResponder.isButton?.()) {
+            await targetResponder.deferUpdate();
+            sentMsg = await targetResponder.editReply({
+                content: null,
+                embeds: [gifEmbed],
+                components: [],
+                files,
+                attachments: []
+            });
+        } else if (targetResponder.isRepliable?.()) {
             if (targetResponder.deferred || targetResponder.replied) {
-                sentMsg = await targetResponder.followUp({ embeds: [gifEmbed], files, fetchReply: true });
+                sentMsg = await targetResponder.followUp(withSilent({ embeds: [gifEmbed], files, fetchReply: true }));
             } else {
-                const resp = await targetResponder.reply({ embeds: [gifEmbed], files, fetchReply: true });
-                sentMsg = resp;
+                sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], files, fetchReply: true }));
             }
         } else {
-            sentMsg = await targetResponder.reply({ embeds: [gifEmbed], files });
+            sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], files }));
         }
 
         const session = {
@@ -1636,6 +1929,7 @@ async function startBoosterOpening(targetResponder, member, client) {
             pityUsed: draw.pityUsed,
             halfCdUsed,
             triggeredNextPity: draw.triggeredNextPity,
+            fromHub: Boolean(fromHub),
             step: 0
         };
         boosterSessions.set(sentMsg.id, session);
@@ -1644,7 +1938,7 @@ async function startBoosterOpening(targetResponder, member, client) {
             boostersEnCours.delete(userId);
             try {
                 const firstPayload = buildBoosterCardEmbed(member, session, 0);
-                await sentMsg.edit(firstPayload);
+                await sentMsg.edit({ ...firstPayload, attachments: [] });
             } catch {}
         }, BOOSTER_GIF_DELAY_MS);
     } catch (err) {
@@ -1658,10 +1952,11 @@ async function startBoosterOpening(targetResponder, member, client) {
 // ==========================================
 
 function buildBinderComponents(ownerId, viewerId, options, totalPages) {
-    const { category, perPageMode, page, sortMode } = options;
+    const { category, perPageMode, page, sortMode, fromHub = false } = options;
+    const hubFlag = fromHub ? '1' : '0';
 
     const catMenu = new StringSelectMenuBuilder()
-        .setCustomId(`tcg:bcat:${ownerId}:${viewerId}:${perPageMode}:${sortMode}`)
+        .setCustomId(`tcg:bcat:${ownerId}:${viewerId}:${perPageMode}:${sortMode}:${hubFlag}`)
         .setPlaceholder('Choisir un classeur...')
         .addOptions([
             { label: 'Complet Set 1 (109 cartes)', value: 'complet', emoji: '📚', default: category === 'complet' },
@@ -1671,7 +1966,7 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages) {
         ]);
 
     const perPageMenu = new StringSelectMenuBuilder()
-        .setCustomId(`tcg:bsize:${ownerId}:${viewerId}:${category}:${sortMode}`)
+        .setCustomId(`tcg:bsize:${ownerId}:${viewerId}:${category}:${sortMode}:${hubFlag}`)
         .setPlaceholder('Cartes par page...')
         .addOptions([
             { label: '9 cartes par page (3×3)', value: '9', default: perPageMode === '9' },
@@ -1682,28 +1977,32 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages) {
 
     const btnRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`tcg:bnav:prev:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}`)
+            .setCustomId(`tcg:bnav:prev:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}`)
             .setLabel('Précédent')
             .setEmoji('◀️')
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(page <= 0),
         new ButtonBuilder()
-            .setCustomId(`tcg:bnav:next:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}`)
+            .setCustomId(`tcg:bnav:next:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}`)
             .setLabel('Suivant')
             .setEmoji('▶️')
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(page >= totalPages - 1),
         new ButtonBuilder()
-            .setCustomId(`tcg:bsort:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode === 'number' ? 'rarity' : 'number'}`)
+            .setCustomId(`tcg:bsort:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode === 'number' ? 'rarity' : 'number'}:${hubFlag}`)
             .setLabel(sortMode === 'number' ? 'Tri : Rareté' : 'Tri : Numéro')
             .setEmoji('🔀')
             .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
-            .setCustomId(`tcg:btheme:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}`)
+            .setCustomId(`tcg:btheme:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}`)
             .setLabel('Thème B/W')
             .setEmoji('🌗')
             .setStyle(ButtonStyle.Secondary)
     );
+
+    if (fromHub && ownerId === viewerId) {
+        btnRow.addComponents(buildAccueilButton(viewerId));
+    }
 
     return [
         new ActionRowBuilder().addComponents(catMenu),
@@ -1719,7 +2018,8 @@ async function buildBinderReplyPayload(ownerMember, viewerId, options = {}) {
         category: options.category || 'complet',
         perPageMode: options.perPageMode || '18',
         page: options.page || 0,
-        sortMode: options.sortMode || 'number'
+        sortMode: options.sortMode || 'number',
+        fromHub: Boolean(options.fromHub)
     };
 
     const rendered = await renderBinderCanvas(ownerMember, u, opts);
@@ -1741,16 +2041,17 @@ async function buildBinderReplyPayload(ownerMember, viewerId, options = {}) {
     };
 }
 
-function buildSingleCardPayload(card, viewerId, targetMember = null) {
+function buildSingleCardPayload(card, viewerId) {
     const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
     const u = getOrCreateTcgUser(viewerId);
     const qty = u.cards?.[card.id] || 0;
 
+    // Anti-spoiler : n'afficher la version alternative que si le joueur la possède déjà !
     let extraLines = '';
-    if (card.holoCounterpartId) {
-        extraLines += `\n✨ **Version Holo :** \`${card.holoCounterpartId}\``;
-    } else if (card.baseCounterpartId) {
-        extraLines += `\n🃏 **Version Classique :** \`${card.baseCounterpartId}\``;
+    if (card.holoCounterpartId && (u.cards?.[card.holoCounterpartId] || 0) > 0) {
+        extraLines += `\n✨ **Version Holo :** \`${card.holoCounterpartId}\` *(x${u.cards[card.holoCounterpartId]})*`;
+    } else if (card.baseCounterpartId && (u.cards?.[card.baseCounterpartId] || 0) > 0) {
+        extraLines += `\n🃏 **Version Classique :** \`${card.baseCounterpartId}\` *(x${u.cards[card.baseCounterpartId]})*`;
     }
 
     const embed = new EmbedBuilder()
@@ -1783,15 +2084,16 @@ async function handleCarteCommand(targetResponder, authorMember, rawArg, channel
             .setColor(0x3498db)
             .setTitle('🔎 Rechercher une carte RegaDex (`!carte`)')
             .setDescription(
-                `Pour afficher une carte précise, tape :\n` +
+                `Pour afficher une carte **que tu possèdes**, tape :\n` +
                 `• \`!carte [N° Set]-[N° Carte]\` *(ex : \`!carte 1-84\`, \`!carte 1-Ø1\`)*\n` +
                 `• \`!carte [Nom]\` *(ex : \`!carte Tasty Crousty\`, \`!carte Epsys\`)*\n\n` +
+                `🔒 *Pour garder la surprise intacte, les cartes non découvertes restent verrouillées.*\n` +
                 `Tu peux aussi ouvrir rapidement un classeur ci-dessous 👇`
             );
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId(`tcg:binder:open:${authorMember.id}:${authorMember.id}`)
+                .setCustomId(`tcg:binder:open:${authorMember.id}:${authorMember.id}:0`)
                 .setLabel('Afficher mon classeur')
                 .setEmoji('📖')
                 .setStyle(ButtonStyle.Primary)
@@ -1806,41 +2108,65 @@ async function handleCarteCommand(targetResponder, authorMember, rawArg, channel
                     .setEmoji('🤝')
                     .setStyle(ButtonStyle.Secondary)
             );
-        } else {
-            const userRow = new ActionRowBuilder().addComponents(
-                new UserSelectMenuBuilder()
-                    .setCustomId(`tcg:binder:pickuser:${authorMember.id}`)
-                    .setPlaceholder('Consulter le classeur d\'un autre membre...')
-            );
-            return targetResponder.reply({ embeds: [embed], components: [row, userRow] });
+            return replySilent(targetResponder, { embeds: [embed], components: [row] });
         }
 
-        return targetResponder.reply({ embeds: [embed], components: [row] });
+        const userRow = new ActionRowBuilder().addComponents(
+            new UserSelectMenuBuilder()
+                .setCustomId(`tcg:binder:pickuser:${authorMember.id}`)
+                .setPlaceholder('Consulter le classeur d\'un autre membre...')
+        );
+        return replySilent(targetResponder, { embeds: [embed], components: [row, userRow] });
     }
 
+    const u = getOrCreateTcgUser(authorMember.id);
     const res = resolveCardQuery(query);
+
+    // 1. Correspondance unique : vérifier la possession avant tout affichage (zéro spoiler)
     if (res.card) {
+        if ((u.cards?.[res.card.id] || 0) <= 0) {
+            return replySilent(
+                targetResponder,
+                `🔒 Tu n'as pas encore découvert cette carte dans ton RegaDex ! La surprise reste totale 🤫`
+            );
+        }
         const payload = buildSingleCardPayload(res.card, authorMember.id);
-        return targetResponder.reply(payload);
+        return replySilent(targetResponder, payload);
     }
 
+    // 2. Correspondances multiples : ne proposer QUE les cartes possédées
     if (res.matches.length > 1) {
-        const opts = res.matches.slice(0, 25).map(c => ({
+        const ownedMatches = res.matches.filter(c => (u.cards?.[c.id] || 0) > 0);
+        if (ownedMatches.length === 0) {
+            return replySilent(
+                targetResponder,
+                `🔒 Tu ne possèdes aucune carte correspondant à cette recherche dans ton RegaDex !`
+            );
+        }
+        if (ownedMatches.length === 1) {
+            const payload = buildSingleCardPayload(ownedMatches[0], authorMember.id);
+            return replySilent(targetResponder, payload);
+        }
+
+        const opts = ownedMatches.slice(0, 25).map(c => ({
             label: `${c.id} • ${c.name}`.slice(0, 100),
-            description: `${c.category} • ${c.rarity}`,
+            description: `${c.category} • ${c.rarity} • x${u.cards[c.id]}`,
             value: c.id
         }));
         const menu = new StringSelectMenuBuilder()
             .setCustomId(`tcg:cartesel:${authorMember.id}`)
-            .setPlaceholder('Plusieurs cartes correspondent, choisis...')
+            .setPlaceholder('Plusieurs cartes possédées correspondent, choisis...')
             .addOptions(opts);
-        return targetResponder.reply({
-            content: `🔎 **${res.matches.length}** cartes correspondent à \`${query}\` :`,
+        return replySilent(targetResponder, {
+            content: `🔎 **${ownedMatches.length}** carte(s) possédée(s) correspondent à \`${query}\` :`,
             components: [new ActionRowBuilder().addComponents(menu)]
         });
     }
 
-    return targetResponder.reply(`❌ Aucune carte trouvée pour \`${query}\`. Tape \`!carte\` pour voir les formats.`);
+    return replySilent(
+        targetResponder,
+        `🔒 Aucune carte découverte dans ton RegaDex ne correspond à \`${query}\`. Tape \`!carte\` pour voir les formats.`
+    );
 }
 
 async function handleFlexCommand(targetResponder, authorMember, guild, rawArg) {
@@ -1858,7 +2184,7 @@ async function handleFlexCommand(targetResponder, authorMember, guild, rawArg) {
             if (res.matches.length > 1) {
                 const ownedMatches = res.matches.filter(c => (authorU.cards?.[c.id] || 0) > 0);
                 if (ownedMatches.length === 0) {
-                    return targetResponder.reply("❌ Tu ne possèdes aucune des cartes correspondant à cette recherche.");
+                    return replySilent(targetResponder, "❌ Tu ne possèdes aucune des cartes correspondant à cette recherche.");
                 }
                 const menu = new StringSelectMenuBuilder()
                     .setCustomId(`tcg:flexset:${authorMember.id}`)
@@ -1868,21 +2194,21 @@ async function handleFlexCommand(targetResponder, authorMember, guild, rawArg) {
                         description: `${c.rarity} • Possédée x${authorU.cards[c.id]}`,
                         value: c.id
                     })));
-                return targetResponder.reply({
+                return replySilent(targetResponder, {
                     content: '✨ Choisis la carte à définir en préférée :',
                     components: [new ActionRowBuilder().addComponents(menu)]
                 });
             }
-            return targetResponder.reply(`❌ Carte introuvable pour \`${cardQuery}\`.`);
+            return replySilent(targetResponder, `❌ Carte introuvable pour \`${cardQuery}\`.`);
         }
 
         if ((authorU.cards?.[res.card.id] || 0) <= 0) {
-            return targetResponder.reply(`❌ Tu dois posséder **${res.card.id} • ${res.card.name}** pour la mettre en carte préférée !`);
+            return replySilent(targetResponder, "❌ Tu dois d'abord posséder cette carte pour la mettre en carte préférée !");
         }
 
         authorU.favoriteCardId = res.card.id;
         tcgBridge.demanderSauvegarde();
-        return targetResponder.reply(`⭐ Ta carte préférée est maintenant **${res.card.id} • ${res.card.name}** !`);
+        return replySilent(targetResponder, `⭐ Ta carte préférée est maintenant **${res.card.id} • ${res.card.name}** !`);
     }
 
     // 2. Flex d'un autre membre : !tcg flex <ID / @ / pseudo>
@@ -1892,7 +2218,7 @@ async function handleFlexCommand(targetResponder, authorMember, guild, rawArg) {
             const tu = getOrCreateTcgUser(targetMember.id);
             const fav = tu.favoriteCardId ? cardById.get(tu.favoriteCardId) : null;
             if (!fav || (tu.cards?.[fav.id] || 0) <= 0) {
-                return targetResponder.reply(`❌ **${targetMember.displayName || targetMember.username}** n'a pas encore défini de carte préférée.`);
+                return replySilent(targetResponder, `❌ **${targetMember.displayName || targetMember.username}** n'a pas encore défini de carte préférée.`);
             }
             const meta = RARITY_META[fav.rarity] || RARITY_META['Commune'];
             const embed = new EmbedBuilder()
@@ -1904,11 +2230,10 @@ async function handleFlexCommand(targetResponder, authorMember, guild, rawArg) {
             const files = fav.filePath && fs.existsSync(fav.filePath)
                 ? [new AttachmentBuilder(fav.filePath, { name: 'flex_card.png' })]
                 : [];
-            return targetResponder.reply({ embeds: [embed], files });
+            return replySilent(targetResponder, { embeds: [embed], files });
         };
 
         if (targetResponder.isRepliable?.()) {
-            // Slash option résolue ailleurs
             return showMemberFlex(arg);
         }
         return resolveMemberArg(targetResponder, arg, showMemberFlex);
@@ -1925,23 +2250,22 @@ async function handleFlexCommand(targetResponder, authorMember, guild, rawArg) {
     const meta = RARITY_META[fav.rarity] || RARITY_META['Commune'];
     const embed = new EmbedBuilder()
         .setColor(meta.color)
-        .setAuthor({ name: `${authorMember.displayName} flex sa carte !`, iconURL: authorMember.displayAvatarURL({ dynamic: true }) })
+        .setAuthor({ name: `${authorMember.displayName} flex sa carte préférée !`, iconURL: authorMember.displayAvatarURL({ dynamic: true }) })
         .setTitle(`⭐ ${fav.id} — ${fav.name}`)
-        .setDescription(`${meta.emoji} **Rareté :** ${fav.rarity}\n📦 **Exemplaires possédés :** \`x${authorU.cards[fav.id]}\``)
         .setImage('attachment://flex_card.png')
         .setFooter({ text: 'Modifie avec !tcg flex modify [carte]' });
 
     const files = fav.filePath && fs.existsSync(fav.filePath)
         ? [new AttachmentBuilder(fav.filePath, { name: 'flex_card.png' })]
         : [];
-    return targetResponder.reply({ embeds: [embed], files });
+    return replySilent(targetResponder, { embeds: [embed], files });
 }
 
 function sendFlexPicker(targetResponder, member, page = 0) {
     const u = getOrCreateTcgUser(member.id);
     const owned = cardCatalog.filter(c => (u.cards?.[c.id] || 0) > 0);
     if (owned.length === 0) {
-        return targetResponder.reply("❌ Tu n'as pas encore de carte ! Ouvre d'abord un booster dans <#1572007962199851059>.");
+        return replySilent(targetResponder, "❌ Tu n'as pas encore de carte ! Ouvre d'abord un booster dans <#1572007962199851059>.");
     }
 
     const perPage = 25;
@@ -1978,13 +2302,14 @@ function sendFlexPicker(targetResponder, member, page = 0) {
 
     const content = '⭐ **Choisis ta carte préférée parmi ta collection :**';
     if (targetResponder.isButton?.() || targetResponder.isStringSelectMenu?.()) {
-        return targetResponder.update({ content, embeds: [], components: rows });
+        return targetResponder.update({ content, embeds: [], components: rows, files: [], attachments: [] });
     }
-    return targetResponder.reply({ content, components: rows });
+    return replySilent(targetResponder, { content, components: rows });
 }
 
-function sendHoloTransformPicker(targetResponder, member, page = 0) {
+function sendHoloTransformPicker(targetResponder, member, page = 0, fromHub = false) {
     const u = getOrCreateTcgUser(member.id);
+    const hubFlag = fromHub ? '1' : '0';
     const compatible = cardCatalog.filter(c =>
         !c.isHolo &&
         c.holoCounterpartId &&
@@ -1995,7 +2320,7 @@ function sendHoloTransformPicker(targetResponder, member, page = 0) {
         const msg = "❌ Tu ne possèdes actuellement aucune carte compatible pouvant être transformée en version Holographique.";
         return targetResponder.isRepliable?.()
             ? targetResponder.reply({ content: msg, ephemeral: true })
-            : targetResponder.reply(msg);
+            : replySilent(targetResponder, msg);
     }
 
     const perPage = 25;
@@ -2004,7 +2329,7 @@ function sendHoloTransformPicker(targetResponder, member, page = 0) {
     const slice = compatible.slice(safePage * perPage, (safePage + 1) * perPage);
 
     const menu = new StringSelectMenuBuilder()
-        .setCustomId(`tcg:holopick:${member.id}`)
+        .setCustomId(`tcg:holopick:${member.id}:${hubFlag}`)
         .setPlaceholder(`Choisis la carte à transformer (Page ${safePage + 1}/${totalPages})...`)
         .addOptions(slice.map(c => {
             const holo = cardById.get(c.holoCounterpartId);
@@ -2016,37 +2341,53 @@ function sendHoloTransformPicker(targetResponder, member, page = 0) {
         }));
 
     const rows = [new ActionRowBuilder().addComponents(menu)];
-    if (totalPages > 1) {
-        rows.push(new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`tcg:holopage:${member.id}:${safePage - 1}`)
-                .setLabel('Précédent')
-                .setEmoji('◀️')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(safePage <= 0),
-            new ButtonBuilder()
-                .setCustomId(`tcg:holopage:${member.id}:${safePage + 1}`)
-                .setLabel('Suivant')
-                .setEmoji('▶️')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(safePage >= totalPages - 1)
-        ));
+    if (totalPages > 1 || fromHub) {
+        const btnRow = new ActionRowBuilder();
+        if (totalPages > 1) {
+            btnRow.addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`tcg:holopage:${member.id}:${safePage - 1}:${hubFlag}`)
+                    .setLabel('Précédent')
+                    .setEmoji('◀️')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(safePage <= 0),
+                new ButtonBuilder()
+                    .setCustomId(`tcg:holopage:${member.id}:${safePage + 1}:${hubFlag}`)
+                    .setLabel('Suivant')
+                    .setEmoji('▶️')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(safePage >= totalPages - 1)
+            );
+        }
+        if (fromHub) {
+            btnRow.addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`tcg:claim:open:${member.id}:1`)
+                    .setLabel('Inventaire')
+                    .setEmoji('🎒')
+                    .setStyle(ButtonStyle.Secondary),
+                buildAccueilButton(member.id)
+            );
+        }
+        rows.push(btnRow);
     }
 
     const payload = {
         content: '✨ **Transformation Holographique :** Choisis la carte à convertir *(consomme 1 copie normale → +1 version Holo)* :',
         embeds: [],
-        components: rows
+        components: rows,
+        files: [],
+        attachments: []
     };
     if (targetResponder.isButton?.()) return targetResponder.update(payload);
-    return targetResponder.reply(payload);
+    return replySilent(targetResponder, payload);
 }
 
 // ==========================================
 //   SYSTÈME D'ÉCHANGE (!TRADE & THREADS)
 // ==========================================
 
-function buildTradeConfirmPayload(confirmId, conf, initiatorMember, targetMember) {
+function buildTradeConfirmPayload(confirmId, conf) {
     const embed = new EmbedBuilder()
         .setColor(0x3498db)
         .setTitle('🔄 Proposition d\'échange RegaDex')
@@ -2109,7 +2450,7 @@ async function initiateTradePrompt(targetResponder, initiatorMember, targetMembe
                 .setCustomId(`tcg:tradepick:${initiatorMember.id}`)
                 .setPlaceholder('Sélectionner un.e Collectionneur.euse...')
         );
-        return targetResponder.reply({ embeds: [embed], components: [row] });
+        return replySilent(targetResponder, { embeds: [embed], components: [row] });
     }
 
     if (targetMember.user?.bot || targetMember.bot) {
@@ -2134,8 +2475,8 @@ async function initiateTradePrompt(targetResponder, initiatorMember, targetMembe
     pendingConfirms.set(confirmId, conf);
     setTimeout(() => pendingConfirms.delete(confirmId), 15 * 60 * 1000);
 
-    const payload = buildTradeConfirmPayload(confirmId, conf, initiatorMember, targetMember);
-    return targetResponder.reply(payload);
+    const payload = buildTradeConfirmPayload(confirmId, conf);
+    return replySilent(targetResponder, payload);
 }
 
 function formatOfferLines(offerIds) {
@@ -2263,7 +2604,7 @@ async function executeTradeIfBothLocked(thread, trade, client) {
         trade.lockedOffers[idA] = false;
         trade.lockedOffers[idB] = false;
         await refreshTradePanel(thread, trade);
-        await thread.send("⚠️ Impossible de valider un échange vide !").catch(() => {});
+        await sendSilent(thread, "⚠️ Impossible de valider un échange vide !").catch(() => {});
         return false;
     }
 
@@ -2283,7 +2624,7 @@ async function executeTradeIfBothLocked(thread, trade, client) {
             trade.lockedOffers[idA] = false;
             trade.lockedOffers[idB] = false;
             await refreshTradePanel(thread, trade);
-            await thread.send(`❌ <@${idA}> n'a plus assez de doublons pour \`${cid}\`. Validation annulée.`).catch(() => {});
+            await sendSilent(thread, `❌ <@${idA}> n'a plus assez de doublons pour \`${cid}\`. Validation annulée.`).catch(() => {});
             return false;
         }
     }
@@ -2292,7 +2633,7 @@ async function executeTradeIfBothLocked(thread, trade, client) {
             trade.lockedOffers[idA] = false;
             trade.lockedOffers[idB] = false;
             await refreshTradePanel(thread, trade);
-            await thread.send(`❌ <@${idB}> n'a plus assez de doublons pour \`${cid}\`. Validation annulée.`).catch(() => {});
+            await sendSilent(thread, `❌ <@${idB}> n'a plus assez de doublons pour \`${cid}\`. Validation annulée.`).catch(() => {});
             return false;
         }
     }
@@ -2336,7 +2677,7 @@ async function executeTradeIfBothLocked(thread, trade, client) {
         .setImage('attachment://trade_recap.png')
         .setFooter({ text: `Effectué le ${dateStr}` });
 
-    await thread.send({
+    await sendSilent(thread, {
         embeds: [recapEmbed],
         files: [new AttachmentBuilder(recapBuffer, { name: 'trade_recap.png' })]
     }).catch(() => {});
@@ -2357,7 +2698,7 @@ async function executeTradeIfBothLocked(thread, trade, client) {
             .setImage('attachment://trade_recap_log.png')
             .setTimestamp();
 
-        await logChan.send({
+        await sendSilent(logChan, {
             embeds: [logEmbed],
             files: [new AttachmentBuilder(recapBuffer, { name: 'trade_recap_log.png' })]
         }).catch(() => {});
@@ -2374,7 +2715,7 @@ async function executeTradeIfBothLocked(thread, trade, client) {
         trade.statusMessageId = null;
     }
 
-    await thread.send(buildPostTradeDecisionPayload(trade)).catch(() => {});
+    await sendSilent(thread, buildPostTradeDecisionPayload(trade)).catch(() => {});
     return true;
 }
 
@@ -2386,7 +2727,6 @@ async function handleTcgTradeThreadMessage(message) {
 
     trade.lastActivityAt = Date.now();
 
-    // Si le thread n'autorise pas tout le monde à parler, on supprime les messages de tiers
     if (!trade.isPublic || !trade.canEveryoneTalk) {
         const uid = message.author.id;
         const isTrader = uid === trade.initiatorId || uid === trade.targetId;
@@ -2439,7 +2779,7 @@ async function handleAdminTcgCommand(message, lowerContent) {
         }
         const memberQuery = tokens.join(' ');
         if (!memberQuery && message.mentions.users.size === 0) {
-            await message.reply("Usage : `!boostergive [@membre/ID] [quantité]`");
+            await replySilent(message, "Usage : `!boostergive [@membre/ID] [quantité]`");
             return true;
         }
         await resolveMemberArg(message, memberQuery, async (target) => {
@@ -2447,7 +2787,7 @@ async function handleAdminTcgCommand(message, lowerContent) {
             const u = getOrCreateTcgUser(target.id);
             u.inventory.booster = (u.inventory.booster || 0) + Math.max(1, qty);
             tcgBridge.demanderSauvegarde();
-            await message.reply(`🎁 **+${Math.max(1, qty)} booster(s)** ajouté(s) à l'inventaire de <@${target.id}> *(Total inventaire : ${u.inventory.booster})*.`);
+            await replySilent(message, `🎁 **+${Math.max(1, qty)} booster(s)** ajouté(s) à l'inventaire de <@${target.id}> *(Total inventaire : ${u.inventory.booster})*.`);
         });
         return true;
     }
@@ -2464,11 +2804,11 @@ async function handleAdminTcgCommand(message, lowerContent) {
         }
         const memberQuery = tokens.join(' ');
         await resolveMemberArg(message, memberQuery, async (target) => {
-            if (!target) return message.reply("Usage : `!boosterremove [@membre/ID] [quantité]`");
+            if (!target) return replySilent(message, "Usage : `!boosterremove [@membre/ID] [quantité]`");
             const u = getOrCreateTcgUser(target.id);
             u.inventory.booster = Math.max(0, (u.inventory.booster || 0) - Math.max(1, qty));
             tcgBridge.demanderSauvegarde();
-            await message.reply(`🗑️ **-${Math.max(1, qty)} booster(s)** retiré(s) de l'inventaire de <@${target.id}> *(Reste inventaire : ${u.inventory.booster})*.`);
+            await replySilent(message, `🗑️ **-${Math.max(1, qty)} booster(s)** retiré(s) de l'inventaire de <@${target.id}> *(Reste inventaire : ${u.inventory.booster})*.`);
         });
         return true;
     }
@@ -2484,7 +2824,7 @@ async function handleAdminTcgCommand(message, lowerContent) {
         const amount = parseInt(amountStr, 10);
         const memberQuery = tokens.join(' ');
         if (isNaN(amount)) {
-            await message.reply(`Usage : \`!rgdxpts ${action} [@membre/ID] [nombre]\``);
+            await replySilent(message, `Usage : \`!rgdxpts ${action} [@membre/ID] [nombre]\``);
             return true;
         }
         await resolveMemberArg(message, memberQuery, async (target) => {
@@ -2493,7 +2833,7 @@ async function handleAdminTcgCommand(message, lowerContent) {
             if (action === 'give') u.points = Math.max(0, u.points + amount);
             else u.points = Math.max(0, amount);
             tcgBridge.demanderSauvegarde();
-            await message.reply(`🪙 Points RegaDex de <@${target.id}> : **${u.points} pts**.`);
+            await replySilent(message, `🪙 Points RegaDex de <@${target.id}> : **${u.points} pts**.`);
         });
         return true;
     }
@@ -2506,14 +2846,14 @@ async function handleAdminTcgCommand(message, lowerContent) {
         const rawArgs = message.content.trim().replace(/^!(?:rgdx|tcg|regadex)\s*card\s*(?:give|remove)\s*/i, '').trim();
         const tokens = rawArgs.split(/\s+/).filter(Boolean);
         if (tokens.length < 2) {
-            await message.reply(`Usage : \`!rgdxcard ${action} [@membre/ID] [carte]\``);
+            await replySilent(message, `Usage : \`!rgdxcard ${action} [@membre/ID] [carte]\``);
             return true;
         }
         const memberToken = tokens.shift();
         const cardQuery = tokens.join(' ');
         const res = resolveCardQuery(cardQuery);
         if (!res.card) {
-            await message.reply(`❌ Carte introuvable pour \`${cardQuery}\`.`);
+            await replySilent(message, `❌ Carte introuvable pour \`${cardQuery}\`.`);
             return true;
         }
         await resolveMemberArg(message, memberToken, async (target) => {
@@ -2526,7 +2866,7 @@ async function handleAdminTcgCommand(message, lowerContent) {
                 if (u.cards[res.card.id] === 0) delete u.cards[res.card.id];
             }
             tcgBridge.demanderSauvegarde();
-            await message.reply(`🃏 **${res.card.id} • ${res.card.name}** ${action === 'give' ? 'ajoutée à' : 'retirée de'} <@${target.id}> *(Quantité : ${u.cards[res.card.id] || 0})*.`);
+            await replySilent(message, `🃏 **${res.card.id} • ${res.card.name}** ${action === 'give' ? 'ajoutée à' : 'retirée de'} <@${target.id}> *(Quantité : ${u.cards[res.card.id] || 0})*.`);
         });
         return true;
     }
@@ -2541,7 +2881,7 @@ async function handleAdminTcgCommand(message, lowerContent) {
             u.freeBoosters = MAX_FREE_BOOSTERS;
             u.lastFreeRechargeAt = Date.now();
             tcgBridge.demanderSauvegarde();
-            await message.reply(`⏱️ Cooldown booster RegaDex réinitialisé pour <@${message.author.id}> (**2/2 gratuits** prêts) !`);
+            await replySilent(message, `⏱️ Cooldown booster RegaDex réinitialisé pour <@${message.author.id}> (**2/2 gratuits** prêts) !`);
             return true;
         }
         await resolveMemberArg(message, memberQuery, async (target) => {
@@ -2550,7 +2890,7 @@ async function handleAdminTcgCommand(message, lowerContent) {
             u.freeBoosters = MAX_FREE_BOOSTERS;
             u.lastFreeRechargeAt = Date.now();
             tcgBridge.demanderSauvegarde();
-            await message.reply(`⏱️ Cooldown booster RegaDex réinitialisé pour <@${target.id}> (**2/2 gratuits** prêts) !`);
+            await replySilent(message, `⏱️ Cooldown booster RegaDex réinitialisé pour <@${target.id}> (**2/2 gratuits** prêts) !`);
         });
         return true;
     }
@@ -2566,8 +2906,7 @@ function parseTcgCommand(content) {
     const trimmed = (content || '').trim();
     if (!trimmed.startsWith('!')) return null;
 
-    // 1. !regadex / !rgdx / !tcg (+ sous-commande collée ou espacée)
-    let m = trimmed.match(/^!(?:regadex|rgdx|tcg)\s*(flexmodify|flex|open|store|claim|classeur|collection|carte|trade|top|notif)?(?:\s+(.*))?$/i);
+    let m = trimmed.match(/^!(?:regadex|rgdx|tcg)\s*(flexmodify|flex|open|store|claim|classeur|collection|carte|trade|top|notif|credits)?(?:\s+(.*))?$/i);
     if (m) {
         let sub = (m[1] || 'hub').toLowerCase();
         let rest = (m[2] || '').trim();
@@ -2579,7 +2918,6 @@ function parseTcgCommand(content) {
         return { sub, rest };
     }
 
-    // 2. Raccourcis autonomes (!booster, !open, !classeur, !collection, !carte, !trade)
     m = trimmed.match(/^!(boosteropen|openbooster|booster|open)(?:\s+(.*))?$/i);
     if (m) {
         const cmd = m[1].toLowerCase();
@@ -2600,84 +2938,73 @@ function parseTcgCommand(content) {
     return null;
 }
 
-async function handleTcgMessage(message, helpers = {}) {
+async function handleTcgMessage(message) {
     if (!message.guild || message.guild.id !== GUILD_ID) return false;
     const raw = message.content.trim();
     if (!raw.startsWith('!')) return false;
 
-    // Commandes Admin Epsys-only (avec ou sans espace)
     if (await handleAdminTcgCommand(message, raw.toLowerCase())) return true;
 
     const parsed = parseTcgCommand(raw);
     if (!parsed) return false;
 
-    // Vérification du rôle Collectionneur.euse
     if (!hasTcgRole(message.member)) {
-        await message.reply(`🔒 Le **RegaDex TCG** est réservé aux membres ayant le rôle <@&${TCG_ROLE_ID}> !`).catch(() => {});
+        await replySilent(message, `🔒 Le **RegaDex TCG** est réservé aux membres ayant le rôle <@&${TCG_ROLE_ID}> !`).catch(() => {});
         return true;
     }
 
-    // Vérification du salon (tout sauf flex est restreint au salon TCG ou crash-test)
     if (parsed.sub !== 'flex' && !isAllowedTcgChannel(message.channel)) {
-        await message.reply(`🃏 Pour jouer au **RegaDex**, rendez-vous dans <#${TCG_CHANNEL_ID}> ! *(Seule la commande \`!tcg flex\` / \`!regadex flex\` est autorisée partout.)*`).catch(() => {});
+        await replySilent(
+            message,
+            `🃏 Pour jouer au **RegaDex**, rendez-vous dans <#${TCG_CHANNEL_ID}> ! *(Seule la commande \`!tcg flex\` / \`!regadex flex\` est autorisée partout.)*`
+        ).catch(() => {});
         return true;
     }
 
     const u = getOrCreateTcgUser(message.author.id);
 
     if (parsed.sub === 'hub') {
-        await message.reply({
-            embeds: [buildHubEmbed(message.member, u)],
-            components: buildHubComponents(message.author.id, u)
-        });
+        await replySilent(message, buildHubPayload(message.member, u));
+        return true;
+    }
+
+    if (parsed.sub === 'credits') {
+        await replySilent(message, buildCreditsPayload(message.author.id, false));
         return true;
     }
 
     if (parsed.sub === 'open') {
-        await message.reply(buildOpenPromptPayload(message.member, u));
+        await replySilent(message, buildOpenPromptPayload(message.member, u, false));
         return true;
     }
 
     if (parsed.sub === 'store') {
-        await message.reply(buildStorePayload(message.member, u));
+        await replySilent(message, buildStorePayload(message.member, u, false));
         return true;
     }
 
     if (parsed.sub === 'claim') {
-        await message.reply(buildClaimPayload(message.member, u));
+        await replySilent(message, buildClaimPayload(message.member, u, false));
         return true;
     }
 
     if (parsed.sub === 'top') {
-        await message.reply({
+        await replySilent(message, {
             embeds: [buildTopEmbed(message.guild, 'total')],
-            components: buildTopComponents(message.author.id, 'total')
+            components: buildTopComponents(message.author.id, 'total', false)
         });
         return true;
     }
 
     if (parsed.sub === 'notif') {
-        const nextTs = getNextBoosterTimestamp(u);
-        if (!nextTs) {
-            await message.reply(`✅ Tu as déjà **${u.freeBoosters}/${MAX_FREE_BOOSTERS}** boosters gratuits prêts à être ouverts !`);
-            return true;
-        }
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`tcg:notif:here:${message.author.id}`).setLabel('Me prévenir ici').setEmoji('🔔').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`tcg:notif:dm:${message.author.id}`).setLabel('Me prévenir en MP').setEmoji('📩').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`tcg:notif:off:${message.author.id}`).setLabel('Désactiver').setEmoji('🔕').setStyle(ButtonStyle.Danger)
-        );
-        await message.reply({
-            content: `🔔 Prochain booster gratuit prêt <t:${Math.floor(nextTs / 1000)}:R>. Choisis ton mode d'alerte :`,
-            components: [row]
-        });
+        await replySilent(message, buildNotifMenuPayload(message.member, u, false));
         return true;
     }
 
     if (parsed.sub === 'classeur') {
         if (!parsed.rest) {
-            const sent = await message.reply('📖 Chargement de ton classeur RegaDex...');
-            const payload = await buildBinderReplyPayload(message.member, message.author.id);
+            const sent = await replySilent(message, '📖 Chargement de ton classeur RegaDex...');
+            const payload = await buildBinderReplyPayload(message.member, message.author.id, { fromHub: false });
             await sent.edit({ content: null, ...payload });
             return true;
         }
@@ -2685,8 +3012,8 @@ async function handleTcgMessage(message, helpers = {}) {
         await resolveMemberArg(message, parsed.rest, async (targetMember) => {
             if (!targetMember) return;
             if (targetMember.id === message.author.id) {
-                const sent = await message.reply('📖 Chargement de ton classeur RegaDex...');
-                const payload = await buildBinderReplyPayload(message.member, message.author.id);
+                const sent = await replySilent(message, '📖 Chargement de ton classeur RegaDex...');
+                const payload = await buildBinderReplyPayload(message.member, message.author.id, { fromHub: false });
                 await sent.edit({ content: null, ...payload });
                 return;
             }
@@ -2706,7 +3033,7 @@ async function handleTcgMessage(message, helpers = {}) {
                     .setEmoji('❌')
                     .setStyle(ButtonStyle.Danger)
             );
-            await message.reply({ content: `<@${targetMember.id}>`, embeds: [embed], components: [row] });
+            await replySilent(message, { content: `<@${targetMember.id}>`, embeds: [embed], components: [row] });
         });
         return true;
     }
@@ -2758,50 +3085,37 @@ async function handleTcgSlash(interaction) {
     const u = getOrCreateTcgUser(interaction.user.id);
 
     if (sub === 'hub') {
-        await interaction.reply({ embeds: [buildHubEmbed(member, u)], components: buildHubComponents(interaction.user.id, u) });
+        await replySilent(interaction, buildHubPayload(member, u));
         return true;
     }
     if (sub === 'open') {
-        await interaction.reply(buildOpenPromptPayload(member, u));
+        await replySilent(interaction, buildOpenPromptPayload(member, u, false));
         return true;
     }
     if (sub === 'store') {
-        await interaction.reply(buildStorePayload(member, u));
+        await replySilent(interaction, buildStorePayload(member, u, false));
         return true;
     }
     if (sub === 'claim') {
-        await interaction.reply(buildClaimPayload(member, u));
+        await replySilent(interaction, buildClaimPayload(member, u, false));
         return true;
     }
     if (sub === 'top') {
-        await interaction.reply({
+        await replySilent(interaction, {
             embeds: [buildTopEmbed(interaction.guild, 'total')],
-            components: buildTopComponents(interaction.user.id, 'total')
+            components: buildTopComponents(interaction.user.id, 'total', false)
         });
         return true;
     }
     if (sub === 'notif') {
-        const nextTs = getNextBoosterTimestamp(u);
-        if (!nextTs) {
-            await interaction.reply({ content: `✅ Tu as déjà **${u.freeBoosters}/${MAX_FREE_BOOSTERS}** boosters gratuits prêts !`, ephemeral: true });
-            return true;
-        }
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`tcg:notif:here:${interaction.user.id}`).setLabel('Me prévenir ici').setEmoji('🔔').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId(`tcg:notif:dm:${interaction.user.id}`).setLabel('Me prévenir en MP').setEmoji('📩').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`tcg:notif:off:${interaction.user.id}`).setLabel('Désactiver').setEmoji('🔕').setStyle(ButtonStyle.Danger)
-        );
-        await interaction.reply({
-            content: `🔔 Prochain booster gratuit prêt <t:${Math.floor(nextTs / 1000)}:R>. Choisis ton mode d'alerte :`,
-            components: [row]
-        });
+        await replySilent(interaction, buildNotifMenuPayload(member, u, false));
         return true;
     }
     if (sub === 'classeur') {
         const cible = interaction.options.getMember('membre');
         if (!cible || cible.id === interaction.user.id) {
-            await interaction.deferReply();
-            const payload = await buildBinderReplyPayload(member, interaction.user.id);
+            await deferReplySilent(interaction);
+            const payload = await buildBinderReplyPayload(member, interaction.user.id, { fromHub: false });
             await interaction.editReply(payload);
             return true;
         }
@@ -2813,7 +3127,7 @@ async function handleTcgSlash(interaction) {
             new ButtonBuilder().setCustomId(`tcg:binder:allow:${cible.id}:${interaction.user.id}`).setLabel('Autoriser l\'accès').setEmoji('✅').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId(`tcg:binder:deny:${cible.id}:${interaction.user.id}`).setLabel('Refuser').setEmoji('❌').setStyle(ButtonStyle.Danger)
         );
-        await interaction.reply({ content: `<@${cible.id}>`, embeds: [embed], components: [row] });
+        await replySilent(interaction, { content: `<@${cible.id}>`, embeds: [embed], components: [row] });
         return true;
     }
     if (sub === 'carte') {
@@ -2873,14 +3187,49 @@ async function handleTcgInteraction(interaction) {
     const action = parts[1];
     const client = interaction.client;
 
+    // ----- RETOUR ACCUEIL HUB -----
+    if (action === 'hub' && interaction.isButton()) {
+        const ownerId = parts[2];
+        if (interaction.user.id !== ownerId) {
+            await interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
+            return true;
+        }
+        await interaction.deferUpdate();
+        const u = getOrCreateTcgUser(ownerId);
+        await interaction.editReply({
+            content: null,
+            ...buildHubPayload(interaction.member, u),
+            attachments: []
+        });
+        return true;
+    }
+
+    // ----- CRÉDITS -----
+    if (action === 'credits' && interaction.isButton()) {
+        const ownerId = parts[2];
+        const fromHub = parts[3] === '1';
+        if (interaction.user.id !== ownerId) {
+            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            return true;
+        }
+        const payload = buildCreditsPayload(ownerId, fromHub);
+        if (fromHub) {
+            await interaction.update({ content: null, files: [], attachments: [], ...payload });
+        } else {
+            await replySilent(interaction, payload);
+        }
+        return true;
+    }
+
     // ----- OUVERTURE DE BOOSTER -----
     if (action === 'open' && interaction.isButton()) {
         const ownerId = parts[2];
+        const fromHub = parts[3] === '1';
         if (interaction.user.id !== ownerId) {
             await interaction.reply({ content: "Ce bouton ne t'est pas destiné !", ephemeral: true });
             return true;
         }
-        await startBoosterOpening(interaction, interaction.member, client);
+        await startBoosterOpening(interaction, interaction.member, client, fromHub);
         return true;
     }
 
@@ -2902,12 +3251,13 @@ async function handleTcgInteraction(interaction) {
         else if (dir === 'back3') session.step = 2;
         else if (dir === 'recap') session.step = 3;
 
+        await interaction.deferUpdate();
         if (session.step === 3) {
-            await interaction.deferUpdate();
             const recapPayload = await buildBoosterRecapPayload(interaction.member, session);
-            await interaction.editReply(recapPayload);
+            await interaction.editReply({ content: null, ...recapPayload, attachments: [] });
         } else {
-            await interaction.update(buildBoosterCardEmbed(interaction.member, session, session.step));
+            const cardPayload = buildBoosterCardEmbed(interaction.member, session, session.step);
+            await interaction.editReply({ content: null, ...cardPayload, attachments: [] });
         }
         return true;
     }
@@ -2916,6 +3266,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'notif' && interaction.isButton()) {
         const sub = parts[2];
         const ownerId = parts[3];
+        const fromHub = parts[4] === '1';
         if (interaction.user.id !== ownerId) {
             await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
             return true;
@@ -2925,6 +3276,15 @@ async function handleTcgInteraction(interaction) {
         const nextTs = getNextBoosterTimestamp(u);
 
         if (sub === 'menu') {
+            if (fromHub) {
+                await interaction.update({
+                    content: null,
+                    files: [],
+                    attachments: [],
+                    ...buildNotifMenuPayload(interaction.member, u, true)
+                });
+                return true;
+            }
             if (!nextTs) {
                 await interaction.reply({ content: "✅ Tu as déjà des boosters prêts !", ephemeral: true });
                 return true;
@@ -2945,11 +3305,29 @@ async function handleTcgInteraction(interaction) {
             }
             delete data.notifs[ownerId];
             tcgBridge.demanderSauvegarde();
+            if (fromHub) {
+                await interaction.update({
+                    content: null,
+                    files: [],
+                    attachments: [],
+                    ...buildNotifMenuPayload(interaction.member, u, true, '🔕 *Notification booster désactivée.*')
+                });
+                return true;
+            }
             await interaction.reply({ content: "🔕 Notification booster désactivée.", ephemeral: true });
             return true;
         }
 
         if (!nextTs) {
+            if (fromHub) {
+                await interaction.update({
+                    content: null,
+                    files: [],
+                    attachments: [],
+                    ...buildNotifMenuPayload(interaction.member, u, true, '✅ *Ta jauge de boosters gratuits est déjà pleine (`2/2`) !*')
+                });
+                return true;
+            }
             await interaction.reply({ content: "✅ Ta jauge de boosters gratuits est déjà pleine (`2/2`) !", ephemeral: true });
             return true;
         }
@@ -2961,10 +3339,27 @@ async function handleTcgInteraction(interaction) {
         };
         armerNotifBooster(ownerId, client);
         tcgBridge.demanderSauvegarde();
+
+        if (fromHub) {
+            await interaction.update({
+                content: null,
+                files: [],
+                attachments: [],
+                ...buildNotifMenuPayload(
+                    interaction.member,
+                    u,
+                    true,
+                    `✅ *C'est noté ! Je te préviendrai **${sub === 'dm' ? 'en MP' : 'dans ce salon'}** <t:${Math.floor(nextTs / 1000)}:R>.*`
+                )
+            });
+            return true;
+        }
+
         await interaction.reply({
             content: `🔔 C'est noté ! Je te préviendrai **${sub === 'dm' ? 'en MP' : 'dans ce salon'}** <t:${Math.floor(nextTs / 1000)}:R>.`,
             ephemeral: true
         });
+        await disableNotifButtonsOnMessage(interaction.message);
         return true;
     }
 
@@ -2985,23 +3380,37 @@ async function handleTcgInteraction(interaction) {
     // ----- STORE & ACHATS & CLAIM -----
     if (action === 'store' && interaction.isButton()) {
         const ownerId = parts[3];
+        const fromHub = parts[4] === '1';
         if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
         const u = getOrCreateTcgUser(ownerId);
-        await interaction.reply(buildStorePayload(interaction.member, u));
+        const payload = buildStorePayload(interaction.member, u, fromHub);
+        if (fromHub) {
+            await interaction.update({ content: null, files: [], attachments: [], ...payload });
+        } else {
+            await replySilent(interaction, payload);
+        }
         return true;
     }
 
     if (action === 'claim' && interaction.isButton()) {
         const ownerId = parts[3];
+        const fromHub = parts[4] === '1';
         if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
         const u = getOrCreateTcgUser(ownerId);
-        await interaction.reply(buildClaimPayload(interaction.member, u));
+        const payload = buildClaimPayload(interaction.member, u, fromHub);
+        if (fromHub) {
+            await interaction.update({ content: null, files: [], attachments: [], ...payload });
+        } else {
+            await replySilent(interaction, payload);
+        }
         return true;
     }
 
     if (action === 'buy' && interaction.isButton()) {
         const itemKey = parts[2];
         const ownerId = parts[3];
+        const fromHub = parts[4] === '1';
+        const hubSuffix = fromHub ? ':1' : '';
         if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
 
         const price = STORE_PRICES[itemKey];
@@ -3036,18 +3445,32 @@ async function handleTcgInteraction(interaction) {
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId(`tcg:postbuy:use:${itemKey}:${ownerId}`)
+                .setCustomId(`tcg:postbuy:use:${itemKey}:${ownerId}${hubSuffix}`)
                 .setLabel(itemKey === 'booster' ? 'Ouvrir maintenant' : 'Utiliser / Activer maintenant')
                 .setEmoji('⚡')
                 .setStyle(ButtonStyle.Success),
             new ButtonBuilder()
-                .setCustomId(`tcg:postbuy:keep:${itemKey}:${ownerId}`)
+                .setCustomId(`tcg:postbuy:keep:${itemKey}:${ownerId}${hubSuffix}`)
                 .setLabel('Garder en inventaire')
                 .setEmoji('🎒')
                 .setStyle(ButtonStyle.Secondary)
         );
+        if (fromHub) {
+            row.addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`tcg:store:open:${ownerId}:1`)
+                    .setLabel('Store')
+                    .setEmoji('🛒')
+                    .setStyle(ButtonStyle.Secondary),
+                buildAccueilButton(ownerId)
+            );
+        }
 
-        await interaction.reply({ embeds: [confirmEmbed], components: [row] });
+        if (fromHub) {
+            await interaction.update({ content: null, embeds: [confirmEmbed], components: [row], files: [], attachments: [] });
+        } else {
+            await replySilent(interaction, { embeds: [confirmEmbed], components: [row] });
+        }
         return true;
     }
 
@@ -3055,14 +3478,27 @@ async function handleTcgInteraction(interaction) {
         const sub = parts[2];
         const itemKey = parts[3];
         const ownerId = parts[4];
+        const fromHub = parts[5] === '1';
         if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
 
+        const backRows = fromHub
+            ? [new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`tcg:store:open:${ownerId}:1`).setLabel('Retour Store').setEmoji('🛒').setStyle(ButtonStyle.Secondary),
+                buildAccueilButton(ownerId)
+            )]
+            : [];
+
         if (sub === 'keep') {
-            await interaction.update({ content: "🎒 Parfait ! L'objet reste bien au chaud dans ton inventaire (`!regadex claim`).", embeds: [], components: [] });
+            await interaction.update({
+                content: "🎒 Parfait ! L'objet reste bien au chaud dans ton inventaire (`!regadex claim`).",
+                embeds: [],
+                components: backRows,
+                files: [],
+                attachments: []
+            });
             return true;
         }
 
-        // sub === 'use'
         const u = getOrCreateTcgUser(ownerId);
         if ((u.inventory[itemKey] || 0) <= 0) {
             await interaction.reply({ content: "❌ Cet objet n'est plus dans ton inventaire.", ephemeral: true });
@@ -3070,8 +3506,8 @@ async function handleTcgInteraction(interaction) {
         }
 
         if (itemKey === 'booster') {
-            await interaction.message.edit({ components: [] }).catch(() => {});
-            await startBoosterOpening(interaction, interaction.member, client);
+            if (!fromHub) await interaction.message.edit({ components: [] }).catch(() => {});
+            await startBoosterOpening(interaction, interaction.member, client, fromHub);
             return true;
         }
         if (itemKey === 'luckyBooster') {
@@ -3082,7 +3518,13 @@ async function handleTcgInteraction(interaction) {
             u.inventory.luckyBooster -= 1;
             u.activeBonuses.luckyBooster = true;
             tcgBridge.demanderSauvegarde();
-            await interaction.update({ content: "🍀 **Prochain booster chanceux activé !** Aucune carte Commune ne tombera dans ton prochain booster.", embeds: [], components: [] });
+            await interaction.update({
+                content: "🍀 **Prochain booster chanceux activé !** Aucune carte Commune ne tombera dans ton prochain booster.",
+                embeds: [],
+                components: backRows,
+                files: [],
+                attachments: []
+            });
             return true;
         }
         if (itemKey === 'halfCooldown') {
@@ -3093,11 +3535,17 @@ async function handleTcgInteraction(interaction) {
             u.inventory.halfCooldown -= 1;
             u.activeBonuses.halfCooldown = true;
             tcgBridge.demanderSauvegarde();
-            await interaction.update({ content: "⚡ **Demi-cooldown armé !** Dès l'ouverture de ton prochain booster, le suivant mettra **3h** au lieu de 6h.", embeds: [], components: [] });
+            await interaction.update({
+                content: "⚡ **Demi-cooldown armé !** Dès l'ouverture de ton prochain booster, le suivant mettra **3h** au lieu de 6h.",
+                embeds: [],
+                components: backRows,
+                files: [],
+                attachments: []
+            });
             return true;
         }
         if (itemKey === 'holoTransform') {
-            await sendHoloTransformPicker(interaction, interaction.member, 0);
+            await sendHoloTransformPicker(interaction, interaction.member, 0, fromHub);
             return true;
         }
     }
@@ -3105,6 +3553,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'use' && interaction.isButton()) {
         const itemKey = parts[2];
         const ownerId = parts[3];
+        const fromHub = parts[4] === '1';
         if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
         const u = getOrCreateTcgUser(ownerId);
         if ((u.inventory[itemKey] || 0) <= 0) return interaction.reply({ content: "❌ Stock insuffisant.", ephemeral: true }), true;
@@ -3114,7 +3563,7 @@ async function handleTcgInteraction(interaction) {
             u.inventory.luckyBooster -= 1;
             u.activeBonuses.luckyBooster = true;
             tcgBridge.demanderSauvegarde();
-            await interaction.update(buildClaimPayload(interaction.member, u));
+            await interaction.update(buildClaimPayload(interaction.member, u, fromHub));
             await interaction.followUp({ content: "🍀 **Prochain booster chanceux activé !**", ephemeral: true });
             return true;
         }
@@ -3123,12 +3572,12 @@ async function handleTcgInteraction(interaction) {
             u.inventory.halfCooldown -= 1;
             u.activeBonuses.halfCooldown = true;
             tcgBridge.demanderSauvegarde();
-            await interaction.update(buildClaimPayload(interaction.member, u));
+            await interaction.update(buildClaimPayload(interaction.member, u, fromHub));
             await interaction.followUp({ content: "⚡ **Demi-cooldown armé !**", ephemeral: true });
             return true;
         }
         if (itemKey === 'holoTransform') {
-            await sendHoloTransformPicker(interaction, interaction.member, 0);
+            await sendHoloTransformPicker(interaction, interaction.member, 0, fromHub);
             return true;
         }
     }
@@ -3136,13 +3585,15 @@ async function handleTcgInteraction(interaction) {
     if (action === 'holopage' && interaction.isButton()) {
         const ownerId = parts[2];
         const page = parseInt(parts[3], 10) || 0;
+        const fromHub = parts[4] === '1';
         if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
-        await sendHoloTransformPicker(interaction, interaction.member, page);
+        await sendHoloTransformPicker(interaction, interaction.member, page, fromHub);
         return true;
     }
 
     if (action === 'holopick' && interaction.isStringSelectMenu()) {
         const ownerId = parts[2];
+        const fromHub = parts[3] === '1';
         if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
 
         const baseId = interaction.values[0];
@@ -3170,7 +3621,15 @@ async function handleTcgInteraction(interaction) {
         const files = holoCard.filePath && fs.existsSync(holoCard.filePath)
             ? [new AttachmentBuilder(holoCard.filePath, { name: 'holo_result.png' })]
             : [];
-        await interaction.update({ content: null, embeds: [embed], files, components: [] });
+        const resultRows = fromHub
+            ? [new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`tcg:claim:open:${ownerId}:1`).setLabel('Inventaire').setEmoji('🎒').setStyle(ButtonStyle.Secondary),
+                buildAccueilButton(ownerId)
+            )]
+            : [];
+
+        await interaction.deferUpdate();
+        await interaction.editReply({ content: null, embeds: [embed], files, attachments: [], components: resultRows });
         return true;
     }
 
@@ -3183,8 +3642,8 @@ async function handleTcgInteraction(interaction) {
             if (interaction.user.id !== viewerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
             const targetId = interaction.values[0];
             if (targetId === viewerId) {
-                await interaction.deferReply();
-                const payload = await buildBinderReplyPayload(interaction.member, viewerId);
+                await deferReplySilent(interaction);
+                const payload = await buildBinderReplyPayload(interaction.member, viewerId, { fromHub: false });
                 await interaction.editReply(payload);
                 return true;
             }
@@ -3196,7 +3655,7 @@ async function handleTcgInteraction(interaction) {
                 new ButtonBuilder().setCustomId(`tcg:binder:allow:${targetId}:${viewerId}`).setLabel('Autoriser l\'accès').setEmoji('✅').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId(`tcg:binder:deny:${targetId}:${viewerId}`).setLabel('Refuser').setEmoji('❌').setStyle(ButtonStyle.Danger)
             );
-            await interaction.reply({ content: `<@${targetId}>`, embeds: [embed], components: [row] });
+            await replySilent(interaction, { content: `<@${targetId}>`, embeds: [embed], components: [row] });
             return true;
         }
 
@@ -3212,7 +3671,7 @@ async function handleTcgInteraction(interaction) {
                 new ButtonBuilder().setCustomId(`tcg:binder:allow:${targetId}:${viewerId}`).setLabel('Autoriser l\'accès').setEmoji('✅').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId(`tcg:binder:deny:${targetId}:${viewerId}`).setLabel('Refuser').setEmoji('❌').setStyle(ButtonStyle.Danger)
             );
-            await interaction.reply({ content: `<@${targetId}>`, embeds: [embed], components: [row] });
+            await replySilent(interaction, { content: `<@${targetId}>`, embeds: [embed], components: [row] });
             return true;
         }
 
@@ -3229,31 +3688,41 @@ async function handleTcgInteraction(interaction) {
             }
             await interaction.deferUpdate();
             const ownerMember = await interaction.guild.members.fetch(ownerId).catch(() => interaction.member);
-            const payload = await buildBinderReplyPayload(ownerMember, viewerId);
-            await interaction.editReply({ content: null, ...payload });
+            const payload = await buildBinderReplyPayload(ownerMember, viewerId, { fromHub: false });
+            await interaction.editReply({ content: null, ...payload, attachments: [] });
             return true;
         }
 
         if (sub === 'open' && interaction.isButton()) {
             const ownerId = parts[3];
             const viewerId = parts[4];
+            const fromHub = parts[5] === '1';
             if (interaction.user.id !== viewerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
-            await interaction.deferReply();
-            const ownerMember = await interaction.guild.members.fetch(ownerId).catch(() => interaction.member);
-            const payload = await buildBinderReplyPayload(ownerMember, viewerId);
-            await interaction.editReply(payload);
+
+            if (fromHub) {
+                await interaction.deferUpdate();
+                const ownerMember = await interaction.guild.members.fetch(ownerId).catch(() => interaction.member);
+                const payload = await buildBinderReplyPayload(ownerMember, viewerId, { fromHub: true });
+                await interaction.editReply({ content: null, ...payload, attachments: [] });
+            } else {
+                await deferReplySilent(interaction);
+                const ownerMember = await interaction.guild.members.fetch(ownerId).catch(() => interaction.member);
+                const payload = await buildBinderReplyPayload(ownerMember, viewerId, { fromHub: false });
+                await interaction.editReply(payload);
+            }
             return true;
         }
     }
 
     if ((action === 'bcat' || action === 'bsize' || action === 'bnav' || action === 'bsort' || action === 'btheme')) {
-        let ownerId, viewerId, category, perPageMode, page, sortMode;
+        let ownerId, viewerId, category, perPageMode, page, sortMode, fromHub;
 
         if (action === 'bcat' && interaction.isStringSelectMenu()) {
             ownerId = parts[2];
             viewerId = parts[3];
             perPageMode = parts[4];
             sortMode = parts[5];
+            fromHub = parts[6] === '1';
             category = interaction.values[0];
             page = 0;
         } else if (action === 'bsize' && interaction.isStringSelectMenu()) {
@@ -3261,6 +3730,7 @@ async function handleTcgInteraction(interaction) {
             viewerId = parts[3];
             category = parts[4];
             sortMode = parts[5];
+            fromHub = parts[6] === '1';
             perPageMode = interaction.values[0];
             page = 0;
         } else if (action === 'bnav' && interaction.isButton()) {
@@ -3271,6 +3741,7 @@ async function handleTcgInteraction(interaction) {
             perPageMode = parts[6];
             page = parseInt(parts[7], 10) || 0;
             sortMode = parts[8];
+            fromHub = parts[9] === '1';
             page = dir === 'prev' ? page - 1 : page + 1;
         } else if (action === 'bsort' && interaction.isButton()) {
             ownerId = parts[2];
@@ -3279,6 +3750,7 @@ async function handleTcgInteraction(interaction) {
             perPageMode = parts[5];
             page = 0;
             sortMode = parts[7];
+            fromHub = parts[8] === '1';
         } else if (action === 'btheme' && interaction.isButton()) {
             ownerId = parts[2];
             viewerId = parts[3];
@@ -3286,6 +3758,7 @@ async function handleTcgInteraction(interaction) {
             perPageMode = parts[5];
             page = parseInt(parts[6], 10) || 0;
             sortMode = parts[7];
+            fromHub = parts[8] === '1';
             if (interaction.user.id !== ownerId) {
                 await interaction.reply({ content: "❌ Seul le propriétaire du classeur peut changer son thème Clair/Nuit.", ephemeral: true });
                 return true;
@@ -3304,8 +3777,8 @@ async function handleTcgInteraction(interaction) {
 
         await interaction.deferUpdate();
         const ownerMember = await interaction.guild.members.fetch(ownerId).catch(() => interaction.member);
-        const payload = await buildBinderReplyPayload(ownerMember, viewerId, { category, perPageMode, page, sortMode });
-        await interaction.editReply(payload);
+        const payload = await buildBinderReplyPayload(ownerMember, viewerId, { category, perPageMode, page, sortMode, fromHub });
+        await interaction.editReply({ content: null, ...payload, attachments: [] });
         return true;
     }
 
@@ -3314,8 +3787,13 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[2];
         if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
         const card = cardById.get(interaction.values[0]);
-        if (!card) return true;
-        await interaction.update({ content: null, ...buildSingleCardPayload(card, ownerId), components: [] });
+        const u = getOrCreateTcgUser(ownerId);
+        if (!card || (u.cards?.[card.id] || 0) <= 0) {
+            await interaction.reply({ content: "🔒 Tu ne possèdes pas cette carte dans ton RegaDex !", ephemeral: true });
+            return true;
+        }
+        await interaction.deferUpdate();
+        await interaction.editReply({ content: null, ...buildSingleCardPayload(card, ownerId), components: [], attachments: [] });
         return true;
     }
 
@@ -3338,24 +3816,24 @@ async function handleTcgInteraction(interaction) {
         }
         u.favoriteCardId = card.id;
         tcgBridge.demanderSauvegarde();
-        await interaction.update({ content: `⭐ Ta carte préférée est maintenant **${card.id} • ${card.name}** ! Tape \`!tcg flex\` pour frimer !`, embeds: [], components: [] });
+        await interaction.update({ content: `⭐ Ta carte préférée est maintenant **${card.id} • ${card.name}** ! Tape \`!tcg flex\` pour frimer !`, embeds: [], components: [], files: [], attachments: [] });
         return true;
     }
 
-    // ----- CLASSEMENTS (!regadex top) -----
+    // ----- CLASSEMENTS (!regadex top / Hub) -----
     if (action === 'top' && interaction.isButton()) {
         const mode = parts[2];
         const ownerId = parts[3];
+        const fromHub = parts[4] === '1';
         if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
         const payload = {
+            content: null,
+            files: [],
+            attachments: [],
             embeds: [buildTopEmbed(interaction.guild, mode)],
-            components: buildTopComponents(ownerId, mode)
+            components: buildTopComponents(ownerId, mode, fromHub)
         };
-        if (interaction.message.embeds?.[0]?.title?.startsWith('🃏 Hub')) {
-            await interaction.reply(payload);
-        } else {
-            await interaction.update(payload);
-        }
+        await interaction.update(payload);
         return true;
     }
 
@@ -3441,7 +3919,7 @@ async function handleTcgInteraction(interaction) {
             data.activeTrades[thread.id] = trade;
             tcgBridge.demanderSauvegarde();
 
-            const introMsg = await thread.send({
+            const introMsg = await sendSilent(thread, {
                 content: `👋 Bienvenue <@${conf.initiatorId}> et <@${conf.targetId}> dans votre salon d'échange !\n` +
                     ((!trade.isPublic || !trade.canEveryoneTalk) ? `🔒 *Thread en mode restreint : les messages des autres membres y sont automatiquement supprimés.*\n` : ''),
                 ...buildTradeThreadPayload(trade)
@@ -3484,7 +3962,7 @@ async function handleTcgInteraction(interaction) {
             delete data.activeTrades[threadId];
             tcgBridge.demanderSauvegarde();
 
-            await interaction.reply(`❌ Échange annulé par <@${uid}>. Fermeture du thread...`);
+            await replySilent(interaction, `❌ Échange annulé par <@${uid}>. Fermeture du thread...`);
             setTimeout(async () => {
                 if (hadTrades) {
                     await thread.setLocked(true).catch(() => {});
@@ -3648,7 +4126,7 @@ async function handleTcgInteraction(interaction) {
             if (res.card) {
                 const already = trade.offers[uid].filter(id => id === res.card.id).length;
                 if ((u.cards[res.card.id] || 0) - already < 2) {
-                    await interaction.reply({ content: `❌ Tu ne possèdes pas **${res.card.id} • ${res.card.name}** en doublon disponible.`, ephemeral: true });
+                    await interaction.reply({ content: `❌ Tu ne possèdes pas cette carte en doublon disponible.`, ephemeral: true });
                     return true;
                 }
                 trade.offers[uid].push(res.card.id);
@@ -3684,7 +4162,7 @@ async function handleTcgInteraction(interaction) {
 
     // ----- POST-ÉCHANGE (ENCHAÎNER OU FERMER) -----
     if (action === 'trpost' && interaction.isButton()) {
-        const choice = parts[2]; // 'again' | 'close'
+        const choice = parts[2];
         const threadId = parts[3];
         const data = getStoreData();
         const trade = data.activeTrades?.[threadId];
@@ -3709,7 +4187,7 @@ async function handleTcgInteraction(interaction) {
             trade.lockedOffers = { [trade.initiatorId]: false, [trade.targetId]: false };
             trade.postTradeVotes = { [trade.initiatorId]: null, [trade.targetId]: null };
             await interaction.update({ content: '🔄 **Nouvel échange lancé !**', embeds: [], components: [] });
-            const panel = await interaction.channel.send(buildTradeThreadPayload(trade));
+            const panel = await sendSilent(interaction.channel, buildTradeThreadPayload(trade));
             trade.statusMessageId = panel.id;
             tcgBridge.demanderSauvegarde();
             return true;
