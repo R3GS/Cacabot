@@ -2332,6 +2332,10 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
 
         const estNeutre = (outcomeId === 'aucun-resultat') && nbMalusCumules === 0 && (rouletteBouclierActif.get(authorId) || 0) === 0;
 
+        if (bridge.trackTcgRoulettePoint) {
+            bridge.trackTcgRoulettePoint(authorId, membre);
+        }
+
         bridge.trackBattlePassProgress(authorId, 'roulette_roll', 1, {
             isHappyHour: estHappyHour(),
             sansEffetActif: estNeutre,

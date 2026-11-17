@@ -55,10 +55,13 @@ const QUETES_QUOTIDIENNES_POOL = [
     { id: 'coup_essai_motus', tier: 'facile', xp: 50, desc: 'Proposer 1 mot au Motus du matin (10h) ou du soir (19h)', objectif: 1, type: 'minijeu_essai' },
     { id: 'premiere_lettre', tier: 'facile', xp: 50, desc: 'Proposer au moins une lettre lors d\'une session de Pendu (21h)', objectif: 1, type: 'pendu_essai' },
     { id: 'pendu_express', tier: 'facile', xp: 50, desc: 'Être le premier joueur à proposer une lettre après le lancement de 21h00', objectif: 1, type: 'pendu_premier' },
+    { id: 'tcg_booster_daily', tier: 'facile', xp: 50, desc: 'Ouvrir 1 booster RegaDex', objectif: 1, type: 'tcg_booster' },
+    { id: 'tcg_flex_daily', tier: 'facile', xp: 50, desc: 'Flexer sa carte préférée avec !tcg flex / !regadex flex', objectif: 1, type: 'tcg_flex' },
 
     // ==========================================
     //  TIER 2 : MOYENNES (100 XP)
     // ==========================================
+    { id: 'tcg_doublon_daily', tier: 'moyen', xp: 100, desc: 'Obtenir 1 carte RegaDex en doublon', objectif: 1, type: 'tcg_doublon' },
     { id: 'habitue_comptoir', tier: 'moyen', xp: 100, desc: 'Envoyer au moins 35 messages sur le serveur dans la journée', objectif: 35, type: 'message' },
     { id: 'soiree_posee_vocal', tier: 'moyen', xp: 100, desc: 'Passer au moins 20 minutes cumulées en salon vocal avec du monde', objectif: 20, type: 'vocal_min' },
     { id: 'heure_de_pointe', tier: 'moyen', xp: 100, desc: 'Faire au moins 1 tirage pendant l\'Happy Hour (20h - 21h)', objectif: 1, type: 'happy_hour_roll' },
@@ -175,7 +178,15 @@ const QUETES_HEBDOMADAIRES_POOL = [
     { id: 'alphabet_regaïen', xp: 400, desc: 'Découvrir un total cumulé de 10 bonnes lettres au Pendu sur la semaine', objectif: 10, type: 'pendu_bonne_lettre' },
     { id: 'esprit_equipe', xp: 350, desc: 'Participer à au moins 2 sessions où le mot du Pendu est trouvé collectivement', objectif: 2, type: 'pendu_victoire_collective' },
     { id: 'grand_chelem_minijeux', xp: 450, desc: 'Participer au Motus, au Rébus ET au Pendu le même jour sur 2 jours de la semaine', objectif: 2, type: 'grand_chelem_minijeux' },
-    { id: 'tete_epaules', xp: 350, desc: 'Proposer au moins 15 lettres ou mots cumulés au Pendu sur la semaine', objectif: 15, type: 'pendu_essai' }
+    { id: 'tete_epaules', xp: 350, desc: 'Proposer au moins 15 lettres ou mots cumulés au Pendu sur la semaine', objectif: 15, type: 'pendu_essai' },
+
+    // ==========================================
+    //  6. REGADEX (TCG)
+    // ==========================================
+    { id: 'tcg_booster_hebdo', xp: 350, desc: 'Ouvrir 5 boosters RegaDex au cours de la semaine', objectif: 5, type: 'tcg_booster' },
+    { id: 'tcg_doublon_hebdo', xp: 400, desc: 'Obtenir 15 cartes RegaDex en doublon dans la semaine', objectif: 15, type: 'tcg_doublon' },
+    { id: 'tcg_store_hebdo', xp: 350, desc: 'Acheter un bonus dans le RegaDex Store', objectif: 1, type: 'tcg_store_buy' },
+    { id: 'tcg_trade_hebdo', xp: 400, desc: 'Participer à un échange de cartes RegaDex', objectif: 1, type: 'tcg_trade' }
 ];
 
 // Récompenses des 25 paliers

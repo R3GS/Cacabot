@@ -33,6 +33,9 @@ function buildHelpxHomeEmbed(user, botAvatarUrl = null) {
             `🎫 **Battle Pass (Admin)**\n` +
             `-# Ajout d'XP, validation de quêtes, dons d'items & aperçu onboarding.\n` +
             `────────────────────────────────────────\n` +
+            `🃏 **RegaDex / TCG (Admin)**\n` +
+            `-# Boosters, points RegaDex, cartes & reset de cooldown.\n` +
+            `────────────────────────────────────────\n` +
             `🧪 **Tests & Générateurs**\n` +
             `-# Simulations d'anniversaire, stream Twitch & envois manuels.\n` +
             `────────────────────────────────────────\n` +
@@ -135,6 +138,23 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
             );
     }
 
+    // 4b. REGADEX / TCG (ADMIN)
+    if (category === 'tcg') {
+        return embed
+            .setColor(0xf1c40f)
+            .setTitle('🃏 RegaDex / TCG (Administration)')
+            .setDescription(
+                `Gestion complète des boosters, points, cartes et cooldowns RegaDex *(fonctionnent avec ou sans espace)*.\n\n` +
+                `### 🎁 Boosters & Cooldown\n` +
+                `\`!boostergive [@membre/ID] [nb]\` • Ajouter des boosters à l'inventaire\n` +
+                `\`!boosterremove [@membre/ID] [nb]\` • Retirer des boosters de l'inventaire\n` +
+                `\`!rgdxcooldown reset [@membre/ID]\` *(ou \`!tcgcooldown\` / \`!regadexcooldown\`)* • Remet le stock gratuit à 2/2\n\n` +
+                `### 🪙 Points & Cartes\n` +
+                `\`!rgdxpts give [@membre/ID] [nb]\` / \`set\` *(ou \`!tcgpts\` / \`!regadexpts\`)* • Gérer les points\n` +
+                `\`!rgdxcard give [@membre/ID] [carte]\` / \`remove\` *(ou \`!tcgcard\` / \`!regadexcard\`)* • Gérer les cartes`
+            );
+    }
+
     // 5. TESTS & GÉNÉRATEURS
     if (category === 'generateurs') {
         return embed
@@ -200,6 +220,13 @@ function buildHelpxMenu(authorId, currentCategory = 'home', originalMessageId = 
                 emoji: '🎫',
                 value: 'battlepass',
                 default: currentCategory === 'battlepass'
+            },
+            {
+                label: 'RegaDex / TCG (Admin)',
+                description: 'boostergive/remove, rgdxpts, rgdxcard & cooldown reset',
+                emoji: '🃏',
+                value: 'tcg',
+                default: currentCategory === 'tcg'
             },
             {
                 label: 'Tests & Générateurs',
@@ -422,6 +449,9 @@ function buildHelpHomeEmbed(user, botAvatarUrl = null) {
             `🎰 **Roulette & Battle Pass**\n` +
             `-# Casino toutes les 15 min, inventaire, quêtes et 25 paliers mensuels.\n` +
             `────────────────────────────────────────\n` +
+            `🃏 **RegaDex (TCG)**\n` +
+            `-# Boosters, classeur, Store, flex & échanges de doublons.\n` +
+            `────────────────────────────────────────\n` +
             `🎮 **Rendez-vous & Jeux Quotidiens**\n` +
             `-# Sessions automatiques : Motus (10h/19h), Rébus (15h) et Pendu (21h).\n` +
             `────────────────────────────────────────\n` +
@@ -468,6 +498,29 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
                 `Accomplis tes quêtes quotidiennes et hebdos pour débloquer 25 paliers de récompenses.\n\n` +
                 `\`!bp\` *(ou \`!pass\`)* • Ouvrir ton Battle Pass de la saison\n` +
                 `-# 🎁 Astuce : Le bouton **Tout récupérer** sous ton pass te permet d'encaisser tous tes paliers débloqués en un clic !`
+            );
+    }
+
+    // 1b. REGADEX (TCG)
+    if (category === 'tcg') {
+        return embed
+            .setColor(0xf1c40f)
+            .setTitle('🃏 RegaDex — Jeu de Cartes (TCG)')
+            .setDescription(
+                `Collectionne les **109 cartes** du Set 1 dans <#1572007962199851059> !\n` +
+                `-# 🔒 Accès : Nécessite le rôle <@&1572007430152261672> *(toutes les commandes existent aussi sous \`/regadex\`)*. \n\n` +
+                `### 🎁 Boosters, Store & Inventaire\n` +
+                `\`!regadex\` *(ou \`!rgdx\` / \`!tcg\`)* • Hub principal RegaDex\n` +
+                `\`!regadex open\` *(ou \`!booster open\` / \`!open\`)* • Ouvrir un booster *(1 gratuit / 6h, max 2)*\n` +
+                `\`!regadex store\` • Acheter boosters et bonus avec tes points RegaDex\n` +
+                `\`!regadex claim\` • Utiliser les boosters et bonus de ton inventaire\n` +
+                `\`!regadex notif\` • Être prévenu·e quand un booster gratuit est prêt\n\n` +
+                `### 📖 Collection, Échanges & Flex\n` +
+                `\`!classeur [@membre]\` *(ou \`!collection\`)* • Afficher le classeur Canvas (mode Clair W / Nuit B)\n` +
+                `\`!carte [N° ou nom]\` • Inspecter une carte précise *(ex: \`!carte 1-84\`)*\n` +
+                `\`!trade [@membre]\` *(ou Clic droit → Applications)* • Échanger jusqu'à 3 doublons en thread\n` +
+                `\`!regadex top\` • Classements Total de cartes & Complétion Set 1\n` +
+                `\`!tcg flex [@membre]\` *(utilisable partout !)* • Montrer sa carte préférée (\`modify\` pour changer)`
             );
     }
 
@@ -600,6 +653,13 @@ function buildHelpMenu(authorId, currentCategory = 'home', originalMessageId = '
                 emoji: '🎰',
                 value: 'roulette',
                 default: currentCategory === 'roulette'
+            },
+            {
+                label: 'RegaDex (TCG)',
+                description: 'Boosters Set 1, classeur Canvas, Store, flex & échanges',
+                emoji: '🃏',
+                value: 'tcg',
+                default: currentCategory === 'tcg'
             },
             {
                 label: 'Rendez-vous & Jeux Quotidiens',

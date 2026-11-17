@@ -20,6 +20,7 @@ let destitutionVotesData = {}; // messageId -> { targetId, targetTag, authorId, 
 let dernierCommitSha = null;
 let numeroBuild = 1;
 let battlePassData = {};
+let tcgData = { users: {}, notifs: {}, activeTrades: {} };
 let donneesChargees = false;
 
 function getVersionString() {
@@ -87,6 +88,7 @@ async function loadAll() {
         dernierCommitSha = jsonRecord.dernierCommitSha ?? null;
         if (jsonRecord.numeroBuild) numeroBuild = jsonRecord.numeroBuild;
         if (jsonRecord.battlePassData) battlePassData = jsonRecord.battlePassData;
+        if (jsonRecord.tcgData) tcgData = jsonRecord.tcgData;
         if (jsonRecord.bugs && typeof setBugsList === 'function') setBugsList(jsonRecord.bugs);
 
         suggestionsData.clear();
@@ -155,6 +157,7 @@ async function saveAll() {
             dernierCommitSha: dernierCommitSha,
             numeroBuild: numeroBuild,
             battlePassData: battlePassData,
+            tcgData: tcgData,
             bugs: typeof getBugsList === 'function' ? getBugsList() : [],
             suggestions: Object.fromEntries(suggestionsData),
             roulette: Object.fromEntries(
@@ -499,6 +502,23 @@ initMinijeuxState({
     trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta)
 });
 
+///tcg.js
+const {
+    AFK_VOCAL_CHANNEL_ID,
+    initTcgState,
+    scanSet1Cards,
+    getTcgCardsCount,
+    restaurerNotifsTcg,
+    verifierInactiviteTradesTcg,
+    trackTcgMessagePoint,
+    trackTcgVocalMinute,
+    trackTcgRoulettePoint,
+    handleTcgTradeThreadMessage,
+    handleTcgMessage,
+    handleTcgSlash,
+    handleTcgInteraction
+} = require('./tcg.js');
+
 initRouletteBridge({
     topData,
     demanderSauvegarde,
@@ -509,7 +529,8 @@ initRouletteBridge({
     findMemberByName,
     askDisambiguation,
     suggestionsData,
-    trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta)
+    trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta),
+    trackTcgRoulettePoint: (uid, member) => trackTcgRoulettePoint(uid, member)
 });
 
 
@@ -622,6 +643,17 @@ initSecurityState({
     demanderSauvegarde,
     client,
     EPSYS_ID: '436218312574107658'
+});
+
+initTcgState({
+    client,
+    getTcgData: () => tcgData,
+    demanderSauvegarde,
+    saveAll,
+    findMemberByName,
+    askDisambiguation,
+    estModo,
+    trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta)
 });
 
 ///watcher.js
@@ -759,6 +791,9 @@ async function disableButtons(interaction) {
         }
         if (message.author.bot) return;
 
+        // Surveillance des threads d'échange RegaDex (activité 24h & blocage des tiers)
+        if (await handleTcgTradeThreadMessage(message)) return;
+
         // Commande prioritaire Rolembed (Epsys-only)
         if (message.content.trim().toLowerCase().startsWith('!rolembed')) {
             if (await handleRolembedMessage(message)) return;
@@ -774,6 +809,7 @@ async function disableButtons(interaction) {
 
             const modules = [
                 { nom: 'Roulette', obj: typeof handleRouletteMessage === 'function' && typeof ROULETTE_ETATS === 'object' },
+                { nom: 'RegaDex (TCG)', obj: typeof handleTcgMessage === 'function' && typeof getTcgCardsCount === 'function' && getTcgCardsCount() === 109 },
                 { nom: 'Tools & Utilitaires', obj: typeof handleToolsMessage === 'function' && typeof handleToolsSlash === 'function' },
                 { nom: 'Minijeux (Motus/Rébus)', obj: typeof handleMotusMessage === 'function' && typeof handleRebusMessage === 'function' },
                 { nom: 'Pendu Quotidien', obj: typeof handlePenduMessage === 'function' },
@@ -902,6 +938,11 @@ async function disableButtons(interaction) {
         const rawLower = message.content.trim().toLowerCase();
         const cmdPass = rawLower.split(/\s+/)[0];
 
+        // Points RegaDex (1 pt tous les 15 messages naturels, tous salons confondus)
+        if (!message.content.trim().startsWith('!')) {
+            trackTcgMessagePoint(uid, message.member);
+        }
+
         // 1. Quête messages simples avec métadonnées de salon et d'état
         if (message.content.trim().length >= 4 && !message.content.startsWith('!')) {
             const hasCooldown = (ROULETTE_ETATS.cooldowns?.get(uid) > Date.now());
@@ -975,6 +1016,9 @@ async function disableButtons(interaction) {
 
     // Si ce n'est pas une réplique réflexe ET que ce n'est pas une commande commençant par !, on ignore
     if (!response && !isExplicitCommand) return;
+
+// Commandes RegaDex TCG (!regadex, !rgdx, !tcg, !booster, !classeur, !carte, !trade...)
+    if (await handleTcgMessage(message, { findMemberByName, askDisambiguation })) return;
 
 // Commandes Battle Pass (!bp, !pass)
     if (await handleBattlePassMessage(message, { findMemberByName, askDisambiguation })) return;
@@ -1175,6 +1219,8 @@ try {
             return await handleHelpInteraction(interaction);
         }
 
+        if (await handleTcgSlash(interaction)) return;
+
         if (await handleBattlePassSlash(interaction)) return;
 
         // Commandes Activité (/profil, /top)
@@ -1232,6 +1278,14 @@ try {
         if (await handleToolsInteraction(interaction, client)) return;
         return;
     }
+
+    if (interaction.isUserContextMenuCommand()) {
+        if (await handleTcgInteraction(interaction)) return;
+        return;
+    }
+
+    // Interactions RegaDex TCG (boutons, menus, modals)
+    if (await handleTcgInteraction(interaction)) return;
 
     // Bouton pour tirer une autre citation au hasard
     if (await handleQuotesButton(interaction)) return;
@@ -1502,9 +1556,30 @@ client.once('ready', async () => {
             .addStringOption(opt => opt.setName('modifier').setDescription('ID du message contenant l\'embed à modifier')),
         new SlashCommandBuilder().setName('up').setDescription('Remonter une suggestion ou un vote de roulette en bas du salon (Modos)')
             .addStringOption(opt => opt.setName('message').setDescription('ID ou lien du message de Cacabot à remonter').setRequired(true)),
+        new SlashCommandBuilder()
+            .setName('regadex')
+            .setDescription('🃏 RegaDex TCG — Boosters, classeur, Store, flex & échanges')
+            .addSubcommand(sub => sub.setName('hub').setDescription('Ouvrir le menu principal RegaDex'))
+            .addSubcommand(sub => sub.setName('open').setDescription('Voir et ouvrir tes boosters Set 1 disponibles'))
+            .addSubcommand(sub => sub.setName('store').setDescription('Ouvrir le RegaDex Store'))
+            .addSubcommand(sub => sub.setName('claim').setDescription('Consulter et utiliser ton inventaire RegaDex'))
+            .addSubcommand(sub => sub.setName('classeur').setDescription('Afficher ton classeur Canvas (ou celui d\'un membre)')
+                .addUserOption(opt => opt.setName('membre').setDescription('Membre à inspecter')))
+            .addSubcommand(sub => sub.setName('carte').setDescription('Afficher une carte précise ou les explications')
+                .addStringOption(opt => opt.setName('recherche').setDescription('Numéro (ex: 1-84, Ø1) ou nom de la carte')))
+            .addSubcommand(sub => sub.setName('trade').setDescription('Proposer un échange de doublons')
+                .addUserOption(opt => opt.setName('membre').setDescription('Membre avec qui échanger')))
+            .addSubcommand(sub => sub.setName('top').setDescription('Classements RegaDex (Total & Complétion Set 1)'))
+            .addSubcommand(sub => sub.setName('flex').setDescription('Afficher ou modifier ta carte préférée (utilisable partout)')
+                .addUserOption(opt => opt.setName('membre').setDescription('Voir la carte préférée d\'un membre'))
+                .addStringOption(opt => opt.setName('modifier').setDescription('Définir ta nouvelle carte préférée (numéro ou nom)')))
+            .addSubcommand(sub => sub.setName('notif').setDescription('Configurer la notification de booster gratuit')),
         new ContextMenuCommandBuilder()
             .setName('🆙 Remonter (up)')
-            .setType(ApplicationCommandType.Message)
+            .setType(ApplicationCommandType.Message),
+        new ContextMenuCommandBuilder()
+            .setName('🔄 Échanger (RegaDex)')
+            .setType(ApplicationCommandType.User)
     ].map(cmd => cmd.toJSON());
 
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
@@ -1523,6 +1598,11 @@ client.once('ready', async () => {
 
     // Chargement immédiat des données sans attendre
     await loadAll();
+
+    // Scan du Set 1 RegaDex + alerte intégrité si carte/asset manquant
+    await scanSet1Cards(client);
+    restaurerNotifsTcg(client);
+    setInterval(() => verifierInactiviteTradesTcg(client), 10 * 60 * 1000);
 
     // Réarmement des alertes roulette, votes publics et des rappels
     for (const [uid, chId] of rouletteNotifs) armerNotifRoulette(uid, chId, client);
@@ -1595,6 +1675,10 @@ client.once('ready', async () => {
                         trackBattlePassProgress(membre.id, 'vocal_min', 1, {
                             groupeCount: membresHumains.size
                         });
+                        // Points RegaDex : hors salon AFK et au moins 3 humains présents
+                        if (salon.id !== AFK_VOCAL_CHANNEL_ID && membresHumains.size >= 3) {
+                            trackTcgVocalMinute(membre.id, membre, salon.id);
+                        }
                     }
                 }
             }
