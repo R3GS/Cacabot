@@ -1213,16 +1213,16 @@ function buildHubEmbed(member, u) {
     const nextTs = getNextBoosterTimestamp(u);
     const totalAvail = getTotalAvailableBoosters(u);
     const pct = comp.totalSet > 0 ? Math.round((comp.uniqueCount / comp.totalSet) * 100) : 0;
-    const bar = buildProgressBar(comp.uniqueCount, comp.totalSet, 12);
+    const bar = buildProgressBar(comp.uniqueCount, comp.totalSet, 16);
 
     const timerLine = u.freeBoosters >= MAX_FREE_BOOSTERS
-        ? 'Stock max (`2/2`)'
-        : `Prochain <t:${Math.floor(nextTs / 1000)}:R>`;
+        ? '• Recharge : **Stock max (`2/2`)**'
+        : `• Prochain : <t:${Math.floor(nextTs / 1000)}:R>`;
 
     const activeEffects = [];
-    if (u.activeBonuses?.luckyBooster) activeEffects.push('🍀 Chanceux');
-    if (u.activeBonuses?.halfCooldown) activeEffects.push('⚡ Cooldown /2');
-    if (u.pityRare) activeEffects.push('✨ Pity Rare');
+    if (u.activeBonuses?.luckyBooster) activeEffects.push('🍀 **Booster Chanceux** *(sans Communes)*');
+    if (u.activeBonuses?.halfCooldown) activeEffects.push('⚡ **Cooldown /2** *(3h)*');
+    if (u.pityRare) activeEffects.push('✨ **Pity Rare garantie**');
 
     const favCard = u.favoriteCardId && (u.cards?.[u.favoriteCardId] || 0) > 0
         ? cardById.get(u.favoriteCardId)
@@ -1234,43 +1234,42 @@ function buildHubEmbed(member, u) {
             name: `${member.displayName} • RegaDex TCG`,
             iconURL: member.displayAvatarURL({ dynamic: true })
         })
-        .setTitle('🃏 RegaDex — Set 1')
+        .setTitle('🃏 Tableau de bord — Set 1')
         .setDescription(
-            `\`${bar}\` **${pct}%** — **${comp.uniqueCount}/${comp.totalSet}** cartes découvertes *(${comp.totalCopies} au total)*`
+            `Bienvenue dans ton espace **RegaDex** !\n` +
+            `Ouvre tes boosters, remplis ton classeur et échange tes doublons.\n\n` +
+            `### 📚 Progression Set 1\n` +
+            `\`${bar}\` **${pct}%** — **${comp.uniqueCount}/${comp.totalSet}** découvertes *(${comp.totalCopies} au total)*\n\n` +
+            `🧰 **Items :** \`${comp.byCategory['Items'].owned}/${comp.byCategory['Items'].total}\`  •  ` +
+            `🧑 **Persos :** \`${comp.byCategory['Personnages'].owned}/${comp.byCategory['Personnages'].total}\`  •  ` +
+            `🎬 **Réfs :** \`${comp.byCategory['Références'].owned}/${comp.byCategory['Références'].total}\`\n` +
+            `────────────────────────────────────────`
         )
         .addFields(
             {
-                name: '🎁 Boosters',
+                name: '🎁 Tes Boosters',
                 value:
-                    `**${totalAvail}** prêt${totalAvail > 1 ? 's' : ''}\n` +
-                    `Gratuits : **${u.freeBoosters}/${MAX_FREE_BOOSTERS}**\n` +
-                    `Inventaire : **${u.inventory?.booster || 0}**\n` +
+                    `• Prêts à ouvrir : **${totalAvail}**\n` +
+                    `• Gratuits : **${u.freeBoosters}/${MAX_FREE_BOOSTERS}**\n` +
+                    `• Inventaire : **${u.inventory?.booster || 0}**\n` +
                     timerLine,
                 inline: true
             },
             {
-                name: '🪙 Profil',
+                name: '🪙 Ton Profil',
                 value:
-                    `**${u.points} pts** RegaDex\n` +
-                    `Thème : ${u.theme === 'W' ? '☀️ Clair' : '🌙 Nuit'}\n` +
-                    `Flex : ${favCard ? `\`${favCard.id}\` ${favCard.name}` : '*Aucun*'}`,
-                inline: true
-            },
-            {
-                name: '📂 Catégories',
-                value:
-                    `🧰 Items : **${comp.byCategory['Items'].owned}/${comp.byCategory['Items'].total}**\n` +
-                    `🧑 Persos : **${comp.byCategory['Personnages'].owned}/${comp.byCategory['Personnages'].total}**\n` +
-                    `🎬 Réfs : **${comp.byCategory['Références'].owned}/${comp.byCategory['Références'].total}**`,
+                    `• Solde : **${u.points} pts**\n` +
+                    `• Thème : ${u.theme === 'W' ? '☀️ Clair (W)' : '🌙 Nuit (B)'}\n` +
+                    `• Flex : ${favCard ? `\`${favCard.id}\` ${favCard.name}` : '*Aucune carte*'}`,
                 inline: true
             }
         )
-        .setFooter({ text: 'RegaDex Set 1 • Utilise 📘 Guide pour tout comprendre' });
+        .setFooter({ text: 'RegaDex TCG • Set 1 — Clique sur 📘 Guide si tu débutes' });
 
     if (activeEffects.length > 0) {
         embed.addFields({
-            name: '🔥 Effets actifs',
-            value: activeEffects.join('  •  '),
+            name: '🔥 Effets actifs sur ton prochain booster',
+            value: activeEffects.join('\n'),
             inline: false
         });
     }
@@ -1343,42 +1342,42 @@ function buildHubComponents(userId, u) {
 }
 
 function buildGuidePayload(userId, fromHub = true) {
+    const sep = '\n────────────────────────────────────────\n';
+
     const embed = new EmbedBuilder()
         .setColor(0x3498DB)
-        .setTitle('📘 Guide du RegaDex TCG — Set 1')
-        .setDescription('Tout ce qu\'il faut savoir pour collectionner les **109 cartes** de Regaïa !')
-        .addFields(
-            {
-                name: '🎁 Boosters, Pity & Raretés',
-                value:
-                    `• **1 booster gratuit toutes les 6h** *(max **2** en réserve)* = **3 cartes**.\n` +
-                    `• **Pity :** si un booster ne contient que **3 Communes**, le suivant garantit **1 Rare**.\n` +
-                    `• **Taux :** Commune \`45%\` • Rare \`25%\` • Épique \`15%\` • Légendaire \`10%\` • Full Art \`4%\` • Négative \`1%\`.\n` +
-                    `• Les versions **Holo** ont **2× moins de chances** de tomber que leur carte normale.`,
-                inline: false
-            },
-            {
-                name: '🪙 Points RegaDex & Store',
-                value:
-                    `• **Gains :** \`+1 pt\` / 15 messages, 10 min vocal *(≥ 3 membres, hors AFK)* ou 1 roulette • \`+5 pts\` / booster ouvert • \`+3 pts\` / doublon.\n` +
-                    `• **Store :** Booster \`100 pts\` • Booster chanceux *(sans Communes)* \`75 pts\` • Transformation Holo \`50 pts\` • Cooldown /2 *(3h)* \`25 pts\`.`,
-                inline: false
-            },
-            {
-                name: '🔄 Échanges & Classeur',
-                value:
-                    `• **Échanges (\`!trade [@]\`) :** uniquement avec tes **doublons** (\`≥ 2\` copies), jusqu'à **3 cartes** par échange dans un thread dédié.\n` +
-                    `• **Classeur :** filtre par catégorie, change le nombre par page (\`9\`, \`18\`, \`36\`, \`All\`) et le thème Clair/Nuit (\`W/B\`).`,
-                inline: false
-            },
-            {
-                name: '⌨️ Commandes utiles',
-                value:
-                    `• \`!tcg\` / \`!open\` / \`!classeur [@]\`\n` +
-                    `• \`!carte [n° ou nom]\` *(cartes possédées uniquement)*\n` +
-                    `• \`!tcg flex [modify / @]\` *(autorisé dans tous les salons)*`,
-                inline: false
-            }
+        .setTitle('📘 Guide complet du RegaDex TCG — Set 1')
+        .setDescription(
+            `Collectionne les **109 cartes** du Set 1 *(Items, Personnages & Références)* en ouvrant des boosters et en échangeant tes doublons !\n` +
+            sep +
+            `### 🎁 1. Boosters & Ouverture\n` +
+            `• Tu reçois **1 booster gratuit toutes les 6h** *(max **2** en attente)*.\n` +
+            `• Chaque booster contient **3 cartes uniques**, révélées de la plus commune à la plus rare.\n` +
+            `• **Système de Pity :** si un booster ne te donne que **3 Communes**, ton prochain booster garantit au moins **1 carte Rare**.\n` +
+            `• Tu peux activer une **alerte 🔔** *(ici ou en MP)* pour être prévenu(e) dès que ton prochain booster est prêt !` +
+            sep +
+            `### ✨ 2. Raretés, Holos & Négatives\n` +
+            `• **Taux de tirage :**\n` +
+            `  ⚪ Commune \`45%\` • 🔵 Rare \`25%\` • 🟣 Épique \`15%\`\n` +
+            `  🟡 Légendaire \`10%\` • 🌈 Full Art \`4%\` • 🕳️ Négative \`1%\`\n` +
+            `• **Cartes Holographiques :** certaines cartes ont une version *Holo* avec leur propre numéro, **2× plus rare** que l'originale.\n` +
+            `• **Cartes Négatives :** **13 cartes secrètes** numérotées \`1-Ø1\` à \`1-Ø13\`, les plus rares du Set 1.` +
+            sep +
+            `### 🪙 3. Points RegaDex & Store\n` +
+            `• **Comment gagner des points :**\n` +
+            `  \`+1 pt\` / 15 messages • \`+1 pt\` / 10 min en vocal *(≥ 3 humains, hors AFK)*\n` +
+            `  \`+1 pt\` / roulette • \`+5 pts\` / booster ouvert • \`+3 pts\` / doublon\n` +
+            `• **RegaDex Store (\`🛒 Store\`) :** tes achats vont dans ton **🎒 Inventaire** (\`!regadex claim\`) :\n` +
+            `  • 🎁 **Booster** (\`100 pts\`) — Un booster supplémentaire à ouvrir.\n` +
+            `  • 🍀 **Chanceux** (\`75 pts\`) — Retire toutes les *Communes* du prochain booster.\n` +
+            `  • ✨ **Transfo Holo** (\`50 pts\`) — Transforme une carte compatible possédée en *Holo*.\n` +
+            `  • ⚡ **Cooldown /2** (\`25 pts\`) — Le prochain rechargement gratuit passe à **3h** au lieu de 6h.` +
+            sep +
+            `### 📖 4. Classeur, Échanges & Commandes\n` +
+            `• **Classeur :** filtre par catégorie, choisis l'affichage (\`9\`, \`18\`, \`36\` ou \`All\`) et le thème **Clair (W) / Nuit (B)**.\n` +
+            `• **Voir le classeur d'un membre :** utilise le menu déroulant du classeur ou \`!classeur @membre\` *(cela mentionne la personne pour lui demander son accord)*.\n` +
+            `• **Échanges (\`!trade [@]\` ou clic droit sur un membre) :** échange jusqu'à **3 doublons** *(cartes possédées en ≥ 2 exemplaires)* dans un thread dédié.\n` +
+            `• **Commandes rapides :** \`!tcg\` • \`!open\` • \`!carte [n°/nom]\` *(cartes obtenues uniquement)* • \`!tcg flex\` *(utilisable partout sur le serveur)*`
         )
         .setFooter({ text: 'RegaDex Set 1 • Cacabot' });
 
@@ -1404,9 +1403,9 @@ function buildCreditsPayload(userId, fromHub = true) {
         .setColor(0xE67E22)
         .setTitle('📜 Crédits & Remerciements — RegaDex TCG')
         .setDescription(
-            `Merci à <@704593833421438996> d'héberger Cacabot et qui me permet de créer de genre de jeux pour vous;`
-            `Merci aussi à <@1070742213635625050> de m'avoir donné quelques inspirations pour créer les cartes;`
-            `Sans oublier <@390562565417336834> qui est toujours présente pour m'aider à vous offrir la meilleure qualité visuelle possible;`
+            `Merci à <@704593833421438996> d'héberger Cacabot, ce qui me permet de créer ce genre de jeux pour vous ;\n` +
+            `Merci aussi à <@1070742213635625050> de m'avoir donné quelques inspirations pour créer les cartes ;\n` +
+            `Sans oublier <@390562565417336834> qui est toujours présente pour m'aider à vous offrir la meilleure qualité visuelle possible.\n\n` +
             `Et surtout, merci à toutes les personnes qui ouvrent des boosters, complètent leur classeur et font vivre le **RegaDex** sur **Regaïa** ! 💜\n` +
             `Chaque carte du Set 1 a été imaginée et montée avec soin pour la communauté. — <@${EPSYS_ID}>`
         )
@@ -2050,6 +2049,10 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages) {
             { label: 'Tout sur 1 page (All)', value: 'all', default: perPageMode === 'all' }
         ]);
 
+    const userMenu = new UserSelectMenuBuilder()
+        .setCustomId(`tcg:binder:pickuser:${viewerId}`)
+        .setPlaceholder('Consulter le classeur d\'un autre membre...');
+
     const btnRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`tcg:bnav:prev:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}`)
@@ -2082,6 +2085,7 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages) {
     return [
         new ActionRowBuilder().addComponents(catMenu),
         new ActionRowBuilder().addComponents(perPageMenu),
+        new ActionRowBuilder().addComponents(userMenu),
         btnRow
     ];
 }
