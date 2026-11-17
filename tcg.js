@@ -169,6 +169,7 @@ let assetPaths = {
     openingGif: null,
     mysteryCard: null,
     boosterPng: null,
+    eventBanner: null,
     bgW: null,
     bgB: null
 };
@@ -277,6 +278,7 @@ async function scanSet1Cards(client = null) {
         openingGif: findExistingFile(TCG_ASSETS_DIR, ['Ouverture Set 1.gif']),
         mysteryCard: findExistingFile(TCG_ASSETS_DIR, ['Carte mystère.png', 'Carte mystere.png']),
         boosterPng: findExistingFile(TCG_ASSETS_DIR, ['Booster Set 1.png']),
+        eventBanner: findExistingFile(TCG_SET1_DIR, ['Event banner Set 1.png']) || findExistingFile(TCG_ASSETS_DIR, ['Event banner Set 1.png']),
         bgW: findExistingFile(TCG_ASSETS_DIR, ['Background RegaDex W.png', 'Background Readex W.png']),
         bgB: findExistingFile(TCG_ASSETS_DIR, ['Background RegaDex B.png', 'Background Readex B.png'])
     };
@@ -284,6 +286,7 @@ async function scanSet1Cards(client = null) {
     if (!assetPaths.openingGif) missingAssets.push('TCG/Assets/Ouverture Set 1.gif');
     if (!assetPaths.mysteryCard) missingAssets.push('TCG/Assets/Carte mystère.png');
     if (!assetPaths.boosterPng) missingAssets.push('TCG/Assets/Booster Set 1.png');
+    if (!assetPaths.eventBanner) missingAssets.push('TCG/Set 1/Event banner Set 1.png');
     if (!assetPaths.bgW) missingAssets.push('TCG/Assets/Background RegaDex W.png (ou Readex W.png)');
     if (!assetPaths.bgB) missingAssets.push('TCG/Assets/Background RegaDex B.png (ou Readex B.png)');
 
@@ -1274,8 +1277,8 @@ function buildHubEmbed(member, u) {
         });
     }
 
-    if (assetPaths.boosterPng && fs.existsSync(assetPaths.boosterPng)) {
-        embed.setThumbnail('attachment://booster_set1.png');
+    if (assetPaths.eventBanner && fs.existsSync(assetPaths.eventBanner)) {
+        embed.setImage('attachment://event_banner_set1.png');
     }
 
     return embed;
@@ -1365,8 +1368,8 @@ function buildGuidePayload(userId, fromHub = true) {
             sep +
             `### 🪙 3. Points RegaDex & Store\n` +
             `• **Comment gagner des points :**\n` +
-            `  \`+1 pt\` / 15 messages • \`+1 pt\` / 10 min en vocal *(≥ 3 humains, hors AFK)*\n` +
-            `  \`+1 pt\` / roulette • \`+5 pts\` / booster ouvert • \`+3 pts\` / doublon\n` +
+            `  15 messages = **+1pt** • 10 min en vocal *(≥ 3 membres, hors AFK)* = **+1pt**\n` +
+            `  1 roulette = **+1pt** • 1 booster ouvert = **+5pts** • 1 doublon = **+3pts**\n` +
             `• **RegaDex Store (\`🛒 Store\`) :** tes achats vont dans ton **🎒 Inventaire** (\`!regadex claim\`) :\n` +
             `  • 🎁 **Booster** (\`100 pts\`) — Un booster supplémentaire à ouvrir.\n` +
             `  • 🍀 **Chanceux** (\`75 pts\`) — Retire toutes les *Communes* du prochain booster.\n` +
@@ -1392,8 +1395,8 @@ function buildHubPayload(member, u) {
     const embed = buildHubEmbed(member, u);
     const components = buildHubComponents(member.id, u);
     const files = [];
-    if (assetPaths.boosterPng && fs.existsSync(assetPaths.boosterPng)) {
-        files.push(new AttachmentBuilder(assetPaths.boosterPng, { name: 'booster_set1.png' }));
+    if (assetPaths.eventBanner && fs.existsSync(assetPaths.eventBanner)) {
+        files.push(new AttachmentBuilder(assetPaths.eventBanner, { name: 'event_banner_set1.png' }));
     }
     return { embeds: [embed], components, files };
 }
@@ -1403,11 +1406,14 @@ function buildCreditsPayload(userId, fromHub = true) {
         .setColor(0xE67E22)
         .setTitle('📜 Crédits & Remerciements — RegaDex TCG')
         .setDescription(
+            `────────────────────────────────────────\n` +
             `Merci à <@704593833421438996> d'héberger Cacabot, ce qui me permet de créer ce genre de jeux pour vous ;\n` +
             `Merci aussi à <@1070742213635625050> de m'avoir donné quelques inspirations pour créer les cartes ;\n` +
             `Sans oublier <@390562565417336834> qui est toujours présente pour m'aider à vous offrir la meilleure qualité visuelle possible.\n\n` +
             `Et surtout, merci à toutes les personnes qui ouvrent des boosters, complètent leur classeur et font vivre le **RegaDex** sur **Regaïa** ! 💜\n` +
-            `Chaque carte du Set 1 a été imaginée et montée avec soin pour la communauté. — <@${EPSYS_ID}>`
+            `Chaque carte du Set 1 a été imaginée et montée avec soin pour la communauté.` +
+            ` — ***Epsys***\n` +
+            `────────────────────────────────────────`
         )
         .addFields(
             {
@@ -1417,18 +1423,20 @@ function buildCreditsPayload(userId, fromHub = true) {
                     `• **[VectorStock](${CREDITS_LINKS.vectorstock})** — Éléments vectoriels\n` +
                     `• **[Magnific](${CREDITS_LINKS.magnific})** — FX haute définition\n` +
                     `• **[PNGimg](${CREDITS_LINKS.pngimg})** — Ressources PNG détourées\n` +
-                    `• **[MetalForge](${CREDITS_LINKS.metalforge})** — Effets et textures métalliques`,
+                    `• **[MetalForge](${CREDITS_LINKS.metalforge})** — Effets et textures métalliques\n` +
+                    `────────────────────────────────────────`,
                 inline: false
             },
             {
                 name: '⚠️ Note de prévention — Utilisation d\'IA',
                 value:
-                    `De l'intelligence artificielle a pu être utilisée sur certaines cartes **purement à des fins d'upscaling** *(amélioration de la résolution et de la netteté)*.\n` +
-                    `**Aucune carte n'a été imaginée, modifiée ou générée à 100 % par intelligence artificielle.**`,
+                    `De l'intelligence artificielle a pu être utilisée sur certaines cartes **purement** à des fins d'**upscaling** *(amélioration de la résolution et de la netteté)*.\n` +
+                    `**Aucune carte** n'a été **imaginée**, **modifiée** ou **générée à 100 %** par intelligence artificielle.\n` +
+                    `────────────────────────────────────────`,
                 inline: false
             }
         )
-        .setFooter({ text: 'RegaDex Set 1 • Créé par Epsys pour Regaïa' });
+        .setFooter({ text: 'RegaDex • Créé par Epsys, pour Regaïa' });
 
     const components = fromHub
         ? [new ActionRowBuilder().addComponents(buildAccueilButton(userId))]
@@ -1455,7 +1463,7 @@ function buildOpenPromptPayload(member, u, fromHub = false) {
     const embed = new EmbedBuilder()
         .setColor(totalAvail > 0 ? 0x2ecc71 : 0x95a5a6)
         .setAuthor({ name: `Boosters de ${member.displayName}`, iconURL: member.displayAvatarURL({ dynamic: true }) })
-        .setTitle('🎁 Booster Set 1 — RegaDex')
+        .setTitle('🃏 Booster Set 1 — RegaDex')
         .setDescription(desc);
 
     const files = [];
@@ -2053,7 +2061,13 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages) {
         .setCustomId(`tcg:binder:pickuser:${viewerId}`)
         .setPlaceholder('Consulter le classeur d\'un autre membre...');
 
-    const btnRow = new ActionRowBuilder().addComponents(
+    const navRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tcg:bnav:first:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}`)
+            .setLabel('Première page')
+            .setEmoji('⏪')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(page <= 0),
         new ButtonBuilder()
             .setCustomId(`tcg:bnav:prev:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}`)
             .setLabel('Précédent')
@@ -2067,6 +2081,15 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages) {
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(page >= totalPages - 1),
         new ButtonBuilder()
+            .setCustomId(`tcg:bnav:last:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}`)
+            .setLabel('Dernière page')
+            .setEmoji('⏩')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(page >= totalPages - 1)
+    );
+
+    const optRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
             .setCustomId(`tcg:bsort:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode === 'number' ? 'rarity' : 'number'}:${hubFlag}`)
             .setLabel(sortMode === 'number' ? 'Tri : Rareté' : 'Tri : Numéro')
             .setEmoji('🔀')
@@ -2079,14 +2102,15 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages) {
     );
 
     if (fromHub && ownerId === viewerId) {
-        btnRow.addComponents(buildAccueilButton(viewerId));
+        optRow.addComponents(buildAccueilButton(viewerId));
     }
 
     return [
         new ActionRowBuilder().addComponents(catMenu),
         new ActionRowBuilder().addComponents(perPageMenu),
         new ActionRowBuilder().addComponents(userMenu),
-        btnRow
+        navRow,
+        optRow
     ];
 }
 
@@ -3867,7 +3891,10 @@ async function handleTcgInteraction(interaction) {
             page = parseInt(parts[7], 10) || 0;
             sortMode = parts[8];
             fromHub = parts[9] === '1';
-            page = dir === 'prev' ? page - 1 : page + 1;
+            if (dir === 'first') page = 0;
+            else if (dir === 'prev') page = Math.max(0, page - 1);
+            else if (dir === 'next') page = page + 1;
+            else if (dir === 'last') page = 999999;
         } else if (action === 'bsort' && interaction.isButton()) {
             ownerId = parts[2];
             viewerId = parts[3];
