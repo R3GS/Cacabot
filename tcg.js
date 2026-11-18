@@ -50,6 +50,13 @@ const VOCAL_MINUTES_PER_POINT = 10;
 
 const PULL_BOOST_ROLE_KEY = 'ROLE_TCG';
 const PULL_MULTIPLIERS = [1, 2, 3, 5, 10, 20, 50, 100];
+const PUNITION_RARITIES = [
+    { code: 'E', rarity: 'Épique', emoji: '🟣' },
+    { code: 'L', rarity: 'Légendaire', emoji: '🟡' },
+    { code: 'F', rarity: 'Full Art', emoji: '🌈' },
+    { code: 'N', rarity: 'Négative', emoji: '🕳️' }
+];
+const PUNITION_LEVELS = [1, 0.5, 0.2, 0.1, 0];
 
 const STORE_PRICES = {
     booster: 100,
@@ -189,6 +196,7 @@ function getStoreData() {
     if (!data.notifs) data.notifs = {};
     if (!data.activeTrades) data.activeTrades = {};
     if (!data.pullBoosts) data.pullBoosts = {};
+    if (!data.pullPunishments) data.pullPunishments = {};
     return data;
 }
 
@@ -232,6 +240,7 @@ const boosterSessions = new Map(); // messageId -> session
 const pendingConfirms = new Map(); // confirmId -> payload
 const binderReturnStates = new Map(); // binderMsgId -> { ownerId, viewerId, category, perPageMode, page, sortMode, rarityFilter, ownedOnly, fromHub, expiresAt }
 const pullChanceSessions = new Map(); // sessionId -> { targetKey, cardId, mult, cardPage, createdAt }
+const punitionSessions = new Map(); // sessionId -> { targetUserId, createdAt }
 const notifTimers = new Map(); // userId -> Timeout
 
 function normalizeText(str) {
@@ -353,7 +362,7 @@ async function scanSet1Cards(client = null) {
     if (!assetPaths.mysteryCard) missingAssets.push('TCG/Assets/Carte mystère.png');
     if (!assetPaths.boosterPng) missingAssets.push('TCG/Assets/Booster Set 1.png');
     if (!assetPaths.eventBanner) missingAssets.push('TCG/Set 1/Event banner Set 1.png');
-    if (!assetPaths.set1Logo) missingAssets.push('TCG/Assets/Set 1/Logo.png');
+    if (!assetPaths.set1Logo) missingAssets.push('TCG/Set 1/Logo.png');
     if (!assetPaths.bgW) missingAssets.push('TCG/Assets/Background RegaDex W.jpg (ou .png)');
     if (!assetPaths.bgB) missingAssets.push('TCG/Assets/Background RegaDex B.jpg (ou .png)');
 
@@ -999,13 +1008,42 @@ function getCardPullMultiplier(cardId, userId = null, member = null) {
     return mult;
 }
 
+function getRarityPunishmentFactor(rarity, userId = null) {
+    if (!rarity || !userId || isSandboxId(userId)) return 1;
+    const data = getStoreData();
+    const factor = data.pullPunishments?.[userId]?.[rarity];
+    if (typeof factor === 'number' && factor >= 0 && factor < 1) {
+        return factor;
+    }
+    return 1;
+}
+
 function getEffectiveCardWeight(card, raritySums, userId = null, member = null) {
     if (!card) return 0;
+    const punishFactor = getRarityPunishmentFactor(card.rarity, userId);
+    if (punishFactor <= 0) return 0;
     const rarityW = RARITY_WEIGHTS[card.rarity] || 0;
     const denom = raritySums[card.rarity] || 1;
     const cardBaseShare = rarityW * ((card.isHolo ? 1 : 2) / denom);
     const mult = getCardPullMultiplier(card.id, userId, member);
-    return cardBaseShare * mult;
+    return cardBaseShare * mult * punishFactor;
+}
+
+function getRarityPullSummary(userId = null, member = null) {
+    const raritySums = getRarityBaseWeightSums();
+    const totalsByRarity = {};
+    let totalW = 0;
+    for (const r of RARITY_LIST) totalsByRarity[r] = 0;
+    for (const c of cardCatalog) {
+        const w = getEffectiveCardWeight(c, raritySums, userId, member);
+        totalsByRarity[c.rarity] = (totalsByRarity[c.rarity] || 0) + w;
+        totalW += w;
+    }
+    const result = {};
+    for (const r of RARITY_LIST) {
+        result[r] = totalW > 0 ? (totalsByRarity[r] / totalW) * 100 : 0;
+    }
+    return result;
 }
 
 function getCardPullProbability(card, luckyUsed = false, userId = null, member = null) {
@@ -1070,7 +1108,10 @@ function drawBoosterCards(u, userId = null, member = null) {
     }
 
     for (let i = 0; i < slots; i++) {
-        const pool = cardCatalog.filter(c => !(luckyActive && c.rarity === 'Commune') && !pickedIds.has(c.id));
+        let pool = cardCatalog.filter(c => !(luckyActive && c.rarity === 'Commune') && !pickedIds.has(c.id) && getEffectiveCardWeight(c, raritySums, userId, member) > 0);
+        if (pool.length === 0) {
+            pool = cardCatalog.filter(c => !pickedIds.has(c.id) && getEffectiveCardWeight(c, raritySums, userId, member) > 0);
+        }
         const fallback = pool.length > 0 ? pool : cardCatalog.filter(c => !pickedIds.has(c.id));
         const chosenCard = pickWeightedCard(fallback, raritySums, userId, member);
         if (chosenCard) {
@@ -4309,6 +4350,119 @@ function buildPullChancePayload(sessionId, session, guild) {
     return { embeds: [embed], components: [row1, row2, row3, row4, row5] };
 }
 
+function formatPunitionFactor(factor) {
+    if (factor === 0) return '🚫 0% (Bloqué)';
+    if (factor === 0.1) return '÷10';
+    if (factor === 0.2) return '÷5';
+    if (factor === 0.5) return '÷2';
+    return 'Normal';
+}
+
+function buildPunitionPayload(sessionId, session, guild) {
+    const data = getStoreData();
+    const allPunishments = data.pullPunishments || {};
+    const targetId = session.targetUserId || null;
+    const userPunish = targetId ? (allPunishments[targetId] || {}) : {};
+
+    let targetLabel = '*Aucun·e membre sélectionné·e*';
+    if (targetId) {
+        const m = guild?.members?.cache?.get(targetId);
+        targetLabel = `👤 <@${targetId}>${m ? ` (${m.displayName})` : ''}`;
+    }
+
+    const restrictionLines = PUNITION_RARITIES.map(r => {
+        const f = typeof userPunish[r.rarity] === 'number' ? userPunish[r.rarity] : 1;
+        return `${r.emoji} **${r.rarity} :** ${formatPunitionFactor(f)}`;
+    }).join('  •  ');
+
+    let ratesLine = '';
+    if (targetId && cardCatalog.length > 0) {
+        const m = guild?.members?.cache?.get(targetId) || null;
+        const summary = getRarityPullSummary(targetId, m);
+        const rateParts = RARITY_LIST.map(r => {
+            const meta = RARITY_META[r] || RARITY_META['Commune'];
+            return `${meta.emoji} ${r} **${formatPullPercent(summary[r])}%**`;
+        });
+        ratesLine = `\n🎲 **Taux réels actuels :**\n${rateParts.join(' • ')}\n`;
+    }
+
+    const activeLines = [];
+    for (const [uid, map] of Object.entries(allPunishments)) {
+        if (!map || typeof map !== 'object') continue;
+        const entries = PUNITION_RARITIES
+            .filter(r => typeof map[r.rarity] === 'number' && map[r.rarity] >= 0 && map[r.rarity] < 1)
+            .map(r => `${r.emoji} ${r.rarity} (**${formatPunitionFactor(map[r.rarity])}**)` );
+        if (entries.length === 0) continue;
+        activeLines.push(`• <@${uid}> : ${entries.join(', ')}`);
+    }
+
+    const hasTargetPunish = Boolean(targetId && PUNITION_RARITIES.some(r => typeof userPunish[r.rarity] === 'number' && userPunish[r.rarity] < 1));
+
+    const embed = new EmbedBuilder()
+        .setColor(0xe74c3c)
+        .setTitle('⚖️ Panneau !tcgpunition (Epsys-Only)')
+        .setDescription(
+            `Réduit ou bloque les chances de tirer des cartes **Épiques**, **Légendaires**, **Full Art** et **Négatives** pour un·e membre.\n` +
+            `-# Clique sur un bouton de rareté pour alterner : \`Normal → ÷2 → ÷5 → ÷10 → 0% (Bloqué)\`\n\n` +
+            `• **Cible :** ${targetLabel}\n` +
+            `• **Restrictions :** ${restrictionLines}` +
+            ratesLine +
+            `\n────────────────────────────────────────\n` +
+            `### 📌 Punitions actives actuellement\n` +
+            (activeLines.length > 0 ? activeLines.join('\n').slice(0, 1600) : '*Aucune punition active sur le serveur.*')
+        )
+        .setFooter({ text: `${SET1_NAME} • Commande secrète Epsys-Only` });
+
+    const row1 = new ActionRowBuilder().addComponents(
+        new UserSelectMenuBuilder()
+            .setCustomId(`tcg:pun:user:${sessionId}`)
+            .setPlaceholder('Choisir ou changer le/la membre ciblé·e...')
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
+        ...PUNITION_RARITIES.map(r => {
+            const f = targetId && typeof userPunish[r.rarity] === 'number' ? userPunish[r.rarity] : 1;
+            const style = f === 0 ? ButtonStyle.Danger : (f < 1 ? ButtonStyle.Primary : ButtonStyle.Secondary);
+            return new ButtonBuilder()
+                .setCustomId(`tcg:pun:rar:${sessionId}:${r.code}`)
+                .setLabel(`${r.rarity} : ${f === 0 ? '0% (Bloqué)' : formatPunitionFactor(f)}`)
+                .setEmoji(r.emoji)
+                .setStyle(style)
+                .setDisabled(!targetId);
+        })
+    );
+
+    const row3 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tcg:pun:all5:${sessionId}`)
+            .setLabel('Tout ÷5')
+            .setEmoji('📉')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(!targetId),
+        new ButtonBuilder()
+            .setCustomId(`tcg:pun:all0:${sessionId}`)
+            .setLabel('Tout bloquer (0%)')
+            .setEmoji('🚫')
+            .setStyle(ButtonStyle.Danger)
+            .setDisabled(!targetId),
+        new ButtonBuilder()
+            .setCustomId(`tcg:pun:clear:${sessionId}`)
+            .setLabel('Lever punition')
+            .setEmoji('✅')
+            .setStyle(ButtonStyle.Success)
+            .setDisabled(!hasTargetPunish),
+        new ButtonBuilder()
+            .setCustomId(`tcg:pun:clearall:${sessionId}`)
+            .setLabel('Tout reset')
+            .setEmoji('🗑️')
+            .setStyle(ButtonStyle.Danger)
+            .setDisabled(activeLines.length === 0),
+        buildCloseButton(EPSYS_ID)
+    );
+
+    return { embeds: [embed], components: [row1, row2, row3] };
+}
+
 async function handleAdminTcgCommand(message, lowerContent) {
     // 0. !tcgpullchance (Epsys-only)
     if (/^!(?:tcg|rgdx|regadex)\s*pull\s*chance(?:\s|$)/i.test(lowerContent)) {
@@ -4331,6 +4485,36 @@ async function handleAdminTcgCommand(message, lowerContent) {
         };
         pullChanceSessions.set(sessionId, session);
         await replySilent(message, buildPullChancePayload(sessionId, session, message.guild));
+        return true;
+    }
+
+    // 0bis. !tcgpunition [ID/@/pseudo] (Epsys-only)
+    if (/^!(?:tcg|rgdx|regadex)\s*punition(?:\s|$)/i.test(lowerContent)) {
+        if (message.author.id !== EPSYS_ID) return true;
+        const now = Date.now();
+        for (const [k, s] of punitionSessions.entries()) {
+            if (now - (s.createdAt || 0) > 60 * 60 * 1000) punitionSessions.delete(k);
+        }
+        const rawArg = message.content.trim().replace(/^!(?:tcg|rgdx|regadex)\s*punition\s*/i, '').trim();
+        const openPanel = async (targetUserId = null) => {
+            const sessionId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+            const session = { targetUserId, createdAt: now };
+            punitionSessions.set(sessionId, session);
+            await replySilent(message, buildPunitionPayload(sessionId, session, message.guild));
+        };
+
+        if (!rawArg && message.mentions.users.size === 0) {
+            await openPanel(null);
+            return true;
+        }
+        await resolveMemberArg(message, rawArg, async (target) => {
+            if (!target) return;
+            if (target.user?.bot || target.bot) {
+                await replySilent(message, '❌ Impossible de cibler un bot.');
+                return;
+            }
+            await openPanel(target.id);
+        });
         return true;
     }
     // 1. !boostergive [@membre/ID] [nb] / !booster give ...
@@ -6814,6 +6998,86 @@ async function handleTcgInteraction(interaction) {
             data.pullBoosts = {};
             tcgBridge.demanderSauvegarde();
             await interaction.update(buildPullChancePayload(sessionId, session, interaction.guild));
+            return true;
+        }
+    }
+
+    // ----- !TCGPUNITION (EPSYS-ONLY) -----
+    if (action === 'pun') {
+        if (interaction.user.id !== EPSYS_ID) {
+            await interaction.reply({ content: "Réservé à Epsys 😌", ephemeral: true });
+            return true;
+        }
+        const sub = parts[2];
+        const sessionId = parts[3];
+        const session = punitionSessions.get(sessionId);
+        if (!session) {
+            await interaction.reply({ content: "⏳ Session `!tcgpunition` expirée. Relance la commande.", ephemeral: true });
+            return true;
+        }
+        const data = getStoreData();
+        if (!data.pullPunishments) data.pullPunishments = {};
+
+        if (sub === 'user' && interaction.isUserSelectMenu()) {
+            const chosenId = interaction.values[0];
+            const chosenMember = await interaction.guild.members.fetch(chosenId).catch(() => null);
+            if (chosenMember?.user?.bot) {
+                await interaction.reply({ content: "❌ Impossible de cibler un bot.", ephemeral: true });
+                return true;
+            }
+            session.targetUserId = chosenId;
+            await interaction.update(buildPunitionPayload(sessionId, session, interaction.guild));
+            return true;
+        }
+
+        if (sub === 'rar' && interaction.isButton()) {
+            const code = parts[4];
+            const info = PUNITION_RARITIES.find(r => r.code === code);
+            if (!session.targetUserId || !info) return true;
+            const userMap = data.pullPunishments[session.targetUserId] || {};
+            const current = typeof userMap[info.rarity] === 'number' ? userMap[info.rarity] : 1;
+            const idx = PUNITION_LEVELS.indexOf(current);
+            const next = PUNITION_LEVELS[(idx === -1 ? 0 : idx + 1) % PUNITION_LEVELS.length];
+
+            if (next >= 1) {
+                delete userMap[info.rarity];
+            } else {
+                userMap[info.rarity] = next;
+            }
+            if (Object.keys(userMap).length === 0) {
+                delete data.pullPunishments[session.targetUserId];
+            } else {
+                data.pullPunishments[session.targetUserId] = userMap;
+            }
+            tcgBridge.demanderSauvegarde();
+            await interaction.update(buildPunitionPayload(sessionId, session, interaction.guild));
+            return true;
+        }
+
+        if ((sub === 'all5' || sub === 'all0') && interaction.isButton()) {
+            if (!session.targetUserId) return true;
+            const val = sub === 'all0' ? 0 : 0.2;
+            const userMap = {};
+            for (const r of PUNITION_RARITIES) userMap[r.rarity] = val;
+            data.pullPunishments[session.targetUserId] = userMap;
+            tcgBridge.demanderSauvegarde();
+            await interaction.update(buildPunitionPayload(sessionId, session, interaction.guild));
+            return true;
+        }
+
+        if (sub === 'clear' && interaction.isButton()) {
+            if (session.targetUserId && data.pullPunishments[session.targetUserId]) {
+                delete data.pullPunishments[session.targetUserId];
+                tcgBridge.demanderSauvegarde();
+            }
+            await interaction.update(buildPunitionPayload(sessionId, session, interaction.guild));
+            return true;
+        }
+
+        if (sub === 'clearall' && interaction.isButton()) {
+            data.pullPunishments = {};
+            tcgBridge.demanderSauvegarde();
+            await interaction.update(buildPunitionPayload(sessionId, session, interaction.guild));
             return true;
         }
     }

@@ -158,6 +158,7 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
                 `### 🪙 Points & Cartes\n` +
                 `\`!rgdxpts give [@membre/ID] [nb]\` / \`set\` *(ou \`!tcgpts\` / \`!regadexpts\`)* • Gérer les points\n` +
                 `\`!rgdxcard give [@membre/ID] [carte]\` / \`remove\` *(ou \`!tcgcard\` / \`!regadexcard\`)* • Gérer les cartes\n` +
+                `\`!tcgpunition [@membre/ID/pseudo]\` • Réduire ou bloquer les pulls Épiques / Légendaires / Full Art / Négatives d'un·e membre\n\n` +
                 `\`!tcgpullchance\` • Augmenter les chances de pull d'une carte *(membre ou rôle Collectionneur.euse)*\n\n` +
                 `### 🧪 Mode Test & Cache Proxies (Coolify)\n` +
                 `\`!tcgx [sous-cmd]\` *(hub, open, store, claim, classeur, carte, flex, top, reset)* • Bac à sable isolé *(109/109 cartes x5, 999k pts)*\n` +
