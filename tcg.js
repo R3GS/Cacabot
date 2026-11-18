@@ -2756,7 +2756,7 @@ async function envoyerPantheonTcg(client, member, card, isNew, luckyUsed = false
         .setTitle(titre)
         .setDescription(description)
         .addFields(
-            { name: '👤 Collectionneur·euse', value: `<@${member.id}> (${nom})`, inline: true },
+            { name: '👤 Collectionneur·euse', value: `<@${member.id}>`, inline: true },
             { name: `${meta.emoji} Carte obtenue`, value: `**${card.id} — ${card.name}**`, inline: true },
             { name: '\u200b', value: '\u200b', inline: true },
             { name: '✨ Rareté', value: `**${card.rarity}**${card.isHolo ? ' *(Holo)*' : ''}`, inline: true },
