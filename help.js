@@ -117,6 +117,8 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
                 `\`!bonusforce [id] [@membre]\` / \`!malusforce [id] [@membre]\` • Impose un tirage\n` +
                 `\`!rltid\` *(ou \`!rouletteid\`)* • Liste triée des IDs bonus, malus & spéciaux\n` +
                 `\`!removestate [@membre] [nom]\` • Retire un seul effet actif *(pseudo, mute, transfo...)*\n` +
+                `\`!rltgiveitem [id item] [@membre]\` • Donne un item du Battle Pass à un.e membre\n` +
+                `\`!itemid\` • Consulter l'id des items du Battle Pass\n` +
                 `\`!resetrlt [@membre]\` *(ou \`!resetroulettestate\`)* • Remise à zéro de tout l'état actif`
             );
     }
