@@ -37,7 +37,7 @@ const AFK_VOCAL_CHANNEL_ID = '1542345102930874449';
 const BOOSTER_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6h
 const HALF_COOLDOWN_MS = 3 * 60 * 60 * 1000; // 3h
 const MAX_FREE_BOOSTERS = 2;
-const BOOSTER_GIF_DELAY_MS = 5500; // 5,5 secondes
+const BOOSTER_GIF_DELAY_MS = 4000; // 4 secondes
 const TRADE_INACTIVITY_MS = 24 * 60 * 60 * 1000; // 24h
 
 const POINTS_PER_BOOSTER = 5;
@@ -2252,6 +2252,14 @@ function buildBoosterCardEmbed(member, session, stepIndex) {
                 .setEmoji('📊')
                 .setStyle(ButtonStyle.Success)
         );
+    } else if (!session.skipUsed) {
+        row.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tcg:bstep:skip:${session.userId}`)
+                .setLabel('Skip')
+                .setEmoji('⏭️')
+                .setStyle(ButtonStyle.Secondary)
+        );
     }
 
     return { embeds: [embed], components: [row], files };
@@ -2559,6 +2567,14 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             gifEmbed.setImage('attachment://ouverture_set1.gif');
         }
 
+        const skipRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tcg:bstep:skip:${userId}`)
+                .setLabel('Skip')
+                .setEmoji('⏭️')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
         let sentMsg;
         if (targetResponder.isButton?.()) {
             const isExistingRecap = Boolean(targetResponder.message?.id && boosterSessions.has(targetResponder.message.id));
@@ -2567,22 +2583,22 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
                 sentMsg = await targetResponder.editReply({
                     content: null,
                     embeds: [gifEmbed],
-                    components: [],
+                    components: [skipRow],
                     files,
                     attachments: []
                 });
             } else {
-                sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], files, fetchReply: true }));
+                sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], components: [skipRow], files, fetchReply: true }));
                 disableBoosterOpenButtonOnMessage(targetResponder.message).catch(() => {});
             }
         } else if (targetResponder.isRepliable?.()) {
             if (targetResponder.deferred || targetResponder.replied) {
-                sentMsg = await targetResponder.followUp(withSilent({ embeds: [gifEmbed], files, fetchReply: true }));
+                sentMsg = await targetResponder.followUp(withSilent({ embeds: [gifEmbed], components: [skipRow], files, fetchReply: true }));
             } else {
-                sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], files, fetchReply: true }));
+                sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], components: [skipRow], files, fetchReply: true }));
             }
         } else {
-            sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], files }));
+            sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], components: [skipRow], files }));
         }
 
         const session = {
@@ -2597,9 +2613,12 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             fromHub: Boolean(fromHub),
             step: 0,
             hasReachedRecap: false,
+            skipUsed: false,
+            pantheonSent: false,
             recapBuffer: null,
             recapTheme: null,
             inspectTimeout: null,
+            gifTimeout: null,
             message: sentMsg
         };
         boosterSessions.set(sentMsg.id, session);
@@ -2611,20 +2630,30 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
         recapCleanTimer.unref?.();
 
         const sessionExpireTimer = setTimeout(() => {
+            if (session.gifTimeout) {
+                clearTimeout(session.gifTimeout);
+                session.gifTimeout = null;
+            }
             clearBoosterInspectTimeout(session);
             session.recapBuffer = null;
             boosterSessions.delete(sentMsg.id);
         }, 2 * 60 * 60 * 1000);
         sessionExpireTimer.unref?.();
 
-        setTimeout(async () => {
+        session.gifTimeout = setTimeout(async () => {
+            session.gifTimeout = null;
             boostersEnCours.delete(userId);
-            try {
-                const firstPayload = buildBoosterCardEmbed(member, session, 0);
-                await sentMsg.edit({ ...firstPayload, attachments: [] });
-            } catch {}
+            if (!session.skipUsed) {
+                try {
+                    const firstPayload = buildBoosterCardEmbed(member, session, 0);
+                    if (!session.skipUsed) {
+                        await sentMsg.edit({ ...firstPayload, attachments: [] });
+                    }
+                } catch {}
+            }
 
-            if (!isSandboxId(userId)) {
+            if (!session.pantheonSent && !isSandboxId(userId)) {
+                session.pantheonSent = true;
                 for (let i = 0; i < session.cards.length; i++) {
                     const pulledCard = session.cards[i];
                     if (pulledCard.rarity === 'Full Art' || pulledCard.rarity === 'Négative') {
@@ -4398,7 +4427,20 @@ async function handleTcgInteraction(interaction) {
             await interaction.reply({ content: "⏳ Session d'ouverture expirée.", ephemeral: true });
             return true;
         }
-        if (dir === 'next') session.step = Math.min(2, session.step + 1);
+        if (dir === 'skip') {
+            if (session.skipUsed) {
+                await interaction.reply({ content: "⏭️ Le bouton Skip n'est utilisable qu'une seule fois par ouverture !", ephemeral: true });
+                return true;
+            }
+            if (session.gifTimeout) {
+                clearTimeout(session.gifTimeout);
+                session.gifTimeout = null;
+            }
+            boostersEnCours.delete(session.userId);
+            session.skipUsed = true;
+            session.hasReachedRecap = true;
+            session.step = 3;
+        } else if (dir === 'next') session.step = Math.min(2, session.step + 1);
         else if (dir === 'prev') session.step = Math.max(0, session.step - 1);
         else if (dir === 'back3') session.step = 2;
         else if (dir === 'recap') {
@@ -4410,6 +4452,16 @@ async function handleTcgInteraction(interaction) {
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
         const stepPayload = await buildBoosterStepPayload(actorMember, session);
         await interaction.editReply({ content: null, ...stepPayload, attachments: [] });
+
+        if (dir === 'skip' && !session.pantheonSent && !isSandboxId(session.userId)) {
+            session.pantheonSent = true;
+            for (let i = 0; i < session.cards.length; i++) {
+                const pulledCard = session.cards[i];
+                if (pulledCard.rarity === 'Full Art' || pulledCard.rarity === 'Négative') {
+                    await envoyerPantheonTcg(client, actorMember, pulledCard, session.isNewFlags[i], session.luckyUsed).catch(() => {});
+                }
+            }
+        }
         return true;
     }
 
