@@ -2101,9 +2101,9 @@ function buildCreditsPayload(userId, fromHub = true) {
         .setTitle('📜 Crédits & Remerciements — RegaDex TCG')
         .setDescription(
             `────────────────────────────────────────\n` +
-            `Merci à <@704593833421438996> d'héberger Cacabot, ce qui me permet de créer ce genre de jeux pour vous ;\n` +
-            `Merci aussi à <@1070742213635625050> de m'avoir donné quelques inspirations pour créer les cartes ;\n` +
-            `Merci infiniment à ma femme <@738191002187202630> qui m'a aidé et soutenu tout du long ;\n` +
+            `Merci à <@704593833421438996> d'héberger Cacabot, ce qui me permet de créer ce genre de jeux pour vous;\n` +
+            `Merci aussi à <@1070742213635625050> de m'avoir donné quelques inspirations pour créer les cartes;\n` +
+            `Merci infiniment à ma femme <@738191002187202630> qui m'a aidée et soutenue tout du long ❤️;\n` +
             `Sans oublier <@390562565417336834>, la bêta-testeuse officielle du TCG, qui est toujours présente pour m'aider à vous offrir la meilleure qualité visuelle possible.\n\n` +
             `Et surtout, merci à toutes les personnes qui ouvrent des boosters, complètent leur classeur et font vivre le **RegaDex** sur **Regaïa** ! 💜\n` +
             `Chaque carte du ${SET1_NAME} a été imaginée et montée avec soin pour la communauté.\n\n` +
