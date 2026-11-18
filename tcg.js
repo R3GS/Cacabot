@@ -186,10 +186,11 @@ let assetPaths = {
     bgB: null
 };
 
-const MAX_IMAGE_CACHE = 12;
-const MAX_THUMB_CACHE = 150;
+const MAX_IMAGE_CACHE = 4;
+const MAX_THUMB_CACHE = 80;
 const imageCache = new Map();
 const thumbCache = new Map();
+const bgCanvases = new Map(); // 'W' | 'B' -> fond pré-redimensionné en 1920x1080
 const boostersEnCours = new Set();
 const boosterSessions = new Map(); // messageId -> session
 const pendingConfirms = new Map(); // confirmId -> payload
@@ -296,6 +297,11 @@ async function scanSet1Cards(client = null) {
         bgW: findExistingFile(TCG_ASSETS_DIR, ['Background RegaDex W.png', 'Background Readex W.png']),
         bgB: findExistingFile(TCG_ASSETS_DIR, ['Background RegaDex B.png', 'Background Readex B.png'])
     };
+
+    // Les fonds source font 3840x2160 (~31 Mo décodés chacun) : on les réduit
+    // une seule fois à la taille d'affichage, puis on libère l'image 4K.
+    bgCanvases.clear();
+    await Promise.all([getBackground('W'), getBackground('B')]);
 
     if (!assetPaths.openingGif) missingAssets.push('TCG/Assets/Ouverture Set 1.gif');
     if (!assetPaths.mysteryCard) missingAssets.push('TCG/Assets/Carte mystère.png');
@@ -1010,8 +1016,9 @@ async function getCachedThumb(filePath, targetW, targetH) {
         return existing;
     }
     try {
-        // On utilise l'image HD si déjà en cache, sinon on la charge juste le temps de créer la miniature sans saturer imageCache
-        const img = imageCache.get(filePath) || (fs.existsSync(filePath) ? await loadImage(filePath) : null);
+        // imageCache ne contient plus que des sources de cartes (4 max), les fonds
+        // étant désormais pré-redimensionnés dans bgCanvases.
+        const img = await loadCachedImage(filePath);
         if (!img) return null;
         const c = createCanvas(targetW, targetH);
         const cctx = c.getContext('2d');
@@ -1032,6 +1039,36 @@ function drawCoverImage(ctx, img, w, h) {
     const dw = img.width * scale;
     const dh = img.height * scale;
     ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+}
+
+async function getBackground(theme) {
+    if (bgCanvases.has(theme)) return bgCanvases.get(theme);
+    const p = theme === 'W' ? assetPaths.bgW : assetPaths.bgB;
+    if (!p || !fs.existsSync(p)) return null;
+    try {
+        const src = await loadImage(p); // image 4K, libérée dès la fin de la fonction
+        const c = createCanvas(1920, 1080);
+        c.getContext('2d').drawImage(src, 0, 0, 1920, 1080);
+        bgCanvases.set(theme, c);
+        return c;
+    } catch {
+        return null;
+    }
+}
+
+function drawBackground(ctx, theme, w, h) {
+    const bg = bgCanvases.get(theme);
+    if (bg) return drawCoverImage(ctx, bg, w, h);
+    ctx.fillStyle = theme === 'W' ? '#F4F1EA' : '#13151B';
+    ctx.fillRect(0, 0, w, h);
+}
+
+function toPng(canvas) {
+    const buffer = canvas.toBuffer('image/png');
+    // node-canvas alloue la surface en mémoire native (Cairo) : la remettre à 0
+    // libère immédiatement ~8 Mo par rendu au lieu d'attendre le GC.
+    canvas.width = canvas.height = 0;
+    return buffer;
 }
 
 function getFilteredSortedCards(categoryFilter, sortMode) {
@@ -1081,14 +1118,7 @@ async function renderBinderCanvas(targetUser, u, options) {
     const textColor = isLight ? '#111111' : '#FFFFFF';
     const subTextColor = isLight ? '#333333' : '#CCCCCC';
 
-    const bgPath = isLight ? assetPaths.bgW : assetPaths.bgB;
-    const bgImg = await loadCachedImage(bgPath);
-    if (bgImg) {
-        drawCoverImage(ctx, bgImg, W, H);
-    } else {
-        ctx.fillStyle = isLight ? '#F4F1EA' : '#13151B';
-        ctx.fillRect(0, 0, W, H);
-    }
+    drawBackground(ctx, isLight ? 'W' : 'B', W, H);
 
     const cardsList = getFilteredSortedCards(category, sortMode);
     const grid = getBinderGridConfig(perPageMode, cardsList.length);
@@ -1215,7 +1245,7 @@ async function renderBinderCanvas(targetUser, u, options) {
     }
 
     return {
-        buffer: canvas.toBuffer('image/png'),
+        buffer: toPng(canvas),
         totalPages,
         safePage,
         ownedInView,
@@ -1230,13 +1260,7 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
     const ctx = canvas.getContext('2d');
     const isLight = theme === 'W';
 
-    const bgImg = await loadCachedImage(isLight ? assetPaths.bgW : assetPaths.bgB);
-    if (bgImg) {
-        drawCoverImage(ctx, bgImg, W, H);
-    } else {
-        ctx.fillStyle = isLight ? '#F4F1EA' : '#13151B';
-        ctx.fillRect(0, 0, W, H);
-    }
+    drawBackground(ctx, isLight ? 'W' : 'B', W, H);
 
     ctx.fillStyle = isLight ? 'rgba(255,255,255,0.78)' : 'rgba(12,14,20,0.78)';
     drawRoundRect(ctx, 40, 22, W - 80, 66, 16);
@@ -1262,7 +1286,7 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
         const pos = positions[i];
         const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
 
-        const img = await loadCachedImage(card.filePath);
+        const img = await getCachedThumb(card.filePath, cardW, cardH);
         if (img) {
             ctx.save();
             ctx.shadowColor = meta.glow || 'rgba(255, 255, 255, 0.55)';
@@ -1281,7 +1305,7 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
         ctx.fillText(`${card.id} • ${card.rarity} • ${statusTxt}`, pos.x + cardW / 2, pos.y + cardH + 10, cardW + 90);
     }
 
-    return canvas.toBuffer('image/png');
+    return toPng(canvas);
 }
 
 async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
@@ -1336,7 +1360,7 @@ async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
             if (!card) continue;
             const x = firstX + i * (cW + gap);
             const y = 195;
-            const img = await loadCachedImage(card.filePath);
+            const img = await getCachedThumb(card.filePath, cW, cH);
             if (img) ctx.drawImage(img, x, y, cW, cH);
 
             ctx.fillStyle = '#FFFFFF';
@@ -1349,7 +1373,7 @@ async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
     await drawSide(nameA, cardsA, 48, 580);
     await drawSide(nameB, cardsB, W - 48 - 580, 580);
 
-    return canvas.toBuffer('image/png');
+    return toPng(canvas);
 }
 
 // ==========================================
