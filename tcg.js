@@ -1492,21 +1492,6 @@ async function renderBinderCanvas(targetUser, u, options) {
 
     drawBackground(ctx, isLight ? 'W' : 'B', W, H);
 
-    // Logo Set 1 - Vestiges Regaïens centré et légèrement remonté en arrière-plan
-    if (assetPaths.set1Logo) {
-        const logoW = 1132;
-        const logoH = 467;
-        const logoProxy = await loadAssetProxy(assetPaths.set1Logo, logoW, logoH, { cacheKey: 'Set1_Logo.png' });
-        if (logoProxy?.img) {
-            const logoX = Math.round((W - logoW) / 2);
-            const logoY = Math.round((H - logoH) / 2) - 24;
-            ctx.save();
-            ctx.globalAlpha = isLight ? 0.85 : 0.90;
-            ctx.drawImage(logoProxy.img, logoX - logoProxy.pad, logoY - logoProxy.pad);
-            ctx.restore();
-        }
-    }
-
     const allCategoryCards = getFilteredSortedCards(category, sortMode, u, false, rarityFilter);
     const cardsList = ownedOnly ? allCategoryCards.filter(c => (u.cards?.[c.id] || 0) > 0) : allCategoryCards;
     const grid = getBinderGridConfig(perPageMode, cardsList.length);
@@ -1519,7 +1504,7 @@ async function renderBinderCanvas(targetUser, u, options) {
     const totalInView = allCategoryCards.length;
     const pct = totalInView > 0 ? Math.round((ownedInView / totalInView) * 100) : 0;
     const rarityLabel = BINDER_RARITY_CODES[rarityFilter];
-    const baseLabel = category === 'complet' ? `RegaDex • ${SET1_NAME}` : `RegaDex • ${category}`;
+    const baseLabel = category === 'complet' ? 'RegaDex • Set 1' : `RegaDex • ${category}`;
     const headerTags = [];
     if (rarityLabel) headerTags.push(rarityLabel);
     if (ownedOnly) headerTags.push('Possédées');
@@ -1529,16 +1514,31 @@ async function renderBinderCanvas(targetUser, u, options) {
     drawRoundRect(ctx, 32, 18, W - 64, 62, 14);
     ctx.fill();
 
+    const logoH = 76;
+    const logoW = Math.round((1132 / 467) * logoH);
+    const logoX = Math.round((W - logoW) / 2);
+    const logoY = Math.round(49 - logoH / 2);
+    const maxSideW = Math.max(200, logoX - 56 - 24);
+
     ctx.fillStyle = textColor;
     ctx.font = 'bold 25px "LemonMilk", "Sans"';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    const displayName = targetUser.displayName || targetUser.username || 'Collectionneur';
-    ctx.fillText(`${headerLabel} — ${displayName}`, 56, 49, W * 0.56);
+    const rawName = (targetUser.displayName || targetUser.username || 'Collectionneur').trim();
+    const displayName = rawName.split(/\s+/)[0] || 'Collectionneur';
+    ctx.fillText(`${headerLabel} — ${displayName}`, 56, 49, maxSideW);
 
     ctx.textAlign = 'right';
     ctx.font = 'bold 20px "LemonMilk", "Sans"';
-    ctx.fillText(`${ownedInView}/${totalInView} (${pct}%)  •  Page ${safePage + 1}/${totalPages}`, W - 56, 49, W * 0.34);
+    ctx.fillText(`${ownedInView}/${totalInView} (${pct}%)  •  Page ${safePage + 1}/${totalPages}`, W - 56, 49, maxSideW);
+
+    // Logo Set 1 en premier plan, petit et centré tout en haut
+    if (assetPaths.set1Logo) {
+        const logoProxy = await loadAssetProxy(assetPaths.set1Logo, logoW, logoH, { cacheKey: 'Set1_Logo_header.png' });
+        if (logoProxy?.img) {
+            ctx.drawImage(logoProxy.img, logoX - logoProxy.pad, logoY - logoProxy.pad);
+        }
+    }
 
     // Zone grille
     const { padX, startY, cellW, cellH, labelH, cardW, cardH, fontSize } = computeBinderCardDims(W, H, grid);
@@ -4809,7 +4809,7 @@ async function handleAdminTcgCommand(message, lowerContent) {
                 );
 
                 if (assetPaths.set1Logo) {
-                    await loadAssetProxy(assetPaths.set1Logo, 1132, 467, { cacheKey: 'Set1_Logo.png' });
+                    await loadAssetProxy(assetPaths.set1Logo, 184, 76, { cacheKey: 'Set1_Logo_header.png' });
                 }
 
                 for (const s of sizes) {
