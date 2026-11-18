@@ -3469,6 +3469,7 @@ async function handleFlexCommand(targetResponder, authorMember, guild, rawArg) {
     const flexAtt = await buildFlexCardAttachment(fav);
     const files = flexAtt ? [flexAtt] : [];
     return replySilent(targetResponder, { embeds: [embed], files });
+}
 
 function sendFlexPicker(targetResponder, member, page = 0) {
     const u = getOrCreateTcgUser(member.id);
