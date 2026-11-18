@@ -2199,7 +2199,8 @@ function buildBoosterCardEmbed(member, session, stepIndex) {
         .setAuthor({ name: `Ouverture de ${member.displayName}`, iconURL: member.displayAvatarURL({ dynamic: true }) })
         .setTitle(`${meta.emoji} Carte ${stepIndex + 1}/3 — ${card.name}`)
         .setDescription(
-            `🆔 **Numéro :** \`${card.id}\` • 📁 **Catégorie :** \`${card.category}\`\n` +
+            `🆔 **Numéro :** \`${card.id}\`\n` +
+            `📁 **Catégorie :** \`${card.category}\`\n` +
             `✨ **Rareté :** **${card.rarity}**${card.isHolo ? ' **(Holographique)**' : ''}\n` +
             (isNew ? `🆕 **NOUVELLE CARTE AJOUTÉE AU REGADEX !**` : `🔁 **Doublon !** *+3 points RegaDex gagnés*`)
         )
@@ -2567,14 +2568,6 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             gifEmbed.setImage('attachment://ouverture_set1.gif');
         }
 
-        const skipRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`tcg:bstep:skip:${userId}`)
-                .setLabel('Skip')
-                .setEmoji('⏭️')
-                .setStyle(ButtonStyle.Secondary)
-        );
-
         let sentMsg;
         if (targetResponder.isButton?.()) {
             const isExistingRecap = Boolean(targetResponder.message?.id && boosterSessions.has(targetResponder.message.id));
@@ -2583,22 +2576,22 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
                 sentMsg = await targetResponder.editReply({
                     content: null,
                     embeds: [gifEmbed],
-                    components: [skipRow],
+                    components: [],
                     files,
                     attachments: []
                 });
             } else {
-                sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], components: [skipRow], files, fetchReply: true }));
+                sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], files, fetchReply: true }));
                 disableBoosterOpenButtonOnMessage(targetResponder.message).catch(() => {});
             }
         } else if (targetResponder.isRepliable?.()) {
             if (targetResponder.deferred || targetResponder.replied) {
-                sentMsg = await targetResponder.followUp(withSilent({ embeds: [gifEmbed], components: [skipRow], files, fetchReply: true }));
+                sentMsg = await targetResponder.followUp(withSilent({ embeds: [gifEmbed], files, fetchReply: true }));
             } else {
-                sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], components: [skipRow], files, fetchReply: true }));
+                sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], files, fetchReply: true }));
             }
         } else {
-            sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], components: [skipRow], files }));
+            sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], files }));
         }
 
         const session = {
