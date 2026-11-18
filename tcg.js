@@ -186,11 +186,11 @@ let assetPaths = {
     bgB: null
 };
 
-const MAX_IMAGE_CACHE = 4;
-const MAX_THUMB_CACHE = 80;
-const imageCache = new Map();
-const thumbCache = new Map();
-const bgCanvases = new Map(); // 'W' | 'B' -> fond pré-redimensionné en 1920x1080
+// Pas de cache générique : les 109 cartes sont décodées à la demande puis libérées.
+// Seuls les assets réellement récurrents sont gardés en mémoire (liste explicite).
+const bgCanvases = new Map();  // 'W' | 'B' -> fond pré-redimensionné en 1920x1080
+const hotImages = new Map();   // carte mystère (une seule image décodée)
+const hotBuffers = new Map();  // buffers des pièces jointes les plus envoyées
 const boostersEnCours = new Set();
 const boosterSessions = new Map(); // messageId -> session
 const pendingConfirms = new Map(); // confirmId -> payload
@@ -390,8 +390,8 @@ async function scanSet1Cards(client = null) {
     cardCatalog = newCatalog;
     cardById = newById;
     cardByNumCode = newByNumCode;
-    imageCache.clear();
-    thumbCache.clear();
+    hotImages.clear();
+    hotBuffers.clear();
 
     console.log(`🃏 RegaDex Set 1 scanné : ${cardCatalog.length}/109 cartes reconnues.`);
 
@@ -985,50 +985,37 @@ function drawRoundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-async function loadCachedImage(filePath) {
-    if (!filePath || !fs.existsSync(filePath)) return null;
-    if (imageCache.has(filePath)) {
-        const existing = imageCache.get(filePath);
-        imageCache.delete(filePath);
-        imageCache.set(filePath, existing);
-        return existing;
-    }
+// Image décodée d'un asset utilisé à chaque rendu (carte mystère du classeur).
+async function getHotImage(filePath) {
+    if (!filePath) return null;
+    if (hotImages.has(filePath)) return hotImages.get(filePath);
     try {
         const img = await loadImage(filePath);
-        if (imageCache.size >= MAX_IMAGE_CACHE) {
-            const oldestKey = imageCache.keys().next().value;
-            imageCache.delete(oldestKey);
-        }
-        imageCache.set(filePath, img);
+        hotImages.set(filePath, img);
         return img;
     } catch {
         return null;
     }
 }
 
-async function getCachedThumb(filePath, targetW, targetH) {
-    if (!filePath) return null;
-    const key = `${filePath}|${targetW}x${targetH}`;
-    if (thumbCache.has(key)) {
-        const existing = thumbCache.get(key);
-        thumbCache.delete(key);
-        thumbCache.set(key, existing);
-        return existing;
-    }
+// Buffer d'une pièce jointe récurrente (bannière, booster, GIF d'ouverture).
+function getAssetBuffer(filePath) {
+    if (!filePath || !fs.existsSync(filePath)) return null;
+    if (hotBuffers.has(filePath)) return hotBuffers.get(filePath);
     try {
-        // imageCache ne contient plus que des sources de cartes (4 max), les fonds
-        // étant désormais pré-redimensionnés dans bgCanvases.
-        const img = await loadCachedImage(filePath);
-        if (!img) return null;
-        const c = createCanvas(targetW, targetH);
-        const cctx = c.getContext('2d');
-        cctx.drawImage(img, 0, 0, targetW, targetH);
-        if (thumbCache.size >= MAX_THUMB_CACHE) {
-            const oldestKey = thumbCache.keys().next().value;
-            thumbCache.delete(oldestKey);
-        }
-        thumbCache.set(key, c);
-        return c;
+        const buffer = fs.readFileSync(filePath);
+        hotBuffers.set(filePath, buffer);
+        return buffer;
+    } catch {
+        return null;
+    }
+}
+
+// Carte du catalogue : décodage ponctuel, aucun cache, dessin direct à la bonne taille.
+async function loadCardImage(filePath) {
+    if (!filePath || !fs.existsSync(filePath)) return null;
+    try {
+        return await loadImage(filePath);
     } catch {
         return null;
     }
@@ -1169,7 +1156,7 @@ async function renderBinderCanvas(targetUser, u, options) {
     cardH = Math.floor(cardH);
 
     const fontSize = grid.rows >= 6 ? 14 : (grid.rows >= 4 ? 18 : 23);
-    const mysteryThumb = await getCachedThumb(assetPaths.mysteryCard, cardW, cardH);
+    const mysteryImg = await getHotImage(assetPaths.mysteryCard);
 
     for (let idx = 0; idx < slice.length; idx++) {
         const card = slice[idx];
@@ -1185,8 +1172,8 @@ async function renderBinderCanvas(targetUser, u, options) {
         const owned = count > 0;
 
         if (owned) {
-            const thumb = await getCachedThumb(card.filePath, cardW, cardH);
-            if (thumb) {
+            const img = await loadCardImage(card.filePath);
+            if (img) {
                 const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
                 const glowColor = meta.glow || 'rgba(255, 255, 255, 0.55)';
 
@@ -1196,7 +1183,7 @@ async function renderBinderCanvas(targetUser, u, options) {
                 ctx.shadowBlur = Math.max(5, Math.round(cardW * 0.05));
                 ctx.shadowOffsetX = 0;
                 ctx.shadowOffsetY = Math.max(2, Math.round(cardH * 0.02));
-                ctx.drawImage(thumb, cardX, cardY, cardW, cardH);
+                ctx.drawImage(img, cardX, cardY, cardW, cardH);
                 ctx.restore();
 
                 // 2. Lueur externe à 55% de la couleur de la rareté
@@ -1205,7 +1192,7 @@ async function renderBinderCanvas(targetUser, u, options) {
                 ctx.shadowBlur = Math.max(8, Math.round(cardW * 0.08));
                 ctx.shadowOffsetX = 0;
                 ctx.shadowOffsetY = 0;
-                ctx.drawImage(thumb, cardX, cardY, cardW, cardH);
+                ctx.drawImage(img, cardX, cardY, cardW, cardH);
                 ctx.restore();
             } else {
                 ctx.fillStyle = RARITY_META[card.rarity]?.hex || '#888888';
@@ -1220,8 +1207,8 @@ async function renderBinderCanvas(targetUser, u, options) {
             ctx.shadowBlur = Math.max(5, Math.round(cardW * 0.05));
             ctx.shadowOffsetX = 0;
             ctx.shadowOffsetY = Math.max(2, Math.round(cardH * 0.02));
-            if (mysteryThumb) {
-                ctx.drawImage(mysteryThumb, cardX, cardY, cardW, cardH);
+            if (mysteryImg) {
+                ctx.drawImage(mysteryImg, cardX, cardY, cardW, cardH);
             } else {
                 ctx.fillStyle = isLight ? '#CCCCCC' : '#2C2F3A';
                 drawRoundRect(ctx, cardX, cardY, cardW, cardH, 8);
@@ -1286,7 +1273,7 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
         const pos = positions[i];
         const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
 
-        const img = await getCachedThumb(card.filePath, cardW, cardH);
+        const img = await loadCardImage(card.filePath);
         if (img) {
             ctx.save();
             ctx.shadowColor = meta.glow || 'rgba(255, 255, 255, 0.55)';
@@ -1360,7 +1347,7 @@ async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
             if (!card) continue;
             const x = firstX + i * (cW + gap);
             const y = 195;
-            const img = await getCachedThumb(card.filePath, cW, cH);
+            const img = await loadCardImage(card.filePath);
             if (img) ctx.drawImage(img, x, y, cW, cH);
 
             ctx.fillStyle = '#FFFFFF';
@@ -1647,8 +1634,9 @@ function buildHubPayload(member, u) {
     const embed = buildHubEmbed(member, u);
     const components = buildHubComponents(member.id, u);
     const files = [];
-    if (assetPaths.eventBanner && fs.existsSync(assetPaths.eventBanner)) {
-        files.push(new AttachmentBuilder(assetPaths.eventBanner, { name: 'event_banner_set1.png' }));
+    const bannerBuffer = getAssetBuffer(assetPaths.eventBanner);
+    if (bannerBuffer) {
+        files.push(new AttachmentBuilder(bannerBuffer, { name: 'event_banner_set1.png' }));
     }
     return { embeds: [embed], components, files };
 }
@@ -1722,8 +1710,9 @@ function buildOpenPromptPayload(member, u, fromHub = false) {
         .setDescription(desc);
 
     const files = [];
-    if (assetPaths.boosterPng && fs.existsSync(assetPaths.boosterPng)) {
-        files.push(new AttachmentBuilder(assetPaths.boosterPng, { name: 'booster_set1.png' }));
+    const boosterBuffer = getAssetBuffer(assetPaths.boosterPng);
+    if (boosterBuffer) {
+        files.push(new AttachmentBuilder(boosterBuffer, { name: 'booster_set1.png' }));
         embed.setThumbnail('attachment://booster_set1.png');
     }
 
@@ -2397,8 +2386,9 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             .setTitle('✨ Ouverture du Booster Set 1 en cours...');
 
         const files = [];
-        if (assetPaths.openingGif && fs.existsSync(assetPaths.openingGif)) {
-            files.push(new AttachmentBuilder(assetPaths.openingGif, { name: 'ouverture_set1.gif' }));
+        const gifBuffer = getAssetBuffer(assetPaths.openingGif);
+        if (gifBuffer) {
+            files.push(new AttachmentBuilder(gifBuffer, { name: 'ouverture_set1.gif' }));
             gifEmbed.setImage('attachment://ouverture_set1.gif');
         }
 
