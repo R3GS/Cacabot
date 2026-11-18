@@ -3880,7 +3880,7 @@ async function handleAdminTcgCommand(message, lowerContent) {
 
         await replySilent(
             message,
-            `🗂️ **Proxies RegaDex (`TCG/Proxies`)**\n` +
+            `🗂️ **Proxies RegaDex (\`TCG/Proxies\`)**\n` +
             `${statusHeader}\n\n` +
             `• **Total disque :** **${stats.files}** miniature(s) (**${mb} Mo**)\n` +
             `• **Micro-cache RAM :** **${proxyRamCache.size}/${PROXY_MAX_RAM_ITEMS}** (TTL 2 min)\n` +
