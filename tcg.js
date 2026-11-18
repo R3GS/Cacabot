@@ -343,7 +343,8 @@ async function scanSet1Cards(client = null) {
         mysteryCard: findExistingFile(TCG_ASSETS_DIR, ['Carte mystère.png', 'Carte mystere.png']),
         boosterPng: findExistingFile(TCG_ASSETS_DIR, ['Booster Set 1.png']),
         eventBanner: findExistingFile(TCG_SET1_DIR, ['Event banner Set 1.png']) || findExistingFile(TCG_ASSETS_DIR, ['Event banner Set 1.png']),
-        set1Logo: findExistingFile(findSubdir(TCG_ASSETS_DIR, ['Set 1']) || path.join(TCG_ASSETS_DIR, 'Set 1'), ['Logo.png']),
+        set1Logo: findExistingFile(TCG_SET1_DIR, ['Logo.png'])
+            || findExistingFile(findSubdir(TCG_ASSETS_DIR, ['Set 1']) || path.join(TCG_ASSETS_DIR, 'Set 1'), ['Logo.png']),
         bgW: findExistingFile(TCG_ASSETS_DIR, [
             'Background RegaDex W.jpg', 'Background RegaDex W.jpeg', 'Background RegaDex W.png',
             'Background Readex W.jpg', 'Background Readex W.jpeg', 'Background Readex W.png'
