@@ -190,13 +190,15 @@ let assetPaths = {
     bgB: null
 };
 
-// Les miniatures déjà redimensionnées sont stockées sur disque dans TCG/Proxies (volume Coolify).
-// En RAM, on ne garde que les 2 fonds 1080p, les buffers récurrents et un micro-cache TTL des proxies
+// Les miniatures déjà redimensionnées (avec lueur/ombre pré-cuites) sont stockées sur disque dans TCG/Proxies (volume Coolify).
+// En RAM, on ne garde que les 2 fonds 900p, les buffers récurrents et un micro-cache TTL des proxies
 // vidé automatiquement après 2 minutes d'inactivité (0 Mo gardés au repos).
-const bgCanvases = new Map();     // 'W' | 'B' -> fond pré-redimensionné en 1920x1080
+const bgCanvases = new Map();     // 'W' | 'B' -> fond pré-redimensionné en 1600x900
 const proxyRamCache = new Map();  // proxyPath -> Image miniature (éphémère)
-const proxyInFlight = new Map();  // proxyPath -> Promise<Image|null> (anti double-génération)
+const proxyInFlight = new Map();  // proxyPath -> Promise<{img, pad}|null> (anti double-génération)
 let proxyRamClearTimer = null;
+let lastProxyWriteError = null;
+let proxyWarmupRunning = false;
 const hotBuffers = new Map();     // buffers des pièces jointes les plus envoyées
 const boostersEnCours = new Set();
 const boosterSessions = new Map(); // messageId -> session
@@ -301,12 +303,17 @@ async function scanSet1Cards(client = null) {
         mysteryCard: findExistingFile(TCG_ASSETS_DIR, ['Carte mystère.png', 'Carte mystere.png']),
         boosterPng: findExistingFile(TCG_ASSETS_DIR, ['Booster Set 1.png']),
         eventBanner: findExistingFile(TCG_SET1_DIR, ['Event banner Set 1.png']) || findExistingFile(TCG_ASSETS_DIR, ['Event banner Set 1.png']),
-        bgW: findExistingFile(TCG_ASSETS_DIR, ['Background RegaDex W.png', 'Background Readex W.png']),
-        bgB: findExistingFile(TCG_ASSETS_DIR, ['Background RegaDex B.png', 'Background Readex B.png'])
+        bgW: findExistingFile(TCG_ASSETS_DIR, [
+            'Background RegaDex W.jpg', 'Background RegaDex W.jpeg', 'Background RegaDex W.png',
+            'Background Readex W.jpg', 'Background Readex W.jpeg', 'Background Readex W.png'
+        ]),
+        bgB: findExistingFile(TCG_ASSETS_DIR, [
+            'Background RegaDex B.jpg', 'Background RegaDex B.jpeg', 'Background RegaDex B.png',
+            'Background Readex B.jpg', 'Background Readex B.jpeg', 'Background Readex B.png'
+        ])
     };
 
-    // Les fonds source font 3840x2160 (~31 Mo décodés chacun) : on les réduit
-    // une seule fois à la taille d'affichage, puis on libère l'image 4K.
+    // Les fonds source sont réduits une seule fois en 1600x900 puis libérés.
     bgCanvases.clear();
     await Promise.all([getBackground('W'), getBackground('B')]);
 
@@ -314,8 +321,8 @@ async function scanSet1Cards(client = null) {
     if (!assetPaths.mysteryCard) missingAssets.push('TCG/Assets/Carte mystère.png');
     if (!assetPaths.boosterPng) missingAssets.push('TCG/Assets/Booster Set 1.png');
     if (!assetPaths.eventBanner) missingAssets.push('TCG/Set 1/Event banner Set 1.png');
-    if (!assetPaths.bgW) missingAssets.push('TCG/Assets/Background RegaDex W.png (ou Readex W.png)');
-    if (!assetPaths.bgB) missingAssets.push('TCG/Assets/Background RegaDex B.png (ou Readex B.png)');
+    if (!assetPaths.bgW) missingAssets.push('TCG/Assets/Background RegaDex W.jpg (ou .png)');
+    if (!assetPaths.bgB) missingAssets.push('TCG/Assets/Background RegaDex B.jpg (ou .png)');
 
     const newCatalog = [];
     const newById = new Map();
@@ -1015,13 +1022,56 @@ function setProxyRamCache(key, img) {
     scheduleProxyRamClear();
 }
 
-async function generateProxyBuffer(sourcePath, proxyPath, targetW, targetH) {
+function getProxyEffectOptions(targetW, opts = {}) {
+    if (opts.glowColor) {
+        const blur = Math.max(8, Math.round(targetW * 0.08));
+        const pad = Math.max(12, Math.ceil(blur * 2));
+        return {
+            pad,
+            blur,
+            offsetY: 0,
+            alpha: 1,
+            shadowColor: opts.glowColor
+        };
+    }
+    if (opts.mysteryShadow) {
+        const targetH = opts.targetH || Math.round(targetW * 1.4);
+        const blur = Math.max(5, Math.round(targetW * 0.05));
+        const offsetY = Math.max(2, Math.round(targetH * 0.02));
+        const pad = Math.max(10, Math.ceil(blur * 2) + offsetY);
+        return {
+            pad,
+            blur,
+            offsetY,
+            alpha: 0.78,
+            shadowColor: 'rgba(0, 0, 0, 0.42)'
+        };
+    }
+    return { pad: 0, blur: 0, offsetY: 0, alpha: 1, shadowColor: null };
+}
+
+async function generateProxyBuffer(sourcePath, proxyPath, targetW, targetH, fx = {}) {
+    const pad = fx.pad || 0;
+    const outW = targetW + pad * 2;
+    const outH = targetH + pad * 2;
+
     const srcImg = await loadImage(sourcePath);
-    const c = createCanvas(targetW, targetH);
+    const c = createCanvas(outW, outH);
     const pctx = c.getContext('2d');
     pctx.imageSmoothingEnabled = true;
     pctx.patternQuality = 'best';
-    pctx.drawImage(srcImg, 0, 0, targetW, targetH);
+
+    if (typeof fx.alpha === 'number' && fx.alpha < 1) {
+        pctx.globalAlpha = fx.alpha;
+    }
+    if (fx.shadowColor && fx.blur > 0) {
+        pctx.shadowColor = fx.shadowColor;
+        pctx.shadowBlur = fx.blur;
+        pctx.shadowOffsetX = 0;
+        pctx.shadowOffsetY = fx.offsetY || 0;
+    }
+
+    pctx.drawImage(srcImg, pad, pad, targetW, targetH);
     const pngBuf = c.toBuffer('image/png');
     c.width = c.height = 0; // Libère immédiatement la surface native Cairo
 
@@ -1030,20 +1080,29 @@ async function generateProxyBuffer(sourcePath, proxyPath, targetW, targetH) {
         const tmpPath = `${proxyPath}.tmp.${process.pid}.${Date.now()}`;
         fs.writeFileSync(tmpPath, pngBuf);
         fs.renameSync(tmpPath, proxyPath);
+        lastProxyWriteError = null;
     } catch (err) {
-        console.warn(`⚠️ Impossible d'écrire le proxy (${proxyPath}) :`, err?.message || err);
+        lastProxyWriteError = err?.message || String(err);
+        console.warn(`⚠️ Impossible d'écrire le proxy (${proxyPath}) :`, lastProxyWriteError);
     }
 
     return pngBuf;
 }
 
-async function getOrCreateProxyImage(sourcePath, proxyPath, targetW, targetH) {
+async function getOrCreateProxyImage(sourcePath, proxyPath, targetW, targetH, fx = {}) {
     if (!sourcePath || !fs.existsSync(sourcePath)) return null;
+
+    const pad = fx.pad || 0;
+    const expectedW = targetW + pad * 2;
+    const expectedH = targetH + pad * 2;
 
     if (proxyRamCache.has(proxyPath)) {
         const cached = proxyRamCache.get(proxyPath);
-        setProxyRamCache(proxyPath, cached);
-        return cached;
+        if (cached && cached.width === expectedW && cached.height === expectedH) {
+            setProxyRamCache(proxyPath, cached);
+            return { img: cached, pad, fromDisk: true };
+        }
+        proxyRamCache.delete(proxyPath);
     }
 
     if (proxyInFlight.has(proxyPath)) {
@@ -1053,6 +1112,7 @@ async function getOrCreateProxyImage(sourcePath, proxyPath, targetW, targetH) {
     const task = (async () => {
         try {
             let proxyImg = null;
+            let fromDisk = false;
             let hasDiskProxy = false;
             try {
                 hasDiskProxy = fs.existsSync(proxyPath) && fs.statSync(proxyPath).size > 0;
@@ -1062,19 +1122,24 @@ async function getOrCreateProxyImage(sourcePath, proxyPath, targetW, targetH) {
 
             if (hasDiskProxy) {
                 try {
-                    proxyImg = await loadImage(proxyPath);
+                    const loaded = await loadImage(proxyPath);
+                    if (loaded && loaded.width === expectedW && loaded.height === expectedH) {
+                        proxyImg = loaded;
+                        fromDisk = true;
+                    }
                 } catch {
                     proxyImg = null;
                 }
             }
 
             if (!proxyImg) {
-                const pngBuf = await generateProxyBuffer(sourcePath, proxyPath, targetW, targetH);
+                const pngBuf = await generateProxyBuffer(sourcePath, proxyPath, targetW, targetH, fx);
                 proxyImg = await loadImage(pngBuf);
+                fromDisk = false;
             }
 
             if (proxyImg) setProxyRamCache(proxyPath, proxyImg);
-            return proxyImg;
+            return proxyImg ? { img: proxyImg, pad, fromDisk } : null;
         } catch {
             return null;
         } finally {
@@ -1097,12 +1162,17 @@ function getCardProxyPath(card, targetW, targetH) {
     );
 }
 
-async function loadCardProxy(card, targetW, targetH) {
+async function loadCardProxy(card, targetW, targetH, opts = {}) {
     if (!card?.filePath) return null;
-    return getOrCreateProxyImage(card.filePath, getCardProxyPath(card, targetW, targetH), targetW, targetH);
+    const useGlow = opts.glow !== false;
+    const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
+    const fx = useGlow
+        ? getProxyEffectOptions(targetW, { targetH, glowColor: meta.glow || 'rgba(255, 255, 255, 0.55)' })
+        : getProxyEffectOptions(targetW, {});
+    return getOrCreateProxyImage(card.filePath, getCardProxyPath(card, targetW, targetH), targetW, targetH, fx);
 }
 
-async function loadAssetProxy(filePath, targetW, targetH) {
+async function loadAssetProxy(filePath, targetW, targetH, opts = {}) {
     if (!filePath) return null;
     const proxyPath = path.join(
         TCG_PROXIES_DIR,
@@ -1110,7 +1180,10 @@ async function loadAssetProxy(filePath, targetW, targetH) {
         `${targetW}x${targetH}`,
         path.basename(filePath)
     );
-    return getOrCreateProxyImage(filePath, proxyPath, targetW, targetH);
+    const fx = opts.mysteryShadow
+        ? getProxyEffectOptions(targetW, { targetH, mysteryShadow: true })
+        : getProxyEffectOptions(targetW, {});
+    return getOrCreateProxyImage(filePath, proxyPath, targetW, targetH, fx);
 }
 
 // Buffer d'une pièce jointe récurrente (bannière, booster, GIF d'ouverture).
@@ -1139,8 +1212,8 @@ async function getBackground(theme) {
     if (!p || !fs.existsSync(p)) return null;
     try {
         const src = await loadImage(p);
-        const c = createCanvas(1920, 1080);
-        c.getContext('2d').drawImage(src, 0, 0, 1920, 1080);
+        const c = createCanvas(1600, 900);
+        drawCoverImage(c.getContext('2d'), src, 1600, 900);
         bgCanvases.set(theme, c);
         return c;
     } catch {
@@ -1157,6 +1230,12 @@ function drawBackground(ctx, theme, w, h) {
 
 function toPng(canvas) {
     const buffer = canvas.toBuffer('image/png');
+    canvas.width = canvas.height = 0; // Libère immédiatement la mémoire native Cairo
+    return buffer;
+}
+
+function toJpeg(canvas, quality = 0.90) {
+    const buffer = canvas.toBuffer('image/jpeg', { quality, progressive: false, chromaSubsampling: true });
     canvas.width = canvas.height = 0; // Libère immédiatement la mémoire native Cairo
     return buffer;
 }
@@ -1191,6 +1270,37 @@ function getBinderGridConfig(perPageMode, totalInCategory) {
     return { cols: 16, rows: 7, perPage: Math.max(totalInCategory, 1) };
 }
 
+function computeBinderCardDims(W, H, grid) {
+    const padX = 40;
+    const startY = 96;
+    const availW = W - padX * 2;
+    const availH = H - startY - 20;
+
+    const cellW = availW / grid.cols;
+    const cellH = availH / grid.rows;
+    const labelH = grid.rows >= 6 ? 19 : (grid.rows >= 4 ? 22 : 28);
+    const maxCardH = cellH - labelH - 8;
+    const maxCardW = cellW - 12;
+    const cardRatio = 500 / 700;
+
+    let cardH = maxCardH;
+    let cardW = cardH * cardRatio;
+    if (cardW > maxCardW) {
+        cardW = maxCardW;
+        cardH = cardW / cardRatio;
+    }
+    return {
+        padX,
+        startY,
+        cellW,
+        cellH,
+        labelH,
+        cardW: Math.floor(cardW),
+        cardH: Math.floor(cardH),
+        fontSize: grid.rows >= 6 ? 12 : (grid.rows >= 4 ? 15 : 19)
+    };
+}
+
 async function renderBinderCanvas(targetUser, u, options) {
     const {
         category = 'complet',
@@ -1199,8 +1309,8 @@ async function renderBinderCanvas(targetUser, u, options) {
         sortMode = 'number'
     } = options;
 
-    const W = 1920;
-    const H = 1080;
+    const W = 1600;
+    const H = 900;
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
 
@@ -1222,44 +1332,27 @@ async function renderBinderCanvas(targetUser, u, options) {
     const headerLabel = category === 'complet' ? 'RegaDex • Set 1 Complet' : `RegaDex • ${category}`;
 
     ctx.fillStyle = isLight ? 'rgba(255,255,255,0.72)' : 'rgba(15,17,24,0.72)';
-    drawRoundRect(ctx, 40, 22, W - 80, 74, 16);
+    drawRoundRect(ctx, 32, 18, W - 64, 62, 14);
     ctx.fill();
 
     ctx.fillStyle = textColor;
-    ctx.font = 'bold 30px "LemonMilk", "Sans"';
+    ctx.font = 'bold 25px "LemonMilk", "Sans"';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     const displayName = targetUser.displayName || targetUser.username || 'Collectionneur';
-    ctx.fillText(`${headerLabel} — ${displayName}`, 68, 59, W * 0.56);
+    ctx.fillText(`${headerLabel} — ${displayName}`, 56, 49, W * 0.56);
 
     ctx.textAlign = 'right';
-    ctx.font = 'bold 24px "LemonMilk", "Sans"';
-    ctx.fillText(`${ownedInView}/${cardsList.length} (${pct}%)  •  Page ${safePage + 1}/${totalPages}`, W - 68, 59, W * 0.34);
+    ctx.font = 'bold 20px "LemonMilk", "Sans"';
+    ctx.fillText(`${ownedInView}/${cardsList.length} (${pct}%)  •  Page ${safePage + 1}/${totalPages}`, W - 56, 49, W * 0.34);
 
     // Zone grille
-    const padX = 48;
-    const startY = 114;
-    const availW = W - padX * 2;
-    const availH = H - startY - 26;
+    const { padX, startY, cellW, cellH, labelH, cardW, cardH, fontSize } = computeBinderCardDims(W, H, grid);
+    const mysteryProxy = await loadAssetProxy(assetPaths.mysteryCard, cardW, cardH, { mysteryShadow: true });
 
-    const cellW = availW / grid.cols;
-    const cellH = availH / grid.rows;
-    const labelH = grid.rows >= 6 ? 22 : (grid.rows >= 4 ? 26 : 34);
-    const maxCardH = cellH - labelH - 8;
-    const maxCardW = cellW - 14;
-    const cardRatio = 500 / 700;
-
-    let cardH = maxCardH;
-    let cardW = cardH * cardRatio;
-    if (cardW > maxCardW) {
-        cardW = maxCardW;
-        cardH = cardW / cardRatio;
-    }
-    cardW = Math.floor(cardW);
-    cardH = Math.floor(cardH);
-
-    const fontSize = grid.rows >= 6 ? 14 : (grid.rows >= 4 ? 18 : 23);
-    const mysteryImg = await loadAssetProxy(assetPaths.mysteryCard, cardW, cardH);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.font = `bold ${fontSize}px "LemonMilk", "Sans"`;
 
     for (let idx = 0; idx < slice.length; idx++) {
         const card = slice[idx];
@@ -1275,69 +1368,32 @@ async function renderBinderCanvas(targetUser, u, options) {
         const owned = count > 0;
 
         if (owned) {
-            const img = await loadCardProxy(card, cardW, cardH);
-            if (img) {
-                const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
-                const glowColor = meta.glow || 'rgba(255, 255, 255, 0.55)';
-
-                // 1. Ombre portée noire légère (désactivée en grille dense 16x7 pour économiser le CPU)
-                if (grid.rows < 6) {
-                    ctx.save();
-                    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-                    ctx.shadowBlur = Math.max(5, Math.round(cardW * 0.05));
-                    ctx.shadowOffsetX = 0;
-                    ctx.shadowOffsetY = Math.max(2, Math.round(cardH * 0.02));
-                    ctx.drawImage(img, cardX, cardY, cardW, cardH);
-                    ctx.restore();
-                }
-
-                // 2. Lueur externe à 55% de la couleur de la rareté
-                ctx.save();
-                ctx.shadowColor = glowColor;
-                ctx.shadowBlur = Math.max(8, Math.round(cardW * 0.08));
-                ctx.shadowOffsetX = 0;
-                ctx.shadowOffsetY = 0;
-                ctx.drawImage(img, cardX, cardY, cardW, cardH);
-                ctx.restore();
+            // Lueur de rareté déjà pré-cuite dans le proxy (0 ombre noire, 0 shadowBlur en direct)
+            const proxy = await loadCardProxy(card, cardW, cardH, { glow: true });
+            if (proxy?.img) {
+                ctx.drawImage(proxy.img, cardX - proxy.pad, cardY - proxy.pad);
             } else {
                 ctx.fillStyle = RARITY_META[card.rarity]?.hex || '#888888';
                 drawRoundRect(ctx, cardX, cardY, cardW, cardH, 8);
                 ctx.fill();
             }
         } else {
-            // Cartes mystères : ombre portée noire légère uniquement (pas de lueur pour éviter tout spoiler de rareté)
-            ctx.save();
-            ctx.globalAlpha = 0.78;
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.42)';
-            ctx.shadowBlur = Math.max(5, Math.round(cardW * 0.05));
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = Math.max(2, Math.round(cardH * 0.02));
-            if (mysteryImg) {
-                ctx.drawImage(mysteryImg, cardX, cardY, cardW, cardH);
+            // Carte mystère : opacité 0.78 + ombre noire pré-cuites dans _Assets (aucun spoiler)
+            if (mysteryProxy?.img) {
+                ctx.drawImage(mysteryProxy.img, cardX - mysteryProxy.pad, cardY - mysteryProxy.pad);
             } else {
-                ctx.fillStyle = isLight ? '#CCCCCC' : '#2C2F3A';
+                ctx.fillStyle = isLight ? 'rgba(204, 204, 204, 0.78)' : 'rgba(44, 47, 58, 0.78)';
                 drawRoundRect(ctx, cardX, cardY, cardW, cardH, 8);
                 ctx.fill();
             }
-            ctx.restore();
         }
 
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'top';
-        ctx.font = `bold ${fontSize}px "LemonMilk", "Sans"`;
-        ctx.shadowColor = isLight ? 'rgba(255, 255, 255, 0.92)' : 'rgba(0, 0, 0, 0.92)';
-        ctx.shadowBlur = Math.max(5, Math.round(fontSize * 0.35));
-        ctx.shadowOffsetX = 0;
-        ctx.shadowOffsetY = isLight ? 0 : Math.max(1, Math.round(fontSize * 0.1));
         ctx.fillStyle = owned ? textColor : subTextColor;
-        const labelText = `${card.id} • x${count}`;
-        ctx.fillText(labelText, cx, cardY + cardH + 4, cellW - 8);
-        ctx.restore();
+        ctx.fillText(`${card.id} • x${count}`, cx, cardY + cardH + 4, cellW - 8);
     }
 
     return {
-        buffer: toPng(canvas),
+        buffer: toJpeg(canvas, 0.90),
         totalPages,
         safePage,
         ownedInView,
@@ -1376,17 +1432,10 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
     for (let i = 0; i < Math.min(cards.length, 3); i++) {
         const card = cards[i];
         const pos = positions[i];
-        const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
 
-        const img = await loadCardProxy(card, cardW, cardH);
-        if (img) {
-            ctx.save();
-            ctx.shadowColor = meta.glow || 'rgba(255, 255, 255, 0.55)';
-            ctx.shadowBlur = 30;
-            ctx.shadowOffsetX = 0;
-            ctx.shadowOffsetY = 0;
-            ctx.drawImage(img, pos.x, pos.y, cardW, cardH);
-            ctx.restore();
+        const proxy = await loadCardProxy(card, cardW, cardH, { glow: true });
+        if (proxy?.img) {
+            ctx.drawImage(proxy.img, pos.x - proxy.pad, pos.y - proxy.pad);
         }
 
         ctx.textAlign = 'center';
@@ -1397,7 +1446,7 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
         ctx.fillText(`${card.id} • ${card.rarity} • ${statusTxt}`, pos.x + cardW / 2, pos.y + cardH + 10, cardW + 90);
     }
 
-    return toPng(canvas);
+    return toJpeg(canvas, 0.90);
 }
 
 async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
@@ -1452,8 +1501,8 @@ async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
             if (!card) continue;
             const x = firstX + i * (cW + gap);
             const y = 195;
-            const img = await loadCardProxy(card, cW, cH);
-            if (img) ctx.drawImage(img, x, y, cW, cH);
+            const proxy = await loadCardProxy(card, cW, cH, { glow: false });
+            if (proxy?.img) ctx.drawImage(proxy.img, x, y, cW, cH);
 
             ctx.fillStyle = '#FFFFFF';
             ctx.font = 'bold 15px "LemonMilk", "Sans"';
@@ -1465,7 +1514,7 @@ async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
     await drawSide(nameA, cardsA, 48, 580);
     await drawSide(nameB, cardsB, W - 48 - 580, 580);
 
-    return toPng(canvas);
+    return toJpeg(canvas, 0.90);
 }
 
 // ==========================================
@@ -2224,7 +2273,7 @@ function buildBoosterRecapEmbed(member, session, u) {
             cooldownLine +
             (bonusInfo.length > 0 ? `\n\n${bonusInfo.join('\n')}` : '')
         )
-        .setImage('attachment://recap_booster.png')
+        .setImage('attachment://recap_booster.jpg')
         .setFooter({ text: `Boosters restants : ${totalAvail} • Mode ${u.theme === 'W' ? 'Clair (W)' : 'Nuit (B)'}` });
 }
 
@@ -2295,7 +2344,7 @@ async function buildBoosterRecapPayload(member, session) {
     return {
         embeds: [embed],
         components: [row1, row2],
-        files: [new AttachmentBuilder(buffer, { name: 'recap_booster.png' })]
+        files: [new AttachmentBuilder(buffer, { name: 'recap_booster.jpg' })]
     };
 }
 
@@ -2319,7 +2368,7 @@ async function buildBoosterStepPayload(member, session) {
     return {
         embeds: [recapEmbed, ...cardPayload.embeds],
         components: cardPayload.components,
-        files: [new AttachmentBuilder(buffer, { name: 'recap_booster.png' }), ...cardPayload.files]
+        files: [new AttachmentBuilder(buffer, { name: 'recap_booster.jpg' }), ...cardPayload.files]
     };
 }
 
@@ -2680,12 +2729,12 @@ async function buildBinderReplyPayload(ownerMember, viewerId, options = {}) {
         .setDescription(
             `📖 **${opts.category === 'complet' ? 'Set 1 Complet' : opts.category}** • **${rendered.ownedInView}/${rendered.totalInView}** cartes • Tri : **${opts.sortMode === 'rarity' ? 'Rareté' : 'Numéro'}**`
         )
-        .setImage('attachment://regadex_classeur.png')
+        .setImage('attachment://regadex_classeur.jpg')
         .setFooter({ text: `Page ${rendered.safePage + 1}/${rendered.totalPages} • Mode ${u.theme === 'W' ? 'Clair (W)' : 'Nuit (B)'}` });
 
     return {
         embeds: [embed],
-        files: [new AttachmentBuilder(rendered.buffer, { name: 'regadex_classeur.png' })],
+        files: [new AttachmentBuilder(rendered.buffer, { name: 'regadex_classeur.jpg' })],
         components: buildBinderComponents(ownerMember.id, viewerId, opts, rendered.totalPages)
     };
 }
@@ -3373,12 +3422,12 @@ async function executeTradeIfBothLocked(thread, trade, client) {
             `**${nameA}** (<@${idA}>) a donné :\n${formatOfferLines(offerA)}\n\n` +
             `**${nameB}** (<@${idB}>) a donné :\n${formatOfferLines(offerB)}`
         )
-        .setImage('attachment://trade_recap.png')
+        .setImage('attachment://trade_recap.jpg')
         .setFooter({ text: `Effectué le ${dateStr}` });
 
     await sendSilent(thread, {
         embeds: [recapEmbed],
-        files: [new AttachmentBuilder(recapBuffer, { name: 'trade_recap.png' })]
+        files: [new AttachmentBuilder(recapBuffer, { name: 'trade_recap.jpg' })]
     }).catch(() => {});
 
     // Log privé Epsys-only dans 1572168354435964928
@@ -3394,12 +3443,12 @@ async function executeTradeIfBothLocked(thread, trade, client) {
                 `**${nameA} → ${nameB} :**\n${formatOfferLines(offerA)}\n\n` +
                 `**${nameB} → ${nameA} :**\n${formatOfferLines(offerB)}`
             )
-            .setImage('attachment://trade_recap_log.png')
+            .setImage('attachment://trade_recap_log.jpg')
             .setTimestamp();
 
         await sendSilent(logChan, {
             embeds: [logEmbed],
-            files: [new AttachmentBuilder(recapBuffer, { name: 'trade_recap_log.png' })]
+            files: [new AttachmentBuilder(recapBuffer, { name: 'trade_recap_log.jpg' })]
         }).catch(() => {});
     }
 
@@ -3647,13 +3696,45 @@ async function handleAdminTcgCommand(message, lowerContent) {
         return true;
     }
 
-    // 6. !rgdxproxies [purge] | !tcgproxies [purge] (Epsys-only)
+    // 6. !rgdxproxies [warmup / purge] | !tcgproxies [warmup / purge] (Epsys-only)
     m = lowerContent.match(/^!(?:rgdx|tcg|regadex)\s*proxies(?:\s+(.*))?$/i);
     if (m) {
         if (message.author.id !== EPSYS_ID) return true;
         const arg = (m[1] || '').trim().toLowerCase();
 
+        const walkStats = (dir) => {
+            let files = 0;
+            let bytes = 0;
+            const byDim = {};
+            const scan = (curr) => {
+                if (!fs.existsSync(curr)) return;
+                for (const entry of fs.readdirSync(curr, { withFileTypes: true })) {
+                    if (entry.name.startsWith('.')) continue;
+                    const full = path.join(curr, entry.name);
+                    if (entry.isDirectory()) {
+                        scan(full);
+                    } else if (entry.name.toLowerCase().endsWith('.png')) {
+                        files++;
+                        let sz = 0;
+                        try { sz = fs.statSync(full).size; } catch {}
+                        bytes += sz;
+                        const parentName = path.basename(curr);
+                        const dimKey = /^\d+x\d+$/.test(parentName) ? parentName : 'autre';
+                        if (!byDim[dimKey]) byDim[dimKey] = { files: 0, bytes: 0 };
+                        byDim[dimKey].files++;
+                        byDim[dimKey].bytes += sz;
+                    }
+                }
+            };
+            scan(dir);
+            return { files, bytes, byDim };
+        };
+
         if (arg === 'purge' || arg === 'clear' || arg === 'reset') {
+            if (proxyWarmupRunning) {
+                await replySilent(message, '⏳ Un `!rgdxproxies warmup` est déjà en cours, attends la fin avant de purger.');
+                return true;
+            }
             proxyRamCache.clear();
             if (proxyRamClearTimer) {
                 clearTimeout(proxyRamClearTimer);
@@ -3669,36 +3750,142 @@ async function handleAdminTcgCommand(message, lowerContent) {
                     } catch {}
                 }
             }
+            lastProxyWriteError = null;
             await replySilent(
                 message,
-                `🧹 **Proxies RegaDex purgés !** (${removedEntries} dossier(s) supprimé(s) dans \`TCG/Proxies\`). Ils se régénéreront automatiquement à la prochaine ouverture.`
+                `🧹 **Proxies RegaDex purgés !** (${removedEntries} dossier(s) supprimé(s) dans \`TCG/Proxies\`).\n👉 Lance \`!rgdxproxies warmup\` pour tout pré-générer proprement.`
             );
             return true;
         }
 
-        const walkStats = (dir) => {
-            let files = 0;
-            let bytes = 0;
-            if (!fs.existsSync(dir)) return { files, bytes };
-            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-                if (entry.name.startsWith('.')) continue;
-                const full = path.join(dir, entry.name);
-                if (entry.isDirectory()) {
-                    const sub = walkStats(full);
-                    files += sub.files;
-                    bytes += sub.bytes;
-                } else {
-                    files++;
-                    try { bytes += fs.statSync(full).size; } catch {}
-                }
+        if (arg === 'warmup' || arg === 'warm' || arg === 'build' || arg === 'pregen') {
+            if (cardCatalog.length === 0) {
+                await replySilent(message, '❌ Aucune carte Set 1 chargée pour lancer le warmup.');
+                return true;
             }
-            return { files, bytes };
-        };
+            if (proxyWarmupRunning) {
+                await replySilent(message, '⏳ Un warmup des proxies est déjà en cours !');
+                return true;
+            }
+
+            proxyWarmupRunning = true;
+            try {
+                // Collecte toutes les tailles exactes utilisées (900p + Récap Booster)
+                const sizeMap = new Map();
+                const catCounts = {
+                    complet: cardCatalog.length,
+                    ...Object.fromEntries(CATEGORIES.map(cat => [cat, cardCatalog.filter(c => c.category === cat).length]))
+                };
+                for (const count of Object.values(catCounts)) {
+                    for (const mode of ['9', '18', '36', 'all']) {
+                        const grid = getBinderGridConfig(mode, count);
+                        const dims = computeBinderCardDims(1600, 900, grid);
+                        const key = `${dims.cardW}x${dims.cardH}`;
+                        if (!sizeMap.has(key)) {
+                            sizeMap.set(key, { w: dims.cardW, h: dims.cardH, glow: true, mystery: true });
+                        }
+                    }
+                }
+                // Taille du Récapitulatif Booster
+                if (!sizeMap.has('285x399')) {
+                    sizeMap.set('285x399', { w: 285, h: 399, glow: true, mystery: false });
+                }
+
+                const sizes = [...sizeMap.values()];
+                const totalItems = sizes.reduce((acc, s) => acc + cardCatalog.length + (s.mystery ? 1 : 0), 0);
+                const startedAt = Date.now();
+                let done = 0;
+                let generated = 0;
+                let alreadyOnDisk = 0;
+                let failed = 0;
+                let lastEditAt = Date.now();
+
+                const statusMsg = await replySilent(
+                    message,
+                    `🔥 **Warmup RegaDex démarré !**\n• **${sizes.length}** formats à préparer : ${sizes.map(s => `\`${s.w}×${s.h}\``).join(', ')}\n• **${totalItems}** miniatures au total *(avec lueurs & ombres pré-cuites)*\n⏳ Progression : \`0/${totalItems}\` (0%)...`
+                );
+
+                for (const s of sizes) {
+                    if (s.mystery && assetPaths.mysteryCard) {
+                        const resM = await loadAssetProxy(assetPaths.mysteryCard, s.w, s.h, { mysteryShadow: true });
+                        done++;
+                        if (!resM) failed++;
+                        else if (resM.fromDisk) alreadyOnDisk++;
+                        else generated++;
+                    }
+
+                    for (const card of cardCatalog) {
+                        const resC = await loadCardProxy(card, s.w, s.h, { glow: s.glow });
+                        done++;
+                        if (!resC) failed++;
+                        else if (resC.fromDisk) alreadyOnDisk++;
+                        else generated++;
+
+                        // Cède un micro-instant à la boucle Node.js pour garder le bot fluide
+                        if (!resC?.fromDisk || done % 15 === 0) {
+                            await new Promise(r => setTimeout(r, 8));
+                        }
+
+                        if (statusMsg && (Date.now() - lastEditAt >= 3000 || done === totalItems)) {
+                            lastEditAt = Date.now();
+                            const pct = Math.round((done / totalItems) * 100);
+                            await statusMsg.edit(withSilent(
+                                `🔥 **Warmup RegaDex en cours...**\n` +
+                                `• Taille actuelle : \`${s.w}×${s.h}\`\n` +
+                                `• Progression : **${done}/${totalItems}** (**${pct}%**)\n` +
+                                `• Créées : **${generated}** • Déjà prêtes : **${alreadyOnDisk}**${failed ? ` • Échecs : **${failed}**` : ''}`
+                            )).catch(() => {});
+                        }
+                    }
+                }
+
+                proxyRamCache.clear();
+                if (proxyRamClearTimer) {
+                    clearTimeout(proxyRamClearTimer);
+                    proxyRamClearTimer = null;
+                }
+
+                const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
+                const stats = walkStats(TCG_PROXIES_DIR);
+                const mb = (stats.bytes / (1024 * 1024)).toFixed(2);
+                const errLine = lastProxyWriteError
+                    ? `\n⚠️ **Erreur d'écriture disque :** \`${lastProxyWriteError}\``
+                    : '\n✅ **Volume Coolify (`/app/TCG/Proxies`) : OK et persistant !**';
+
+                if (statusMsg) {
+                    await statusMsg.edit(withSilent(
+                        `✅ **Warmup RegaDex terminé en ${elapsedSec}s !**\n` +
+                        `• **${generated}** miniature(s) générée(s) • **${alreadyOnDisk}** déjà en cache${failed ? ` • **${failed}** échec(s)` : ''}\n` +
+                        `• Total sur disque : **${stats.files}** fichiers (**${mb} Mo** dans \`TCG/Proxies\`)` +
+                        errLine
+                    )).catch(() => {});
+                }
+            } finally {
+                proxyWarmupRunning = false;
+            }
+            return true;
+        }
+
         const stats = walkStats(TCG_PROXIES_DIR);
         const mb = (stats.bytes / (1024 * 1024)).toFixed(2);
+        const dimLines = Object.entries(stats.byDim)
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([dim, d]) => `• \`${dim}\` : **${d.files}** fichier(s) (*${(d.bytes / (1024 * 1024)).toFixed(2)} Mo*)`);
+
+        const statusHeader = lastProxyWriteError
+            ? `⚠️ **Erreur d'écriture détectée :** \`${lastProxyWriteError}\``
+            : (stats.files > 0
+                ? '✅ **Installation confirmée :** le bot lit et écrit bien ses miniatures sur le volume.'
+                : 'ℹ️ **Cache vide pour le moment :** lance `!rgdxproxies warmup` pour tout pré-générer en une fois.');
+
         await replySilent(
             message,
-            `🗂️ **Proxies RegaDex** : **${stats.files}** miniature(s) sur disque (**${mb} Mo** dans \`TCG/Proxies\`) • **${proxyRamCache.size}** en micro-cache RAM (TTL 2 min).\n*(Pour forcer une régénération après retouche d'une carte : \`!rgdxproxies purge\`)*`
+            `🗂️ **Proxies RegaDex (`TCG/Proxies`)**\n` +
+            `${statusHeader}\n\n` +
+            `• **Total disque :** **${stats.files}** miniature(s) (**${mb} Mo**)\n` +
+            `• **Micro-cache RAM :** **${proxyRamCache.size}/${PROXY_MAX_RAM_ITEMS}** (TTL 2 min)\n` +
+            (dimLines.length > 0 ? `\n**Détail par format :**\n${dimLines.join('\n')}\n` : '\n') +
+            `\n-# Commandes : \`!rgdxproxies warmup\` (pré-générer) • \`!rgdxproxies purge\` (vider)`
         );
         return true;
     }

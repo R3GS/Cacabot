@@ -22,7 +22,7 @@ function buildHelpxHomeEmbed(user, botAvatarUrl = null) {
             `────────────────────────────────────────\n` +
             `### 🧭 Thématiques disponibles\n` +
             `🤖 **Cacabot, Admin & Serveur**\n` +
-            `-# Diagnostic, saves, messages du bot, modération, embeds, rôles & YouTube.\n` +
+            `-# Diagnostic, saves, messages du bot, sanctions modos, embeds, rôles & YouTube.\n` +
             `────────────────────────────────────────\n` +
             `🎮 **Mini-Jeux & Arbitrage**\n` +
             `-# Relances d'urgence, mots/rébus forcés, indices, scores & parties de test.\n` +
@@ -34,7 +34,7 @@ function buildHelpxHomeEmbed(user, botAvatarUrl = null) {
             `-# Ajout d'XP, validation de quêtes, dons d'items & aperçu onboarding.\n` +
             `────────────────────────────────────────\n` +
             `🃏 **RegaDex / TCG (Admin)**\n` +
-            `-# Boosters, points RegaDex, cartes & reset de cooldown.\n` +
+            `-# Boosters (membre & rôle), points, cartes, cooldown, proxies & mode test !tcgx.\n` +
             `────────────────────────────────────────\n` +
             `🧪 **Tests & Générateurs**\n` +
             `-# Simulations d'anniversaire, stream Twitch & envois manuels.\n` +
@@ -59,24 +59,27 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
             .setColor(0x5865f2)
             .setTitle('🤖 Cacabot, Admin & Serveur')
             .setDescription(
-                `Gestion complète du bot, de ses messages, des salons et des configurations.\n\n` +
+                `Gestion complète du bot, de ses messages, des salons et de la modération.\n\n` +
                 `### 🩺 Santé & Sauvegardes\n` +
                 `\`!diag\` *(ou \`!cacatest\`)* • Diagnostic complet de tous les modules et APIs\n` +
                 `\`!save\` • \`!lastsave\` • Forcer un backup \`#json\` ou voir l'heure du dernier\n\n` +
-                `### 🛡️ Modération & Voix de Cacabot\n` +
-                `\`!up [réponse / ID / lien]\` *(Modos)* • Remonte une suggestion ou un vote roulette\n` +
-                `-# ↳ Aussi disponible via \`/up\` et \`Clic droit -> Applications -> 🆙 Remonter (up)\`\n` +
-                `\`!prune [1-100]\` *(Modos)* • Suppression en masse de messages récents\n` +
+                `### 🗣️ Voix de Cacabot & Bugs\n` +
                 `\`!say [#salon/ID] [texte]\` • Envoyer un message au nom de Cacabot\n` +
                 `\`!reply [ID] [texte]\` • \`!edit [ID] [texte]\` • Répondre ou éditer un message du bot\n` +
                 `\`!chut [durée]\` / \`!unchut\` • Couper ou réactiver les répliques dans le salon\n` +
-                `\`!bug\` *(en réponse)* • \`!bug resolve [N]\` • \`!bug clear\` • Gérer la liste des bugs\n\n` +
+                `\`!bug\` *(liste)* • \`!bug\` *(en réponse)* • \`!bug resolve [N]\` • \`!bug clear\` • Suivi des bugs\n\n` +
+                `### 🔨 Modération & Sanctions *(Modos + Epsys)*\n` +
+                `\`!helpm\` • Ouvrir le centre d'aide Modération\n` +
+                `\`!bannir [@membre/ID] [raison]\` • \`!unban [ID] [raison]\` • \`!kick [@membre/ID] [raison]\` *(ou \`!expulser\`)*\n` +
+                `\`!mute [@membre/ID] [durée] [raison]\` • \`!unmute [@membre/ID] [raison]\`\n` +
+                `\`!warn [@membre/ID] [raison]\` *(paliers 1→6)* • \`!warns\` *(ou \`!casier\`)* • \`!unwarn\`\n` +
+                `\`!lock [raison]\` • \`!unlock\` • \`!slowmode [durée/off]\` • \`!prune [1-100]\`\n` +
+                `\`!up [réponse/ID/lien]\` *(/up / menu Apps)* • \`!tribunal [ID/@membre]\` • \`!archives\` • \`!destituation [@modo]\`\n\n` +
                 `### ⚙️ Configuration & Communauté\n` +
                 `\`!embed\` / \`!embed modify [ID]\` • Créateur et éditeur interactif d'embeds\n` +
                 `\`!rolereac\` • \`!rolebtn\` • \`!rolembed\` • Gérer rôles-réactions, boutons & panneaux\n` +
                 `\`!ytabo config\` • Panneau interactif des abonnements YouTube\n` +
-                `\`!welcome\` / \`!welcome test\` • Configurer l'accueil et tester l'affiche Canvas\n` +
-                `\`!tribunal [@membre]\` *(ou \`!trib\` / \`!archives\`)* • Tribunal des bannis & logs \`.txt\``
+                `\`!welcome\` / \`!welcome test [@membre]\` • Configurer l'accueil, rôles auto & tester l'affiche`
             );
     }
 
@@ -146,14 +149,20 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
             .setColor(0xf1c40f)
             .setTitle('🃏 RegaDex / TCG (Administration)')
             .setDescription(
-                `Gestion complète des boosters, points, cartes et cooldowns RegaDex *(fonctionnent avec ou sans espace)*.\n\n` +
+                `Gestion complète des boosters, points, cartes, cooldowns et cache RegaDex *(avec ou sans espace)*.\n\n` +
                 `### 🎁 Boosters & Cooldown\n` +
-                `\`!boostergive [@membre/ID] [nb]\` • Ajouter des boosters à l'inventaire\n` +
+                `\`!boostergive [@membre/ID] [nb]\` • Ajouter des boosters à l'inventaire d'un·e membre\n` +
+                `\`!givebooster @rôle [nb]\` • Donner des boosters à tout un rôle *(\`@everyone\` inclus)*\n` +
                 `\`!boosterremove [@membre/ID] [nb]\` • Retirer des boosters de l'inventaire\n` +
                 `\`!rgdxcooldown reset [@membre/ID]\` *(ou \`!tcgcooldown\` / \`!regadexcooldown\`)* • Remet le stock gratuit à 2/2\n\n` +
                 `### 🪙 Points & Cartes\n` +
                 `\`!rgdxpts give [@membre/ID] [nb]\` / \`set\` *(ou \`!tcgpts\` / \`!regadexpts\`)* • Gérer les points\n` +
-                `\`!rgdxcard give [@membre/ID] [carte]\` / \`remove\` *(ou \`!tcgcard\` / \`!regadexcard\`)* • Gérer les cartes`
+                `\`!rgdxcard give [@membre/ID] [carte]\` / \`remove\` *(ou \`!tcgcard\` / \`!regadexcard\`)* • Gérer les cartes\n\n` +
+                `### 🧪 Mode Test & Cache Proxies (Coolify)\n` +
+                `\`!tcgx [sous-cmd]\` *(hub, open, store, claim, classeur, carte, flex, top, reset)* • Bac à sable isolé *(109/109 cartes x5, 999k pts)*\n` +
+                `\`!rgdxproxies\` *(ou \`!tcgproxies\`)* • Diagnostic du volume \`TCG/Proxies\` & poids par format\n` +
+                `\`!rgdxproxies warmup\` • Pré-génère toutes les miniatures & lueurs sur le volume *(1 seule fois)*\n` +
+                `\`!rgdxproxies purge\` • Vide le cache disque pour forcer la régénération`
             );
     }
 
@@ -197,7 +206,7 @@ function buildHelpxMenu(authorId, currentCategory = 'home', originalMessageId = 
         .addOptions(
             {
                 label: 'Cacabot, Admin & Serveur',
-                description: 'Diag, saves, say/reply/edit, up, embeds, rôles & tribunal',
+                description: 'Diag, saves, say/edit, sanctions modos, embeds & rôles',
                 emoji: '🤖',
                 value: 'cacabot',
                 default: currentCategory === 'cacabot'
@@ -225,7 +234,7 @@ function buildHelpxMenu(authorId, currentCategory = 'home', originalMessageId = 
             },
             {
                 label: 'RegaDex / TCG (Admin)',
-                description: 'boostergive/remove, rgdxpts, rgdxcard & cooldown reset',
+                description: 'boostergive, givebooster, rgdxpts/card, !tcgx & proxies',
                 emoji: '🃏',
                 value: 'tcg',
                 default: currentCategory === 'tcg'
