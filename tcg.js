@@ -2008,7 +2008,7 @@ function buildHelpPayload(userId) {
             `### 🛒 Boutique, Échanges & Flex\n` +
             `• \`!tcg store\` — Dépenser tes points RegaDex\n` +
             `• \`!tcg claim\` — Voir et activer tes achats / inventaire\n` +
-            `• \`!trade [@membre]\` — Lancer un échange *(doublons ou dernière copie à rareté égale)*\n` +
+            `• \`!trade [@membre]\` — Lancer un échange *(doublons libre, ou dernière copie à nombre et raretés identiques)*\n` +
             `• \`!flex\` *(\`!tcg flex\`)* — Montrer ta carte préférée *(<#${TCG_CHANNEL_ID}> & <#${SHITPOST_CHANNEL_ID}>)* • \`!flex @membre\`\n` +
             `• \`!flex modify [N°Set]-[N°Carte]\` pour la changer\n` +
             `────────────────────────────────────────\n` +
@@ -2065,7 +2065,7 @@ function buildGuidePayload(userId, fromHub = true) {
             `### 📖 4. Classeur, Échanges & Commandes\n` +
             `• **Classeur :** filtre par catégorie ou rareté, choisis la grille (\`4\`, \`18\`, \`36\` ou \`All\`), masque les cartes manquantes et change le thème **Clair (W) / Nuit (B)**.\n` +
             `• **Voir le classeur d'un membre :** utilise le menu déroulant du classeur ou \`!classeur @membre\` *(cela mentionne la personne pour lui demander son accord)*.\n` +
-            `• **Échanges (\`!trade [@]\` ou clic droit sur un membre) :** échange jusqu'à **3 cartes** en doublon ou même **ta dernière copie** *(uniquement contre des cartes de **même rareté**)* ! Gagne **+3 pts RegaDex** à la fermeture du fil *(1 seul bonus par fil, même si plusieurs échanges y sont faits)*.\n` +
+            `• **Échanges (\`!trade [@]\` ou clic droit sur un membre) :** échange jusqu'à **3 cartes** en doublon *(libre, avec double confirmation si déséquilibré)* ou même **ta dernière copie** *(uniquement à **nombre et raretés identiques**)* ! Gagne **+3 pts RegaDex** à la fermeture du fil *(1 seul bonus par fil, même si plusieurs échanges y sont faits)*.\n` +
             `• **Commandes rapides :** \`!tcg\` • \`!tcg help\` • \`!open\` • \`!carte [n°/nom]\` *(cartes obtenues uniquement)* • \`!flex\` *(<#${TCG_CHANNEL_ID}> & <#${SHITPOST_CHANNEL_ID}>)*`
         )
         .setFooter({ text: `RegaDex ${SET1_NAME} • Cacabot` });
