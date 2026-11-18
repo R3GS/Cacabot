@@ -1240,10 +1240,14 @@ function toJpeg(canvas, quality = 0.90) {
     return buffer;
 }
 
-function getFilteredSortedCards(categoryFilter, sortMode) {
+function getFilteredSortedCards(categoryFilter, sortMode, u = null, ownedOnly = false) {
     let list = categoryFilter === 'complet'
         ? [...cardCatalog]
         : cardCatalog.filter(c => c.category === categoryFilter);
+
+    if (ownedOnly && u) {
+        list = list.filter(c => (u.cards?.[c.id] || 0) > 0);
+    }
 
     if (sortMode === 'rarity') {
         list.sort((a, b) => {
@@ -1260,7 +1264,7 @@ function getFilteredSortedCards(categoryFilter, sortMode) {
 }
 
 function getBinderGridConfig(perPageMode, totalInCategory) {
-    if (perPageMode === '9') return { cols: 3, rows: 3, perPage: 9 };
+    if (perPageMode === '4' || perPageMode === '9') return { cols: 4, rows: 1, perPage: 4 };
     if (perPageMode === '18') return { cols: 6, rows: 3, perPage: 18 };
     if (perPageMode === '36') return { cols: 9, rows: 4, perPage: 36 };
     // Mode 'all'
@@ -1278,9 +1282,9 @@ function computeBinderCardDims(W, H, grid) {
 
     const cellW = availW / grid.cols;
     const cellH = availH / grid.rows;
-    const labelH = grid.rows >= 6 ? 19 : (grid.rows >= 4 ? 22 : 28);
+    const labelH = grid.rows === 1 ? 32 : (grid.rows >= 6 ? 19 : (grid.rows >= 4 ? 22 : 28));
     const maxCardH = cellH - labelH - 8;
-    const maxCardW = cellW - 12;
+    const maxCardW = cellW - (grid.cols <= 4 ? 24 : 12);
     const cardRatio = 500 / 700;
 
     let cardH = maxCardH;
@@ -1297,7 +1301,7 @@ function computeBinderCardDims(W, H, grid) {
         labelH,
         cardW: Math.floor(cardW),
         cardH: Math.floor(cardH),
-        fontSize: grid.rows >= 6 ? 12 : (grid.rows >= 4 ? 15 : 19)
+        fontSize: grid.rows === 1 ? 22 : (grid.rows >= 6 ? 12 : (grid.rows >= 4 ? 15 : 19))
     };
 }
 
@@ -1306,7 +1310,8 @@ async function renderBinderCanvas(targetUser, u, options) {
         category = 'complet',
         perPageMode = '18',
         page = 0,
-        sortMode = 'number'
+        sortMode = 'number',
+        ownedOnly = false
     } = options;
 
     const W = 1600;
@@ -1320,16 +1325,19 @@ async function renderBinderCanvas(targetUser, u, options) {
 
     drawBackground(ctx, isLight ? 'W' : 'B', W, H);
 
-    const cardsList = getFilteredSortedCards(category, sortMode);
+    const allCategoryCards = getFilteredSortedCards(category, sortMode);
+    const cardsList = ownedOnly ? allCategoryCards.filter(c => (u.cards?.[c.id] || 0) > 0) : allCategoryCards;
     const grid = getBinderGridConfig(perPageMode, cardsList.length);
     const totalPages = Math.max(1, Math.ceil(cardsList.length / grid.perPage));
     const safePage = Math.max(0, Math.min(page, totalPages - 1));
     const slice = cardsList.slice(safePage * grid.perPage, (safePage + 1) * grid.perPage);
 
     // En-tête (LEMON MILK Bold)
-    const ownedInView = cardsList.filter(c => (u.cards?.[c.id] || 0) > 0).length;
-    const pct = cardsList.length > 0 ? Math.round((ownedInView / cardsList.length) * 100) : 0;
-    const headerLabel = category === 'complet' ? 'RegaDex • Set 1 Complet' : `RegaDex • ${category}`;
+    const ownedInView = allCategoryCards.filter(c => (u.cards?.[c.id] || 0) > 0).length;
+    const totalInView = allCategoryCards.length;
+    const pct = totalInView > 0 ? Math.round((ownedInView / totalInView) * 100) : 0;
+    const baseLabel = category === 'complet' ? 'RegaDex • Set 1 Complet' : `RegaDex • ${category}`;
+    const headerLabel = ownedOnly ? `${baseLabel} (Possédées)` : baseLabel;
 
     ctx.fillStyle = isLight ? 'rgba(255,255,255,0.72)' : 'rgba(15,17,24,0.72)';
     drawRoundRect(ctx, 32, 18, W - 64, 62, 14);
@@ -1344,11 +1352,19 @@ async function renderBinderCanvas(targetUser, u, options) {
 
     ctx.textAlign = 'right';
     ctx.font = 'bold 20px "LemonMilk", "Sans"';
-    ctx.fillText(`${ownedInView}/${cardsList.length} (${pct}%)  •  Page ${safePage + 1}/${totalPages}`, W - 56, 49, W * 0.34);
+    ctx.fillText(`${ownedInView}/${totalInView} (${pct}%)  •  Page ${safePage + 1}/${totalPages}`, W - 56, 49, W * 0.34);
 
     // Zone grille
     const { padX, startY, cellW, cellH, labelH, cardW, cardH, fontSize } = computeBinderCardDims(W, H, grid);
-    const mysteryProxy = await loadAssetProxy(assetPaths.mysteryCard, cardW, cardH, { mysteryShadow: true });
+    const mysteryProxy = ownedOnly ? null : await loadAssetProxy(assetPaths.mysteryCard, cardW, cardH, { mysteryShadow: true });
+
+    if (slice.length === 0) {
+        ctx.fillStyle = subTextColor;
+        ctx.font = 'bold 28px "LemonMilk", "Sans"';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('Aucune carte possédée dans cette catégorie.', W / 2, H / 2 + 20, W - 120);
+    }
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
@@ -1397,7 +1413,7 @@ async function renderBinderCanvas(targetUser, u, options) {
         totalPages,
         safePage,
         ownedInView,
-        totalInView: cardsList.length
+        totalInView
     };
 }
 
@@ -1762,7 +1778,7 @@ function buildGuidePayload(userId, fromHub = true) {
             `  • ⚡ **Cooldown /2** (\`25 pts\`) — Le prochain rechargement gratuit passe à **3h** au lieu de 6h.` +
             sep +
             `### 📖 4. Classeur, Échanges & Commandes\n` +
-            `• **Classeur :** filtre par catégorie, choisis l'affichage (\`9\`, \`18\`, \`36\` ou \`All\`) et le thème **Clair (W) / Nuit (B)**.\n` +
+            `• **Classeur :** filtre par catégorie, choisis l'affichage (\`4\`, \`18\`, \`36\` ou \`All\`), affiche uniquement tes cartes possédées et change le thème **Clair (W) / Nuit (B)**.\n` +
             `• **Voir le classeur d'un membre :** utilise le menu déroulant du classeur ou \`!classeur @membre\` *(cela mentionne la personne pour lui demander son accord)*.\n` +
             `• **Échanges (\`!trade [@]\` ou clic droit sur un membre) :** échange jusqu'à **3 doublons** *(cartes possédées en ≥ 2 exemplaires)* dans un thread dédié.\n` +
             `• **Commandes rapides :** \`!tcg\` • \`!tcg help\` • \`!open\` • \`!carte [n°/nom]\` *(cartes obtenues uniquement)* • \`!tcg flex\` *(utilisable partout sur le serveur)*`
@@ -2628,11 +2644,12 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
 // ==========================================
 
 function buildBinderComponents(ownerId, viewerId, options, totalPages) {
-    const { category, perPageMode, page, sortMode, fromHub = false } = options;
+    const { category, perPageMode, page, sortMode, ownedOnly = false, fromHub = false } = options;
     const hubFlag = fromHub ? '1' : '0';
+    const ownedFlag = ownedOnly ? '1' : '0';
 
     const catMenu = new StringSelectMenuBuilder()
-        .setCustomId(`tcg:bcat:${ownerId}:${viewerId}:${perPageMode}:${sortMode}:${hubFlag}`)
+        .setCustomId(`tcg:bcat:${ownerId}:${viewerId}:${perPageMode}:${sortMode}:${hubFlag}:${ownedFlag}`)
         .setPlaceholder('Choisir un classeur...')
         .addOptions([
             { label: 'Complet Set 1 (109 cartes)', value: 'complet', emoji: '📚', default: category === 'complet' },
@@ -2642,10 +2659,10 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages) {
         ]);
 
     const perPageMenu = new StringSelectMenuBuilder()
-        .setCustomId(`tcg:bsize:${ownerId}:${viewerId}:${category}:${sortMode}:${hubFlag}`)
+        .setCustomId(`tcg:bsize:${ownerId}:${viewerId}:${category}:${sortMode}:${hubFlag}:${ownedFlag}`)
         .setPlaceholder('Cartes par page...')
         .addOptions([
-            { label: '9 cartes par page (3×3)', value: '9', default: perPageMode === '9' },
+            { label: '4 cartes par page (4×1)', value: '4', default: perPageMode === '4' },
             { label: '18 cartes par page (6×3)', value: '18', default: perPageMode === '18' },
             { label: '36 cartes par page (9×4)', value: '36', default: perPageMode === '36' },
             { label: 'Tout sur 1 page (All)', value: 'all', default: perPageMode === 'all' }
@@ -2657,25 +2674,39 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages) {
 
     const navRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`tcg:bnav:first:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}`)
+            .setCustomId(`tcg:bnav:first:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}:${ownedFlag}`)
             .setLabel('Première page')
             .setEmoji('⏪')
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(page <= 0),
         new ButtonBuilder()
-            .setCustomId(`tcg:bnav:prev:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}`)
+            .setCustomId(`tcg:bnav:prev:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}:${ownedFlag}`)
             .setLabel('Précédent')
             .setEmoji('◀️')
             .setStyle(ButtonStyle.Secondary)
-            .setDisabled(page <= 0),
+            .setDisabled(page <= 0)
+    );
+
+    if (perPageMode !== 'all') {
+        navRow.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tcg:bpage:${ownerId}:${viewerId}:${category}:${perPageMode}:${sortMode}:${hubFlag}:${ownedFlag}`)
+                .setLabel(`Page ${page + 1}/${totalPages}`)
+                .setEmoji('🔢')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(totalPages <= 1)
+        );
+    }
+
+    navRow.addComponents(
         new ButtonBuilder()
-            .setCustomId(`tcg:bnav:next:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}`)
+            .setCustomId(`tcg:bnav:next:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}:${ownedFlag}`)
             .setLabel('Suivant')
             .setEmoji('▶️')
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(page >= totalPages - 1),
         new ButtonBuilder()
-            .setCustomId(`tcg:bnav:last:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}`)
+            .setCustomId(`tcg:bnav:last:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}:${ownedFlag}`)
             .setLabel('Dernière page')
             .setEmoji('⏩')
             .setStyle(ButtonStyle.Secondary)
@@ -2684,12 +2715,17 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages) {
 
     const optRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`tcg:bsort:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode === 'number' ? 'rarity' : 'number'}:${hubFlag}`)
+            .setCustomId(`tcg:bsort:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode === 'number' ? 'rarity' : 'number'}:${hubFlag}:${ownedFlag}`)
             .setLabel(sortMode === 'number' ? 'Tri : Rareté' : 'Tri : Numéro')
             .setEmoji('🔀')
             .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
-            .setCustomId(`tcg:btheme:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}`)
+            .setCustomId(`tcg:bowned:${ownerId}:${viewerId}:${category}:${perPageMode}:${sortMode}:${hubFlag}:${ownedOnly ? '0' : '1'}`)
+            .setLabel(ownedOnly ? 'Possédées : ON' : 'Possédées uniquement')
+            .setEmoji(ownedOnly ? '✅' : '👁️')
+            .setStyle(ownedOnly ? ButtonStyle.Success : ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`tcg:btheme:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}:${ownedFlag}`)
             .setLabel('Thème B/W')
             .setEmoji('🌗')
             .setStyle(ButtonStyle.Secondary)
@@ -2712,11 +2748,13 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages) {
 async function buildBinderReplyPayload(ownerMember, viewerId, options = {}) {
     const ownerUser = ownerMember.user || ownerMember;
     const u = getOrCreateTcgUser(ownerMember.id);
+    const rawPerPage = options.perPageMode || '18';
     const opts = {
         category: options.category || 'complet',
-        perPageMode: options.perPageMode || '18',
+        perPageMode: rawPerPage === '9' ? '4' : rawPerPage,
         page: options.page || 0,
         sortMode: options.sortMode || 'number',
+        ownedOnly: Boolean(options.ownedOnly),
         fromHub: Boolean(options.fromHub)
     };
 
@@ -2727,7 +2765,7 @@ async function buildBinderReplyPayload(ownerMember, viewerId, options = {}) {
         .setColor(u.theme === 'W' ? 0xecf0f1 : 0x2c3e50)
         .setAuthor({ name: `Classeur de ${ownerMember.displayName || ownerUser.username}`, iconURL: ownerUser.displayAvatarURL({ dynamic: true }) })
         .setDescription(
-            `📖 **${opts.category === 'complet' ? 'Set 1 Complet' : opts.category}** • **${rendered.ownedInView}/${rendered.totalInView}** cartes • Tri : **${opts.sortMode === 'rarity' ? 'Rareté' : 'Numéro'}**`
+            `📖 **${opts.category === 'complet' ? 'Set 1 Complet' : opts.category}**${opts.ownedOnly ? ' *(Possédées uniquement)*' : ''} • **${rendered.ownedInView}/${rendered.totalInView}** cartes • Tri : **${opts.sortMode === 'rarity' ? 'Rareté' : 'Numéro'}**`
         )
         .setImage('attachment://regadex_classeur.jpg')
         .setFooter({ text: `Page ${rendered.safePage + 1}/${rendered.totalPages} • Mode ${u.theme === 'W' ? 'Clair (W)' : 'Nuit (B)'}` });
@@ -3777,7 +3815,7 @@ async function handleAdminTcgCommand(message, lowerContent) {
                     ...Object.fromEntries(CATEGORIES.map(cat => [cat, cardCatalog.filter(c => c.category === cat).length]))
                 };
                 for (const count of Object.values(catCounts)) {
-                    for (const mode of ['9', '18', '36', 'all']) {
+                    for (const mode of ['4', '18', '36', 'all']) {
                         const grid = getBinderGridConfig(mode, count);
                         const dims = computeBinderCardDims(1600, 900, grid);
                         const key = `${dims.cardW}x${dims.cardH}`;
@@ -4872,8 +4910,42 @@ async function handleTcgInteraction(interaction) {
         }
     }
 
-    if ((action === 'bcat' || action === 'bsize' || action === 'bnav' || action === 'bsort' || action === 'btheme')) {
-        let ownerId, viewerId, category, perPageMode, page, sortMode, fromHub;
+    if (action === 'bpage' && interaction.isButton()) {
+        const ownerId = parts[2];
+        const viewerId = parts[3];
+        const category = parts[4];
+        const perPageMode = parts[5];
+        const sortMode = parts[6];
+        const fromHub = parts[7] === '1';
+        const ownedOnly = parts[8] === '1';
+
+        if (!canControlTcgOwner(interaction.user.id, viewerId) && !canControlTcgOwner(interaction.user.id, ownerId)) {
+            await interaction.reply({ content: "Ce classeur n'est pas à toi !", ephemeral: true });
+            return true;
+        }
+
+        const uOwner = getOrCreateTcgUser(ownerId);
+        const cardsList = getFilteredSortedCards(category, sortMode, uOwner, ownedOnly);
+        const grid = getBinderGridConfig(perPageMode, cardsList.length);
+        const totalPages = Math.max(1, Math.ceil(cardsList.length / grid.perPage));
+
+        const modal = new ModalBuilder()
+            .setCustomId(`tcg:bpagesub:${ownerId}:${viewerId}:${category}:${perPageMode}:${sortMode}:${fromHub ? '1' : '0'}:${ownedOnly ? '1' : '0'}`)
+            .setTitle('Aller à une page du classeur');
+        const input = new TextInputBuilder()
+            .setCustomId('page_number')
+            .setLabel(`Numéro de page (entre 1 et ${totalPages})`)
+            .setPlaceholder(`Ex : 1 à ${totalPages}`)
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+            .setMaxLength(5);
+        modal.addComponents(new ActionRowBuilder().addComponents(input));
+        await interaction.showModal(modal);
+        return true;
+    }
+
+    if ((action === 'bcat' || action === 'bsize' || action === 'bnav' || action === 'bsort' || action === 'bowned' || action === 'btheme' || action === 'bpagesub')) {
+        let ownerId, viewerId, category, perPageMode, page, sortMode, fromHub, ownedOnly;
 
         if (action === 'bcat' && interaction.isStringSelectMenu()) {
             ownerId = parts[2];
@@ -4881,6 +4953,7 @@ async function handleTcgInteraction(interaction) {
             perPageMode = parts[4];
             sortMode = parts[5];
             fromHub = parts[6] === '1';
+            ownedOnly = parts[7] === '1';
             category = interaction.values[0];
             page = 0;
         } else if (action === 'bsize' && interaction.isStringSelectMenu()) {
@@ -4889,6 +4962,7 @@ async function handleTcgInteraction(interaction) {
             category = parts[4];
             sortMode = parts[5];
             fromHub = parts[6] === '1';
+            ownedOnly = parts[7] === '1';
             perPageMode = interaction.values[0];
             page = 0;
         } else if (action === 'bnav' && interaction.isButton()) {
@@ -4900,6 +4974,7 @@ async function handleTcgInteraction(interaction) {
             page = parseInt(parts[7], 10) || 0;
             sortMode = parts[8];
             fromHub = parts[9] === '1';
+            ownedOnly = parts[10] === '1';
             if (dir === 'first') page = 0;
             else if (dir === 'prev') page = Math.max(0, page - 1);
             else if (dir === 'next') page = page + 1;
@@ -4912,6 +4987,16 @@ async function handleTcgInteraction(interaction) {
             page = 0;
             sortMode = parts[7];
             fromHub = parts[8] === '1';
+            ownedOnly = parts[9] === '1';
+        } else if (action === 'bowned' && interaction.isButton()) {
+            ownerId = parts[2];
+            viewerId = parts[3];
+            category = parts[4];
+            perPageMode = parts[5];
+            sortMode = parts[6];
+            fromHub = parts[7] === '1';
+            ownedOnly = parts[8] === '1';
+            page = 0;
         } else if (action === 'btheme' && interaction.isButton()) {
             ownerId = parts[2];
             viewerId = parts[3];
@@ -4920,6 +5005,7 @@ async function handleTcgInteraction(interaction) {
             page = parseInt(parts[6], 10) || 0;
             sortMode = parts[7];
             fromHub = parts[8] === '1';
+            ownedOnly = parts[9] === '1';
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
                 await interaction.reply({ content: "❌ Seul le propriétaire du classeur peut changer son thème Clair/Nuit.", ephemeral: true });
                 return true;
@@ -4927,21 +5013,44 @@ async function handleTcgInteraction(interaction) {
             const uOwner = getOrCreateTcgUser(ownerId);
             uOwner.theme = uOwner.theme === 'W' ? 'B' : 'W';
             if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
+        } else if (action === 'bpagesub' && interaction.isModalSubmit()) {
+            ownerId = parts[2];
+            viewerId = parts[3];
+            category = parts[4];
+            perPageMode = parts[5];
+            sortMode = parts[6];
+            fromHub = parts[7] === '1';
+            ownedOnly = parts[8] === '1';
+            const rawPage = interaction.fields.getTextInputValue('page_number').trim();
+            const pageNum = parseInt(rawPage, 10);
+            if (!/^\d+$/.test(rawPage) || isNaN(pageNum) || pageNum < 1) {
+                await interaction.reply({ content: "❌ Merci d'entrer un numéro de page valide (nombre entier ≥ 1).", ephemeral: true });
+                return true;
+            }
+            page = pageNum - 1;
         } else {
             return false;
         }
 
         if (!canControlTcgOwner(interaction.user.id, viewerId) && !canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Ce classeur n'est pas à toi' !", ephemeral: true });
+            await interaction.reply({ content: "Ce classeur n'est pas à toi !", ephemeral: true });
             return true;
         }
 
-        await interaction.deferUpdate();
+        if (action === 'bpagesub' && !interaction.isFromMessage?.()) {
+            await deferReplySilent(interaction);
+        } else {
+            await interaction.deferUpdate();
+        }
         const ownerMember = isSandboxId(ownerId)
             ? buildTcgMemberProxy(interaction.member, TCGX_SANDBOX_ID)
             : await interaction.guild.members.fetch(ownerId).catch(() => interaction.member);
-        const payload = await buildBinderReplyPayload(ownerMember, viewerId, { category, perPageMode, page, sortMode, fromHub });
-        await interaction.editReply({ content: null, ...payload, attachments: [] });
+        const payload = await buildBinderReplyPayload(ownerMember, viewerId, { category, perPageMode, page, sortMode, ownedOnly, fromHub });
+        if (action === 'bpagesub' && !interaction.isFromMessage?.()) {
+            await interaction.editReply(payload);
+        } else {
+            await interaction.editReply({ content: null, ...payload, attachments: [] });
+        }
         return true;
     }
 
