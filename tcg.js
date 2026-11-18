@@ -87,6 +87,25 @@ const RARITY_META = {
 };
 
 const CATEGORIES = ['Items', 'Personnages', 'Références'];
+const BINDER_RARITY_CODES = {
+    all: null,
+    C: 'Commune',
+    R: 'Rare',
+    E: 'Épique',
+    L: 'Légendaire',
+    F: 'Full Art',
+    N: 'Négative'
+};
+const BINDER_RARITY_ORDER = ['all', 'C', 'R', 'E', 'L', 'F', 'N'];
+const BINDER_RARITY_BTN = {
+    all: { label: 'Rareté : OFF', emoji: '💎', style: ButtonStyle.Secondary },
+    C: { label: 'Communes', emoji: '⚪', style: ButtonStyle.Primary },
+    R: { label: 'Rares', emoji: '🔵', style: ButtonStyle.Primary },
+    E: { label: 'Épiques', emoji: '🟣', style: ButtonStyle.Primary },
+    L: { label: 'Légendaires', emoji: '🟡', style: ButtonStyle.Primary },
+    F: { label: 'Full Art', emoji: '🌈', style: ButtonStyle.Primary },
+    N: { label: 'Négatives', emoji: '🕳️', style: ButtonStyle.Primary }
+};
 
 // ==========================================
 //   HELPERS SILENCIEUX (ZERO NOTIFS / PUSH)
@@ -203,6 +222,7 @@ const hotBuffers = new Map();     // buffers des pièces jointes les plus envoy�
 const boostersEnCours = new Set();
 const boosterSessions = new Map(); // messageId -> session
 const pendingConfirms = new Map(); // confirmId -> payload
+const binderReturnStates = new Map(); // binderMsgId -> { ownerId, viewerId, category, perPageMode, page, sortMode, rarityFilter, ownedOnly, fromHub, expiresAt }
 const notifTimers = new Map(); // userId -> Timeout
 
 function normalizeText(str) {
@@ -259,6 +279,7 @@ function parseCardFilename(filename, category, folderRarity) {
     const rawName = match[4].trim();
     const isHolo = /\bholo$/i.test(rawName);
     const baseName = rawName.replace(/\s+holo$/i, '').trim();
+    const displayName = isHolo ? rawName.replace(/\bholo$/i, 'Holographique') : rawName;
 
     let rarity = folderRarity;
     if (folderRarity === 'Full Art & Négative') {
@@ -276,9 +297,10 @@ function parseCardFilename(filename, category, folderRarity) {
         numCode,
         numValue,
         sortIndex,
-        name: rawName,
+        name: displayName,
         baseName,
         normalizedName: normalizeText(rawName),
+        normalizedDisplayName: normalizeText(displayName),
         normalizedBaseName: normalizeText(baseName),
         category,
         rarity,
@@ -880,12 +902,13 @@ function resolveCardQuery(rawQuery) {
     const normQ = normalizeText(q);
     if (!normQ) return { card: null, matches: [] };
 
-    const exact = cardCatalog.filter(c => c.normalizedName === normQ);
+    const exact = cardCatalog.filter(c => c.normalizedName === normQ || c.normalizedDisplayName === normQ);
     if (exact.length === 1) return { card: exact[0], matches: exact };
     if (exact.length > 1) return { card: null, matches: exact };
 
     const partial = cardCatalog.filter(c =>
         c.normalizedName.includes(normQ) ||
+        (c.normalizedDisplayName && c.normalizedDisplayName.includes(normQ)) ||
         c.id.toLowerCase() === cleaned.toLowerCase()
     );
     if (partial.length === 1) return { card: partial[0], matches: partial };
@@ -1268,10 +1291,15 @@ function toJpeg(canvas, quality = 0.90) {
     return buffer;
 }
 
-function getFilteredSortedCards(categoryFilter, sortMode, u = null, ownedOnly = false) {
+function getFilteredSortedCards(categoryFilter, sortMode, u = null, ownedOnly = false, rarityCode = 'all') {
     let list = categoryFilter === 'complet'
         ? [...cardCatalog]
         : cardCatalog.filter(c => c.category === categoryFilter);
+
+    const targetRarity = BINDER_RARITY_CODES[rarityCode] || null;
+    if (targetRarity) {
+        list = list.filter(c => c.rarity === targetRarity);
+    }
 
     if (ownedOnly && u) {
         list = list.filter(c => (u.cards?.[c.id] || 0) > 0);
@@ -1346,6 +1374,7 @@ async function renderBinderCanvas(targetUser, u, options) {
         perPageMode = '18',
         page = 0,
         sortMode = 'number',
+        rarityFilter = 'all',
         ownedOnly = false
     } = options;
 
@@ -1360,7 +1389,7 @@ async function renderBinderCanvas(targetUser, u, options) {
 
     drawBackground(ctx, isLight ? 'W' : 'B', W, H);
 
-    const allCategoryCards = getFilteredSortedCards(category, sortMode, u);
+    const allCategoryCards = getFilteredSortedCards(category, sortMode, u, false, rarityFilter);
     const cardsList = ownedOnly ? allCategoryCards.filter(c => (u.cards?.[c.id] || 0) > 0) : allCategoryCards;
     const grid = getBinderGridConfig(perPageMode, cardsList.length);
     const totalPages = Math.max(1, Math.ceil(cardsList.length / grid.perPage));
@@ -1371,8 +1400,12 @@ async function renderBinderCanvas(targetUser, u, options) {
     const ownedInView = allCategoryCards.filter(c => (u.cards?.[c.id] || 0) > 0).length;
     const totalInView = allCategoryCards.length;
     const pct = totalInView > 0 ? Math.round((ownedInView / totalInView) * 100) : 0;
+    const rarityLabel = BINDER_RARITY_CODES[rarityFilter];
     const baseLabel = category === 'complet' ? 'RegaDex • Set 1 Complet' : `RegaDex • ${category}`;
-    const headerLabel = ownedOnly ? `${baseLabel} (Possédées)` : baseLabel;
+    const headerTags = [];
+    if (rarityLabel) headerTags.push(rarityLabel);
+    if (ownedOnly) headerTags.push('Possédées');
+    const headerLabel = headerTags.length > 0 ? `${baseLabel} (${headerTags.join(' • ')})` : baseLabel;
 
     ctx.fillStyle = isLight ? 'rgba(255,255,255,0.72)' : 'rgba(15,17,24,0.72)';
     drawRoundRect(ctx, 32, 18, W - 64, 62, 14);
@@ -1398,7 +1431,7 @@ async function renderBinderCanvas(targetUser, u, options) {
         ctx.font = 'bold 28px "LemonMilk", "Sans"';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('Aucune carte possédée dans cette catégorie.', W / 2, H / 2 + 20, W - 120);
+        ctx.fillText(rarityLabel ? 'Aucune carte trouvée pour ce filtre.' : 'Aucune carte possédée dans cette catégorie.', W / 2, H / 2 + 20, W - 120);
     }
 
     ctx.textAlign = 'center';
@@ -1997,10 +2030,22 @@ function buildOpenPromptPayload(member, u, fromHub = false) {
     const hasNotif = Boolean(data.notifs?.[member.id]);
     const hubSuffix = fromHub ? ':1' : '';
 
+    const unactivatedReminders = [];
+    if ((u.inventory?.luckyBooster || 0) > 0 && !u.activeBonuses?.luckyBooster) {
+        unactivatedReminders.push(`🍀 **Booster Chanceux** (\`${u.inventory.luckyBooster}\` en inventaire)`);
+    }
+    if ((u.inventory?.halfCooldown || 0) > 0 && !u.activeBonuses?.halfCooldown) {
+        unactivatedReminders.push(`⚡ **Cooldown /2** (\`${u.inventory.halfCooldown}\` en inventaire)`);
+    }
+    const reminderBlock = unactivatedReminders.length > 0
+        ? `\n\n💡 *Rappel : tu as des bonus non activés dans ton inventaire (\`!regadex claim\`) :*\n${unactivatedReminders.map(r => `• ${r}`).join('\n')}`
+        : '';
+
     const desc = totalAvail > 0
         ? `### Vous avez **${totalAvail} booster${totalAvail > 1 ? 's' : ''} disponible${totalAvail > 1 ? 's' : ''}** !\nEn ouvrir un maintenant ?\n\n` +
           `🎁 **Gratuits :** \`${u.freeBoosters}/${MAX_FREE_BOOSTERS}\` • 🎒 **Inventaire :** \`${u.inventory?.booster || 0}\`` +
-          (nextTs ? `\n⏱️ Prochain booster gratuit <t:${Math.floor(nextTs / 1000)}:R>` : '\n✅ Jauge gratuite pleine (`2/2`)')
+          (nextTs ? `\n⏱️ Prochain booster gratuit <t:${Math.floor(nextTs / 1000)}:R>` : '\n✅ Jauge gratuite pleine (`2/2`)') +
+          reminderBlock
         : `### Vous n'avez aucun booster disponible pour le moment.\n` +
           `⏱️ Prochain booster gratuit <t:${Math.floor(nextTs / 1000)}:R>\n` +
           `💡 Tu peux aussi acheter un booster à **${STORE_PRICES.booster} pts** dans le Store *(Solde : **${u.points} pts**)*.`;
@@ -2442,6 +2487,8 @@ function buildBoosterCardEmbed(member, session, stepIndex) {
 function buildBoosterRecapEmbed(member, session, u) {
     const nextTs = getNextBoosterTimestamp(u);
     const totalAvail = getTotalAvailableBoosters(u);
+    const comp = getUserCompletionStats(u);
+    const pctSet = comp.totalSet > 0 ? Math.round((comp.uniqueCount / comp.totalSet) * 100) : 0;
 
     const lines = session.cards.map((c, i) => {
         const meta = RARITY_META[c.rarity] || RARITY_META['Commune'];
@@ -2468,6 +2515,7 @@ function buildBoosterRecapEmbed(member, session, u) {
         .setDescription(
             lines.join('\n') +
             `\n\n🪙 **Points RegaDex gagnés :** **+${session.ptsEarned} pts** *(Solde : ${u.points} pts)*` +
+            `\n📚 **Progression Set 1 :** **${comp.uniqueCount}/${comp.totalSet}** (${pctSet}%)` +
             cooldownLine +
             (bonusInfo.length > 0 ? `\n\n${bonusInfo.join('\n')}` : '')
         )
@@ -2838,13 +2886,13 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
 //   AFFICHAGE CLASSEUR & CARTE & FLEX
 // ==========================================
 
-function buildBinderComponents(ownerId, viewerId, options, totalPages) {
-    const { category, perPageMode, page, sortMode, ownedOnly = false, fromHub = false } = options;
+function buildBinderComponents(ownerId, viewerId, options, totalPages, ownerTheme = 'B') {
+    const { category, perPageMode, page, sortMode, rarityFilter = 'all', ownedOnly = false, fromHub = false } = options;
     const hubFlag = fromHub ? '1' : '0';
     const ownedFlag = ownedOnly ? '1' : '0';
 
     const catMenu = new StringSelectMenuBuilder()
-        .setCustomId(`tcg:bcat:${ownerId}:${viewerId}:${perPageMode}:${sortMode}:${hubFlag}:${ownedFlag}`)
+        .setCustomId(`tcg:bcat:${ownerId}:${viewerId}:${perPageMode}:${sortMode}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
         .setPlaceholder('Choisir un classeur...')
         .addOptions([
             { label: 'Complet Set 1 (109 cartes)', value: 'complet', emoji: '📚', default: category === 'complet' },
@@ -2853,30 +2901,18 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages) {
             { label: 'Références (34 cartes)', value: 'Références', emoji: '🎬', default: category === 'Références' }
         ]);
 
-    const perPageMenu = new StringSelectMenuBuilder()
-        .setCustomId(`tcg:bsize:${ownerId}:${viewerId}:${category}:${sortMode}:${hubFlag}:${ownedFlag}`)
-        .setPlaceholder('Cartes par page...')
-        .addOptions([
-            { label: '4 cartes par page (4×1)', value: '4', default: perPageMode === '4' },
-            { label: '18 cartes par page (6×3)', value: '18', default: perPageMode === '18' },
-            { label: '36 cartes par page (9×4)', value: '36', default: perPageMode === '36' },
-            { label: 'Tout sur 1 page (All)', value: 'all', default: perPageMode === 'all' }
-        ]);
-
     const userMenu = new UserSelectMenuBuilder()
         .setCustomId(`tcg:binder:pickuser:${viewerId}`)
         .setPlaceholder('Consulter le classeur d\'un autre membre...');
 
     const navRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`tcg:bnav:first:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}:${ownedFlag}`)
-            .setLabel('Première page')
+            .setCustomId(`tcg:bnav:first:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
             .setEmoji('⏪')
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(page <= 0),
         new ButtonBuilder()
-            .setCustomId(`tcg:bnav:prev:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}:${ownedFlag}`)
-            .setLabel('Précédent')
+            .setCustomId(`tcg:bnav:prev:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
             .setEmoji('◀️')
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(page <= 0)
@@ -2885,7 +2921,7 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages) {
     if (perPageMode !== 'all') {
         navRow.addComponents(
             new ButtonBuilder()
-                .setCustomId(`tcg:bpage:${ownerId}:${viewerId}:${category}:${perPageMode}:${sortMode}:${hubFlag}:${ownedFlag}`)
+                .setCustomId(`tcg:bpage:${ownerId}:${viewerId}:${category}:${perPageMode}:${sortMode}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
                 .setLabel(`Page ${page + 1}/${totalPages}`)
                 .setEmoji('🔢')
                 .setStyle(ButtonStyle.Primary)
@@ -2895,51 +2931,71 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages) {
 
     navRow.addComponents(
         new ButtonBuilder()
-            .setCustomId(`tcg:bnav:next:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}:${ownedFlag}`)
-            .setLabel('Suivant')
+            .setCustomId(`tcg:bnav:next:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
             .setEmoji('▶️')
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(page >= totalPages - 1),
         new ButtonBuilder()
-            .setCustomId(`tcg:bnav:last:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}:${ownedFlag}`)
-            .setLabel('Dernière page')
+            .setCustomId(`tcg:bnav:last:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
             .setEmoji('⏩')
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(page >= totalPages - 1)
     );
 
+    const nextPerPage = perPageMode === '4' ? '18' : (perPageMode === '18' ? '36' : (perPageMode === '36' ? 'all' : '4'));
+    const sizeLabel = perPageMode === 'all' ? 'All' : perPageMode;
+    const rIdx = BINDER_RARITY_ORDER.indexOf(rarityFilter);
+    const nextRarity = BINDER_RARITY_ORDER[(rIdx === -1 ? 0 : rIdx + 1) % BINDER_RARITY_ORDER.length];
+    const rBtn = BINDER_RARITY_BTN[rarityFilter] || BINDER_RARITY_BTN.all;
     const nextSort = sortMode === 'number' ? 'rarity' : (sortMode === 'rarity' ? 'quantity' : 'number');
     const nextSortLabel = nextSort === 'rarity' ? 'Tri : Rareté' : (nextSort === 'quantity' ? 'Tri : Quantité' : 'Tri : Numéro');
+    const canInspect = canControlTcgOwner(viewerId, ownerId);
 
     const optRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`tcg:bsort:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${nextSort}:${hubFlag}:${ownedFlag}`)
+            .setCustomId(`tcg:bsize:${ownerId}:${viewerId}:${category}:${nextPerPage}:${sortMode}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
+            .setLabel(`Grille : ${sizeLabel}`)
+            .setEmoji('📐')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`tcg:brarity:${ownerId}:${viewerId}:${category}:${perPageMode}:${nextRarity}:${sortMode}:${hubFlag}:${ownedFlag}`)
+            .setLabel(rBtn.label)
+            .setEmoji(rBtn.emoji)
+            .setStyle(rBtn.style),
+        new ButtonBuilder()
+            .setCustomId(`tcg:bsort:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${nextSort}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
             .setLabel(nextSortLabel)
             .setEmoji('🔀')
             .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
-            .setCustomId(`tcg:bowned:${ownerId}:${viewerId}:${category}:${perPageMode}:${sortMode}:${hubFlag}:${ownedOnly ? '0' : '1'}`)
-            .setLabel(ownedOnly ? 'Possédées : ON' : 'Possédées uniquement')
+            .setCustomId(`tcg:bowned:${ownerId}:${viewerId}:${category}:${perPageMode}:${sortMode}:${rarityFilter}:${hubFlag}:${ownedOnly ? '0' : '1'}`)
+            .setLabel(ownedOnly ? 'Possédées' : 'Toutes les cartes')
             .setEmoji(ownedOnly ? '✅' : '👁️')
             .setStyle(ownedOnly ? ButtonStyle.Success : ButtonStyle.Secondary),
         new ButtonBuilder()
-            .setCustomId(`tcg:btheme:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${hubFlag}:${ownedFlag}`)
-            .setLabel('Thème B/W')
-            .setEmoji('🌗')
+            .setCustomId(`tcg:binspect:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
+            .setLabel('Inspecter')
+            .setEmoji('🔎')
             .setStyle(ButtonStyle.Secondary)
+            .setDisabled(!canInspect)
     );
 
-    optRow.addComponents(
+    const bottomRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tcg:btheme:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${sortMode}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
+            .setLabel(ownerTheme === 'W' ? 'Mode Clair' : 'Mode Nuit')
+            .setEmoji(ownerTheme === 'W' ? '☀️' : '🌙')
+            .setStyle(ButtonStyle.Secondary),
         buildAccueilButton(viewerId),
         buildCloseButton(viewerId)
     );
 
     return [
         new ActionRowBuilder().addComponents(catMenu),
-        new ActionRowBuilder().addComponents(perPageMenu),
         new ActionRowBuilder().addComponents(userMenu),
         navRow,
-        optRow
+        optRow,
+        bottomRow
     ];
 }
 
@@ -2952,18 +3008,22 @@ async function buildBinderReplyPayload(ownerMember, viewerId, options = {}) {
         perPageMode: rawPerPage === '9' ? '4' : rawPerPage,
         page: options.page || 0,
         sortMode: options.sortMode || 'number',
+        rarityFilter: BINDER_RARITY_CODES[options.rarityFilter] !== undefined ? options.rarityFilter : 'all',
         ownedOnly: Boolean(options.ownedOnly),
         fromHub: Boolean(options.fromHub)
     };
 
     const rendered = await renderBinderCanvas(ownerMember, u, opts);
     opts.page = rendered.safePage;
+    const rarityLabel = BINDER_RARITY_CODES[opts.rarityFilter];
 
     const embed = new EmbedBuilder()
         .setColor(u.theme === 'W' ? 0xecf0f1 : 0x2c3e50)
         .setAuthor({ name: `Classeur de ${ownerMember.displayName || ownerUser.username}`, iconURL: ownerUser.displayAvatarURL({ dynamic: true }) })
         .setDescription(
-            `📖 **${opts.category === 'complet' ? 'Set 1 Complet' : opts.category}**${opts.ownedOnly ? ' *(Possédées uniquement)*' : ''} • **${rendered.ownedInView}/${rendered.totalInView}** cartes • Tri : **${opts.sortMode === 'rarity' ? 'Rareté' : (opts.sortMode === 'quantity' ? 'Quantité' : 'Numéro')}**`
+            `📖 **${opts.category === 'complet' ? 'Set 1 Complet' : opts.category}**` +
+            `${rarityLabel ? ` • 💎 **${rarityLabel}**` : ''}` +
+            `${opts.ownedOnly ? ' *(Possédées)*' : ''} • **${rendered.ownedInView}/${rendered.totalInView}** cartes • Tri : **${opts.sortMode === 'rarity' ? 'Rareté' : (opts.sortMode === 'quantity' ? 'Quantité' : 'Numéro')}**`
         )
         .setImage('attachment://regadex_classeur.jpg')
         .setFooter({ text: `Page ${rendered.safePage + 1}/${rendered.totalPages} • Mode ${u.theme === 'W' ? 'Clair (W)' : 'Nuit (B)'}` });
@@ -2971,8 +3031,60 @@ async function buildBinderReplyPayload(ownerMember, viewerId, options = {}) {
     return {
         embeds: [embed],
         files: [new AttachmentBuilder(rendered.buffer, { name: 'regadex_classeur.jpg' })],
-        components: buildBinderComponents(ownerMember.id, viewerId, opts, rendered.totalPages)
+        components: buildBinderComponents(ownerMember.id, viewerId, opts, rendered.totalPages, u.theme)
     };
+}
+
+function buildBinderInspectPayload(card, ownerId, viewerId, binderMsgId) {
+    const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
+    const u = getOrCreateTcgUser(ownerId);
+    const qty = u.cards?.[card.id] || 0;
+    const isAlreadyFlex = u.favoriteCardId === card.id;
+
+    let extraLines = '';
+    if (card.holoCounterpartId && (u.cards?.[card.holoCounterpartId] || 0) > 0) {
+        extraLines += `\n✨ **Version Holographique :** \`${card.holoCounterpartId}\` *(x${u.cards[card.holoCounterpartId]})*`;
+    } else if (card.baseCounterpartId && (u.cards?.[card.baseCounterpartId] || 0) > 0) {
+        extraLines += `\n🃏 **Version Classique :** \`${card.baseCounterpartId}\` *(x${u.cards[card.baseCounterpartId]})*`;
+    }
+
+    const embed = new EmbedBuilder()
+        .setColor(meta.color)
+        .setTitle(`${meta.emoji} ${card.id} — ${card.name}`)
+        .setDescription(
+            `📁 **Catégorie :** ${card.category}\n` +
+            `✨ **Rareté :** **${card.rarity}**${card.isHolo ? ' *(Holographique — 2× plus rare)*' : ''}\n` +
+            `📦 **Dans ton RegaDex :** \`x${qty}\`` +
+            extraLines
+        )
+        .setImage('attachment://carte_regadex.png')
+        .setFooter({ text: 'RegaDex Set 1 • Inspection depuis le classeur' });
+
+    const files = [];
+    if (card.filePath && fs.existsSync(card.filePath)) {
+        files.push(new AttachmentBuilder(card.filePath, { name: 'carte_regadex.png' }));
+    }
+
+    const row1 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tcg:binback:${binderMsgId}:${ownerId}:${viewerId}`)
+            .setLabel('Retour au classeur')
+            .setEmoji('⬅️')
+            .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+            .setCustomId(`tcg:setflex:${card.id}:${ownerId}:binspect`)
+            .setLabel(isAlreadyFlex ? 'Flex actuel' : 'Définir Flex')
+            .setEmoji('⭐')
+            .setStyle(isAlreadyFlex ? ButtonStyle.Success : ButtonStyle.Secondary)
+            .setDisabled(isAlreadyFlex || qty <= 0)
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
+        buildAccueilButton(viewerId),
+        buildCloseButton(viewerId)
+    );
+
+    return { embeds: [embed], files, components: [row1, row2] };
 }
 
 function buildSingleCardPayload(card, viewerId) {
@@ -3277,7 +3389,15 @@ async function handleFlexCommand(targetResponder, authorMember, guild, rawArg) {
 
 function sendFlexPicker(targetResponder, member, page = 0) {
     const u = getOrCreateTcgUser(member.id);
-    const owned = cardCatalog.filter(c => (u.cards?.[c.id] || 0) > 0);
+    const owned = cardCatalog
+        .filter(c => (u.cards?.[c.id] || 0) > 0)
+        .sort((a, b) => {
+            const ra = RARITY_ORDER[a.rarity] ?? 0;
+            const rb = RARITY_ORDER[b.rarity] ?? 0;
+            if (rb !== ra) return rb - ra;
+            if (a.isHolo !== b.isHolo) return b.isHolo ? 1 : -1;
+            return a.sortIndex - b.sortIndex;
+        });
     if (owned.length === 0) {
         return replySilent(targetResponder, "❌ Tu n'as pas encore de carte ! Ouvre d'abord un booster dans <#1572007962199851059>.");
     }
@@ -3537,6 +3657,11 @@ function buildTradeThreadPayload(trade) {
             .setEmoji('➖')
             .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
+            .setCustomId(`tcg:tr:clear:${trade.id}`)
+            .setLabel('Vider mon offre')
+            .setEmoji('🧹')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
             .setCustomId(`tcg:tr:search:${trade.id}`)
             .setLabel('Chercher (Modal)')
             .setEmoji('🔍')
@@ -3611,6 +3736,115 @@ async function refreshTradePanel(thread, trade) {
     await msg.edit(buildTradeThreadPayload(trade)).catch(() => {});
 }
 
+function buildTradeAddCardEphemeralPayload(trade, uid, page = 0, missingOnly = false) {
+    const allTradables = getTradableDuplicates(uid, trade.offers[uid]);
+    const partnerId = uid === trade.initiatorId ? trade.targetId : trade.initiatorId;
+    const uPartner = getOrCreateTcgUser(partnerId);
+    const u = getOrCreateTcgUser(uid);
+
+    const filtered = missingOnly
+        ? allTradables.filter(c => (uPartner.cards?.[c.id] || 0) <= 0)
+        : allTradables;
+
+    const missFlag = missingOnly ? '1' : '0';
+    const toggleBtn = new ButtonBuilder()
+        .setCustomId(`tcg:tr:addmiss:${trade.id}:${missingOnly ? '0' : '1'}`)
+        .setLabel(missingOnly ? 'Ce qui lui manque : ON' : 'Ce qui lui manque uniquement')
+        .setEmoji('🎯')
+        .setStyle(missingOnly ? ButtonStyle.Success : ButtonStyle.Secondary);
+
+    if (filtered.length === 0) {
+        return {
+            content: missingOnly
+                ? '🎯 Aucun de tes doublons disponibles ne manque actuellement à ton partenaire.'
+                : "❌ Tu n'as aucun doublon disponible (`≥ 2` exemplaires) à ajouter.",
+            components: missingOnly ? [new ActionRowBuilder().addComponents(toggleBtn)] : []
+        };
+    }
+
+    const totalPages = Math.max(1, Math.ceil(filtered.length / 25));
+    const safePage = Math.max(0, Math.min(page, totalPages - 1));
+    const slice = filtered.slice(safePage * 25, (safePage + 1) * 25);
+
+    const menu = new StringSelectMenuBuilder()
+        .setCustomId(`tcg:tr:addsel:${trade.id}`)
+        .setPlaceholder(`Choisir un doublon à ajouter (Page ${safePage + 1}/${totalPages})...`)
+        .addOptions(slice.map(c => {
+            const missingForPartner = (uPartner.cards?.[c.id] || 0) <= 0;
+            return {
+                label: `${c.id} • ${c.name}`.slice(0, 100),
+                description: `${c.rarity} • Possédées : x${u.cards[c.id]}${missingForPartner ? ' • 🆕 Lui manque' : ''}`.slice(0, 100),
+                value: c.id
+            };
+        }));
+
+    const btnRow = new ActionRowBuilder();
+    if (totalPages > 1) {
+        btnRow.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tcg:tr:addpage:${trade.id}:${safePage - 1}:${missFlag}`)
+                .setEmoji('◀️')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(safePage <= 0),
+            new ButtonBuilder()
+                .setCustomId(`tcg:tr:addpage:${trade.id}:${safePage + 1}:${missFlag}`)
+                .setEmoji('▶️')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(safePage >= totalPages - 1)
+        );
+    }
+    btnRow.addComponents(toggleBtn);
+
+    return {
+        content: missingOnly
+            ? '🎯 Choisis une carte en doublon **qui manque à ton partenaire** :'
+            : '➕ Choisis une carte en doublon à ajouter à ton offre :',
+        components: [new ActionRowBuilder().addComponents(menu), btnRow]
+    };
+}
+
+function buildTradeUnfairConfirmPayload(trade) {
+    const idA = trade.initiatorId;
+    const idB = trade.targetId;
+    const offerA = trade.offers[idA] || [];
+    const offerB = trade.offers[idB] || [];
+    const fmtRarities = (arr) => arr.map(id => {
+        const c = cardById.get(id);
+        const r = c?.rarity || 'Commune';
+        const m = RARITY_META[r] || RARITY_META['Commune'];
+        return `${m.emoji} ${r}`;
+    }).join(', ');
+    const vA = Boolean(trade.unfairConfirm?.votes?.[idA]);
+    const vB = Boolean(trade.unfairConfirm?.votes?.[idB]);
+
+    const embed = new EmbedBuilder()
+        .setColor(0xf39c12)
+        .setTitle('⚠️ Échange déséquilibré — Confirmation requise')
+        .setDescription(
+            `Cet échange ne contient pas le même nombre ou les mêmes raretés de cartes des deux côtés :\n\n` +
+            `• **<@${idA}>** (${offerA.length}) : ${fmtRarities(offerA)}\n` +
+            `• **<@${idB}>** (${offerB.length}) : ${fmtRarities(offerB)}\n\n` +
+            `Confirmez-vous cet échange ? Les **deux** participants doivent valider :\n` +
+            `• <@${idA}> : ${vA ? '✅ Confirmé' : '⏳ En attente'}\n` +
+            `• <@${idB}> : ${vB ? '✅ Confirmé' : '⏳ En attente'}`
+        );
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tcg:tr:uok:${trade.id}`)
+            .setLabel("Confirmer l'échange")
+            .setEmoji('✅')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId(`tcg:tr:ucancel:${trade.id}`)
+            .setLabel('Annuler')
+            .setEmoji('❌')
+            .setStyle(ButtonStyle.Danger)
+    );
+
+    return { embeds: [embed], components: [row] };
+}
+
 async function executeTradeIfBothLocked(thread, trade, client) {
     const idA = trade.initiatorId;
     const idB = trade.targetId;
@@ -3618,11 +3852,13 @@ async function executeTradeIfBothLocked(thread, trade, client) {
 
     const offerA = trade.offers[idA] || [];
     const offerB = trade.offers[idB] || [];
-    if (offerA.length === 0 && offerB.length === 0) {
+    if (offerA.length === 0 || offerB.length === 0) {
         trade.lockedOffers[idA] = false;
         trade.lockedOffers[idB] = false;
+        trade.unfairConfirm = null;
+        tcgBridge.demanderSauvegarde();
         await refreshTradePanel(thread, trade);
-        await sendSilent(thread, "⚠️ Impossible de valider un échange vide !").catch(() => {});
+        await sendSilent(thread, "❌ **Échange bloqué :** les **deux** participants doivent obligatoirement proposer au moins **1 carte** en doublon *(les dons à sens unique sont interdits)*.").catch(() => {});
         return false;
     }
 
@@ -3641,6 +3877,8 @@ async function executeTradeIfBothLocked(thread, trade, client) {
         if ((uA.cards[cid] || 0) - q < 1) {
             trade.lockedOffers[idA] = false;
             trade.lockedOffers[idB] = false;
+            trade.unfairConfirm = null;
+            tcgBridge.demanderSauvegarde();
             await refreshTradePanel(thread, trade);
             await sendSilent(thread, `❌ <@${idA}> n'a plus assez de doublons pour \`${cid}\`. Validation annulée.`).catch(() => {});
             return false;
@@ -3650,10 +3888,26 @@ async function executeTradeIfBothLocked(thread, trade, client) {
         if ((uB.cards[cid] || 0) - q < 1) {
             trade.lockedOffers[idA] = false;
             trade.lockedOffers[idB] = false;
+            trade.unfairConfirm = null;
+            tcgBridge.demanderSauvegarde();
             await refreshTradePanel(thread, trade);
             await sendSilent(thread, `❌ <@${idB}> n'a plus assez de doublons pour \`${cid}\`. Validation annulée.`).catch(() => {});
             return false;
         }
+    }
+
+    const getSortedRarities = (arr) => arr
+        .map(id => cardById.get(id)?.rarity || 'Commune')
+        .sort((a, b) => (RARITY_ORDER[a] ?? 0) - (RARITY_ORDER[b] ?? 0));
+    const raritiesA = getSortedRarities(offerA);
+    const raritiesB = getSortedRarities(offerB);
+    const isBalanced = offerA.length === offerB.length && raritiesA.join('|') === raritiesB.join('|');
+
+    if (!isBalanced && !(trade.unfairConfirm?.votes?.[idA] && trade.unfairConfirm?.votes?.[idB])) {
+        trade.unfairConfirm = { votes: { [idA]: false, [idB]: false } };
+        tcgBridge.demanderSauvegarde();
+        await sendSilent(thread, buildTradeUnfairConfirmPayload(trade)).catch(() => {});
+        return false;
     }
 
     // Transfert atomique
@@ -3666,6 +3920,7 @@ async function executeTradeIfBothLocked(thread, trade, client) {
         uA.cards[cid] = (uA.cards[cid] || 0) + q;
     }
 
+    trade.unfairConfirm = null;
     uA.stats.tradesCompleted = (uA.stats.tradesCompleted || 0) + 1;
     uB.stats.tradesCompleted = (uB.stats.tradesCompleted || 0) + 1;
     trade.tradeCount = (trade.tradeCount || 0) + 1;
@@ -4550,8 +4805,12 @@ async function handleTcgInteraction(interaction) {
             await interaction.reply({ content: "Seul l'auteur de ce menu peut le fermer !", ephemeral: true });
             return true;
         }
-        await interaction.deferUpdate().catch(() => {});
         const msg = interaction.message;
+        if (msg?.flags?.has?.(MessageFlags.Ephemeral)) {
+            await interaction.update({ content: '🗑️ Menu fermé.', embeds: [], components: [], files: [], attachments: [] }).catch(() => {});
+            return true;
+        }
+        await interaction.deferUpdate().catch(() => {});
         const refId = msg?.reference?.messageId;
         if (refId && msg.channel) {
             const triggerMsg = await msg.channel.messages.fetch(refId).catch(() => null);
@@ -4912,6 +5171,66 @@ async function handleTcgInteraction(interaction) {
         return true;
     }
 
+    if (action === 'buyholocancel' && interaction.isButton()) {
+        const ownerId = parts[2];
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        await interaction.update({ content: '❌ Achat annulé.', embeds: [], components: [] });
+        return true;
+    }
+
+    if (action === 'buyholoconf' && interaction.isButton()) {
+        const ownerId = parts[2];
+        const fromHub = parts[3] === '1';
+        const storeMsgId = parts[4] || '';
+        const hubSuffix = fromHub ? ':1' : '';
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+
+        const price = STORE_PRICES.holoTransform;
+        const u = getOrCreateTcgUser(ownerId);
+        if (u.points < price) {
+            await interaction.update({ content: "❌ Tu n'as plus assez de points RegaDex !", embeds: [], components: [] });
+            return true;
+        }
+
+        u.points -= price;
+        u.inventory.holoTransform = (u.inventory.holoTransform || 0) + 1;
+        if (!isSandboxId(ownerId)) {
+            tcgBridge.trackBattlePassProgress(ownerId, 'tcg_store_buy', 1);
+            tcgBridge.demanderSauvegarde();
+        }
+
+        if (storeMsgId && interaction.channel) {
+            const storeMsg = await interaction.channel.messages.fetch(storeMsgId).catch(() => null);
+            if (storeMsg) {
+                const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+                await storeMsg.edit(buildStorePayload(actorMember, u, fromHub)).catch(() => {});
+            }
+        }
+
+        const doneEmbed = new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle('✅ Achat effectué dans le RegaDex Store !')
+            .setDescription(
+                `Tu as acheté : **✨ Transformer une carte en Holographique** pour \`${price} pts\` *(Solde restant : **${u.points} pts**)*.` +
+                `\n\nSouhaites-tu l'utiliser tout de suite ou le garder dans ton inventaire (\`!regadex claim\`) ?`
+            );
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tcg:postbuy:use:holoTransform:${ownerId}${hubSuffix}`)
+                .setLabel('Activer maintenant')
+                .setEmoji('⚡')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId(`tcg:postbuy:keep:holoTransform:${ownerId}${hubSuffix}`)
+                .setLabel('Garder en inventaire')
+                .setEmoji('🎒')
+                .setStyle(ButtonStyle.Secondary)
+        );
+        await interaction.update({ content: null, embeds: [doneEmbed], components: [row] });
+        return true;
+    }
+
     if (action === 'buy' && interaction.isButton()) {
         const itemKey = parts[2];
         const ownerId = parts[3];
@@ -4923,6 +5242,39 @@ async function handleTcgInteraction(interaction) {
         const u = getOrCreateTcgUser(ownerId);
         if (!price || u.points < price) {
             await interaction.reply({ content: "❌ Tu n'as pas assez de points RegaDex !", ephemeral: true });
+            return true;
+        }
+
+        if (itemKey === 'holoTransform') {
+            const compatibleCount = cardCatalog.filter(c =>
+                !c.isHolo &&
+                c.holoCounterpartId &&
+                (u.cards?.[c.id] || 0) >= 1
+            ).length;
+            const confEmbed = new EmbedBuilder()
+                .setColor(compatibleCount > 0 ? 0xf1c40f : 0xe67e22)
+                .setTitle('✨ Confirmation — Transformation Holographique')
+                .setDescription(
+                    `🪙 **Coût :** \`${price} pts\` *(Solde actuel : **${u.points} pts**)*\n` +
+                    `🃏 **Cartes disponibles à transformer :** **${compatibleCount}** carte${compatibleCount > 1 ? 's' : ''}\n\n` +
+                    (compatibleCount === 0
+                        ? `⚠️ *Tu ne possèdes actuellement aucune carte compatible (non-Holo avec version Holographique). L'objet restera dans ton inventaire pour plus tard.*\n\n`
+                        : '') +
+                    `Confirmer cet achat ?`
+                );
+            const confRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`tcg:buyholoconf:${ownerId}:${fromHub ? '1' : '0'}:${interaction.message?.id || ''}`)
+                    .setLabel(`Confirmer (${price} pts)`)
+                    .setEmoji('✅')
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId(`tcg:buyholocancel:${ownerId}`)
+                    .setLabel('Annuler')
+                    .setEmoji('❌')
+                    .setStyle(ButtonStyle.Secondary)
+            );
+            await interaction.reply({ embeds: [confEmbed], components: [confRow], ephemeral: true });
             return true;
         }
 
@@ -5241,14 +5593,125 @@ async function handleTcgInteraction(interaction) {
         }
     }
 
+    if (action === 'binspect' && interaction.isButton()) {
+        const ownerId = parts[2];
+        const viewerId = parts[3];
+        const category = parts[4];
+        const perPageMode = parts[5];
+        const page = parseInt(parts[6], 10) || 0;
+        const sortMode = parts[7];
+        const rarityFilter = parts[8] || 'all';
+        const fromHub = parts[9] === '1';
+        const ownedOnly = parts[10] === '1';
+
+        if (!canControlTcgOwner(interaction.user.id, viewerId) && !canControlTcgOwner(interaction.user.id, ownerId)) {
+            await interaction.reply({ content: "Ce classeur n'est pas à toi !", ephemeral: true });
+            return true;
+        }
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+            await interaction.reply({ content: "🔒 Tu ne peux inspecter en grand format que les cartes de ton propre classeur (anti-spoiler) !", ephemeral: true });
+            return true;
+        }
+
+        const uOwner = getOrCreateTcgUser(ownerId);
+        const cardsList = getFilteredSortedCards(category, sortMode, uOwner, ownedOnly, rarityFilter);
+        const grid = getBinderGridConfig(perPageMode, cardsList.length);
+        const totalPages = Math.max(1, Math.ceil(cardsList.length / grid.perPage));
+        const safePage = Math.max(0, Math.min(page, totalPages - 1));
+        const slice = cardsList.slice(safePage * grid.perPage, (safePage + 1) * grid.perPage);
+        const ownedOnPage = slice.filter(c => (uOwner.cards?.[c.id] || 0) > 0);
+
+        if (ownedOnPage.length === 0) {
+            await interaction.reply({ content: "🔒 Tu ne possèdes aucune carte sur cette page du classeur à inspecter !", ephemeral: true });
+            return true;
+        }
+
+        const now = Date.now();
+        for (const [k, v] of binderReturnStates.entries()) {
+            if (now > (v.expiresAt || 0)) binderReturnStates.delete(k);
+        }
+        binderReturnStates.set(interaction.message.id, {
+            ownerId,
+            viewerId,
+            category,
+            perPageMode,
+            page: safePage,
+            sortMode,
+            rarityFilter,
+            ownedOnly,
+            fromHub,
+            expiresAt: now + 30 * 60 * 1000
+        });
+
+        const menu = new StringSelectMenuBuilder()
+            .setCustomId(`tcg:binsel:${interaction.message.id}:${ownerId}:${viewerId}`)
+            .setPlaceholder('Choisis une carte possédée à inspecter...')
+            .addOptions(ownedOnPage.slice(0, 25).map(c => ({
+                label: `${c.id} • ${c.name}`.slice(0, 100),
+                description: `${c.rarity} • Possédées : x${uOwner.cards[c.id]}`.slice(0, 100),
+                value: c.id
+            })));
+
+        const content = ownedOnPage.length > 25
+            ? '🔎 **Choisis la carte à inspecter** *(25 premières cartes possédées de cette vue — change de grille ou utilise les filtres si besoin)* :'
+            : '🔎 **Choisis une carte possédée de cette page à inspecter :**';
+        await interaction.reply({ content, components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
+        return true;
+    }
+
+    if (action === 'binsel' && interaction.isStringSelectMenu()) {
+        const binderMsgId = parts[2];
+        const ownerId = parts[3];
+        const viewerId = parts[4];
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        const card = cardById.get(interaction.values[0]);
+        const uOwner = getOrCreateTcgUser(ownerId);
+        if (!card || (uOwner.cards?.[card.id] || 0) <= 0) {
+            await interaction.reply({ content: "🔒 Tu ne possèdes pas cette carte !", ephemeral: true });
+            return true;
+        }
+        const binderMsg = await interaction.channel?.messages?.fetch(binderMsgId).catch(() => null);
+        if (!binderMsg) {
+            await interaction.update({ content: "❌ Le message du classeur n'existe plus.", components: [] });
+            return true;
+        }
+        const inspectPayload = buildBinderInspectPayload(card, ownerId, viewerId, binderMsgId);
+        await binderMsg.edit({ content: null, ...inspectPayload, attachments: [] });
+        await interaction.update({ content: `🔎 **${card.id} • ${card.name}** affichée dans le classeur !`, components: [] });
+        return true;
+    }
+
+    if (action === 'binback' && interaction.isButton()) {
+        const binderMsgId = parts[2];
+        const ownerId = parts[3];
+        const viewerId = parts[4];
+        if (!canControlTcgOwner(interaction.user.id, viewerId) && !canControlTcgOwner(interaction.user.id, ownerId)) {
+            await interaction.reply({ content: "Ce classeur n'est pas à toi !", ephemeral: true });
+            return true;
+        }
+        const state = binderReturnStates.get(binderMsgId) || binderReturnStates.get(interaction.message.id) || {
+            ownerId,
+            viewerId,
+            fromHub: false
+        };
+        await interaction.deferUpdate();
+        const ownerMember = isSandboxId(state.ownerId)
+            ? buildTcgMemberProxy(interaction.member, TCGX_SANDBOX_ID)
+            : await interaction.guild.members.fetch(state.ownerId).catch(() => interaction.member);
+        const payload = await buildBinderReplyPayload(ownerMember, state.viewerId, state);
+        await interaction.editReply({ content: null, ...payload, attachments: [] });
+        return true;
+    }
+
     if (action === 'bpage' && interaction.isButton()) {
         const ownerId = parts[2];
         const viewerId = parts[3];
         const category = parts[4];
         const perPageMode = parts[5];
         const sortMode = parts[6];
-        const fromHub = parts[7] === '1';
-        const ownedOnly = parts[8] === '1';
+        const rarityFilter = parts[7] || 'all';
+        const fromHub = parts[8] === '1';
+        const ownedOnly = parts[9] === '1';
 
         if (!canControlTcgOwner(interaction.user.id, viewerId) && !canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({ content: "Ce classeur n'est pas à toi !", ephemeral: true });
@@ -5256,12 +5719,12 @@ async function handleTcgInteraction(interaction) {
         }
 
         const uOwner = getOrCreateTcgUser(ownerId);
-        const cardsList = getFilteredSortedCards(category, sortMode, uOwner, ownedOnly);
+        const cardsList = getFilteredSortedCards(category, sortMode, uOwner, ownedOnly, rarityFilter);
         const grid = getBinderGridConfig(perPageMode, cardsList.length);
         const totalPages = Math.max(1, Math.ceil(cardsList.length / grid.perPage));
 
         const modal = new ModalBuilder()
-            .setCustomId(`tcg:bpagesub:${ownerId}:${viewerId}:${category}:${perPageMode}:${sortMode}:${fromHub ? '1' : '0'}:${ownedOnly ? '1' : '0'}`)
+            .setCustomId(`tcg:bpagesub:${ownerId}:${viewerId}:${category}:${perPageMode}:${sortMode}:${rarityFilter}:${fromHub ? '1' : '0'}:${ownedOnly ? '1' : '0'}`)
             .setTitle('Aller à une page du classeur');
         const input = new TextInputBuilder()
             .setCustomId('page_number')
@@ -5275,23 +5738,35 @@ async function handleTcgInteraction(interaction) {
         return true;
     }
 
-    if ((action === 'bcat' || action === 'bsize' || action === 'bnav' || action === 'bsort' || action === 'bowned' || action === 'btheme' || action === 'bpagesub')) {
-        let ownerId, viewerId, category, perPageMode, page, sortMode, fromHub, ownedOnly;
+    if ((action === 'bcat' || action === 'bsize' || action === 'bnav' || action === 'brarity' || action === 'bsort' || action === 'bowned' || action === 'btheme' || action === 'bpagesub')) {
+        let ownerId, viewerId, category, perPageMode, page, sortMode, rarityFilter, fromHub, ownedOnly;
 
         if (action === 'bcat' && interaction.isStringSelectMenu()) {
             ownerId = parts[2];
             viewerId = parts[3];
             perPageMode = parts[4];
             sortMode = parts[5];
-            fromHub = parts[6] === '1';
-            ownedOnly = parts[7] === '1';
+            rarityFilter = parts[6] || 'all';
+            fromHub = parts[7] === '1';
+            ownedOnly = parts[8] === '1';
             category = interaction.values[0];
+            page = 0;
+        } else if (action === 'bsize' && interaction.isButton()) {
+            ownerId = parts[2];
+            viewerId = parts[3];
+            category = parts[4];
+            perPageMode = parts[5];
+            sortMode = parts[6];
+            rarityFilter = parts[7] || 'all';
+            fromHub = parts[8] === '1';
+            ownedOnly = parts[9] === '1';
             page = 0;
         } else if (action === 'bsize' && interaction.isStringSelectMenu()) {
             ownerId = parts[2];
             viewerId = parts[3];
             category = parts[4];
             sortMode = parts[5];
+            rarityFilter = 'all';
             fromHub = parts[6] === '1';
             ownedOnly = parts[7] === '1';
             perPageMode = interaction.values[0];
@@ -5304,12 +5779,23 @@ async function handleTcgInteraction(interaction) {
             perPageMode = parts[6];
             page = parseInt(parts[7], 10) || 0;
             sortMode = parts[8];
-            fromHub = parts[9] === '1';
-            ownedOnly = parts[10] === '1';
+            rarityFilter = parts[9] || 'all';
+            fromHub = parts[10] === '1';
+            ownedOnly = parts[11] === '1';
             if (dir === 'first') page = 0;
             else if (dir === 'prev') page = Math.max(0, page - 1);
             else if (dir === 'next') page = page + 1;
             else if (dir === 'last') page = 999999;
+        } else if (action === 'brarity' && interaction.isButton()) {
+            ownerId = parts[2];
+            viewerId = parts[3];
+            category = parts[4];
+            perPageMode = parts[5];
+            rarityFilter = parts[6] || 'all';
+            sortMode = parts[7];
+            fromHub = parts[8] === '1';
+            ownedOnly = parts[9] === '1';
+            page = 0;
         } else if (action === 'bsort' && interaction.isButton()) {
             ownerId = parts[2];
             viewerId = parts[3];
@@ -5317,16 +5803,18 @@ async function handleTcgInteraction(interaction) {
             perPageMode = parts[5];
             page = 0;
             sortMode = parts[7];
-            fromHub = parts[8] === '1';
-            ownedOnly = parts[9] === '1';
+            rarityFilter = parts[8] || 'all';
+            fromHub = parts[9] === '1';
+            ownedOnly = parts[10] === '1';
         } else if (action === 'bowned' && interaction.isButton()) {
             ownerId = parts[2];
             viewerId = parts[3];
             category = parts[4];
             perPageMode = parts[5];
             sortMode = parts[6];
-            fromHub = parts[7] === '1';
-            ownedOnly = parts[8] === '1';
+            rarityFilter = parts[7] || 'all';
+            fromHub = parts[8] === '1';
+            ownedOnly = parts[9] === '1';
             page = 0;
         } else if (action === 'btheme' && interaction.isButton()) {
             ownerId = parts[2];
@@ -5335,8 +5823,9 @@ async function handleTcgInteraction(interaction) {
             perPageMode = parts[5];
             page = parseInt(parts[6], 10) || 0;
             sortMode = parts[7];
-            fromHub = parts[8] === '1';
-            ownedOnly = parts[9] === '1';
+            rarityFilter = parts[8] || 'all';
+            fromHub = parts[9] === '1';
+            ownedOnly = parts[10] === '1';
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
                 await interaction.reply({ content: "❌ Seul le propriétaire du classeur peut changer son thème Clair/Nuit.", ephemeral: true });
                 return true;
@@ -5350,8 +5839,9 @@ async function handleTcgInteraction(interaction) {
             category = parts[4];
             perPageMode = parts[5];
             sortMode = parts[6];
-            fromHub = parts[7] === '1';
-            ownedOnly = parts[8] === '1';
+            rarityFilter = parts[7] || 'all';
+            fromHub = parts[8] === '1';
+            ownedOnly = parts[9] === '1';
             const rawPage = interaction.fields.getTextInputValue('page_number').trim();
             const pageNum = parseInt(rawPage, 10);
             if (!/^\d+$/.test(rawPage) || isNaN(pageNum) || pageNum < 1) {
@@ -5376,7 +5866,7 @@ async function handleTcgInteraction(interaction) {
         const ownerMember = isSandboxId(ownerId)
             ? buildTcgMemberProxy(interaction.member, TCGX_SANDBOX_ID)
             : await interaction.guild.members.fetch(ownerId).catch(() => interaction.member);
-        const payload = await buildBinderReplyPayload(ownerMember, viewerId, { category, perPageMode, page, sortMode, ownedOnly, fromHub });
+        const payload = await buildBinderReplyPayload(ownerMember, viewerId, { category, perPageMode, page, sortMode, rarityFilter, ownedOnly, fromHub });
         if (action === 'bpagesub' && !interaction.isFromMessage?.()) {
             await interaction.editReply(payload);
         } else {
@@ -5450,6 +5940,15 @@ async function handleTcgInteraction(interaction) {
         } else if (context === 'card') {
             const cardPayload = buildSingleCardPayload(card, ownerId);
             await interaction.update({ components: cardPayload.components });
+            await interaction.followUp({
+                content: `⭐ Ta carte préférée est maintenant **${card.id} • ${card.name}** ! Tape \`!flex\` pour frimer !`,
+                ephemeral: true
+            });
+            return true;
+        } else if (context === 'binspect') {
+            const state = binderReturnStates.get(interaction.message?.id);
+            const inspectPayload = buildBinderInspectPayload(card, ownerId, state?.viewerId || ownerId, interaction.message?.id);
+            await interaction.update({ components: inspectPayload.components });
             await interaction.followUp({
                 content: `⭐ Ta carte préférée est maintenant **${card.id} • ${card.name}** ! Tape \`!flex\` pour frimer !`,
                 ephemeral: true
@@ -5649,10 +6148,56 @@ async function handleTcgInteraction(interaction) {
         }
 
         if (sub === 'lock' && interaction.isButton()) {
+            if (!trade.lockedOffers[uid] && (trade.offers[uid]?.length || 0) === 0) {
+                await interaction.reply({ content: "❌ Tu dois proposer au moins **1 carte** en doublon avant de valider ton offre *(les dons à sens unique sont interdits)*.", ephemeral: true });
+                return true;
+            }
             trade.lockedOffers[uid] = !trade.lockedOffers[uid];
+            trade.unfairConfirm = null;
             tcgBridge.demanderSauvegarde();
             await interaction.update(buildTradeThreadPayload(trade));
             await executeTradeIfBothLocked(thread, trade, client);
+            return true;
+        }
+
+        if (sub === 'clear' && interaction.isButton()) {
+            if (trade.offers[uid].length === 0) {
+                await interaction.reply({ content: "Ton offre est déjà vide.", ephemeral: true });
+                return true;
+            }
+            trade.offers[uid] = [];
+            trade.lockedOffers[trade.initiatorId] = false;
+            trade.lockedOffers[trade.targetId] = false;
+            trade.unfairConfirm = null;
+            tcgBridge.demanderSauvegarde();
+            await interaction.update(buildTradeThreadPayload(trade));
+            return true;
+        }
+
+        if (sub === 'uok' && interaction.isButton()) {
+            if (!trade.unfairConfirm || !trade.lockedOffers[trade.initiatorId] || !trade.lockedOffers[trade.targetId]) {
+                await interaction.reply({ content: "⏳ Cette demande de confirmation n'est plus active (les offres ont été modifiées ou déverrouillées).", ephemeral: true });
+                return true;
+            }
+            trade.unfairConfirm.votes = trade.unfairConfirm.votes || {};
+            trade.unfairConfirm.votes[uid] = true;
+            if (trade.unfairConfirm.votes[trade.initiatorId] && trade.unfairConfirm.votes[trade.targetId]) {
+                await interaction.update({ content: "✅ **Double confirmation validée !** Exécution de l'échange...", embeds: [], components: [] });
+                await executeTradeIfBothLocked(thread, trade, client);
+                return true;
+            }
+            tcgBridge.demanderSauvegarde();
+            await interaction.update(buildTradeUnfairConfirmPayload(trade));
+            return true;
+        }
+
+        if (sub === 'ucancel' && interaction.isButton()) {
+            trade.unfairConfirm = null;
+            trade.lockedOffers[trade.initiatorId] = false;
+            trade.lockedOffers[trade.targetId] = false;
+            tcgBridge.demanderSauvegarde();
+            await refreshTradePanel(thread, trade);
+            await interaction.update({ content: `❌ **Confirmation annulée par <@${uid}>** *(échange déséquilibré)*. Les offres ont été déverrouillées.`, embeds: [], components: [] });
             return true;
         }
 
@@ -5667,65 +6212,21 @@ async function handleTcgInteraction(interaction) {
                 return true;
             }
             const page = parseInt(parts[4] || '0', 10);
-            const totalPages = Math.max(1, Math.ceil(tradables.length / 25));
-            const safePage = Math.max(0, Math.min(page, totalPages - 1));
-            const slice = tradables.slice(safePage * 25, (safePage + 1) * 25);
-
-            const u = getOrCreateTcgUser(uid);
-            const partnerId = uid === trade.initiatorId ? trade.targetId : trade.initiatorId;
-            const uPartner = getOrCreateTcgUser(partnerId);
-            const menu = new StringSelectMenuBuilder()
-                .setCustomId(`tcg:tr:addsel:${threadId}`)
-                .setPlaceholder(`Choisir un doublon à ajouter (Page ${safePage + 1}/${totalPages})...`)
-                .addOptions(slice.map(c => {
-                    const missingForPartner = (uPartner.cards?.[c.id] || 0) <= 0;
-                    return {
-                        label: `${c.id} • ${c.name}`.slice(0, 100),
-                        description: `${c.rarity} • Possédées : x${u.cards[c.id]}${missingForPartner ? ' • 🆕 Lui manque' : ''}`.slice(0, 100),
-                        value: c.id
-                    };
-                }));
-
-            const rows = [new ActionRowBuilder().addComponents(menu)];
-            if (totalPages > 1) {
-                rows.push(new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`tcg:tr:addpage:${threadId}:${safePage - 1}`).setLabel('◀️').setStyle(ButtonStyle.Secondary).setDisabled(safePage <= 0),
-                    new ButtonBuilder().setCustomId(`tcg:tr:addpage:${threadId}:${safePage + 1}`).setLabel('▶️').setStyle(ButtonStyle.Secondary).setDisabled(safePage >= totalPages - 1)
-                ));
-            }
-            await interaction.reply({ content: '➕ Choisis une carte en doublon à ajouter à ton offre :', components: rows, ephemeral: true });
+            const missingOnly = parts[5] === '1';
+            await interaction.reply({ ...buildTradeAddCardEphemeralPayload(trade, uid, page, missingOnly), ephemeral: true });
             return true;
         }
 
         if (sub === 'addpage' && interaction.isButton()) {
             const page = parseInt(parts[4] || '0', 10);
-            const tradables = getTradableDuplicates(uid, trade.offers[uid]);
-            const totalPages = Math.max(1, Math.ceil(tradables.length / 25));
-            const safePage = Math.max(0, Math.min(page, totalPages - 1));
-            const slice = tradables.slice(safePage * 25, (safePage + 1) * 25);
-            const u = getOrCreateTcgUser(uid);
-            const partnerId = uid === trade.initiatorId ? trade.targetId : trade.initiatorId;
-            const uPartner = getOrCreateTcgUser(partnerId);
+            const missingOnly = parts[5] === '1';
+            await interaction.update(buildTradeAddCardEphemeralPayload(trade, uid, page, missingOnly));
+            return true;
+        }
 
-            const menu = new StringSelectMenuBuilder()
-                .setCustomId(`tcg:tr:addsel:${threadId}`)
-                .setPlaceholder(`Choisir un doublon (Page ${safePage + 1}/${totalPages})...`)
-                .addOptions(slice.map(c => {
-                    const missingForPartner = (uPartner.cards?.[c.id] || 0) <= 0;
-                    return {
-                        label: `${c.id} • ${c.name}`.slice(0, 100),
-                        description: `${c.rarity} • Possédées : x${u.cards[c.id]}${missingForPartner ? ' • 🆕 Lui manque' : ''}`.slice(0, 100),
-                        value: c.id
-                    };
-                }));
-            const rows = [new ActionRowBuilder().addComponents(menu)];
-            if (totalPages > 1) {
-                rows.push(new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId(`tcg:tr:addpage:${threadId}:${safePage - 1}`).setLabel('◀️').setStyle(ButtonStyle.Secondary).setDisabled(safePage <= 0),
-                    new ButtonBuilder().setCustomId(`tcg:tr:addpage:${threadId}:${safePage + 1}`).setLabel('▶️').setStyle(ButtonStyle.Secondary).setDisabled(safePage >= totalPages - 1)
-                ));
-            }
-            await interaction.update({ components: rows });
+        if (sub === 'addmiss' && interaction.isButton()) {
+            const missingOnly = parts[4] === '1';
+            await interaction.update(buildTradeAddCardEphemeralPayload(trade, uid, 0, missingOnly));
             return true;
         }
 
@@ -5744,6 +6245,7 @@ async function handleTcgInteraction(interaction) {
             trade.offers[uid].push(cardId);
             trade.lockedOffers[trade.initiatorId] = false;
             trade.lockedOffers[trade.targetId] = false;
+            trade.unfairConfirm = null;
             tcgBridge.demanderSauvegarde();
 
             await refreshTradePanel(thread, trade);
@@ -5777,6 +6279,7 @@ async function handleTcgInteraction(interaction) {
             const [removed] = trade.offers[uid].splice(idx, 1);
             trade.lockedOffers[trade.initiatorId] = false;
             trade.lockedOffers[trade.targetId] = false;
+            trade.unfairConfirm = null;
             tcgBridge.demanderSauvegarde();
 
             await refreshTradePanel(thread, trade);
@@ -5816,6 +6319,7 @@ async function handleTcgInteraction(interaction) {
                 trade.offers[uid].push(res.card.id);
                 trade.lockedOffers[trade.initiatorId] = false;
                 trade.lockedOffers[trade.targetId] = false;
+                trade.unfairConfirm = null;
                 tcgBridge.demanderSauvegarde();
                 await refreshTradePanel(thread, trade);
                 await interaction.reply({ content: `✅ **${res.card.id} • ${res.card.name}** ajoutée à ton offre !`, ephemeral: true });
@@ -5875,6 +6379,7 @@ async function handleTcgInteraction(interaction) {
             trade.offers = { [trade.initiatorId]: [], [trade.targetId]: [] };
             trade.lockedOffers = { [trade.initiatorId]: false, [trade.targetId]: false };
             trade.postTradeVotes = { [trade.initiatorId]: null, [trade.targetId]: null };
+            trade.unfairConfirm = null;
             await interaction.update({ content: '🔄 **Nouvel échange lancé !**', embeds: [], components: [] });
             const panel = await sendSilent(interaction.channel, buildTradeThreadPayload(trade));
             trade.statusMessageId = panel.id;
