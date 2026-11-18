@@ -173,6 +173,10 @@ function getStoreData() {
 const TCG_ROOT = path.resolve(process.cwd(), 'TCG');
 const TCG_ASSETS_DIR = path.join(TCG_ROOT, 'Assets');
 const TCG_SET1_DIR = path.join(TCG_ROOT, 'Set 1');
+const TCG_PROXIES_DIR = path.join(TCG_ROOT, 'Proxies'); // Volume persistant (/app/TCG/Proxies)
+
+const PROXY_TTL_MS = 2 * 60 * 1000; // Micro-cache RAM éphémère de 2 min sur les miniatures uniquement
+const PROXY_MAX_RAM_ITEMS = 120;
 
 let cardCatalog = [];
 let cardById = new Map();
@@ -186,10 +190,21 @@ let assetPaths = {
     bgB: null
 };
 
+<<<<<<< HEAD
+// Les miniatures déjà redimensionnées sont stockées sur disque dans TCG/Proxies (volume Dokploy).
+// En RAM, on ne garde que les 2 fonds 1080p, les buffers récurrents et un micro-cache TTL des proxies
+// vidé automatiquement après 2 minutes d'inactivité (0 Mo gardés au repos).
+const bgCanvases = new Map();     // 'W' | 'B' -> fond pré-redimensionné en 1920x1080
+const proxyRamCache = new Map();  // proxyPath -> Image miniature (éphémère)
+const proxyInFlight = new Map();  // proxyPath -> Promise<Image|null> (anti double-génération)
+let proxyRamClearTimer = null;
+const hotBuffers = new Map();     // buffers des pièces jointes les plus envoyées
+=======
 const MAX_IMAGE_CACHE = 12;
 const MAX_THUMB_CACHE = 150;
 const imageCache = new Map();
 const thumbCache = new Map();
+>>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
 const boostersEnCours = new Set();
 const boosterSessions = new Map(); // messageId -> session
 const pendingConfirms = new Map(); // confirmId -> payload
@@ -384,8 +399,17 @@ async function scanSet1Cards(client = null) {
     cardCatalog = newCatalog;
     cardById = newById;
     cardByNumCode = newByNumCode;
+<<<<<<< HEAD
+    proxyRamCache.clear();
+    if (proxyRamClearTimer) {
+        clearTimeout(proxyRamClearTimer);
+        proxyRamClearTimer = null;
+    }
+    hotBuffers.clear();
+=======
     imageCache.clear();
     thumbCache.clear();
+>>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
 
     console.log(`🃏 RegaDex Set 1 scanné : ${cardCatalog.length}/109 cartes reconnues.`);
 
@@ -979,27 +1003,135 @@ function drawRoundRect(ctx, x, y, w, h, r) {
     ctx.closePath();
 }
 
-async function loadCachedImage(filePath) {
-    if (!filePath || !fs.existsSync(filePath)) return null;
-    if (imageCache.has(filePath)) {
-        const existing = imageCache.get(filePath);
-        imageCache.delete(filePath);
-        imageCache.set(filePath, existing);
-        return existing;
-    }
-    try {
-        const img = await loadImage(filePath);
-        if (imageCache.size >= MAX_IMAGE_CACHE) {
-            const oldestKey = imageCache.keys().next().value;
-            imageCache.delete(oldestKey);
-        }
-        imageCache.set(filePath, img);
-        return img;
-    } catch {
-        return null;
-    }
+function scheduleProxyRamClear() {
+    if (proxyRamClearTimer) clearTimeout(proxyRamClearTimer);
+    proxyRamClearTimer = setTimeout(() => {
+        proxyRamCache.clear();
+        proxyRamClearTimer = null;
+    }, PROXY_TTL_MS);
+    proxyRamClearTimer.unref?.();
 }
 
+function setProxyRamCache(key, img) {
+    if (proxyRamCache.has(key)) proxyRamCache.delete(key);
+    while (proxyRamCache.size >= PROXY_MAX_RAM_ITEMS) {
+        const oldestKey = proxyRamCache.keys().next().value;
+        proxyRamCache.delete(oldestKey);
+    }
+    proxyRamCache.set(key, img);
+    scheduleProxyRamClear();
+}
+
+async function generateProxyBuffer(sourcePath, proxyPath, targetW, targetH) {
+    const srcImg = await loadImage(sourcePath);
+    const c = createCanvas(targetW, targetH);
+    const pctx = c.getContext('2d');
+    pctx.imageSmoothingEnabled = true;
+    pctx.patternQuality = 'best';
+    pctx.drawImage(srcImg, 0, 0, targetW, targetH);
+    const pngBuf = c.toBuffer('image/png');
+    c.width = c.height = 0; // Libère immédiatement la surface native Cairo
+
+    try {
+        fs.mkdirSync(path.dirname(proxyPath), { recursive: true });
+        const tmpPath = `${proxyPath}.tmp.${process.pid}.${Date.now()}`;
+        fs.writeFileSync(tmpPath, pngBuf);
+        fs.renameSync(tmpPath, proxyPath);
+    } catch (err) {
+        console.warn(`⚠️ Impossible d'écrire le proxy (${proxyPath}) :`, err?.message || err);
+    }
+
+    return pngBuf;
+}
+
+<<<<<<< HEAD
+async function getOrCreateProxyImage(sourcePath, proxyPath, targetW, targetH) {
+    if (!sourcePath || !fs.existsSync(sourcePath)) return null;
+
+    if (proxyRamCache.has(proxyPath)) {
+        const cached = proxyRamCache.get(proxyPath);
+        setProxyRamCache(proxyPath, cached);
+        return cached;
+    }
+
+    if (proxyInFlight.has(proxyPath)) {
+        return proxyInFlight.get(proxyPath);
+    }
+
+    const task = (async () => {
+        try {
+            let proxyImg = null;
+            let hasDiskProxy = false;
+            try {
+                hasDiskProxy = fs.existsSync(proxyPath) && fs.statSync(proxyPath).size > 0;
+            } catch {
+                hasDiskProxy = false;
+            }
+
+            if (hasDiskProxy) {
+                try {
+                    proxyImg = await loadImage(proxyPath);
+                } catch {
+                    proxyImg = null;
+                }
+            }
+
+            if (!proxyImg) {
+                const pngBuf = await generateProxyBuffer(sourcePath, proxyPath, targetW, targetH);
+                proxyImg = await loadImage(pngBuf);
+            }
+
+            if (proxyImg) setProxyRamCache(proxyPath, proxyImg);
+            return proxyImg;
+        } catch {
+            return null;
+        } finally {
+            proxyInFlight.delete(proxyPath);
+        }
+    })();
+
+    proxyInFlight.set(proxyPath, task);
+    return task;
+}
+
+function getCardProxyPath(card, targetW, targetH) {
+    return path.join(
+        TCG_PROXIES_DIR,
+        `Set ${card.setNumber || 1}`,
+        card.category,
+        card.rarity,
+        `${targetW}x${targetH}`,
+        card.filename
+    );
+}
+
+async function loadCardProxy(card, targetW, targetH) {
+    if (!card?.filePath) return null;
+    return getOrCreateProxyImage(card.filePath, getCardProxyPath(card, targetW, targetH), targetW, targetH);
+}
+
+async function loadAssetProxy(filePath, targetW, targetH) {
+    if (!filePath) return null;
+    const proxyPath = path.join(
+        TCG_PROXIES_DIR,
+        '_Assets',
+        `${targetW}x${targetH}`,
+        path.basename(filePath)
+    );
+    return getOrCreateProxyImage(filePath, proxyPath, targetW, targetH);
+}
+
+// Buffer d'une pièce jointe récurrente (bannière, booster, GIF d'ouverture).
+function getAssetBuffer(filePath) {
+    if (!filePath || !fs.existsSync(filePath)) return null;
+    if (hotBuffers.has(filePath)) return hotBuffers.get(filePath);
+    try {
+        const buffer = fs.readFileSync(filePath);
+        hotBuffers.set(filePath, buffer);
+        return buffer;
+    } catch {
+        return null;
+=======
 async function getCachedThumb(filePath, targetW, targetH) {
     if (!filePath) return null;
     const key = `${filePath}|${targetW}x${targetH}`;
@@ -1008,7 +1140,12 @@ async function getCachedThumb(filePath, targetW, targetH) {
         thumbCache.delete(key);
         thumbCache.set(key, existing);
         return existing;
+>>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
     }
+<<<<<<< HEAD
+}
+
+=======
     try {
         // On utilise l'image HD si déjà en cache, sinon on la charge juste le temps de créer la miniature sans saturer imageCache
         const img = imageCache.get(filePath) || (fs.existsSync(filePath) ? await loadImage(filePath) : null);
@@ -1027,6 +1164,7 @@ async function getCachedThumb(filePath, targetW, targetH) {
     }
 }
 
+>>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
 function drawCoverImage(ctx, img, w, h) {
     const scale = Math.max(w / img.width, h / img.height);
     const dw = img.width * scale;
@@ -1139,7 +1277,11 @@ async function renderBinderCanvas(targetUser, u, options) {
     cardH = Math.floor(cardH);
 
     const fontSize = grid.rows >= 6 ? 14 : (grid.rows >= 4 ? 18 : 23);
+<<<<<<< HEAD
+    const mysteryImg = await loadAssetProxy(assetPaths.mysteryCard, cardW, cardH);
+=======
     const mysteryThumb = await getCachedThumb(assetPaths.mysteryCard, cardW, cardH);
+>>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
 
     for (let idx = 0; idx < slice.length; idx++) {
         const card = slice[idx];
@@ -1155,11 +1297,28 @@ async function renderBinderCanvas(targetUser, u, options) {
         const owned = count > 0;
 
         if (owned) {
+<<<<<<< HEAD
+            const img = await loadCardProxy(card, cardW, cardH);
+            if (img) {
+=======
             const thumb = await getCachedThumb(card.filePath, cardW, cardH);
             if (thumb) {
+>>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
                 const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
                 const glowColor = meta.glow || 'rgba(255, 255, 255, 0.55)';
 
+<<<<<<< HEAD
+                // 1. Ombre portée noire légère (désactivée en grille dense 16x7 pour économiser le CPU)
+                if (grid.rows < 6) {
+                    ctx.save();
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+                    ctx.shadowBlur = Math.max(5, Math.round(cardW * 0.05));
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = Math.max(2, Math.round(cardH * 0.02));
+                    ctx.drawImage(img, cardX, cardY, cardW, cardH);
+                    ctx.restore();
+                }
+=======
                 // 1. Ombre portée noire légère
                 ctx.save();
                 ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
@@ -1168,6 +1327,7 @@ async function renderBinderCanvas(targetUser, u, options) {
                 ctx.shadowOffsetY = Math.max(2, Math.round(cardH * 0.02));
                 ctx.drawImage(thumb, cardX, cardY, cardW, cardH);
                 ctx.restore();
+>>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
 
                 // 2. Lueur externe à 55% de la couleur de la rareté
                 ctx.save();
@@ -1262,7 +1422,11 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
         const pos = positions[i];
         const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
 
+<<<<<<< HEAD
+        const img = await loadCardProxy(card, cardW, cardH);
+=======
         const img = await loadCachedImage(card.filePath);
+>>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
         if (img) {
             ctx.save();
             ctx.shadowColor = meta.glow || 'rgba(255, 255, 255, 0.55)';
@@ -1336,7 +1500,11 @@ async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
             if (!card) continue;
             const x = firstX + i * (cW + gap);
             const y = 195;
+<<<<<<< HEAD
+            const img = await loadCardProxy(card, cW, cH);
+=======
             const img = await loadCachedImage(card.filePath);
+>>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
             if (img) ctx.drawImage(img, x, y, cW, cH);
 
             ctx.fillStyle = '#FFFFFF';
@@ -3528,6 +3696,62 @@ async function handleAdminTcgCommand(message, lowerContent) {
             tcgBridge.demanderSauvegarde();
             await replySilent(message, `⏱️ Cooldown booster RegaDex réinitialisé pour <@${target.id}> (**2/2 gratuits** prêts) !`);
         });
+        return true;
+    }
+
+    // 6. !rgdxproxies [purge] | !tcgproxies [purge] (Epsys-only)
+    m = lowerContent.match(/^!(?:rgdx|tcg|regadex)\s*proxies(?:\s+(.*))?$/i);
+    if (m) {
+        if (message.author.id !== EPSYS_ID) return true;
+        const arg = (m[1] || '').trim().toLowerCase();
+
+        if (arg === 'purge' || arg === 'clear' || arg === 'reset') {
+            proxyRamCache.clear();
+            if (proxyRamClearTimer) {
+                clearTimeout(proxyRamClearTimer);
+                proxyRamClearTimer = null;
+            }
+            let removedEntries = 0;
+            if (fs.existsSync(TCG_PROXIES_DIR)) {
+                for (const entry of fs.readdirSync(TCG_PROXIES_DIR)) {
+                    if (entry.startsWith('.')) continue;
+                    try {
+                        fs.rmSync(path.join(TCG_PROXIES_DIR, entry), { recursive: true, force: true });
+                        removedEntries++;
+                    } catch {}
+                }
+            }
+            await replySilent(
+                message,
+                `🧹 **Proxies RegaDex purgés !** (${removedEntries} dossier(s) supprimé(s) dans \`TCG/Proxies\`). Ils se régénéreront automatiquement à la prochaine ouverture.`
+            );
+            return true;
+        }
+
+        const walkStats = (dir) => {
+            let files = 0;
+            let bytes = 0;
+            if (!fs.existsSync(dir)) return { files, bytes };
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                if (entry.name.startsWith('.')) continue;
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                    const sub = walkStats(full);
+                    files += sub.files;
+                    bytes += sub.bytes;
+                } else {
+                    files++;
+                    try { bytes += fs.statSync(full).size; } catch {}
+                }
+            }
+            return { files, bytes };
+        };
+        const stats = walkStats(TCG_PROXIES_DIR);
+        const mb = (stats.bytes / (1024 * 1024)).toFixed(2);
+        await replySilent(
+            message,
+            `🗂️ **Proxies RegaDex** : **${stats.files}** miniature(s) sur disque (**${mb} Mo** dans \`TCG/Proxies\`) • **${proxyRamCache.size}** en micro-cache RAM (TTL 2 min).\n*(Pour forcer une régénération après retouche d'une carte : \`!rgdxproxies purge\`)*`
+        );
         return true;
     }
 
