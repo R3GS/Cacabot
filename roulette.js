@@ -29,8 +29,18 @@ const ROULETTE_PITY_NULS = 5;
 
 const ROULETTE_WEBHOOK_EXCLUS = new Set([
     '1553948893354401923', '1544686219223498762', '862253918583390238',
-    '730795053563248640', '745115366065176598', '738514269234266242'
+    '730795053563248640', '745115366065176598', '738514269234266242',
+    '1480756332373213275', // Salon admin / staff
+    '1572459715831664700'  // Catégorie exclue des malus textuels
 ]);
+
+function estSalonExcluMalusTexte(channel) {
+    if (!channel) return false;
+    if (ROULETTE_WEBHOOK_EXCLUS.has(channel.id)) return true;
+    if (channel.parentId && ROULETTE_WEBHOOK_EXCLUS.has(channel.parentId)) return true;
+    if (channel.parent?.parentId && ROULETTE_WEBHOOK_EXCLUS.has(channel.parent.parentId)) return true;
+    return false;
+}
 
 const ROULETTE_EMOJIS_ALEATOIRES = ['😂','😍','🔥','💀','🎉','😭','👀','🤡','😏','👁️👄👁️','🫦','😡'];
 const ROULETTE_BOOMER_FINS = [
@@ -2813,7 +2823,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
 
 async function assurerWebhookRoulette(channel) {
     if (channel.guild?.id !== '720057528351850547') return null;
-    if (ROULETTE_WEBHOOK_EXCLUS.has(channel.id)) return null;
+    if (estSalonExcluMalusTexte(channel)) return null;
     if (rouletteWebhooks.has(channel.id)) return rouletteWebhooks.get(channel.id);
     try {
         const existants = await channel.fetchWebhooks();
@@ -5152,7 +5162,7 @@ async function handleRouletteCouronne(message, dernierAuteurParSalon) {
 async function handleRouletteTransfoMessage(message, client) {
     if (message.webhookId || message.author.bot || !message.guild) return;
     if (!message.content) return;
-    if (ROULETTE_WEBHOOK_EXCLUS.has(message.channel.id) || ROULETTE_WEBHOOK_EXCLUS.has(message.channel.parentId)) return;
+    if (estSalonExcluMalusTexte(message.channel)) return;
     if (estMessageExempte(message.content)) return;
 
     const id = message.author.id;
@@ -5311,6 +5321,7 @@ module.exports = {
     handleRouletteSlash,
     handleRouletteButton,
     handleRouletteCouronne,
+    estSalonExcluMalusTexte,
     handleRouletteTransfoMessage,
     handleRoulettePseudoLock
 };
