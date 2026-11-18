@@ -157,6 +157,7 @@ const ROULETTE_NOMS_COMMANDES = {
     legendaire: 'bonus-legendaire', elu: 'bonus-elu-roulette', youtube: 'bonus-youtube-credit',
     goodies: 'bonus-epsys-goodies', petitdej: 'bonus-epsys-petitdej', twitch: 'bonus-twitch-jeu',
     commande: 'bonus-commande-perso', '5e': 'bonus-epsys-5e', photo: 'bonus-epsys-photo',
+    carte: 'bonus-regadex-perso', carteperso: 'bonus-regadex-perso', regadex: 'bonus-regadex-perso',
     pseudochoix: 'bonus-pseudo-choix', epingle: 'bonus-epingle', prime: 'malus-prime', chatnoir: 'malus-chat-noir', boomer: 'malus-boomer',
     uwu: 'malus-uwu-24h', lettre: 'malus-lettre-interdite', emoji: 'malus-emoji', cooldown45: 'malus-cooldown-45',
     bouclier: 'bonus-bouclier', redirectchoix: 'bonus-redirect-choix', leet: 'malus-leet',
@@ -197,9 +198,10 @@ const ROULETTE_TABLE = [
     { id: 'bonus-echangeur-poison', type: 'bonus', poids: 1/75, nom: 'Échangeur de poison', desc: 'Transfère un de tes malus actifs vers la personne de ton choix' },
     { id: 'bonus-pseudo-choix', type: 'bonus', poids: 1/250, nom: 'Pseudo au choix', desc: 'Choisis le pseudo d\'un·e membre, verrouillé pendant 48h' },
     { id: 'bonus-legendaire', type: 'bonus', poids: 1/420, nom: 'Regaïen·ne légendraire', desc: 'Rôle de Regaïen·ne légendraire' },
-    { id: 'bonus-twitch-jeu', type: 'bonus', poids: 1/850, nom: 'Choix du jeu du prochain stream Twitch', desc: 'Choix du jeu du prochain stream Twitch' },
+    { id: 'bonus-regadex-perso', type: 'bonus', poids: 1/1000, nom: 'Carte RegaDex unique personnalisée', desc: 'Une carte RegaDex unique et personnalisée créée par Epsys' },
+    { id: 'bonus-twitch-jeu', type: 'bonus', poids: 1/1500, nom: 'Choix du jeu du prochain stream Twitch', desc: 'Choix du jeu du prochain stream Twitch' },
     { id: 'bonus-commande-perso', type: 'bonus', poids: 1/1700, nom: 'Commande Cacabot personnalisée', desc: 'Ajoute une commande Cacabot de ton choix' },
-    { id: 'bonus-epsys-5e', type: 'bonus', poids: 1/3400, nom: '5€ de la YouTube Money d\'Epsys', desc: '5€ de la YouTube Money d\'Epsys' },
+    { id: 'bonus-epsys-5e', type: 'bonus', poids: 1/7500, nom: '5€ de la YouTube Money d\'Epsys', desc: '5€ de la YouTube Money d\'Epsys' },
     { id: 'bonus-epsys-photo', type: 'bonus', poids: 1/5000, nom: 'Photo disgracieuse d\'Epsys dédicacée', desc: '1 photo disgracieuse d\'Epsys signée' },
     { id: 'bonus-elu-roulette', type: 'bonus', poids: 1/7000, nom: 'Rôle Élu·e de la Roulette', desc: 'Rôle spécial d\'Élu·e de la Roulette' },
     { id: 'bonus-youtube-credit', type: 'bonus', poids: 1/8500, nom: 'Pseudo crédité sous chaque vidéo YouTube', desc: 'Pseudo crédité sous chaque vidéo YouTube' },
@@ -253,7 +255,7 @@ const ROULETTE_ID_VERS_SLUG = Object.fromEntries(Object.entries(ROULETTE_NOMS_CO
 const ROULETTE_EMOJIS_PAR_ID = {
     'bonus-epsys-petitdej': '🍳', 'bonus-epsys-goodies': '🎁', 'bonus-youtube-credit': '📹',
     'bonus-elu-roulette': '🎖️', 'bonus-epsys-photo': '📸', 'bonus-epsys-5e': '💶',
-    'malus-ban': '☠️', 'bonus-commande-perso': '🛠️', 'bonus-twitch-jeu': '🎮',
+    'malus-ban': '☠️', 'bonus-commande-perso': '🛠️', 'bonus-twitch-jeu': '🎮', 'bonus-regadex-perso': '🃏',
     'malus-pseudo-lock-mois': '🔒', 'bonus-legendaire': '👑', 'malus-exclu-semaine': '🚫',
     'bonus-role-superieur': '🏆', 'malus-pseudo-lock-semaine': '🔐', 'special-vote-immunite-exclusion': '🗳️',
     'bonus-redirect-malus': '😈', 'malus-exclu-jour': '🚫', 'malus-lettre-interdite': '🔤',
@@ -370,6 +372,20 @@ function getMultiplicateurMalusTemps(userId) {
     const fin = rouletteDoubleTempsUntil.get(userId);
     if (fin && Date.now() < fin) return 2;
     return 1;
+}
+
+function getCiblesListe(map, userId) {
+    const val = map.get(userId);
+    if (Array.isArray(val)) return val.filter(Boolean);
+    if (typeof val === 'string' && val.length > 0) return [val];
+    return [];
+}
+
+function ajouterCibleListe(map, userId, cibleId) {
+    const liste = getCiblesListe(map, userId);
+    liste.push(cibleId);
+    map.set(userId, liste);
+    return liste;
 }
 
 const ROULETTE_ETATS = {
@@ -641,6 +657,22 @@ function retirerLettre(texte, lettre) {
         .join('');
 }
 
+function desarmerNotifRoulette(userId) {
+    if (rouletteNotifTimers.has(userId)) {
+        clearTimeout(rouletteNotifTimers.get(userId));
+        rouletteNotifTimers.delete(userId);
+    }
+    if (rouletteNotifs.has(userId)) {
+        rouletteNotifs.delete(userId);
+        bridge.demanderSauvegarde();
+    }
+}
+
+function aUneNotifRouletteActive(userId) {
+    const fin = rouletteCooldowns.get(userId) ?? 0;
+    return rouletteNotifs.has(userId) && Date.now() < fin;
+}
+
 function armerNotifRoulette(userId, channelId, client) {
     if (rouletteNotifTimers.has(userId)) {
         clearTimeout(rouletteNotifTimers.get(userId));
@@ -657,7 +689,7 @@ function armerNotifRoulette(userId, channelId, client) {
         return;
     }
 
-    const delai = Math.max(fin - now, 0);
+    const delai = Math.max(fin - now, 1000);
 
     const timer = setTimeout(async () => {
         rouletteNotifTimers.delete(userId);
@@ -725,13 +757,70 @@ function armerNotifRoulette(userId, channelId, client) {
     rouletteNotifTimers.set(userId, timer);
 }
 
+function buildRouletteNotifMenuPayload(member, ctx = 'ephem', statusNote = null) {
+    const userId = member?.id || member?.user?.id;
+    const finCd = rouletteCooldowns.get(userId) ?? 0;
+    const hasCd = Date.now() < finCd;
+    const currentNotif = hasCd ? rouletteNotifs.get(userId) : null;
+    const ctxSuffix = ctx === 'pub' ? ':pub' : ':ephem';
+
+    let statusText = '🔕 **Alerte actuelle :** Désactivée';
+    if (currentNotif) {
+        statusText = currentNotif === 'MP'
+            ? '📩 **Alerte actuelle :** Active en **Message Privé**'
+            : `🔔 **Alerte actuelle :** Active dans <#${currentNotif}>`;
+    }
+
+    const displayName = member?.displayName || member?.user?.username || 'Membre';
+    const avatarUrl = member?.displayAvatarURL?.({ dynamic: true }) || member?.user?.displayAvatarURL?.({ dynamic: true }) || null;
+
+    const embed = new EmbedBuilder()
+        .setColor(currentNotif ? 0x3498db : 0x95a5a6)
+        .setAuthor({ name: `Alertes Roulette • ${displayName}`, iconURL: avatarUrl || undefined })
+        .setTitle('🔔 Prévenir à la fin du cooldown roulette')
+        .setDescription(
+            (hasCd
+                ? `⏱️ Prochain tirage prêt **<t:${Math.ceil(finCd / 1000)}:R>** *(à <t:${Math.ceil(finCd / 1000)}:T>)*.\n\n`
+                : `✅ Ton cooldown roulette est déjà terminé ! Tu peux lancer ton tirage dès maintenant.\n\n`) +
+            statusText +
+            (statusNote ? `\n\n${statusNote}` : '')
+        );
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`roulette_notif:here:${userId}${ctxSuffix}`)
+            .setLabel('Me prévenir ici')
+            .setEmoji('🔔')
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(!hasCd),
+        new ButtonBuilder()
+            .setCustomId(`roulette_notif:dm:${userId}${ctxSuffix}`)
+            .setLabel('Me prévenir en MP')
+            .setEmoji('📩')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(!hasCd),
+        new ButtonBuilder()
+            .setCustomId(`roulette_notif:off:${userId}${ctxSuffix}`)
+            .setLabel('Désactiver')
+            .setEmoji('🔕')
+            .setStyle(ButtonStyle.Danger)
+            .setDisabled(!currentNotif)
+    );
+
+    return { embeds: [embed], components: [row] };
+}
+
 function buildRowResultatRoulette(authorId, outcomeId, failIndex) {
+    const hasNotif = aUneNotifRouletteActive(authorId);
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('roulette_tour').setLabel('🎲 À mon tour !').setStyle(ButtonStyle.Success),
         new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('📊 Probabilités').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`roulette_claim_btn_${authorId}`).setLabel('🎒 Mon Inventaire').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`roulette_notif_${authorId}`).setLabel('🔔 Me prévenir ici').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`roulette_notifmp_${authorId}`).setLabel('🔔 MP').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder()
+            .setCustomId('roulette_notif:menu')
+            .setLabel(hasNotif ? 'Alerte ✓' : 'Me prévenir')
+            .setEmoji('🔔')
+            .setStyle(hasNotif ? ButtonStyle.Primary : ButtonStyle.Secondary)
     );
 }
 
@@ -954,6 +1043,12 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             const totalCharges = chargesActuelles + 3;
             rouletteCoupTripleCharges.set(member.id, totalCharges);
             return `🎰 **${auteurNom}** décroche le **COUP TRIPLE** ! **3 tirages supplémentaires** immédiats et sans aucun cooldown (${totalCharges} en réserve) !`;
+        }
+        case 'bonus-regadex-perso': {
+            const { MessageFlags } = require('discord.js');
+            await message.channel.send({ content: `Bravo ! Tu as gagné une **carte RegaDex unique et personnalisée** créée spécialement pour toi ! <@${bridge.EPSYS_ID}> viendra te voir pour en discuter✨`, flags: [MessageFlags.SuppressNotifications] });
+            await message.channel.send({ files: ["https://media.tenor.com/PxSJqqZ_lDsAAAAM/jdg-joueur-du-grenier.gif"], flags: [MessageFlags.SuppressNotifications] }).catch(() => {});
+            return `**${auteurNom}** a gagné sa **carte RegaDex unique personnalisée** !`;
         }
         case 'bonus-twitch-jeu': {
             const { MessageFlags } = require('discord.js');
@@ -1322,112 +1417,112 @@ function consommerInventaireRoulette(userId, itemKey) {
     return true;
 }
 
+const ROULETTE_ITEMS_METADATA = {
+    bouclier_1: {
+        label: '🛡️ 1 Charge de Bouclier',
+        emoji: '🛡️',
+        desc: 'Ajoute 1 bouclier de protection contre le prochain malus'
+    },
+    bouclier_5: {
+        label: '🔰 Pack Défense (5 Boucliers)',
+        emoji: '🔰',
+        desc: 'Ajoute 5 boucliers de protection contre les malus'
+    },
+    freeRoll1Min: {
+        label: '🎰 Tirage à volonté (1 min)',
+        emoji: '🎰',
+        desc: '1 minute sans cooldown et immunisé aux mutes'
+    },
+    ticketSkip: {
+        label: '🎟️ Ticket Coupe-File',
+        emoji: '🎟️',
+        desc: 'Réinitialise immédiatement ton cooldown de roulette'
+    },
+    trefle20: {
+        label: '🍀 Trèfle de Chance (+20%)',
+        emoji: '🍀',
+        desc: '+20% de bonus jackpot sur tes 2 prochains tirages'
+    },
+    eponge: {
+        label: '🧹 Éponge à Malus',
+        emoji: '🧹',
+        desc: 'Nettoie et annule tous tes malus textuels actifs'
+    },
+    miniHH: {
+        label: '⚡ Pass Mini Happy-Hour',
+        emoji: '⚡',
+        desc: 'Tes 2 prochains tirages ont un cooldown réduit à 5 minutes'
+    },
+    pityBoost: {
+        label: '📈 Coup de Pouce Pity',
+        emoji: '📈',
+        desc: 'Ajoute +1 malus et +1 nul pour rapprocher du bonus garanti'
+    },
+    coupTriple: {
+        label: '🎰 Coup Triple',
+        emoji: '🎰',
+        desc: '3 tirages consécutifs sans aucun cooldown'
+    },
+    superBouclier: {
+        label: '🔰 Super Bouclier',
+        emoji: '🔰',
+        desc: 'Ajoute +3 charges de bouclier de protection'
+    },
+    redirectChoix5: {
+        label: '🎯 5 Redirections au choix',
+        emoji: '🎯',
+        desc: 'Ajoute 5 redirections ciblées en réserve'
+    },
+    redirectChoix: {
+        label: '🎯 Redirection de malus au choix',
+        emoji: '🎯',
+        desc: 'Choisis le membre qui subira ton prochain malus à ta place'
+    },
+    redirectBonusChoix: {
+        label: '🎀 Redirection de bonus au choix',
+        emoji: '🎀',
+        desc: 'Choisis le/la membre qui recevra ton prochain bonus à ta place'
+    },
+    partageBonus: {
+        label: '🤝 Partage de bonus au choix',
+        emoji: '🤝',
+        desc: 'Partage ton prochain bonus avec le membre de ton choix (vous en profitez tous les deux)'
+    },
+    pseudoChoix: {
+        label: '✍️ Pseudo au choix (48h)',
+        emoji: '✍️',
+        desc: 'Verrouille le pseudo du membre de ton choix pendant 48h'
+    },
+    pseudoLockSemaine: {
+        label: '✍️ Gravé dans la roche',
+        emoji: '✍️',
+        desc: 'Verrouille le pseudo d\'un membre pendant 1 semaine'
+    },
+    echangeurPoison: {
+        label: '🧪 Échangeur de poison',
+        emoji: '🧪',
+        desc: 'Transfère un de tes malus actifs vers le membre de ton choix'
+    },
+    epingleSalon: {
+        label: '📌 Message épinglé',
+        emoji: '📌',
+        desc: 'Épingle définitivement un de tes messages dans le salon'
+    },
+    palierUltime: {
+        label: '🏆 Pack Palier Ultime',
+        emoji: '🏆',
+        desc: 'Déballe : 1 Tirage à volonté (1min) + 1 Épingle + 3 Redirections'
+    }
+};
+
 function buildInventaireEmbed(membre) {
     const inv = rouletteInventaire.get(membre.id) ?? {};
     const items = [];
     const options = [];
 
-    const ITEMS_METADATA = {
-        bouclier_1: {
-            label: '🛡️ 1 Charge de Bouclier',
-            emoji: '🛡️',
-            desc: 'Ajoute 1 bouclier de protection contre le prochain malus'
-        },
-        bouclier_5: {
-            label: '🔰 Pack Défense (5 Boucliers)',
-            emoji: '🔰',
-            desc: 'Ajoute 5 boucliers de protection contre les malus'
-        },
-        freeRoll1Min: {
-            label: '🎰 Tirage à volonté (1 min)',
-            emoji: '🎰',
-            desc: '1 minute sans cooldown et immunisé aux mutes'
-        },
-        ticketSkip: {
-            label: '🎟️ Ticket Coupe-File',
-            emoji: '🎟️',
-            desc: 'Réinitialise immédiatement ton cooldown de roulette'
-        },
-        trefle20: {
-            label: '🍀 Trèfle de Chance (+20%)',
-            emoji: '🍀',
-            desc: '+20% de bonus jackpot sur tes 2 prochains tirages'
-        },
-        eponge: {
-            label: '🧹 Éponge à Malus',
-            emoji: '🧹',
-            desc: 'Nettoie et annule tous tes malus textuels actifs'
-        },
-        miniHH: {
-            label: '⚡ Pass Mini Happy-Hour',
-            emoji: '⚡',
-            desc: 'Tes 2 prochains tirages ont un cooldown réduit à 5 minutes'
-        },
-        pityBoost: {
-            label: '📈 Coup de Pouce Pity',
-            emoji: '📈',
-            desc: 'Ajoute +1 malus et +1 nul pour rapprocher du bonus garanti'
-        },
-        coupTriple: {
-            label: '🎰 Coup Triple',
-            emoji: '🎰',
-            desc: '3 tirages consécutifs sans aucun cooldown'
-        },
-        superBouclier: {
-            label: '🔰 Super Bouclier',
-            emoji: '🔰',
-            desc: 'Ajoute +3 charges de bouclier de protection'
-        },
-        redirectChoix5: {
-            label: '🎯 5 Redirections au choix',
-            emoji: '🎯',
-            desc: 'Ajoute 5 redirections ciblées en réserve'
-        },
-        redirectChoix: {
-            label: '🎯 Redirection de malus au choix',
-            emoji: '🎯',
-            desc: 'Choisis le membre qui subira ton prochain malus à ta place'
-        },
-        redirectBonusChoix: {
-            label: '🎀 Redirection de bonus au choix',
-            emoji: '🎀',
-            desc: 'Choisis le/la membre qui recevra ton prochain bonus à ta place'
-        },
-        partageBonus: {
-            label: '🤝 Partage de bonus au choix',
-            emoji: '🤝',
-            desc: 'Partage ton prochain bonus avec le membre de ton choix (vous en profitez tous les deux)'
-        },
-        pseudoChoix: {
-            label: '✍️ Pseudo au choix (48h)',
-            emoji: '✍️',
-            desc: 'Verrouille le pseudo du membre de ton choix pendant 48h'
-        },
-        pseudoLockSemaine: {
-            label: '✍️ Gravé dans la roche',
-            emoji: '✍️',
-            desc: 'Verrouille le pseudo d\'un membre pendant 1 semaine'
-        },
-        echangeurPoison: {
-            label: '🧪 Échangeur de poison',
-            emoji: '🧪',
-            desc: 'Transfère un de tes malus actifs vers le membre de ton choix'
-        },
-        epingleSalon: {
-            label: '📌 Message épinglé',
-            emoji: '📌',
-            desc: 'Épingle définitivement un de tes messages dans le salon'
-        },
-        palierUltime: {
-            label: '🏆 Pack Palier Ultime',
-            emoji: '🏆',
-            desc: 'Déballe : 1 Tirage à volonté (1min) + 1 Épingle + 3 Redirections'
-        }
-    };
-
     for (const [key, qte] of Object.entries(inv)) {
-        if (qte > 0 && ITEMS_METADATA[key]) {
-            const meta = ITEMS_METADATA[key];
+        if (qte > 0 && ROULETTE_ITEMS_METADATA[key]) {
+            const meta = ROULETTE_ITEMS_METADATA[key];
             items.push(`${meta.emoji} **${meta.label}** : x${qte}\n> *${meta.desc}*`);
             options.push({
                 label: `${meta.label} (x${qte})`.slice(0, 100),
@@ -1750,14 +1845,20 @@ function buildRouletteStateEmbed(cible, guildId = null) {
     if ((rouletteRedirectCharges.get(cible.id) || 0) > 0) {
         bonus.push(`😈 ${rouletteRedirectCharges.get(cible.id)} redirection(s) de malus`);
     }
-    if (rouletteRedirectChoixCible.has(cible.id)) bonus.push('🎯 Redirection de malus au choix en attente');
+    const ciblesMalusChoix = getCiblesListe(rouletteRedirectChoixCible, cible.id);
+    if (ciblesMalusChoix.length > 0) {
+        bonus.push(`🎯 Redirection du prochain malus au choix (${ciblesMalusChoix.length}) ➔ ${ciblesMalusChoix.map(id => `<@${id}>`).join(', ')}`);
+    }
     if ((rouletteRedirectBonusCharges.get(cible.id) || 0) > 0) {
         bonus.push(`🎁 ${rouletteRedirectBonusCharges.get(cible.id)} redirection(s) de bonus au hasard`);
     }
-    if (rouletteRedirectBonusChoixCible.has(cible.id)) bonus.push('🎀 Redirection de bonus au choix en attente');
-    if (roulettePartageBonusChoixCible.has(cible.id)) {
-        const pId = roulettePartageBonusChoixCible.get(cible.id);
-        bonus.push(`🤝 Partage du prochain bonus actif (avec <@${pId}>)`);
+    const ciblesBonusChoix = getCiblesListe(rouletteRedirectBonusChoixCible, cible.id);
+    if (ciblesBonusChoix.length > 0) {
+        bonus.push(`🎀 Redirection du prochain bonus au choix (${ciblesBonusChoix.length}) ➔ ${ciblesBonusChoix.map(id => `<@${id}>`).join(', ')}`);
+    }
+    const ciblesPartage = getCiblesListe(roulettePartageBonusChoixCible, cible.id);
+    if (ciblesPartage.length > 0) {
+        bonus.push(`🤝 Partage du prochain bonus (${ciblesPartage.length}) ➔ ${ciblesPartage.map(id => `<@${id}>`).join(', ')}`);
     }
     if ((rouletteCooldownCourtCharges.get(cible.id) || 0) > 0) {
         bonus.push(`⚡ ${rouletteCooldownCourtCharges.get(cible.id)} tirage(s) à cooldown réduit (5 min)`);
@@ -2114,12 +2215,18 @@ function membresTop30Roulette(guild, authorId) {
 }
 
 async function envoyerPingRedirection(channel, resultat) {
-    if (!resultat.pingCible) return;
+    const liste = Array.isArray(resultat.pingsCible)
+        ? resultat.pingsCible
+        : (resultat.pingCible ? [resultat.pingCible] : []);
+    if (liste.length === 0) return;
+
     const { MessageFlags } = require('discord.js');
-    await channel.send({ 
-        content: resultat.pingCible.texte, 
+    const userIds = [...new Set(liste.map(p => p.id).filter(Boolean))];
+    const contenu = liste.map(p => p.texte).join('\n').slice(0, 2000);
+    await channel.send({
+        content: contenu,
         flags: [MessageFlags.SuppressNotifications],
-        allowedMentions: { users: [resultat.pingCible.id] } 
+        allowedMentions: { users: userIds }
     }).catch(() => {});
 }
 
@@ -2399,33 +2506,52 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         }
     }
 
-    let cible = membre;
-    let cibleNom = auteurNom;
+    let cibles = [membre];
     let prefixeRedirect = '';
-    let pingRedirection = null;
+    const pingsRedirection = [];
 
-    // Redirection des BONUS vers une cible au choix ou au hasard
+    const resoudreCibles = async (ids) => {
+        const res = [];
+        for (const id of ids) {
+            if (!id || id === authorId) continue;
+            const m = guild?.members?.cache?.get(id) || await guild?.members?.fetch?.(id).catch(() => null);
+            if (m && m.id !== authorId) res.push(m);
+        }
+        return res;
+    };
+
+    // Redirection des BONUS vers une ou plusieurs cibles au choix, ou au hasard
     if (entryTiree?.type === 'bonus' && !outcomeId.startsWith('bonus-redirect-bonus-')) {
-        const cibleBonusChoisieId = rouletteRedirectBonusChoixCible.get(authorId);
-        if (cibleBonusChoisieId) {
+        const ciblesBonusIds = getCiblesListe(rouletteRedirectBonusChoixCible, authorId);
+        if (ciblesBonusIds.length > 0) {
             rouletteRedirectBonusChoixCible.delete(authorId);
-            const cibleChoisie = guild.members.cache.get(cibleBonusChoisieId);
-            if (cibleChoisie && cibleChoisie.id !== authorId) {
-                cible = cibleChoisie;
-                cibleNom = cible.displayName;
-                prefixeRedirect = `🎀 **${auteurNom}** avait choisi de rediriger son bonus, offert à **${cibleNom}** !\n`;
-                pingRedirection = { id: cible.id, texte: `🔔 <@${cible.id}>, **${auteurNom}** t'a offert son bonus **${ROULETTE_NOMS[outcomeId]}** !` };
+            const ciblesChoisies = await resoudreCibles(ciblesBonusIds);
+            if (ciblesChoisies.length > 0) {
+                cibles = ciblesChoisies;
+                const nomsUniques = [...new Set(ciblesChoisies.map(m => m.displayName))].map(n => `**${n}**`).join(', ');
+                prefixeRedirect = ciblesChoisies.length > 1
+                    ? `🎀 **${auteurNom}** avait cumulé **${ciblesChoisies.length} redirections de bonus**, offert simultanément à ${nomsUniques} !\n`
+                    : `🎀 **${auteurNom}** avait choisi de rediriger son bonus, offert à **${ciblesChoisies[0].displayName}** !\n`;
+                for (const cid of new Set(ciblesChoisies.map(m => m.id))) {
+                    pingsRedirection.push({
+                        id: cid,
+                        texte: `🔔 <@${cid}>, **${auteurNom}** t'a offert son bonus **${ROULETTE_NOMS[outcomeId]}** ! 🎁`
+                    });
+                }
             }
         } else {
             const chargesBonus = rouletteRedirectBonusCharges.get(authorId) || 0;
             if (chargesBonus > 0) {
                 const candidats = membresTop30Roulette(guild, authorId);
                 if (candidats.length > 0) {
-                    cible = candidats[Math.floor(Math.random() * candidats.length)];
-                    cibleNom = cible.displayName;
+                    const cibleAlea = candidats[Math.floor(Math.random() * candidats.length)];
+                    cibles = [cibleAlea];
                     rouletteRedirectBonusCharges.set(authorId, chargesBonus - 1);
-                    prefixeRedirect = `🎁 **${auteurNom}** avait un bonus à rediriger au hasard, offert à **${cibleNom}** !\n`;
-                    pingRedirection = { id: cible.id, texte: `🔔 <@${cible.id}>, **${auteurNom}** t'a offert son bonus **${ROULETTE_NOMS[outcomeId]}** !` };
+                    prefixeRedirect = `🎁 **${auteurNom}** avait un bonus à rediriger au hasard, offert à **${cibleAlea.displayName}** !\n`;
+                    pingsRedirection.push({
+                        id: cibleAlea.id,
+                        texte: `🔔 <@${cibleAlea.id}>, **${auteurNom}** t'a offert son bonus **${ROULETTE_NOMS[outcomeId]}** ! 🎁`
+                    });
                 }
             }
         }
@@ -2465,114 +2591,159 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     }
 
     if (outcomeId.startsWith('malus-')) {
-        const cibleChoisieId = rouletteRedirectChoixCible.get(authorId);
-        if (cibleChoisieId) {
+        const ciblesMalusIds = getCiblesListe(rouletteRedirectChoixCible, authorId);
+        if (ciblesMalusIds.length > 0) {
             rouletteRedirectChoixCible.delete(authorId);
-            const cibleChoisie = guild.members.cache.get(cibleChoisieId);
-            if (cibleChoisie && cibleChoisie.id !== authorId) {
-                cible = cibleChoisie;
-                cibleNom = cible.displayName;
+            const ciblesChoisies = await resoudreCibles(ciblesMalusIds);
+            if (ciblesChoisies.length > 0) {
+                cibles = ciblesChoisies;
                 deverrouillerSucces(authorId, 'sniper-impitoyable', channel);
-                prefixeRedirect = `🎯 **${auteurNom}** avait choisi de rediriger son malus, envoyé vers **${cibleNom}** !\n`;
-                pingRedirection = { id: cible.id, raison: " quelqu'un a choisi de te l'envoyer !" };
+                const nomsUniques = [...new Set(ciblesChoisies.map(m => m.displayName))].map(n => `**${n}**`).join(', ');
+                prefixeRedirect = ciblesChoisies.length > 1
+                    ? `🎯 **${auteurNom}** avait cumulé **${ciblesChoisies.length} redirections de malus**, envoyé simultanément vers ${nomsUniques} !\n`
+                    : `🎯 **${auteurNom}** avait choisi de rediriger son malus, envoyé vers **${ciblesChoisies[0].displayName}** !\n`;
+                for (const cid of new Set(ciblesChoisies.map(m => m.id))) {
+                    pingsRedirection.push({
+                        id: cid,
+                        texte: `🔔 <@${cid}>, **${auteurNom}** t'a redirigé le malus **${ROULETTE_NOMS[outcomeId] || outcomeId}** ! 💀`
+                    });
+                }
             }
         } else {
             const charges = rouletteRedirectCharges.get(authorId) || 0;
             if (charges > 0) {
                 const candidats = membresTop30Roulette(guild, authorId);
                 if (candidats.length > 0) {
-                    cible = candidats[Math.floor(Math.random() * candidats.length)];
-                    cibleNom = cible.displayName;
+                    const cibleAlea = candidats[Math.floor(Math.random() * candidats.length)];
+                    cibles = [cibleAlea];
                     rouletteRedirectCharges.set(authorId, charges - 1);
-                    prefixeRedirect = `😈 **${auteurNom}** avait un malus en réserve, redirigé vers **${cibleNom}** !\n`;
-                    pingRedirection = { id: cible.id, raison: 'un malus en réserve a été redirigé vers toi' };
+                    prefixeRedirect = `😈 **${auteurNom}** avait un malus en réserve, redirigé vers **${cibleAlea.displayName}** !\n`;
+                    pingsRedirection.push({
+                        id: cibleAlea.id,
+                        texte: `🔔 <@${cibleAlea.id}>, **${auteurNom}** t'a redirigé le malus **${ROULETTE_NOMS[outcomeId] || outcomeId}** ! 💀`
+                    });
                 }
             }
         }
     }
 
-    // Comptabilisation des malus RÉELLEMENT subis (uniquement pour la cible qui le prend)
+    // Comptabilisation des malus RÉELLEMENT subis (uniquement pour les cibles qui le prennent)
     if (outcomeId.startsWith('malus-')) {
-        bridge.trackBattlePassProgress?.(cible.id, 'malus_subis', 1);
-        bridge.trackBattlePassProgress?.(cible.id, 'malus_diff', 1, { malusId: outcomeId });
-        const cons = (rouletteMalusConsecutifs.get(cible.id) || 0) + 1;
-        rouletteMalusConsecutifs.set(cible.id, cons);
-        if (cons >= 3) deverrouillerSucces(cible.id, 'enchainement-fatal', channel);
+        const idsUniquesMalus = new Set(cibles.map(m => m.id));
+        for (const cibleId of idsUniquesMalus) {
+            bridge.trackBattlePassProgress?.(cibleId, 'malus_subis', 1);
+            bridge.trackBattlePassProgress?.(cibleId, 'malus_diff', 1, { malusId: outcomeId });
+            const cons = (rouletteMalusConsecutifs.get(cibleId) || 0) + 1;
+            rouletteMalusConsecutifs.set(cibleId, cons);
+            if (cons >= 3) deverrouillerSucces(cibleId, 'enchainement-fatal', channel);
 
-        let diffList = rouletteMalusDifferents.get(cible.id);
-        if (!Array.isArray(diffList)) diffList = [];
-        if (!diffList.includes(outcomeId)) diffList.push(outcomeId);
-        rouletteMalusDifferents.set(cible.id, diffList);
-        if (diffList.length >= 10) deverrouillerSucces(cible.id, 'seum-en-personne', channel);
+            let diffList = rouletteMalusDifferents.get(cibleId);
+            if (!Array.isArray(diffList)) diffList = [];
+            if (!diffList.includes(outcomeId)) diffList.push(outcomeId);
+            rouletteMalusDifferents.set(cibleId, diffList);
+            if (diffList.length >= 10) deverrouillerSucces(cibleId, 'seum-en-personne', channel);
+        }
     }
 
-    // Vérification du Partage de bonus au choix
-    let partenairePartage = null;
+    // Vérification des Partages de bonus au choix (cumulables)
+    let partenairesPartage = [];
     if (entryTiree?.type === 'bonus' && !outcomeId.startsWith('bonus-redirect-bonus-') && outcomeId !== 'bonus-partage-bonus') {
-        const partId = roulettePartageBonusChoixCible.get(authorId);
-        if (partId) {
+        const partIds = getCiblesListe(roulettePartageBonusChoixCible, authorId);
+        if (partIds.length > 0) {
             roulettePartageBonusChoixCible.delete(authorId);
-            const mPart = guild.members.cache.get(partId);
-            if (mPart && mPart.id !== authorId) {
-                partenairePartage = mPart;
+            partenairesPartage = await resoudreCibles(partIds);
+        }
+    }
+
+    const allFiles = [];
+    const textesCibles = [];
+    const textesImmediatesSansDiffere = [];
+    const differes = [];
+    let voteObj = null;
+
+    for (const cibleCourante of cibles) {
+        // Hall of Fame et Hall of Shame sur chaque vraie cible
+        envoyerHallOfFame(guild, cibleCourante, entryTiree, membre, partenairesPartage.length > 0).catch(() => {});
+        envoyerHallOfShame(guild, cibleCourante, entryTiree, membre).catch(() => {});
+
+        const proxyM = { member: cibleCourante, channel, guild };
+        const texteM = await appliquerEtDecrireResultat(outcomeId, proxyM, cibleCourante.displayName, failIndex);
+        textesCibles.push(texteM);
+
+        if (Array.isArray(proxyM.files)) {
+            for (const f of proxyM.files) {
+                if (!allFiles.includes(f)) allFiles.push(f);
             }
         }
-    }
+        if (proxyM.pingCible) pingsRedirection.push(proxyM.pingCible);
+        if (proxyM.vote && !voteObj) voteObj = proxyM.vote;
+        if (proxyM.differe) {
+            differes.push(proxyM.differe);
+        } else {
+            textesImmediatesSansDiffere.push(texteM);
+        }
 
-    // Déclenchement du Hall of Fame et Hall of Shame sur la VRAIE cible (avec mention du tireur si redirection)
-    envoyerHallOfFame(guild, cible, entryTiree, membre, Boolean(partenairePartage)).catch(() => {});
-    envoyerHallOfShame(guild, cible, entryTiree, membre).catch(() => {});
+        // Crise de la quarantaine : vérifié uniquement si le tirage vient d'ajouter le mode boomer ou bébé
+        if (outcomeId === 'malus-boomer' || outcomeId === 'malus-bebe') {
+            const tTransfo = rouletteTransfos.get(cibleCourante.id);
+            if (tTransfo?.boomer && tTransfo?.bebe && Date.now() < tTransfo.boomer && Date.now() < tTransfo.bebe) {
+                deverrouillerSucces(cibleCourante.id, 'crise-quarantaine', channel);
+            }
+        }
 
-    const proxy = { member: cible, channel, guild };
-    let texte = await appliquerEtDecrireResultat(outcomeId, proxy, cibleNom, failIndex);
+        if (texteM.includes('Miracle !')) {
+            deverrouillerSucces(cibleCourante.id, 'pharmacien', channel);
+            bridge.trackBattlePassProgress?.(cibleCourante.id, 'contre_poison', 1);
+        }
 
-    if (partenairePartage) {
-        const proxyPart = { member: partenairePartage, channel, guild };
-        const textePart = await appliquerEtDecrireResultat(outcomeId, proxyPart, partenairePartage.displayName, failIndex);
-        texte += `\n\n🤝 **BONUS PARTAGÉ !** <@${partenairePartage.id}> en profite également !\n> ${textePart}`;
-        const { MessageFlags } = require('discord.js');
-        await channel.send({
-            content: `🤝 🔔 <@${partenairePartage.id}>, **${auteurNom}** a partagé son bonus **${ROULETTE_NOMS[outcomeId] || outcomeId}** avec toi !`,
-            flags: [MessageFlags.SuppressNotifications],
-            allowedMentions: { users: [partenairePartage.id] }
-        }).catch(() => {});
-    }
+        // L'Incompréhensible : vérifié UNIQUEMENT si le tirage actuel est un malus textuel
+        const estMalusTexte = [
+            'malus-boomer', 'malus-bebe', 'malus-uwu-24h', 'malus-emoji', 'malus-emoji-only',
+            'malus-leet', 'malus-caps', 'malus-sans-voyelle', 'malus-sans-consonne',
+            'malus-lettre-interdite', 'malus-limite-100', 'malus-limite-30',
+            'malus-existentiel', 'malus-linkedin', 'malus-echo', 'malus-censure',
+            'malus-mots-melanges', 'malus-lettres-melangees', 'malus-mocking',
+            'malus-begaiement', 'malus-publicite', 'malus-autocorrect'
+        ].includes(outcomeId);
 
-    // Crise de la quarantaine : vérifié uniquement si le tirage vient d'ajouter le mode boomer ou bébé
-    if (outcomeId === 'malus-boomer' || outcomeId === 'malus-bebe') {
-        const tTransfo = rouletteTransfos.get(cible.id);
-        if (tTransfo?.boomer && tTransfo?.bebe && Date.now() < tTransfo.boomer && Date.now() < tTransfo.bebe) {
-            deverrouillerSucces(cible.id, 'crise-quarantaine', channel);
+        if (estMalusTexte) {
+            const nowCheck = Date.now();
+            let malusTexteCumules = 0;
+            if (rouletteUwuUntil.has(cibleCourante.id) && nowCheck < rouletteUwuUntil.get(cibleCourante.id)) malusTexteCumules++;
+            if (rouletteLettreInterdite.has(cibleCourante.id) && nowCheck < rouletteLettreInterdite.get(cibleCourante.id).until) malusTexteCumules++;
+            if (rouletteEmojiUntil.has(cibleCourante.id) && nowCheck < rouletteEmojiUntil.get(cibleCourante.id)) malusTexteCumules++;
+            if (rouletteLeetUntil.has(cibleCourante.id) && nowCheck < rouletteLeetUntil.get(cibleCourante.id)) malusTexteCumules++;
+            if (rouletteEchoUntil.has(cibleCourante.id) && nowCheck < rouletteEchoUntil.get(cibleCourante.id)) malusTexteCumules++;
+            for (const fin of Object.values(rouletteTransfos.get(cibleCourante.id) ?? {})) {
+                if (nowCheck < fin) malusTexteCumules++;
+            }
+            if (malusTexteCumules >= 3) deverrouillerSucces(cibleCourante.id, 'incomprehensible', channel);
         }
     }
 
-    if (texte.includes('Miracle !')) {
-        deverrouillerSucces(cible.id, 'pharmacien', channel);
-        bridge.trackBattlePassProgress?.(cible.id, 'contre_poison', 1);
-    }
+    let texte = textesCibles.join('\n');
 
-    // L'Incompréhensible : vérifié UNIQUEMENT si le tirage actuel est un malus textuel
-    const estMalusTexte = [
-        'malus-boomer', 'malus-bebe', 'malus-uwu-24h', 'malus-emoji', 'malus-emoji-only',
-        'malus-leet', 'malus-caps', 'malus-sans-voyelle', 'malus-sans-consonne',
-        'malus-lettre-interdite', 'malus-limite-100', 'malus-limite-30',
-        'malus-existentiel', 'malus-linkedin', 'malus-echo', 'malus-censure',
-        'malus-mots-melanges', 'malus-lettres-melangees', 'malus-mocking',
-        'malus-begaiement', 'malus-publicite', 'malus-autocorrect'
-    ].includes(outcomeId);
-
-    if (estMalusTexte) {
-        const nowCheck = Date.now();
-        let malusTexteCumules = 0;
-        if (rouletteUwuUntil.has(cible.id) && nowCheck < rouletteUwuUntil.get(cible.id)) malusTexteCumules++;
-        if (rouletteLettreInterdite.has(cible.id) && nowCheck < rouletteLettreInterdite.get(cible.id).until) malusTexteCumules++;
-        if (rouletteEmojiUntil.has(cible.id) && nowCheck < rouletteEmojiUntil.get(cible.id)) malusTexteCumules++;
-        if (rouletteLeetUntil.has(cible.id) && nowCheck < rouletteLeetUntil.get(cible.id)) malusTexteCumules++;
-        if (rouletteEchoUntil.has(cible.id) && nowCheck < rouletteEchoUntil.get(cible.id)) malusTexteCumules++;
-        for (const fin of Object.values(rouletteTransfos.get(cible.id) ?? {})) {
-            if (nowCheck < fin) malusTexteCumules++;
+    if (partenairesPartage.length > 0) {
+        const mentionsPartage = [...new Set(partenairesPartage.map(p => `<@${p.id}>`))].join(', ');
+        const lignesPartage = [];
+        for (const part of partenairesPartage) {
+            envoyerHallOfFame(guild, part, entryTiree, membre, true).catch(() => {});
+            const proxyPart = { member: part, channel, guild };
+            const textePart = await appliquerEtDecrireResultat(outcomeId, proxyPart, part.displayName, failIndex);
+            lignesPartage.push(`> ${textePart}`);
+            if (Array.isArray(proxyPart.files)) {
+                for (const f of proxyPart.files) {
+                    if (!allFiles.includes(f)) allFiles.push(f);
+                }
+            }
         }
-        if (malusTexteCumules >= 3) deverrouillerSucces(cible.id, 'incomprehensible', channel);
+        texte += `\n\n🤝 **BONUS PARTAGÉ !** ${mentionsPartage} en profite${partenairesPartage.length > 1 ? 'nt' : ''} également !\n${lignesPartage.join('\n')}`;
+        for (const pid of new Set(partenairesPartage.map(p => p.id))) {
+            pingsRedirection.push({
+                id: pid,
+                texte: `🤝 🔔 <@${pid}>, **${auteurNom}** a partagé son bonus **${ROULETTE_NOMS[outcomeId] || outcomeId}** avec toi !`
+            });
+        }
     }
 
     if (outcomeId === 'bonus-coup-triple') {
@@ -2612,34 +2783,30 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
 
     const embed = buildRouletteResultEmbed(outcomeId, prefixeRedirect + texte + extraVoteTexte, authorId, auteurNom, cooldownMinutes);
     const roleMaxId = ROULETTE_RANGS[ROULETTE_RANGS.length - 1].id;
-    const dejaMaxRole = (outcomeId === 'bonus-role-superieur' || outcomeId === 'bonus-legendaire') && cible.roles.cache.has(roleMaxId);
+    const dejaMaxRole = !prefixeRedirect && cibles.length === 1 && (outcomeId === 'bonus-role-superieur' || outcomeId === 'bonus-legendaire') && cibles[0].roles.cache.has(roleMaxId);
 
     if (dejaMaxRole) {
         return {
             embeds: [embed],
             components: [buildMenuFallbackRoulette(authorId), buildRowResultatRoulette(authorId, outcomeId, failIndex)],
-            files: proxy.files ?? [],
+            files: allFiles,
             attenteChoix: true
         };
     }
-    const differe = proxy.differe;
+
     const resultComponents = [buildRowResultatRoulette(authorId, outcomeId, failIndex)];
     if (menuVoteRedirectRow) resultComponents.unshift(menuVoteRedirectRow);
 
     return {
-        embeds: proxy.vote ? [buildVoteRouletteEmbed(proxy.vote)] : [embed],
-        components: proxy.vote ? [buildVoteRouletteRow(0, 0, false)] : resultComponents,
-        files: proxy.files ?? [],
-        vote: proxy.vote ?? null,
-        pingCible: pingRedirection ? {
-            id: pingRedirection.id,
-            texte: pingRedirection.texte || (entryTiree?.type === 'bonus'
-                ? `🔔 <@${pingRedirection.id}>, **${auteurNom}** t'a offert son bonus **${ROULETTE_NOMS[outcomeId] || outcomeId}** ! 🎁`
-                : `🔔 <@${pingRedirection.id}>, **${auteurNom}** t'a redirigé le malus **${ROULETTE_NOMS[outcomeId] || outcomeId}** ! 💀`)
-        } : (proxy.pingCible ?? null),
-        differe: differe ? async () => {
-            await differe.action();
-            return buildRouletteResultEmbed(outcomeId, prefixeRedirect + differe.texteFinal + extraVoteTexte, authorId, auteurNom, cooldownMinutes);
+        embeds: voteObj ? [buildVoteRouletteEmbed(voteObj)] : [embed],
+        components: voteObj ? [buildVoteRouletteRow(0, 0, false)] : resultComponents,
+        files: allFiles,
+        vote: voteObj ?? null,
+        pingsCible: pingsRedirection,
+        differe: differes.length > 0 ? async () => {
+            await Promise.all(differes.map(d => d.action()));
+            const lignesFinales = [...textesImmediatesSansDiffere, ...differes.map(d => d.texteFinal)].join('\n');
+            return buildRouletteResultEmbed(outcomeId, prefixeRedirect + lignesFinales + extraVoteTexte, authorId, auteurNom, cooldownMinutes);
         } : null
     };
 }
@@ -3325,19 +3492,107 @@ async function handleRouletteMessage(message, response, client, helpers) {
         return true;
     }
 
-    if (['!reroll', '!bonusforce', '!malusforce', '!rouletteid', '!rltid', '!resetroulettestate', '!resetrlt', '!removestate', ...adminSuccesAliases].includes(command)) {
+    if (['!reroll', '!bonusforce', '!malusforce', '!rouletteid', '!rltid', '!itemid', '!rltitemid', '!rltgiveitem', '!roulettegiveitem', '!resetroulettestate', '!resetrlt', '!removestate', ...adminSuccesAliases].includes(command)) {
         if (message.author.id !== bridge.EPSYS_ID) {
             await message.reply("Cette commande est réservée à Epsys.");
             return true;
         }
 
         const argsBruts = raw.split(" ").slice(1);
+        if (command === '!itemid' || command === '!rltitemid') {
+            const lignes = Object.entries(ROULETTE_ITEMS_METADATA).map(([id, meta]) =>
+                `**${meta.label}** — \`${id}\`\n-# *${meta.desc}*`
+            );
+            const embed = new EmbedBuilder()
+                .setColor(0xffd20a)
+                .setTitle('🎒 Identifiants des Items (!rltgiveitem)')
+                .setDescription(
+                    `\`!rltgiveitem [id_item] [ID/@/pseudo] (quantité)\`\n` +
+                    `Exemple : \`!rltgiveitem redirectBonusChoix @Epsys\` ou \`!rltgiveitem redirectBonusChoix 390562565417336834 3\`\n\n` +
+                    lignes.join('\n\n')
+                );
+            await message.reply({ embeds: [embed] });
+            return true;
+        }
+        if (command === '!rltgiveitem' || command === '!roulettegiveitem') {
+            const giveArgs = raw.split(/\s+/).slice(1);
+            const rawItemId = giveArgs[0];
+            if (!rawItemId) {
+                await message.reply(`Usage : \`!rltgiveitem [id_item] [ID/@/pseudo] (quantité)\`\nFais \`!itemid\` pour voir la liste des identifiants.`);
+                return true;
+            }
+
+            const itemKey = Object.keys(ROULETTE_ITEMS_METADATA).find(k => k.toLowerCase() === rawItemId.toLowerCase());
+            if (!itemKey) {
+                await message.reply(`❌ Item inconnu : \`${rawItemId}\`. Fais \`!itemid\` pour voir la liste des identifiants.`);
+                return true;
+            }
+
+            let cibleArgs = giveArgs.slice(1);
+            let quantite = 1;
+            if (cibleArgs.length >= 2) {
+                const dernierArg = cibleArgs[cibleArgs.length - 1];
+                if (/^\d+$/.test(dernierArg) && !/^\d{15,22}$/.test(dernierArg)) {
+                    const qteParsed = parseInt(dernierArg, 10);
+                    if (qteParsed >= 1 && qteParsed <= 1000) {
+                        quantite = qteParsed;
+                        cibleArgs = cibleArgs.slice(0, -1);
+                    }
+                }
+            }
+
+            const query = cibleArgs.join(" ").trim();
+            if (!query) {
+                await message.reply(`Usage : \`!rltgiveitem ${itemKey} [ID/@/pseudo] (quantité)\``);
+                return true;
+            }
+
+            const envoyerConfirmationGiveItem = async (membreCible) => {
+                if (!membreCible) {
+                    await message.reply("Membre introuvable.");
+                    return;
+                }
+                if (membreCible.user?.bot) {
+                    await message.reply("❌ Impossible de donner un item à un bot !");
+                    return;
+                }
+                crediterInventaireRoulette(membreCible.id, itemKey, quantite);
+                const stockActuel = rouletteInventaire.get(membreCible.id)?.[itemKey] || quantite;
+                await message.reply(
+                    `✅ **${quantite}x ${ROULETTE_ITEMS_METADATA[itemKey].label}** (\`${itemKey}\`) ajouté(s) à l'inventaire de <@${membreCible.id}> ! *(Stock actuel : x${stockActuel} — utilisable avec \`!rlt claim\`)*`
+                );
+            };
+
+            let cible = message.mentions?.members?.first ? message.mentions.members.first() : null;
+            if (!cible) {
+                const matchId = query.match(/^<@!?(\d{15,22})>$/) || query.match(/^(\d{15,22})$/);
+                if (matchId) {
+                    const uid = matchId[1];
+                    cible = message.guild?.members?.cache?.get(uid)
+                        || await message.guild?.members?.fetch?.(uid).catch(() => null);
+                } else if (bridge.findMemberByName) {
+                    const result = bridge.findMemberByName(message.guild, query);
+                    if (result?.multiple && bridge.askDisambiguation) {
+                        return bridge.askDisambiguation(message, message.guild, result.candidates, async (user) => {
+                            const mb = message.guild.members.cache.get(user.id)
+                                || await message.guild.members.fetch(user.id).catch(() => null);
+                            await envoyerConfirmationGiveItem(mb);
+                        });
+                    }
+                    cible = result?.found;
+                }
+            }
+
+            await envoyerConfirmationGiveItem(cible);
+            return true;
+        }
         if (command === '!reroll') {
             const query = argsBruts.join(" ");
             const cible = message.mentions.members.first() ?? bridge.findMemberByName(message.guild, query).found;
             if (!cible) { await message.reply("Membre introuvable."); return true; }
             rouletteCooldowns.delete(cible.id);
             rouletteFreeRollUntil.delete(cible.id);
+            desarmerNotifRoulette(cible.id);
             await message.reply(`Le cooldown de <@${cible.id}> a été réinitialisé ! ✅`);
             return true;
         }
@@ -3519,6 +3774,7 @@ async function handleRouletteMessage(message, response, client, helpers) {
             else if (nom === 'bouclier' || nom === 'superbouclier') { rouletteBouclierActif.delete(id); retire = true; }
             else if (nom === 'redirect' || nom === 'redirection') { rouletteRedirectCharges.delete(id); retire = true; }
             else if (nom === 'redirectchoix' || nom === 'redirect-choix') { rouletteRedirectChoixCible.delete(id); retire = true; }
+            else if (nom === 'redirectbonuschoix' || nom === 'redirect-bonus-choix' || nom === 'redirectbonus') { rouletteRedirectBonusChoixCible.delete(id); retire = true; }
             else if (nom === 'partagebonus' || nom === 'partage-bonus' || nom === 'partage') { roulettePartageBonusChoixCible.delete(id); retire = true; }
             else if (nom === 'cooldowncourt' || nom === 'cooldown-court') { rouletteCooldownCourtCharges.delete(id); retire = true; }
             else if (nom === 'cooldown45' || nom === 'cooldown-45') { rouletteCooldown45Charges.delete(id); retire = true; }
@@ -3690,15 +3946,9 @@ async function handleRouletteMessage(message, response, client, helpers) {
             const resultat = await tirerEtConstruireResultatRoulette(message.author.id, message.guild, message.channel, client);
             if (resultat.cooldown) {
                 const { MessageFlags } = require('discord.js');
-                const notifRow = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('roulette_notif').setLabel('🔔 Me prévenir').setStyle(ButtonStyle.Secondary),
-                    new ButtonBuilder().setCustomId('roulette_notif_mp').setLabel('🔔 Me prévenir par MP').setStyle(ButtonStyle.Secondary)
-                );
-                const tsR = resultat.finCooldown ? `<t:${Math.ceil(resultat.finCooldown / 1000)}:R>` : `dans **${resultat.reste} min**`;
-                const tsT = resultat.finCooldown ? ` (à <t:${Math.ceil(resultat.finCooldown / 1000)}:T>)` : '';
-                await message.reply({ 
-                    content: `⏳ Attends la fin de ton cooldown ! Tu pourras relancer ${tsR}${tsT}.`, 
-                    components: [notifRow],
+                const notifPayload = buildRouletteNotifMenuPayload(message.member, 'pub');
+                await message.reply({
+                    ...notifPayload,
                     flags: [MessageFlags.SuppressNotifications],
                     allowedMentions: { repliedUser: false }
                 });
@@ -3823,13 +4073,8 @@ async function handleRouletteSlash(interaction, client) {
             await interaction.deferReply();
             const res = await tirerEtConstruireResultatRoulette(interaction.user.id, interaction.guild, interaction.channel, client);
             if (res.cooldown) {
-                const notifRow = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('roulette_notif').setLabel('🔔 Me prévenir ici').setStyle(ButtonStyle.Secondary),
-                    new ButtonBuilder().setCustomId('roulette_notif_mp').setLabel('🔔 Me prévenir par MP').setStyle(ButtonStyle.Secondary)
-                );
-                const tsR = res.finCooldown ? `<t:${Math.ceil(res.finCooldown / 1000)}:R>` : `dans **${res.reste} min**`;
-                const tsT = res.finCooldown ? ` (à <t:${Math.ceil(res.finCooldown / 1000)}:T>)` : '';
-                await interaction.editReply({ content: `⏳ Cooldown actif ! Tu pourras relancer ${tsR}${tsT}.`, components: [notifRow] });
+                const member = interaction.member || { id: interaction.user.id, displayName: interaction.user.username, user: interaction.user };
+                await interaction.editReply({ content: null, ...buildRouletteNotifMenuPayload(member, 'pub') });
                 return true;
             }
             const env = await interaction.editReply({ embeds: res.embeds, components: res.components, files: res.files ?? [] });
@@ -4183,11 +4428,6 @@ async function handleRouletteButton(interaction, client) {
             if (!aMalus) {
                 return interaction.reply({ content: "❌ Tu n'as aucun malus textuel actif à effacer ! Ton **Éponge à malus** est conservée dans ton inventaire.", ephemeral: true });
             }
-        } else if (itemChoisi === 'freeRoll1Min') {
-            const finFr = rouletteFreeRollUntil.get(targetUserId);
-            if (finFr && Date.now() < finFr) {
-                return interaction.reply({ content: "❌ Ton tirage à volonté est déjà actif en ce moment ! Attends qu'il se termine pour en réactiver un autre.", ephemeral: true });
-            }
         }
 
         const consomme = consommerInventaireRoulette(targetUserId, itemChoisi);
@@ -4208,11 +4448,17 @@ async function handleRouletteButton(interaction, client) {
             if (tot >= 10) deverrouillerSucces(targetUserId, 'forteresse', interaction.channel);
             messageConfirmation = `🔰 **PACK DÉFENSE ACTIVÉ !** <@${targetUserId}> gagne +5 charges de bouclier (${tot} en réserve) !`;
         } else if (itemChoisi === 'freeRoll1Min') {
-            rouletteFreeRollUntil.set(targetUserId, Date.now() + 60 * 1000);
-            rouletteImmuniteUntil.set(targetUserId, Date.now() + 60 * 1000);
-            messageConfirmation = `⚡ **C'EST PARTI !** <@${targetUserId}>, ton **tirage à volonté (1 min)** est activé ! Aucun cooldown et immunité aux mutes pendant 60 secondes ! Fais péter \`!rlt go\` ! 🎰`;
+            const nowFr = Date.now();
+            const baseFr = Math.max(nowFr, rouletteFreeRollUntil.get(targetUserId) || 0);
+            const baseImm = Math.max(nowFr, rouletteImmuniteUntil.get(targetUserId) || 0);
+            const nouvelleFin = baseFr + 60 * 1000;
+            rouletteFreeRollUntil.set(targetUserId, nouvelleFin);
+            rouletteImmuniteUntil.set(targetUserId, baseImm + 60 * 1000);
+            desarmerNotifRoulette(targetUserId);
+            messageConfirmation = `⚡ **C'EST PARTI !** <@${targetUserId}>, **+1 minute de tirage à volonté** activée (fin <t:${Math.ceil(nouvelleFin / 1000)}:R>) ! Aucun cooldown et immunité aux mutes ! Fais péter \`!rlt go\` ! 🎰`;
         } else if (itemChoisi === 'ticketSkip') {
             rouletteCooldowns.delete(targetUserId);
+            desarmerNotifRoulette(targetUserId);
             messageConfirmation = `🎟️ **COUPE-FILE UTILISÉ !** <@${targetUserId}>, ton cooldown roulette est remis à zéro ! Tu peux relancer immédiatement avec \`!rlt go\` ! ⚡`;
         } else if (itemChoisi === 'trefle20') {
             const curCharges = rouletteJackpotBoostCharges.get(targetUserId) || 0;
@@ -4240,6 +4486,7 @@ async function handleRouletteButton(interaction, client) {
             messageConfirmation = `📈 **COUP DE POUCE PITY !** La pity de <@${targetUserId}> avance de +1 malus et +1 tirage nul ! Le bonus garanti approche !`;
         } else if (itemChoisi === 'coupTriple') {
             rouletteCooldowns.delete(targetUserId);
+            desarmerNotifRoulette(targetUserId);
             const actuelles = rouletteCoupTripleCharges.get(targetUserId) || 0;
             rouletteCoupTripleCharges.set(targetUserId, actuelles + 3);
             messageConfirmation = `🎰 **COUP TRIPLE ACTIVÉ !** <@${targetUserId}> débloque 3 tirages immédiats sans aucun cooldown !`;
@@ -4404,8 +4651,12 @@ async function handleRouletteButton(interaction, client) {
             return interaction.reply({ content: "Tu n'as plus ce bonus en réserve ou il a déjà été activé !", ephemeral: true });
         }
 
-        rouletteFreeRollUntil.set(targetUserId, Date.now() + 60 * 1000);
-        rouletteImmuniteUntil.set(targetUserId, Date.now() + 60 * 1000);
+        const nowBtnFr = Date.now();
+        const baseBtnFr = Math.max(nowBtnFr, rouletteFreeRollUntil.get(targetUserId) || 0);
+        const baseBtnImm = Math.max(nowBtnFr, rouletteImmuniteUntil.get(targetUserId) || 0);
+        rouletteFreeRollUntil.set(targetUserId, baseBtnFr + 60 * 1000);
+        rouletteImmuniteUntil.set(targetUserId, baseBtnImm + 60 * 1000);
+        desarmerNotifRoulette(targetUserId);
         bridge.demanderSauvegarde();
 
         const rowDesactive = new ActionRowBuilder().addComponents(
@@ -4512,13 +4763,8 @@ async function handleRouletteButton(interaction, client) {
         if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
         const res = await tirerEtConstruireResultatRoulette(authorId, interaction.guild, interaction.channel, client);
         if (res.cooldown) {
-            const notifRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('roulette_notif').setLabel('🔔 Me prévenir ici').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('roulette_notif_mp').setLabel('🔔 Me prévenir par MP').setStyle(ButtonStyle.Secondary)
-            );
-            const tsR = res.finCooldown ? `<t:${Math.ceil(res.finCooldown / 1000)}:R>` : `dans **${res.reste} min**`;
-            const tsT = res.finCooldown ? ` (à <t:${Math.ceil(res.finCooldown / 1000)}:T>)` : '';
-            await interaction.reply({ content: `⏳ Cooldown actif ! Tu pourras relancer ${tsR}${tsT}.`, components: [notifRow], ephemeral: true });
+            const member = interaction.member || { id: authorId, displayName: interaction.user.username, user: interaction.user };
+            await interaction.reply({ ...buildRouletteNotifMenuPayload(member, 'ephem'), ephemeral: true });
             return true;
         }
         // content: null supprime proprement l'ancien texte de rappel "ton cooldown est terminé..."
@@ -4550,25 +4796,85 @@ async function handleRouletteButton(interaction, client) {
         const proxy = { member: interaction.member, channel: interaction.channel, guild: interaction.guild };
         const texte = await appliquerEtDecrireResultat(outcomeId, proxy, auteurNom, 0);
         const embed = buildRouletteResultEmbed(outcomeId, texte, authorId, auteurNom);
+        const hasNotif = aUneNotifRouletteActive(authorId);
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_0`).setLabel('🎲 Probabilités').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId(`roulette_notif_${authorId}`).setLabel('🔔 Me prévenir').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder()
+                .setCustomId('roulette_notif:menu')
+                .setLabel(hasNotif ? 'Alerte ✓' : 'Me prévenir')
+                .setEmoji('🔔')
+                .setStyle(hasNotif ? ButtonStyle.Primary : ButtonStyle.Secondary)
         );
         rouletteChoixEnAttente.delete(interaction.message.id);
         memoriserResultatRoulette(interaction.message.id, embed);
         await interaction.editReply({ embeds: [embed], components: [row], files: proxy.files ?? [] });
         return true;
     }
+    if (customId.startsWith('roulette_notif:')) {
+        const [, sub, ownerId, ctx = 'ephem'] = customId.split(':');
+
+        if (sub === 'menu') {
+            const member = interaction.member || { id: interaction.user.id, displayName: interaction.user.username, user: interaction.user };
+            await interaction.reply({
+                ...buildRouletteNotifMenuPayload(member, 'ephem'),
+                ephemeral: true
+            });
+            return true;
+        }
+
+        if (ownerId && interaction.user.id !== ownerId) {
+            return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+        }
+
+        const userId = ownerId || interaction.user.id;
+        const member = interaction.member || { id: userId, displayName: interaction.user.username, user: interaction.user };
+        const fin = rouletteCooldowns.get(userId) ?? 0;
+
+        if (sub === 'off') {
+            desarmerNotifRoulette(userId);
+            await interaction.update({
+                content: null,
+                ...buildRouletteNotifMenuPayload(member, ctx, '🔕 *Notification roulette désactivée.*')
+            });
+            return true;
+        }
+
+        if (Date.now() >= fin) {
+            desarmerNotifRoulette(userId);
+            await interaction.update({
+                content: null,
+                ...buildRouletteNotifMenuPayload(member, ctx, '✅ *Ton cooldown roulette est déjà terminé ! Tu peux relancer dès maintenant.*')
+            });
+            return true;
+        }
+
+        const modeChannel = sub === 'dm' ? 'MP' : interaction.channelId;
+        rouletteNotifs.set(userId, modeChannel);
+        armerNotifRoulette(userId, modeChannel, client);
+        bridge.demanderSauvegarde();
+
+        const note = `✅ *C'est noté ! Je te préviendrai **${sub === 'dm' ? 'en MP' : 'dans ce salon'}** <t:${Math.ceil(fin / 1000)}:R>.*`;
+        await interaction.update({
+            content: null,
+            ...buildRouletteNotifMenuPayload(member, ctx, note)
+        });
+        return true;
+    }
+
+    // Rétrocompatibilité avec les anciens boutons "Me prévenir" déjà postés dans le salon
     if (customId.startsWith('roulette_notif_mp') || customId.startsWith('roulette_notifmp_')) {
         const userId = interaction.user.id;
         const fin = rouletteCooldowns.get(userId) ?? 0;
         if (Date.now() >= fin) return interaction.reply({ content: "Ton cooldown est déjà terminé ! 🎰", ephemeral: true });
-        
-        // Réarmement immédiat sans blocage
+
         rouletteNotifs.set(userId, 'MP');
         armerNotifRoulette(userId, 'MP', client);
         bridge.demanderSauvegarde();
-        await interaction.reply({ content: `🔔 Noté ! Je t'enverrai un message privé dès la fin de ton cooldown <t:${Math.ceil(fin / 1000)}:R>.`, ephemeral: true });
+        const member = interaction.member || { id: userId, displayName: interaction.user.username, user: interaction.user };
+        await interaction.reply({
+            ...buildRouletteNotifMenuPayload(member, 'ephem', `✅ *C'est noté ! Je te préviendrai **en MP** <t:${Math.ceil(fin / 1000)}:R>.*`),
+            ephemeral: true
+        });
         return true;
     }
 
@@ -4576,12 +4882,15 @@ async function handleRouletteButton(interaction, client) {
         const userId = interaction.user.id;
         const fin = rouletteCooldowns.get(userId) ?? 0;
         if (Date.now() >= fin) return interaction.reply({ content: "Ton cooldown est déjà terminé ! 🎰", ephemeral: true });
-        
-        // Réarmement immédiat sur le salon
+
         rouletteNotifs.set(userId, interaction.channelId);
         armerNotifRoulette(userId, interaction.channelId, client);
         bridge.demanderSauvegarde();
-        await interaction.reply({ content: `🔔 Noté ! Je te ping ici <t:${Math.ceil(fin / 1000)}:R>.`, ephemeral: true });
+        const member = interaction.member || { id: userId, displayName: interaction.user.username, user: interaction.user };
+        await interaction.reply({
+            ...buildRouletteNotifMenuPayload(member, 'ephem', `✅ *C'est noté ! Je te préviendrai **dans ce salon** <t:${Math.ceil(fin / 1000)}:R>.*`),
+            ephemeral: true
+        });
         return true;
     }
     if (customId.startsWith('roulette_claim_btn_')) {
@@ -4598,15 +4907,9 @@ async function handleRouletteButton(interaction, client) {
         const clickerId = interaction.user.id;
         const res = await tirerEtConstruireResultatRoulette(clickerId, interaction.guild, interaction.channel, client);
         if (res.cooldown) {
-            const notifRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`roulette_notif_${clickerId}`).setLabel('🔔 Me prévenir ici').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId(`roulette_notifmp_${clickerId}`).setLabel('🔔 Me prévenir par MP').setStyle(ButtonStyle.Secondary)
-            );
-            const tsR = res.finCooldown ? `<t:${Math.ceil(res.finCooldown / 1000)}:R>` : `dans **${res.reste} min**`;
-            const tsT = res.finCooldown ? ` (à <t:${Math.ceil(res.finCooldown / 1000)}:T>)` : '';
+            const member = interaction.member || { id: clickerId, displayName: interaction.user.username, user: interaction.user };
             return interaction.reply({
-                content: `⏳ Attends la fin de ton cooldown ! Tu pourras relancer ${tsR}${tsT}.`,
-                components: [notifRow],
+                ...buildRouletteNotifMenuPayload(member, 'ephem'),
                 ephemeral: true
             });
         }
@@ -4668,10 +4971,11 @@ async function handleRouletteButton(interaction, client) {
             if (cible.id === targetUserId) {
                 return interaction.reply({ content: "❌ Tu ne peux pas te renvoyer ton propre malus à toi-même !", ephemeral: true });
             }
-            rouletteRedirectChoixCible.set(targetUserId, cible.id);
+            const liste = ajouterCibleListe(rouletteRedirectChoixCible, targetUserId, cible.id);
             bridge.demanderSauvegarde();
+            const resumeCibles = liste.map(id => `<@${id}>`).join(', ');
             await interaction.update({
-                content: `✅ C'est enregistré ! Le prochain malus de **${interaction.member.displayName}** sera automatiquement envoyé à **${cible.displayName}** !`,
+                content: `✅ C'est enregistré ! Le prochain malus de **${interaction.member.displayName}** sera automatiquement envoyé à : ${resumeCibles} (${liste.length} redirection${liste.length > 1 ? 's' : ''} cumulée${liste.length > 1 ? 's' : ''}) !`,
                 components: []
             });
             return true;
@@ -4681,10 +4985,11 @@ async function handleRouletteButton(interaction, client) {
             if (cible.id === targetUserId) {
                 return interaction.reply({ content: "❌ Tu ne peux pas te rediriger ton bonus à toi-même !", ephemeral: true });
             }
-            rouletteRedirectBonusChoixCible.set(targetUserId, cible.id);
+            const liste = ajouterCibleListe(rouletteRedirectBonusChoixCible, targetUserId, cible.id);
             bridge.demanderSauvegarde();
+            const resumeCibles = liste.map(id => `<@${id}>`).join(', ');
             await interaction.update({
-                content: `✅ C'est enregistré ! Le prochain bonus de **${interaction.member.displayName}** sera automatiquement offert à **${cible.displayName}** !`,
+                content: `✅ C'est enregistré ! Le prochain bonus de **${interaction.member.displayName}** sera automatiquement offert à : ${resumeCibles} (${liste.length} redirection${liste.length > 1 ? 's' : ''} cumulée${liste.length > 1 ? 's' : ''}) !`,
                 components: []
             });
             return true;
@@ -4694,10 +4999,11 @@ async function handleRouletteButton(interaction, client) {
             if (cible.id === targetUserId) {
                 return interaction.reply({ content: "❌ Tu ne peux pas partager ton bonus avec toi-même !", ephemeral: true });
             }
-            roulettePartageBonusChoixCible.set(targetUserId, cible.id);
+            const liste = ajouterCibleListe(roulettePartageBonusChoixCible, targetUserId, cible.id);
             bridge.demanderSauvegarde();
+            const resumeCibles = liste.map(id => `<@${id}>`).join(', ');
             await interaction.update({
-                content: `✅ C'est enregistré ! Le prochain bonus de **${interaction.member.displayName}** sera automatiquement partagé avec **${cible.displayName}** (vous en profiterez tous les deux) ! 🤝`,
+                content: `✅ C'est enregistré ! Le prochain bonus de **${interaction.member.displayName}** sera automatiquement partagé avec : ${resumeCibles} (${liste.length} partage${liste.length > 1 ? 's' : ''} cumulé${liste.length > 1 ? 's' : ''}) ! 🤝`,
                 components: []
             });
             return true;
