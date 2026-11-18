@@ -18,7 +18,7 @@ const {
     AttachmentBuilder,
     MessageFlags
 } = require('discord.js');
-const { createCanvas, loadImage, Image } = require('canvas');
+const { createCanvas, loadImage } = require('canvas');
 
 // ==========================================
 //   CONSTANTES & CONFIGURATION
@@ -1011,44 +1011,14 @@ function getAssetBuffer(filePath) {
     }
 }
 
-// Un seul objet Image natif réutilisé pour TOUTES les cartes d'un même rendu.
-// node-canvas détruit la surface précédente dans Image::SetSource (clearData)
-// et met à jour Nan::AdjustExternalMemory : une seule carte 750x1050 (~3 Mo)
-// est décodée à la fois au lieu de 36 pendant un classeur complet.
-const TINY_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
-
-function createCardLoader() {
-    const img = new Image();
-    img.onload = null;
-    img.onerror = null;
-
-    return {
-        async load(filePath) {
-            if (!filePath || !fs.existsSync(filePath)) return null;
-            const ok = await new Promise((resolve) => {
-                img.onload = () => resolve(true);
-                img.onerror = () => resolve(false);
-                try {
-                    img.src = filePath;
-                } catch {
-                    resolve(false);
-                }
-            });
-            img.onload = null;
-            img.onerror = null;
-            return ok ? img : null;
-        },
-        // Libère immédiatement la dernière surface décodée (1x1 à la place).
-        release() {
-            img.onload = null;
-            img.onerror = null;
-            try {
-                img.src = TINY_PNG;
-            } catch {
-                // Ignoré : l'essentiel (clearData de l'ancienne surface) est déjà fait.
-            }
-        }
-    };
+// Carte du catalogue : décodage ponctuel, aucun cache, dessin direct à la bonne taille.
+async function loadCardImage(filePath) {
+    if (!filePath || !fs.existsSync(filePath)) return null;
+    try {
+        return await loadImage(filePath);
+    } catch {
+        return null;
+    }
 }
 
 function drawCoverImage(ctx, img, w, h) {
@@ -1130,7 +1100,6 @@ async function renderBinderCanvas(targetUser, u, options) {
     const H = 1080;
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
-    const cardLoader = createCardLoader();
 
     const isLight = u.theme === 'W';
     const textColor = isLight ? '#111111' : '#FFFFFF';
@@ -1203,7 +1172,7 @@ async function renderBinderCanvas(targetUser, u, options) {
         const owned = count > 0;
 
         if (owned) {
-            const img = await cardLoader.load(card.filePath);
+            const img = await loadCardImage(card.filePath);
             if (img) {
                 const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
                 const glowColor = meta.glow || 'rgba(255, 255, 255, 0.55)';
@@ -1262,7 +1231,6 @@ async function renderBinderCanvas(targetUser, u, options) {
         ctx.restore();
     }
 
-    cardLoader.release();
     return {
         buffer: toPng(canvas),
         totalPages,
@@ -1277,7 +1245,6 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
     const H = 1040;
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
-    const cardLoader = createCardLoader();
     const isLight = theme === 'W';
 
     drawBackground(ctx, isLight ? 'W' : 'B', W, H);
@@ -1306,7 +1273,7 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
         const pos = positions[i];
         const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
 
-        const img = await cardLoader.load(card.filePath);
+        const img = await loadCardImage(card.filePath);
         if (img) {
             ctx.save();
             ctx.shadowColor = meta.glow || 'rgba(255, 255, 255, 0.55)';
@@ -1325,7 +1292,6 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
         ctx.fillText(`${card.id} • ${card.rarity} • ${statusTxt}`, pos.x + cardW / 2, pos.y + cardH + 10, cardW + 90);
     }
 
-    cardLoader.release();
     return toPng(canvas);
 }
 
@@ -1334,7 +1300,6 @@ async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
     const H = 680;
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
-    const cardLoader = createCardLoader();
 
     ctx.fillStyle = '#151822';
     ctx.fillRect(0, 0, W, H);
@@ -1382,7 +1347,7 @@ async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
             if (!card) continue;
             const x = firstX + i * (cW + gap);
             const y = 195;
-            const img = await cardLoader.load(card.filePath);
+            const img = await loadCardImage(card.filePath);
             if (img) ctx.drawImage(img, x, y, cW, cH);
 
             ctx.fillStyle = '#FFFFFF';
@@ -1395,7 +1360,6 @@ async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
     await drawSide(nameA, cardsA, 48, 580);
     await drawSide(nameB, cardsB, W - 48 - 580, 580);
 
-    cardLoader.release();
     return toPng(canvas);
 }
 
