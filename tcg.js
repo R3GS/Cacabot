@@ -190,8 +190,7 @@ let assetPaths = {
     bgB: null
 };
 
-<<<<<<< HEAD
-// Les miniatures déjà redimensionnées sont stockées sur disque dans TCG/Proxies (volume Dokploy).
+// Les miniatures déjà redimensionnées sont stockées sur disque dans TCG/Proxies (volume Coolify).
 // En RAM, on ne garde que les 2 fonds 1080p, les buffers récurrents et un micro-cache TTL des proxies
 // vidé automatiquement après 2 minutes d'inactivité (0 Mo gardés au repos).
 const bgCanvases = new Map();     // 'W' | 'B' -> fond pré-redimensionné en 1920x1080
@@ -199,12 +198,6 @@ const proxyRamCache = new Map();  // proxyPath -> Image miniature (éphémère)
 const proxyInFlight = new Map();  // proxyPath -> Promise<Image|null> (anti double-génération)
 let proxyRamClearTimer = null;
 const hotBuffers = new Map();     // buffers des pièces jointes les plus envoyées
-=======
-const MAX_IMAGE_CACHE = 12;
-const MAX_THUMB_CACHE = 150;
-const imageCache = new Map();
-const thumbCache = new Map();
->>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
 const boostersEnCours = new Set();
 const boosterSessions = new Map(); // messageId -> session
 const pendingConfirms = new Map(); // confirmId -> payload
@@ -312,6 +305,11 @@ async function scanSet1Cards(client = null) {
         bgB: findExistingFile(TCG_ASSETS_DIR, ['Background RegaDex B.png', 'Background Readex B.png'])
     };
 
+    // Les fonds source font 3840x2160 (~31 Mo décodés chacun) : on les réduit
+    // une seule fois à la taille d'affichage, puis on libère l'image 4K.
+    bgCanvases.clear();
+    await Promise.all([getBackground('W'), getBackground('B')]);
+
     if (!assetPaths.openingGif) missingAssets.push('TCG/Assets/Ouverture Set 1.gif');
     if (!assetPaths.mysteryCard) missingAssets.push('TCG/Assets/Carte mystère.png');
     if (!assetPaths.boosterPng) missingAssets.push('TCG/Assets/Booster Set 1.png');
@@ -399,17 +397,12 @@ async function scanSet1Cards(client = null) {
     cardCatalog = newCatalog;
     cardById = newById;
     cardByNumCode = newByNumCode;
-<<<<<<< HEAD
     proxyRamCache.clear();
     if (proxyRamClearTimer) {
         clearTimeout(proxyRamClearTimer);
         proxyRamClearTimer = null;
     }
     hotBuffers.clear();
-=======
-    imageCache.clear();
-    thumbCache.clear();
->>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
 
     console.log(`🃏 RegaDex Set 1 scanné : ${cardCatalog.length}/109 cartes reconnues.`);
 
@@ -1044,7 +1037,6 @@ async function generateProxyBuffer(sourcePath, proxyPath, targetW, targetH) {
     return pngBuf;
 }
 
-<<<<<<< HEAD
 async function getOrCreateProxyImage(sourcePath, proxyPath, targetW, targetH) {
     if (!sourcePath || !fs.existsSync(sourcePath)) return null;
 
@@ -1131,45 +1123,42 @@ function getAssetBuffer(filePath) {
         return buffer;
     } catch {
         return null;
-=======
-async function getCachedThumb(filePath, targetW, targetH) {
-    if (!filePath) return null;
-    const key = `${filePath}|${targetW}x${targetH}`;
-    if (thumbCache.has(key)) {
-        const existing = thumbCache.get(key);
-        thumbCache.delete(key);
-        thumbCache.set(key, existing);
-        return existing;
->>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
     }
-<<<<<<< HEAD
 }
 
-=======
+function drawCoverImage(ctx, img, w, h) {
+    const scale = Math.max(w / img.width, h / img.height);
+    const dw = img.width * scale;
+    const dh = img.height * scale;
+    ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+}
+
+async function getBackground(theme) {
+    if (bgCanvases.has(theme)) return bgCanvases.get(theme);
+    const p = theme === 'W' ? assetPaths.bgW : assetPaths.bgB;
+    if (!p || !fs.existsSync(p)) return null;
     try {
-        // On utilise l'image HD si déjà en cache, sinon on la charge juste le temps de créer la miniature sans saturer imageCache
-        const img = imageCache.get(filePath) || (fs.existsSync(filePath) ? await loadImage(filePath) : null);
-        if (!img) return null;
-        const c = createCanvas(targetW, targetH);
-        const cctx = c.getContext('2d');
-        cctx.drawImage(img, 0, 0, targetW, targetH);
-        if (thumbCache.size >= MAX_THUMB_CACHE) {
-            const oldestKey = thumbCache.keys().next().value;
-            thumbCache.delete(oldestKey);
-        }
-        thumbCache.set(key, c);
+        const src = await loadImage(p);
+        const c = createCanvas(1920, 1080);
+        c.getContext('2d').drawImage(src, 0, 0, 1920, 1080);
+        bgCanvases.set(theme, c);
         return c;
     } catch {
         return null;
     }
 }
 
->>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
-function drawCoverImage(ctx, img, w, h) {
-    const scale = Math.max(w / img.width, h / img.height);
-    const dw = img.width * scale;
-    const dh = img.height * scale;
-    ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+function drawBackground(ctx, theme, w, h) {
+    const bg = bgCanvases.get(theme);
+    if (bg) return drawCoverImage(ctx, bg, w, h);
+    ctx.fillStyle = theme === 'W' ? '#F4F1EA' : '#13151B';
+    ctx.fillRect(0, 0, w, h);
+}
+
+function toPng(canvas) {
+    const buffer = canvas.toBuffer('image/png');
+    canvas.width = canvas.height = 0; // Libère immédiatement la mémoire native Cairo
+    return buffer;
 }
 
 function getFilteredSortedCards(categoryFilter, sortMode) {
@@ -1219,14 +1208,7 @@ async function renderBinderCanvas(targetUser, u, options) {
     const textColor = isLight ? '#111111' : '#FFFFFF';
     const subTextColor = isLight ? '#333333' : '#CCCCCC';
 
-    const bgPath = isLight ? assetPaths.bgW : assetPaths.bgB;
-    const bgImg = await loadCachedImage(bgPath);
-    if (bgImg) {
-        drawCoverImage(ctx, bgImg, W, H);
-    } else {
-        ctx.fillStyle = isLight ? '#F4F1EA' : '#13151B';
-        ctx.fillRect(0, 0, W, H);
-    }
+    drawBackground(ctx, isLight ? 'W' : 'B', W, H);
 
     const cardsList = getFilteredSortedCards(category, sortMode);
     const grid = getBinderGridConfig(perPageMode, cardsList.length);
@@ -1277,11 +1259,7 @@ async function renderBinderCanvas(targetUser, u, options) {
     cardH = Math.floor(cardH);
 
     const fontSize = grid.rows >= 6 ? 14 : (grid.rows >= 4 ? 18 : 23);
-<<<<<<< HEAD
     const mysteryImg = await loadAssetProxy(assetPaths.mysteryCard, cardW, cardH);
-=======
-    const mysteryThumb = await getCachedThumb(assetPaths.mysteryCard, cardW, cardH);
->>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
 
     for (let idx = 0; idx < slice.length; idx++) {
         const card = slice[idx];
@@ -1297,17 +1275,11 @@ async function renderBinderCanvas(targetUser, u, options) {
         const owned = count > 0;
 
         if (owned) {
-<<<<<<< HEAD
             const img = await loadCardProxy(card, cardW, cardH);
             if (img) {
-=======
-            const thumb = await getCachedThumb(card.filePath, cardW, cardH);
-            if (thumb) {
->>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
                 const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
                 const glowColor = meta.glow || 'rgba(255, 255, 255, 0.55)';
 
-<<<<<<< HEAD
                 // 1. Ombre portée noire légère (désactivée en grille dense 16x7 pour économiser le CPU)
                 if (grid.rows < 6) {
                     ctx.save();
@@ -1318,16 +1290,6 @@ async function renderBinderCanvas(targetUser, u, options) {
                     ctx.drawImage(img, cardX, cardY, cardW, cardH);
                     ctx.restore();
                 }
-=======
-                // 1. Ombre portée noire légère
-                ctx.save();
-                ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-                ctx.shadowBlur = Math.max(5, Math.round(cardW * 0.05));
-                ctx.shadowOffsetX = 0;
-                ctx.shadowOffsetY = Math.max(2, Math.round(cardH * 0.02));
-                ctx.drawImage(thumb, cardX, cardY, cardW, cardH);
-                ctx.restore();
->>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
 
                 // 2. Lueur externe à 55% de la couleur de la rareté
                 ctx.save();
@@ -1335,7 +1297,7 @@ async function renderBinderCanvas(targetUser, u, options) {
                 ctx.shadowBlur = Math.max(8, Math.round(cardW * 0.08));
                 ctx.shadowOffsetX = 0;
                 ctx.shadowOffsetY = 0;
-                ctx.drawImage(thumb, cardX, cardY, cardW, cardH);
+                ctx.drawImage(img, cardX, cardY, cardW, cardH);
                 ctx.restore();
             } else {
                 ctx.fillStyle = RARITY_META[card.rarity]?.hex || '#888888';
@@ -1350,8 +1312,8 @@ async function renderBinderCanvas(targetUser, u, options) {
             ctx.shadowBlur = Math.max(5, Math.round(cardW * 0.05));
             ctx.shadowOffsetX = 0;
             ctx.shadowOffsetY = Math.max(2, Math.round(cardH * 0.02));
-            if (mysteryThumb) {
-                ctx.drawImage(mysteryThumb, cardX, cardY, cardW, cardH);
+            if (mysteryImg) {
+                ctx.drawImage(mysteryImg, cardX, cardY, cardW, cardH);
             } else {
                 ctx.fillStyle = isLight ? '#CCCCCC' : '#2C2F3A';
                 drawRoundRect(ctx, cardX, cardY, cardW, cardH, 8);
@@ -1375,7 +1337,7 @@ async function renderBinderCanvas(targetUser, u, options) {
     }
 
     return {
-        buffer: canvas.toBuffer('image/png'),
+        buffer: toPng(canvas),
         totalPages,
         safePage,
         ownedInView,
@@ -1390,13 +1352,7 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
     const ctx = canvas.getContext('2d');
     const isLight = theme === 'W';
 
-    const bgImg = await loadCachedImage(isLight ? assetPaths.bgW : assetPaths.bgB);
-    if (bgImg) {
-        drawCoverImage(ctx, bgImg, W, H);
-    } else {
-        ctx.fillStyle = isLight ? '#F4F1EA' : '#13151B';
-        ctx.fillRect(0, 0, W, H);
-    }
+    drawBackground(ctx, isLight ? 'W' : 'B', W, H);
 
     ctx.fillStyle = isLight ? 'rgba(255,255,255,0.78)' : 'rgba(12,14,20,0.78)';
     drawRoundRect(ctx, 40, 22, W - 80, 66, 16);
@@ -1422,11 +1378,7 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
         const pos = positions[i];
         const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
 
-<<<<<<< HEAD
         const img = await loadCardProxy(card, cardW, cardH);
-=======
-        const img = await loadCachedImage(card.filePath);
->>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
         if (img) {
             ctx.save();
             ctx.shadowColor = meta.glow || 'rgba(255, 255, 255, 0.55)';
@@ -1445,7 +1397,7 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
         ctx.fillText(`${card.id} • ${card.rarity} • ${statusTxt}`, pos.x + cardW / 2, pos.y + cardH + 10, cardW + 90);
     }
 
-    return canvas.toBuffer('image/png');
+    return toPng(canvas);
 }
 
 async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
@@ -1500,11 +1452,7 @@ async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
             if (!card) continue;
             const x = firstX + i * (cW + gap);
             const y = 195;
-<<<<<<< HEAD
             const img = await loadCardProxy(card, cW, cH);
-=======
-            const img = await loadCachedImage(card.filePath);
->>>>>>> 974f38963f9abd88167ebf0b993f3c83f9394fd4
             if (img) ctx.drawImage(img, x, y, cW, cH);
 
             ctx.fillStyle = '#FFFFFF';
@@ -1517,7 +1465,7 @@ async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
     await drawSide(nameA, cardsA, 48, 580);
     await drawSide(nameB, cardsB, W - 48 - 580, 580);
 
-    return canvas.toBuffer('image/png');
+    return toPng(canvas);
 }
 
 // ==========================================
