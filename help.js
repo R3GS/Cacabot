@@ -157,7 +157,8 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
                 `\`!rgdxcooldown reset [@membre/ID]\` *(ou \`!tcgcooldown\` / \`!regadexcooldown\`)* • Remet le stock gratuit à 2/2\n\n` +
                 `### 🪙 Points & Cartes\n` +
                 `\`!rgdxpts give [@membre/ID] [nb]\` / \`set\` *(ou \`!tcgpts\` / \`!regadexpts\`)* • Gérer les points\n` +
-                `\`!rgdxcard give [@membre/ID] [carte]\` / \`remove\` *(ou \`!tcgcard\` / \`!regadexcard\`)* • Gérer les cartes\n\n` +
+                `\`!rgdxcard give [@membre/ID] [carte]\` / \`remove\` *(ou \`!tcgcard\` / \`!regadexcard\`)* • Gérer les cartes\n` +
+                `\`!tcgpullchance\` • Augmenter les chances de pull d'une carte *(membre ou rôle Collectionneur.euse)*\n\n` +
                 `### 🧪 Mode Test & Cache Proxies (Coolify)\n` +
                 `\`!tcgx [sous-cmd]\` *(hub, open, store, claim, classeur, carte, flex, top, reset)* • Bac à sable isolé *(109/109 cartes x5, 999k pts)*\n` +
                 `\`!rgdxproxies\` *(ou \`!tcgproxies\`)* • Diagnostic du volume \`TCG/Proxies\` & poids par format\n` +
@@ -234,7 +235,7 @@ function buildHelpxMenu(authorId, currentCategory = 'home', originalMessageId = 
             },
             {
                 label: 'RegaDex / TCG (Admin)',
-                description: 'boostergive, givebooster, rgdxpts/card, !tcgx & proxies',
+                description: 'boostergive, pullchance, rgdxpts/card, !tcgx & proxies',
                 emoji: '🃏',
                 value: 'tcg',
                 default: currentCategory === 'tcg'
@@ -461,7 +462,7 @@ function buildHelpHomeEmbed(user, botAvatarUrl = null) {
             `-# Casino toutes les 15 min, inventaire, quêtes et 25 paliers mensuels.\n` +
             `────────────────────────────────────────\n` +
             `🃏 **RegaDex (TCG)**\n` +
-            `-# Boosters, classeur, Store, flex & échanges de doublons.\n` +
+            `-# Boosters, classeur, Store, flex & échanges de cartes.\n` +
             `────────────────────────────────────────\n` +
             `🎮 **Rendez-vous & Jeux Quotidiens**\n` +
             `-# Sessions automatiques : Motus (10h/19h), Rébus (15h) et Pendu (21h).\n` +
@@ -518,20 +519,20 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
             .setColor(0xf1c40f)
             .setTitle('🃏 RegaDex — Jeu de Cartes (TCG)')
             .setDescription(
-                `Collectionne les **109 cartes** du Set 1 dans <#1572007962199851059> !\n` +
+                `Collectionne les **109 cartes** du **Set 1 - Vestiges Regaïens** dans <#1572007962199851059> !\n` +
                 `-# 🔒 Accès : Nécessite le rôle <@&1572007430152261672> *(toutes les commandes existent aussi sous \`/regadex\`)*. \n\n` +
                 `### 🎁 Boosters, Store & Inventaire\n` +
                 `\`!regadex\` *(ou \`!rgdx\` / \`!tcg\`)* • Hub principal RegaDex\n` +
                 `\`!regadex open\` *(ou \`!booster open\` / \`!open\`)* • Ouvrir un booster *(1 gratuit / 6h, max 2)*\n` +
                 `\`!regadex store\` • Acheter boosters et bonus avec tes points RegaDex\n` +
                 `\`!regadex claim\` • Utiliser les boosters et bonus de ton inventaire\n` +
-                `\`!regadex notif\` • Être prévenu·e quand un booster gratuit est prêt\n\n` +
+                `\`!regadex notif\` • Configurer tes notifications de boosters *(choix permanent)*\n\n` +
                 `### 📖 Collection, Échanges & Flex\n` +
                 `\`!classeur [@membre]\` *(ou \`!collection\`)* • Afficher le classeur Canvas (mode Clair W / Nuit B)\n` +
                 `\`!carte [N° ou nom]\` • Inspecter une carte précise *(ex: \`!carte 1-84\`)*\n` +
-                `\`!trade [@membre]\` *(ou Clic droit → Applications)* • Échanger jusqu'à 3 doublons en thread\n` +
-                `\`!regadex top\` • Classements Total de cartes & Complétion Set 1\n` +
-                `\`!tcg flex [@membre]\` *(utilisable partout !)* • Montrer sa carte préférée (\`modify\` pour changer)`
+                `\`!trade [@membre]\` *(ou Clic droit → Applications)* • Échanger jusqu'à 3 cartes *(+3 pts 1×/fil)*\n` +
+                `\`!regadex top\` • Classements Total de cartes & Complétion Set 1 - Vestiges Regaïens\n` +
+                `\`!tcg flex [@membre]\` *(<#1572007962199851059> & <#720079691041472572>)* • Montrer sa carte préférée`
             );
     }
 
@@ -667,7 +668,7 @@ function buildHelpMenu(authorId, currentCategory = 'home', originalMessageId = '
             },
             {
                 label: 'RegaDex (TCG)',
-                description: 'Boosters Set 1, classeur Canvas, Store, flex & échanges',
+                description: 'Set 1 - Vestiges Regaïens, classeur, Store, flex & échanges',
                 emoji: '🃏',
                 value: 'tcg',
                 default: currentCategory === 'tcg'
