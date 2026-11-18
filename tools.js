@@ -21,7 +21,7 @@ const MODO_ROLE_ID = '720081311716606004';
 let toolsState = {
     client: null,
     getTopData: () => ({ messages: {} }),
-    getVersionString: () => '2.001',
+    getVersionString: () => '3.010',
     demanderSauvegarde: () => {},
     estModo: () => false,
     getSuggestionsData: () => new Map(),
@@ -772,7 +772,7 @@ async function handleToolsMessage(message, response, client) {
         if (months > 0 || days > 0) uptime += `${days} jour${days > 1 ? 's' : ''}, `;
         uptime += `${hours} heure${hours > 1 ? 's' : ''}`;
 
-        const versionStr = `Version ${toolsState.getVersionString()}`;
+        const versionStr = 'Version 3.010';
 
         const embed = new EmbedBuilder()
             .setColor(0x5865f2)
@@ -1506,8 +1506,8 @@ async function handleToolsSlash(interaction, client) {
         if (months > 0) uptime += `${months} mois, `;
         if (months > 0 || days > 0) uptime += `${days} jour${days > 1 ? 's' : ''}, `;
         uptime += `${hours} heure${hours > 1 ? 's' : ''}`;
-        
-        const versionStr = `Version ${toolsState.getVersionString()}`;
+
+        const versionStr = 'Version 3.010';
 
         const embed = new EmbedBuilder()
             .setColor(0x5865f2)

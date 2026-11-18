@@ -18,13 +18,14 @@ let welcomeData = { channelId: null, actif: true };
 let warnsData = {}; // userId -> [{ id, reason, modoId, modoTag, timestamp, expiredNotified }]
 let destitutionVotesData = {}; // messageId -> { targetId, targetTag, authorId, channelId, raison, pour: [], contre: [], endsAt, cloture }
 let dernierCommitSha = null;
-let numeroBuild = 1;
+let numeroBuild = 0;
 let battlePassData = {};
 let tcgData = { users: {}, notifs: {}, activeTrades: {} };
 let donneesChargees = false;
 
 function getVersionString() {
-    return `2.${String(numeroBuild).padStart(3, '0')}`;
+    if (numeroBuild <= 0) return '3.010';
+    return `3.${String(numeroBuild).padStart(3, '0')}`;
 }
 const suggestionsData = new Map();
 
@@ -86,7 +87,11 @@ async function loadAll() {
         warnsData = jsonRecord.warns ?? {};
         destitutionVotesData = jsonRecord.destitutionVotes ?? {};
         dernierCommitSha = jsonRecord.dernierCommitSha ?? null;
-        if (jsonRecord.numeroBuild) numeroBuild = jsonRecord.numeroBuild;
+        if (jsonRecord.versionMajor === 3 && typeof jsonRecord.numeroBuild === 'number') {
+            numeroBuild = jsonRecord.numeroBuild;
+        } else {
+            numeroBuild = -1; // Réinitialisation unique lors du passage en Version 3.0
+        }
         if (jsonRecord.battlePassData) battlePassData = jsonRecord.battlePassData;
         if (jsonRecord.tcgData) tcgData = jsonRecord.tcgData;
         if (jsonRecord.bugs && typeof setBugsList === 'function') setBugsList(jsonRecord.bugs);
@@ -104,6 +109,7 @@ async function loadAll() {
         donneesChargees = true;
         numeroBuild++; // Incrémentation uniquement au démarrage réussi !
         console.log(`✅ Toutes les données appliquées — Version ${getVersionString()}`);
+        if (jsonRecord.versionMajor !== 3) demanderSauvegarde();
 
         // Si le salon était vide, on y dépose immédiatement le premier fichier de sauvegarde
         if (channel) {
@@ -155,6 +161,7 @@ async function saveAll() {
             warns: warnsData,
             destitutionVotes: destitutionVotesData,
             dernierCommitSha: dernierCommitSha,
+            versionMajor: 3,
             numeroBuild: numeroBuild,
             battlePassData: battlePassData,
             tcgData: tcgData,
