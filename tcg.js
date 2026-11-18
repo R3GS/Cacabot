@@ -31,6 +31,7 @@ const TCG_CHANNEL_ID = '1572007962199851059'; // Salon TCG
 const ROLE_CHANNEL_ID = '1559082682313474059'; // Salon choix des rôles
 const TCG_TEST_CHANNEL_ID = '1480756332373213275'; // Crash-test & Alertes intégrité
 const TCG_TRADE_LOG_CHANNEL_ID = '1572168354435964928'; // Salon privé Epsys
+const TCG_PANTHEON_CHANNEL_ID = '1572421633937768519'; // Panthéon RegaDex
 const AFK_VOCAL_CHANNEL_ID = '1542345102930874449';
 
 const BOOSTER_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6h
@@ -2206,6 +2207,67 @@ async function buildBoosterStepPayload(member, session) {
     };
 }
 
+async function envoyerPantheonTcg(client, member, card, isNew, luckyUsed = false) {
+    if (!card || (card.rarity !== 'Full Art' && card.rarity !== 'Négative')) return;
+    if (!member || isSandboxId(member.id)) return;
+
+    const c = client || tcgBridge.client;
+    if (!c) return;
+
+    const salon = c.channels.cache.get(TCG_PANTHEON_CHANNEL_ID)
+        ?? await c.channels.fetch(TCG_PANTHEON_CHANNEL_ID).catch(() => null);
+    if (!salon) return;
+
+    const meta = RARITY_META[card.rarity] || RARITY_META['Full Art'];
+    const nom = member?.displayName ?? member?.user?.username ?? 'Un·e membre';
+    const avatar = member?.user?.displayAvatarURL?.({ dynamic: true, size: 256 })
+        ?? member?.displayAvatarURL?.({ dynamic: true, size: 256 });
+
+    const baseTotal = Object.values(RARITY_WEIGHTS).reduce((s, w) => s + w, 0);
+    const activeTotal = luckyUsed ? (baseTotal - (RARITY_WEIGHTS['Commune'] || 0)) : baseTotal;
+    const rawPct = activeTotal > 0 ? ((RARITY_WEIGHTS[card.rarity] || 0) / activeTotal) * 100 : 0;
+    const pctStr = rawPct.toFixed(1).replace('.', ',').replace(',0', '');
+    const tauxText = `**${pctStr}%**${card.isHolo ? ' *(Holo ×2 plus rare)*' : ''}${luckyUsed ? ' *(🍀 Booster Chanceux)*' : ''}`;
+
+    const titre = card.rarity === 'Négative'
+        ? '🕳️ CARTE NÉGATIVE AU PANTHÉON !'
+        : '🌈 CARTE FULL ART AU PANTHÉON !';
+
+    const description =
+        `Le destin a parlé ! Une carte **${card.rarity}**${card.isHolo ? ' **(Holographique)**' : ''} vient d'être tirée dans un **Booster Set 1** !\n` +
+        (isNew ? `🆕 **Première découverte dans son RegaDex !**` : `🔁 **Nouvel exemplaire obtenu !**`);
+
+    const embed = new EmbedBuilder()
+        .setColor(meta.color)
+        .setTitle(titre)
+        .setDescription(description)
+        .addFields(
+            { name: '👤 Collectionneur·euse', value: `<@${member.id}> (${nom})`, inline: true },
+            { name: `${meta.emoji} Carte obtenue`, value: `**${card.id} — ${card.name}**`, inline: true },
+            { name: '\u200b', value: '\u200b', inline: true },
+            { name: '✨ Rareté', value: `**${card.rarity}**${card.isHolo ? ' *(Holo)*' : ''}`, inline: true },
+            { name: '📁 Catégorie', value: `**${card.category}**`, inline: true },
+            { name: '🎲 Taux de tirage', value: tauxText, inline: true },
+            { name: '📅 Date du tirage', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
+        )
+        .setFooter({ text: 'Panthéon RegaDex • Regaïa' })
+        .setTimestamp();
+
+    if (avatar) embed.setThumbnail(avatar);
+
+    const files = [];
+    if (card.filePath && fs.existsSync(card.filePath)) {
+        files.push(new AttachmentBuilder(card.filePath, { name: 'carte_pantheon.png' }));
+        embed.setImage('attachment://carte_pantheon.png');
+    }
+
+    await sendSilent(salon, {
+        content: `🎉 Félicitations à <@${member.id}> pour ce tirage exceptionnel !`,
+        embeds: [embed],
+        files
+    }).catch(() => {});
+}
+
 async function startBoosterOpening(targetResponder, member, client, fromHub = false) {
     const userId = member.id;
     if (cardCatalog.length === 0) {
@@ -2380,6 +2442,15 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
                 const firstPayload = buildBoosterCardEmbed(member, session, 0);
                 await sentMsg.edit({ ...firstPayload, attachments: [] });
             } catch {}
+
+            if (!isSandboxId(userId)) {
+                for (let i = 0; i < session.cards.length; i++) {
+                    const pulledCard = session.cards[i];
+                    if (pulledCard.rarity === 'Full Art' || pulledCard.rarity === 'Négative') {
+                        await envoyerPantheonTcg(client, member, pulledCard, session.isNewFlags[i], session.luckyUsed).catch(() => {});
+                    }
+                }
+            }
         }, BOOSTER_GIF_DELAY_MS);
     } catch (err) {
         boostersEnCours.delete(userId);
@@ -4970,6 +5041,7 @@ module.exports = {
     TCG_CHANNEL_ID,
     TCG_TEST_CHANNEL_ID,
     TCG_TRADE_LOG_CHANNEL_ID,
+    TCG_PANTHEON_CHANNEL_ID,
     AFK_VOCAL_CHANNEL_ID,
     initTcgState,
     scanSet1Cards,
