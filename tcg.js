@@ -3304,6 +3304,59 @@ async function handleAdminTcgCommand(message, lowerContent) {
         return true;
     }
 
+    // 1bis. !givebooster @rôle [nb] (Epsys-only)
+    m = lowerContent.match(/^!give\s*booster(?:\s+(.*))?$/i);
+    if (m) {
+        if (message.author.id !== EPSYS_ID) return true;
+        const rawArgs = message.content.trim().replace(/^!give\s*booster\s*/i, '').trim();
+        const tokens = rawArgs.split(/\s+/).filter(Boolean);
+        let qty = 1;
+        const exactRoleMatch = rawArgs && message.guild.roles.cache.find(r => normalizeText(r.name) === normalizeText(rawArgs));
+        if (!exactRoleMatch && tokens.length >= 2 && /^\d{1,4}$/.test(tokens[tokens.length - 1])) {
+            qty = Math.max(1, parseInt(tokens.pop(), 10));
+        }
+        const roleQuery = tokens.join(' ').trim();
+
+        let role = message.mentions.roles.first() || null;
+        if (!role && roleQuery) {
+            const idMatch = roleQuery.match(/^(?:<@&)?(\d{17,20})>?$/);
+            if (idMatch) {
+                role = message.guild.roles.cache.get(idMatch[1]) || await message.guild.roles.fetch(idMatch[1]).catch(() => null);
+            } else if (roleQuery.toLowerCase() === '@everyone' || roleQuery.toLowerCase() === 'everyone') {
+                role = message.guild.roles.everyone;
+            } else {
+                const normRole = normalizeText(roleQuery);
+                role = message.guild.roles.cache.find(r => normalizeText(r.name) === normRole)
+                    || message.guild.roles.cache.find(r => normalizeText(r.name).includes(normRole))
+                    || null;
+            }
+        }
+
+        if (!role) {
+            await replySilent(message, "❌ Rôle introuvable. Usage : `!givebooster @rôle [quantité]` *(pour un seul membre, utilise `!boostergive @membre [quantité]`)*.");
+            return true;
+        }
+
+        await message.guild.members.fetch().catch(() => {});
+        const targets = [...role.members.values()].filter(mem => !mem.user.bot);
+        if (targets.length === 0) {
+            await replySilent(message, `❌ Aucun membre humain ne possède le rôle **${role.name}**.`);
+            return true;
+        }
+
+        for (const target of targets) {
+            const u = getOrCreateTcgUser(target.id);
+            u.inventory.booster = (u.inventory.booster || 0) + qty;
+        }
+        tcgBridge.demanderSauvegarde();
+
+        await replySilent(
+            message,
+            `🎁 **+${qty} booster${qty > 1 ? 's' : ''}** ajouté${qty > 1 ? 's' : ''} à l'inventaire des **${targets.length} membre${targets.length > 1 ? 's' : ''}** possédant le rôle **${role.name}** !`
+        );
+        return true;
+    }
+
     // 2. !boosterremove [@membre/ID] [nb] / !booster remove ...
     m = lowerContent.match(/^!booster\s*remove(?:\s+(.*))?$/i);
     if (m) {
