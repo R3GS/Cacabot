@@ -2803,57 +2803,129 @@ async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
     drawRoundRect(ctx, 24, 24, W - 48, H - 48, 22);
     ctx.fill();
 
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 28px "LemonMilk", "Sans"';
+    // Titre + étoile dorée de chaque côté
+    ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('Échange RegaDex terminé', W / 2, 68, W - 120);
+    ctx.font = 'bold 30px "LemonMilk", "Sans"';
+    const mainTitle = 'Échange RegaDex terminé';
+    const mainTitleW = ctx.measureText(mainTitle).width;
+    const mainTitleY = 66;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+    ctx.shadowBlur = 10;
+    ctx.fillText(mainTitle, W / 2, mainTitleY, W - 200);
+    ctx.restore();
 
-    // Flèche centrale en Sans pour garantir le glyphe Unicode ⇄
+    const starOff = (mainTitleW / 2) + 28;
+    drawFivePointStar(ctx, (W / 2) - starOff, mainTitleY - 1, 13, 6, '#FFD700', 'rgba(255, 215, 0, 0.75)');
+    drawFivePointStar(ctx, (W / 2) + starOff, mainTitleY - 1, 13, 6, '#FFD700', 'rgba(255, 215, 0, 0.75)');
+
+    const boxY = 112;
+    const boxH = H - 156;
+    const boxW = 564;
+
+    // Logo d'échange vert agrandi au centre des deux rectangles
+    ctx.save();
     ctx.fillStyle = '#2ECC71';
-    ctx.font = 'bold 46px "Sans"';
-    ctx.fillText('⇄', W / 2, H / 2 + 10);
+    ctx.shadowColor = 'rgba(46, 204, 113, 0.45)';
+    ctx.shadowBlur = 16;
+    ctx.font = 'bold 74px "Sans"';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('⇄', W / 2, boxY + boxH / 2);
+    ctx.restore();
 
-    const drawSide = async (title, list, startX, boxW) => {
+    const drawSide = async (title, list, startX) => {
+        // Rectangle gris clair avec ombre portée
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.52)';
+        ctx.shadowBlur = 24;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 8;
         ctx.fillStyle = '#262C3D';
-        drawRoundRect(ctx, startX, 112, boxW, H - 160, 16);
+        drawRoundRect(ctx, startX, boxY, boxW, boxH, 18);
         ctx.fill();
+        ctx.restore();
 
-        ctx.fillStyle = '#F1C40F';
-        ctx.font = 'bold 22px "LemonMilk", "Sans"';
-        ctx.textAlign = 'center';
-        ctx.fillText(`Offre de ${title}`, startX + boxW / 2, 146, boxW - 40);
+        // "OFFRE DE " en blanc + pseudo en doré uniquement
+        const prefixTxt = 'Offre de ';
+        const nameTxt = String(title || '');
+        ctx.save();
+        let fSize = 22;
+        const maxHeaderW = boxW - 44;
+        while (fSize > 13) {
+            ctx.font = `bold ${fSize}px "LemonMilk", "Sans"`;
+            if (ctx.measureText(prefixTxt).width + ctx.measureText(nameTxt).width <= maxHeaderW) break;
+            fSize--;
+        }
+        const pW = ctx.measureText(prefixTxt).width;
+        const nW = ctx.measureText(nameTxt).width;
+        const sX = startX + (boxW - (pW + nW)) / 2;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(prefixTxt, sX, boxY + 38);
+        ctx.fillStyle = '#FFD700';
+        ctx.fillText(nameTxt, sX + pW, boxY + 38);
+        ctx.restore();
+
+        const cardsZoneTop = boxY + 68;
+        const cardsZoneBottom = boxY + boxH - 18;
 
         if (list.length === 0) {
+            ctx.save();
             ctx.fillStyle = '#AAAAAA';
             ctx.font = 'bold 20px "LemonMilk", "Sans"';
-            ctx.fillText('Aucune carte', startX + boxW / 2, H / 2 + 10, boxW - 40);
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Aucune carte', startX + boxW / 2, (cardsZoneTop + cardsZoneBottom) / 2, boxW - 40);
+            ctx.restore();
             return;
         }
 
-        const cW = 165;
-        const cH = 231;
-        const gap = 16;
+        let cW, cH, gap;
+        if (list.length === 1) {
+            cW = 240;
+            cH = 336;
+            gap = 0;
+        } else if (list.length === 2) {
+            cW = 215;
+            cH = 301;
+            gap = 34;
+        } else {
+            cW = 160;
+            cH = 224;
+            gap = 18;
+        }
+
+        const labelFontSize = list.length <= 2 ? 18 : 15;
+        const labelBlockH = 12 + labelFontSize;
         const totalW = list.length * cW + (list.length - 1) * gap;
-        const firstX = startX + (boxW - totalW) / 2;
+        const firstX = Math.round(startX + (boxW - totalW) / 2);
+        const y = Math.round(cardsZoneTop + (cardsZoneBottom - cardsZoneTop - (cH + labelBlockH)) / 2);
 
         for (let i = 0; i < list.length; i++) {
             const card = cardById.get(list[i]);
             if (!card) continue;
             const x = firstX + i * (cW + gap);
-            const y = 195;
-            const proxy = await loadCardProxy(card, cW, cH, { glow: false });
-            if (proxy?.img) ctx.drawImage(proxy.img, x, y, cW, cH);
+            const proxy = await loadCardProxy(card, cW, cH, { glow: true });
+            if (proxy?.img) ctx.drawImage(proxy.img, x - proxy.pad, y - proxy.pad);
 
+            ctx.save();
             ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 15px "LemonMilk", "Sans"';
+            ctx.font = `bold ${labelFontSize}px "LemonMilk", "Sans"`;
             ctx.textAlign = 'center';
-            ctx.fillText(card.id, x + cW / 2, y + cH + 18, cW + 10);
+            ctx.textBaseline = 'top';
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+            ctx.shadowBlur = 6;
+            ctx.fillText(card.id, x + cW / 2, y + cH + 12, cW + 10);
+            ctx.restore();
         }
     };
 
-    await drawSide(nameA, cardsA, 48, 580);
-    await drawSide(nameB, cardsB, W - 48 - 580, 580);
+    await drawSide(nameA, cardsA, 48);
+    await drawSide(nameB, cardsB, W - 48 - boxW);
 
     return toJpeg(canvas, 0.90);
 }
@@ -5453,16 +5525,25 @@ function buildTradeThreadPayload(trade) {
     const missingA = Math.max(0, compA.totalSet - compA.uniqueCount);
     const missingB = Math.max(0, compB.totalSet - compB.uniqueCount);
 
+    const sep = '────────────────────────────────────────';
     const embed = new EmbedBuilder()
         .setColor(0xf1c40f)
         .setTitle('🔄 Table d\'échange RegaDex')
         .setDescription(
-            `Règles : **3 cartes max** par personne • **Doublons** libre, ou **dernière copie** *(uniquement à nombre et raretés identiques)* • **+3 pts RegaDex** à la fermeture *(1× par fil)*.\n` +
-            `-# Toute modification déverrouille automatiquement la validation des deux joueurs.\n` +
-            `-# 📊 Repère ${SET1_NAME} : il manque **${missingA}/${compA.totalSet}** cartes à <@${trade.initiatorId}> et **${missingB}/${compB.totalSet}** à <@${trade.targetId}>.\n\n` +
-            `**Offre de <@${trade.initiatorId}>** (${lockA} • ${trade.offers[trade.initiatorId].length}/3) :\n` +
+            `### 📜 Règles de l'échange\n` +
+            `• **Cartes :** jusqu'à **3 cartes** par personne\n` +
+            `• **Doublons :** échange libre *(double confirmation si déséquilibré)*\n` +
+            `• **Dernière copie :** autorisée uniquement à **nombre et raretés identiques**\n` +
+            `• **Bonus :** **+${POINTS_PER_TRADE} pts RegaDex** offerts à la fermeture *(1× par fil)*\n` +
+            `-# ⚠️ Toute modification déverrouille automatiquement la validation des deux joueurs.\n` +
+            `${sep}\n` +
+            `### 📊 Repère — ${SET1_NAME}\n` +
+            `• Il manque **${missingA}/${compA.totalSet}** cartes à <@${trade.initiatorId}>\n` +
+            `• Il manque **${missingB}/${compB.totalSet}** cartes à <@${trade.targetId}>\n` +
+            `${sep}\n` +
+            `### 🟦 Offre de <@${trade.initiatorId}> *(${lockA} • ${trade.offers[trade.initiatorId].length}/3)*\n` +
             `${formatOfferLines(trade.offers[trade.initiatorId], trade.initiatorId)}\n\n` +
-            `**Offre de <@${trade.targetId}>** (${lockB} • ${trade.offers[trade.targetId].length}/3) :\n` +
+            `### 🟪 Offre de <@${trade.targetId}> *(${lockB} • ${trade.offers[trade.targetId].length}/3)*\n` +
             `${formatOfferLines(trade.offers[trade.targetId], trade.targetId)}`
         )
         .setFooter({ text: `Échange #${(trade.tradeCount || 0) + 1} • Fermeture auto après 24h d'inactivité` });
@@ -6801,6 +6882,49 @@ async function handleTcgMessage(message) {
         const testFlags = testCards.map(c => (u.cards?.[c.id] || 0) <= 0);
         const payload = await buildGodPackPantheonPayload(message.member, testCards, testFlags, u.theme, false, true);
         await sendSilent(message.channel, payload);
+        return true;
+    }
+
+    if (/^!tcgtradetest(?:\s|$)/i.test(raw)) {
+        if (message.author.id !== EPSYS_ID) return true;
+        if (cardCatalog.length === 0) {
+            await replySilent(message, `❌ Les cartes ${SET1_NAME} ne sont pas chargées.`);
+            return true;
+        }
+        const argMatch = raw.match(/^!tcgtradetest\s+([1-3])$/i);
+        const countA = argMatch ? parseInt(argMatch[1], 10) : 1;
+        const countB = argMatch ? parseInt(argMatch[1], 10) : 2;
+
+        const pickRandomIds = (n) => {
+            const pool = [...cardCatalog];
+            const picked = [];
+            while (picked.length < n && pool.length > 0) {
+                const idx = Math.floor(Math.random() * pool.length);
+                picked.push(pool.splice(idx, 1)[0].id);
+            }
+            return picked;
+        };
+
+        const cardsA = pickRandomIds(countA);
+        const cardsB = pickRandomIds(countB);
+        const nameA = message.member?.displayName || message.author.username;
+        const nameB = 'Hyaeros';
+        const recapBuffer = await renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB);
+
+        const testEmbed = new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle('✅ [TEST] Échange #1 validé !')
+            .setDescription(
+                `**${nameA}** (<@${message.author.id}>) a donné :\n${formatOfferLines(cardsA)}\n\n` +
+                `**${nameB}** a donné :\n${formatOfferLines(cardsB)}`
+            )
+            .setImage('attachment://trade_recap_test.jpg')
+            .setFooter({ text: `Aperçu Visuel Trade • !tcgtradetest [1|2|3]` });
+
+        await sendSilent(message.channel, {
+            embeds: [testEmbed],
+            files: [new AttachmentBuilder(recapBuffer, { name: 'trade_recap_test.jpg' })]
+        });
         return true;
     }
 
@@ -8880,7 +9004,7 @@ async function handleTcgInteraction(interaction) {
 
             const introMsg = await sendSilent(thread, {
                 content: `👋 Bienvenue <@${conf.initiatorId}> et <@${conf.targetId}> dans votre salon d'échange !\n` +
-                    ((!trade.isPublic || !trade.canEveryoneTalk) ? `🔒 *Thread en mode restreint : les messages des autres membres y sont automatiquement supprimés.*\n` : ''),
+                    ((!trade.isPublic || !trade.canEveryoneTalk) ? `-# 🔒 Thread en mode restreint : les messages des autres membres sont automatiquement supprimés.` : ''),
                 ...buildTradeThreadPayload(trade)
             });
             trade.statusMessageId = introMsg.id;

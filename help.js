@@ -162,7 +162,7 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
                 `\`!tcgpullchance\` • Augmenter les chances de pull d'une carte *(membre ou rôle Collectionneur.euse)*\n\n` +
                 `### 🧪 Mode Test & Cache Proxies (Coolify)\n` +
                 `\`!tcgx [sous-cmd]\` *(hub, open, store, claim, classeur, carte, flex, top, reset)* • Bac à sable isolé *(109/109 cartes x5, 999k pts)*\n` +
-                `\`!tcgmastertest\` • \`!tcggodpacktest\` • Tester les visuels Panthéon Maître du Set & God Pack dans ce salon\n` +
+                `\`!tcgmastertest\` • \`!tcggodpacktest\` • \`!tcgtradetest [1-3]\` • Tester les visuels Maître du Set, God Pack & Trade\n` +
                 `\`!tcgopenlast\` *(ou \`!tcglastopen\`)* • Voir le récap des 20 dernières ouvertures + détail par sélection\n` +
                 `\`!rgdxproxies\` *(ou \`!tcgproxies\`)* • Diagnostic du volume \`TCG/Proxies\` & poids par format\n` +
                 `\`!rgdxproxies warmup\` • Pré-génère toutes les miniatures & lueurs sur le volume *(1 seule fois)*\n` +
