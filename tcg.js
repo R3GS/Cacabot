@@ -2680,9 +2680,10 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
         || member?.displayAvatarURL?.({ extension: 'png', size: 1024 });
 
     ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.68)';
-    ctx.shadowBlur = 28;
-    ctx.shadowOffsetY = 9;
+    ctx.shadowColor = 'rgba(241, 196, 15, 0.85)';
+    ctx.shadowBlur = 38;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
     ctx.fillStyle = isLight ? '#FFFFFF' : '#1E212D';
     drawRoundRect(ctx, ppX, ppY, ppSize, ppSize, 30);
     ctx.fill();
