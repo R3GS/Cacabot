@@ -4382,6 +4382,7 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
                     const firstPayload = buildBoosterCardEmbed(member, session, 0);
                     if (!session.skipUsed) {
                         await sentMsg.edit({ ...firstPayload, attachments: [] });
+                        scheduleBoosterInspectTimeout(member, session);
                     }
                 } catch {}
             }
@@ -7180,6 +7181,9 @@ async function handleTcgInteraction(interaction) {
         const stepPayload = await buildBoosterStepPayload(actorMember, session);
         await interaction.editReply({ content: null, ...stepPayload, attachments: [] });
 
+        if (session.step < 3) {
+            scheduleBoosterInspectTimeout(actorMember, session);
+        }
         if (session.step === 2 && !session.hasReachedRecap) {
             scheduleCard3AutoRecap(actorMember, session, client);
         } else if (session.hasReachedRecap) {
