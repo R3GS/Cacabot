@@ -2462,34 +2462,70 @@ function formatMasterDisplayName(member) {
     return raw;
 }
 
-function drawFittedWrappedText(ctx, text, centerX, startY, maxWidth, startSize = 24, minSize = 14) {
+function drawFivePointStar(ctx, cx, cy, outerR, innerR, fillStyle, shadowCol = null) {
+    ctx.save();
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+        const r = i % 2 === 0 ? outerR : innerR;
+        const angle = (-Math.PI / 2) + (i * Math.PI / 5);
+        const x = cx + Math.cos(angle) * r;
+        const y = cy + Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = fillStyle;
+    if (shadowCol) {
+        ctx.shadowColor = shadowCol;
+        ctx.shadowBlur = 18;
+    }
+    ctx.fill();
+    ctx.restore();
+}
+
+function drawFittedWrappedText(ctx, text, centerX, startY, maxWidth, startSize = 38, minSize = 22, maxCharsPerLine = 15) {
     const str = String(text || '').trim();
     if (!str) return;
 
-    for (let size = startSize; size >= minSize; size -= 2) {
-        ctx.font = `bold ${size}px "LemonMilk", "Sans"`;
+    const words = str.split(/\s+/);
+    const shouldForceWrap = words.length > 1 && str.length > maxCharsPerLine;
+
+    if (!shouldForceWrap) {
+        ctx.font = `bold ${startSize}px "LemonMilk", "Sans"`;
         if (ctx.measureText(str).width <= maxWidth) {
+            ctx.fillText(str, centerX, startY, maxWidth);
+            return;
+        }
+        if (words.length === 1) {
+            for (let size = startSize - 2; size >= minSize; size -= 2) {
+                ctx.font = `bold ${size}px "LemonMilk", "Sans"`;
+                if (ctx.measureText(str).width <= maxWidth) {
+                    ctx.fillText(str, centerX, startY, maxWidth);
+                    return;
+                }
+            }
+            ctx.font = `bold ${minSize}px "LemonMilk", "Sans"`;
             ctx.fillText(str, centerX, startY, maxWidth);
             return;
         }
     }
 
-    // Passage sur 2 lignes maximum avec ajustement de taille
-    const words = str.split(/\s+/);
-    for (let size = Math.min(startSize - 2, 20); size >= minSize; size -= 2) {
+    // Passage sur 2 lignes en priorité pour les noms composés / longs
+    for (let size = startSize; size >= minSize; size -= 2) {
         ctx.font = `bold ${size}px "LemonMilk", "Sans"`;
         let line1 = '';
         let line2 = '';
         for (const w of words) {
             const test = line1 ? `${line1} ${w}` : w;
-            if (ctx.measureText(test).width <= maxWidth) {
+            const fitsChars = !line1 || test.length <= maxCharsPerLine;
+            if (fitsChars && ctx.measureText(test).width <= maxWidth) {
                 line1 = test;
             } else {
                 line2 = line2 ? `${line2} ${w}` : w;
             }
         }
         if (line1 && (!line2 || ctx.measureText(line2).width <= maxWidth || size === minSize)) {
-            const lineH = Math.round(size * 1.25);
+            const lineH = Math.round(size * 1.24);
             ctx.fillText(line1, centerX, startY, maxWidth);
             if (line2) ctx.fillText(line2, centerX, startY + lineH, maxWidth);
             return;
@@ -2501,76 +2537,104 @@ function drawFittedWrappedText(ctx, text, centerX, startY, maxWidth, startSize =
 }
 
 async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) {
-    const W = 1360;
-    const H = 820;
+    const W = 1600;
+    const H = 900;
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.patternQuality = 'best';
+
     const isLight = u?.theme === 'W';
     const textColor = isLight ? '#111111' : '#FFFFFF';
     const shadowCol = isLight ? 'rgba(0, 0, 0, 0.25)' : 'rgba(0, 0, 0, 0.85)';
 
+    // Background en résolution native 900p (1600x900)
     drawBackground(ctx, isLight ? 'W' : 'B', W, H);
 
-    // 1. Titre "MAÎTRE DU SET" en LEMONMILK Bold
+    // Aura & contour doré identique au God Pack
+    const grad = ctx.createRadialGradient(W / 2, H / 2, 90, W / 2, H / 2, W * 0.72);
+    grad.addColorStop(0, 'rgba(255, 215, 0, 0.22)');
+    grad.addColorStop(0.55, 'rgba(241, 196, 15, 0.11)');
+    grad.addColorStop(1, 'rgba(255, 165, 0, 0.04)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.save();
+    ctx.strokeStyle = '#FFD700';
+    ctx.lineWidth = 9;
+    ctx.shadowColor = 'rgba(255, 215, 0, 0.85)';
+    ctx.shadowBlur = 26;
+    drawRoundRect(ctx, 20, 16, W - 40, H - 32, 28);
+    ctx.stroke();
+    ctx.restore();
+
+    // 1. Titre "MAÎTRE DU SET" en LEMONMILK Bold + une étoile de chaque côté
     ctx.save();
     ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.font = 'bold 54px "LemonMilk", "Sans"';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 58px "LemonMilk", "Sans"';
+    const titleStr = 'MAÎTRE DU SET';
+    const titleW = ctx.measureText(titleStr).width;
+    const titleY = 66;
     ctx.fillStyle = textColor;
     ctx.shadowColor = shadowCol;
-    ctx.shadowBlur = 14;
+    ctx.shadowBlur = 16;
     ctx.shadowOffsetY = 4;
-    ctx.fillText('MAÎTRE DU SET', W / 2, 34, W - 120);
+    ctx.fillText(titleStr, W / 2, titleY, W - 240);
     ctx.restore();
+
+    const starOffset = (titleW / 2) + 42;
+    drawFivePointStar(ctx, (W / 2) - starOffset, titleY - 2, 21, 9.5, '#FFD700', 'rgba(255, 215, 0, 0.75)');
+    drawFivePointStar(ctx, (W / 2) + starOffset, titleY - 2, 21, 9.5, '#FFD700', 'rgba(255, 215, 0, 0.75)');
 
     // 2. Logo du Set juste en dessous
     const activeLogoPath = setAssets[setNumber]?.logo || assetPaths.set1Logo;
     if (activeLogoPath && fs.existsSync(activeLogoPath)) {
         try {
             const logoImg = await loadImage(activeLogoPath);
-            const logoH = 128;
+            const logoH = 140;
             const logoW = Math.round((logoImg.width / logoImg.height) * logoH);
             ctx.save();
             ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-            ctx.shadowBlur = 12;
-            ctx.drawImage(logoImg, Math.round((W - logoW) / 2), 100, logoW, logoH);
+            ctx.shadowBlur = 14;
+            ctx.drawImage(logoImg, Math.round((W - logoW) / 2), 110, logoW, logoH);
             ctx.restore();
         } catch {}
     }
 
     // 3. Colonne gauche : Booster du Set
     const activeBoosterPath = setAssets[setNumber]?.boosterPng || assetPaths.boosterPng;
-    const leftCenterX = 240;
-    const contentMidY = 500;
+    const leftCenterX = 285;
+    const contentMidY = 545;
     if (activeBoosterPath && fs.existsSync(activeBoosterPath)) {
         try {
             const boosterImg = await loadImage(activeBoosterPath);
-            const targetH = 420;
+            const targetH = 470;
             const targetW = Math.round((boosterImg.width / boosterImg.height) * targetH);
             const bx = Math.round(leftCenterX - targetW / 2);
             const by = Math.round(contentMidY - targetH / 2);
             ctx.save();
             ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
-            ctx.shadowBlur = 22;
+            ctx.shadowBlur = 24;
             ctx.shadowOffsetY = 10;
             ctx.drawImage(boosterImg, bx, by, targetW, targetH);
             ctx.restore();
         } catch {}
     }
 
-    // 4. Colonne centrale : PP en carré arrondi (+ ombre portée) + pseudo dessous
-    const ppSize = 230;
+    // 4. Colonne centrale : PP agrandie en carré arrondi (+ ombre portée) + pseudo dessous
+    const ppSize = 315;
     const ppX = Math.round((W - ppSize) / 2);
-    const ppY = 340;
-    const avatarUrl = (member?.user || member)?.displayAvatarURL?.({ extension: 'png', size: 512 })
-        || member?.displayAvatarURL?.({ extension: 'png', size: 512 });
+    const ppY = 335;
+    const avatarUrl = (member?.user || member)?.displayAvatarURL?.({ extension: 'png', size: 1024 })
+        || member?.displayAvatarURL?.({ extension: 'png', size: 1024 });
 
     ctx.save();
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
-    ctx.shadowBlur = 24;
-    ctx.shadowOffsetY = 8;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.68)';
+    ctx.shadowBlur = 28;
+    ctx.shadowOffsetY = 9;
     ctx.fillStyle = isLight ? '#FFFFFF' : '#1E212D';
-    drawRoundRect(ctx, ppX, ppY, ppSize, ppSize, 26);
+    drawRoundRect(ctx, ppX, ppY, ppSize, ppSize, 30);
     ctx.fill();
     ctx.restore();
 
@@ -2578,7 +2642,7 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
         try {
             const avatarImg = await loadImage(avatarUrl);
             ctx.save();
-            drawRoundRect(ctx, ppX, ppY, ppSize, ppSize, 26);
+            drawRoundRect(ctx, ppX, ppY, ppSize, ppSize, 30);
             ctx.clip();
             ctx.drawImage(avatarImg, ppX, ppY, ppSize, ppSize);
             ctx.restore();
@@ -2587,8 +2651,8 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
 
     ctx.save();
     ctx.strokeStyle = '#F1C40F';
-    ctx.lineWidth = 4;
-    drawRoundRect(ctx, ppX, ppY, ppSize, ppSize, 26);
+    ctx.lineWidth = 5;
+    drawRoundRect(ctx, ppX, ppY, ppSize, ppSize, 30);
     ctx.stroke();
     ctx.restore();
 
@@ -2598,64 +2662,65 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
     ctx.textBaseline = 'top';
     ctx.fillStyle = textColor;
     ctx.shadowColor = shadowCol;
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 12;
     ctx.shadowOffsetY = 3;
-    drawFittedWrappedText(ctx, masterName, W / 2, ppY + ppSize + 24, 340, 32, 18);
+    drawFittedWrappedText(ctx, masterName, W / 2, ppY + ppSize + 24, 420, 36, 22, 16);
     ctx.restore();
 
-    // 5. Colonne droite : Carte flexée (ou 1-84 Epsys Full Art) + texte "CARTE FLEXÉE" + nom carte en dessous
-    const rightCenterX = W - 240;
+    // 5. Colonne droite : Carte flexée chargée en pleine résolution source (ou 1-84 Epsys Full Art) + texte "CARTE FLEXÉE" + nom carte dessous
+    const rightCenterX = W - 285;
     const flexCard = (u?.favoriteCardId && (u?.cards?.[u.favoriteCardId] || 0) > 0 && cardById.get(u.favoriteCardId))
         || cardById.get(EPSYS_FULL_ART_CARD_ID)
         || cardCatalog[0];
 
-    const cW = 285;
-    const cH = 399;
+    const cW = 325;
+    const cH = 455;
     const cX = Math.round(rightCenterX - cW / 2);
-    const cY = 278;
+    const cY = 305;
 
     if (flexCard) {
-        const proxy = await loadCardProxy(flexCard, cW, cH, { glow: true });
-        if (proxy?.img) {
-            ctx.save();
-            ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
-            ctx.shadowBlur = 18;
-            ctx.shadowOffsetY = 8;
-            ctx.drawImage(proxy.img, cX - proxy.pad, cY - proxy.pad);
-            ctx.restore();
-        } else if (flexCard.filePath && fs.existsSync(flexCard.filePath)) {
+        const meta = RARITY_META[flexCard.rarity] || RARITY_META['Commune'];
+        if (flexCard.filePath && fs.existsSync(flexCard.filePath)) {
             const cImg = await loadImage(flexCard.filePath);
+            ctx.save();
+            ctx.shadowColor = meta.glow || 'rgba(255, 255, 255, 0.55)';
+            ctx.shadowBlur = 30;
+            ctx.shadowOffsetX = 0;
+            ctx.shadowOffsetY = 0;
             ctx.drawImage(cImg, cX, cY, cW, cH);
+            ctx.restore();
         }
 
         // Texte "CARTE FLEXÉE" directement sur le haut de la carte avec ombre portée
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.font = 'bold 20px "LemonMilk", "Sans"';
+        ctx.font = 'bold 22px "LemonMilk", "Sans"';
         ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
-        ctx.shadowBlur = 10;
-        ctx.shadowOffsetY = 2;
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetY = 3;
         ctx.fillStyle = '#FFFFFF';
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
-        ctx.lineWidth = 4;
-        ctx.strokeText('CARTE FLEXÉE', rightCenterX, cY + 26, cW - 24);
-        ctx.fillText('CARTE FLEXÉE', rightCenterX, cY + 26, cW - 24);
+        ctx.lineWidth = 4.5;
+        ctx.strokeText('CARTE FLEXÉE', rightCenterX, cY + 30, cW - 26);
+        ctx.fillText('CARTE FLEXÉE', rightCenterX, cY + 30, cW - 26);
         ctx.restore();
 
-        // Nom de la carte sous la carte (adaptatif / saut de ligne)
+        // Nom de la carte sous la carte (wrap prioritaire pour afficher "Holographique" à la ligne suivante)
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         ctx.fillStyle = textColor;
         ctx.shadowColor = shadowCol;
-        ctx.shadowBlur = 8;
-        ctx.shadowOffsetY = 2;
-        drawFittedWrappedText(ctx, flexCard.name, rightCenterX, cY + cH + 18, 360, 22, 13);
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetY = 3;
+        drawFittedWrappedText(ctx, flexCard.name, rightCenterX, cY + cH + 20, 310, 24, 14, 14);
         ctx.restore();
     }
 
-    return toJpeg(canvas, 0.92);
+    const buffer = canvas.toBuffer('image/jpeg', { quality: 0.96, progressive: false, chromaSubsampling: false });
+    canvas.width = canvas.height = 0;
+    return buffer;
 }
 
 async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
