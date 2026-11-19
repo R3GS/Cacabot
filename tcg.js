@@ -2626,11 +2626,12 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
     // 3. Colonne gauche : Booster du Set + Boosters ouverts + Cartes totales du Set
     const activeBoosterPath = setAssets[setNumber]?.boosterPng || assetPaths.boosterPng;
     const leftCenterX = 330;
-    const boosterH = 468;
+    const leftCenterY = 490; // Milieu de la zone sous le bandeau doré
+    const boosterH = 490;
     const boosterGap = 16;
     const boosterTextH = 110;
     const leftBlockTotalH = boosterH + boosterGap + boosterTextH;
-    const boosterY = Math.round(MID_Y - leftBlockTotalH / 2);
+    const boosterY = Math.round(leftCenterY - leftBlockTotalH / 2);
 
     if (activeBoosterPath && fs.existsSync(activeBoosterPath)) {
         try {
