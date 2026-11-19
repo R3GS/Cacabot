@@ -244,6 +244,59 @@ async function deferReplySilent(interaction) {
     return interaction.deferReply({ flags: [MessageFlags.SuppressNotifications] });
 }
 
+const PANEL_AUTO_DELETE_MS = 20 * 60 * 1000; // 20 minutes d'inactivité
+const panelAutoDeleteTimers = new Map(); // messageId -> Timeout
+
+function cancelPanelAutoDelete(messageId) {
+    if (!messageId) return;
+    const t = panelAutoDeleteTimers.get(messageId);
+    if (t) {
+        clearTimeout(t);
+        panelAutoDeleteTimers.delete(messageId);
+    }
+}
+
+function schedulePanelAutoDelete(msg, triggerMessage = null) {
+    if (!msg?.id || msg.flags?.has?.(MessageFlags.Ephemeral)) return msg;
+    if (boosterSessions.has(msg.id)) return msg;
+    cancelPanelAutoDelete(msg.id);
+    const timer = setTimeout(async () => {
+        panelAutoDeleteTimers.delete(msg.id);
+        if (boosterSessions.has(msg.id)) return;
+        const refId = triggerMessage?.id || msg.reference?.messageId;
+        if (refId && msg.channel) {
+            const trig = triggerMessage || await msg.channel.messages.fetch(refId).catch(() => null);
+            if (trig && !trig.author?.bot) {
+                await trig.delete().catch(() => {});
+            }
+        }
+        await msg.delete().catch(() => {});
+    }, PANEL_AUTO_DELETE_MS);
+    timer.unref?.();
+    panelAutoDeleteTimers.set(msg.id, timer);
+    return msg;
+}
+
+async function replyPanelSilent(target, payload, ownerId = null) {
+    if (isSandboxId(ownerId)) {
+        return replySilent(target, payload);
+    }
+    const data = withSilent(payload);
+    let sent = null;
+    if (target.isRepliable?.()) {
+        if (target.deferred || target.replied) {
+            sent = await target.followUp({ ...data, fetchReply: true });
+        } else {
+            sent = await target.reply({ ...data, fetchReply: true });
+        }
+        schedulePanelAutoDelete(sent);
+        return sent;
+    }
+    sent = await target.reply(data);
+    schedulePanelAutoDelete(sent, target);
+    return sent;
+}
+
 // ==========================================
 //   BRIDGE AVEC INDEX.JS
 // ==========================================
@@ -4533,6 +4586,7 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             gifTimeout: null,
             message: sentMsg
         };
+        cancelPanelAutoDelete(sentMsg.id);
         boosterSessions.set(sentMsg.id, session);
 
         if (!isSandboxId(userId)) {
@@ -5060,7 +5114,7 @@ async function sendBinderAccessWarning(targetResponder, requesterId, targetMembe
     if (targetResponder.isRepliable?.()) {
         return targetResponder.reply({ embeds: [embed], components: [row], ephemeral: true });
     }
-    return replySilent(targetResponder, { embeds: [embed], components: [row] });
+    return replyPanelSilent(targetResponder, { embeds: [embed], components: [row] }, requesterId);
 }
 
 async function handleCarteCommand(targetResponder, authorMember, rawArg, channel) {
@@ -5098,7 +5152,7 @@ async function handleCarteCommand(targetResponder, authorMember, rawArg, channel
                     .setStyle(ButtonStyle.Secondary),
                 buildCloseButton(authorMember.id)
             );
-            return replySilent(targetResponder, { embeds: [embed], components: [row] });
+            return replyPanelSilent(targetResponder, { embeds: [embed], components: [row] }, authorMember.id);
         }
 
         row.addComponents(
@@ -5111,7 +5165,7 @@ async function handleCarteCommand(targetResponder, authorMember, rawArg, channel
                 .setCustomId(`tcg:binder:pickuser:${authorMember.id}`)
                 .setPlaceholder('Consulter le classeur d\'un autre membre...')
         );
-        return replySilent(targetResponder, { embeds: [embed], components: [row, userRow] });
+        return replyPanelSilent(targetResponder, { embeds: [embed], components: [row, userRow] }, authorMember.id);
     }
 
     const u = getOrCreateTcgUser(authorMember.id);
@@ -5121,29 +5175,31 @@ async function handleCarteCommand(targetResponder, authorMember, rawArg, channel
     if (res.card) {
         if ((u.cards?.[res.card.id] || 0) <= 0) {
             if (res.isCodeQuery) {
-                return replySilent(targetResponder, buildUnownedCardPayload(res.card, authorMember.id));
+                return replyPanelSilent(targetResponder, buildUnownedCardPayload(res.card, authorMember.id), authorMember.id);
             }
-            return replySilent(
+            return replyPanelSilent(
                 targetResponder,
-                `🔒 Tu n'as pas encore découvert cette carte dans ton RegaDex ! La surprise reste totale 🤫`
+                `🔒 Tu n'as pas encore découvert cette carte dans ton RegaDex ! La surprise reste totale 🤫`,
+                authorMember.id
             );
         }
         const payload = buildSingleCardPayload(res.card, authorMember.id);
-        return replySilent(targetResponder, payload);
+        return replyPanelSilent(targetResponder, payload, authorMember.id);
     }
 
     // 2. Correspondances multiples : ne proposer QUE les cartes possédées
     if (res.matches.length > 1) {
         const ownedMatches = res.matches.filter(c => (u.cards?.[c.id] || 0) > 0);
         if (ownedMatches.length === 0) {
-            return replySilent(
+            return replyPanelSilent(
                 targetResponder,
-                `🔒 Tu ne possèdes aucune carte correspondant à cette recherche dans ton RegaDex !`
+                `🔒 Tu ne possèdes aucune carte correspondant à cette recherche dans ton RegaDex !`,
+                authorMember.id
             );
         }
         if (ownedMatches.length === 1) {
             const payload = buildSingleCardPayload(ownedMatches[0], authorMember.id);
-            return replySilent(targetResponder, payload);
+            return replyPanelSilent(targetResponder, payload, authorMember.id);
         }
 
         const opts = ownedMatches.slice(0, 25).map(c => ({
@@ -5159,15 +5215,16 @@ async function handleCarteCommand(targetResponder, authorMember, rawArg, channel
             buildAccueilButton(authorMember.id),
             buildCloseButton(authorMember.id)
         );
-        return replySilent(targetResponder, {
+        return replyPanelSilent(targetResponder, {
             content: `🔎 **${ownedMatches.length}** carte(s) possédée(s) correspondent à \`${query}\` :`,
             components: [new ActionRowBuilder().addComponents(menu), navRow]
-        });
+        }, authorMember.id);
     }
 
-    return replySilent(
+    return replyPanelSilent(
         targetResponder,
-        `🔒 Aucune carte découverte dans ton RegaDex ne correspond à \`${query}\`. Tape \`!carte\` pour voir les formats.`
+        `🔒 Aucune carte découverte dans ton RegaDex ne correspond à \`${query}\`. Tape \`!carte\` pour voir les formats.`,
+        authorMember.id
     );
 }
 
@@ -5213,10 +5270,10 @@ async function handleFlexCommand(targetResponder, authorMember, guild, rawArg) {
                         description: `${c.rarity} • Possédée x${authorU.cards[c.id]}`,
                         value: c.id
                     })));
-                return replySilent(targetResponder, {
+                return replyPanelSilent(targetResponder, {
                     content: '✨ Choisis la carte à définir en préférée :',
                     components: [new ActionRowBuilder().addComponents(menu)]
-                });
+                }, authorMember.id);
             }
             return replySilent(targetResponder, `❌ Carte introuvable pour \`${cardQuery}\`.`);
         }
@@ -5333,7 +5390,7 @@ function sendFlexPicker(targetResponder, member, page = 0) {
     if (targetResponder.isButton?.() || targetResponder.isStringSelectMenu?.()) {
         return targetResponder.update({ content, embeds: [], components: rows, files: [], attachments: [] });
     }
-    return replySilent(targetResponder, { content, components: rows });
+    return replyPanelSilent(targetResponder, { content, components: rows }, member.id);
 }
 
 function sendHoloTransformPicker(targetResponder, member, page = 0, fromHub = false) {
@@ -6793,41 +6850,41 @@ async function handleWishlistCommand(targetResponder, authorMember, rawArg) {
     u.wishlist = getSanitizedWishlist(u);
 
     if (!arg) {
-        return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false));
+        return replyPanelSilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false), authorMember.id);
     }
 
     if (/^(?:clear|vider|reset)$/i.test(arg)) {
         u.wishlist = [];
         if (!isSandboxId(authorMember.id)) tcgBridge.demanderSauvegarde();
-        return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, '🧹 *Wishlist vidée.*'));
+        return replyPanelSilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, '🧹 *Wishlist vidée.*'), authorMember.id);
     }
 
     if (/^(?:add|ajouter|\+)\s+/i.test(arg)) {
         const q = arg.replace(/^(?:add|ajouter|\+)\s+/i, '').trim();
         const res = resolveCardQuery(q);
         if (!res.card) {
-            return replySilent(targetResponder, `❌ Aucune carte unique trouvée pour \`${q}\`. Essaie avec son numéro exact (ex: \`1-84\`).`);
+            return replyPanelSilent(targetResponder, `❌ Aucune carte unique trouvée pour \`${q}\`. Essaie avec son numéro exact (ex: \`1-84\`).`, authorMember.id);
         }
         if (u.wishlist.includes(res.card.id)) {
-            return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `ℹ️ \`${res.card.id}\` est déjà dans ta Wishlist.`));
+            return replyPanelSilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `ℹ️ \`${res.card.id}\` est déjà dans ta Wishlist.`), authorMember.id);
         }
         if (u.wishlist.length >= MAX_WISHLIST) {
-            return replySilent(targetResponder, `⚠️ Ta Wishlist est pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**). Retire d'abord une carte via \`!wishlist\`.`);
+            return replyPanelSilent(targetResponder, `⚠️ Ta Wishlist est pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**). Retire d'abord une carte via \`!wishlist\`.`, authorMember.id);
         }
         u.wishlist.push(res.card.id);
         if (!isSandboxId(authorMember.id)) tcgBridge.demanderSauvegarde();
-        return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `❤️ \`${res.card.id}\` ajoutée à ta Wishlist !`));
+        return replyPanelSilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `❤️ \`${res.card.id}\` ajoutée à ta Wishlist !`), authorMember.id);
     }
 
     if (/^(?:remove|rem|retirer|del|-)\s+/i.test(arg)) {
         const q = arg.replace(/^(?:remove|rem|retirer|del|-)\s+/i, '').trim();
         const res = resolveCardQuery(q);
         if (!res.card || !u.wishlist.includes(res.card.id)) {
-            return replySilent(targetResponder, `❌ Cette carte n'est pas dans ta Wishlist.`);
+            return replyPanelSilent(targetResponder, `❌ Cette carte n'est pas dans ta Wishlist.`, authorMember.id);
         }
         u.wishlist = u.wishlist.filter(id => id !== res.card.id);
         if (!isSandboxId(authorMember.id)) tcgBridge.demanderSauvegarde();
-        return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `💔 \`${res.card.id}\` retirée de ta Wishlist.`));
+        return replyPanelSilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `💔 \`${res.card.id}\` retirée de ta Wishlist.`), authorMember.id);
     }
 
     // Si une carte directe est tapée (!wishlist 1-84), basculer ajout/retrait
@@ -6836,23 +6893,23 @@ async function handleWishlistCommand(targetResponder, authorMember, rawArg) {
         if (u.wishlist.includes(cardRes.card.id)) {
             u.wishlist = u.wishlist.filter(id => id !== cardRes.card.id);
             if (!isSandboxId(authorMember.id)) tcgBridge.demanderSauvegarde();
-            return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `💔 \`${cardRes.card.id}\` retirée de ta Wishlist.`));
+            return replyPanelSilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `💔 \`${cardRes.card.id}\` retirée de ta Wishlist.`), authorMember.id);
         }
         if (u.wishlist.length >= MAX_WISHLIST) {
-            return replySilent(targetResponder, `⚠️ Ta Wishlist est pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**).`);
+            return replyPanelSilent(targetResponder, `⚠️ Ta Wishlist est pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**).`, authorMember.id);
         }
         u.wishlist.push(cardRes.card.id);
         if (!isSandboxId(authorMember.id)) tcgBridge.demanderSauvegarde();
-        return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `❤️ \`${cardRes.card.id}\` ajoutée à ta Wishlist !`));
+        return replyPanelSilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `❤️ \`${cardRes.card.id}\` ajoutée à ta Wishlist !`), authorMember.id);
     }
 
     // Sinon consulter la wishlist d'un membre mentionné / cherché
     if (targetResponder.isRepliable?.()) {
-        return replySilent(targetResponder, `❌ Carte introuvable pour \`${arg}\`.`);
+        return replyPanelSilent(targetResponder, `❌ Carte introuvable pour \`${arg}\`.`, authorMember.id);
     }
     return resolveMemberArg(targetResponder, arg, async (targetMember) => {
         if (!targetMember) return;
-        await replySilent(targetResponder, buildWishlistPayload(targetMember, authorMember.id, false, false));
+        await replyPanelSilent(targetResponder, buildWishlistPayload(targetMember, authorMember.id, false, false), authorMember.id);
     });
 }
 
@@ -7041,55 +7098,55 @@ async function handleTcgMessage(message) {
     const u = getOrCreateTcgUser(message.author.id);
 
     if (parsed.sub === 'hub') {
-        await replySilent(message, buildHubPayload(message.member, u));
+        await replyPanelSilent(message, buildHubPayload(message.member, u), message.author.id);
         return true;
     }
 
     if (parsed.sub === 'help') {
-        await replySilent(message, buildHelpPayload(message.author.id));
+        await replyPanelSilent(message, buildHelpPayload(message.author.id), message.author.id);
         return true;
     }
 
     if (parsed.sub === 'guide') {
-        await replySilent(message, buildGuidePayload(message.author.id, false));
+        await replyPanelSilent(message, buildGuidePayload(message.author.id, false), message.author.id);
         return true;
     }
 
     if (parsed.sub === 'credits') {
-        await replySilent(message, buildCreditsPayload(message.author.id, false));
+        await replyPanelSilent(message, buildCreditsPayload(message.author.id, false), message.author.id);
         return true;
     }
 
     if (parsed.sub === 'open') {
-        await replySilent(message, buildOpenPromptPayload(message.member, u, false));
+        await replyPanelSilent(message, buildOpenPromptPayload(message.member, u, false), message.author.id);
         return true;
     }
 
     if (parsed.sub === 'store') {
-        await replySilent(message, buildStorePayload(message.member, u, false));
+        await replyPanelSilent(message, buildStorePayload(message.member, u, false), message.author.id);
         return true;
     }
 
     if (parsed.sub === 'claim') {
-        await replySilent(message, buildClaimPayload(message.member, u, false));
+        await replyPanelSilent(message, buildClaimPayload(message.member, u, false), message.author.id);
         return true;
     }
 
     if (parsed.sub === 'top') {
-        await replySilent(message, {
+        await replyPanelSilent(message, {
             embeds: [buildTopEmbed(message.guild, 'total')],
             components: buildTopComponents(message.author.id, 'total', false)
-        });
+        }, message.author.id);
         return true;
     }
 
     if (parsed.sub === 'notif') {
-        await replySilent(message, buildNotifMenuPayload(message.member, u, false));
+        await replyPanelSilent(message, buildNotifMenuPayload(message.member, u, false), message.author.id);
         return true;
     }
 
     if (parsed.sub === 'profil') {
-        await replySilent(message, buildProfilePayload(message.member, u, false, false));
+        await replyPanelSilent(message, buildProfilePayload(message.member, u, false, false), message.author.id);
         return true;
     }
 
@@ -7100,7 +7157,7 @@ async function handleTcgMessage(message) {
 
     if (parsed.sub === 'classeur') {
         if (!parsed.rest) {
-            const sent = await replySilent(message, '📖 Chargement de ton classeur RegaDex...');
+            const sent = await replyPanelSilent(message, '📖 Chargement de ton classeur RegaDex...', message.author.id);
             const payload = await buildBinderReplyPayload(message.member, message.author.id, { fromHub: false });
             await sent.edit({ content: null, ...payload });
             return true;
@@ -7109,7 +7166,7 @@ async function handleTcgMessage(message) {
         await resolveMemberArg(message, parsed.rest, async (targetMember) => {
             if (!targetMember) return;
             if (targetMember.id === message.author.id) {
-                const sent = await replySilent(message, '📖 Chargement de ton classeur RegaDex...');
+                const sent = await replyPanelSilent(message, '📖 Chargement de ton classeur RegaDex...', message.author.id);
                 const payload = await buildBinderReplyPayload(message.member, message.author.id, { fromHub: false });
                 await sent.edit({ content: null, ...payload });
                 return;
@@ -7171,43 +7228,43 @@ async function handleTcgSlash(interaction) {
     const u = getOrCreateTcgUser(interaction.user.id);
 
     if (sub === 'hub') {
-        await replySilent(interaction, buildHubPayload(member, u));
+        await replyPanelSilent(interaction, buildHubPayload(member, u), interaction.user.id);
         return true;
     }
     if (sub === 'open' || sub === 'booster' || sub === 'go') {
-        await replySilent(interaction, buildOpenPromptPayload(member, u, false));
+        await replyPanelSilent(interaction, buildOpenPromptPayload(member, u, false), interaction.user.id);
         return true;
     }
     if (sub === 'store') {
-        await replySilent(interaction, buildStorePayload(member, u, false));
+        await replyPanelSilent(interaction, buildStorePayload(member, u, false), interaction.user.id);
         return true;
     }
     if (sub === 'claim') {
-        await replySilent(interaction, buildClaimPayload(member, u, false));
+        await replyPanelSilent(interaction, buildClaimPayload(member, u, false), interaction.user.id);
         return true;
     }
     if (sub === 'top') {
-        await replySilent(interaction, {
+        await replyPanelSilent(interaction, {
             embeds: [buildTopEmbed(interaction.guild, 'total')],
             components: buildTopComponents(interaction.user.id, 'total', false)
-        });
+        }, interaction.user.id);
         return true;
     }
     if (sub === 'notif') {
-        await replySilent(interaction, buildNotifMenuPayload(member, u, false));
+        await replyPanelSilent(interaction, buildNotifMenuPayload(member, u, false), interaction.user.id);
         return true;
     }
     if (sub === 'profil') {
-        await replySilent(interaction, buildProfilePayload(member, u, false, false));
+        await replyPanelSilent(interaction, buildProfilePayload(member, u, false, false), interaction.user.id);
         return true;
     }
     if (sub === 'wishlist') {
         const cible = interaction.options.getMember('membre');
         if (cible && cible.id !== interaction.user.id) {
-            await replySilent(interaction, buildWishlistPayload(cible, interaction.user.id, false, false));
+            await replyPanelSilent(interaction, buildWishlistPayload(cible, interaction.user.id, false, false), interaction.user.id);
             return true;
         }
-        await replySilent(interaction, buildWishlistPayload(member, interaction.user.id, false, false));
+        await replyPanelSilent(interaction, buildWishlistPayload(member, interaction.user.id, false, false), interaction.user.id);
         return true;
     }
     if (sub === 'classeur') {
@@ -7215,7 +7272,8 @@ async function handleTcgSlash(interaction) {
         if (!cible || cible.id === interaction.user.id) {
             await deferReplySilent(interaction);
             const payload = await buildBinderReplyPayload(member, interaction.user.id, { fromHub: false });
-            await interaction.editReply(payload);
+            const msg = await interaction.editReply(payload);
+            schedulePanelAutoDelete(msg);
             return true;
         }
         await sendBinderAccessWarning(interaction, interaction.user.id, cible);
@@ -7278,6 +7336,10 @@ async function handleTcgInteraction(interaction) {
     const action = parts[1];
     const client = interaction.client;
 
+    if (interaction.message?.id && panelAutoDeleteTimers.has(interaction.message.id) && action !== 'close') {
+        schedulePanelAutoDelete(interaction.message);
+    }
+
     // ----- FERMER UN MENU (+ MESSAGE DE COMMANDE SI RÉPONSE) -----
     if (action === 'close' && interaction.isButton()) {
         const ownerId = parts[2];
@@ -7286,6 +7348,7 @@ async function handleTcgInteraction(interaction) {
             return true;
         }
         const msg = interaction.message;
+        cancelPanelAutoDelete(msg?.id);
         if (msg?.flags?.has?.(MessageFlags.Ephemeral)) {
             await interaction.update({ content: '🗑️ Menu fermé.', embeds: [], components: [], files: [], attachments: [] }).catch(() => {});
             return true;
@@ -8082,12 +8145,14 @@ async function handleTcgInteraction(interaction) {
             }
             if (sub === 'deny') {
                 await interaction.update({ content: `❌ <@${ownerId}> a refusé l'accès à son classeur.`, embeds: [], components: [] });
+                schedulePanelAutoDelete(interaction.message);
                 return true;
             }
             await interaction.deferUpdate();
             const ownerMember = await interaction.guild.members.fetch(ownerId).catch(() => interaction.member);
             const payload = await buildBinderReplyPayload(ownerMember, viewerId, { fromHub: false });
-            await interaction.editReply({ content: null, ...payload, attachments: [] });
+            const edited = await interaction.editReply({ content: null, ...payload, attachments: [] });
+            schedulePanelAutoDelete(edited || interaction.message);
             return true;
         }
 
@@ -8389,7 +8454,8 @@ async function handleTcgInteraction(interaction) {
             : await interaction.guild.members.fetch(ownerId).catch(() => interaction.member);
         const payload = await buildBinderReplyPayload(ownerMember, viewerId, { category, perPageMode, page, sortMode, rarityFilter, ownedMode, fromHub });
         if (action === 'bpagesub' && !interaction.isFromMessage?.()) {
-            await interaction.editReply(payload);
+            const msg = await interaction.editReply(payload);
+            schedulePanelAutoDelete(msg);
         } else {
             await interaction.editReply({ content: null, ...payload, attachments: [] });
         }
