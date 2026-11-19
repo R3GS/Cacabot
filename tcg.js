@@ -901,6 +901,7 @@ function getOrCreateTcgxSandbox(forceReset = false) {
             masteredSets: { '1': Date.now() },
             stats: {
                 boostersOpened: 0,
+                boostersBySet: { '1': 0 },
                 tradesCompleted: 0,
                 duplicatesObtained: 0
             }
@@ -916,6 +917,7 @@ function getOrCreateTcgxSandbox(forceReset = false) {
         if (!Array.isArray(tcgxSandboxUser.wishlist)) tcgxSandboxUser.wishlist = [];
         if (!tcgxSandboxUser.completionMilestones) tcgxSandboxUser.completionMilestones = {};
         if (!tcgxSandboxUser.masteredSets) tcgxSandboxUser.masteredSets = { '1': Date.now() };
+        if (!tcgxSandboxUser.stats.boostersBySet) tcgxSandboxUser.stats.boostersBySet = { '1': tcgxSandboxUser.stats.boostersOpened || 0 };
     }
     return tcgxSandboxUser;
 }
@@ -987,7 +989,13 @@ function getOrCreateTcgUser(userId) {
     if (!Array.isArray(u.wishlist)) u.wishlist = [];
     if (!u.completionMilestones || typeof u.completionMilestones !== 'object') u.completionMilestones = {};
     if (!u.masteredSets || typeof u.masteredSets !== 'object') u.masteredSets = {};
-    if (!u.stats) u.stats = { boostersOpened: 0, tradesCompleted: 0, duplicatesObtained: 0 };
+    if (!u.stats) u.stats = { boostersOpened: 0, boostersBySet: {}, tradesCompleted: 0, duplicatesObtained: 0 };
+    if (!u.stats.boostersBySet || typeof u.stats.boostersBySet !== 'object') {
+        u.stats.boostersBySet = {};
+        if ((u.stats.boostersOpened || 0) > 0) {
+            u.stats.boostersBySet['1'] = u.stats.boostersOpened;
+        }
+    }
 
     syncFreeBoosters(u);
     return u;
@@ -2575,7 +2583,7 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
     ctx.font = 'bold 58px "LemonMilk", "Sans"';
     const titleStr = 'MAÎTRE DU SET';
     const titleW = ctx.measureText(titleStr).width;
-    const titleY = 66;
+    const titleY = 62;
     ctx.fillStyle = textColor;
     ctx.shadowColor = shadowCol;
     ctx.shadowBlur = 16;
@@ -2592,40 +2600,40 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
     if (activeLogoPath && fs.existsSync(activeLogoPath)) {
         try {
             const logoImg = await loadImage(activeLogoPath);
-            const logoH = 140;
+            const logoH = 136;
             const logoW = Math.round((logoImg.width / logoImg.height) * logoH);
             ctx.save();
             ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
             ctx.shadowBlur = 14;
-            ctx.drawImage(logoImg, Math.round((W - logoW) / 2), 110, logoW, logoH);
+            ctx.drawImage(logoImg, Math.round((W - logoW) / 2), 104, logoW, logoH);
             ctx.restore();
         } catch {}
     }
 
-    // 3. Colonne gauche : Booster du Set
+    // 3. Colonne gauche : Booster du Set agrandi & remonté, centré entre le bord et la PP
     const activeBoosterPath = setAssets[setNumber]?.boosterPng || assetPaths.boosterPng;
-    const leftCenterX = 285;
-    const contentMidY = 545;
+    const leftCenterX = 330;
+    const contentMidY = 490;
     if (activeBoosterPath && fs.existsSync(activeBoosterPath)) {
         try {
             const boosterImg = await loadImage(activeBoosterPath);
-            const targetH = 470;
+            const targetH = 530;
             const targetW = Math.round((boosterImg.width / boosterImg.height) * targetH);
             const bx = Math.round(leftCenterX - targetW / 2);
             const by = Math.round(contentMidY - targetH / 2);
             ctx.save();
             ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
-            ctx.shadowBlur = 24;
-            ctx.shadowOffsetY = 10;
+            ctx.shadowBlur = 26;
+            ctx.shadowOffsetY = 12;
             ctx.drawImage(boosterImg, bx, by, targetW, targetH);
             ctx.restore();
         } catch {}
     }
 
-    // 4. Colonne centrale : PP agrandie en carré arrondi (+ ombre portée) + pseudo dessous
+    // 4. Colonne centrale : PP en carré arrondi (+ ombre portée) + pseudo + compteur boosters Set
     const ppSize = 315;
     const ppX = Math.round((W - ppSize) / 2);
-    const ppY = 335;
+    const ppY = 300;
     const avatarUrl = (member?.user || member)?.displayAvatarURL?.({ extension: 'png', size: 1024 })
         || member?.displayAvatarURL?.({ extension: 'png', size: 1024 });
 
@@ -2667,44 +2675,55 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
     drawFittedWrappedText(ctx, masterName, W / 2, ppY + ppSize + 24, 420, 36, 22, 16);
     ctx.restore();
 
-    // 5. Colonne droite : Carte flexée chargée en pleine résolution source (ou 1-84 Epsys Full Art) + texte "CARTE FLEXÉE" + nom carte dessous
-    const rightCenterX = W - 285;
+    const setKey = String(setNumber);
+    const setBoostersCount = u?.stats?.boostersBySet?.[setKey]
+        ?? (setNumber === 1 ? (u?.stats?.boostersOpened || 0) : 0);
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.font = 'bold 21px "LemonMilk", "Sans"';
+    ctx.fillStyle = isLight ? '#8A5A00' : '#FFE066';
+    ctx.shadowColor = shadowCol;
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 2;
+    ctx.fillText(`Boosters Set ${setNumber} Ouverts = ${setBoostersCount}`, W / 2, ppY + ppSize + 120, 460);
+    ctx.restore();
+
+    // 5. Colonne droite : Carte flexée agrandie & remontée (centrée symétriquement) + textes resitués au-dessus et en dessous
+    const rightCenterX = W - 330;
     const flexCard = (u?.favoriteCardId && (u?.cards?.[u.favoriteCardId] || 0) > 0 && cardById.get(u.favoriteCardId))
         || cardById.get(EPSYS_FULL_ART_CARD_ID)
         || cardCatalog[0];
 
-    const cW = 325;
-    const cH = 455;
+    const cW = 375;
+    const cH = 525;
     const cX = Math.round(rightCenterX - cW / 2);
-    const cY = 305;
+    const cY = 228;
 
     if (flexCard) {
+        // Libellé "CARTE FLEXÉE" juste au-dessus de la carte avec ombre portée
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.font = 'bold 25px "LemonMilk", "Sans"';
+        ctx.fillStyle = textColor;
+        ctx.shadowColor = shadowCol;
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetY = 3;
+        ctx.fillText('CARTE FLEXÉE', rightCenterX, cY - 14, cW);
+        ctx.restore();
+
         const meta = RARITY_META[flexCard.rarity] || RARITY_META['Commune'];
         if (flexCard.filePath && fs.existsSync(flexCard.filePath)) {
             const cImg = await loadImage(flexCard.filePath);
             ctx.save();
             ctx.shadowColor = meta.glow || 'rgba(255, 255, 255, 0.55)';
-            ctx.shadowBlur = 30;
+            ctx.shadowBlur = 32;
             ctx.shadowOffsetX = 0;
             ctx.shadowOffsetY = 0;
             ctx.drawImage(cImg, cX, cY, cW, cH);
             ctx.restore();
         }
-
-        // Texte "CARTE FLEXÉE" directement sur le haut de la carte avec ombre portée
-        ctx.save();
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = 'bold 22px "LemonMilk", "Sans"';
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
-        ctx.shadowBlur = 12;
-        ctx.shadowOffsetY = 3;
-        ctx.fillStyle = '#FFFFFF';
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
-        ctx.lineWidth = 4.5;
-        ctx.strokeText('CARTE FLEXÉE', rightCenterX, cY + 30, cW - 26);
-        ctx.fillText('CARTE FLEXÉE', rightCenterX, cY + 30, cW - 26);
-        ctx.restore();
 
         // Nom de la carte sous la carte (wrap prioritaire pour afficher "Holographique" à la ligne suivante)
         ctx.save();
@@ -2714,7 +2733,7 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
         ctx.shadowColor = shadowCol;
         ctx.shadowBlur = 10;
         ctx.shadowOffsetY = 3;
-        drawFittedWrappedText(ctx, flexCard.name, rightCenterX, cY + cH + 20, 310, 24, 14, 14);
+        drawFittedWrappedText(ctx, flexCard.name, rightCenterX, cY + cH + 18, 360, 26, 15, 14);
         ctx.restore();
     }
 
@@ -4293,6 +4312,9 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
         const ptsEarned = POINTS_PER_BOOSTER + (duplicatesInPack * POINTS_PER_DUPLICATE);
         u.points += ptsEarned;
         u.stats.boostersOpened = (u.stats.boostersOpened || 0) + 1;
+        if (!u.stats.boostersBySet) u.stats.boostersBySet = {};
+        // [SET 2] Remplacer DEFAULT_SET_NUMBER par le setNumber du booster ouvert
+        u.stats.boostersBySet[String(DEFAULT_SET_NUMBER)] = (u.stats.boostersBySet[String(DEFAULT_SET_NUMBER)] || 0) + 1;
         u.stats.duplicatesObtained = (u.stats.duplicatesObtained || 0) + duplicatesInPack;
 
         // [SET 2] Adapter le setNumber selon le booster ouvert
