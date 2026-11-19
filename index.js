@@ -350,7 +350,8 @@ initPenduState({
     getMotusStats: () => motusStats,
     getRebusStats: () => rebusStats,
     demanderSauvegarde: () => demanderSauvegarde(),
-    trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta)
+    trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta),
+    grantTcgPoints: (uids, pts) => grantMinigameTcgPoints(client, uids, pts)
 });
 
 ///welcome.js
@@ -508,21 +509,27 @@ initMinijeuxState({
     getPenduStats: () => penduStats,
     setPenduStats: (s) => { penduStats = s; },
     demanderSauvegarde: () => demanderSauvegarde(),
-    trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta)
+    trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta),
+    grantTcgPoints: (uids, pts) => grantMinigameTcgPoints(client, uids, pts)
 });
 
 ///tcg.js
 const {
     AFK_VOCAL_CHANNEL_ID,
+    hasTcgRole,
     initTcgState,
     scanSet1Cards,
     getTcgCardsCount,
     restaurerNotifsTcg,
     verifierInactiviteTradesTcg,
     verifierBoosterHebdoTcg,
+    verifierQueteCommunautaireTcg,
     trackTcgMessagePoint,
     trackTcgVocalMinute,
     trackTcgRoulettePoint,
+    addTcgPointsFromRoulette,
+    addTcgBoostersFromRoulette,
+    grantMinigameTcgPoints,
     handleTcgTradeThreadMessage,
     handleTcgMessage,
     handleTcgSlash,
@@ -540,7 +547,10 @@ initRouletteBridge({
     askDisambiguation,
     suggestionsData,
     trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta),
-    trackTcgRoulettePoint: (uid, member) => trackTcgRoulettePoint(uid, member)
+    trackTcgRoulettePoint: (uid, member) => trackTcgRoulettePoint(uid, member),
+    hasTcgCollectorRole: (member) => hasTcgRole(member),
+    addTcgPoints: (uid, pts, member) => addTcgPointsFromRoulette(uid, pts, member),
+    addTcgBoosters: (uid, qty, member) => addTcgBoostersFromRoulette(uid, qty, member)
 });
 
 
@@ -1620,7 +1630,11 @@ client.once('ready', async () => {
     restaurerNotifsTcg(client);
     setInterval(() => verifierInactiviteTradesTcg(client), 10 * 60 * 1000);
     verifierBoosterHebdoTcg(client);
-    setInterval(() => verifierBoosterHebdoTcg(client), 60 * 1000);
+    verifierQueteCommunautaireTcg(client);
+    setInterval(() => {
+        verifierBoosterHebdoTcg(client);
+        verifierQueteCommunautaireTcg(client);
+    }, 60 * 1000);
 
     // Réarmement des alertes roulette, votes publics et des rappels
     for (const [uid, chId] of rouletteNotifs) armerNotifRoulette(uid, chId, client);

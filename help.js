@@ -162,6 +162,7 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
                 `\`!tcgpullchance\` • Augmenter les chances de pull d'une carte *(membre ou rôle Collectionneur.euse)*\n\n` +
                 `### 🧪 Mode Test & Cache Proxies (Coolify)\n` +
                 `\`!tcgx [sous-cmd]\` *(hub, open, store, claim, classeur, carte, flex, top, reset)* • Bac à sable isolé *(109/109 cartes x5, 999k pts)*\n` +
+                `\`!tcgmastertest\` • \`!tcggodpacktest\` • Tester les visuels Panthéon Maître du Set & God Pack dans ce salon\n` +
                 `\`!rgdxproxies\` *(ou \`!tcgproxies\`)* • Diagnostic du volume \`TCG/Proxies\` & poids par format\n` +
                 `\`!rgdxproxies warmup\` • Pré-génère toutes les miniatures & lueurs sur le volume *(1 seule fois)*\n` +
                 `\`!rgdxproxies purge\` • Vide le cache disque pour forcer la régénération`
@@ -526,7 +527,7 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
                 `\`!regadex\` *(ou \`!rgdx\` / \`!tcg\`)* • Hub principal RegaDex *(toutes les commandes marchent avec ou sans espace)*\n` +
                 `\`!regadex open\` *(ou \`!tcggo\` / \`!tcgbooster\` / \`!open\`)* • Ouvrir un booster *(1/6h max 2 + 1/lundi 8h)*\n` +
                 `\`!regadex store\` • Acheter boosters et bonus avec tes points RegaDex\n` +
-                `\`!tcgclaim\` *(ou \`!regadex claim\`)* • Inventaire, achats & boosters du lundi 8h *(max 2/2)*\n` +
+                `\`!tcgclaim\` *(ou \`!regadex claim\`)* • Inventaire, achats & boosters du vendredi 8h *(max 2/2)*\n` +
                 `\`!regadex notif\` • Configurer tes notifications de boosters *(choix permanent)*\n\n` +
                 `### 📖 Collection, Wishlist, Échanges & Flex\n` +
                 `\`!classeur [@membre]\` *(ou \`!collection\`)* • Classeur Canvas *(filtres Tout / Possédées / Doublons)*\n` +

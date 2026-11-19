@@ -71,7 +71,8 @@ const SET1_NAME = SETS_CONFIG[1].name;
 const BOOSTER_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6h
 const HALF_COOLDOWN_MS = 3 * 60 * 60 * 1000; // 3h
 const MAX_FREE_BOOSTERS = 2;
-const MAX_WEEKLY_BOOSTERS = 2; // Plafond de boosters du lundi 8h dans !tcgclaim
+const MAX_WEEKLY_BOOSTERS = 2; // Plafond de boosters du vendredi 8h
+const MAX_COMMUNITY_BOOSTERS = 2; // Plafond de boosters communautaires
 const MAX_WISHLIST = 5;
 const COMPLETION_MILESTONES = [
     { pct: 25, reward: 15 },
@@ -80,7 +81,21 @@ const COMPLETION_MILESTONES = [
     { pct: 100, reward: 25 }
 ];
 const BOOSTER_GIF_DELAY_MS = 4000; // 4 secondes
+const CARD_3_AUTO_RECAP_MS = 10 * 1000; // 10 secondes sur la carte 3 avant récap auto
 const TRADE_INACTIVITY_MS = 24 * 60 * 60 * 1000; // 24h
+const GOD_PACK_BASE_CHANCE = 0.01; // 1% de base
+const GOD_PACK_BOOST_MULT = 5; // x5 pendant 5 jours (5%)
+const GOD_PACK_BOOST_DURATION_MS = 5 * 24 * 60 * 60 * 1000;
+const EPSYS_FULL_ART_CARD_ID = '1-84';
+
+const COMMUNITY_QUEST_POOL = [
+    { type: 'open_boosters', target: 80, label: 'Ouvrir **80 boosters** au total' },
+    { type: 'pull_rare', target: 35, label: 'Obtenir **35 cartes Rares**' },
+    { type: 'pull_epic', target: 20, label: 'Obtenir **20 cartes Épiques**' },
+    { type: 'pull_legendary', target: 8, label: 'Obtenir **8 cartes Légendaires**' },
+    { type: 'pull_fullart', target: 3, label: 'Obtenir **3 cartes Full Art**' },
+    { type: 'trades', target: 8, label: 'Effectuer **8 échanges** de cartes' }
+];
 
 const POINTS_PER_BOOSTER = 5;
 const POINTS_PER_DUPLICATE = 3;
@@ -119,7 +134,8 @@ const STORE_PRICES = {
     booster: 100,
     luckyBooster: 75,
     holoTransform: 50,
-    halfCooldown: 25
+    halfCooldown: 25,
+    godPackBoost: 150
 };
 
 const CREDITS_LINKS = {
@@ -255,6 +271,7 @@ function getStoreData() {
     if (!data.pullBoosts) data.pullBoosts = {};
     if (!data.pullPunishments) data.pullPunishments = {};
     if (typeof data.lastWeeklyBoosterKey !== 'string') data.lastWeeklyBoosterKey = '';
+    if (!data.communityQuest) data.communityQuest = null;
     return data;
 }
 
@@ -634,13 +651,17 @@ function getOrCreateTcgxSandbox(forceReset = false) {
             inventory: {
                 booster: 999,
                 weeklyBooster: 2,
+                communityBooster: 2,
+                masterBooster: 2,
                 luckyBooster: 99,
                 holoTransform: 99,
-                halfCooldown: 99
+                halfCooldown: 99,
+                godPackBoost: 99
             },
             activeBonuses: {
                 luckyBooster: false,
-                halfCooldown: false
+                halfCooldown: false,
+                godPackBoostUntil: 0
             },
             pityRare: false,
             theme: 'B',
@@ -648,6 +669,7 @@ function getOrCreateTcgxSandbox(forceReset = false) {
             favoriteCardId: cardCatalog[0]?.id || null,
             wishlist: [],
             completionMilestones: {}, // [SET 2] Clés par numéro de set ('1', '2'...)
+            masteredSets: { '1': Date.now() },
             stats: {
                 boostersOpened: 0,
                 tradesCompleted: 0,
@@ -664,6 +686,7 @@ function getOrCreateTcgxSandbox(forceReset = false) {
         if ((tcgxSandboxUser.inventory?.booster || 0) < 50) tcgxSandboxUser.inventory.booster = 999;
         if (!Array.isArray(tcgxSandboxUser.wishlist)) tcgxSandboxUser.wishlist = [];
         if (!tcgxSandboxUser.completionMilestones) tcgxSandboxUser.completionMilestones = {};
+        if (!tcgxSandboxUser.masteredSets) tcgxSandboxUser.masteredSets = { '1': Date.now() };
     }
     return tcgxSandboxUser;
 }
@@ -685,13 +708,17 @@ function getOrCreateTcgUser(userId) {
             inventory: {
                 booster: 0,
                 weeklyBooster: 0,
+                communityBooster: 0,
+                masterBooster: 0,
                 luckyBooster: 0,
                 holoTransform: 0,
-                halfCooldown: 0
+                halfCooldown: 0,
+                godPackBoost: 0
             },
             activeBonuses: {
                 luckyBooster: false,
-                halfCooldown: false
+                halfCooldown: false,
+                godPackBoostUntil: 0
             },
             pityRare: false,
             theme: 'B',
@@ -699,6 +726,7 @@ function getOrCreateTcgUser(userId) {
             favoriteCardId: null,
             wishlist: [],
             completionMilestones: {}, // [SET 2] Clés par numéro de set ('1', '2'...)
+            masteredSets: {},
             stats: {
                 boostersOpened: 0,
                 tradesCompleted: 0,
@@ -715,15 +743,21 @@ function getOrCreateTcgUser(userId) {
     if (typeof u.freeBoosters !== 'number') u.freeBoosters = 1;
     if (!u.lastFreeRechargeAt) u.lastFreeRechargeAt = Date.now();
     if (!u.currentRechargeMs) u.currentRechargeMs = BOOSTER_COOLDOWN_MS;
-    if (!u.inventory) u.inventory = { booster: 0, weeklyBooster: 0, luckyBooster: 0, holoTransform: 0, halfCooldown: 0 };
+    if (!u.inventory) u.inventory = { booster: 0, weeklyBooster: 0, communityBooster: 0, masterBooster: 0, luckyBooster: 0, holoTransform: 0, halfCooldown: 0, godPackBoost: 0 };
     if (typeof u.inventory.weeklyBooster !== 'number') u.inventory.weeklyBooster = 0;
     if (u.inventory.weeklyBooster > MAX_WEEKLY_BOOSTERS) u.inventory.weeklyBooster = MAX_WEEKLY_BOOSTERS;
-    if (!u.activeBonuses) u.activeBonuses = { luckyBooster: false, halfCooldown: false };
+    if (typeof u.inventory.communityBooster !== 'number') u.inventory.communityBooster = 0;
+    if (u.inventory.communityBooster > MAX_COMMUNITY_BOOSTERS) u.inventory.communityBooster = MAX_COMMUNITY_BOOSTERS;
+    if (typeof u.inventory.masterBooster !== 'number') u.inventory.masterBooster = 0;
+    if (typeof u.inventory.godPackBoost !== 'number') u.inventory.godPackBoost = 0;
+    if (!u.activeBonuses) u.activeBonuses = { luckyBooster: false, halfCooldown: false, godPackBoostUntil: 0 };
+    if (typeof u.activeBonuses.godPackBoostUntil !== 'number') u.activeBonuses.godPackBoostUntil = 0;
     if (typeof u.pityRare !== 'boolean') u.pityRare = false;
     if (u.theme !== 'W' && u.theme !== 'B') u.theme = 'B';
     if (u.notifFreq !== 'each' && u.notifFreq !== 'full') u.notifFreq = 'each';
     if (!Array.isArray(u.wishlist)) u.wishlist = [];
     if (!u.completionMilestones || typeof u.completionMilestones !== 'object') u.completionMilestones = {};
+    if (!u.masteredSets || typeof u.masteredSets !== 'object') u.masteredSets = {};
     if (!u.stats) u.stats = { boostersOpened: 0, tradesCompleted: 0, duplicatesObtained: 0 };
 
     syncFreeBoosters(u);
@@ -778,24 +812,182 @@ function getFullBoosterTimestamp(u) {
 
 function getTotalAvailableBoosters(u) {
     syncFreeBoosters(u);
-    return (u.freeBoosters || 0) + (u.inventory?.weeklyBooster || 0) + (u.inventory?.booster || 0);
+    return (u.freeBoosters || 0)
+        + (u.inventory?.weeklyBooster || 0)
+        + (u.inventory?.communityBooster || 0)
+        + (u.inventory?.masterBooster || 0)
+        + (u.inventory?.booster || 0);
+}
+
+function getCurrentQuestWeekInfoParis() {
+    const now = new Date();
+    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+    const mondayParis = new Date(parisNow.getTime());
+
+    if (mondayParis.getDay() === 1 && mondayParis.getHours() < 8) {
+        mondayParis.setDate(mondayParis.getDate() - 7);
+    } else {
+        const day = mondayParis.getDay();
+        const diffToMonday = day === 0 ? -6 : (1 - day);
+        mondayParis.setDate(mondayParis.getDate() + diffToMonday);
+    }
+    mondayParis.setHours(8, 0, 0, 0);
+
+    const yyyy = mondayParis.getFullYear();
+    const mm = String(mondayParis.getMonth() + 1).padStart(2, '0');
+    const dd = String(mondayParis.getDate()).padStart(2, '0');
+    const weekKey = `${yyyy}-${mm}-${dd}`;
+
+    const nextMonday = new Date(mondayParis.getTime());
+    nextMonday.setDate(nextMonday.getDate() + 7);
+    const nextResetTs = Math.floor((Date.now() + (nextMonday.getTime() - parisNow.getTime())) / 1000);
+    return { weekKey, nextResetTs, parisNow };
+}
+
+function getOrEnsureCommunityQuest() {
+    const data = getStoreData();
+    const { weekKey } = getCurrentQuestWeekInfoParis();
+    if (!data.communityQuest || data.communityQuest.weekKey !== weekKey) {
+        const prevType = data.communityQuest?.type || null;
+        const candidates = COMMUNITY_QUEST_POOL.filter(q => q.type !== prevType);
+        const picked = candidates[Math.floor(Math.random() * candidates.length)] || COMMUNITY_QUEST_POOL[0];
+        data.communityQuest = {
+            weekKey,
+            type: picked.type,
+            target: picked.target,
+            label: picked.label,
+            progress: 0,
+            completed: false,
+            completedAt: null,
+            participants: []
+        };
+        tcgBridge.demanderSauvegarde();
+    }
+    if (!Array.isArray(data.communityQuest.participants)) {
+        data.communityQuest.participants = [];
+    }
+    return data.communityQuest;
+}
+
+async function verifierQueteCommunautaireTcg(client) {
+    try {
+        const data = getStoreData();
+        const { weekKey, nextResetTs, parisNow } = getCurrentQuestWeekInfoParis();
+        const prevQuest = data.communityQuest;
+        if (prevQuest && prevQuest.weekKey === weekKey) return false;
+
+        const shouldAnnounce = Boolean(prevQuest) || (parisNow.getDay() === 1 && parisNow.getHours() === 8);
+        const quest = getOrEnsureCommunityQuest();
+        await tcgBridge.saveAll().catch(() => tcgBridge.demanderSauvegarde());
+
+        if (shouldAnnounce && client) {
+            const tcgChan = client.channels.cache.get(TCG_CHANNEL_ID)
+                || await client.channels.fetch(TCG_CHANNEL_ID).catch(() => null);
+            if (tcgChan) {
+                const embed = new EmbedBuilder()
+                    .setColor(0x3498db)
+                    .setTitle('🤝 Nouvelle Quête Communautaire de la semaine !')
+                    .setDescription(
+                        `Une nouvelle semaine RegaDex commence !\n\n` +
+                        `🎯 **Objectif :** ${quest.label}\n` +
+                        `🎁 **Récompense collective :** **2 boosters communautaires** *(stock max 2)* + **15 pts RegaDex**\n` +
+                        `👥 **Comment être éligible :** ouvre au moins **1 booster** pendant que la quête est encore en cours !\n` +
+                        `⏳ **Réinitialisation :** <t:${nextResetTs}:R>`
+                    )
+                    .setFooter({ text: `RegaDex ${SET1_NAME} • Quête du lundi 8h` })
+                    .setTimestamp();
+                await sendSilent(tcgChan, { embeds: [embed] }).catch(() => {});
+            }
+        }
+        return true;
+    } catch (err) {
+        console.error('Erreur verifierQueteCommunautaireTcg:', err);
+        return false;
+    }
+}
+
+async function progressCommunityQuest(client, events, boosterOpenerId = null) {
+    const quest = getOrEnsureCommunityQuest();
+    if (quest.completed) return false;
+
+    let modified = false;
+    if (boosterOpenerId && !isSandboxId(boosterOpenerId)) {
+        if (!quest.participants.includes(boosterOpenerId)) {
+            quest.participants.push(boosterOpenerId);
+            modified = true;
+        }
+    }
+
+    for (const ev of (events || [])) {
+        if (quest.type === ev.type && ev.amount > 0) {
+            quest.progress = Math.min(quest.target, (quest.progress || 0) + ev.amount);
+            modified = true;
+        }
+    }
+
+    if (quest.progress >= quest.target && !quest.completed) {
+        quest.completed = true;
+        quest.completedAt = Date.now();
+        modified = true;
+
+        for (const uid of quest.participants) {
+            const u = getOrCreateTcgUser(uid);
+            u.points = (u.points || 0) + 15;
+            u.inventory.communityBooster = Math.min(MAX_COMMUNITY_BOOSTERS, (u.inventory.communityBooster || 0) + 2);
+        }
+
+        tcgBridge.demanderSauvegarde();
+
+        const c = client || tcgBridge.client;
+        const tcgChan = c
+            ? (c.channels.cache.get(TCG_CHANNEL_ID) || await c.channels.fetch(TCG_CHANNEL_ID).catch(() => null))
+            : null;
+        if (tcgChan) {
+            const mentionsList = quest.participants.length > 0
+                ? quest.participants.map(id => `<@${id}>`).join(' ')
+                : '*Aucun·e participant·e*';
+            const { nextResetTs } = getCurrentQuestWeekInfoParis();
+            const embed = new EmbedBuilder()
+                .setColor(0x2ecc71)
+                .setTitle('🎉 QUÊTE COMMUNAUTAIRE TERMINÉE !')
+                .setDescription(
+                    `Bravo la team ! L'objectif de la semaine a été atteint : ${quest.label} (**${quest.progress}/${quest.target}**)\n\n` +
+                    `🎁 **Récompenses distribuées à tous les participant·es :**\n` +
+                    `• **+2 Boosters communautaires** *(prêts à ouvrir, stock max ${MAX_COMMUNITY_BOOSTERS})*\n` +
+                    `• **+15 points RegaDex**\n\n` +
+                    `⏳ Prochaine quête communautaire : <t:${nextResetTs}:R>`
+                )
+                .setFooter({ text: `RegaDex ${SET1_NAME} • Quête communautaire` })
+                .setTimestamp();
+
+            await tcgChan.send({
+                content: `🎊 Félicitations aux participant·es : ${mentionsList}`,
+                embeds: [embed],
+                allowedMentions: { users: quest.participants }
+            }).catch(() => {});
+        }
+        return true;
+    }
+
+    if (modified) tcgBridge.demanderSauvegarde();
+    return false;
 }
 
 async function verifierBoosterHebdoTcg(client) {
     try {
         const now = new Date();
         const paris = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-        // Tous les lundis à partir de 8h00 (fenêtre 8h00 -> 8h59 Paris)
-        if (paris.getDay() !== 1 || paris.getHours() !== 8) return false;
+        // Tous les vendredis à partir de 8h00 (fenêtre 8h00 -> 8h59 Paris)
+        if (paris.getDay() !== 5 || paris.getHours() !== 8) return false;
 
         const yyyy = paris.getFullYear();
         const mm = String(paris.getMonth() + 1).padStart(2, '0');
         const dd = String(paris.getDate()).padStart(2, '0');
-        const mondayKey = `${yyyy}-${mm}-${dd}`;
+        const fridayKey = `${yyyy}-${mm}-${dd}`;
 
         const data = getStoreData();
-        if (data.lastWeeklyBoosterKey === mondayKey) return false;
-        data.lastWeeklyBoosterKey = mondayKey;
+        if (data.lastWeeklyBoosterKey === fridayKey) return false;
+        data.lastWeeklyBoosterKey = fridayKey;
 
         const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID).catch(() => null);
         if (!guild) return false;
@@ -822,16 +1014,16 @@ async function verifierBoosterHebdoTcg(client) {
         if (tcgChan) {
             const embed = new EmbedBuilder()
                 .setColor(0xf1c40f)
-                .setTitle('📅 Booster hebdomadaire du lundi offert !')
+                .setTitle('📅 Booster hebdomadaire du vendredi offert !')
                 .setDescription(
-                    `Bon lundi les collectionneur·euses ! ☀️\n` +
-                    `**+1 Booster gratuit hebdomadaire** vient d'être déposé dans ton inventaire (\`!tcgclaim\`) !\n\n` +
+                    `Bon vendredi les collectionneur·euses ! ☀️\n` +
+                    `**+1 Booster gratuit hebdomadaire** vient d'être ajouté à tes boosters prêts à ouvrir !\n\n` +
                     `• 🎁 **Bénéficiaires :** **${credited}** membre${credited > 1 ? 's' : ''} crédité${credited > 1 ? 's' : ''}` +
                     (capped > 0 ? ` *(${capped} déjà au plafond de ${MAX_WEEKLY_BOOSTERS}/${MAX_WEEKLY_BOOSTERS})*` : '') + `\n` +
-                    `• 📦 **Stock hebdo max :** **${MAX_WEEKLY_BOOSTERS}/${MAX_WEEKLY_BOOSTERS}** *(pense à ouvrir tes boosters avant lundi prochain pour ne pas bloquer le suivant !)*\n\n` +
-                    `👉 Tape \`!tcggo\`, \`!open\` ou \`!tcgclaim\` pour l'ouvrir !`
+                    `• 📦 **Stock hebdo max :** **${MAX_WEEKLY_BOOSTERS}/${MAX_WEEKLY_BOOSTERS}** *(pense à ouvrir tes boosters avant vendredi prochain pour ne pas bloquer le suivant !)*\n\n` +
+                    `👉 Tape \`!tcggo\` ou \`!open\` pour l'ouvrir !`
                 )
-                .setFooter({ text: `RegaDex ${SET1_NAME} • Bonus du lundi 8h` })
+                .setFooter({ text: `RegaDex ${SET1_NAME} • Bonus du vendredi 8h` })
                 .setTimestamp();
 
             await tcgChan.send({
@@ -1091,10 +1283,10 @@ function getUserCompletionStats(u, setNumber = null) {
 }
 
 function checkAndGrantCompletionMilestones(userId, setNumber = DEFAULT_SET_NUMBER) {
-    if (isSandboxId(userId)) return { unlocked: [], totalBonusPts: 0 };
+    if (isSandboxId(userId)) return { unlocked: [], totalBonusPts: 0, masteredSets: [] };
     const u = getOrCreateTcgUser(userId);
     const comp = getUserCompletionStats(u, setNumber);
-    if (!comp.totalSet || comp.totalSet <= 0) return { unlocked: [], totalBonusPts: 0 };
+    if (!comp.totalSet || comp.totalSet <= 0) return { unlocked: [], totalBonusPts: 0, masteredSets: [] };
 
     const setKey = String(setNumber);
     if (!u.completionMilestones || typeof u.completionMilestones !== 'object') {
@@ -1103,10 +1295,14 @@ function checkAndGrantCompletionMilestones(userId, setNumber = DEFAULT_SET_NUMBE
     if (!Array.isArray(u.completionMilestones[setKey])) {
         u.completionMilestones[setKey] = [];
     }
+    if (!u.masteredSets || typeof u.masteredSets !== 'object') {
+        u.masteredSets = {};
+    }
 
     const setCfg = getSetConfig(setNumber);
     const exactPct = (comp.uniqueCount / comp.totalSet) * 100;
     const unlocked = [];
+    const masteredSets = [];
     let totalBonusPts = 0;
 
     for (const m of COMPLETION_MILESTONES) {
@@ -1116,13 +1312,19 @@ function checkAndGrantCompletionMilestones(userId, setNumber = DEFAULT_SET_NUMBE
             u.points = (u.points || 0) + m.reward;
             totalBonusPts += m.reward;
             unlocked.push({ pct: m.pct, reward: m.reward, setNumber, setName: setCfg.name });
+
+            if (m.pct === 100 && !u.masteredSets[setKey]) {
+                u.masteredSets[setKey] = Date.now();
+                u.inventory.masterBooster = (u.inventory.masterBooster || 0) + 2;
+                masteredSets.push(setNumber);
+            }
         }
     }
 
     if (unlocked.length > 0) {
         tcgBridge.demanderSauvegarde();
     }
-    return { unlocked, totalBonusPts };
+    return { unlocked, totalBonusPts, masteredSets };
 }
 
 function getCardDuplicateOwners(cardId, excludeUserId = null) {
@@ -1343,7 +1545,63 @@ function pickWeightedCard(candidates, raritySums, userId = null, member = null) 
     return candidates[candidates.length - 1];
 }
 
+function drawGodPackCards(setNumber = DEFAULT_SET_NUMBER, userId = null, member = null) {
+    const setPool = getSetCatalog(setNumber);
+    const raritySums = getRarityBaseWeightSums();
+    const picked = [];
+    const pickedIds = new Set();
+
+    const pickByRarity = (targetRarity) => {
+        let candidates = setPool.filter(c => c.rarity === targetRarity && !pickedIds.has(c.id) && getEffectiveCardWeight(c, raritySums, userId, member) > 0);
+        if (candidates.length === 0) {
+            candidates = setPool.filter(c => c.rarity === targetRarity && !pickedIds.has(c.id));
+        }
+        if (candidates.length === 0) return null;
+        const c = pickWeightedCard(candidates, raritySums, userId, member);
+        if (c) {
+            picked.push(c);
+            pickedIds.add(c.id);
+        }
+        return c;
+    };
+
+    // 1 Légendaire + 1 Full Art + (50% Full Art / 50% Négative)
+    pickByRarity('Légendaire');
+    pickByRarity('Full Art');
+    const thirdRarity = Math.random() < 0.5 ? 'Full Art' : 'Négative';
+    if (!pickByRarity(thirdRarity)) {
+        pickByRarity(thirdRarity === 'Full Art' ? 'Négative' : 'Full Art');
+    }
+
+    picked.sort((a, b) => {
+        const ra = RARITY_ORDER[a.rarity] ?? 0;
+        const rb = RARITY_ORDER[b.rarity] ?? 0;
+        if (ra !== rb) return ra - rb;
+        if (a.isHolo !== b.isHolo) return a.isHolo ? 1 : -1;
+        return a.sortIndex - b.sortIndex;
+    });
+
+    return picked;
+}
+
 function drawBoosterCards(u, userId = null, member = null, setNumber = DEFAULT_SET_NUMBER) {
+    const godBoostActive = Boolean(u.activeBonuses?.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil);
+    const godChance = godBoostActive ? (GOD_PACK_BASE_CHANCE * GOD_PACK_BOOST_MULT) : GOD_PACK_BASE_CHANCE;
+    if (Math.random() < godChance) {
+        const godCards = drawGodPackCards(setNumber, userId, member);
+        if (godCards.length === 3) {
+            // La pityRare déjà active est conservée pour le booster suivant
+            return {
+                cards: godCards,
+                luckyUsed: false,
+                pityUsed: false,
+                triggeredNextPity: false,
+                isGodPack: true,
+                godBoostUsed: godBoostActive
+            };
+        }
+    }
+
     const luckyActive = Boolean(u.activeBonuses?.luckyBooster);
     const pityActive = Boolean(u.pityRare);
     const setPool = getSetCatalog(setNumber); // [SET 2] Pool limité au Set du booster ouvert
@@ -1389,7 +1647,7 @@ function drawBoosterCards(u, userId = null, member = null, setNumber = DEFAULT_S
     const allCommunes = picked.length === 3 && picked.every(c => c.rarity === 'Commune');
     u.pityRare = allCommunes;
 
-    return { cards: picked, luckyUsed: luckyActive, pityUsed: pityActive, triggeredNextPity: allCommunes };
+    return { cards: picked, luckyUsed: luckyActive, pityUsed: pityActive, triggeredNextPity: allCommunes, isGodPack: false, godBoostUsed: godBoostActive };
 }
 
 // ==========================================
@@ -1882,7 +2140,7 @@ async function renderBinderCanvas(targetUser, u, options) {
     };
 }
 
-async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
+async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B', isGodPack = false) {
     const W = 1280;
     const H = 1040;
     const canvas = createCanvas(W, H);
@@ -1891,15 +2149,47 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
 
     drawBackground(ctx, isLight ? 'W' : 'B', W, H);
 
-    ctx.fillStyle = isLight ? 'rgba(255,255,255,0.78)' : 'rgba(12,14,20,0.78)';
+    if (isGodPack) {
+        const grad = ctx.createRadialGradient(W / 2, H / 2, 80, W / 2, H / 2, W * 0.72);
+        grad.addColorStop(0, 'rgba(255, 215, 0, 0.24)');
+        grad.addColorStop(0.55, 'rgba(241, 196, 15, 0.12)');
+        grad.addColorStop(1, 'rgba(255, 165, 0, 0.04)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.save();
+        ctx.strokeStyle = '#FFD700';
+        ctx.lineWidth = 8;
+        ctx.shadowColor = 'rgba(255, 215, 0, 0.85)';
+        ctx.shadowBlur = 24;
+        drawRoundRect(ctx, 18, 14, W - 36, H - 28, 24);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    ctx.fillStyle = isGodPack
+        ? (isLight ? 'rgba(255, 248, 220, 0.90)' : 'rgba(28, 22, 8, 0.88)')
+        : (isLight ? 'rgba(255,255,255,0.78)' : 'rgba(12,14,20,0.78)');
     drawRoundRect(ctx, 40, 22, W - 80, 66, 16);
     ctx.fill();
 
-    ctx.fillStyle = isLight ? '#111111' : '#FFFFFF';
+    if (isGodPack) {
+        ctx.save();
+        ctx.strokeStyle = '#F1C40F';
+        ctx.lineWidth = 3;
+        drawRoundRect(ctx, 40, 22, W - 80, 66, 16);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    ctx.fillStyle = isGodPack ? (isLight ? '#9A6700' : '#FFD700') : (isLight ? '#111111' : '#FFFFFF');
     ctx.font = 'bold 31px "LemonMilk", "Sans"';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(`Récapitulatif du Booster ${SET1_NAME}`, W / 2, 55, W - 120);
+    const titleText = isGodPack
+        ? `★ GOD PACK ! — ${SET1_NAME} ★`
+        : `Récapitulatif du Booster ${SET1_NAME}`;
+    ctx.fillText(titleText, W / 2, 55, W - 120);
 
     // Triangle inversé : 2 cartes en haut, 1 centrée en bas
     const cardW = 285;
@@ -1922,12 +2212,221 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B') {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
         ctx.font = 'bold 18px "LemonMilk", "Sans"';
-        ctx.fillStyle = isLight ? '#111111' : '#FFFFFF';
+        ctx.fillStyle = isGodPack ? (isLight ? '#7A5200' : '#FFE066') : (isLight ? '#111111' : '#FFFFFF');
         const statusTxt = isNewFlags[i] ? 'NOUVELLE !' : 'DOUBLON (+3 PTS)';
         ctx.fillText(`${card.id} • ${card.rarity} • ${statusTxt}`, pos.x + cardW / 2, pos.y + cardH + 10, cardW + 90);
     }
 
     return toJpeg(canvas, 0.90);
+}
+
+function formatMasterDisplayName(member) {
+    const raw = (member?.displayName || member?.user?.username || member?.username || 'Collectionneur').trim();
+    if (/\(\s*OG\b/i.test(raw)) {
+        const cleaned = raw.replace(/\s*\([^)]*\bOG\b[^)]*\)/gi, '').trim();
+        if (cleaned) {
+            return cleaned.split(/\s+/)[0];
+        }
+        const noParens = raw.replace(/[()]/g, '').trim();
+        return noParens.split(/\s+/)[0] || member?.user?.username || 'Collectionneur';
+    }
+    return raw;
+}
+
+function drawFittedWrappedText(ctx, text, centerX, startY, maxWidth, startSize = 24, minSize = 14) {
+    const str = String(text || '').trim();
+    if (!str) return;
+
+    for (let size = startSize; size >= minSize; size -= 2) {
+        ctx.font = `bold ${size}px "LemonMilk", "Sans"`;
+        if (ctx.measureText(str).width <= maxWidth) {
+            ctx.fillText(str, centerX, startY, maxWidth);
+            return;
+        }
+    }
+
+    // Passage sur 2 lignes maximum avec ajustement de taille
+    const words = str.split(/\s+/);
+    for (let size = Math.min(startSize - 2, 20); size >= minSize; size -= 2) {
+        ctx.font = `bold ${size}px "LemonMilk", "Sans"`;
+        let line1 = '';
+        let line2 = '';
+        for (const w of words) {
+            const test = line1 ? `${line1} ${w}` : w;
+            if (ctx.measureText(test).width <= maxWidth) {
+                line1 = test;
+            } else {
+                line2 = line2 ? `${line2} ${w}` : w;
+            }
+        }
+        if (line1 && (!line2 || ctx.measureText(line2).width <= maxWidth || size === minSize)) {
+            const lineH = Math.round(size * 1.25);
+            ctx.fillText(line1, centerX, startY, maxWidth);
+            if (line2) ctx.fillText(line2, centerX, startY + lineH, maxWidth);
+            return;
+        }
+    }
+
+    ctx.font = `bold ${minSize}px "LemonMilk", "Sans"`;
+    ctx.fillText(str, centerX, startY, maxWidth);
+}
+
+async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) {
+    const W = 1360;
+    const H = 820;
+    const canvas = createCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+    const isLight = u?.theme === 'W';
+    const textColor = isLight ? '#111111' : '#FFFFFF';
+    const shadowCol = isLight ? 'rgba(0, 0, 0, 0.25)' : 'rgba(0, 0, 0, 0.85)';
+
+    drawBackground(ctx, isLight ? 'W' : 'B', W, H);
+
+    // 1. Titre "MAÎTRE DU SET" en LEMONMILK Bold
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.font = 'bold 54px "LemonMilk", "Sans"';
+    ctx.fillStyle = textColor;
+    ctx.shadowColor = shadowCol;
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 4;
+    ctx.fillText('MAÎTRE DU SET', W / 2, 34, W - 120);
+    ctx.restore();
+
+    // 2. Logo du Set juste en dessous
+    const activeLogoPath = setAssets[setNumber]?.logo || assetPaths.set1Logo;
+    if (activeLogoPath && fs.existsSync(activeLogoPath)) {
+        try {
+            const logoImg = await loadImage(activeLogoPath);
+            const logoH = 128;
+            const logoW = Math.round((logoImg.width / logoImg.height) * logoH);
+            ctx.save();
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
+            ctx.shadowBlur = 12;
+            ctx.drawImage(logoImg, Math.round((W - logoW) / 2), 100, logoW, logoH);
+            ctx.restore();
+        } catch {}
+    }
+
+    // 3. Colonne gauche : Booster du Set
+    const activeBoosterPath = setAssets[setNumber]?.boosterPng || assetPaths.boosterPng;
+    const leftCenterX = 240;
+    const contentMidY = 500;
+    if (activeBoosterPath && fs.existsSync(activeBoosterPath)) {
+        try {
+            const boosterImg = await loadImage(activeBoosterPath);
+            const targetH = 420;
+            const targetW = Math.round((boosterImg.width / boosterImg.height) * targetH);
+            const bx = Math.round(leftCenterX - targetW / 2);
+            const by = Math.round(contentMidY - targetH / 2);
+            ctx.save();
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
+            ctx.shadowBlur = 22;
+            ctx.shadowOffsetY = 10;
+            ctx.drawImage(boosterImg, bx, by, targetW, targetH);
+            ctx.restore();
+        } catch {}
+    }
+
+    // 4. Colonne centrale : PP en carré arrondi (+ ombre portée) + pseudo dessous
+    const ppSize = 230;
+    const ppX = Math.round((W - ppSize) / 2);
+    const ppY = 340;
+    const avatarUrl = (member?.user || member)?.displayAvatarURL?.({ extension: 'png', size: 512 })
+        || member?.displayAvatarURL?.({ extension: 'png', size: 512 });
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 8;
+    ctx.fillStyle = isLight ? '#FFFFFF' : '#1E212D';
+    drawRoundRect(ctx, ppX, ppY, ppSize, ppSize, 26);
+    ctx.fill();
+    ctx.restore();
+
+    if (avatarUrl) {
+        try {
+            const avatarImg = await loadImage(avatarUrl);
+            ctx.save();
+            drawRoundRect(ctx, ppX, ppY, ppSize, ppSize, 26);
+            ctx.clip();
+            ctx.drawImage(avatarImg, ppX, ppY, ppSize, ppSize);
+            ctx.restore();
+        } catch {}
+    }
+
+    ctx.save();
+    ctx.strokeStyle = '#F1C40F';
+    ctx.lineWidth = 4;
+    drawRoundRect(ctx, ppX, ppY, ppSize, ppSize, 26);
+    ctx.stroke();
+    ctx.restore();
+
+    const masterName = formatMasterDisplayName(member);
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = textColor;
+    ctx.shadowColor = shadowCol;
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 3;
+    drawFittedWrappedText(ctx, masterName, W / 2, ppY + ppSize + 24, 340, 32, 18);
+    ctx.restore();
+
+    // 5. Colonne droite : Carte flexée (ou 1-84 Epsys Full Art) + texte "CARTE FLEXÉE" + nom carte en dessous
+    const rightCenterX = W - 240;
+    const flexCard = (u?.favoriteCardId && (u?.cards?.[u.favoriteCardId] || 0) > 0 && cardById.get(u.favoriteCardId))
+        || cardById.get(EPSYS_FULL_ART_CARD_ID)
+        || cardCatalog[0];
+
+    const cW = 285;
+    const cH = 399;
+    const cX = Math.round(rightCenterX - cW / 2);
+    const cY = 278;
+
+    if (flexCard) {
+        const proxy = await loadCardProxy(flexCard, cW, cH, { glow: true });
+        if (proxy?.img) {
+            ctx.save();
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.55)';
+            ctx.shadowBlur = 18;
+            ctx.shadowOffsetY = 8;
+            ctx.drawImage(proxy.img, cX - proxy.pad, cY - proxy.pad);
+            ctx.restore();
+        } else if (flexCard.filePath && fs.existsSync(flexCard.filePath)) {
+            const cImg = await loadImage(flexCard.filePath);
+            ctx.drawImage(cImg, cX, cY, cW, cH);
+        }
+
+        // Texte "CARTE FLEXÉE" directement sur le haut de la carte avec ombre portée
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = 'bold 20px "LemonMilk", "Sans"';
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetY = 2;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.lineWidth = 4;
+        ctx.strokeText('CARTE FLEXÉE', rightCenterX, cY + 26, cW - 24);
+        ctx.fillText('CARTE FLEXÉE', rightCenterX, cY + 26, cW - 24);
+        ctx.restore();
+
+        // Nom de la carte sous la carte (adaptatif / saut de ligne)
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = textColor;
+        ctx.shadowColor = shadowCol;
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetY = 2;
+        drawFittedWrappedText(ctx, flexCard.name, rightCenterX, cY + cH + 18, 360, 22, 13);
+        ctx.restore();
+    }
+
+    return toJpeg(canvas, 0.92);
 }
 
 async function renderTradeRecapCanvas(nameA, cardsA, nameB, cardsB) {
@@ -2039,11 +2538,32 @@ function buildHubEmbed(member, u) {
     const activeEffects = [];
     if (u.activeBonuses?.luckyBooster) activeEffects.push('🍀 **Booster Chanceux** *(sans Communes)*');
     if (u.activeBonuses?.halfCooldown) activeEffects.push('⚡ **Cooldown /2** *(3h)*');
+    if (u.activeBonuses?.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil) {
+        activeEffects.push(`🌟 **Taux God Pack ×5** *(fin <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:R>)*`);
+    }
     if (u.pityRare) activeEffects.push('✨ **Pity Rare garantie**');
 
     const favCard = u.favoriteCardId && (u.cards?.[u.favoriteCardId] || 0) > 0
         ? cardById.get(u.favoriteCardId)
         : null;
+
+    const boosterLines = [
+        `• Prêts à ouvrir : **${totalAvail}**`,
+        `• Gratuits : **${u.freeBoosters}/${MAX_FREE_BOOSTERS}**`
+    ];
+    if ((u.inventory?.weeklyBooster || 0) > 0) {
+        boosterLines.push(`• Hebdos (Vendredi) : **${u.inventory.weeklyBooster}/${MAX_WEEKLY_BOOSTERS}**`);
+    }
+    if ((u.inventory?.communityBooster || 0) > 0) {
+        boosterLines.push(`• Communautaires : **${u.inventory.communityBooster}/${MAX_COMMUNITY_BOOSTERS}**`);
+    }
+    if ((u.inventory?.masterBooster || 0) > 0) {
+        boosterLines.push(`• De Maître : **${u.inventory.masterBooster}**`);
+    }
+    if ((u.inventory?.booster || 0) > 0) {
+        boosterLines.push(`• Bonus / Achetés : **${u.inventory.booster}**`);
+    }
+    boosterLines.push(timerLine);
 
     const embed = new EmbedBuilder()
         .setColor(0xF1C40F)
@@ -2065,12 +2585,7 @@ function buildHubEmbed(member, u) {
         .addFields(
             {
                 name: '🎁 Tes Boosters',
-                value:
-                    `• Prêts à ouvrir : **${totalAvail}**\n` +
-                    `• Gratuits : **${u.freeBoosters}/${MAX_FREE_BOOSTERS}**\n` +
-                    `• Hebdos (Lundi) : **${u.inventory?.weeklyBooster || 0}/${MAX_WEEKLY_BOOSTERS}**\n` +
-                    `• Inventaire : **${u.inventory?.booster || 0}**\n` +
-                    timerLine,
+                value: boosterLines.join('\n'),
                 inline: true
             },
             {
@@ -2086,11 +2601,24 @@ function buildHubEmbed(member, u) {
 
     if (activeEffects.length > 0) {
         embed.addFields({
-            name: '🔥 Effets actifs sur ton prochain booster',
+            name: '🔥 Effets actifs sur tes prochains boosters',
             value: activeEffects.join('\n'),
             inline: false
         });
     }
+
+    // Quête communautaire hebdomadaire (en dernier avec séparateur)
+    const quest = getOrEnsureCommunityQuest();
+    const { nextResetTs } = getCurrentQuestWeekInfoParis();
+    const qBar = buildProgressBar(quest.progress, quest.target, 14);
+    const qStatus = quest.completed
+        ? `✅ **Quête terminée !** *(Récompenses distribuées aux **${quest.participants.length}** participant·e(s))*\n🔄 Prochaine quête <t:${nextResetTs}:R>`
+        : `🎁 **Récompense :** **2 boosters communautaires** + **15 pts RegaDex**\n👥 **Participant·e(s) :** **${quest.participants.length}** *(ouvre 1 booster pour participer)*\n⏳ Réinitialisation <t:${nextResetTs}:R>`;
+    embed.addFields({
+        name: '────────────────────────────────────────\n🤝 Quête communautaire de la semaine',
+        value: `🎯 **Objectif :** ${quest.label}\n\`${qBar}\` **${quest.progress}/${quest.target}**\n${qStatus}`,
+        inline: false
+    });
 
     if (assetPaths.eventBanner && fs.existsSync(assetPaths.eventBanner)) {
         embed.setImage('attachment://event_banner_set1.png');
@@ -2120,7 +2648,10 @@ function buildHubComponents(userId, u) {
             .setCustomId(`tcg:profile:${userId}:1:0`)
             .setLabel('Mon profil')
             .setEmoji('👤')
-            .setStyle(ButtonStyle.Secondary),
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`tcg:store:open:${userId}:1`)
             .setLabel('Store')
@@ -2130,15 +2661,15 @@ function buildHubComponents(userId, u) {
             .setCustomId(`tcg:claim:open:${userId}:1`)
             .setLabel('Inventaire')
             .setEmoji('🎒')
-            .setStyle(ButtonStyle.Secondary)
-    );
-
-    const row2 = new ActionRowBuilder().addComponents(
+            .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
             .setCustomId(`tcg:top:total:${userId}:1`)
             .setLabel('Top')
             .setEmoji('🏆')
-            .setStyle(ButtonStyle.Secondary),
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    const row3 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`tcg:notif:menu:${userId}:1`)
             .setLabel(hasNotif ? 'Notifications ✓' : 'Notifications')
@@ -2152,7 +2683,7 @@ function buildHubComponents(userId, u) {
         buildCloseButton(userId)
     );
 
-    return [row1, row2];
+    return [row1, row2, row3];
 }
 
 function buildProfilePayload(member, u, fromHub = false, showRarities = false) {
@@ -2188,6 +2719,14 @@ function buildProfilePayload(member, u, fromHub = false, showRarities = false) {
     const milestoneTags = COMPLETION_MILESTONES.map(m =>
         `${unlockedSet1.includes(m.pct) ? '✅' : '⬜'} ${m.pct}%`
     ).join(' • ');
+
+    const masteredKeys = Object.keys(u.masteredSets || {}).sort((a, b) => Number(a) - Number(b));
+    const masterRanksLine = masteredKeys.length > 0
+        ? masteredKeys.map(k => `🏆 **Maître du ${getSetConfig(Number(k)).name}**`).join(' • ')
+        : '*Aucun rang de Maître pour le moment*';
+    const godBoostLine = (u.activeBonuses?.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil)
+        ? `\n• 🌟 **Taux God Pack ×5 :** actif jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F>`
+        : '';
 
     const wishlistIds = getSanitizedWishlist(u);
     const wishlistSummary = wishlistIds.length > 0
@@ -2236,6 +2775,7 @@ function buildProfilePayload(member, u, fromHub = false, showRarities = false) {
             `• 🎁 **Boosters ouverts :** **${u.stats?.boostersOpened || 0}**\n` +
             `• 🃏 **Cartes obtenues :** **${comp.totalCopies}** au total *(\`${comp.uniqueCount}/${comp.totalSet}\` uniques — **${pct}%**)*\n` +
             `• 🏆 **Paliers Set 1 :** ${milestoneTags}\n` +
+            `• 👑 **Rang(s) de Maître :** ${masterRanksLine}${godBoostLine}\n` +
             `• 🔁 **Doublons obtenus :** **${u.stats?.duplicatesObtained || 0}**\n` +
             `• 🔄 **Échanges effectués :** **${u.stats?.tradesCompleted || 0}**\n` +
             `• 💎 **Carte la plus rare :** ${rarestLine}\n` +
@@ -2409,8 +2949,9 @@ function buildGuidePayload(userId, fromHub = true) {
             sep +
             `### 🎁 1. Boosters & Notifications\n` +
             `• Tu reçois **1 booster gratuit toutes les 6h** *(max **2** en attente)*.\n` +
-            `• **Bonus du lundi 8h 📅 :** un booster offert chaque lundi dans \`!tcgclaim\` *(stock hebdo limité à **2/2** max)*.\n` +
-            `• Chaque booster contient **3 cartes uniques**, révélées de la plus commune à la plus rare.\n` +
+            `• **Bonus du vendredi 8h 📅 :** un booster offert chaque vendredi *(stock hebdo limité à **2/2** max)*.\n` +
+            `• **Quêtes communautaires 🤝 :** chaque lundi 8h, un objectif collectif ! Tous ceux ayant ouvert un booster avant la fin gagnent **2 boosters communautaires** + **15 pts**.\n` +
+            `• Chaque booster contient **3 cartes uniques**, révélées de la plus commune à la plus rare *(1% de chance de **God Pack** !)*. \n` +
             `• **Système de Pity :** si un booster ne te donne que **3 Communes**, ton prochain booster garantit au moins **1 carte Rare**.\n` +
             `• **Notifications 🔔 :** règle ton choix une bonne fois pour toutes *(à chaque booster ou à 2/2, ici ou en MP)* — il reste sauvegardé même après avoir atteint 2/2 et est modifiable/désactivable à tout moment !` +
             sep +
@@ -2424,14 +2965,15 @@ function buildGuidePayload(userId, fromHub = true) {
             `### 🪙 3. Points RegaDex & Store\n` +
             `• **Comment gagner des points :**\n` +
             `  15 messages = **+1pt** • 10 min en vocal *(≥ 3 membres, hors AFK)* = **+1pt**\n` +
-            `  1 roulette = **+1pt** • 1 booster ouvert = **+5pts** • 1 doublon = **+3pts**\n` +
-            `  1 fil d'échange terminé = **+3pts** pour chacun·e *(1 seule fois par fil)*\n` +
-            `  **Paliers de complétion :** **+15pts** à \`25%\`, \`50%\`, \`75%\` • **+25pts** à \`100%\`\n` +
-            `• **RegaDex Store (\`🛒 Store\`) :** tes achats vont dans ton **🎒 Inventaire** (\`!tcgclaim\`) :\n` +
+            `  1 roulette = **+1pt** *(+ gains rares)* • 1 booster ouvert = **+5pts** • 1 doublon = **+3pts**\n` +
+            `  1 fil d'échange terminé = **+3pts** *(1×/fil)* • Victoire Motus/Rébus/Pendu = **+2pts**\n` +
+            `  **Paliers de complétion :** **+15pts** à \`25%\`, \`50%\`, \`75%\` • **+25pts + 2 boosters de Maître** à \`100%\`\n` +
+            `• **RegaDex Store (\`🛒 Store\`) :** les boosters achetés sont **prêts à ouvrir** tout de suite, et les bonus vont dans ton **🎒 Inventaire** (\`!tcgclaim\`) :\n` +
             `  • 🎁 **Booster** (\`100 pts\`) — Un booster supplémentaire à ouvrir.\n` +
             `  • 🍀 **Chanceux** (\`75 pts\`) — Retire toutes les *Communes* du prochain booster.\n` +
             `  • ✨ **Transfo Holo** (\`50 pts\`) — Transforme une carte compatible possédée en *Holo*.\n` +
-            `  • ⚡ **Cooldown /2** (\`25 pts\`) — Le prochain rechargement gratuit passe à **3h** au lieu de 6h.` +
+            `  • ⚡ **Cooldown /2** (\`25 pts\`) — Le prochain rechargement gratuit passe à **3h** au lieu de 6h.\n` +
+            `  • 🌟 **Taux God Pack ×5 (5j)** (\`150 pts\`) — Multiplie par 5 tes chances de **God Pack** pendant 5 jours.` +
             sep +
             `### 📖 4. Classeur, Wishlist, Échanges & Commandes\n` +
             `• **Classeur :** filtre par catégorie, rareté ou affichage (**Tout** / **Possédées** / **Doublons**), choisis la grille (\`4\`, \`18\`, \`36\` ou \`All\`) et change le thème **Clair (W) / Nuit (B)**.\n` +
@@ -2533,16 +3075,23 @@ function buildOpenPromptPayload(member, u, fromHub = false) {
     if ((u.inventory?.halfCooldown || 0) > 0 && !u.activeBonuses?.halfCooldown) {
         unactivatedReminders.push(`⚡ **Cooldown /2** (\`${u.inventory.halfCooldown}\` en inventaire)`);
     }
+    if ((u.inventory?.godPackBoost || 0) > 0 && !(u.activeBonuses?.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil)) {
+        unactivatedReminders.push(`🌟 **Taux God Pack ×5** (\`${u.inventory.godPackBoost}\` en inventaire)`);
+    }
     const reminderBlock = unactivatedReminders.length > 0
         ? `\n\n💡 *Rappel : tu as des bonus non activés dans ton inventaire (\`!regadex claim\`) :*\n${unactivatedReminders.map(r => `• ${r}`).join('\n')}`
         : '';
 
-    const weeklyStock = u.inventory?.weeklyBooster || 0;
-    const weeklySegment = weeklyStock > 0 ? ` • 📅 **Hebdos (Lundi) :** \`${weeklyStock}/${MAX_WEEKLY_BOOSTERS}\`` : '';
+    const extraSegments = [];
+    if ((u.inventory?.weeklyBooster || 0) > 0) extraSegments.push(`📅 **Hebdos (Vendredi) :** \`${u.inventory.weeklyBooster}/${MAX_WEEKLY_BOOSTERS}\``);
+    if ((u.inventory?.communityBooster || 0) > 0) extraSegments.push(`🤝 **Communautaires :** \`${u.inventory.communityBooster}/${MAX_COMMUNITY_BOOSTERS}\``);
+    if ((u.inventory?.masterBooster || 0) > 0) extraSegments.push(`🏆 **De Maître :** \`${u.inventory.masterBooster}\``);
+    if ((u.inventory?.booster || 0) > 0) extraSegments.push(`🛒 **Bonus / Achetés :** \`${u.inventory.booster}\``);
+    const extraLine = extraSegments.length > 0 ? ` • ${extraSegments.join(' • ')}` : '';
 
     const desc = totalAvail > 0
-        ? `### Vous avez **${totalAvail} booster${totalAvail > 1 ? 's' : ''} disponible${totalAvail > 1 ? 's' : ''}** !\nEn ouvrir un maintenant ?\n\n` +
-          `🎁 **Gratuits :** \`${u.freeBoosters}/${MAX_FREE_BOOSTERS}\`${weeklySegment} • 🎒 **Inventaire :** \`${u.inventory?.booster || 0}\`` +
+        ? `### Vous avez **${totalAvail} booster${totalAvail > 1 ? 's' : ''} prêt${totalAvail > 1 ? 's' : ''} à ouvrir** !\nEn ouvrir un maintenant ?\n\n` +
+          `🎁 **Gratuits :** \`${u.freeBoosters}/${MAX_FREE_BOOSTERS}\`${extraLine}` +
           (nextTs ? `\n⏱️ Prochain booster gratuit <t:${Math.floor(nextTs / 1000)}:R>` : '\n✅ Jauge gratuite pleine (`2/2`)') +
           reminderBlock
         : `### Vous n'avez aucun booster disponible pour le moment.\n` +
@@ -2679,7 +3228,9 @@ function buildStorePayload(member, u, fromHub = false) {
             `✨ **Transformer une carte en Holographique** — \`${STORE_PRICES.holoTransform} pts\`\n` +
             `-# Transforme 1 de tes cartes compatibles possédées en sa version **holographique** !\n\n` +
             `⚡ **Diviser le cooldown par 2** — \`${STORE_PRICES.halfCooldown} pts\`\n` +
-            `-# Activé dès l'ouverture du prochain booster : celui d'après prendra **3h** au lieu de 6h.`
+            `-# Activé dès l'ouverture du prochain booster : celui d'après prendra **3h** au lieu de 6h.\n\n` +
+            `🌟 **Taux de God Pack ×5 (5j)** — \`${STORE_PRICES.godPackBoost} pts\`\n` +
+            `-# Multiplie par **5** tes chances d'obtenir un **God Pack** pendant **5 jours** !`
         );
 
     const row = new ActionRowBuilder().addComponents(
@@ -2703,10 +3254,16 @@ function buildStorePayload(member, u, fromHub = false) {
             .setDisabled(u.points < STORE_PRICES.holoTransform),
         new ButtonBuilder()
             .setCustomId(`tcg:buy:halfCooldown:${member.id}${hubSuffix}`)
-            .setLabel(`Cooldown /2 (${STORE_PRICES.halfCooldown} pts)`)
+            .setLabel(`CD /2 (${STORE_PRICES.halfCooldown} pts)`)
             .setEmoji('⚡')
             .setStyle(ButtonStyle.Primary)
-            .setDisabled(u.points < STORE_PRICES.halfCooldown)
+            .setDisabled(u.points < STORE_PRICES.halfCooldown),
+        new ButtonBuilder()
+            .setCustomId(`tcg:buy:godPackBoost:${member.id}${hubSuffix}`)
+            .setLabel(`God Pack ×5 (${STORE_PRICES.godPackBoost} pts)`)
+            .setEmoji('🌟')
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(u.points < STORE_PRICES.godPackBoost)
     );
 
     const row2 = new ActionRowBuilder().addComponents(
@@ -2725,18 +3282,27 @@ function buildStorePayload(member, u, fromHub = false) {
 function buildClaimPayload(member, u, fromHub = false) {
     const inv = u.inventory || {};
     const hubSuffix = fromHub ? ':1' : '';
+    const godBoostActive = Boolean(u.activeBonuses?.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil);
+
+    const boosterDetails = [];
+    if ((inv.weeklyBooster || 0) > 0) boosterDetails.push(`📅 **Hebdomadaires (Vendredi 8h) :** \`${inv.weeklyBooster}/${MAX_WEEKLY_BOOSTERS}\``);
+    if ((inv.communityBooster || 0) > 0) boosterDetails.push(`🤝 **Communautaires :** \`${inv.communityBooster}/${MAX_COMMUNITY_BOOSTERS}\``);
+    if ((inv.masterBooster || 0) > 0) boosterDetails.push(`🏆 **Boosters de Maître :** \`${inv.masterBooster}\``);
+    if ((inv.booster || 0) > 0) boosterDetails.push(`🛒 **Bonus / Achetés :** \`${inv.booster}\``);
+    const boosterSubBlock = boosterDetails.length > 0 ? boosterDetails.join('\n') + '\n' : '';
 
     const embed = new EmbedBuilder()
         .setColor(0x3498db)
         .setAuthor({ name: `Inventaire RegaDex • ${member.displayName}`, iconURL: member.displayAvatarURL({ dynamic: true }) })
         .setTitle('🎒 Inventaire RegaDex (`!regadex claim`)')
         .setDescription(
-            `Voici tes boosters et bonus en réserve :\n\n` +
-            `📅 **Boosters hebdomadaires (Lundi 8h) :** \`${inv.weeklyBooster || 0}/${MAX_WEEKLY_BOOSTERS}\` *(${SET1_NAME})*\n` +
-            `🎁 **Boosters ${SET1_NAME} (Inventaire) :** \`${inv.booster || 0}\` *(stock illimité)*\n` +
+            `Voici tes bonus en réserve :\n\n` +
+            `🎁 **Boosters prêts à ouvrir :** \`${getTotalAvailableBoosters(u)}\` *(${SET1_NAME})*\n` +
+            boosterSubBlock +
             `🍀 **Prochain booster chanceux :** \`${inv.luckyBooster || 0}\` ${u.activeBonuses?.luckyBooster ? '*(Déjà actif sur le prochain booster !)*' : ''}\n` +
             `✨ **Transformation Holographique :** \`${inv.holoTransform || 0}\`\n` +
-            `⚡ **Demi-cooldown (3h) :** \`${inv.halfCooldown || 0}\` ${u.activeBonuses?.halfCooldown ? '*(Déjà armé sur le prochain booster !)*' : ''}`
+            `⚡ **Demi-cooldown (3h) :** \`${inv.halfCooldown || 0}\` ${u.activeBonuses?.halfCooldown ? '*(Déjà armé sur le prochain booster !)*' : ''}\n` +
+            `🌟 **Taux God Pack ×5 (5j) :** \`${inv.godPackBoost || 0}\` ${godBoostActive ? `*(Actif jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F>)*` : ''}`
         );
 
     const row = new ActionRowBuilder().addComponents(
@@ -2748,22 +3314,28 @@ function buildClaimPayload(member, u, fromHub = false) {
             .setDisabled(getTotalAvailableBoosters(u) <= 0),
         new ButtonBuilder()
             .setCustomId(`tcg:use:luckyBooster:${member.id}${hubSuffix}`)
-            .setLabel(`Activer Chanceux (${inv.luckyBooster || 0})`)
+            .setLabel(`Chanceux (${inv.luckyBooster || 0})`)
             .setEmoji('🍀')
             .setStyle(ButtonStyle.Primary)
             .setDisabled((inv.luckyBooster || 0) <= 0 || Boolean(u.activeBonuses?.luckyBooster)),
         new ButtonBuilder()
             .setCustomId(`tcg:use:holoTransform:${member.id}${hubSuffix}`)
-            .setLabel(`Transformer Holo (${inv.holoTransform || 0})`)
+            .setLabel(`Holo (${inv.holoTransform || 0})`)
             .setEmoji('✨')
             .setStyle(ButtonStyle.Primary)
             .setDisabled((inv.holoTransform || 0) <= 0),
         new ButtonBuilder()
             .setCustomId(`tcg:use:halfCooldown:${member.id}${hubSuffix}`)
-            .setLabel(`Activer CD /2 (${inv.halfCooldown || 0})`)
+            .setLabel(`CD /2 (${inv.halfCooldown || 0})`)
             .setEmoji('⚡')
             .setStyle(ButtonStyle.Primary)
-            .setDisabled((inv.halfCooldown || 0) <= 0 || Boolean(u.activeBonuses?.halfCooldown))
+            .setDisabled((inv.halfCooldown || 0) <= 0 || Boolean(u.activeBonuses?.halfCooldown)),
+        new ButtonBuilder()
+            .setCustomId(`tcg:use:godPackBoost:${member.id}${hubSuffix}`)
+            .setLabel(`God Pack ×5 (${inv.godPackBoost || 0})`)
+            .setEmoji('🌟')
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled((inv.godPackBoost || 0) <= 0 || godBoostActive)
     );
 
     const row2 = new ActionRowBuilder().addComponents(
@@ -2848,11 +3420,36 @@ function buildTopComponents(authorId, mode = 'total', fromHub = false) {
 
 const BOOSTER_INSPECT_IDLE_MS = 5 * 60 * 1000; // 5 minutes
 
+function clearCard3AutoRecapTimer(session) {
+    if (session?.card3AutoRecapTimer) {
+        clearTimeout(session.card3AutoRecapTimer);
+        session.card3AutoRecapTimer = null;
+    }
+}
+
 function clearBoosterInspectTimeout(session) {
     if (session?.inspectTimeout) {
         clearTimeout(session.inspectTimeout);
         session.inspectTimeout = null;
     }
+}
+
+function scheduleCard3AutoRecap(member, session, client) {
+    clearCard3AutoRecapTimer(session);
+    if (!session?.message || session.hasReachedRecap || session.step !== 2) return;
+
+    session.card3AutoRecapTimer = setTimeout(async () => {
+        session.card3AutoRecapTimer = null;
+        if (boosterSessions.get(session.message.id) !== session) return;
+        if (session.hasReachedRecap || session.step !== 2) return;
+        session.hasReachedRecap = true;
+        try {
+            const dualPayload = await buildBoosterStepPayload(member, session);
+            await session.message.edit({ content: null, ...dualPayload, attachments: [] });
+        } catch {}
+        await triggerSessionPantheonIfNeeded(client, member, session).catch(() => {});
+    }, CARD_3_AUTO_RECAP_MS);
+    session.card3AutoRecapTimer.unref?.();
 }
 
 function scheduleBoosterInspectTimeout(member, session) {
@@ -2863,11 +3460,14 @@ function scheduleBoosterInspectTimeout(member, session) {
         session.inspectTimeout = null;
         if (boosterSessions.get(session.message.id) !== session) return;
         if (session.step >= 3) return;
+        clearCard3AutoRecapTimer(session);
+        session.hasReachedRecap = true;
         session.step = 3;
         try {
             const recapPayload = await buildBoosterRecapPayload(member, session);
             await session.message.edit({ content: null, ...recapPayload, attachments: [] });
         } catch {}
+        await triggerSessionPantheonIfNeeded(tcgBridge.client, member, session).catch(() => {});
     }, BOOSTER_INSPECT_IDLE_MS);
 }
 
@@ -2992,13 +3592,15 @@ function buildBoosterRecapEmbed(member, session, u) {
     });
 
     const bonusInfo = [];
+    if (session.isGodPack) bonusInfo.push(`🌟 **GOD PACK DÉCROCHÉ !** *(Tirage légendaire${session.godBoostUsed ? ' • Boost ×5 actif' : ''})*`);
     if (session.luckyUsed) bonusInfo.push('🍀 Booster Chanceux appliqué');
     if (session.pityUsed) bonusInfo.push('✨ Pity appliquée (Rare garantie)');
     if (session.halfCdUsed) bonusInfo.push('⚡ Demi-cooldown activé (3h)');
     if (session.triggeredNextPity) bonusInfo.push('🛡️ 3 Communes : ton **prochain** booster aura une **Rare** garantie !');
     if (Array.isArray(session.unlockedMilestones) && session.unlockedMilestones.length > 0) {
         for (const ms of session.unlockedMilestones) {
-            bonusInfo.push(`🏆 **Palier de complétion ${ms.pct}% (${ms.setName}) atteint :** **+${ms.reward} pts RegaDex** !`);
+            const extraMaster = ms.pct === 100 ? ' & **+2 Boosters de Maître** (rang **Maître du Set** débloqué !)' : '';
+            bonusInfo.push(`🏆 **Palier de complétion ${ms.pct}% (${ms.setName}) atteint :** **+${ms.reward} pts RegaDex**${extraMaster} !`);
         }
     }
 
@@ -3006,13 +3608,14 @@ function buildBoosterRecapEmbed(member, session, u) {
         ? `\n⏱️ **Prochain booster gratuit :** <t:${Math.floor(nextTs / 1000)}:R>`
         : `\n✅ **Jauge gratuite pleine :** \`${u.freeBoosters}/${MAX_FREE_BOOSTERS}\``;
 
-    const recapColor = u.theme === 'W' ? 0xffffff : 0x111216;
+    const recapColor = session.isGodPack ? 0xFFD700 : (u.theme === 'W' ? 0xffffff : 0x111216);
     const milestoneNote = session.milestoneBonusPts > 0 ? ` *(+${session.milestoneBonusPts} pts de palier)*` : '';
+    const recapTitle = session.isGodPack ? '🌟 RÉCAPITULATIF — GOD PACK ! 🌟' : '📊 Récapitulatif du Booster';
 
     return new EmbedBuilder()
         .setColor(recapColor)
         .setAuthor({ name: `Booster ${SET1_NAME} de ${member.displayName}`, iconURL: member.displayAvatarURL({ dynamic: true }) })
-        .setTitle('📊 Récapitulatif du Booster')
+        .setTitle(recapTitle)
         .setDescription(
             lines.join('\n') +
             `\n\n🪙 **Points RegaDex gagnés :** **+${session.ptsEarned} pts**${milestoneNote} *(Solde : ${u.points} pts)*` +
@@ -3026,7 +3629,7 @@ function buildBoosterRecapEmbed(member, session, u) {
 
 async function ensureSessionRecapBuffer(session, theme) {
     if (!session.recapBuffer || session.recapTheme !== theme) {
-        session.recapBuffer = await renderBoosterRecapCanvas(session.cards, session.isNewFlags, theme);
+        session.recapBuffer = await renderBoosterRecapCanvas(session.cards, session.isNewFlags, theme, Boolean(session.isGodPack));
         session.recapTheme = theme;
     }
     return session.recapBuffer;
@@ -3175,6 +3778,113 @@ async function envoyerPantheonTcg(client, member, card, isNew, luckyUsed = false
     }).catch(() => {});
 }
 
+async function buildGodPackPantheonPayload(member, cards, isNewFlags, theme = 'B', godBoostUsed = false, isTest = false) {
+    const buffer = await renderBoosterRecapCanvas(cards, isNewFlags, theme, true);
+    const cardLines = cards.map((c, i) => {
+        const meta = RARITY_META[c.rarity] || RARITY_META['Légendaire'];
+        const status = isNewFlags[i] ? '🆕 Première découverte' : '🔁 Doublon';
+        return `${meta.emoji} \`${c.id}\` **${c.name}** — *${c.rarity}*${c.isHolo ? ' *(Holo)*' : ''} • ${status}`;
+    });
+
+    const embed = new EmbedBuilder()
+        .setColor(0xFFD700)
+        .setTitle(isTest ? '🌟 [TEST] GOD PACK AU PANTHÉON ! 🌟' : '🌟 GOD PACK AU PANTHÉON ! 🌟')
+        .setDescription(
+            `Incroyable exploit sur le **${SET1_NAME}** ! <@${member.id}> vient de tirer un **God Pack**${godBoostUsed ? ' *(Boost ×5 actif)*' : ''} !\n\n` +
+            cardLines.join('\n')
+        )
+        .addFields(
+            { name: '👤 Collectionneur·euse', value: `<@${member.id}>`, inline: true },
+            { name: '🎲 Taux du God Pack', value: godBoostUsed ? '**5%** *(×5 actif)*' : '**1%** *(Base)*', inline: true },
+            { name: '📅 Date du tirage', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
+        )
+        .setImage('attachment://godpack_pantheon.jpg')
+        .setFooter({ text: 'Panthéon RegaDex • Regaïa' })
+        .setTimestamp();
+
+    const avatar = member?.user?.displayAvatarURL?.({ dynamic: true, size: 256 })
+        ?? member?.displayAvatarURL?.({ dynamic: true, size: 256 });
+    if (avatar) embed.setThumbnail(avatar);
+
+    return {
+        content: `🌟 Légendaire !! Félicitations à <@${member.id}> pour ce **God Pack** !`,
+        embeds: [embed],
+        files: [new AttachmentBuilder(buffer, { name: 'godpack_pantheon.jpg' })]
+    };
+}
+
+async function envoyerGodPackPantheonTcg(client, member, session) {
+    if (!member || isSandboxId(member.id)) return;
+    const c = client || tcgBridge.client;
+    if (!c) return;
+    const salon = c.channels.cache.get(TCG_PANTHEON_CHANNEL_ID)
+        ?? await c.channels.fetch(TCG_PANTHEON_CHANNEL_ID).catch(() => null);
+    if (!salon) return;
+
+    const u = getOrCreateTcgUser(member.id);
+    const payload = await buildGodPackPantheonPayload(member, session.cards, session.isNewFlags, u.theme, Boolean(session.godBoostUsed), false);
+    await sendSilent(salon, payload).catch(() => {});
+}
+
+async function buildMasterSetPantheonPayload(member, u, setNumber = DEFAULT_SET_NUMBER, isTest = false) {
+    const setCfg = getSetConfig(setNumber);
+    const buffer = await renderMasterSetCanvas(member, u, setNumber);
+
+    const embed = new EmbedBuilder()
+        .setColor(0xF1C40F)
+        .setTitle(isTest ? `👑 [TEST] MAÎTRE DU ${setCfg.name.toUpperCase()} !` : `👑 MAÎTRE DU ${setCfg.name.toUpperCase()} !`)
+        .setDescription(
+            `Immense bravo à <@${member.id}> qui vient de compléter les **${setCfg.totalExpected} cartes** du **${setCfg.name}** !\n\n` +
+            `🏆 **Rang permanent débloqué :** **Maître du ${setCfg.name}**\n` +
+            `🎁 **Récompenses :** **+25 points RegaDex** & **+2 Boosters de Maître**`
+        )
+        .setImage('attachment://maitre_du_set.jpg')
+        .setFooter({ text: 'Panthéon RegaDex • Regaïa' })
+        .setTimestamp();
+
+    return {
+        content: `👑🎉 Chapeau bas à <@${member.id}>, nouveau/nouvelle **Maître du ${setCfg.name}** !`,
+        embeds: [embed],
+        files: [new AttachmentBuilder(buffer, { name: 'maitre_du_set.jpg' })]
+    };
+}
+
+async function envoyerMaitreDuSetPantheonTcg(client, member, setNumber = DEFAULT_SET_NUMBER) {
+    if (!member || isSandboxId(member.id)) return;
+    const c = client || tcgBridge.client;
+    if (!c) return;
+    const salon = c.channels.cache.get(TCG_PANTHEON_CHANNEL_ID)
+        ?? await c.channels.fetch(TCG_PANTHEON_CHANNEL_ID).catch(() => null);
+    if (!salon) return;
+
+    const u = getOrCreateTcgUser(member.id);
+    const payload = await buildMasterSetPantheonPayload(member, u, setNumber, false);
+    await sendSilent(salon, payload).catch(() => {});
+}
+
+async function triggerSessionPantheonIfNeeded(client, member, session) {
+    if (!session || session.pantheonSent) return;
+    session.pantheonSent = true;
+    if (isSandboxId(session.userId)) return;
+
+    if (session.isGodPack) {
+        await envoyerGodPackPantheonTcg(client, member, session).catch(() => {});
+    } else {
+        for (let i = 0; i < session.cards.length; i++) {
+            const pulledCard = session.cards[i];
+            if (pulledCard.rarity === 'Full Art' || pulledCard.rarity === 'Négative') {
+                await envoyerPantheonTcg(client, member, pulledCard, session.isNewFlags[i], session.luckyUsed).catch(() => {});
+            }
+        }
+    }
+
+    if (Array.isArray(session.pendingMasterSets) && session.pendingMasterSets.length > 0) {
+        for (const sNum of session.pendingMasterSets) {
+            await envoyerMaitreDuSetPantheonTcg(client, member, sNum).catch(() => {});
+        }
+    }
+}
+
 async function startBoosterOpening(targetResponder, member, client, fromHub = false) {
     const userId = member.id;
     if (cardCatalog.length === 0) {
@@ -3210,7 +3920,7 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
     boostersEnCours.add(userId);
 
     try {
-        // Consommer prioritairement : gratuit -> hebdo (plafonné à 2) -> inventaire illimité
+        // Ordre de consommation : gratuit -> hebdo -> communautaire -> maître -> inventaire
         if (u.freeBoosters > 0) {
             const wasFull = u.freeBoosters >= MAX_FREE_BOOSTERS;
             u.freeBoosters -= 1;
@@ -3220,6 +3930,10 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             }
         } else if ((u.inventory.weeklyBooster || 0) > 0) {
             u.inventory.weeklyBooster -= 1;
+        } else if ((u.inventory.communityBooster || 0) > 0) {
+            u.inventory.communityBooster -= 1;
+        } else if ((u.inventory.masterBooster || 0) > 0) {
+            u.inventory.masterBooster -= 1;
         } else {
             u.inventory.booster -= 1;
         }
@@ -3244,7 +3958,9 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
 
         // Tirage des 3 cartes
         const draw = drawBoosterCards(u, userId, member);
-        u.activeBonuses.luckyBooster = false;
+        if (!draw.isGodPack) {
+            u.activeBonuses.luckyBooster = false;
+        }
 
         const isNewFlags = [];
         let duplicatesInPack = 0;
@@ -3273,6 +3989,15 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             if (duplicatesInPack > 0) {
                 tcgBridge.trackBattlePassProgress(userId, 'tcg_doublon', duplicatesInPack);
             }
+
+            const qEvents = [{ type: 'open_boosters', amount: 1 }];
+            for (const c of draw.cards) {
+                if (c.rarity === 'Rare') qEvents.push({ type: 'pull_rare', amount: 1 });
+                else if (c.rarity === 'Épique') qEvents.push({ type: 'pull_epic', amount: 1 });
+                else if (c.rarity === 'Légendaire') qEvents.push({ type: 'pull_legendary', amount: 1 });
+                else if (c.rarity === 'Full Art') qEvents.push({ type: 'pull_fullart', amount: 1 });
+            }
+            await progressCommunityQuest(client, qEvents, userId).catch(() => {});
 
             const data = getStoreData();
             if (data.notifs?.[userId]) armerNotifBooster(userId, client);
@@ -3323,10 +4048,13 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             ptsEarned,
             unlockedMilestones: milestoneInfo.unlocked,
             milestoneBonusPts: milestoneInfo.totalBonusPts,
+            pendingMasterSets: milestoneInfo.masteredSets || [],
             milestoneAnnounced: false,
             milestoneTimer: null,
             luckyUsed: draw.luckyUsed,
             pityUsed: draw.pityUsed,
+            isGodPack: Boolean(draw.isGodPack),
+            godBoostUsed: Boolean(draw.godBoostUsed),
             halfCdUsed,
             triggeredNextPity: draw.triggeredNextPity,
             fromHub: Boolean(fromHub),
@@ -3337,6 +4065,7 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             recapBuffer: null,
             recapTheme: null,
             inspectTimeout: null,
+            card3AutoRecapTimer: null,
             gifTimeout: null,
             message: sentMsg
         };
@@ -3373,6 +4102,7 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
                 clearTimeout(session.milestoneTimer);
                 session.milestoneTimer = null;
             }
+            clearCard3AutoRecapTimer(session);
             clearBoosterInspectTimeout(session);
             session.recapBuffer = null;
             boosterSessions.delete(sentMsg.id);
@@ -3389,16 +4119,6 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
                         await sentMsg.edit({ ...firstPayload, attachments: [] });
                     }
                 } catch {}
-            }
-
-            if (!session.pantheonSent && !isSandboxId(userId)) {
-                session.pantheonSent = true;
-                for (let i = 0; i < session.cards.length; i++) {
-                    const pulledCard = session.cards[i];
-                    if (pulledCard.rarity === 'Full Art' || pulledCard.rarity === 'Négative') {
-                        await envoyerPantheonTcg(client, member, pulledCard, session.isNewFlags[i], session.luckyUsed).catch(() => {});
-                    }
-                }
             }
         }, BOOSTER_GIF_DELAY_MS);
     } catch (err) {
@@ -3621,12 +4341,25 @@ function buildBinderInspectPayload(card, ownerId, viewerId, binderMsgId) {
             .setDisabled(!inWishlist && wishlistFull)
     );
 
+    const canTransformHolo = !card.isHolo && Boolean(card.holoCounterpartId) && qty >= 1 && (u.inventory?.holoTransform || 0) >= 1;
+
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`tcg:carddups:${card.id}:${viewerId}`)
             .setLabel('Qui l\'a en doublon ?')
             .setEmoji('👥')
-            .setStyle(ButtonStyle.Secondary),
+            .setStyle(ButtonStyle.Secondary)
+    );
+    if (canTransformHolo) {
+        row2.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tcg:cardholo:${card.id}:${ownerId}:binspect`)
+                .setLabel('Passer en Holo')
+                .setEmoji('✨')
+                .setStyle(ButtonStyle.Primary)
+        );
+    }
+    row2.addComponents(
         buildAccueilButton(viewerId),
         buildCloseButton(viewerId)
     );
@@ -3730,6 +4463,8 @@ function buildSingleCardPayload(card, viewerId, options = {}) {
         components.push(new ActionRowBuilder().addComponents(cardMenu));
     }
 
+    const canTransformHolo = !card.isHolo && Boolean(card.holoCounterpartId) && qty >= 1 && (u.inventory?.holoTransform || 0) >= 1;
+
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`tcg:cartenav:prev:${card.id}:${viewerId}`)
@@ -3756,6 +4491,15 @@ function buildSingleCardPayload(card, viewerId, options = {}) {
             .setStyle(inWishlist ? ButtonStyle.Success : ButtonStyle.Secondary)
             .setDisabled(!inWishlist && wishlistFull)
     );
+    if (canTransformHolo) {
+        row1.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tcg:cardholo:${card.id}:${ownerId}:card`)
+                .setLabel('Passer en Holo')
+                .setEmoji('✨')
+                .setStyle(ButtonStyle.Primary)
+        );
+    }
 
     // [SET 2] S'active automatiquement dès qu'un 2e Set est activé dans SETS_CONFIG
     const row2 = new ActionRowBuilder().addComponents(
@@ -4624,16 +5368,22 @@ async function executeTradeIfBothLocked(thread, trade, client) {
     trade.lastActivityAt = Date.now();
 
     const tradeMilestones = [];
+    const masteredAfterTrade = [];
     for (const setCfg of getActiveSets()) {
         const msA = checkAndGrantCompletionMilestones(idA, setCfg.number);
         if (msA.unlocked.length > 0) {
-            tradeMilestones.push(`<@${idA}> : ${msA.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts)`).join(', ')}`);
+            tradeMilestones.push(`<@${idA}> : ${msA.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts${m.pct === 100 ? ' & +2 Boosters de Maître' : ''})`).join(', ')}`);
         }
+        for (const sNum of (msA.masteredSets || [])) masteredAfterTrade.push({ uid: idA, setNumber: sNum });
+
         const msB = checkAndGrantCompletionMilestones(idB, setCfg.number);
         if (msB.unlocked.length > 0) {
-            tradeMilestones.push(`<@${idB}> : ${msB.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts)`).join(', ')}`);
+            tradeMilestones.push(`<@${idB}> : ${msB.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts${m.pct === 100 ? ' & +2 Boosters de Maître' : ''})`).join(', ')}`);
         }
+        for (const sNum of (msB.masteredSets || [])) masteredAfterTrade.push({ uid: idB, setNumber: sNum });
     }
+
+    await progressCommunityQuest(client, [{ type: 'trades', amount: 1 }]).catch(() => {});
 
     tcgBridge.trackBattlePassProgress(idA, 'tcg_trade', 1);
     tcgBridge.trackBattlePassProgress(idB, 'tcg_trade', 1);
@@ -4644,6 +5394,13 @@ async function executeTradeIfBothLocked(thread, trade, client) {
     const mB = await guild.members.fetch(idB).catch(() => null);
     const nameA = mA?.displayName || mA?.user?.username || idA;
     const nameB = mB?.displayName || mB?.user?.username || idB;
+
+    for (const entry of masteredAfterTrade) {
+        const masterMember = entry.uid === idA ? mA : mB;
+        if (masterMember) {
+            await envoyerMaitreDuSetPantheonTcg(client, masterMember, entry.setNumber).catch(() => {});
+        }
+    }
 
     const recapBuffer = await renderTradeRecapCanvas(nameA, offerA, nameB, offerB);
     const dateStr = new Date().toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' }) + ' à ' +
@@ -5602,6 +6359,28 @@ async function handleTcgMessage(message) {
 
     if (await handleAdminTcgCommand(message, raw.toLowerCase())) return true;
 
+    if (/^!tcgmastertest(?:\s|$)/i.test(raw)) {
+        if (message.author.id !== EPSYS_ID) return true;
+        const u = getOrCreateTcgUser(message.author.id);
+        const payload = await buildMasterSetPantheonPayload(message.member, u, DEFAULT_SET_NUMBER, true);
+        await sendSilent(message.channel, payload);
+        return true;
+    }
+
+    if (/^!tcggodpacktest(?:\s|$)/i.test(raw)) {
+        if (message.author.id !== EPSYS_ID) return true;
+        if (cardCatalog.length === 0) {
+            await replySilent(message, `❌ Les cartes ${SET1_NAME} ne sont pas chargées.`);
+            return true;
+        }
+        const u = getOrCreateTcgUser(message.author.id);
+        const testCards = drawGodPackCards(DEFAULT_SET_NUMBER, message.author.id, message.member);
+        const testFlags = testCards.map(c => (u.cards?.[c.id] || 0) <= 0);
+        const payload = await buildGodPackPantheonPayload(message.member, testCards, testFlags, u.theme, false, true);
+        await sendSilent(message.channel, payload);
+        return true;
+    }
+
     const sandboxMatch = raw.match(/^!tcgx\s*([a-z]*)(?:\s+(.*))?$/i);
     if (sandboxMatch) {
         if (message.author.id !== EPSYS_ID) return true;
@@ -6103,14 +6882,20 @@ async function handleTcgInteraction(interaction) {
                 clearTimeout(session.gifTimeout);
                 session.gifTimeout = null;
             }
+            clearCard3AutoRecapTimer(session);
             boostersEnCours.delete(session.userId);
             session.skipUsed = true;
             session.hasReachedRecap = true;
             session.step = 3;
-        } else if (dir === 'next') session.step = Math.min(2, session.step + 1);
-        else if (dir === 'prev') session.step = Math.max(0, session.step - 1);
-        else if (dir === 'back3') session.step = 2;
-        else if (dir === 'recap') {
+        } else if (dir === 'next') {
+            session.step = Math.min(2, session.step + 1);
+        } else if (dir === 'prev') {
+            clearCard3AutoRecapTimer(session);
+            session.step = Math.max(0, session.step - 1);
+        } else if (dir === 'back3') {
+            session.step = 2;
+        } else if (dir === 'recap') {
+            clearCard3AutoRecapTimer(session);
             session.hasReachedRecap = true;
             session.step = 3;
         }
@@ -6120,14 +6905,10 @@ async function handleTcgInteraction(interaction) {
         const stepPayload = await buildBoosterStepPayload(actorMember, session);
         await interaction.editReply({ content: null, ...stepPayload, attachments: [] });
 
-        if (dir === 'skip' && !session.pantheonSent && !isSandboxId(session.userId)) {
-            session.pantheonSent = true;
-            for (let i = 0; i < session.cards.length; i++) {
-                const pulledCard = session.cards[i];
-                if (pulledCard.rarity === 'Full Art' || pulledCard.rarity === 'Négative') {
-                    await envoyerPantheonTcg(client, actorMember, pulledCard, session.isNewFlags[i], session.luckyUsed).catch(() => {});
-                }
-            }
+        if (session.step === 2 && !session.hasReachedRecap) {
+            scheduleCard3AutoRecap(actorMember, session, client);
+        } else if (session.hasReachedRecap) {
+            await triggerSessionPantheonIfNeeded(client, actorMember, session).catch(() => {});
         }
         return true;
     }
@@ -6427,28 +7208,38 @@ async function handleTcgInteraction(interaction) {
             booster: `🎁 Booster ${SET1_NAME}`,
             luckyBooster: '🍀 Prochain booster chanceux',
             holoTransform: '✨ Transformer une carte en Holographique',
-            halfCooldown: '⚡ Diviser le cooldown du prochain booster par 2'
+            halfCooldown: '⚡ Diviser le cooldown du prochain booster par 2',
+            godPackBoost: '🌟 Taux de God Pack ×5 (5j)'
         };
 
+        const isBoosterBuy = itemKey === 'booster';
         const confirmEmbed = new EmbedBuilder()
             .setColor(0x2ecc71)
             .setTitle('✅ Achat effectué dans le RegaDex Store !')
             .setDescription(
                 `Tu as acheté : **${labels[itemKey]}** pour \`${price} pts\` *(Solde restant : **${u.points} pts**)*.` +
-                `\n\nSouhaites-tu l'utiliser tout de suite ou le garder dans ton inventaire (\`!regadex claim\`) ?`
+                (isBoosterBuy
+                    ? `\n\n🎁 Il est **prêt à ouvrir** ! *(Total disponible : **${getTotalAvailableBoosters(u)}**)*`
+                    : `\n\nSouhaites-tu l'utiliser tout de suite ou le garder dans ton inventaire (\`!regadex claim\`) ?`)
             );
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId(`tcg:postbuy:use:${itemKey}:${ownerId}${hubSuffix}`)
-                .setLabel(itemKey === 'booster' ? 'Ouvrir maintenant' : 'Activer maintenant')
-                .setEmoji('⚡')
-                .setStyle(ButtonStyle.Success),
-            new ButtonBuilder()
-                .setCustomId(`tcg:postbuy:keep:${itemKey}:${ownerId}${hubSuffix}`)
-                .setLabel('Garder en inventaire')
-                .setEmoji('🎒')
-                .setStyle(ButtonStyle.Secondary),
+                .setLabel(isBoosterBuy ? 'Ouvrir maintenant' : 'Activer maintenant')
+                .setEmoji(isBoosterBuy ? '🎁' : '⚡')
+                .setStyle(ButtonStyle.Success)
+        );
+        if (!isBoosterBuy) {
+            row.addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`tcg:postbuy:keep:${itemKey}:${ownerId}${hubSuffix}`)
+                    .setLabel('Garder en inventaire')
+                    .setEmoji('🎒')
+                    .setStyle(ButtonStyle.Secondary)
+            );
+        }
+        row.addComponents(
             new ButtonBuilder()
                 .setCustomId(`tcg:store:open:${ownerId}:1`)
                 .setLabel('Store')
@@ -6533,6 +7324,26 @@ async function handleTcgInteraction(interaction) {
             });
             return true;
         }
+        if (itemKey === 'godPackBoost') {
+            if (u.activeBonuses.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil) {
+                await interaction.reply({
+                    content: `⚠️ Ton bonus **God Pack ×5** est déjà actif jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F> !`,
+                    ephemeral: true
+                });
+                return true;
+            }
+            u.inventory.godPackBoost -= 1;
+            u.activeBonuses.godPackBoostUntil = Date.now() + GOD_PACK_BOOST_DURATION_MS;
+            if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
+            await interaction.update({
+                content: `🌟 **Taux de God Pack ×5 activé pour 5 jours !** *(fin <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:R>)*`,
+                embeds: [],
+                components: backRows,
+                files: [],
+                attachments: []
+            });
+            return true;
+        }
         if (itemKey === 'holoTransform') {
             await sendHoloTransformPicker(interaction, actorMember, 0, fromHub);
             return true;
@@ -6564,6 +7375,23 @@ async function handleTcgInteraction(interaction) {
             if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
             await interaction.update(buildClaimPayload(actorMember, u, fromHub));
             await interaction.followUp({ content: "⚡ **Demi-cooldown armé !**", ephemeral: true });
+            return true;
+        }
+        if (itemKey === 'godPackBoost') {
+            if (u.activeBonuses.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil) {
+                return interaction.reply({
+                    content: `⚠️ Ton bonus **God Pack ×5** est déjà actif jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F> !`,
+                    ephemeral: true
+                }), true;
+            }
+            u.inventory.godPackBoost -= 1;
+            u.activeBonuses.godPackBoostUntil = Date.now() + GOD_PACK_BOOST_DURATION_MS;
+            if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
+            await interaction.update(buildClaimPayload(actorMember, u, fromHub));
+            await interaction.followUp({
+                content: `🌟 **Taux de God Pack ×5 activé pour 5 jours !** *(fin <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:R>)*`,
+                ephemeral: true
+            });
             return true;
         }
         if (itemKey === 'holoTransform') {
@@ -6602,9 +7430,12 @@ async function handleTcgInteraction(interaction) {
         u.cards[holoCard.id] = (u.cards[holoCard.id] || 0) + 1;
         const holoMilestones = checkAndGrantCompletionMilestones(ownerId, baseCard.setNumber || DEFAULT_SET_NUMBER);
         if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
+        for (const sNum of (holoMilestones.masteredSets || [])) {
+            await envoyerMaitreDuSetPantheonTcg(client, interaction.member, sNum).catch(() => {});
+        }
 
         const msTxt = holoMilestones.unlocked.length > 0
-            ? `\n\n🏆 **Palier(s) de complétion atteint(s) :** ${holoMilestones.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts)`).join(', ')}`
+            ? `\n\n🏆 **Palier(s) de complétion atteint(s) :** ${holoMilestones.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts${m.pct === 100 ? ' & +2 Boosters de Maître' : ''})`).join(', ')}`
             : '';
 
         const embed = new EmbedBuilder()
@@ -7099,6 +7930,128 @@ async function handleTcgInteraction(interaction) {
             content: null,
             ...buildSingleCardPayload(nextOwned[0], ownerId, { setNumber: nextSet.number }),
             attachments: []
+        });
+        return true;
+    }
+
+    // ----- PASSER EN HOLO DEPUIS !CARTE / INSPECTER -----
+    if (action === 'cardholo' && interaction.isButton()) {
+        const cardId = parts[2];
+        const ownerId = parts[3];
+        const context = parts[4] || 'card';
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            return true;
+        }
+        const card = cardById.get(cardId);
+        const holoCard = card?.holoCounterpartId ? cardById.get(card.holoCounterpartId) : null;
+        const u = getOrCreateTcgUser(ownerId);
+
+        if (!card || !holoCard || (u.cards?.[card.id] || 0) < 1 || (u.inventory?.holoTransform || 0) < 1) {
+            await interaction.reply({ content: "❌ Transformation impossible (carte ou bonus manquant).", ephemeral: true });
+            return true;
+        }
+
+        const qty = u.cards[card.id];
+        const warnLast = qty === 1
+            ? `\n⚠️ *Attention : tu n'as qu'**1 seule copie** de \`${card.id}\` — elle sera remplacée par la version Holo.*`
+            : '';
+
+        const confEmbed = new EmbedBuilder()
+            .setColor(RARITY_META[holoCard.rarity]?.color || 0xf1c40f)
+            .setTitle('✨ Passer cette carte en Holographique ?')
+            .setDescription(
+                `**${card.id} • ${card.name}** ➔ **${holoCard.id} • ${holoCard.name}**\n` +
+                `🎒 Consomme **1 Transformation Holographique** *(restant après transfo : \`${u.inventory.holoTransform - 1}\`)*` +
+                warnLast
+            );
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tcg:cardholoconf:${card.id}:${ownerId}:${context}:${interaction.message?.id || ''}`)
+                .setLabel('Confirmer')
+                .setEmoji('✅')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId(`tcg:cardholocancel:${ownerId}`)
+                .setLabel('Annuler')
+                .setEmoji('❌')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        await interaction.reply({ embeds: [confEmbed], components: [row], ephemeral: true });
+        return true;
+    }
+
+    if (action === 'cardholocancel' && interaction.isButton()) {
+        const ownerId = parts[2];
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            return true;
+        }
+        await interaction.update({ content: '❌ Transformation annulée.', embeds: [], components: [] });
+        return true;
+    }
+
+    if (action === 'cardholoconf' && interaction.isButton()) {
+        const cardId = parts[2];
+        const ownerId = parts[3];
+        const context = parts[4] || 'card';
+        const origMsgId = parts[5] || '';
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            return true;
+        }
+        const card = cardById.get(cardId);
+        const holoCard = card?.holoCounterpartId ? cardById.get(card.holoCounterpartId) : null;
+        const u = getOrCreateTcgUser(ownerId);
+
+        if (!card || !holoCard || (u.cards?.[card.id] || 0) < 1 || (u.inventory?.holoTransform || 0) < 1) {
+            await interaction.update({ content: "❌ Transformation impossible (carte ou bonus manquant).", embeds: [], components: [] });
+            return true;
+        }
+
+        u.inventory.holoTransform -= 1;
+        u.cards[card.id] -= 1;
+        if (u.cards[card.id] <= 0) {
+            delete u.cards[card.id];
+            if (u.favoriteCardId === card.id) u.favoriteCardId = null;
+        }
+        u.cards[holoCard.id] = (u.cards[holoCard.id] || 0) + 1;
+        const holoMilestones = checkAndGrantCompletionMilestones(ownerId, card.setNumber || DEFAULT_SET_NUMBER);
+        if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
+        for (const sNum of (holoMilestones.masteredSets || [])) {
+            await envoyerMaitreDuSetPantheonTcg(client, interaction.member, sNum).catch(() => {});
+        }
+
+        if (origMsgId && interaction.channel) {
+            const origMsg = await interaction.channel.messages.fetch(origMsgId).catch(() => null);
+            if (origMsg) {
+                if (context === 'binspect') {
+                    const state = binderReturnStates.get(origMsgId);
+                    await origMsg.edit({
+                        content: null,
+                        ...buildBinderInspectPayload(holoCard, ownerId, state?.viewerId || ownerId, origMsgId),
+                        attachments: []
+                    }).catch(() => {});
+                } else {
+                    await origMsg.edit({
+                        content: null,
+                        ...buildSingleCardPayload(holoCard, ownerId),
+                        attachments: []
+                    }).catch(() => {});
+                }
+            }
+        }
+
+        const msTxt = holoMilestones.unlocked.length > 0
+            ? `\n🏆 **Palier(s) atteint(s) :** ${holoMilestones.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts)`).join(', ')}`
+            : '';
+
+        await interaction.update({
+            content: `✨ **${card.id} • ${card.name}** a évolué en **${holoCard.id} • ${holoCard.name}** ! *(Transformations restantes : \`${u.inventory.holoTransform}\`)*${msTxt}`,
+            embeds: [],
+            components: []
         });
         return true;
     }
@@ -8017,6 +8970,44 @@ async function handleTcgInteraction(interaction) {
     return false;
 }
 
+function addTcgPointsFromRoulette(userId, points, member) {
+    if (!member || !hasTcgRole(member)) return false;
+    const u = getOrCreateTcgUser(userId);
+    u.points = (u.points || 0) + points;
+    tcgBridge.demanderSauvegarde();
+    return true;
+}
+
+function addTcgBoostersFromRoulette(userId, qty, member) {
+    if (!member || !hasTcgRole(member)) return false;
+    const u = getOrCreateTcgUser(userId);
+    u.inventory.booster = (u.inventory.booster || 0) + qty;
+    tcgBridge.demanderSauvegarde();
+    return true;
+}
+
+async function grantMinigameTcgPoints(client, userIds, points = 2) {
+    if (!Array.isArray(userIds) || userIds.length === 0) return [];
+    const c = client || tcgBridge.client;
+    if (!c) return [];
+    const guild = c.guilds.cache.get(GUILD_ID) || await c.guilds.fetch(GUILD_ID).catch(() => null);
+    if (!guild) return [];
+
+    const rewarded = [];
+    for (const uid of [...new Set(userIds)]) {
+        const member = guild.members.cache.get(uid) || await guild.members.fetch(uid).catch(() => null);
+        if (member && hasTcgRole(member)) {
+            const u = getOrCreateTcgUser(uid);
+            u.points = (u.points || 0) + points;
+            rewarded.push(uid);
+        }
+    }
+    if (rewarded.length > 0) {
+        tcgBridge.demanderSauvegarde();
+    }
+    return rewarded;
+}
+
 module.exports = {
     TCG_ROLE_ID,
     TCG_CHANNEL_ID,
@@ -8024,15 +9015,20 @@ module.exports = {
     TCG_TRADE_LOG_CHANNEL_ID,
     TCG_PANTHEON_CHANNEL_ID,
     AFK_VOCAL_CHANNEL_ID,
+    hasTcgRole,
     initTcgState,
     scanSet1Cards,
     getTcgCardsCount,
     restaurerNotifsTcg,
     verifierInactiviteTradesTcg,
     verifierBoosterHebdoTcg,
+    verifierQueteCommunautaireTcg,
     trackTcgMessagePoint,
     trackTcgVocalMinute,
     trackTcgRoulettePoint,
+    addTcgPointsFromRoulette,
+    addTcgBoostersFromRoulette,
+    grantMinigameTcgPoints,
     handleTcgTradeThreadMessage,
     handleTcgMessage,
     handleTcgSlash,

@@ -186,7 +186,9 @@ const ROULETTE_NOMS_COMMANDES = {
     publicite: 'malus-publicite', autocorrect: 'malus-autocorrect',
     looongcooldown: 'malus-looong-cooldown', taxe: 'malus-looong-cooldown',
     pickpocket: 'bonus-pickpocket', echangeurpoison: 'bonus-echangeur-poison',
-    partagebonus: 'bonus-partage-bonus', partage: 'bonus-partage-bonus'
+    partagebonus: 'bonus-partage-bonus', partage: 'bonus-partage-bonus',
+    tcg15: 'bonus-tcg-15pts', tcg50: 'bonus-tcg-50pts',
+    tcg1booster: 'bonus-tcg-1booster', tcg5boosters: 'bonus-tcg-5boosters'
 };
 
 const ROULETTE_TABLE = [
@@ -256,7 +258,11 @@ const ROULETTE_TABLE = [
     { id: 'malus-exclu-semaine', type: 'malus', poids: 1/1200, nom: 'Exclusion de 1 semaine', desc: 'Exclusion de 1 semaine' },
     { id: 'malus-ban', type: 'malus', poids: 1/15000, nom: 'Ban définitif', desc: 'Ban définitif' },
     { id: 'special-vote-immunite-exclusion', type: 'special', poids: 1/125, nom: 'Vote public', desc: 'Vote public : tirage à volonté pendant 1min ou exclusion 1 jour' },
-    { id: 'special-tournee-generale', type: 'special', poids: 1/600, nom: 'Tournée générale', desc: 'Tournée générale ! Happy Hour de 30 minutes pour tout le monde (5 min de cooldown)' }
+    { id: 'special-tournee-generale', type: 'special', poids: 1/600, nom: 'Tournée générale', desc: 'Tournée générale ! Happy Hour de 30 minutes pour tout le monde (5 min de cooldown)' },
+    { id: 'bonus-tcg-15pts', type: 'bonus', tcgOnly: true, poids: 1/27, nom: '+15 pts RegaDex', desc: '+15 points RegaDex ajoutés à ton solde' },
+    { id: 'bonus-tcg-50pts', type: 'bonus', tcgOnly: true, poids: 1/54, nom: '+50 pts RegaDex', desc: '+50 points RegaDex ajoutés à ton solde' },
+    { id: 'bonus-tcg-1booster', type: 'bonus', tcgOnly: true, poids: 1/90, nom: '+1 Booster RegaDex', desc: '+1 Booster Set 1 prêt à ouvrir' },
+    { id: 'bonus-tcg-5boosters', type: 'bonus', tcgOnly: true, poids: 1/445, nom: '+5 Boosters RegaDex', desc: '+5 Boosters Set 1 prêts à ouvrir' }
 ];
 
 const ROULETTE_NOMS = Object.fromEntries(ROULETTE_TABLE.map(e => [e.id, e.nom]));
@@ -287,7 +293,9 @@ const ROULETTE_EMOJIS_PAR_ID = {
     'malus-publicite': '📺', 'malus-autocorrect': '📱',
     'malus-looong-cooldown': '⏳',
     'bonus-pickpocket': '🦹', 'bonus-echangeur-poison': '🧪',
-    'bonus-partage-bonus': '🤝'
+    'bonus-partage-bonus': '🤝',
+    'bonus-tcg-15pts': '🪙', 'bonus-tcg-50pts': '💰',
+    'bonus-tcg-1booster': '🃏', 'bonus-tcg-5boosters': '🎁'
 };
 
 const ROULETTE_FAILS = [
@@ -878,13 +886,14 @@ function piocherRoulette(pool, totalGlobal, defaut) {
     return defaut;
 }
 
-function tirerRoulette(userId, guildId = null) {
+function tirerRoulette(userId, guildId = null, isTcgCollector = false) {
     const pity = roulettePity.get(userId) ?? { malus: 0, nuls: 0 };
     const garanti = pity.malus >= ROULETTE_PITY_MALUS || pity.nuls >= ROULETTE_PITY_NULS;
+    const poolEligible = ROULETTE_TABLE.filter(e => !e.tcgOnly || isTcgCollector);
 
     let outcomeId;
     if (garanti) {
-        const bonus = ROULETTE_TABLE.filter(e => e.type === 'bonus');
+        const bonus = poolEligible.filter(e => e.type === 'bonus');
         outcomeId = piocherRoulette(bonus, bonus.reduce((s, e) => s + e.poids, 0), bonus[bonus.length - 1].id);
     } else {
         const boostCharges = rouletteJackpotBoostCharges.get(userId) || 0;
@@ -893,11 +902,11 @@ function tirerRoulette(userId, guildId = null) {
         const totalJackpot = (rouletteJackpotBonus.get(userId) || 0) + boostVal + boostAnniv;
 
         if (totalJackpot > 0 && Math.random() < totalJackpot) {
-            const bonus = ROULETTE_TABLE.filter(e => e.type === 'bonus');
+            const bonus = poolEligible.filter(e => e.type === 'bonus');
             outcomeId = piocherRoulette(bonus, bonus.reduce((s, e) => s + e.poids, 0), bonus[bonus.length - 1].id);
         } else {
-            const total = ROULETTE_TABLE.reduce((s, e) => s + e.poids, 0);
-            outcomeId = piocherRoulette(ROULETTE_TABLE, total / (1 - ROULETTE_TAUX_ECHEC), 'aucun-resultat');
+            const total = poolEligible.reduce((s, e) => s + e.poids, 0);
+            outcomeId = piocherRoulette(poolEligible, total / (1 - ROULETTE_TAUX_ECHEC), 'aucun-resultat');
         }
     }
 
@@ -1370,6 +1379,18 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'bonus-epingle':
             crediterInventaireRoulette(member.id, 'epingleSalon', 1);
             return `📌 **${auteurNom}** a gagné le droit d'**épingler un message** dans ce salon !\n-# 🎒 *Stocké dans ton inventaire (\`!rlt claim\` pour l'utiliser quand tu veux).*`;
+        case 'bonus-tcg-15pts':
+            bridge.addTcgPoints?.(member.id, 15, member);
+            return `🪙 **${auteurNom}** remporte **+15 points RegaDex** ! *(Ajoutés immédiatement à ton solde)*`;
+        case 'bonus-tcg-50pts':
+            bridge.addTcgPoints?.(member.id, 50, member);
+            return `💰 **${auteurNom}** remporte **+50 points RegaDex** ! *(Ajoutés immédiatement à ton solde)*`;
+        case 'bonus-tcg-1booster':
+            bridge.addTcgBoosters?.(member.id, 1, member);
+            return `🃏 **${auteurNom}** remporte **+1 Booster RegaDex** ! *(Prêt à ouvrir dans <#1572007962199851059>)*`;
+        case 'bonus-tcg-5boosters':
+            bridge.addTcgBoosters?.(member.id, 5, member);
+            return `🎁 **${auteurNom}** décroche **+5 Boosters RegaDex** ! *(Prêts à ouvrir dans <#1572007962199851059>)*`;
         case 'special-vote-immunite-exclusion':
             // Annulation absolue pour la fondatrice (Epsys)
             if (member.id === bridge.EPSYS_ID || member.id === '436218312574107658') {
@@ -2315,9 +2336,9 @@ function buildRouletteResultEmbed(outcomeId, texte, authorId = null, auteurNom =
 }
 
 function buildRoulettePaytableEmbed() {
-    const section = (titre, type) => {
+    const sectionFilter = (titre, pred) => {
         const lignes = ROULETTE_TABLE
-            .filter(e => e.type === type)
+            .filter(pred)
             .sort((a, b) => b.poids - a.poids)
             .map(e => {
                 const { n, pct } = probaAffichee(probaReelle(e));
@@ -2331,9 +2352,10 @@ function buildRoulettePaytableEmbed() {
         .setColor(0xffd20a)
         .setTitle('🎰 Probabilités de la Roulette')
         .setDescription([
-            section('🎉 BONUS', 'bonus'),
-            section('💀 MALUS', 'malus'),
-            section('🗳️ SPÉCIAL', 'special'),
+            sectionFilter('🎉 BONUS', e => e.type === 'bonus' && !e.tcgOnly),
+            sectionFilter('💀 MALUS', e => e.type === 'malus'),
+            sectionFilter('🗳️ SPÉCIAL', e => e.type === 'special'),
+            sectionFilter('🃏 REGADEX TCG (Rôle Collectionneur.euse requis)', e => Boolean(e.tcgOnly)),
             '**😶 RIEN :**\n**1/2** (~50%) — Rien du tout',
             `**🍀 PITY :**\nAprès ${ROULETTE_PITY_MALUS} malus ou ${ROULETTE_PITY_NULS} résultats nuls, bonus garanti.`
         ].filter(Boolean).join('\n\n'));
@@ -2430,8 +2452,9 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     if (client) rouletteClient = client;
     const pityAvant = roulettePity.get(authorId) ?? { malus: 0, nuls: 0 };
     const estPityActive = (pityAvant.malus >= ROULETTE_PITY_MALUS || pityAvant.nuls >= ROULETTE_PITY_NULS);
+    const isTcgCollector = bridge.hasTcgCollectorRole ? bridge.hasTcgCollectorRole(membre) : false;
 
-    const outcomeId = tirerRoulette(authorId, guild?.id);
+    const outcomeId = tirerRoulette(authorId, guild?.id, isTcgCollector);
 
     // ==========================================
     //  BRANCHEMENT BATTLE PASS (ROULETTE ROLL & BONUS)
@@ -2536,18 +2559,36 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         if (ciblesBonusIds.length > 0) {
             rouletteRedirectBonusChoixCible.delete(authorId);
             const ciblesChoisies = await resoudreCibles(ciblesBonusIds);
-            if (ciblesChoisies.length > 0) {
-                cibles = ciblesChoisies;
-                const nomsUniques = [...new Set(ciblesChoisies.map(m => m.displayName))].map(n => `**${n}**`).join(', ');
-                prefixeRedirect = ciblesChoisies.length > 1
-                    ? `🎀 **${auteurNom}** avait cumulé **${ciblesChoisies.length} redirections de bonus**, offert simultanément à ${nomsUniques} !\n`
-                    : `🎀 **${auteurNom}** avait choisi de rediriger son bonus, offert à **${ciblesChoisies[0].displayName}** !\n`;
-                for (const cid of new Set(ciblesChoisies.map(m => m.id))) {
+            const ciblesEligibles = entryTiree.tcgOnly
+                ? ciblesChoisies.filter(m => bridge.hasTcgCollectorRole?.(m))
+                : ciblesChoisies;
+            const ciblesRefusees = entryTiree.tcgOnly
+                ? ciblesChoisies.filter(m => !bridge.hasTcgCollectorRole?.(m))
+                : [];
+
+            for (const _ref of ciblesRefusees) {
+                crediterInventaireRoulette(authorId, 'redirectBonusChoix', 1);
+            }
+
+            if (ciblesEligibles.length > 0) {
+                cibles = ciblesEligibles;
+                const nomsUniques = [...new Set(ciblesEligibles.map(m => m.displayName))].map(n => `**${n}**`).join(', ');
+                prefixeRedirect = ciblesEligibles.length > 1
+                    ? `🎀 **${auteurNom}** avait cumulé **${ciblesEligibles.length} redirections de bonus**, offert simultanément à ${nomsUniques} !\n`
+                    : `🎀 **${auteurNom}** avait choisi de rediriger son bonus, offert à **${ciblesEligibles[0].displayName}** !\n`;
+                for (const cid of new Set(ciblesEligibles.map(m => m.id))) {
                     pingsRedirection.push({
                         id: cid,
                         texte: `🔔 <@${cid}>, **${auteurNom}** t'a offert son bonus **${ROULETTE_NOMS[outcomeId]}** ! 🎁`
                     });
                 }
+                if (ciblesRefusees.length > 0) {
+                    const nomsRef = [...new Set(ciblesRefusees.map(m => `**${m.displayName}**`))].join(', ');
+                    prefixeRedirect += `↩️ *Redirection(s) vers ${nomsRef} remboursée(s) (rôle Collectionneur.euse manquant).* \n`;
+                }
+            } else if (ciblesRefusees.length > 0) {
+                const nomsRef = [...new Set(ciblesRefusees.map(m => `**${m.displayName}**`))].join(', ');
+                prefixeRedirect = `↩️ **${auteurNom}** : ta redirection de bonus vers ${nomsRef} a été **remboursée** (rôle Collectionneur.euse manquant) — tu conserves donc le bonus !\n`;
             }
         } else {
             const chargesBonus = rouletteRedirectBonusCharges.get(authorId) || 0;
@@ -2555,13 +2596,17 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
                 const candidats = membresTop30Roulette(guild, authorId);
                 if (candidats.length > 0) {
                     const cibleAlea = candidats[Math.floor(Math.random() * candidats.length)];
-                    cibles = [cibleAlea];
-                    rouletteRedirectBonusCharges.set(authorId, chargesBonus - 1);
-                    prefixeRedirect = `🎁 **${auteurNom}** avait un bonus à rediriger au hasard, offert à **${cibleAlea.displayName}** !\n`;
-                    pingsRedirection.push({
-                        id: cibleAlea.id,
-                        texte: `🔔 <@${cibleAlea.id}>, **${auteurNom}** t'a offert son bonus **${ROULETTE_NOMS[outcomeId]}** ! 🎁`
-                    });
+                    if (entryTiree.tcgOnly && !bridge.hasTcgCollectorRole?.(cibleAlea)) {
+                        prefixeRedirect = `↩️ La redirection aléatoire est tombée sur **${cibleAlea.displayName}** qui n'a pas le rôle Collectionneur.euse : charge conservée, **${auteurNom}** garde le bonus !\n`;
+                    } else {
+                        cibles = [cibleAlea];
+                        rouletteRedirectBonusCharges.set(authorId, chargesBonus - 1);
+                        prefixeRedirect = `🎁 **${auteurNom}** avait un bonus à rediriger au hasard, offert à **${cibleAlea.displayName}** !\n`;
+                        pingsRedirection.push({
+                            id: cibleAlea.id,
+                            texte: `🔔 <@${cibleAlea.id}>, **${auteurNom}** t'a offert son bonus **${ROULETTE_NOMS[outcomeId]}** ! 🎁`
+                        });
+                    }
                 }
             }
         }
@@ -2657,11 +2702,21 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
 
     // Vérification des Partages de bonus au choix (cumulables)
     let partenairesPartage = [];
+    let partenairesRefuses = [];
     if (entryTiree?.type === 'bonus' && !outcomeId.startsWith('bonus-redirect-bonus-') && outcomeId !== 'bonus-partage-bonus') {
         const partIds = getCiblesListe(roulettePartageBonusChoixCible, authorId);
         if (partIds.length > 0) {
             roulettePartageBonusChoixCible.delete(authorId);
-            partenairesPartage = await resoudreCibles(partIds);
+            const resolus = await resoudreCibles(partIds);
+            if (entryTiree.tcgOnly) {
+                partenairesPartage = resolus.filter(m => bridge.hasTcgCollectorRole?.(m));
+                partenairesRefuses = resolus.filter(m => !bridge.hasTcgCollectorRole?.(m));
+                for (const _ref of partenairesRefuses) {
+                    crediterInventaireRoulette(authorId, 'partageBonus', 1);
+                }
+            } else {
+                partenairesPartage = resolus;
+            }
         }
     }
 
@@ -2754,6 +2809,11 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
                 texte: `🤝 🔔 <@${pid}>, **${auteurNom}** a partagé son bonus **${ROULETTE_NOMS[outcomeId] || outcomeId}** avec toi !`
             });
         }
+    }
+
+    if (partenairesRefuses.length > 0) {
+        const nomsRefPart = [...new Set(partenairesRefuses.map(p => `**${p.displayName}**`))].join(', ');
+        texte += `\n\n↩️ *Partage vers ${nomsRefPart} remboursé dans ton inventaire (\`!rlt claim\`) : rôle Collectionneur.euse requis pour les bonus RegaDex.*`;
     }
 
     if (outcomeId === 'bonus-coup-triple') {

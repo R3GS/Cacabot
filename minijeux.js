@@ -22,7 +22,8 @@ let minijeuxBridge = {
     getPenduStats: () => ({}),
     setPenduStats: () => {},
     demanderSauvegarde: () => {},
-    trackBattlePassProgress: () => {}
+    trackBattlePassProgress: () => {},
+    grantTcgPoints: async () => []
 };
 
 function initMinijeuxState(bridge) {
@@ -556,12 +557,16 @@ async function handleMotusMessage(message, response, client, helpers) {
                     motusData.termine = true;
                     minijeuxBridge.demanderSauvegarde();
 
+                    const tcgRewardM1 = await minijeuxBridge.grantTcgPoints?.([message.author.id], 2) || [];
+                    const ligneTcgM1 = tcgRewardM1.length > 0 ? `\n🃏 **Bonus RegaDex :** **+2 points RegaDex** pour <@${message.author.id}> !\n` : '';
+
                     const embedManche1 = new EmbedBuilder()
                         .setColor(0x2ecc71)
                         .setTitle(`🎉 MANCHE ${mancheActuelle}/${totalManches} REMPORTÉE !`)
                         .setDescription(
                             `Félicitations à <@${message.author.id}> qui trouve le mot en **${essaiNum} essai${essaiNum > 1 ? 's' : ''}** !\n\n` +
-                            `🔤 **Le mot était :** \`${motDuJour}\`\n\n` +
+                            `🔤 **Le mot était :** \`${motDuJour}\`\n` +
+                            ligneTcgM1 + `\n` +
                             `⏳ **La manche 2 commence dans 30 secondes !** Vos 3 essais seront réinitialisés pour le prochain mot !`
                         )
                         .setFooter({ text: `Manche 2 dans 30 secondes chrono !` });
@@ -595,6 +600,9 @@ async function handleMotusMessage(message, response, client, helpers) {
                 motusData.vainqueurId = message.author.id;
                 minijeuxBridge.demanderSauvegarde();
 
+                const tcgRewardM2 = await minijeuxBridge.grantTcgPoints?.([message.author.id], 2) || [];
+                const ligneTcgM2 = tcgRewardM2.length > 0 ? `\n🃏 **Bonus RegaDex :** **+2 points RegaDex** pour <@${message.author.id}> !` : '';
+
                 const prochainRdv = motusData.heureSession === 10 
                     ? 'Rendez-vous ce soir à 19h00 pour le Motus difficile (7 lettres) !' 
                     : 'Rendez-vous demain à 10h00 pour le prochain Motus !';
@@ -605,7 +613,8 @@ async function handleMotusMessage(message, response, client, helpers) {
                     .setDescription(
                         `Félicitations à <@${message.author.id}> qui a trouvé le mot de la manche 2 en **${essaiNum} essai${essaiNum > 1 ? 's' : ''}** !\n\n` +
                         `🔤 **Le mot était :** \`${motDuJour}\` (${longueurAttendue} lettres)\n` +
-                        `🏆 **Total de victoires de ${message.member?.displayName ?? message.author.username} :** **${motusStats[message.author.id].victoires}**`
+                        `🏆 **Total de victoires de ${message.member?.displayName ?? message.author.username} :** **${motusStats[message.author.id].victoires}**` +
+                        ligneTcgM2
                     )
                     .setFooter({ text: prochainRdv });
 
@@ -1479,10 +1488,15 @@ async function terminerSessionRebus(channel) {
         return `${med} <@${uid}> — **${pts} point${pts > 1 ? 's' : ''}**`;
     }).join('\n');
 
-    const vainqueurs = scoresList.filter(s => s[1] === maxScore).map(s => `<@${s[0]}>`);
-    const texteVictoire = vainqueurs.length > 1
+    const vainqueursIds = scoresList.filter(s => s[1] === maxScore).map(s => s[0]);
+    const tcgRewardRebus = await minijeuxBridge.grantTcgPoints?.(vainqueursIds, 2) || [];
+    const vainqueurs = vainqueursIds.map(id => `<@${id}>`);
+    let texteVictoire = vainqueurs.length > 1
         ? `🤝 **ÉGALITÉ AU SOMMET !** Victoire partagée entre ${vainqueurs.join(' et ')} (**${maxScore} pts**) !`
         : `Félicitations à ${vainqueurs[0]} pour cette victoire (**${maxScore} pts**) !`;
+    if (tcgRewardRebus.length > 0) {
+        texteVictoire += `\n🃏 **Bonus RegaDex :** **+2 points RegaDex** pour ${tcgRewardRebus.map(id => `<@${id}>`).join(', ')} !`;
+    }
 
     const embedVictoire = new EmbedBuilder()
         .setColor(0xf1c40f)

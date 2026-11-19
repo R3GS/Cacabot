@@ -60,7 +60,8 @@ let penduBridge = {
     getMotusStats: () => ({}),
     getRebusStats: () => ({}),
     demanderSauvegarde: () => {},
-    trackBattlePassProgress: () => {}
+    trackBattlePassProgress: () => {},
+    grantTcgPoints: async () => []
 };
 
 function initPenduState(bridge) {
@@ -767,6 +768,7 @@ async function handlePenduMessage(message, response, client, helpers) {
                     for (const participantId of Object.keys(session.tentativesJoueurs)) {
                         penduBridge.trackBattlePassProgress?.(participantId, 'pendu_victoire_collective', 1);
                     }
+                    const tcgRewardPendu = await penduBridge.grantTcgPoints?.(vainqueurs, 2) || [];
                     penduBridge.demanderSauvegarde();
 
                     // Bilan de chaque participant avec ses essais (sans liste individuelle répétée)
@@ -782,6 +784,10 @@ async function handlePenduMessage(message, response, client, helpers) {
                     let texteAnnonceVictoire = vainqueurs.length > 1
                         ? `🤝 **ÉGALITÉ AU SOMMET !** Victoire partagée entre ${vainqueurs.map(id => `<@${id}>`).join(' et ')} (avec **${maxBonnes}** bonne(s) lettre(s) chacun·e) !\n⭐ **Récompense :** +3 points au classement hebdo pour chacun·e !`
                         : `🏆 **Vainqueur de la manche :** <@${vainqueurs[0]}> (avec **${maxBonnes}** bonne(s) lettre(s)) !\n⭐ **Récompense :** +3 points au classement hebdomadaire !`;
+
+                    if (tcgRewardPendu.length > 0) {
+                        texteAnnonceVictoire += `\n🃏 **Bonus RegaDex :** **+2 points RegaDex** pour ${tcgRewardPendu.map(id => `<@${id}>`).join(', ')} !`;
+                    }
 
                     if (session.coupDePoker) {
                         texteAnnonceVictoire += `\n\n🎰 **PRIME COUP DE POKER :** <@${session.coupDePoker}> a osé tenter et trouver le mot entier alors qu'il restait au moins 3 lettres cachées ! **(+2 points bonus au classement hebdo)** 🔥`;
