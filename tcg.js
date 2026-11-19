@@ -35,10 +35,50 @@ const TCG_PANTHEON_CHANNEL_ID = '1572421633937768519'; // Panthéon RegaDex
 const SHITPOST_CHANNEL_ID = '720079691041472572'; // Salon shitpost autorisé pour !flex
 const AFK_VOCAL_CHANNEL_ID = '1542345102930874449';
 
-const SET1_NAME = 'Set 1 - Vestiges Regaïens';
+// ==========================================
+//   [SET 2] CONFIGURATION MULTI-SETS REGADEX
+//   Pour activer le Set 2 plus tard :
+//   1) Ajouter `2: { ... enabled: true }` dans SETS_CONFIG
+//   2) Déposer les cartes dans TCG/Set 2/ et les assets dans TCG/Assets/ (ou TCG/Set 2/)
+//   3) Suivre les repères `// [SET 2]` dans tcg.js et index.js
+// ==========================================
+const DEFAULT_SET_NUMBER = 1;
+const SETS_CONFIG = {
+    1: {
+        number: 1,
+        name: 'Set 1 - Vestiges Regaïens',
+        shortName: 'Set 1',
+        folderName: 'Set 1',
+        expectedClassic: 96,
+        expectedNegative: 13,
+        totalExpected: 109,
+        enabled: true
+    }
+    // [SET 2] Modèle prêt à activer le jour J :
+    // 2: {
+    //     number: 2,
+    //     name: 'Set 2 - Nom du Set 2',
+    //     shortName: 'Set 2',
+    //     folderName: 'Set 2',
+    //     expectedClassic: 96,
+    //     expectedNegative: 13,
+    //     totalExpected: 109,
+    //     enabled: true
+    // }
+};
+
+const SET1_NAME = SETS_CONFIG[1].name;
 const BOOSTER_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6h
 const HALF_COOLDOWN_MS = 3 * 60 * 60 * 1000; // 3h
 const MAX_FREE_BOOSTERS = 2;
+const MAX_WEEKLY_BOOSTERS = 2; // Plafond de boosters du lundi 8h dans !tcgclaim
+const MAX_WISHLIST = 5;
+const COMPLETION_MILESTONES = [
+    { pct: 25, reward: 15 },
+    { pct: 50, reward: 15 },
+    { pct: 75, reward: 15 },
+    { pct: 100, reward: 25 }
+];
 const BOOSTER_GIF_DELAY_MS = 4000; // 4 secondes
 const TRADE_INACTIVITY_MS = 24 * 60 * 60 * 1000; // 24h
 
@@ -47,6 +87,23 @@ const POINTS_PER_DUPLICATE = 3;
 const POINTS_PER_TRADE = 3;
 const MESSAGES_PER_POINT = 15;
 const VOCAL_MINUTES_PER_POINT = 10;
+
+function getActiveSets() {
+    return Object.values(SETS_CONFIG).filter(s => s.enabled);
+}
+
+function getSetConfig(setNumber = DEFAULT_SET_NUMBER) {
+    return SETS_CONFIG[setNumber] || SETS_CONFIG[DEFAULT_SET_NUMBER];
+}
+
+function getSetCatalog(setNumber = null) {
+    if (!setNumber) return cardCatalog;
+    return cardCatalog.filter(c => (c.setNumber || 1) === setNumber);
+}
+
+function getSetCardsCount(setNumber = DEFAULT_SET_NUMBER) {
+    return getSetCatalog(setNumber).length;
+}
 
 const PULL_BOOST_ROLE_KEY = 'ROLE_TCG';
 const PULL_MULTIPLIERS = [1, 2, 3, 5, 10, 20, 50, 100];
@@ -197,11 +254,12 @@ function getStoreData() {
     if (!data.activeTrades) data.activeTrades = {};
     if (!data.pullBoosts) data.pullBoosts = {};
     if (!data.pullPunishments) data.pullPunishments = {};
+    if (typeof data.lastWeeklyBoosterKey !== 'string') data.lastWeeklyBoosterKey = '';
     return data;
 }
 
 // ==========================================
-//   CATALOGUE & SCAN AUTOMATIQUE SET 1
+//   CATALOGUE & SCAN AUTOMATIQUE (MULTI-SETS)
 // ==========================================
 
 const TCG_ROOT = path.resolve(process.cwd(), 'TCG');
@@ -215,6 +273,7 @@ const PROXY_MAX_RAM_ITEMS = 120;
 let cardCatalog = [];
 let cardById = new Map();
 let cardByNumCode = new Map();
+let setAssets = {}; // [SET 2] Map setNumber -> { openingGif, boosterPng, eventBanner, logo }
 let assetPaths = {
     openingGif: null,
     mysteryCard: null,
@@ -286,7 +345,7 @@ function findSubdir(parentDir, candidates) {
     return null;
 }
 
-function parseCardFilename(filename, category, folderRarity) {
+function parseCardFilename(filename, category, folderRarity, setNumber = DEFAULT_SET_NUMBER) {
     if (!filename.toLowerCase().endsWith('.png')) return null;
     const match = filename.match(/^(?:(Ø)(\d+)|(\d+))(?:\s*-\s*|\s+)(.+)\.png$/iu);
     if (!match) return null;
@@ -306,12 +365,12 @@ function parseCardFilename(filename, category, folderRarity) {
 
     if (isNegative && folderRarity !== 'Full Art & Négative') return null;
 
-    const sortIndex = isNegative ? 1000 + numValue : numValue;
-    const id = `1-${numCode}`;
+    const sortIndex = (setNumber * 100000) + (isNegative ? 1000 + numValue : numValue);
+    const id = `${setNumber}-${numCode}`;
 
     return {
         id,
-        setNumber: 1,
+        setNumber,
         numCode,
         numValue,
         sortIndex,
@@ -338,13 +397,33 @@ async function scanSet1Cards(client = null) {
     const duplicateCodes = [];
     const orphanHolos = [];
 
+    const newSetAssets = {};
+    for (const setCfg of getActiveSets()) {
+        const setDir = path.join(TCG_ROOT, setCfg.folderName);
+        const setAssetsSub = findSubdir(TCG_ASSETS_DIR, [setCfg.folderName]) || path.join(TCG_ASSETS_DIR, setCfg.folderName);
+        const sNum = setCfg.number;
+
+        const assetsForSet = {
+            openingGif: findExistingFile(TCG_ASSETS_DIR, [`Ouverture Set ${sNum}.gif`]) || findExistingFile(setDir, [`Ouverture Set ${sNum}.gif`]),
+            boosterPng: findExistingFile(TCG_ASSETS_DIR, [`Booster Set ${sNum}.png`]) || findExistingFile(setDir, [`Booster Set ${sNum}.png`]),
+            eventBanner: findExistingFile(setDir, [`Event banner Set ${sNum}.png`]) || findExistingFile(TCG_ASSETS_DIR, [`Event banner Set ${sNum}.png`]),
+            logo: findExistingFile(setDir, ['Logo.png']) || findExistingFile(setAssetsSub, ['Logo.png'])
+        };
+        newSetAssets[sNum] = assetsForSet;
+
+        if (!assetsForSet.openingGif) missingAssets.push(`TCG/Assets/Ouverture Set ${sNum}.gif`);
+        if (!assetsForSet.boosterPng) missingAssets.push(`TCG/Assets/Booster Set ${sNum}.png`);
+        if (!assetsForSet.eventBanner) missingAssets.push(`TCG/${setCfg.folderName}/Event banner Set ${sNum}.png`);
+        if (!assetsForSet.logo) missingAssets.push(`TCG/${setCfg.folderName}/Logo.png`);
+    }
+    setAssets = newSetAssets;
+
     assetPaths = {
-        openingGif: findExistingFile(TCG_ASSETS_DIR, ['Ouverture Set 1.gif']),
+        openingGif: setAssets[1]?.openingGif || null,
         mysteryCard: findExistingFile(TCG_ASSETS_DIR, ['Carte mystère.png', 'Carte mystere.png']),
-        boosterPng: findExistingFile(TCG_ASSETS_DIR, ['Booster Set 1.png']),
-        eventBanner: findExistingFile(TCG_SET1_DIR, ['Event banner Set 1.png']) || findExistingFile(TCG_ASSETS_DIR, ['Event banner Set 1.png']),
-        set1Logo: findExistingFile(TCG_SET1_DIR, ['Logo.png'])
-            || findExistingFile(findSubdir(TCG_ASSETS_DIR, ['Set 1']) || path.join(TCG_ASSETS_DIR, 'Set 1'), ['Logo.png']),
+        boosterPng: setAssets[1]?.boosterPng || null,
+        eventBanner: setAssets[1]?.eventBanner || null,
+        set1Logo: setAssets[1]?.logo || null,
         bgW: findExistingFile(TCG_ASSETS_DIR, [
             'Background RegaDex W.jpg', 'Background RegaDex W.jpeg', 'Background RegaDex W.png',
             'Background Readex W.jpg', 'Background Readex W.jpeg', 'Background Readex W.png'
@@ -359,11 +438,7 @@ async function scanSet1Cards(client = null) {
     bgCanvases.clear();
     await Promise.all([getBackground('W'), getBackground('B')]);
 
-    if (!assetPaths.openingGif) missingAssets.push('TCG/Assets/Ouverture Set 1.gif');
     if (!assetPaths.mysteryCard) missingAssets.push('TCG/Assets/Carte mystère.png');
-    if (!assetPaths.boosterPng) missingAssets.push('TCG/Assets/Booster Set 1.png');
-    if (!assetPaths.eventBanner) missingAssets.push('TCG/Set 1/Event banner Set 1.png');
-    if (!assetPaths.set1Logo) missingAssets.push('TCG/Set 1/Logo.png');
     if (!assetPaths.bgW) missingAssets.push('TCG/Assets/Background RegaDex W.jpg (ou .png)');
     if (!assetPaths.bgB) missingAssets.push('TCG/Assets/Background RegaDex B.jpg (ou .png)');
 
@@ -379,68 +454,83 @@ async function scanSet1Cards(client = null) {
         { key: 'Full Art & Négative', candidates: ['Full Art & Négative', 'Full Art & Négatives', 'Full Art & Negative', 'Full Art & Negatives'] }
     ];
 
-    for (const cat of CATEGORIES) {
-        const catDir = findSubdir(TCG_SET1_DIR, [cat]);
-        if (!catDir) {
-            unrecognizedFiles.push(`Dossier catégorie manquant : TCG/Set 1/${cat}`);
+    // [SET 2] Boucle dynamique sur tous les sets activés dans SETS_CONFIG
+    for (const setCfg of getActiveSets()) {
+        const setDir = path.join(TCG_ROOT, setCfg.folderName);
+        if (!fs.existsSync(setDir)) {
+            unrecognizedFiles.push(`Dossier Set manquant : TCG/${setCfg.folderName}`);
             continue;
         }
 
-        for (const rf of rarityFolders) {
-            const rarDir = findSubdir(catDir, rf.candidates);
-            if (!rarDir) {
-                unrecognizedFiles.push(`Dossier rareté manquant : TCG/Set 1/${cat}/${rf.key}`);
+        for (const cat of CATEGORIES) {
+            const catDir = findSubdir(setDir, [cat]);
+            if (!catDir) {
+                unrecognizedFiles.push(`Dossier catégorie manquant : TCG/${setCfg.folderName}/${cat}`);
                 continue;
             }
 
-            const files = fs.readdirSync(rarDir).filter(f => !f.startsWith('.'));
-            for (const file of files) {
-                const fullPath = path.join(rarDir, file);
-                if (fs.statSync(fullPath).isDirectory()) continue;
-
-                const parsed = parseCardFilename(file, cat, rf.key);
-                if (!parsed) {
-                    unrecognizedFiles.push(`TCG/Set 1/${cat}/${path.basename(rarDir)}/${file}`);
-                    continue;
-                }
-                parsed.filePath = fullPath;
-
-                if (newById.has(parsed.id)) {
-                    duplicateCodes.push(`${parsed.id} (${file} vs ${newById.get(parsed.id).filename})`);
+            for (const rf of rarityFolders) {
+                const rarDir = findSubdir(catDir, rf.candidates);
+                if (!rarDir) {
+                    unrecognizedFiles.push(`Dossier rareté manquant : TCG/${setCfg.folderName}/${cat}/${rf.key}`);
                     continue;
                 }
 
-                newCatalog.push(parsed);
-                newById.set(parsed.id, parsed);
-                newByNumCode.set(parsed.numCode.toUpperCase(), parsed);
+                const files = fs.readdirSync(rarDir).filter(f => !f.startsWith('.'));
+                for (const file of files) {
+                    const fullPath = path.join(rarDir, file);
+                    if (fs.statSync(fullPath).isDirectory()) continue;
+
+                    const parsed = parseCardFilename(file, cat, rf.key, setCfg.number);
+                    if (!parsed) {
+                        unrecognizedFiles.push(`TCG/${setCfg.folderName}/${cat}/${path.basename(rarDir)}/${file}`);
+                        continue;
+                    }
+                    parsed.filePath = fullPath;
+
+                    if (newById.has(parsed.id)) {
+                        duplicateCodes.push(`${parsed.id} (${file} vs ${newById.get(parsed.id).filename})`);
+                        continue;
+                    }
+
+                    newCatalog.push(parsed);
+                    newById.set(parsed.id, parsed);
+                    newByNumCode.set(parsed.id.toUpperCase(), parsed);
+                    if (!newByNumCode.has(parsed.numCode.toUpperCase())) {
+                        newByNumCode.set(parsed.numCode.toUpperCase(), parsed);
+                    }
+                }
             }
         }
-    }
 
-    // Lier chaque carte Holo à sa version normale
-    for (const card of newCatalog) {
-        if (!card.isHolo) continue;
-        const baseMatch = newCatalog.find(c =>
-            !c.isHolo &&
-            !c.isNegative &&
-            c.category === card.category &&
-            c.rarity === card.rarity &&
-            c.normalizedBaseName === card.normalizedBaseName
-        );
-        if (baseMatch) {
-            card.baseCounterpartId = baseMatch.id;
-            baseMatch.holoCounterpartId = card.id;
-        } else {
-            orphanHolos.push(`${card.id} - ${card.name} (${card.category}/${card.rarity})`);
+        // Lier chaque carte Holo à sa version normale (au sein du même Set)
+        const setCards = newCatalog.filter(c => c.setNumber === setCfg.number);
+        for (const card of setCards) {
+            if (!card.isHolo) continue;
+            const baseMatch = setCards.find(c =>
+                !c.isHolo &&
+                !c.isNegative &&
+                c.category === card.category &&
+                c.rarity === card.rarity &&
+                c.normalizedBaseName === card.normalizedBaseName
+            );
+            if (baseMatch) {
+                card.baseCounterpartId = baseMatch.id;
+                baseMatch.holoCounterpartId = card.id;
+            } else {
+                orphanHolos.push(`${card.id} - ${card.name} (${card.category}/${card.rarity})`);
+            }
         }
-    }
 
-    // Vérifier les 96 classiques + 13 négatives = 109 attendues
-    for (let i = 1; i <= 96; i++) {
-        if (!newByNumCode.has(`${i}`)) missingCards.push(`1-${i}`);
-    }
-    for (let i = 1; i <= 13; i++) {
-        if (!newByNumCode.has(`Ø${i}`)) missingCards.push(`1-Ø${i}`);
+        // Vérifier le nombre attendu de cartes classiques + négatives pour ce Set
+        for (let i = 1; i <= setCfg.expectedClassic; i++) {
+            const expectedId = `${setCfg.number}-${i}`;
+            if (!newById.has(expectedId)) missingCards.push(expectedId);
+        }
+        for (let i = 1; i <= setCfg.expectedNegative; i++) {
+            const expectedId = `${setCfg.number}-Ø${i}`;
+            if (!newById.has(expectedId)) missingCards.push(expectedId);
+        }
     }
 
     newCatalog.sort((a, b) => a.sortIndex - b.sortIndex);
@@ -543,6 +633,7 @@ function getOrCreateTcgxSandbox(forceReset = false) {
             currentRechargeMs: BOOSTER_COOLDOWN_MS,
             inventory: {
                 booster: 999,
+                weeklyBooster: 2,
                 luckyBooster: 99,
                 holoTransform: 99,
                 halfCooldown: 99
@@ -555,6 +646,8 @@ function getOrCreateTcgxSandbox(forceReset = false) {
             theme: 'B',
             notifFreq: 'each',
             favoriteCardId: cardCatalog[0]?.id || null,
+            wishlist: [],
+            completionMilestones: {}, // [SET 2] Clés par numéro de set ('1', '2'...)
             stats: {
                 boostersOpened: 0,
                 tradesCompleted: 0,
@@ -569,6 +662,8 @@ function getOrCreateTcgxSandbox(forceReset = false) {
         }
         if (tcgxSandboxUser.points < 900000) tcgxSandboxUser.points = 999999;
         if ((tcgxSandboxUser.inventory?.booster || 0) < 50) tcgxSandboxUser.inventory.booster = 999;
+        if (!Array.isArray(tcgxSandboxUser.wishlist)) tcgxSandboxUser.wishlist = [];
+        if (!tcgxSandboxUser.completionMilestones) tcgxSandboxUser.completionMilestones = {};
     }
     return tcgxSandboxUser;
 }
@@ -589,6 +684,7 @@ function getOrCreateTcgUser(userId) {
             currentRechargeMs: BOOSTER_COOLDOWN_MS,
             inventory: {
                 booster: 0,
+                weeklyBooster: 0,
                 luckyBooster: 0,
                 holoTransform: 0,
                 halfCooldown: 0
@@ -601,6 +697,8 @@ function getOrCreateTcgUser(userId) {
             theme: 'B',
             notifFreq: 'each',
             favoriteCardId: null,
+            wishlist: [],
+            completionMilestones: {}, // [SET 2] Clés par numéro de set ('1', '2'...)
             stats: {
                 boostersOpened: 0,
                 tradesCompleted: 0,
@@ -617,11 +715,15 @@ function getOrCreateTcgUser(userId) {
     if (typeof u.freeBoosters !== 'number') u.freeBoosters = 1;
     if (!u.lastFreeRechargeAt) u.lastFreeRechargeAt = Date.now();
     if (!u.currentRechargeMs) u.currentRechargeMs = BOOSTER_COOLDOWN_MS;
-    if (!u.inventory) u.inventory = { booster: 0, luckyBooster: 0, holoTransform: 0, halfCooldown: 0 };
+    if (!u.inventory) u.inventory = { booster: 0, weeklyBooster: 0, luckyBooster: 0, holoTransform: 0, halfCooldown: 0 };
+    if (typeof u.inventory.weeklyBooster !== 'number') u.inventory.weeklyBooster = 0;
+    if (u.inventory.weeklyBooster > MAX_WEEKLY_BOOSTERS) u.inventory.weeklyBooster = MAX_WEEKLY_BOOSTERS;
     if (!u.activeBonuses) u.activeBonuses = { luckyBooster: false, halfCooldown: false };
     if (typeof u.pityRare !== 'boolean') u.pityRare = false;
     if (u.theme !== 'W' && u.theme !== 'B') u.theme = 'B';
     if (u.notifFreq !== 'each' && u.notifFreq !== 'full') u.notifFreq = 'each';
+    if (!Array.isArray(u.wishlist)) u.wishlist = [];
+    if (!u.completionMilestones || typeof u.completionMilestones !== 'object') u.completionMilestones = {};
     if (!u.stats) u.stats = { boostersOpened: 0, tradesCompleted: 0, duplicatesObtained: 0 };
 
     syncFreeBoosters(u);
@@ -676,7 +778,73 @@ function getFullBoosterTimestamp(u) {
 
 function getTotalAvailableBoosters(u) {
     syncFreeBoosters(u);
-    return (u.freeBoosters || 0) + (u.inventory?.booster || 0);
+    return (u.freeBoosters || 0) + (u.inventory?.weeklyBooster || 0) + (u.inventory?.booster || 0);
+}
+
+async function verifierBoosterHebdoTcg(client) {
+    try {
+        const now = new Date();
+        const paris = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
+        // Tous les lundis à partir de 8h00 (fenêtre 8h00 -> 8h59 Paris)
+        if (paris.getDay() !== 1 || paris.getHours() !== 8) return false;
+
+        const yyyy = paris.getFullYear();
+        const mm = String(paris.getMonth() + 1).padStart(2, '0');
+        const dd = String(paris.getDate()).padStart(2, '0');
+        const mondayKey = `${yyyy}-${mm}-${dd}`;
+
+        const data = getStoreData();
+        if (data.lastWeeklyBoosterKey === mondayKey) return false;
+        data.lastWeeklyBoosterKey = mondayKey;
+
+        const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID).catch(() => null);
+        if (!guild) return false;
+
+        await guild.members.fetch().catch(() => {});
+        const targets = [...guild.members.cache.values()].filter(m => !m.user.bot && hasTcgRole(m));
+
+        let credited = 0;
+        let capped = 0;
+        for (const m of targets) {
+            const u = getOrCreateTcgUser(m.id);
+            if ((u.inventory.weeklyBooster || 0) < MAX_WEEKLY_BOOSTERS) {
+                u.inventory.weeklyBooster = (u.inventory.weeklyBooster || 0) + 1;
+                credited++;
+            } else {
+                capped++;
+            }
+        }
+
+        await tcgBridge.saveAll().catch(() => tcgBridge.demanderSauvegarde());
+
+        const tcgChan = client.channels.cache.get(TCG_CHANNEL_ID)
+            || await client.channels.fetch(TCG_CHANNEL_ID).catch(() => null);
+        if (tcgChan) {
+            const embed = new EmbedBuilder()
+                .setColor(0xf1c40f)
+                .setTitle('📅 Booster hebdomadaire du lundi offert !')
+                .setDescription(
+                    `Bon lundi les collectionneur·euses ! ☀️\n` +
+                    `**+1 Booster gratuit hebdomadaire** vient d'être déposé dans ton inventaire (\`!tcgclaim\`) !\n\n` +
+                    `• 🎁 **Bénéficiaires :** **${credited}** membre${credited > 1 ? 's' : ''} crédité${credited > 1 ? 's' : ''}` +
+                    (capped > 0 ? ` *(${capped} déjà au plafond de ${MAX_WEEKLY_BOOSTERS}/${MAX_WEEKLY_BOOSTERS})*` : '') + `\n` +
+                    `• 📦 **Stock hebdo max :** **${MAX_WEEKLY_BOOSTERS}/${MAX_WEEKLY_BOOSTERS}** *(pense à ouvrir tes boosters avant lundi prochain pour ne pas bloquer le suivant !)*\n\n` +
+                    `👉 Tape \`!tcggo\`, \`!open\` ou \`!tcgclaim\` pour l'ouvrir !`
+                )
+                .setFooter({ text: `RegaDex ${SET1_NAME} • Bonus du lundi 8h` })
+                .setTimestamp();
+
+            await tcgChan.send({
+                content: `<@&${TCG_ROLE_ID}>`,
+                embeds: [embed],
+                allowedMentions: { roles: [TCG_ROLE_ID] }
+            }).catch(() => {});
+        }
+        return true;
+    } catch (err) {
+        console.error('Erreur verifierBoosterHebdoTcg:', err);
+        return false;
+    }
 }
 
 function armerNotifBooster(userId, client) {
@@ -896,7 +1064,9 @@ function isAllowedFlexChannel(channel) {
     return false;
 }
 
-function getUserCompletionStats(u) {
+function getUserCompletionStats(u, setNumber = null) {
+    const list = getSetCatalog(setNumber);
+    const setCfg = getSetConfig(setNumber || DEFAULT_SET_NUMBER);
     let uniqueCount = 0;
     let totalCopies = 0;
     const byCategory = {
@@ -905,7 +1075,7 @@ function getUserCompletionStats(u) {
         'Références': { owned: 0, total: 0 }
     };
 
-    for (const c of cardCatalog) {
+    for (const c of list) {
         if (byCategory[c.category]) byCategory[c.category].total++;
         const q = u.cards?.[c.id] || 0;
         if (q > 0) {
@@ -914,40 +1084,124 @@ function getUserCompletionStats(u) {
             if (byCategory[c.category]) byCategory[c.category].owned++;
         }
     }
-    return { uniqueCount, totalCopies, totalSet: cardCatalog.length || 109, byCategory };
+    const fallbackTotal = setNumber
+        ? setCfg.totalExpected
+        : getActiveSets().reduce((acc, s) => acc + s.totalExpected, 0);
+    return { uniqueCount, totalCopies, totalSet: list.length || fallbackTotal, byCategory };
 }
 
-function resolveCardQuery(rawQuery) {
-    if (!rawQuery) return { card: null, matches: [] };
-    const q = rawQuery.trim();
-    if (!q) return { card: null, matches: [] };
+function checkAndGrantCompletionMilestones(userId, setNumber = DEFAULT_SET_NUMBER) {
+    if (isSandboxId(userId)) return { unlocked: [], totalBonusPts: 0 };
+    const u = getOrCreateTcgUser(userId);
+    const comp = getUserCompletionStats(u, setNumber);
+    if (!comp.totalSet || comp.totalSet <= 0) return { unlocked: [], totalBonusPts: 0 };
 
-    // 1. Format explicite 1-48, 1-Ø12, Ø12, 48
+    const setKey = String(setNumber);
+    if (!u.completionMilestones || typeof u.completionMilestones !== 'object') {
+        u.completionMilestones = {};
+    }
+    if (!Array.isArray(u.completionMilestones[setKey])) {
+        u.completionMilestones[setKey] = [];
+    }
+
+    const setCfg = getSetConfig(setNumber);
+    const exactPct = (comp.uniqueCount / comp.totalSet) * 100;
+    const unlocked = [];
+    let totalBonusPts = 0;
+
+    for (const m of COMPLETION_MILESTONES) {
+        const reached = m.pct === 100 ? (comp.uniqueCount >= comp.totalSet) : (exactPct >= m.pct);
+        if (reached && !u.completionMilestones[setKey].includes(m.pct)) {
+            u.completionMilestones[setKey].push(m.pct);
+            u.points = (u.points || 0) + m.reward;
+            totalBonusPts += m.reward;
+            unlocked.push({ pct: m.pct, reward: m.reward, setNumber, setName: setCfg.name });
+        }
+    }
+
+    if (unlocked.length > 0) {
+        tcgBridge.demanderSauvegarde();
+    }
+    return { unlocked, totalBonusPts };
+}
+
+function getCardDuplicateOwners(cardId, excludeUserId = null) {
+    const data = getStoreData();
+    const owners = [];
+    for (const [uid, u] of Object.entries(data.users || {})) {
+        if (isSandboxId(uid) || uid === excludeUserId) continue;
+        const qty = u?.cards?.[cardId] || 0;
+        if (qty >= 2) {
+            owners.push({ uid, qty, extra: qty - 1 });
+        }
+    }
+    owners.sort((a, b) => b.qty - a.qty);
+    return owners;
+}
+
+function getSanitizedWishlist(u) {
+    if (!Array.isArray(u?.wishlist)) return [];
+    const seen = new Set();
+    const valid = [];
+    for (const id of u.wishlist) {
+        if (cardById.has(id) && !seen.has(id)) {
+            seen.add(id);
+            valid.push(id);
+            if (valid.length >= MAX_WISHLIST) break;
+        }
+    }
+    return valid;
+}
+
+function resolveCardQuery(rawQuery, preferredSetNumber = null) {
+    if (!rawQuery) return { card: null, matches: [], isCodeQuery: false };
+    const q = rawQuery.trim();
+    if (!q) return { card: null, matches: [], isCodeQuery: false };
+
+    // 1. Format explicite 1-48, 2-48, 1-Ø12, Ø12, 48 ([SET 2] multi-sets)
     const cleaned = q.replace(/^#/, '').trim();
-    const codeMatch = cleaned.match(/^(?:1\s*-\s*)?(Ø|O)?\s*(\d+)$/iu);
+    const codeMatch = cleaned.match(/^(?:(\d+)\s*-\s*)?(Ø|O)?\s*(\d+)$/iu);
     if (codeMatch) {
-        const isNeg = Boolean(codeMatch[1]);
-        const num = parseInt(codeMatch[2], 10);
-        const key = isNeg ? `Ø${num}` : `${num}`;
-        const found = cardByNumCode.get(key.toUpperCase());
-        if (found) return { card: found, matches: [found] };
+        const explicitSet = codeMatch[1] ? parseInt(codeMatch[1], 10) : null;
+        const isNeg = Boolean(codeMatch[2]);
+        const num = parseInt(codeMatch[3], 10);
+        const numKey = isNeg ? `Ø${num}` : `${num}`;
+
+        if (explicitSet !== null) {
+            const fullId = `${explicitSet}-${numKey}`.toUpperCase();
+            const found = cardByNumCode.get(fullId) || cardById.get(`${explicitSet}-${numKey}`);
+            if (found) return { card: found, matches: [found], isCodeQuery: true };
+        } else {
+            // [SET 2] Si le numéro est saisi sans préfixe de Set, vérifier tous les Sets actifs
+            const codeMatches = cardCatalog.filter(c => c.numCode.toUpperCase() === numKey.toUpperCase());
+            if (codeMatches.length === 1) {
+                return { card: codeMatches[0], matches: codeMatches, isCodeQuery: true };
+            }
+            if (codeMatches.length > 1) {
+                if (preferredSetNumber) {
+                    const pref = codeMatches.find(c => (c.setNumber || 1) === preferredSetNumber);
+                    if (pref) return { card: pref, matches: codeMatches, isCodeQuery: true };
+                }
+                return { card: null, matches: codeMatches, isCodeQuery: true };
+            }
+        }
     }
 
     // 2. Recherche par nom exact puis partiel
     const normQ = normalizeText(q);
-    if (!normQ) return { card: null, matches: [] };
+    if (!normQ) return { card: null, matches: [], isCodeQuery: false };
 
     const exact = cardCatalog.filter(c => c.normalizedName === normQ || c.normalizedDisplayName === normQ);
-    if (exact.length === 1) return { card: exact[0], matches: exact };
-    if (exact.length > 1) return { card: null, matches: exact };
+    if (exact.length === 1) return { card: exact[0], matches: exact, isCodeQuery: false };
+    if (exact.length > 1) return { card: null, matches: exact, isCodeQuery: false };
 
     const partial = cardCatalog.filter(c =>
         c.normalizedName.includes(normQ) ||
         (c.normalizedDisplayName && c.normalizedDisplayName.includes(normQ)) ||
         c.id.toLowerCase() === cleaned.toLowerCase()
     );
-    if (partial.length === 1) return { card: partial[0], matches: partial };
-    return { card: null, matches: partial };
+    if (partial.length === 1) return { card: partial[0], matches: partial, isCodeQuery: false };
+    return { card: null, matches: partial, isCodeQuery: false };
 }
 
 async function resolveMemberArg(message, rawArg, onResolved) {
@@ -1089,9 +1343,10 @@ function pickWeightedCard(candidates, raritySums, userId = null, member = null) 
     return candidates[candidates.length - 1];
 }
 
-function drawBoosterCards(u, userId = null, member = null) {
+function drawBoosterCards(u, userId = null, member = null, setNumber = DEFAULT_SET_NUMBER) {
     const luckyActive = Boolean(u.activeBonuses?.luckyBooster);
     const pityActive = Boolean(u.pityRare);
+    const setPool = getSetCatalog(setNumber); // [SET 2] Pool limité au Set du booster ouvert
     const raritySums = getRarityBaseWeightSums();
     const picked = [];
     const pickedIds = new Set();
@@ -1099,7 +1354,7 @@ function drawBoosterCards(u, userId = null, member = null) {
     // Si pityRare est actif : garantir 1 carte de rareté 'Rare'
     let slots = 3;
     if (pityActive) {
-        const rareCandidates = cardCatalog.filter(c => c.rarity === 'Rare' && !pickedIds.has(c.id));
+        const rareCandidates = setPool.filter(c => c.rarity === 'Rare' && !pickedIds.has(c.id));
         if (rareCandidates.length > 0) {
             const c = pickWeightedCard(rareCandidates, raritySums, userId, member);
             picked.push(c);
@@ -1109,11 +1364,11 @@ function drawBoosterCards(u, userId = null, member = null) {
     }
 
     for (let i = 0; i < slots; i++) {
-        let pool = cardCatalog.filter(c => !(luckyActive && c.rarity === 'Commune') && !pickedIds.has(c.id) && getEffectiveCardWeight(c, raritySums, userId, member) > 0);
+        let pool = setPool.filter(c => !(luckyActive && c.rarity === 'Commune') && !pickedIds.has(c.id) && getEffectiveCardWeight(c, raritySums, userId, member) > 0);
         if (pool.length === 0) {
-            pool = cardCatalog.filter(c => !pickedIds.has(c.id) && getEffectiveCardWeight(c, raritySums, userId, member) > 0);
+            pool = setPool.filter(c => !pickedIds.has(c.id) && getEffectiveCardWeight(c, raritySums, userId, member) > 0);
         }
-        const fallback = pool.length > 0 ? pool : cardCatalog.filter(c => !pickedIds.has(c.id));
+        const fallback = pool.length > 0 ? pool : setPool.filter(c => !pickedIds.has(c.id));
         const chosenCard = pickWeightedCard(fallback, raritySums, userId, member);
         if (chosenCard) {
             picked.push(chosenCard);
@@ -1393,18 +1648,28 @@ function toJpeg(canvas, quality = 0.90) {
     return buffer;
 }
 
-function getFilteredSortedCards(categoryFilter, sortMode, u = null, ownedOnly = false, rarityCode = 'all') {
+function normalizeBinderOwnedMode(val) {
+    if (val === '2' || val === 'dups') return '2';
+    if (val === '1' || val === 'owned' || val === true) return '1';
+    return '0';
+}
+
+function getFilteredSortedCards(categoryFilter, sortMode, u = null, ownedModeInput = '0', rarityCode = 'all', setNumber = DEFAULT_SET_NUMBER) {
+    const baseList = getSetCatalog(setNumber); // [SET 2] Filtre sur le Set affiché
     let list = categoryFilter === 'complet'
-        ? [...cardCatalog]
-        : cardCatalog.filter(c => c.category === categoryFilter);
+        ? [...baseList]
+        : baseList.filter(c => c.category === categoryFilter);
 
     const targetRarity = BINDER_RARITY_CODES[rarityCode] || null;
     if (targetRarity) {
         list = list.filter(c => c.rarity === targetRarity);
     }
 
-    if (ownedOnly && u) {
+    const ownedMode = normalizeBinderOwnedMode(ownedModeInput);
+    if (ownedMode === '1' && u) {
         list = list.filter(c => (u.cards?.[c.id] || 0) > 0);
+    } else if (ownedMode === '2' && u) {
+        list = list.filter(c => (u.cards?.[c.id] || 0) >= 2);
     }
 
     const effectiveSortMode = (targetRarity && sortMode === 'rarity') ? 'number' : sortMode;
@@ -1473,13 +1738,14 @@ function computeBinderCardDims(W, H, grid) {
 
 async function renderBinderCanvas(targetUser, u, options) {
     const {
+        setNumber = DEFAULT_SET_NUMBER,
         category = 'complet',
         perPageMode = '18',
         page = 0,
         sortMode = 'number',
-        rarityFilter = 'all',
-        ownedOnly = false
+        rarityFilter = 'all'
     } = options;
+    const ownedMode = normalizeBinderOwnedMode(options.ownedMode ?? options.ownedOnly);
 
     const W = 1600;
     const H = 900;
@@ -1492,22 +1758,26 @@ async function renderBinderCanvas(targetUser, u, options) {
 
     drawBackground(ctx, isLight ? 'W' : 'B', W, H);
 
-    const allCategoryCards = getFilteredSortedCards(category, sortMode, u, false, rarityFilter);
-    const cardsList = ownedOnly ? allCategoryCards.filter(c => (u.cards?.[c.id] || 0) > 0) : allCategoryCards;
+    const allCategoryCards = getFilteredSortedCards(category, sortMode, u, '0', rarityFilter, setNumber);
+    const cardsList = ownedMode === '1'
+        ? allCategoryCards.filter(c => (u.cards?.[c.id] || 0) > 0)
+        : (ownedMode === '2' ? allCategoryCards.filter(c => (u.cards?.[c.id] || 0) >= 2) : allCategoryCards);
     const grid = getBinderGridConfig(perPageMode, cardsList.length);
     const totalPages = Math.max(1, Math.ceil(cardsList.length / grid.perPage));
     const safePage = Math.max(0, Math.min(page, totalPages - 1));
     const slice = cardsList.slice(safePage * grid.perPage, (safePage + 1) * grid.perPage);
 
     // En-tête (LEMON MILK Bold)
+    const setCfg = getSetConfig(setNumber);
     const ownedInView = allCategoryCards.filter(c => (u.cards?.[c.id] || 0) > 0).length;
     const totalInView = allCategoryCards.length;
     const pct = totalInView > 0 ? Math.round((ownedInView / totalInView) * 100) : 0;
     const rarityLabel = BINDER_RARITY_CODES[rarityFilter];
-    const baseLabel = category === 'complet' ? 'RegaDex • Set 1' : `RegaDex • ${category}`;
+    const baseLabel = category === 'complet' ? `RegaDex • ${setCfg.shortName}` : `RegaDex • ${category}`;
     const headerTags = [];
     if (rarityLabel) headerTags.push(rarityLabel);
-    if (ownedOnly) headerTags.push('Possédées');
+    if (ownedMode === '1') headerTags.push('Possédées');
+    else if (ownedMode === '2') headerTags.push('Doublons');
     const headerLabel = headerTags.length > 0 ? `${baseLabel} (${headerTags.join(' • ')})` : baseLabel;
 
     ctx.fillStyle = isLight ? 'rgba(255,255,255,0.72)' : 'rgba(15,17,24,0.72)';
@@ -1517,7 +1787,9 @@ async function renderBinderCanvas(targetUser, u, options) {
     const logoH = 76;
     const logoW = Math.round((1132 / 467) * logoH);
     const logoX = Math.round((W - logoW) / 2);
-    const logoY = Math.round(49 - logoH / 2);
+    // [SET 2] Décalage vertical du logo par Set (Set 1 remonté de 3 px)
+    const logoOffsetY = setNumber === 1 ? -3 : 0;
+    const logoY = Math.round(49 - logoH / 2) + logoOffsetY;
     const maxSideW = Math.max(200, logoX - 56 - 24);
 
     ctx.fillStyle = textColor;
@@ -1530,11 +1802,15 @@ async function renderBinderCanvas(targetUser, u, options) {
 
     ctx.textAlign = 'right';
     ctx.font = 'bold 20px "LemonMilk", "Sans"';
-    ctx.fillText(`${ownedInView}/${totalInView} (${pct}%)  •  Page ${safePage + 1}/${totalPages}`, W - 56, 49, maxSideW);
+    const rightSummary = ownedMode === '2'
+        ? `${cardsList.length} doublon${cardsList.length > 1 ? 's' : ''}  •  Page ${safePage + 1}/${totalPages}`
+        : `${ownedInView}/${totalInView} (${pct}%)  •  Page ${safePage + 1}/${totalPages}`;
+    ctx.fillText(rightSummary, W - 56, 49, maxSideW);
 
-    // Logo Set 1 en premier plan, petit et centré tout en haut
-    if (assetPaths.set1Logo) {
-        const logoProxy = await loadAssetProxy(assetPaths.set1Logo, logoW, logoH, { cacheKey: 'Set1_Logo_header.png' });
+    // Logo du Set en premier plan, petit et centré tout en haut ([SET 2] dynamique par Set)
+    const activeLogoPath = setAssets[setNumber]?.logo || assetPaths.set1Logo;
+    if (activeLogoPath) {
+        const logoProxy = await loadAssetProxy(activeLogoPath, logoW, logoH, { cacheKey: `Set${setNumber}_Logo_header.png` });
         if (logoProxy?.img) {
             ctx.drawImage(logoProxy.img, logoX - logoProxy.pad, logoY - logoProxy.pad);
         }
@@ -1542,14 +1818,17 @@ async function renderBinderCanvas(targetUser, u, options) {
 
     // Zone grille
     const { padX, startY, cellW, cellH, labelH, cardW, cardH, fontSize } = computeBinderCardDims(W, H, grid);
-    const mysteryProxy = ownedOnly ? null : await loadAssetProxy(assetPaths.mysteryCard, cardW, cardH, { mysteryShadow: true });
+    const mysteryProxy = ownedMode !== '0' ? null : await loadAssetProxy(assetPaths.mysteryCard, cardW, cardH, { mysteryShadow: true });
 
     if (slice.length === 0) {
         ctx.fillStyle = subTextColor;
         ctx.font = 'bold 28px "LemonMilk", "Sans"';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(rarityLabel ? 'Aucune carte trouvée pour ce filtre.' : 'Aucune carte possédée dans cette catégorie.', W / 2, H / 2 + 20, W - 120);
+        const emptyTxt = ownedMode === '2'
+            ? 'Aucune carte en doublon dans cette vue.'
+            : (rarityLabel ? 'Aucune carte trouvée pour ce filtre.' : 'Aucune carte possédée dans cette catégorie.');
+        ctx.fillText(emptyTxt, W / 2, H / 2 + 20, W - 120);
     }
 
     ctx.textAlign = 'center';
@@ -1789,6 +2068,7 @@ function buildHubEmbed(member, u) {
                 value:
                     `• Prêts à ouvrir : **${totalAvail}**\n` +
                     `• Gratuits : **${u.freeBoosters}/${MAX_FREE_BOOSTERS}**\n` +
+                    `• Hebdos (Lundi) : **${u.inventory?.weeklyBooster || 0}/${MAX_WEEKLY_BOOSTERS}**\n` +
                     `• Inventaire : **${u.inventory?.booster || 0}**\n` +
                     timerLine,
                 inline: true
@@ -1860,46 +2140,23 @@ function buildHubComponents(userId, u) {
             .setEmoji('🏆')
             .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
-            .setCustomId(`tcg:hubflex:${userId}`)
-            .setLabel('Définir Flex')
-            .setEmoji('⭐')
-            .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-            .setCustomId(`tcg:theme:${userId}`)
-            .setLabel(u.theme === 'W' ? 'Mode Clair' : 'Mode Nuit')
-            .setEmoji(u.theme === 'W' ? '☀️' : '🌙')
-            .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
             .setCustomId(`tcg:notif:menu:${userId}:1`)
             .setLabel(hasNotif ? 'Notifications ✓' : 'Notifications')
             .setEmoji('🔔')
-            .setStyle(hasNotif ? ButtonStyle.Primary : ButtonStyle.Secondary)
-    );
-
-    const row3 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId(`tcg:help:${userId}:1`)
-            .setLabel('Commandes')
-            .setEmoji('📖')
-            .setStyle(ButtonStyle.Secondary),
+            .setStyle(hasNotif ? ButtonStyle.Primary : ButtonStyle.Secondary),
         new ButtonBuilder()
             .setCustomId(`tcg:guide:${userId}:1`)
             .setLabel('Guide')
             .setEmoji('📘')
             .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-            .setCustomId(`tcg:credits:${userId}:1`)
-            .setLabel('Crédits')
-            .setEmoji('📜')
-            .setStyle(ButtonStyle.Secondary),
         buildCloseButton(userId)
     );
 
-    return [row1, row2, row3];
+    return [row1, row2];
 }
 
 function buildProfilePayload(member, u, fromHub = false, showRarities = false) {
-    const comp = getUserCompletionStats(u);
+    const comp = getUserCompletionStats(u, DEFAULT_SET_NUMBER);
     const pct = comp.totalSet > 0 ? Math.round((comp.uniqueCount / comp.totalSet) * 100) : 0;
     const msgCur = u.msgProgress || 0;
     const vocCur = u.vocalMinutes || 0;
@@ -1926,6 +2183,20 @@ function buildProfilePayload(member, u, fromHub = false, showRarities = false) {
     const favCard = u.favoriteCardId && (u.cards?.[u.favoriteCardId] || 0) > 0
         ? cardById.get(u.favoriteCardId)
         : null;
+
+    const unlockedSet1 = Array.isArray(u.completionMilestones?.['1']) ? u.completionMilestones['1'] : [];
+    const milestoneTags = COMPLETION_MILESTONES.map(m =>
+        `${unlockedSet1.includes(m.pct) ? '✅' : '⬜'} ${m.pct}%`
+    ).join(' • ');
+
+    const wishlistIds = getSanitizedWishlist(u);
+    const wishlistSummary = wishlistIds.length > 0
+        ? wishlistIds.map(id => {
+            const c = cardById.get(id);
+            const owned = (u.cards?.[id] || 0) > 0;
+            return owned && c ? `\`${id}\` ${c.name}` : `\`${id}\` *(🔒)*`;
+        }).join(', ')
+        : '*Vide (`!tcgwishlist` pour ajouter jusqu\'à 5 cartes)*';
 
     let rarityBlock = '';
     if (showRarities) {
@@ -1964,10 +2235,12 @@ function buildProfilePayload(member, u, fromHub = false, showRarities = false) {
             `### 📊 Statistiques de collection\n` +
             `• 🎁 **Boosters ouverts :** **${u.stats?.boostersOpened || 0}**\n` +
             `• 🃏 **Cartes obtenues :** **${comp.totalCopies}** au total *(\`${comp.uniqueCount}/${comp.totalSet}\` uniques — **${pct}%**)*\n` +
+            `• 🏆 **Paliers Set 1 :** ${milestoneTags}\n` +
             `• 🔁 **Doublons obtenus :** **${u.stats?.duplicatesObtained || 0}**\n` +
             `• 🔄 **Échanges effectués :** **${u.stats?.tradesCompleted || 0}**\n` +
             `• 💎 **Carte la plus rare :** ${rarestLine}\n` +
-            `• ⭐ **Carte Flex :** ${favCard ? `\`${favCard.id}\` **${favCard.name}**` : '*Aucune*'}` +
+            `• ⭐ **Carte Flex :** ${favCard ? `\`${favCard.id}\` **${favCard.name}**` : '*Aucune*'}\n` +
+            `• ❤️ **Wishlist (${wishlistIds.length}/${MAX_WISHLIST}) :** ${wishlistSummary}` +
             rarityBlock
         )
         .setFooter({ text: `RegaDex TCG • ${SET1_NAME}` });
@@ -1978,11 +2251,106 @@ function buildProfilePayload(member, u, fromHub = false, showRarities = false) {
             .setLabel(showRarities ? 'Nb cartes par rareté : ON' : 'Nb cartes par rareté : OFF')
             .setEmoji('💎')
             .setStyle(showRarities ? ButtonStyle.Success : ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`tcg:wish:open:${member.id}:${fromHub ? '1' : '0'}:1`)
+            .setLabel(`Wishlist (${wishlistIds.length}/${MAX_WISHLIST})`)
+            .setEmoji('❤️')
+            .setStyle(ButtonStyle.Secondary),
         buildAccueilButton(member.id),
         buildCloseButton(member.id)
     );
 
     return { embeds: [embed], components: [row] };
+}
+
+function buildWishlistPayload(ownerMember, viewerId, fromHub = false, fromProfile = false, statusNote = null) {
+    const ownerId = ownerMember.id;
+    const ownerU = getOrCreateTcgUser(ownerId);
+    const viewerU = getOrCreateTcgUser(viewerId);
+    const canEdit = canControlTcgOwner(viewerId, ownerId);
+    const wishlistIds = getSanitizedWishlist(ownerU);
+    ownerU.wishlist = wishlistIds;
+
+    const hubFlag = fromHub ? '1' : '0';
+    const profFlag = fromProfile ? '1' : '0';
+
+    const lines = wishlistIds.length === 0
+        ? ['*Aucune carte dans cette Wishlist pour le moment.*']
+        : wishlistIds.map((id, idx) => {
+            const c = cardById.get(id);
+            const viewerOwns = (viewerU.cards?.[id] || 0) > 0;
+            const ownerQty = ownerU.cards?.[id] || 0;
+            const ownedTag = ownerQty > 0 ? ` *(déjà obtenue ×${ownerQty})*` : '';
+            if (viewerOwns && c) {
+                const meta = RARITY_META[c.rarity] || RARITY_META['Commune'];
+                return `**${idx + 1}.** ${meta.emoji} \`${c.id}\` **${c.name}** *(${c.rarity})*${ownedTag}`;
+            }
+            return `**${idx + 1}.** 🔒 \`${id}\` *(Carte non découverte)*${ownedTag}`;
+        });
+
+    const embed = new EmbedBuilder()
+        .setColor(0xe91e63)
+        .setAuthor({
+            name: `Wishlist RegaDex • ${ownerMember.displayName || ownerMember.username || 'Membre'}`,
+            iconURL: (ownerMember.user || ownerMember).displayAvatarURL?.({ dynamic: true }) || undefined
+        })
+        .setTitle(`❤️ Wishlist RegaDex (${wishlistIds.length}/${MAX_WISHLIST})`)
+        .setDescription(
+            (statusNote ? `${statusNote}\n\n` : '') +
+            lines.join('\n') +
+            `\n\n-# 💡 Les cartes de ta Wishlist apparaissent tout en haut avec un ❤️ quand un membre te propose un \`!trade\`.`
+        )
+        .setFooter({ text: `Maximum ${MAX_WISHLIST} cartes • !tcgwishlist` });
+
+    const components = [];
+
+    if (canEdit) {
+        if (wishlistIds.length > 0) {
+            const remMenu = new StringSelectMenuBuilder()
+                .setCustomId(`tcg:wish:remsel:${ownerId}:${hubFlag}:${profFlag}`)
+                .setPlaceholder('Retirer une carte de ta Wishlist...')
+                .addOptions(wishlistIds.map(id => {
+                    const c = cardById.get(id);
+                    const owned = (viewerU.cards?.[id] || 0) > 0;
+                    return {
+                        label: owned && c ? `${id} • ${c.name}`.slice(0, 100) : `${id} • Carte non découverte`,
+                        description: owned && c ? `${c.rarity} • Retirer de la Wishlist` : 'Retirer de la Wishlist',
+                        value: id
+                    };
+                }));
+            components.push(new ActionRowBuilder().addComponents(remMenu));
+        }
+
+        const actionRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tcg:wish:add:${ownerId}:${hubFlag}:${profFlag}`)
+                .setLabel('Ajouter une carte')
+                .setEmoji('➕')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(wishlistIds.length >= MAX_WISHLIST),
+            new ButtonBuilder()
+                .setCustomId(`tcg:wish:clear:${ownerId}:${hubFlag}:${profFlag}`)
+                .setLabel('Vider')
+                .setEmoji('🧹')
+                .setStyle(ButtonStyle.Danger)
+                .setDisabled(wishlistIds.length === 0)
+        );
+        if (fromProfile) {
+            actionRow.addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`tcg:profile:${ownerId}:${hubFlag}:0`)
+                    .setLabel('Retour Profil')
+                    .setEmoji('👤')
+                    .setStyle(ButtonStyle.Secondary)
+            );
+        }
+        actionRow.addComponents(buildAccueilButton(viewerId), buildCloseButton(viewerId));
+        components.push(actionRow);
+    } else {
+        components.push(new ActionRowBuilder().addComponents(buildAccueilButton(viewerId), buildCloseButton(viewerId)));
+    }
+
+    return { embeds: [embed], components };
 }
 
 function buildHelpPayload(userId) {
@@ -1999,20 +2367,21 @@ function buildHelpPayload(userId) {
             `• \`!tcg guide\` — Règles détaillées & taux de tirage\n` +
             `• \`!tcg credits\` — Crédits & remerciements\n\n` +
             `### 🎁 Boosters & Alertes\n` +
-            `• \`!open\` • \`!booster\` — Ouvrir un booster ou voir ton timer\n` +
-            `• \`!tcg notif\` — Configurer tes notifications de booster *(choix permanent, ici ou en MP)*\n\n` +
-            `### 📚 Collection & Classement\n` +
+            `• \`!open\` • \`!booster\` • \`!tcggo\` • \`!tcgbooster\` — Ouvrir un booster ou voir ton timer\n` +
+            `• \`!tcgnotif\` — Configurer tes notifications de booster *(choix permanent, ici ou en MP)*\n\n` +
+            `### 📚 Collection, Wishlist & Classement\n` +
             `• \`!classeur\` *(\`@membre\` pour demander l'accès à un autre)*\n` +
-            `• \`!carte [n° ou nom]\` — Inspecter une carte déjà obtenue\n` +
-            `• \`!tcg top\` — Classement du serveur\n\n` +
+            `• \`!carte [n° ou nom]\` — Inspecter une carte & voir **qui l'a en doublon**\n` +
+            `• \`!wishlist\` *(\`!tcgwishlist\`)* — Gérer tes **${MAX_WISHLIST} cartes recherchées**\n` +
+            `• \`!tcgtop\` — Classement du serveur\n\n` +
             `### 🛒 Boutique, Échanges & Flex\n` +
-            `• \`!tcg store\` — Dépenser tes points RegaDex\n` +
-            `• \`!tcg claim\` — Voir et activer tes achats / inventaire\n` +
+            `• \`!tcgstore\` — Dépenser tes points RegaDex\n` +
+            `• \`!tcgclaim\` — Inventaire, achats & boosters hebdomadaires *(lundi 8h)*\n` +
             `• \`!trade [@membre]\` — Lancer un échange *(doublons libre, ou dernière copie à nombre et raretés identiques)*\n` +
-            `• \`!flex\` *(\`!tcg flex\`)* — Montrer ta carte préférée *(<#${TCG_CHANNEL_ID}> & <#${SHITPOST_CHANNEL_ID}>)* • \`!flex @membre\`\n` +
-            `• \`!flex modify [N°Set]-[N°Carte]\` pour la changer\n` +
+            `• \`!flex\` *(\`!tcgflex\`)* — Montrer ta carte préférée *(<#${TCG_CHANNEL_ID}> & <#${SHITPOST_CHANNEL_ID}>)* • \`!flex @membre\`\n` +
+            `• \`!flexmodify [N°Set]-[N°Carte]\` pour la changer\n` +
             `────────────────────────────────────────\n` +
-            `💡 *Les slash commands \`/regadex\` fonctionnent aussi, et les espaces après \`!tcg\` / \`!regadex\` / \`!rgdx\` sont optionnels !*`
+            `💡 *Les slash commands \`/regadex\` fonctionnent aussi, et toutes les commandes \`!tcg\` / \`!regadex\` / \`!rgdx\` marchent avec ou sans espace !*`
         )
         .setFooter({ text: `RegaDex ${SET1_NAME} • Cacabot` });
 
@@ -2040,6 +2409,7 @@ function buildGuidePayload(userId, fromHub = true) {
             sep +
             `### 🎁 1. Boosters & Notifications\n` +
             `• Tu reçois **1 booster gratuit toutes les 6h** *(max **2** en attente)*.\n` +
+            `• **Bonus du lundi 8h 📅 :** un booster offert chaque lundi dans \`!tcgclaim\` *(stock hebdo limité à **2/2** max)*.\n` +
             `• Chaque booster contient **3 cartes uniques**, révélées de la plus commune à la plus rare.\n` +
             `• **Système de Pity :** si un booster ne te donne que **3 Communes**, ton prochain booster garantit au moins **1 carte Rare**.\n` +
             `• **Notifications 🔔 :** règle ton choix une bonne fois pour toutes *(à chaque booster ou à 2/2, ici ou en MP)* — il reste sauvegardé même après avoir atteint 2/2 et est modifiable/désactivable à tout moment !` +
@@ -2056,28 +2426,34 @@ function buildGuidePayload(userId, fromHub = true) {
             `  15 messages = **+1pt** • 10 min en vocal *(≥ 3 membres, hors AFK)* = **+1pt**\n` +
             `  1 roulette = **+1pt** • 1 booster ouvert = **+5pts** • 1 doublon = **+3pts**\n` +
             `  1 fil d'échange terminé = **+3pts** pour chacun·e *(1 seule fois par fil)*\n` +
-            `• **RegaDex Store (\`🛒 Store\`) :** tes achats vont dans ton **🎒 Inventaire** (\`!regadex claim\`) :\n` +
+            `  **Paliers de complétion :** **+15pts** à \`25%\`, \`50%\`, \`75%\` • **+25pts** à \`100%\`\n` +
+            `• **RegaDex Store (\`🛒 Store\`) :** tes achats vont dans ton **🎒 Inventaire** (\`!tcgclaim\`) :\n` +
             `  • 🎁 **Booster** (\`100 pts\`) — Un booster supplémentaire à ouvrir.\n` +
             `  • 🍀 **Chanceux** (\`75 pts\`) — Retire toutes les *Communes* du prochain booster.\n` +
             `  • ✨ **Transfo Holo** (\`50 pts\`) — Transforme une carte compatible possédée en *Holo*.\n` +
             `  • ⚡ **Cooldown /2** (\`25 pts\`) — Le prochain rechargement gratuit passe à **3h** au lieu de 6h.` +
             sep +
-            `### 📖 4. Classeur, Échanges & Commandes\n` +
-            `• **Classeur :** filtre par catégorie ou rareté, choisis la grille (\`4\`, \`18\`, \`36\` ou \`All\`), masque les cartes manquantes et change le thème **Clair (W) / Nuit (B)**.\n` +
-            `• **Voir le classeur d'un membre :** utilise le menu déroulant du classeur ou \`!classeur @membre\` *(cela mentionne la personne pour lui demander son accord)*.\n` +
-            `• **Échanges (\`!trade [@]\` ou clic droit sur un membre) :** échange jusqu'à **3 cartes** en doublon *(libre, avec double confirmation si déséquilibré)* ou même **ta dernière copie** *(uniquement à **nombre et raretés identiques**)* ! Gagne **+3 pts RegaDex** à la fermeture du fil *(1 seul bonus par fil, même si plusieurs échanges y sont faits)*.\n` +
-            `• **Commandes rapides :** \`!tcg\` • \`!tcg help\` • \`!open\` • \`!carte [n°/nom]\` *(cartes obtenues uniquement)* • \`!flex\` *(<#${TCG_CHANNEL_ID}> & <#${SHITPOST_CHANNEL_ID}>)*`
+            `### 📖 4. Classeur, Wishlist, Échanges & Commandes\n` +
+            `• **Classeur :** filtre par catégorie, rareté ou affichage (**Tout** / **Possédées** / **Doublons**), choisis la grille (\`4\`, \`18\`, \`36\` ou \`All\`) et change le thème **Clair (W) / Nuit (B)**.\n` +
+            `• **Wishlist & Doublons :** ajoute jusqu'à **5 cartes** dans ta \`!wishlist\` *(mises en avant dans \`!trade\`)* et utilise le bouton sous \`!carte\` ou \`Inspecter\` pour voir **qui a une carte en doublon** !\n` +
+            `• **Échanges (\`!trade [@]\` ou clic droit sur un membre) :** échange jusqu'à **3 cartes** en doublon *(libre, avec double confirmation si déséquilibré)* ou même **ta dernière copie** *(uniquement à **nombre et raretés identiques**)* ! Gagne **+3 pts RegaDex** à la fermeture du fil *(1 seul bonus par fil)*.\n` +
+            `• **Commandes rapides :** \`!tcg\` • \`!tcghelp\` • \`!open\` / \`!tcggo\` / \`!tcgbooster\` • \`!tcgclaim\` • \`!carte [n°/nom]\` • \`!flex\` *(<#${TCG_CHANNEL_ID}> & <#${SHITPOST_CHANNEL_ID}>)*`
         )
         .setFooter({ text: `RegaDex ${SET1_NAME} • Cacabot` });
 
     const components = [
         new ActionRowBuilder().addComponents(
-            buildAccueilButton(userId),
             new ButtonBuilder()
                 .setCustomId(`tcg:help:${userId}:1`)
                 .setLabel('Commandes')
                 .setEmoji('📖')
                 .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId(`tcg:credits:${userId}:1`)
+                .setLabel('Crédits')
+                .setEmoji('📜')
+                .setStyle(ButtonStyle.Secondary),
+            buildAccueilButton(userId),
             buildCloseButton(userId)
         )
     ];
@@ -2161,9 +2537,12 @@ function buildOpenPromptPayload(member, u, fromHub = false) {
         ? `\n\n💡 *Rappel : tu as des bonus non activés dans ton inventaire (\`!regadex claim\`) :*\n${unactivatedReminders.map(r => `• ${r}`).join('\n')}`
         : '';
 
+    const weeklyStock = u.inventory?.weeklyBooster || 0;
+    const weeklySegment = weeklyStock > 0 ? ` • 📅 **Hebdos (Lundi) :** \`${weeklyStock}/${MAX_WEEKLY_BOOSTERS}\`` : '';
+
     const desc = totalAvail > 0
         ? `### Vous avez **${totalAvail} booster${totalAvail > 1 ? 's' : ''} disponible${totalAvail > 1 ? 's' : ''}** !\nEn ouvrir un maintenant ?\n\n` +
-          `🎁 **Gratuits :** \`${u.freeBoosters}/${MAX_FREE_BOOSTERS}\` • 🎒 **Inventaire :** \`${u.inventory?.booster || 0}\`` +
+          `🎁 **Gratuits :** \`${u.freeBoosters}/${MAX_FREE_BOOSTERS}\`${weeklySegment} • 🎒 **Inventaire :** \`${u.inventory?.booster || 0}\`` +
           (nextTs ? `\n⏱️ Prochain booster gratuit <t:${Math.floor(nextTs / 1000)}:R>` : '\n✅ Jauge gratuite pleine (`2/2`)') +
           reminderBlock
         : `### Vous n'avez aucun booster disponible pour le moment.\n` +
@@ -2352,8 +2731,9 @@ function buildClaimPayload(member, u, fromHub = false) {
         .setAuthor({ name: `Inventaire RegaDex • ${member.displayName}`, iconURL: member.displayAvatarURL({ dynamic: true }) })
         .setTitle('🎒 Inventaire RegaDex (`!regadex claim`)')
         .setDescription(
-            `Voici tes boosters et bonus en réserve *(stock illimité)* :\n\n` +
-            `🎁 **Booster ${SET1_NAME} :** \`${inv.booster || 0}\`\n` +
+            `Voici tes boosters et bonus en réserve :\n\n` +
+            `📅 **Boosters hebdomadaires (Lundi 8h) :** \`${inv.weeklyBooster || 0}/${MAX_WEEKLY_BOOSTERS}\` *(${SET1_NAME})*\n` +
+            `🎁 **Boosters ${SET1_NAME} (Inventaire) :** \`${inv.booster || 0}\` *(stock illimité)*\n` +
             `🍀 **Prochain booster chanceux :** \`${inv.luckyBooster || 0}\` ${u.activeBonuses?.luckyBooster ? '*(Déjà actif sur le prochain booster !)*' : ''}\n` +
             `✨ **Transformation Holographique :** \`${inv.holoTransform || 0}\`\n` +
             `⚡ **Demi-cooldown (3h) :** \`${inv.halfCooldown || 0}\` ${u.activeBonuses?.halfCooldown ? '*(Déjà armé sur le prochain booster !)*' : ''}`
@@ -2616,12 +2996,18 @@ function buildBoosterRecapEmbed(member, session, u) {
     if (session.pityUsed) bonusInfo.push('✨ Pity appliquée (Rare garantie)');
     if (session.halfCdUsed) bonusInfo.push('⚡ Demi-cooldown activé (3h)');
     if (session.triggeredNextPity) bonusInfo.push('🛡️ 3 Communes : ton **prochain** booster aura une **Rare** garantie !');
+    if (Array.isArray(session.unlockedMilestones) && session.unlockedMilestones.length > 0) {
+        for (const ms of session.unlockedMilestones) {
+            bonusInfo.push(`🏆 **Palier de complétion ${ms.pct}% (${ms.setName}) atteint :** **+${ms.reward} pts RegaDex** !`);
+        }
+    }
 
     const cooldownLine = nextTs
         ? `\n⏱️ **Prochain booster gratuit :** <t:${Math.floor(nextTs / 1000)}:R>`
         : `\n✅ **Jauge gratuite pleine :** \`${u.freeBoosters}/${MAX_FREE_BOOSTERS}\``;
 
     const recapColor = u.theme === 'W' ? 0xffffff : 0x111216;
+    const milestoneNote = session.milestoneBonusPts > 0 ? ` *(+${session.milestoneBonusPts} pts de palier)*` : '';
 
     return new EmbedBuilder()
         .setColor(recapColor)
@@ -2629,7 +3015,7 @@ function buildBoosterRecapEmbed(member, session, u) {
         .setTitle('📊 Récapitulatif du Booster')
         .setDescription(
             lines.join('\n') +
-            `\n\n🪙 **Points RegaDex gagnés :** **+${session.ptsEarned} pts** *(Solde : ${u.points} pts)*` +
+            `\n\n🪙 **Points RegaDex gagnés :** **+${session.ptsEarned} pts**${milestoneNote} *(Solde : ${u.points} pts)*` +
             `\n📚 **Progression ${SET1_NAME} :** **${comp.uniqueCount}/${comp.totalSet}** (${pctSet}%)` +
             cooldownLine +
             (bonusInfo.length > 0 ? `\n\n${bonusInfo.join('\n')}` : '')
@@ -2701,6 +3087,13 @@ async function buildBoosterRecapPayload(member, session) {
 async function buildBoosterStepPayload(member, session) {
     if (session.step === 3) {
         clearBoosterInspectTimeout(session);
+        if (!session.milestoneAnnounced) {
+            session.milestoneAnnounced = true;
+            if (session.milestoneTimer) {
+                clearTimeout(session.milestoneTimer);
+                session.milestoneTimer = null;
+            }
+        }
         return buildBoosterRecapPayload(member, session);
     }
 
@@ -2817,7 +3210,7 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
     boostersEnCours.add(userId);
 
     try {
-        // Consommer prioritairement un booster gratuit, sinon l'inventaire
+        // Consommer prioritairement : gratuit -> hebdo (plafonné à 2) -> inventaire illimité
         if (u.freeBoosters > 0) {
             const wasFull = u.freeBoosters >= MAX_FREE_BOOSTERS;
             u.freeBoosters -= 1;
@@ -2825,6 +3218,8 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
                 u.lastFreeRechargeAt = Date.now();
                 u.currentRechargeMs = BOOSTER_COOLDOWN_MS;
             }
+        } else if ((u.inventory.weeklyBooster || 0) > 0) {
+            u.inventory.weeklyBooster -= 1;
         } else {
             u.inventory.booster -= 1;
         }
@@ -2869,6 +3264,9 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
         u.points += ptsEarned;
         u.stats.boostersOpened = (u.stats.boostersOpened || 0) + 1;
         u.stats.duplicatesObtained = (u.stats.duplicatesObtained || 0) + duplicatesInPack;
+
+        // [SET 2] Adapter le setNumber selon le booster ouvert
+        const milestoneInfo = checkAndGrantCompletionMilestones(userId, DEFAULT_SET_NUMBER);
 
         if (!isSandboxId(userId)) {
             tcgBridge.trackBattlePassProgress(userId, 'tcg_booster', 1);
@@ -2923,6 +3321,10 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             cards: draw.cards,
             isNewFlags,
             ptsEarned,
+            unlockedMilestones: milestoneInfo.unlocked,
+            milestoneBonusPts: milestoneInfo.totalBonusPts,
+            milestoneAnnounced: false,
+            milestoneTimer: null,
             luckyUsed: draw.luckyUsed,
             pityUsed: draw.pityUsed,
             halfCdUsed,
@@ -2940,6 +3342,22 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
         };
         boosterSessions.set(sentMsg.id, session);
 
+        // Si un palier a été franchi et que le récapitulatif n'est pas affiché sous 2 minutes, mention discrète dans le salon
+        if (session.unlockedMilestones.length > 0 && sentMsg?.channel) {
+            session.milestoneTimer = setTimeout(async () => {
+                session.milestoneTimer = null;
+                if (session.milestoneAnnounced) return;
+                session.milestoneAnnounced = true;
+                const latestU = getOrCreateTcgUser(userId);
+                const labels = session.unlockedMilestones.map(m => `**${m.pct}%** (+${m.reward} pts)`).join(', ');
+                await sendSilent(
+                    sentMsg.channel,
+                    `🏆 <@${userId}>, bravo ! Tu as atteint ${session.unlockedMilestones.length > 1 ? 'les paliers' : 'le palier'} ${labels} de complétion du **${SET1_NAME}** *(Nouveau solde : **${latestU.points} pts**)* !`
+                ).catch(() => {});
+            }, 2 * 60 * 1000);
+            session.milestoneTimer.unref?.();
+        }
+
         // Libérer le buffer image du récap après 15 min, et la session après 2h
         const recapCleanTimer = setTimeout(() => {
             session.recapBuffer = null;
@@ -2950,6 +3368,10 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             if (session.gifTimeout) {
                 clearTimeout(session.gifTimeout);
                 session.gifTimeout = null;
+            }
+            if (session.milestoneTimer) {
+                clearTimeout(session.milestoneTimer);
+                session.milestoneTimer = null;
             }
             clearBoosterInspectTimeout(session);
             session.recapBuffer = null;
@@ -2990,32 +3412,41 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
 // ==========================================
 
 function buildBinderComponents(ownerId, viewerId, options, totalPages, ownerTheme = 'B') {
-    const { category, perPageMode, page, sortMode, rarityFilter = 'all', ownedOnly = false, fromHub = false } = options;
+    const { setNumber = DEFAULT_SET_NUMBER, category, perPageMode, page, sortMode, rarityFilter = 'all', fromHub = false } = options;
+    const ownedMode = normalizeBinderOwnedMode(options.ownedMode ?? options.ownedOnly);
     const hubFlag = fromHub ? '1' : '0';
-    const ownedFlag = ownedOnly ? '1' : '0';
+    const ownedFlag = ownedMode;
 
     const effectiveSort = (rarityFilter !== 'all' && sortMode === 'rarity') ? 'number' : sortMode;
+    const setCfg = getSetConfig(setNumber);
+    const setCardsAll = getSetCatalog(setNumber);
+    const countCat = (cat) => setCardsAll.filter(c => c.category === cat).length;
 
     const catMenu = new StringSelectMenuBuilder()
         .setCustomId(`tcg:bcat:${ownerId}:${viewerId}:${perPageMode}:${effectiveSort}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
         .setPlaceholder('Choisir un classeur...')
         .addOptions([
-            { label: `Complet ${SET1_NAME} (109 cartes)`, value: 'complet', emoji: '📚', default: category === 'complet' },
-            { label: 'Items (26 cartes)', value: 'Items', emoji: '🧰', default: category === 'Items' },
-            { label: 'Personnages (49 cartes)', value: 'Personnages', emoji: '🧑', default: category === 'Personnages' },
-            { label: 'Références (34 cartes)', value: 'Références', emoji: '🎬', default: category === 'Références' }
+            { label: `Complet ${setCfg.name} (${setCardsAll.length} cartes)`, value: 'complet', emoji: '📚', default: category === 'complet' },
+            { label: `Items (${countCat('Items')} cartes)`, value: 'Items', emoji: '🧰', default: category === 'Items' },
+            { label: `Personnages (${countCat('Personnages')} cartes)`, value: 'Personnages', emoji: '🧑', default: category === 'Personnages' },
+            { label: `Références (${countCat('Références')} cartes)`, value: 'Références', emoji: '🎬', default: category === 'Références' }
         ]);
 
-    const userMenu = new UserSelectMenuBuilder()
-        .setCustomId(`tcg:binder:pickuser:${viewerId}`)
-        .setPlaceholder('Consulter le classeur d\'un autre membre...');
+    const nextPerPage = perPageMode === '4' ? '18' : (perPageMode === '18' ? '36' : (perPageMode === '36' ? 'all' : '4'));
+    const sizeLabel = perPageMode === 'all' ? 'All' : perPageMode;
+    const rIdx = BINDER_RARITY_ORDER.indexOf(rarityFilter);
+    const nextRarity = BINDER_RARITY_ORDER[(rIdx === -1 ? 0 : rIdx + 1) % BINDER_RARITY_ORDER.length];
+    const rBtn = BINDER_RARITY_BTN[rarityFilter] || BINDER_RARITY_BTN.all;
+    const canSortByRarity = rarityFilter === 'all';
+    const nextSort = canSortByRarity
+        ? (effectiveSort === 'number' ? 'rarity' : (effectiveSort === 'rarity' ? 'quantity' : 'number'))
+        : (effectiveSort === 'number' ? 'quantity' : 'number');
+    const currentSortLabel = effectiveSort === 'rarity'
+        ? 'Tri : Rareté'
+        : (effectiveSort === 'quantity' ? 'Tri : Quantité' : 'Tri : Numéro');
+    const canInspect = canControlTcgOwner(viewerId, ownerId);
 
     const navRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId(`tcg:bnav:first:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${effectiveSort}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
-            .setEmoji('⏪')
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(page <= 0),
         new ButtonBuilder()
             .setCustomId(`tcg:bnav:prev:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${effectiveSort}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
             .setEmoji('◀️')
@@ -3041,32 +3472,25 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages, ownerThem
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(page >= totalPages - 1),
         new ButtonBuilder()
-            .setCustomId(`tcg:bnav:last:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${effectiveSort}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
-            .setEmoji('⏩')
-            .setStyle(ButtonStyle.Secondary)
-            .setDisabled(page >= totalPages - 1)
-    );
-
-    const nextPerPage = perPageMode === '4' ? '18' : (perPageMode === '18' ? '36' : (perPageMode === '36' ? 'all' : '4'));
-    const sizeLabel = perPageMode === 'all' ? 'All' : perPageMode;
-    const rIdx = BINDER_RARITY_ORDER.indexOf(rarityFilter);
-    const nextRarity = BINDER_RARITY_ORDER[(rIdx === -1 ? 0 : rIdx + 1) % BINDER_RARITY_ORDER.length];
-    const rBtn = BINDER_RARITY_BTN[rarityFilter] || BINDER_RARITY_BTN.all;
-    const canSortByRarity = rarityFilter === 'all';
-    const nextSort = canSortByRarity
-        ? (effectiveSort === 'number' ? 'rarity' : (effectiveSort === 'rarity' ? 'quantity' : 'number'))
-        : (effectiveSort === 'number' ? 'quantity' : 'number');
-    const currentSortLabel = effectiveSort === 'rarity'
-        ? 'Tri : Rareté'
-        : (effectiveSort === 'quantity' ? 'Tri : Quantité' : 'Tri : Numéro');
-    const canInspect = canControlTcgOwner(viewerId, ownerId);
-
-    const optRow = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
             .setCustomId(`tcg:bsize:${ownerId}:${viewerId}:${category}:${nextPerPage}:${effectiveSort}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
             .setLabel(`Grille : ${sizeLabel}`)
             .setEmoji('📐')
-            .setStyle(ButtonStyle.Secondary),
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    const nextOwnedMode = ownedMode === '0' ? '1' : (ownedMode === '1' ? '2' : '0');
+    const ownedBtnCfg = ownedMode === '2'
+        ? { label: 'Affichage : Doublons', emoji: '🔁', style: ButtonStyle.Success }
+        : (ownedMode === '1'
+            ? { label: 'Affichage : Possédées', emoji: '✅', style: ButtonStyle.Primary }
+            : { label: 'Affichage : Tout', emoji: '👁️', style: ButtonStyle.Secondary });
+
+    const filterRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tcg:bowned:${ownerId}:${viewerId}:${category}:${perPageMode}:${effectiveSort}:${rarityFilter}:${hubFlag}:${nextOwnedMode}`)
+            .setLabel(ownedBtnCfg.label)
+            .setEmoji(ownedBtnCfg.emoji)
+            .setStyle(ownedBtnCfg.style),
         new ButtonBuilder()
             .setCustomId(`tcg:brarity:${ownerId}:${viewerId}:${category}:${perPageMode}:${nextRarity}:${nextRarity !== 'all' && effectiveSort === 'rarity' ? 'number' : effectiveSort}:${hubFlag}:${ownedFlag}`)
             .setLabel(rBtn.label)
@@ -3086,11 +3510,6 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages, ownerThem
 
     const bottomRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`tcg:bowned:${ownerId}:${viewerId}:${category}:${perPageMode}:${effectiveSort}:${rarityFilter}:${hubFlag}:${ownedOnly ? '0' : '1'}`)
-            .setLabel(ownedOnly ? 'Manquantes : Non' : 'Manquantes : Oui')
-            .setEmoji(ownedOnly ? '🚫' : '👁️')
-            .setStyle(ownedOnly ? ButtonStyle.Success : ButtonStyle.Secondary),
-        new ButtonBuilder()
             .setCustomId(`tcg:binspect:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${effectiveSort}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
             .setLabel('Inspecter')
             .setEmoji('🔎')
@@ -3102,9 +3521,8 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages, ownerThem
 
     return [
         new ActionRowBuilder().addComponents(catMenu),
-        new ActionRowBuilder().addComponents(userMenu),
         navRow,
-        optRow,
+        filterRow,
         bottomRow
     ];
 }
@@ -3115,30 +3533,33 @@ async function buildBinderReplyPayload(ownerMember, viewerId, options = {}) {
     const rawPerPage = options.perPageMode || '18';
     const rarityFilter = BINDER_RARITY_CODES[options.rarityFilter] !== undefined ? options.rarityFilter : 'all';
     const rawSort = options.sortMode || 'number';
+    const ownedMode = normalizeBinderOwnedMode(options.ownedMode ?? options.ownedOnly);
     const opts = {
+        setNumber: options.setNumber || DEFAULT_SET_NUMBER, // [SET 2]
         category: options.category || 'complet',
         perPageMode: rawPerPage === '9' ? '4' : rawPerPage,
         page: options.page || 0,
         sortMode: (rarityFilter !== 'all' && rawSort === 'rarity') ? 'number' : rawSort,
         rarityFilter,
-        ownedOnly: Boolean(options.ownedOnly),
+        ownedMode,
         fromHub: Boolean(options.fromHub)
     };
 
     const rendered = await renderBinderCanvas(ownerMember, u, opts);
     opts.page = rendered.safePage;
     const rarityLabel = BINDER_RARITY_CODES[opts.rarityFilter];
+    const ownedTag = opts.ownedMode === '2' ? ' *(Doublons x2+)*' : (opts.ownedMode === '1' ? ' *(Possédées)*' : '');
 
     const embed = new EmbedBuilder()
         .setColor(u.theme === 'W' ? 0xecf0f1 : 0x2c3e50)
         .setAuthor({ name: `Classeur de ${ownerMember.displayName || ownerUser.username}`, iconURL: ownerUser.displayAvatarURL({ dynamic: true }) })
         .setDescription(
-            `📖 **${opts.category === 'complet' ? SET1_NAME : opts.category}**` +
+            `📖 **${opts.category === 'complet' ? getSetConfig(opts.setNumber).name : opts.category}**` +
             `${rarityLabel ? ` • 💎 **${rarityLabel}**` : ''}` +
-            `${opts.ownedOnly ? ' *(Possédées)*' : ''} • **${rendered.ownedInView}/${rendered.totalInView}** cartes • Tri : **${opts.sortMode === 'rarity' ? 'Rareté' : (opts.sortMode === 'quantity' ? 'Quantité' : 'Numéro')}**`
+            `${ownedTag} • **${rendered.ownedInView}/${rendered.totalInView}** cartes • Tri : **${opts.sortMode === 'rarity' ? 'Rareté' : (opts.sortMode === 'quantity' ? 'Quantité' : 'Numéro')}**`
         )
         .setImage('attachment://regadex_classeur.jpg')
-        .setFooter({ text: `Page ${rendered.safePage + 1}/${rendered.totalPages} • Mode ${u.theme === 'W' ? 'Clair (W)' : 'Nuit (B)'}` });
+        .setFooter({ text: `Page ${rendered.safePage + 1}/${rendered.totalPages} • Mode ${u.theme === 'W' ? 'Clair (W)' : 'Nuit (B)'} • Classeur d'un membre : !classeur @membre` });
 
     return {
         embeds: [embed],
@@ -3177,6 +3598,9 @@ function buildBinderInspectPayload(card, ownerId, viewerId, binderMsgId) {
         files.push(new AttachmentBuilder(card.filePath, { name: 'carte_regadex.png' }));
     }
 
+    const inWishlist = getSanitizedWishlist(u).includes(card.id);
+    const wishlistFull = getSanitizedWishlist(u).length >= MAX_WISHLIST;
+
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`tcg:binback:${binderMsgId}:${ownerId}:${viewerId}`)
@@ -3188,10 +3612,21 @@ function buildBinderInspectPayload(card, ownerId, viewerId, binderMsgId) {
             .setLabel(isAlreadyFlex ? 'Flex actuel' : 'Définir Flex')
             .setEmoji('⭐')
             .setStyle(isAlreadyFlex ? ButtonStyle.Success : ButtonStyle.Secondary)
-            .setDisabled(isAlreadyFlex || qty <= 0)
+            .setDisabled(isAlreadyFlex || qty <= 0),
+        new ButtonBuilder()
+            .setCustomId(`tcg:wish:toggle:${card.id}:${ownerId}:binspect:${binderMsgId}`)
+            .setLabel(inWishlist ? 'Dans la Wishlist' : '+ Wishlist')
+            .setEmoji(inWishlist ? '💔' : '❤️')
+            .setStyle(inWishlist ? ButtonStyle.Success : ButtonStyle.Secondary)
+            .setDisabled(!inWishlist && wishlistFull)
     );
 
     const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tcg:carddups:${card.id}:${viewerId}`)
+            .setLabel('Qui l\'a en doublon ?')
+            .setEmoji('👥')
+            .setStyle(ButtonStyle.Secondary),
         buildAccueilButton(viewerId),
         buildCloseButton(viewerId)
     );
@@ -3199,11 +3634,14 @@ function buildBinderInspectPayload(card, ownerId, viewerId, binderMsgId) {
     return { embeds: [embed], files, components: [row1, row2] };
 }
 
-function buildSingleCardPayload(card, viewerId) {
+function buildSingleCardPayload(card, viewerId, options = {}) {
     const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
     const u = getOrCreateTcgUser(viewerId);
     const qty = u.cards?.[card.id] || 0;
-    const ownedCards = cardCatalog.filter(c => (u.cards?.[c.id] || 0) > 0);
+    const activeSetNumber = options.setNumber || card.setNumber || DEFAULT_SET_NUMBER;
+    const setCfg = getSetConfig(activeSetNumber);
+    const setOwned = getSetCatalog(activeSetNumber).filter(c => (u.cards?.[c.id] || 0) > 0);
+    const ownedCards = setOwned.length > 0 ? setOwned : cardCatalog.filter(c => (u.cards?.[c.id] || 0) > 0);
     const currentIdx = Math.max(0, ownedCards.findIndex(c => c.id === card.id));
     const canNav = ownedCards.length > 1;
     const isAlreadyFlex = u.favoriteCardId === card.id;
@@ -3228,13 +3666,68 @@ function buildSingleCardPayload(card, viewerId) {
         .setImage('attachment://carte_regadex.png')
         .setFooter({
             text: ownedCards.length > 0
-                ? `RegaDex ${SET1_NAME} • Carte possédée ${currentIdx + 1}/${ownedCards.length} • !carte [n° ou nom]`
-                : `RegaDex ${SET1_NAME} • Utilise !carte [numéro ou nom]`
+                ? `RegaDex ${setCfg.name} • Carte possédée ${currentIdx + 1}/${ownedCards.length} • !carte [n° ou nom]`
+                : `RegaDex ${setCfg.name} • Utilise !carte [numéro ou nom]`
         });
 
     const files = [];
     if (card.filePath && fs.existsSync(card.filePath)) {
         files.push(new AttachmentBuilder(card.filePath, { name: 'carte_regadex.png' }));
+    }
+
+    const inWishlist = getSanitizedWishlist(u).includes(card.id);
+    const wishlistFull = getSanitizedWishlist(u).length >= MAX_WISHLIST;
+    const activeSets = getActiveSets();
+
+    const components = [];
+
+    if (ownedCards.length > 0) {
+        const perMenuPage = ownedCards.length > 25 ? 23 : 25;
+        const menuTotalPages = Math.max(1, Math.ceil(ownedCards.length / perMenuPage));
+        const defaultMenuPage = Math.floor(currentIdx / perMenuPage);
+        const safeMenuPage = typeof options.menuPage === 'number'
+            ? Math.max(0, Math.min(options.menuPage, menuTotalPages - 1))
+            : defaultMenuPage;
+
+        const slice = ownedCards.slice(safeMenuPage * perMenuPage, (safeMenuPage + 1) * perMenuPage);
+        const menuOptions = [];
+
+        if (menuTotalPages > 1 && safeMenuPage > 0) {
+            menuOptions.push({
+                label: `⬅️ Cartes précédentes (Page ${safeMenuPage}/${menuTotalPages})`,
+                description: 'Afficher les cartes précédentes de ta collection',
+                value: `__page:${safeMenuPage - 1}`
+            });
+        }
+
+        for (const c of slice) {
+            const cMeta = RARITY_META[c.rarity] || RARITY_META['Commune'];
+            menuOptions.push({
+                label: `${c.id} • ${c.name}`.slice(0, 100),
+                description: `${cMeta.emoji} ${c.rarity} • x${u.cards[c.id]}${u.favoriteCardId === c.id ? ' • ⭐ Flex' : ''}`.slice(0, 100),
+                value: c.id,
+                default: c.id === card.id
+            });
+        }
+
+        if (menuTotalPages > 1 && safeMenuPage < menuTotalPages - 1) {
+            menuOptions.push({
+                label: `➡️ Cartes suivantes (Page ${safeMenuPage + 2}/${menuTotalPages})`,
+                description: 'Afficher la suite de tes cartes possédées',
+                value: `__page:${safeMenuPage + 1}`
+            });
+        }
+
+        const cardMenu = new StringSelectMenuBuilder()
+            .setCustomId(`tcg:cartesel:${viewerId}:${card.id}:${activeSetNumber}`)
+            .setPlaceholder(
+                menuTotalPages > 1
+                    ? `Tes cartes possédées (Liste ${safeMenuPage + 1}/${menuTotalPages})...`
+                    : `Tes cartes possédées (${ownedCards.length})...`
+            )
+            .addOptions(menuOptions);
+
+        components.push(new ActionRowBuilder().addComponents(cardMenu));
     }
 
     const row1 = new ActionRowBuilder().addComponents(
@@ -3255,20 +3748,61 @@ function buildSingleCardPayload(card, viewerId) {
             .setLabel(isAlreadyFlex ? 'Flex actuel' : 'Définir Flex')
             .setEmoji('⭐')
             .setStyle(isAlreadyFlex ? ButtonStyle.Success : ButtonStyle.Secondary)
-            .setDisabled(isAlreadyFlex || qty <= 0)
+            .setDisabled(isAlreadyFlex || qty <= 0),
+        new ButtonBuilder()
+            .setCustomId(`tcg:wish:toggle:${card.id}:${viewerId}:card`)
+            .setLabel(inWishlist ? 'Dans la Wishlist' : '+ Wishlist')
+            .setEmoji(inWishlist ? '💔' : '❤️')
+            .setStyle(inWishlist ? ButtonStyle.Success : ButtonStyle.Secondary)
+            .setDisabled(!inWishlist && wishlistFull)
     );
 
+    // [SET 2] S'active automatiquement dès qu'un 2e Set est activé dans SETS_CONFIG
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`tcg:binder:open:${viewerId}:${viewerId}:1`)
-            .setLabel('Classeur')
-            .setEmoji('📖')
-            .setStyle(ButtonStyle.Primary),
+            .setCustomId(`tcg:carteset:${activeSetNumber}:${card.id}:${viewerId}`)
+            .setLabel(`Changer de Set (${setCfg.shortName})`)
+            .setEmoji('🗂️')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(activeSets.length <= 1),
+        new ButtonBuilder()
+            .setCustomId(`tcg:carddups:${card.id}:${viewerId}`)
+            .setLabel('Qui l\'a en doublon ?')
+            .setEmoji('👥')
+            .setStyle(ButtonStyle.Secondary),
         buildAccueilButton(viewerId),
         buildCloseButton(viewerId)
     );
 
-    return { embeds: [embed], files, components: [row1, row2] };
+    components.push(row1, row2);
+    return { embeds: [embed], files, components };
+}
+
+function buildUnownedCardPayload(card, viewerId) {
+    const u = getOrCreateTcgUser(viewerId);
+    const inWishlist = getSanitizedWishlist(u).includes(card.id);
+    const wishlistFull = getSanitizedWishlist(u).length >= MAX_WISHLIST;
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tcg:carddups:${card.id}:${viewerId}`)
+            .setLabel('Qui l\'a en doublon ?')
+            .setEmoji('👥')
+            .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+            .setCustomId(`tcg:wish:toggle:${card.id}:${viewerId}:unowned`)
+            .setLabel(inWishlist ? 'Dans la Wishlist' : '+ Wishlist')
+            .setEmoji(inWishlist ? '💔' : '❤️')
+            .setStyle(inWishlist ? ButtonStyle.Success : ButtonStyle.Secondary)
+            .setDisabled(!inWishlist && wishlistFull),
+        buildAccueilButton(viewerId),
+        buildCloseButton(viewerId)
+    );
+
+    return {
+        content: `🔒 Tu n'as pas encore découvert la carte \`${card.id}\` dans ton RegaDex ! La surprise reste totale 🤫`,
+        components: [row]
+    };
 }
 
 async function sendBinderAccessWarning(targetResponder, requesterId, targetMember) {
@@ -3357,6 +3891,9 @@ async function handleCarteCommand(targetResponder, authorMember, rawArg, channel
     // 1. Correspondance unique : vérifier la possession avant tout affichage (zéro spoiler)
     if (res.card) {
         if ((u.cards?.[res.card.id] || 0) <= 0) {
+            if (res.isCodeQuery) {
+                return replySilent(targetResponder, buildUnownedCardPayload(res.card, authorMember.id));
+            }
             return replySilent(
                 targetResponder,
                 `🔒 Tu n'as pas encore découvert cette carte dans ton RegaDex ! La surprise reste totale 🤫`
@@ -3785,21 +4322,8 @@ function buildTradeThreadPayload(trade) {
             .setEmoji('➖')
             .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
-            .setCustomId(`tcg:tr:clear:${trade.id}`)
-            .setLabel('Vider mon offre')
-            .setEmoji('🧹')
-            .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-            .setCustomId(`tcg:tr:search:${trade.id}`)
-            .setLabel('Chercher (Modal)')
-            .setEmoji('🔍')
-            .setStyle(ButtonStyle.Secondary)
-    );
-
-    const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
             .setCustomId(`tcg:tr:lock:${trade.id}`)
-            .setLabel('Valider / Déverrouiller mon offre')
+            .setLabel('Valider / Déverrouiller')
             .setEmoji('✅')
             .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
@@ -3809,7 +4333,7 @@ function buildTradeThreadPayload(trade) {
             .setStyle(ButtonStyle.Danger)
     );
 
-    return { embeds: [embed], components: [row1, row2] };
+    return { embeds: [embed], components: [row1] };
 }
 
 function buildPostTradeDecisionPayload(trade) {
@@ -3872,9 +4396,20 @@ function buildTradeAddCardEphemeralPayload(trade, uid, page = 0, missingOnly = f
     const offeredCount = {};
     for (const id of trade.offers[uid]) offeredCount[id] = (offeredCount[id] || 0) + 1;
 
-    const filtered = missingOnly
+    const partnerWishlist = getSanitizedWishlist(uPartner);
+    const partnerWishSet = new Set(partnerWishlist);
+
+    const baseFiltered = missingOnly
         ? allTradables.filter(c => (uPartner.cards?.[c.id] || 0) <= 0)
-        : allTradables;
+        : [...allTradables];
+
+    // Mettre en tête les cartes présentes dans la Wishlist du partenaire
+    const filtered = baseFiltered.sort((a, b) => {
+        const wa = partnerWishSet.has(a.id) ? 1 : 0;
+        const wb = partnerWishSet.has(b.id) ? 1 : 0;
+        if (wb !== wa) return wb - wa;
+        return a.sortIndex - b.sortIndex;
+    });
 
     const missFlag = missingOnly ? '1' : '0';
     const toggleBtn = new ButtonBuilder()
@@ -3900,12 +4435,13 @@ function buildTradeAddCardEphemeralPayload(trade, uid, page = 0, missingOnly = f
         .setCustomId(`tcg:tr:addsel:${trade.id}`)
         .setPlaceholder(`Choisir une carte à ajouter (Page ${safePage + 1}/${totalPages})...`)
         .addOptions(slice.map(c => {
+            const inWish = partnerWishSet.has(c.id);
             const missingForPartner = (uPartner.cards?.[c.id] || 0) <= 0;
             const remainingBeforeAdd = (u.cards[c.id] || 0) - (offeredCount[c.id] || 0);
             const lastCopyTag = remainingBeforeAdd === 1 ? ' • ⚠️ Dernière copie (même rareté)' : '';
             return {
-                label: `${c.id} • ${c.name}`.slice(0, 100),
-                description: `${c.rarity} • x${u.cards[c.id]}${lastCopyTag}${missingForPartner ? ' • 🆕 Lui manque' : ''}`.slice(0, 100),
+                label: `${inWish ? '❤️ ' : ''}${c.id} • ${c.name}`.slice(0, 100),
+                description: `${c.rarity} • x${u.cards[c.id]}${inWish ? ' • ❤️ Wishlist' : ''}${missingForPartner ? ' • 🆕 Lui manque' : ''}${lastCopyTag}`.slice(0, 100),
                 value: c.id
             };
         }));
@@ -4087,6 +4623,18 @@ async function executeTradeIfBothLocked(thread, trade, client) {
     }
     trade.lastActivityAt = Date.now();
 
+    const tradeMilestones = [];
+    for (const setCfg of getActiveSets()) {
+        const msA = checkAndGrantCompletionMilestones(idA, setCfg.number);
+        if (msA.unlocked.length > 0) {
+            tradeMilestones.push(`<@${idA}> : ${msA.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts)`).join(', ')}`);
+        }
+        const msB = checkAndGrantCompletionMilestones(idB, setCfg.number);
+        if (msB.unlocked.length > 0) {
+            tradeMilestones.push(`<@${idB}> : ${msB.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts)`).join(', ')}`);
+        }
+    }
+
     tcgBridge.trackBattlePassProgress(idA, 'tcg_trade', 1);
     tcgBridge.trackBattlePassProgress(idB, 'tcg_trade', 1);
     tcgBridge.demanderSauvegarde();
@@ -4106,7 +4654,8 @@ async function executeTradeIfBothLocked(thread, trade, client) {
         .setTitle(`✅ Échange #${trade.tradeCount} validé !`)
         .setDescription(
             `**${nameA}** (<@${idA}>) a donné :\n${formatOfferLines(offerA)}\n\n` +
-            `**${nameB}** (<@${idB}>) a donné :\n${formatOfferLines(offerB)}`
+            `**${nameB}** (<@${idB}>) a donné :\n${formatOfferLines(offerB)}` +
+            (tradeMilestones.length > 0 ? `\n\n🏆 **Palier(s) de complétion atteint(s) :**\n${tradeMilestones.map(l => `• ${l}`).join('\n')}` : '')
         )
         .setImage('attachment://trade_recap.jpg')
         .setFooter({ text: `Effectué le ${dateStr}` });
@@ -4904,29 +5453,52 @@ async function handleAdminTcgCommand(message, lowerContent) {
 //   PARSEUR COMMANDES PRÉFIXE (AVEC OU SANS ESPACE)
 // ==========================================
 
+function normalizeTcgSubcommand(rawSub, rawRest = '') {
+    let sub = (rawSub || 'hub').toLowerCase();
+    let rest = (rawRest || '').trim();
+
+    if (sub === 'flexmodify') {
+        sub = 'flex';
+        rest = `modify ${rest}`.trim();
+    } else if (sub === 'booster' || sub === 'go' || sub === 'boosteropen' || sub === 'openbooster' || sub === 'boostergo' || sub === 'gobooster') {
+        sub = 'open';
+    } else if (sub === 'collection') {
+        sub = 'classeur';
+    } else if (sub === 'profile') {
+        sub = 'profil';
+    } else if (sub === 'aide') {
+        sub = 'help';
+    } else if (sub === 'notifs') {
+        sub = 'notif';
+    } else if (sub === 'inventaire' || sub === 'inv') {
+        sub = 'claim';
+    } else if (sub === 'boutique') {
+        sub = 'store';
+    }
+
+    return { sub, rest };
+}
+
 function parseTcgCommand(content) {
     const trimmed = (content || '').trim();
     if (!trimmed.startsWith('!')) return null;
 
-    let m = trimmed.match(/^!(?:regadex|rgdx|tcg)\s*(flexmodify|flex|open|store|claim|classeur|collection|carte|trade|top|notif|profil|profile|credits|guide|help|aide)?(?:\s+(.*))?$/i);
+    // 1. Commandes préfixées !tcg / !regadex / !rgdx (avec ou sans espace)
+    let m = trimmed.match(/^!(?:regadex|rgdx|tcg)\s*(flexmodify|flex|boosteropen|openbooster|boostergo|gobooster|open|booster|go|store|boutique|claim|inventaire|inv|classeur|collection|carte|trade|top|notifs?|profile|profil|wishlist|credits|guide|help|aide|hub)(?:\s+(.*))?$/i);
     if (m) {
-        let sub = (m[1] || 'hub').toLowerCase();
-        let rest = (m[2] || '').trim();
-        if (sub === 'flexmodify') {
-            sub = 'flex';
-            rest = `modify ${rest}`.trim();
-        }
-        if (sub === 'collection') sub = 'classeur';
-        if (sub === 'profile') sub = 'profil';
-        if (sub === 'aide') sub = 'help';
-        return { sub, rest };
+        return normalizeTcgSubcommand(m[1], m[2] || '');
     }
 
-    m = trimmed.match(/^!(boosteropen|openbooster|booster|open)(?:\s+(.*))?$/i);
+    if (/^!(?:regadex|rgdx|tcg)(?:\s|$)/i.test(trimmed)) {
+        return { sub: 'hub', rest: '' };
+    }
+
+    // 2. Alias directs !open, !booster, !boosteropen, !boostergo, !booster open / !booster go
+    m = trimmed.match(/^!(boosteropen|openbooster|boostergo|gobooster|booster|open)(?:\s+(.*))?$/i);
     if (m) {
         const cmd = m[1].toLowerCase();
         const rest = (m[2] || '').trim();
-        if (cmd === 'booster' && rest && !/^open$/i.test(rest)) return null;
+        if (cmd === 'booster' && rest && !/^(?:open|go)$/i.test(rest)) return null;
         return { sub: 'open', rest: '' };
     }
 
@@ -4938,6 +5510,9 @@ function parseTcgCommand(content) {
 
     m = trimmed.match(/^!trade(?:\s+(.*))?$/i);
     if (m) return { sub: 'trade', rest: (m[1] || '').trim() };
+
+    m = trimmed.match(/^!wishlist(?:\s+(.*))?$/i);
+    if (m) return { sub: 'wishlist', rest: (m[1] || '').trim() };
 
     m = trimmed.match(/^!(flexmodify|flex)(?:\s+(.*))?$/i);
     if (m) {
@@ -4951,6 +5526,75 @@ function parseTcgCommand(content) {
     return null;
 }
 
+async function handleWishlistCommand(targetResponder, authorMember, rawArg) {
+    const arg = (rawArg || '').trim();
+    const u = getOrCreateTcgUser(authorMember.id);
+    u.wishlist = getSanitizedWishlist(u);
+
+    if (!arg) {
+        return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false));
+    }
+
+    if (/^(?:clear|vider|reset)$/i.test(arg)) {
+        u.wishlist = [];
+        if (!isSandboxId(authorMember.id)) tcgBridge.demanderSauvegarde();
+        return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, '🧹 *Wishlist vidée.*'));
+    }
+
+    if (/^(?:add|ajouter|\+)\s+/i.test(arg)) {
+        const q = arg.replace(/^(?:add|ajouter|\+)\s+/i, '').trim();
+        const res = resolveCardQuery(q);
+        if (!res.card) {
+            return replySilent(targetResponder, `❌ Aucune carte unique trouvée pour \`${q}\`. Essaie avec son numéro exact (ex: \`1-84\`).`);
+        }
+        if (u.wishlist.includes(res.card.id)) {
+            return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `ℹ️ \`${res.card.id}\` est déjà dans ta Wishlist.`));
+        }
+        if (u.wishlist.length >= MAX_WISHLIST) {
+            return replySilent(targetResponder, `⚠️ Ta Wishlist est pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**). Retire d'abord une carte via \`!wishlist\`.`);
+        }
+        u.wishlist.push(res.card.id);
+        if (!isSandboxId(authorMember.id)) tcgBridge.demanderSauvegarde();
+        return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `❤️ \`${res.card.id}\` ajoutée à ta Wishlist !`));
+    }
+
+    if (/^(?:remove|rem|retirer|del|-)\s+/i.test(arg)) {
+        const q = arg.replace(/^(?:remove|rem|retirer|del|-)\s+/i, '').trim();
+        const res = resolveCardQuery(q);
+        if (!res.card || !u.wishlist.includes(res.card.id)) {
+            return replySilent(targetResponder, `❌ Cette carte n'est pas dans ta Wishlist.`);
+        }
+        u.wishlist = u.wishlist.filter(id => id !== res.card.id);
+        if (!isSandboxId(authorMember.id)) tcgBridge.demanderSauvegarde();
+        return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `💔 \`${res.card.id}\` retirée de ta Wishlist.`));
+    }
+
+    // Si une carte directe est tapée (!wishlist 1-84), basculer ajout/retrait
+    const cardRes = resolveCardQuery(arg);
+    if (cardRes.card) {
+        if (u.wishlist.includes(cardRes.card.id)) {
+            u.wishlist = u.wishlist.filter(id => id !== cardRes.card.id);
+            if (!isSandboxId(authorMember.id)) tcgBridge.demanderSauvegarde();
+            return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `💔 \`${cardRes.card.id}\` retirée de ta Wishlist.`));
+        }
+        if (u.wishlist.length >= MAX_WISHLIST) {
+            return replySilent(targetResponder, `⚠️ Ta Wishlist est pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**).`);
+        }
+        u.wishlist.push(cardRes.card.id);
+        if (!isSandboxId(authorMember.id)) tcgBridge.demanderSauvegarde();
+        return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `❤️ \`${cardRes.card.id}\` ajoutée à ta Wishlist !`));
+    }
+
+    // Sinon consulter la wishlist d'un membre mentionné / cherché
+    if (targetResponder.isRepliable?.()) {
+        return replySilent(targetResponder, `❌ Carte introuvable pour \`${arg}\`.`);
+    }
+    return resolveMemberArg(targetResponder, arg, async (targetMember) => {
+        if (!targetMember) return;
+        await replySilent(targetResponder, buildWishlistPayload(targetMember, authorMember.id, false, false));
+    });
+}
+
 async function handleTcgMessage(message) {
     if (!message.guild || message.guild.id !== GUILD_ID) return false;
     const raw = message.content.trim();
@@ -4958,19 +5602,12 @@ async function handleTcgMessage(message) {
 
     if (await handleAdminTcgCommand(message, raw.toLowerCase())) return true;
 
-    if (/^!tcgx(?:\s|$)/i.test(raw)) {
+    const sandboxMatch = raw.match(/^!tcgx\s*([a-z]*)(?:\s+(.*))?$/i);
+    if (sandboxMatch) {
         if (message.author.id !== EPSYS_ID) return true;
-        const restRaw = raw.replace(/^!tcgx\s*/i, '').trim();
-        const [subToken = 'hub', ...argTokens] = restRaw ? restRaw.split(/\s+/) : [];
-        let sub = (subToken || 'hub').toLowerCase();
-        let rest = argTokens.join(' ').trim();
-
-        if (sub === 'collection') sub = 'classeur';
-        if (sub === 'aide') sub = 'help';
-        if (sub === 'flexmodify') {
-            sub = 'flex';
-            rest = `modify ${rest}`.trim();
-        }
+        const norm = normalizeTcgSubcommand(sandboxMatch[1] || 'hub', sandboxMatch[2] || '');
+        const sub = norm.sub;
+        const rest = norm.rest;
 
         if (sub === 'reset') {
             getOrCreateTcgxSandbox(true);
@@ -5006,7 +5643,7 @@ async function handleTcgMessage(message) {
             await replySilent(message, buildProfilePayload(sandboxMember, su, false, false));
             return true;
         }
-        if (sub === 'open' || sub === 'booster') {
+        if (sub === 'open' || sub === 'booster' || sub === 'go') {
             await replySilent(message, buildOpenPromptPayload(sandboxMember, su, false));
             return true;
         }
@@ -5016,6 +5653,10 @@ async function handleTcgMessage(message) {
         }
         if (sub === 'claim') {
             await replySilent(message, buildClaimPayload(sandboxMember, su, false));
+            return true;
+        }
+        if (sub === 'wishlist') {
+            await handleWishlistCommand(message, sandboxMember, rest);
             return true;
         }
         if (sub === 'top') {
@@ -5126,6 +5767,11 @@ async function handleTcgMessage(message) {
         return true;
     }
 
+    if (parsed.sub === 'wishlist') {
+        await handleWishlistCommand(message, message.member, parsed.rest);
+        return true;
+    }
+
     if (parsed.sub === 'classeur') {
         if (!parsed.rest) {
             const sent = await replySilent(message, '📖 Chargement de ton classeur RegaDex...');
@@ -5202,7 +5848,7 @@ async function handleTcgSlash(interaction) {
         await replySilent(interaction, buildHubPayload(member, u));
         return true;
     }
-    if (sub === 'open') {
+    if (sub === 'open' || sub === 'booster' || sub === 'go') {
         await replySilent(interaction, buildOpenPromptPayload(member, u, false));
         return true;
     }
@@ -5223,6 +5869,19 @@ async function handleTcgSlash(interaction) {
     }
     if (sub === 'notif') {
         await replySilent(interaction, buildNotifMenuPayload(member, u, false));
+        return true;
+    }
+    if (sub === 'profil') {
+        await replySilent(interaction, buildProfilePayload(member, u, false, false));
+        return true;
+    }
+    if (sub === 'wishlist') {
+        const cible = interaction.options.getMember('membre');
+        if (cible && cible.id !== interaction.user.id) {
+            await replySilent(interaction, buildWishlistPayload(cible, interaction.user.id, false, false));
+            return true;
+        }
+        await replySilent(interaction, buildWishlistPayload(member, interaction.user.id, false, false));
         return true;
     }
     if (sub === 'classeur') {
@@ -5941,12 +6600,17 @@ async function handleTcgInteraction(interaction) {
         u.cards[baseId] -= 1;
         if (u.cards[baseId] === 0) delete u.cards[baseId];
         u.cards[holoCard.id] = (u.cards[holoCard.id] || 0) + 1;
+        const holoMilestones = checkAndGrantCompletionMilestones(ownerId, baseCard.setNumber || DEFAULT_SET_NUMBER);
         if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
+
+        const msTxt = holoMilestones.unlocked.length > 0
+            ? `\n\n🏆 **Palier(s) de complétion atteint(s) :** ${holoMilestones.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts)`).join(', ')}`
+            : '';
 
         const embed = new EmbedBuilder()
             .setColor(RARITY_META[holoCard.rarity]?.color || 0xf1c40f)
             .setTitle('✨ Transformation Holographique réussie !')
-            .setDescription(`Ta carte **${baseCard.id} • ${baseCard.name}** a évolué en **${holoCard.id} • ${holoCard.name}** !`)
+            .setDescription(`Ta carte **${baseCard.id} • ${baseCard.name}** a évolué en **${holoCard.id} • ${holoCard.name}** !${msTxt}`)
             .setImage('attachment://holo_result.png');
 
         const files = holoCard.filePath && fs.existsSync(holoCard.filePath)
@@ -6078,7 +6742,7 @@ async function handleTcgInteraction(interaction) {
         const sortMode = parts[7];
         const rarityFilter = parts[8] || 'all';
         const fromHub = parts[9] === '1';
-        const ownedOnly = parts[10] === '1';
+        const ownedMode = normalizeBinderOwnedMode(parts[10]);
 
         if (!canControlTcgOwner(interaction.user.id, viewerId) && !canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({ content: "Ce classeur n'est pas à toi !", ephemeral: true });
@@ -6090,7 +6754,7 @@ async function handleTcgInteraction(interaction) {
         }
 
         const uOwner = getOrCreateTcgUser(ownerId);
-        const cardsList = getFilteredSortedCards(category, sortMode, uOwner, ownedOnly, rarityFilter);
+        const cardsList = getFilteredSortedCards(category, sortMode, uOwner, ownedMode, rarityFilter);
         const grid = getBinderGridConfig(perPageMode, cardsList.length);
         const totalPages = Math.max(1, Math.ceil(cardsList.length / grid.perPage));
         const safePage = Math.max(0, Math.min(page, totalPages - 1));
@@ -6114,7 +6778,7 @@ async function handleTcgInteraction(interaction) {
             page: safePage,
             sortMode,
             rarityFilter,
-            ownedOnly,
+            ownedMode,
             fromHub,
             expiresAt: now + 30 * 60 * 1000
         });
@@ -6187,7 +6851,7 @@ async function handleTcgInteraction(interaction) {
         const sortMode = parts[6];
         const rarityFilter = parts[7] || 'all';
         const fromHub = parts[8] === '1';
-        const ownedOnly = parts[9] === '1';
+        const ownedMode = normalizeBinderOwnedMode(parts[9]);
 
         if (!canControlTcgOwner(interaction.user.id, viewerId) && !canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({ content: "Ce classeur n'est pas à toi !", ephemeral: true });
@@ -6195,12 +6859,12 @@ async function handleTcgInteraction(interaction) {
         }
 
         const uOwner = getOrCreateTcgUser(ownerId);
-        const cardsList = getFilteredSortedCards(category, sortMode, uOwner, ownedOnly, rarityFilter);
+        const cardsList = getFilteredSortedCards(category, sortMode, uOwner, ownedMode, rarityFilter);
         const grid = getBinderGridConfig(perPageMode, cardsList.length);
         const totalPages = Math.max(1, Math.ceil(cardsList.length / grid.perPage));
 
         const modal = new ModalBuilder()
-            .setCustomId(`tcg:bpagesub:${ownerId}:${viewerId}:${category}:${perPageMode}:${sortMode}:${rarityFilter}:${fromHub ? '1' : '0'}:${ownedOnly ? '1' : '0'}`)
+            .setCustomId(`tcg:bpagesub:${ownerId}:${viewerId}:${category}:${perPageMode}:${sortMode}:${rarityFilter}:${fromHub ? '1' : '0'}:${ownedMode}`)
             .setTitle('Aller à une page du classeur');
         const input = new TextInputBuilder()
             .setCustomId('page_number')
@@ -6215,7 +6879,7 @@ async function handleTcgInteraction(interaction) {
     }
 
     if ((action === 'bcat' || action === 'bsize' || action === 'bnav' || action === 'brarity' || action === 'bsort' || action === 'bowned' || action === 'btheme' || action === 'bpagesub')) {
-        let ownerId, viewerId, category, perPageMode, page, sortMode, rarityFilter, fromHub, ownedOnly;
+        let ownerId, viewerId, category, perPageMode, page, sortMode, rarityFilter, fromHub, ownedMode;
 
         if (action === 'bcat' && interaction.isStringSelectMenu()) {
             ownerId = parts[2];
@@ -6224,7 +6888,7 @@ async function handleTcgInteraction(interaction) {
             sortMode = parts[5];
             rarityFilter = parts[6] || 'all';
             fromHub = parts[7] === '1';
-            ownedOnly = parts[8] === '1';
+            ownedMode = normalizeBinderOwnedMode(parts[8]);
             category = interaction.values[0];
             page = 0;
         } else if (action === 'bsize' && interaction.isButton()) {
@@ -6235,7 +6899,7 @@ async function handleTcgInteraction(interaction) {
             sortMode = parts[6];
             rarityFilter = parts[7] || 'all';
             fromHub = parts[8] === '1';
-            ownedOnly = parts[9] === '1';
+            ownedMode = normalizeBinderOwnedMode(parts[9]);
             page = 0;
         } else if (action === 'bsize' && interaction.isStringSelectMenu()) {
             ownerId = parts[2];
@@ -6244,7 +6908,7 @@ async function handleTcgInteraction(interaction) {
             sortMode = parts[5];
             rarityFilter = 'all';
             fromHub = parts[6] === '1';
-            ownedOnly = parts[7] === '1';
+            ownedMode = normalizeBinderOwnedMode(parts[7]);
             perPageMode = interaction.values[0];
             page = 0;
         } else if (action === 'bnav' && interaction.isButton()) {
@@ -6257,7 +6921,7 @@ async function handleTcgInteraction(interaction) {
             sortMode = parts[8];
             rarityFilter = parts[9] || 'all';
             fromHub = parts[10] === '1';
-            ownedOnly = parts[11] === '1';
+            ownedMode = normalizeBinderOwnedMode(parts[11]);
             if (dir === 'first') page = 0;
             else if (dir === 'prev') page = Math.max(0, page - 1);
             else if (dir === 'next') page = page + 1;
@@ -6270,7 +6934,7 @@ async function handleTcgInteraction(interaction) {
             rarityFilter = parts[6] || 'all';
             sortMode = (rarityFilter !== 'all' && parts[7] === 'rarity') ? 'number' : parts[7];
             fromHub = parts[8] === '1';
-            ownedOnly = parts[9] === '1';
+            ownedMode = normalizeBinderOwnedMode(parts[9]);
             page = 0;
         } else if (action === 'bsort' && interaction.isButton()) {
             ownerId = parts[2];
@@ -6281,7 +6945,7 @@ async function handleTcgInteraction(interaction) {
             rarityFilter = parts[8] || 'all';
             sortMode = (rarityFilter !== 'all' && parts[7] === 'rarity') ? 'number' : parts[7];
             fromHub = parts[9] === '1';
-            ownedOnly = parts[10] === '1';
+            ownedMode = normalizeBinderOwnedMode(parts[10]);
         } else if (action === 'bowned' && interaction.isButton()) {
             ownerId = parts[2];
             viewerId = parts[3];
@@ -6290,7 +6954,7 @@ async function handleTcgInteraction(interaction) {
             sortMode = parts[6];
             rarityFilter = parts[7] || 'all';
             fromHub = parts[8] === '1';
-            ownedOnly = parts[9] === '1';
+            ownedMode = normalizeBinderOwnedMode(parts[9]);
             page = 0;
         } else if (action === 'btheme' && interaction.isButton()) {
             ownerId = parts[2];
@@ -6301,7 +6965,7 @@ async function handleTcgInteraction(interaction) {
             sortMode = parts[7];
             rarityFilter = parts[8] || 'all';
             fromHub = parts[9] === '1';
-            ownedOnly = parts[10] === '1';
+            ownedMode = normalizeBinderOwnedMode(parts[10]);
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
                 await interaction.reply({ content: "❌ Seul le propriétaire du classeur peut changer son thème Clair/Nuit.", ephemeral: true });
                 return true;
@@ -6317,7 +6981,7 @@ async function handleTcgInteraction(interaction) {
             sortMode = parts[6];
             rarityFilter = parts[7] || 'all';
             fromHub = parts[8] === '1';
-            ownedOnly = parts[9] === '1';
+            ownedMode = normalizeBinderOwnedMode(parts[9]);
             const rawPage = interaction.fields.getTextInputValue('page_number').trim();
             const pageNum = parseInt(rawPage, 10);
             if (!/^\d+$/.test(rawPage) || isNaN(pageNum) || pageNum < 1) {
@@ -6342,7 +7006,7 @@ async function handleTcgInteraction(interaction) {
         const ownerMember = isSandboxId(ownerId)
             ? buildTcgMemberProxy(interaction.member, TCGX_SANDBOX_ID)
             : await interaction.guild.members.fetch(ownerId).catch(() => interaction.member);
-        const payload = await buildBinderReplyPayload(ownerMember, viewerId, { category, perPageMode, page, sortMode, rarityFilter, ownedOnly, fromHub });
+        const payload = await buildBinderReplyPayload(ownerMember, viewerId, { category, perPageMode, page, sortMode, rarityFilter, ownedMode, fromHub });
         if (action === 'bpagesub' && !interaction.isFromMessage?.()) {
             await interaction.editReply(payload);
         } else {
@@ -6351,18 +7015,36 @@ async function handleTcgInteraction(interaction) {
         return true;
     }
 
-    // ----- SÉLECTION & NAVIGATION CARTE (!carte) + DÉFINIR FLEX -----
+    // ----- SÉLECTION & NAVIGATION CARTE (!carte) + CHANGER DE SET + DÉFINIR FLEX -----
     if (action === 'cartesel' && interaction.isStringSelectMenu()) {
         const ownerId = parts[2];
+        const currentCardId = parts[3] || null;
+        const activeSetNumber = parseInt(parts[4], 10) || DEFAULT_SET_NUMBER;
         if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
-        const card = cardById.get(interaction.values[0]);
+
+        const selected = interaction.values[0];
+        if (selected.startsWith('__page:') && currentCardId) {
+            const nextMenuPage = parseInt(selected.slice('__page:'.length), 10) || 0;
+            const currentCard = cardById.get(currentCardId);
+            if (!currentCard) return true;
+            await interaction.update({
+                components: buildSingleCardPayload(currentCard, ownerId, { menuPage: nextMenuPage, setNumber: activeSetNumber }).components
+            });
+            return true;
+        }
+
+        const card = cardById.get(selected);
         const u = getOrCreateTcgUser(ownerId);
         if (!card || (u.cards?.[card.id] || 0) <= 0) {
             await interaction.reply({ content: "🔒 Tu ne possèdes pas cette carte dans ton RegaDex !", ephemeral: true });
             return true;
         }
         await interaction.deferUpdate();
-        await interaction.editReply({ content: null, ...buildSingleCardPayload(card, ownerId), attachments: [] });
+        await interaction.editReply({
+            content: null,
+            ...buildSingleCardPayload(card, ownerId, { setNumber: card.setNumber || activeSetNumber }),
+            attachments: []
+        });
         return true;
     }
 
@@ -6372,7 +7054,10 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[4];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
         const u = getOrCreateTcgUser(ownerId);
-        const ownedCards = cardCatalog.filter(c => (u.cards?.[c.id] || 0) > 0);
+        const currentCard = cardById.get(currentCardId);
+        const activeSetNumber = currentCard?.setNumber || DEFAULT_SET_NUMBER;
+        const setOwned = getSetCatalog(activeSetNumber).filter(c => (u.cards?.[c.id] || 0) > 0);
+        const ownedCards = setOwned.length > 0 ? setOwned : cardCatalog.filter(c => (u.cards?.[c.id] || 0) > 0);
         if (ownedCards.length === 0) {
             await interaction.reply({ content: "🔒 Tu ne possèdes aucune carte dans ton RegaDex !", ephemeral: true });
             return true;
@@ -6383,8 +7068,254 @@ async function handleTcgInteraction(interaction) {
             ? (idx - 1 + ownedCards.length) % ownedCards.length
             : (idx + 1) % ownedCards.length;
         await interaction.deferUpdate();
-        await interaction.editReply({ content: null, ...buildSingleCardPayload(ownedCards[targetIdx], ownerId), attachments: [] });
+        await interaction.editReply({
+            content: null,
+            ...buildSingleCardPayload(ownedCards[targetIdx], ownerId, { setNumber: activeSetNumber }),
+            attachments: []
+        });
         return true;
+    }
+
+    // [SET 2] Changement de Set dans !carte
+    if (action === 'carteset' && interaction.isButton()) {
+        const currentSetNum = parseInt(parts[2], 10) || DEFAULT_SET_NUMBER;
+        const ownerId = parts[4];
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        const activeSets = getActiveSets();
+        if (activeSets.length <= 1) {
+            await interaction.reply({ content: "⏳ Le Set 2 n'est pas encore disponible !", ephemeral: true });
+            return true;
+        }
+        const curIdx = Math.max(0, activeSets.findIndex(s => s.number === currentSetNum));
+        const nextSet = activeSets[(curIdx + 1) % activeSets.length];
+        const u = getOrCreateTcgUser(ownerId);
+        const nextOwned = getSetCatalog(nextSet.number).filter(c => (u.cards?.[c.id] || 0) > 0);
+        if (nextOwned.length === 0) {
+            await interaction.reply({ content: `🔒 Tu ne possèdes encore aucune carte dans le **${nextSet.name}** !`, ephemeral: true });
+            return true;
+        }
+        await interaction.deferUpdate();
+        await interaction.editReply({
+            content: null,
+            ...buildSingleCardPayload(nextOwned[0], ownerId, { setNumber: nextSet.number }),
+            attachments: []
+        });
+        return true;
+    }
+
+    // ----- QUI A CETTE CARTE EN DOUBLON ? (!carte & Inspecter) -----
+    if (action === 'carddups' && interaction.isButton()) {
+        const cardId = parts[2];
+        const ownerId = parts[3];
+        if (!hasTcgRole(interaction.member) && interaction.user.id !== EPSYS_ID) {
+            await interaction.reply({ content: `🔒 Réservé aux membres ayant le rôle <@&${TCG_ROLE_ID}>.`, ephemeral: true });
+            return true;
+        }
+        if (isSandboxId(ownerId) && interaction.user.id !== EPSYS_ID) {
+            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            return true;
+        }
+
+        const card = cardById.get(cardId);
+        const viewerU = getOrCreateTcgUser(interaction.user.id);
+        const viewerOwns = (viewerU.cards?.[cardId] || 0) > 0;
+        const cardTitle = viewerOwns && card ? `\`${card.id}\` **${card.name}**` : `\`${cardId}\``;
+
+        const dups = getCardDuplicateOwners(cardId, interaction.user.id);
+        if (dups.length === 0) {
+            await interaction.reply({
+                content: `😔 Personne sur le serveur ne possède ${cardTitle} en doublon pour le moment.`,
+                ephemeral: true
+            });
+            return true;
+        }
+
+        const topDups = dups.slice(0, 20);
+        await interaction.guild.members.fetch({ user: topDups.map(d => d.uid) }).catch(() => {});
+        const lines = topDups.map(d => {
+            const m = interaction.guild.members.cache.get(d.uid);
+            const name = m ? `**${m.displayName}** (<@${d.uid}>)` : `<@${d.uid}>`;
+            return `• ${name} — \`x${d.qty}\` *(${d.extra} doublon${d.extra > 1 ? 's' : ''})*`;
+        });
+
+        await interaction.reply({
+            content:
+                `👥 **Collectionneur·euses ayant ${cardTitle} en doublon (${dups.length}) :**\n` +
+                lines.join('\n') +
+                (dups.length > 20 ? `\n*...et ${dups.length - 20} autre(s) membre(s)*` : ''),
+            ephemeral: true
+        });
+        return true;
+    }
+
+    // ----- WISHLIST (5 CARTES MAX) -----
+    if (action === 'wish') {
+        const sub = parts[2];
+
+        if (sub === 'open' && interaction.isButton()) {
+            const ownerId = parts[3];
+            const fromHub = parts[4] === '1';
+            const fromProfile = parts[5] === '1';
+            if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+                await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+                return true;
+            }
+            const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+            await interaction.update({
+                content: null,
+                files: [],
+                attachments: [],
+                ...buildWishlistPayload(actorMember, ownerId, fromHub, fromProfile)
+            });
+            return true;
+        }
+
+        if (sub === 'toggle' && interaction.isButton()) {
+            const cardId = parts[3];
+            const ownerId = parts[4];
+            const context = parts[5] || 'card';
+            const binderMsgId = parts[6] || null;
+            if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+                await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+                return true;
+            }
+            const card = cardById.get(cardId);
+            if (!card) {
+                await interaction.reply({ content: "❌ Carte introuvable.", ephemeral: true });
+                return true;
+            }
+            const u = getOrCreateTcgUser(ownerId);
+            u.wishlist = getSanitizedWishlist(u);
+            let feedback;
+            if (u.wishlist.includes(cardId)) {
+                u.wishlist = u.wishlist.filter(id => id !== cardId);
+                feedback = `💔 \`${cardId}\` retirée de ta Wishlist.`;
+            } else if (u.wishlist.length >= MAX_WISHLIST) {
+                await interaction.reply({ content: `⚠️ Ta Wishlist est déjà pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**).`, ephemeral: true });
+                return true;
+            } else {
+                u.wishlist.push(cardId);
+                feedback = `❤️ \`${cardId}\` ajoutée à ta Wishlist !`;
+            }
+            if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
+
+            if (context === 'card') {
+                await interaction.update({ components: buildSingleCardPayload(card, ownerId).components });
+            } else if (context === 'unowned') {
+                await interaction.update({ components: buildUnownedCardPayload(card, ownerId).components });
+            } else if (context === 'binspect') {
+                const state = binderReturnStates.get(interaction.message?.id);
+                await interaction.update({
+                    components: buildBinderInspectPayload(card, ownerId, state?.viewerId || ownerId, binderMsgId || interaction.message?.id).components
+                });
+            }
+            await interaction.followUp({ content: feedback, ephemeral: true });
+            return true;
+        }
+
+        if (sub === 'add' && interaction.isButton()) {
+            const ownerId = parts[3];
+            const fromHub = parts[4] === '1';
+            const fromProfile = parts[5] === '1';
+            if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+                await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+                return true;
+            }
+            const modal = new ModalBuilder()
+                .setCustomId(`tcg:wish:addsub:${ownerId}:${fromHub ? '1' : '0'}:${fromProfile ? '1' : '0'}`)
+                .setTitle('Ajouter à ta Wishlist');
+            const input = new TextInputBuilder()
+                .setCustomId('wish_query')
+                .setLabel('Numéro (ex: 1-84, 1-Ø1) ou Nom de carte')
+                .setStyle(TextInputStyle.Short)
+                .setRequired(true)
+                .setMaxLength(80);
+            modal.addComponents(new ActionRowBuilder().addComponents(input));
+            await interaction.showModal(modal);
+            return true;
+        }
+
+        if (sub === 'addsub' && interaction.isModalSubmit()) {
+            const ownerId = parts[3];
+            const fromHub = parts[4] === '1';
+            const fromProfile = parts[5] === '1';
+            if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+                await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+                return true;
+            }
+            const query = interaction.fields.getTextInputValue('wish_query').trim();
+            const res = resolveCardQuery(query);
+            if (!res.card) {
+                await interaction.reply({
+                    content: `❌ Aucune carte unique trouvée pour \`${query}\`. Essaie avec son numéro exact (ex: \`1-84\`).`,
+                    ephemeral: true
+                });
+                return true;
+            }
+            const u = getOrCreateTcgUser(ownerId);
+            u.wishlist = getSanitizedWishlist(u);
+            if (u.wishlist.includes(res.card.id)) {
+                await interaction.reply({ content: `ℹ️ \`${res.card.id}\` est déjà dans ta Wishlist.`, ephemeral: true });
+                return true;
+            }
+            if (u.wishlist.length >= MAX_WISHLIST) {
+                await interaction.reply({ content: `⚠️ Ta Wishlist est déjà pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**).`, ephemeral: true });
+                return true;
+            }
+            u.wishlist.push(res.card.id);
+            if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
+            const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+            const payload = buildWishlistPayload(actorMember, ownerId, fromHub, fromProfile, `❤️ \`${res.card.id}\` ajoutée à ta Wishlist !`);
+            if (interaction.isFromMessage?.()) {
+                await interaction.update({ content: null, files: [], attachments: [], ...payload });
+            } else {
+                await interaction.reply({ ...payload, ephemeral: true });
+            }
+            return true;
+        }
+
+        if (sub === 'remsel' && interaction.isStringSelectMenu()) {
+            const ownerId = parts[3];
+            const fromHub = parts[4] === '1';
+            const fromProfile = parts[5] === '1';
+            if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+                await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+                return true;
+            }
+            const cardId = interaction.values[0];
+            const u = getOrCreateTcgUser(ownerId);
+            u.wishlist = getSanitizedWishlist(u).filter(id => id !== cardId);
+            if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
+            const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+            await interaction.update({
+                content: null,
+                files: [],
+                attachments: [],
+                ...buildWishlistPayload(actorMember, ownerId, fromHub, fromProfile, `💔 \`${cardId}\` retirée de ta Wishlist.`)
+            });
+            return true;
+        }
+
+        if (sub === 'clear' && interaction.isButton()) {
+            const ownerId = parts[3];
+            const fromHub = parts[4] === '1';
+            const fromProfile = parts[5] === '1';
+            if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+                await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+                return true;
+            }
+            const u = getOrCreateTcgUser(ownerId);
+            u.wishlist = [];
+            if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
+            const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+            await interaction.update({
+                content: null,
+                files: [],
+                attachments: [],
+                ...buildWishlistPayload(actorMember, ownerId, fromHub, fromProfile, '🧹 *Wishlist vidée.*')
+            });
+            return true;
+        }
     }
 
     if (action === 'setflex' && interaction.isButton()) {
@@ -7098,6 +8029,7 @@ module.exports = {
     getTcgCardsCount,
     restaurerNotifsTcg,
     verifierInactiviteTradesTcg,
+    verifierBoosterHebdoTcg,
     trackTcgMessagePoint,
     trackTcgVocalMinute,
     trackTcgRoulettePoint,

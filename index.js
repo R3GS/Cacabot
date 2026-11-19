@@ -519,6 +519,7 @@ const {
     getTcgCardsCount,
     restaurerNotifsTcg,
     verifierInactiviteTradesTcg,
+    verifierBoosterHebdoTcg,
     trackTcgMessagePoint,
     trackTcgVocalMinute,
     trackTcgRoulettePoint,
@@ -818,7 +819,8 @@ async function disableButtons(interaction) {
 
             const modules = [
                 { nom: 'Roulette', obj: typeof handleRouletteMessage === 'function' && typeof ROULETTE_ETATS === 'object' },
-                { nom: 'RegaDex (TCG)', obj: typeof handleTcgMessage === 'function' && typeof getTcgCardsCount === 'function' && getTcgCardsCount() === 109 },
+                // [SET 2] >= 109 reste valide quand les cartes du Set 2 s'ajouteront
+                { nom: 'RegaDex (TCG)', obj: typeof handleTcgMessage === 'function' && typeof getTcgCardsCount === 'function' && getTcgCardsCount() >= 109 },
                 { nom: 'Tools & Utilitaires', obj: typeof handleToolsMessage === 'function' && typeof handleToolsSlash === 'function' },
                 { nom: 'Minijeux (Motus/Rébus)', obj: typeof handleMotusMessage === 'function' && typeof handleRebusMessage === 'function' },
                 { nom: 'Pendu Quotidien', obj: typeof handlePenduMessage === 'function' },
@@ -1570,13 +1572,18 @@ client.once('ready', async () => {
             .setDescription('🃏 RegaDex TCG — Boosters, classeur, Store, flex & échanges')
             .addSubcommand(sub => sub.setName('hub').setDescription('Ouvrir le menu principal RegaDex'))
             .addSubcommand(sub => sub.setName('open').setDescription('Voir et ouvrir tes boosters Set 1 - Vestiges Regaïens disponibles'))
+            .addSubcommand(sub => sub.setName('booster').setDescription('Alias de open — Ouvrir tes boosters disponibles'))
+            .addSubcommand(sub => sub.setName('go').setDescription('Alias de open — Ouvrir tes boosters disponibles'))
             .addSubcommand(sub => sub.setName('store').setDescription('Ouvrir le RegaDex Store'))
             .addSubcommand(sub => sub.setName('claim').setDescription('Consulter et utiliser ton inventaire RegaDex'))
+            .addSubcommand(sub => sub.setName('profil').setDescription('Voir ton profil RegaDex, tes paliers & ta wishlist'))
+            .addSubcommand(sub => sub.setName('wishlist').setDescription('Gérer ta wishlist RegaDex (5 cartes max)')
+                .addUserOption(opt => opt.setName('membre').setDescription('Voir la wishlist d\'un membre')))
             .addSubcommand(sub => sub.setName('classeur').setDescription('Afficher ton classeur Canvas (ou celui d\'un membre)')
                 .addUserOption(opt => opt.setName('membre').setDescription('Membre à inspecter')))
             .addSubcommand(sub => sub.setName('carte').setDescription('Afficher une carte précise ou les explications')
                 .addStringOption(opt => opt.setName('recherche').setDescription('Numéro (ex: 1-84, Ø1) ou nom de la carte')))
-            .addSubcommand(sub => sub.setName('trade').setDescription('Proposer un échange de cartes (doublons ou dernière copie à rareté égale)')
+            .addSubcommand(sub => sub.setName('trade').setDescription('Proposer un échange de cartes (doublons libre, ou dernière copie à nombre/rareté égaux)')
                 .addUserOption(opt => opt.setName('membre').setDescription('Membre avec qui échanger')))
             .addSubcommand(sub => sub.setName('top').setDescription('Classements RegaDex (Total & Complétion Set 1 - Vestiges Regaïens)'))
             .addSubcommand(sub => sub.setName('flex').setDescription('Afficher ou modifier ta carte préférée (#regadex et #shitpost)')
@@ -1612,6 +1619,8 @@ client.once('ready', async () => {
     await scanSet1Cards(client);
     restaurerNotifsTcg(client);
     setInterval(() => verifierInactiviteTradesTcg(client), 10 * 60 * 1000);
+    verifierBoosterHebdoTcg(client);
+    setInterval(() => verifierBoosterHebdoTcg(client), 60 * 1000);
 
     // Réarmement des alertes roulette, votes publics et des rappels
     for (const [uid, chId] of rouletteNotifs) armerNotifRoulette(uid, chId, client);

@@ -523,14 +523,15 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
                 `Collectionne les **109 cartes** du **Set 1 - Vestiges Regaïens** dans <#1572007962199851059> !\n` +
                 `-# 🔒 Accès : Nécessite le rôle <@&1572007430152261672> *(toutes les commandes existent aussi sous \`/regadex\`)*. \n\n` +
                 `### 🎁 Boosters, Store & Inventaire\n` +
-                `\`!regadex\` *(ou \`!rgdx\` / \`!tcg\`)* • Hub principal RegaDex\n` +
-                `\`!regadex open\` *(ou \`!booster open\` / \`!open\`)* • Ouvrir un booster *(1 gratuit / 6h, max 2)*\n` +
+                `\`!regadex\` *(ou \`!rgdx\` / \`!tcg\`)* • Hub principal RegaDex *(toutes les commandes marchent avec ou sans espace)*\n` +
+                `\`!regadex open\` *(ou \`!tcggo\` / \`!tcgbooster\` / \`!open\`)* • Ouvrir un booster *(1/6h max 2 + 1/lundi 8h)*\n` +
                 `\`!regadex store\` • Acheter boosters et bonus avec tes points RegaDex\n` +
-                `\`!regadex claim\` • Utiliser les boosters et bonus de ton inventaire\n` +
+                `\`!tcgclaim\` *(ou \`!regadex claim\`)* • Inventaire, achats & boosters du lundi 8h *(max 2/2)*\n` +
                 `\`!regadex notif\` • Configurer tes notifications de boosters *(choix permanent)*\n\n` +
-                `### 📖 Collection, Échanges & Flex\n` +
-                `\`!classeur [@membre]\` *(ou \`!collection\`)* • Afficher le classeur Canvas (mode Clair W / Nuit B)\n` +
-                `\`!carte [N° ou nom]\` • Inspecter une carte précise *(ex: \`!carte 1-84\`)*\n` +
+                `### 📖 Collection, Wishlist, Échanges & Flex\n` +
+                `\`!classeur [@membre]\` *(ou \`!collection\`)* • Classeur Canvas *(filtres Tout / Possédées / Doublons)*\n` +
+                `\`!carte [N° ou nom]\` • Inspecter une carte & voir **qui l'a en doublon**\n` +
+                `\`!wishlist\` *(\`!tcgwishlist\`)* • Gérer tes **5 cartes recherchées** *(prioritaires en \`!trade\`)*\n` +
                 `\`!trade [@membre]\` *(ou Clic droit → Applications)* • Échanger jusqu'à 3 cartes *(+3 pts 1×/fil)*\n` +
                 `\`!regadex top\` • Classements Total de cartes & Complétion Set 1 - Vestiges Regaïens\n` +
                 `\`!tcg flex [@membre]\` *(<#1572007962199851059> & <#720079691041472572>)* • Montrer sa carte préférée`
