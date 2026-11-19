@@ -247,6 +247,23 @@ async function lancerPenduQuotidien(guild) {
 //  CLASSEMENTS ET STATISTIQUES
 // ==========================================
 
+function buildPenduGuideEmbed() {
+    return new EmbedBuilder()
+        .setColor(0x9b59b6)
+        .setTitle('📘 Guide du Pendu Quotidien')
+        .setDescription(
+            `Le Pendu se joue tous les soirs à **21h00** dans <#${PENDU_CHANNEL_ID}> (jusqu'à **22h00**) :\n\n` +
+            `• **Mot mystère :** strictement **7 lettres**.\n` +
+            `• **Essais personnels :** **3 essais** par joueur *(1 lettre unique ou directement le mot de 7 lettres)*.\n` +
+            `• **Potence collective :** **6 erreurs max** pour tout le salon *(indice de survie auto à 4/6 erreurs + bouton Pacte à 3 votes)*.\n\n` +
+            `### 🏆 Récompenses\n` +
+            `• Le/la/les joueurs ayant trouvé le plus de bonnes lettres remportent la manche (**+3 pts** au classement hebdo \`!pendutop\`).\n` +
+            `• **Prime Coup de Poker :** **+2 pts bonus** si tu trouves le mot entier alors qu'il reste au moins 3 lettres cachées !\n` +
+            `• **+2 points RegaDex** instantanés pour le/la/les vainqueur·es *(rôle Collectionneur.euse requis)*.`
+        )
+        .setFooter({ text: 'Tape !pendu pour voir l\'état de la partie ou remettre l\'embed en bas' });
+}
+
 function buildPenduStatsEmbed(cible) {
     const stats = penduBridge.getPenduStats();
     const s = stats[cible.id] ?? { victoires: 0, parties: 0, points: 0 };
@@ -814,12 +831,19 @@ async function handlePenduMessage(message, response, client, helpers) {
 
                     const rowStats = new ActionRowBuilder().addComponents(
                         new ButtonBuilder()
-                            .setCustomId(`pendu_view_stats_${vainqueurs[0]}`)
-                            .setLabel('📊 Mes stats Pendu')
+                            .setCustomId('pendu_my_stats')
+                            .setLabel('Mes stats')
+                            .setEmoji('📊')
                             .setStyle(ButtonStyle.Primary),
                         new ButtonBuilder()
+                            .setCustomId('pendu_view_guide')
+                            .setLabel('Guide')
+                            .setEmoji('📘')
+                            .setStyle(ButtonStyle.Secondary),
+                        new ButtonBuilder()
                             .setCustomId(`pendu_view_hebdo_${vainqueurs[0]}`)
-                            .setLabel('🏆 Classement Hebdomadaire')
+                            .setLabel('Classement Hebdomadaire')
+                            .setEmoji('🏆')
                             .setStyle(ButtonStyle.Success)
                     );
 
@@ -998,7 +1022,11 @@ async function handlePenduMessage(message, response, client, helpers) {
 
             // Si tapée dans un autre salon : simple affichage informatif sans toucher à l'embed officiel
             const embed = buildPenduEmbed(session);
-            await message.reply({ content: `🪢 **Une partie de Pendu est actuellement EN COURS dans <#${PENDU_CHANNEL_ID}> !**`, embeds: [embed] });
+            const rowInfo = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('pendu_my_stats').setLabel('Mes stats').setEmoji('📊').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('pendu_view_guide').setLabel('Guide').setEmoji('📘').setStyle(ButtonStyle.Secondary)
+            );
+            await message.reply({ content: `🪢 **Une partie de Pendu est actuellement EN COURS dans <#${PENDU_CHANNEL_ID}> !**`, embeds: [embed], components: [rowInfo] });
             return true;
         }
 
@@ -1016,10 +1044,13 @@ async function handlePenduMessage(message, response, client, helpers) {
             .setFooter({ text: 'Rendez-vous tous les soirs à 21h00 • Tape !pendutop pour le classement' });
 
         const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('pendu_my_stats').setLabel('Mes stats').setEmoji('📊').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('pendu_view_guide').setLabel('Guide').setEmoji('📘').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder()
                 .setCustomId(`pendu_view_hebdo_${message.author.id}`)
-                .setLabel('🏆 Classement Hebdomadaire')
-                .setStyle(ButtonStyle.Primary)
+                .setLabel('Classement Hebdomadaire')
+                .setEmoji('🏆')
+                .setStyle(ButtonStyle.Success)
         );
 
         await message.reply({ embeds: [embedAttente], components: [row] });
@@ -1064,7 +1095,11 @@ async function handlePenduSlash(interaction) {
 
         if (enCours) {
             const embed = buildPenduEmbed(session);
-            return interaction.reply({ content: '🪢 **Une partie de Pendu est actuellement EN COURS !**', embeds: [embed] });
+            const rowInfo = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('pendu_my_stats').setLabel('Mes stats').setEmoji('📊').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('pendu_view_guide').setLabel('Guide').setEmoji('📘').setStyle(ButtonStyle.Secondary)
+            );
+            return interaction.reply({ content: '🪢 **Une partie de Pendu est actuellement EN COURS !**', embeds: [embed], components: [rowInfo] });
         }
 
         const { jourStr, heures, minutes, timestamp } = tempsAvantProchainPendu();
@@ -1081,10 +1116,13 @@ async function handlePenduSlash(interaction) {
             .setFooter({ text: 'Rendez-vous tous les soirs à 21h00' });
 
         const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('pendu_my_stats').setLabel('Mes stats').setEmoji('📊').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('pendu_view_guide').setLabel('Guide').setEmoji('📘').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder()
                 .setCustomId(`pendu_view_hebdo_${interaction.user.id}`)
-                .setLabel('🏆 Classement Hebdomadaire')
-                .setStyle(ButtonStyle.Primary)
+                .setLabel('Classement Hebdomadaire')
+                .setEmoji('🏆')
+                .setStyle(ButtonStyle.Success)
         );
 
         return interaction.reply({ embeds: [embedAttente], components: [row] });
@@ -1200,10 +1238,13 @@ async function handlePenduButton(interaction) {
         return true;
     }
 
-    if (customId.startsWith('pendu_view_stats_')) {
-        const uid = customId.split('_')[3];
-        const member = interaction.guild.members.cache.get(uid) || interaction.member;
+    if (customId === 'pendu_my_stats' || customId.startsWith('pendu_view_stats_')) {
+        const member = interaction.member;
         return interaction.reply({ embeds: [buildPenduStatsEmbed(member)], ephemeral: true });
+    }
+
+    if (customId === 'pendu_view_guide') {
+        return interaction.reply({ embeds: [buildPenduGuideEmbed()], ephemeral: true });
     }
 
     if (customId.startsWith('pendu_view_hebdo_') || customId.startsWith('pendu_hebdo_')) {

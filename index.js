@@ -10,6 +10,7 @@ let reactionRolesData = {}; // messageId -> { channelId, roles: { emojiKey: role
 let motusData = { dateKey: 0, mot: '', termine: false, vainqueurId: null, tentatives: {}, messageId: null };
 let motusStats = {}; // userId -> { victoires: number, parties: number }
 let rebusStats = {};
+let rebusLastDateKey = 0;
 let penduData = { dateKey: 0, mot: '', lettresTrouvees: [], lettresFausses: [], erreursCollectives: 0, expireAt: 0, termine: false, vainqueurId: null, tentativesJoueurs: {}, compteurMessages: 0, messageId: null };
 let penduStats = {};
 let twitchLiveEnCours = false;
@@ -80,6 +81,7 @@ async function loadAll() {
         motusData = jsonRecord.motusData ?? { dateKey: 0, mot: '', termine: false, vainqueurId: null, tentatives: {}, messageId: null };
         motusStats = jsonRecord.motusStats ?? {};
         rebusStats = jsonRecord.rebusStats ?? {};
+        rebusLastDateKey = jsonRecord.rebusLastDateKey ?? 0;
         penduData = jsonRecord.penduData ?? { dateKey: 0, mot: '', lettresTrouvees: [], lettresFausses: [], erreursCollectives: 0, expireAt: 0, termine: false, vainqueurId: null, tentativesJoueurs: {}, compteurMessages: 0, messageId: null };
         penduStats = jsonRecord.penduStats ?? {};
         quotesData = jsonRecord.quotes ?? [];
@@ -154,6 +156,7 @@ async function saveAll() {
             motusData: motusData,
             motusStats: motusStats,
             rebusStats: rebusStats,
+            rebusLastDateKey: rebusLastDateKey,
             penduData: penduData,
             penduStats: penduStats,
             quotes: quotesData,
@@ -1723,9 +1726,9 @@ client.once('ready', async () => {
     setInterval(() => verifierTwitchLive(client), 60 * 1000);
     setInterval(() => verifierNouvellesVideosYouTube(), 3 * 60 * 1000); // Vérifie les vidéos YouTube toutes les 3 minutes
 
-    // Lancement et vérification automatique des Motus (10h et 19h) + arrêt après 1 heure
-    let derniereSessionLancee = null;
+    // Lancement et vérification automatique des mini-jeux (persisté contre les redéploiements)
     const verifierMotusAutomatique = async () => {
+        if (!donneesChargees) return;
         const now = new Date();
         const paris = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
         const dateKey = paris.getFullYear() * 10000 + (paris.getMonth() + 1) * 100 + paris.getDate();
@@ -1734,27 +1737,31 @@ client.once('ready', async () => {
         const guildRegaia = client.guilds.cache.get('720057528351850547');
 
         // 1. Lancement du Motus du matin à 10h00 (6 lettres)
-        if (h === 10 && m >= 0 && m < 5 && derniereSessionLancee !== `${dateKey}_10h`) {
-            derniereSessionLancee = `${dateKey}_10h`;
+        if (h === 10 && m >= 0 && m < 5 && motusData.dateKey !== `${dateKey}_10h`) {
+            motusData.dateKey = `${dateKey}_10h`;
             if (guildRegaia) await envoyerMotusQuotidien(guildRegaia, 10);
+            await saveAll().catch(() => {});
         }
 
         // 2. Lancement du Rébus Regaïen à 15h00 (5 manches de 5 minutes)
-        if (h === 15 && m >= 0 && m < 5 && derniereSessionLancee !== `${dateKey}_15h`) {
-            derniereSessionLancee = `${dateKey}_15h`;
+        if (h === 15 && m >= 0 && m < 5 && rebusLastDateKey !== dateKey) {
+            rebusLastDateKey = dateKey;
             if (guildRegaia) await lancerSessionRebus(guildRegaia);
+            await saveAll().catch(() => {});
         }
 
         // 3. Lancement du Motus du soir à 19h00 (7 lettres - Difficile)
-        if (h === 19 && m >= 0 && m < 5 && derniereSessionLancee !== `${dateKey}_19h`) {
-            derniereSessionLancee = `${dateKey}_19h`;
+        if (h === 19 && m >= 0 && m < 5 && motusData.dateKey !== `${dateKey}_19h`) {
+            motusData.dateKey = `${dateKey}_19h`;
             if (guildRegaia) await envoyerMotusQuotidien(guildRegaia, 19);
+            await saveAll().catch(() => {});
         }
 
         // 4. Lancement du Pendu Quotidien à 21h00 (7 lettres - 1h)
-        if (h === 21 && m >= 0 && m < 5 && derniereSessionLancee !== `${dateKey}_21h`) {
-            derniereSessionLancee = `${dateKey}_21h`;
+        if (h === 21 && m >= 0 && m < 5 && penduData.dateKey !== dateKey) {
+            penduData.dateKey = dateKey;
             if (guildRegaia) await lancerPenduQuotidien(guildRegaia);
+            await saveAll().catch(() => {});
         }
 
         // 5. Arrêt automatique du Pendu après 1h de jeu (à 22h00)

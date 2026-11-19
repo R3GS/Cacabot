@@ -231,6 +231,58 @@ function buildMotusStatsEmbed(cible, interactionUser) {
         .setFooter({ text: 'Motus 10h & 19h • Regaïa' });
 }
 
+function buildMotusGuideEmbed() {
+    return new EmbedBuilder()
+        .setColor(0x00b0f4)
+        .setTitle('📘 Guide du Motus Regaïen')
+        .setDescription(
+            `Le Motus se joue tous les jours dans <#${MOTUS_CHANNEL_ID}> pendant **1 heure** par session :\n\n` +
+            `• **10h00 :** Mot de **6 lettres** *(normal)*\n` +
+            `• **19h00 :** Mot de **7 lettres** *(difficile)*\n\n` +
+            `### 🎯 Règles du jeu\n` +
+            `• Chaque session comporte **2 manches** *(la manche 2 démarre 30s après la victoire de la manche 1)*.\n` +
+            `• Tu as **3 essais individuels** par manche. Écris simplement un mot de la bonne longueur commençant par la **1ère lettre** affichée.\n` +
+            `• 🟩 **Vert :** Lettre bien placée • 🟨 **Jaune :** Présente mais mal placée • ⬛ **Noir :** Absente.\n\n` +
+            `### 🏆 Récompenses\n` +
+            `• **+3 points** par manche au classement hebdomadaire (\`!pendutop\`).\n` +
+            `• **+2 points RegaDex** instantanés par manche gagnée *(rôle Collectionneur.euse requis)*.`
+        )
+        .setFooter({ text: 'Tape !motus pour voir le statut ou remettre l\'énoncé en bas du salon' });
+}
+
+function buildMotusActionRow() {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('motus_view_stats')
+            .setLabel('Mes stats')
+            .setEmoji('📊')
+            .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+            .setCustomId('motus_view_guide')
+            .setLabel('Guide')
+            .setEmoji('📘')
+            .setStyle(ButtonStyle.Secondary)
+    );
+}
+
+async function disableMinijeuxButtonsOnMessage(msg) {
+    if (!msg || !Array.isArray(msg.components) || msg.components.length === 0) return;
+    const disabledRows = msg.components.map(row => {
+        const newRow = new ActionRowBuilder();
+        for (const comp of row.components) {
+            const json = comp.toJSON();
+            if (json.type === 2) {
+                json.disabled = true;
+                newRow.addComponents(ButtonBuilder.from(json));
+            }
+        }
+        return newRow;
+    }).filter(r => r.components.length > 0);
+    if (disabledRows.length > 0) {
+        await msg.edit({ components: disabledRows }).catch(() => {});
+    }
+}
+
 function buildMotusTopEmbed(guild) {
     const motusStats = minijeuxBridge.getMotusStats();
     const medailles = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
@@ -299,7 +351,8 @@ async function envoyerMotusQuotidien(guild, heureSession = 10) {
 
     const sent = await channel.send({ 
         content: `📢 <@&1558966826564845590>\n${texteAnnonce}`, 
-        embeds: [embed]
+        embeds: [embed],
+        components: [buildMotusActionRow()]
     });
     nouvelleData.messageId = sent.id;
     minijeuxBridge.setMotusData(nouvelleData);
@@ -521,9 +574,16 @@ async function handleMotusMessage(message, response, client, helpers) {
                 .filter(l => !motDuJour.includes(l))
                 .sort()
                 .join(' ');
+            const lettresRetenues = [...toutesLettresTentees]
+                .filter(l => motDuJour.includes(l))
+                .sort()
+                .join(' ');
 
             const ligneAbsentes = lettresAbsentes.length > 0 
                 ? `\n> ❌ **Lettres absentes :** \`${lettresAbsentes}\`` 
+                : '';
+            const ligneRetenues = lettresRetenues.length > 0
+                ? `\n> ✅ **Lettres retenues :** \`${lettresRetenues}\``
                 : '';
 
             const { MessageFlags } = require('discord.js');
@@ -545,12 +605,7 @@ async function handleMotusMessage(message, response, client, helpers) {
                 const mancheActuelle = motusData.manche || 1;
                 const totalManches = motusData.totalManches || 2;
 
-                const rowStats = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder()
-                        .setCustomId(`motus_view_stats_${message.author.id}`)
-                        .setLabel('📊 Mes stats Motus')
-                        .setStyle(ButtonStyle.Primary)
-                );
+                const rowStats = buildMotusActionRow();
 
                 if (mancheActuelle < totalManches) {
                     // Préparation de la manche 2 dans 30 secondes
@@ -584,13 +639,15 @@ async function handleMotusMessage(message, response, client, helpers) {
                         motusData.termine = false;
                         motusData.tentatives = {};
                         motusData.expireAt = Date.now() + 60 * 60 * 1000;
-                        minijeuxBridge.demanderSauvegarde();
 
                         const embedM2 = buildMotusEmbed(nouveauMot, dateKey, longueurM2, 2, 2);
-                        await message.channel.send({
+                        const sentM2 = await message.channel.send({
                             content: `📢 **C'EST PARTI POUR LA MANCHE 2/2 !** Nouveau mot en jeu :`,
-                            embeds: [embedM2]
+                            embeds: [embedM2],
+                            components: [buildMotusActionRow()]
                         });
+                        motusData.messageId = sentM2.id;
+                        minijeuxBridge.demanderSauvegarde();
                     }, 30000);
                     return true;
                 }
@@ -627,7 +684,7 @@ async function handleMotusMessage(message, response, client, helpers) {
                     : `\n-# *Il te reste ${3 - essaiNum} essai${(3 - essaiNum) > 1 ? 's' : ''} !*`;
 
                 await message.reply({
-                    content: `**${lettresEspacées}**\n${grille} *(Essai ${essaiNum}/3)*${ligneAbsentes}${infoReste}`,
+                    content: `**${lettresEspacées}**\n${grille} *(Essai ${essaiNum}/3)*${ligneAbsentes}${ligneRetenues}${infoReste}`,
                     components: [rowOriginal],
                     flags: [MessageFlags.SuppressNotifications],
                     allowedMentions: { repliedUser: false }
@@ -664,6 +721,31 @@ async function handleMotusMessage(message, response, client, helpers) {
         const now = Date.now();
         const enCours = motusData.mot && !motusData.termine && motusData.expireAt && now < motusData.expireAt;
 
+        if (enCours && message.channel.id === MOTUS_CHANNEL_ID) {
+            if (motusData.messageId) {
+                const ancienMsg = await message.channel.messages.fetch(motusData.messageId).catch(() => null);
+                if (ancienMsg) await disableMinijeuxButtonsOnMessage(ancienMsg);
+            }
+
+            await message.delete().catch(() => {});
+
+            const embedOriginal = buildMotusEmbed(
+                motusData.mot,
+                getMotusDateKey(),
+                motusData.longueur || 6,
+                motusData.manche || 1,
+                motusData.totalManches || 2
+            );
+            const sent = await message.channel.send({
+                content: '🟩 **Partie de Motus en cours (remise en bas du salon) :**',
+                embeds: [embedOriginal],
+                components: [buildMotusActionRow()]
+            });
+            motusData.messageId = sent.id;
+            minijeuxBridge.demanderSauvegarde();
+            return true;
+        }
+
         let desc = `Le prochain Motus aura lieu **${jourStr} à ${sessionNom}** (dans **${heures}h ${minutes}min**, <t:${timestamp}:R>) !\n\n` +
                    `📍 **Salon officiel :** <#${MOTUS_CHANNEL_ID}>\n` +
                    `-# *Sessions tous les jours : 10h00 (6 lettres) et 19h00 (7 lettres - Difficile).*`;
@@ -683,7 +765,7 @@ async function handleMotusMessage(message, response, client, helpers) {
             .setTitle(enCours ? '🟩 MOTUS EN COURS !' : '🟩 Motus Quotidien de Regaïa')
             .setDescription(desc);
 
-        await message.reply({ embeds: [embed] });
+        await message.reply({ embeds: [embed], components: [buildMotusActionRow()] });
         return true;
     }
 
@@ -735,15 +817,20 @@ async function handleMotusMessage(message, response, client, helpers) {
         const dateKey = getMotusDateKey();
         const longueur = motusData.longueur || 6;
         const mot = motusData.mot || getMotDuJour(dateKey, longueur);
-        const embed = buildMotusEmbed(mot, dateKey, longueur);
+        const embed = buildMotusEmbed(mot, dateKey, longueur, motusData.manche || 1, motusData.totalManches || 2);
         await interaction.reply({ embeds: [embed], ephemeral: true });
         return true;
     }
 
-    if (interaction.customId.startsWith('motus_view_stats_')) {
+    if (interaction.customId === 'motus_view_stats' || interaction.customId.startsWith('motus_view_stats_')) {
         const member = interaction.member;
         const embed = buildMotusStatsEmbed(member, interaction.user);
         await interaction.reply({ embeds: [embed], ephemeral: true });
+        return true;
+    }
+
+    if (interaction.customId === 'motus_view_guide') {
+        await interaction.reply({ embeds: [buildMotusGuideEmbed()], ephemeral: true });
         return true;
     }
 
@@ -774,9 +861,9 @@ async function handleMotusSlash(interaction) {
             .setColor(enCours && motusData.longueur === 7 ? 0xe74c3c : 0x00b0f4)
             .setTitle(enCours ? '🟩 MOTUS EN COURS !' : '🟩 Motus Quotidien de Regaïa')
             .setDescription(desc)
-            .setFooter({ text: 'Salon dédié : <#1559041936256409650> • 3 essais individuels • 1 heure de jeu par session' });
+            .setFooter({ text: 'Salon dédié : #motus • 3 essais individuels • 1 heure de jeu par session' });
 
-        return interaction.reply({ embeds: [embed] });
+        return interaction.reply({ embeds: [embed], components: [buildMotusActionRow()] });
     }
 
     if (commandName === 'motustats') {
@@ -1143,6 +1230,40 @@ function tempsAvantProchainRebus() {
     return { jourStr, h, m, timestamp: Math.floor((Date.now() + diff) / 1000) };
 }
 
+function buildRebusGuideEmbed() {
+    return new EmbedBuilder()
+        .setColor(0xf39c12)
+        .setTitle('📘 Guide du Rébus Regaïen')
+        .setDescription(
+            `Le Rébus Regaïen se joue tous les jours à **15h00** dans <#${REBUS_CHANNEL_ID}> (jusqu'à **16h00** max) :\n\n` +
+            `• **5 manches** de **5 minutes** chacune.\n` +
+            `• Un thème différent chaque jour : 🎬 Films, 🎮 Jeux Vidéo, 📺 Séries TV ou ⛩️ Animés & Mangas.\n\n` +
+            `### 🎯 Règles du jeu\n` +
+            `• Déchiffre les emojis et écris directement le titre dans le salon *(les petites fautes de frappe déclenchent une réaction 🔥)*.\n` +
+            `• Le bouton **💡 Demander un indice** (ou l'indice auto à mi-temps) aide à débloquer la manche.\n` +
+            `• Si personne ne joue sur une manche, la partie se met en **pause** pour ne pas tourner dans le vide.\n\n` +
+            `### 🏆 Récompenses\n` +
+            `• **+1 point** par manche remportée au classement (\`!rebustop\` & \`!pendutop\`).\n` +
+            `• **+2 points RegaDex** instantanés pour le/la/les vainqueur·es du podium final *(rôle Collectionneur.euse requis)*.`
+        )
+        .setFooter({ text: 'Tape !rebus pour connaître l\'heure de la prochaine session' });
+}
+
+function buildRebusActionRow() {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('rebus_view_stats')
+            .setLabel('Mes stats')
+            .setEmoji('📊')
+            .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+            .setCustomId('rebus_view_guide')
+            .setLabel('Guide')
+            .setEmoji('📘')
+            .setStyle(ButtonStyle.Secondary)
+    );
+}
+
 function buildRebusStatsEmbed(cible) {
     const rebusStats = minijeuxBridge.getRebusStats();
     const s = rebusStats[cible.id] ?? { victoires: 0, points: 0, parties: 0 };
@@ -1507,12 +1628,7 @@ async function terminerSessionRebus(channel) {
         )
         .setFooter({ text: 'Rendez-vous demain à 15h00 ! • !rebus pour voir le statut' });
 
-    const rowStats = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId('rebus_view_stats')
-            .setLabel('📊 Mes stats Rébus')
-            .setStyle(ButtonStyle.Primary)
-    );
+    const rowStats = buildRebusActionRow();
 
     const { MessageFlags } = require('discord.js');
     await channel.send({ 
@@ -1719,7 +1835,7 @@ async function handleRebusMessage(message, response, client, helpers) {
             .setTitle(rebusSession.active ? '🧩 RÉBUS REGAÏEN EN COURS !' : '🧩 Rébus Regaïen Quotidien (15h00)')
             .setDescription(desc);
 
-        await message.reply({ embeds: [embed] });
+        await message.reply({ embeds: [embed], components: [buildRebusActionRow()] });
         return true;
     }
 
@@ -1766,6 +1882,11 @@ async function handleRebusButton(interaction) {
         const member = interaction.member;
         const embed = buildRebusStatsEmbed(member);
         await interaction.reply({ embeds: [embed], ephemeral: true });
+        return true;
+    }
+
+    if (interaction.customId === 'rebus_view_guide') {
+        await interaction.reply({ embeds: [buildRebusGuideEmbed()], ephemeral: true });
         return true;
     }
 
@@ -1820,9 +1941,9 @@ async function handleRebusSlash(interaction) {
             .setColor(0xf39c12)
             .setTitle(rebusSession.active ? '🧩 RÉBUS REGAÏEN EN COURS !' : '🧩 Rébus Regaïen Quotidien (15h00)')
             .setDescription(desc)
-            .setFooter({ text: 'Salon dédié : <#1556089022718152764> • 5 manches de 5 minutes chaque jour à 15h00' });
+            .setFooter({ text: 'Salon dédié : #rébus • 5 manches de 5 minutes chaque jour à 15h00' });
 
-        return interaction.reply({ embeds: [embed] });
+        return interaction.reply({ embeds: [embed], components: [buildRebusActionRow()] });
     }
 
     if (commandName === 'rebusstats') {
