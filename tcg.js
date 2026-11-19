@@ -2839,13 +2839,25 @@ function buildHubEmbed(member, u) {
     // Quête communautaire hebdomadaire (en dernier avec séparateur)
     const quest = getOrEnsureCommunityQuest();
     const { nextResetTs } = getCurrentQuestWeekInfoParis();
-    const qBar = buildProgressBar(quest.progress, quest.target, 14);
-    const qStatus = quest.completed
-        ? `✅ **Quête terminée !** *(Récompenses distribuées aux **${quest.participants.length}** participant·es)*\n🔄 Prochaine quête <t:${nextResetTs}:R>`
-        : `🎁 **Récompense :** 2 boosters communautaires + 15 pts RegaDex\n👥 **Participant·e(s) :** **${quest.participants.length}** *(ouvre 1 booster pour participer)*\n⏳ Réinitialisation <t:${nextResetTs}:R>`;
+    const qBar = buildProgressBar(quest.progress, quest.target, 16);
+    const qPct = quest.target > 0 ? Math.min(100, Math.round((quest.progress / quest.target) * 100)) : 0;
+    const qLines = quest.completed
+        ? [
+            `• ✅ **Quête terminée !** *(Récompenses envoyées aux **${quest.participants.length}** participant·es)*`,
+            `• 🔄 Prochaine quête : <t:${nextResetTs}:R>`
+        ]
+        : [
+            `• Récompense : **2 boosters communautaires** + **15 pts**`,
+            `• Participant·es : **${quest.participants.length}** *(ouvre 1 booster pour participer)*`,
+            `• Fin : <t:${nextResetTs}:R>`
+        ];
     embed.addFields({
-        name: '────────────────────────────────────────\n## 🌍 Quête communautaire de la semaine :',
-        value: `🎯 **Objectif :** ${quest.label}\n\`${qBar}\` **${quest.progress}/${quest.target}**\n${qStatus}`,
+        name: '\u200b',
+        value:
+            `────────────────────────────────────────\n` +
+            `### 🌍 Quête communautaire de la semaine\n` +
+            `\`${qBar}\` **${qPct}%** — **${quest.progress}/${quest.target}** *(${quest.label.replace(/\*\*/g, '')})*\n\n` +
+            qLines.join('\n'),
         inline: false
     });
 
