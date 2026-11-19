@@ -2491,9 +2491,9 @@ function drawFivePointStar(ctx, cx, cy, outerR, innerR, fillStyle, shadowCol = n
     ctx.restore();
 }
 
-function drawFittedWrappedText(ctx, text, centerX, startY, maxWidth, startSize = 38, minSize = 22, maxCharsPerLine = 15) {
+function computeFittedWrappedLines(ctx, text, maxWidth, startSize = 38, minSize = 22, maxCharsPerLine = 15) {
     const str = String(text || '').trim();
-    if (!str) return;
+    if (!str) return { lines: [], fontSize: startSize, lineH: Math.round(startSize * 1.24) };
 
     const words = str.split(/\s+/);
     const shouldForceWrap = words.length > 1 && str.length > maxCharsPerLine;
@@ -2501,24 +2501,19 @@ function drawFittedWrappedText(ctx, text, centerX, startY, maxWidth, startSize =
     if (!shouldForceWrap) {
         ctx.font = `bold ${startSize}px "LemonMilk", "Sans"`;
         if (ctx.measureText(str).width <= maxWidth) {
-            ctx.fillText(str, centerX, startY, maxWidth);
-            return;
+            return { lines: [str], fontSize: startSize, lineH: Math.round(startSize * 1.24) };
         }
         if (words.length === 1) {
             for (let size = startSize - 2; size >= minSize; size -= 2) {
                 ctx.font = `bold ${size}px "LemonMilk", "Sans"`;
                 if (ctx.measureText(str).width <= maxWidth) {
-                    ctx.fillText(str, centerX, startY, maxWidth);
-                    return;
+                    return { lines: [str], fontSize: size, lineH: Math.round(size * 1.24) };
                 }
             }
-            ctx.font = `bold ${minSize}px "LemonMilk", "Sans"`;
-            ctx.fillText(str, centerX, startY, maxWidth);
-            return;
+            return { lines: [str], fontSize: minSize, lineH: Math.round(minSize * 1.24) };
         }
     }
 
-    // Passage sur 2 lignes en priorité pour les noms composés / longs
     for (let size = startSize; size >= minSize; size -= 2) {
         ctx.font = `bold ${size}px "LemonMilk", "Sans"`;
         let line1 = '';
@@ -2533,20 +2528,27 @@ function drawFittedWrappedText(ctx, text, centerX, startY, maxWidth, startSize =
             }
         }
         if (line1 && (!line2 || ctx.measureText(line2).width <= maxWidth || size === minSize)) {
-            const lineH = Math.round(size * 1.24);
-            ctx.fillText(line1, centerX, startY, maxWidth);
-            if (line2) ctx.fillText(line2, centerX, startY + lineH, maxWidth);
-            return;
+            const lines = line2 ? [line1, line2] : [line1];
+            return { lines, fontSize: size, lineH: Math.round(size * 1.24) };
         }
     }
 
-    ctx.font = `bold ${minSize}px "LemonMilk", "Sans"`;
-    ctx.fillText(str, centerX, startY, maxWidth);
+    return { lines: [str], fontSize: minSize, lineH: Math.round(minSize * 1.24) };
+}
+
+function drawFittedWrappedText(ctx, text, centerX, startY, maxWidth, startSize = 38, minSize = 22, maxCharsPerLine = 15) {
+    const layout = computeFittedWrappedLines(ctx, text, maxWidth, startSize, minSize, maxCharsPerLine);
+    if (layout.lines.length === 0) return;
+    ctx.font = `bold ${layout.fontSize}px "LemonMilk", "Sans"`;
+    layout.lines.forEach((line, idx) => {
+        ctx.fillText(line, centerX, startY + idx * layout.lineH, maxWidth);
+    });
 }
 
 async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) {
     const W = 1600;
     const H = 900;
+    const MID_Y = H / 2; // Méridienne centrale (450)
     const canvas = createCanvas(W, H);
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = true;
@@ -2610,30 +2612,47 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
         } catch {}
     }
 
-    // 3. Colonne gauche : Booster du Set agrandi & remonté, centré entre le bord et la PP
+    // 3. Colonne gauche : Booster du Set + compteur "Boosters Set X Ouverts = N" centré sur la méridienne
     const activeBoosterPath = setAssets[setNumber]?.boosterPng || assetPaths.boosterPng;
     const leftCenterX = 330;
-    const contentMidY = 490;
+    const boosterH = 510;
+    const boosterGap = 18;
+    const boosterTextH = 24;
+    const leftBlockTotalH = boosterH + boosterGap + boosterTextH;
+    const boosterY = Math.round(MID_Y - leftBlockTotalH / 2);
+
     if (activeBoosterPath && fs.existsSync(activeBoosterPath)) {
         try {
             const boosterImg = await loadImage(activeBoosterPath);
-            const targetH = 530;
-            const targetW = Math.round((boosterImg.width / boosterImg.height) * targetH);
+            const targetW = Math.round((boosterImg.width / boosterImg.height) * boosterH);
             const bx = Math.round(leftCenterX - targetW / 2);
-            const by = Math.round(contentMidY - targetH / 2);
             ctx.save();
             ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
             ctx.shadowBlur = 26;
             ctx.shadowOffsetY = 12;
-            ctx.drawImage(boosterImg, bx, by, targetW, targetH);
+            ctx.drawImage(boosterImg, bx, boosterY, targetW, boosterH);
             ctx.restore();
         } catch {}
     }
 
-    // 4. Colonne centrale : PP en carré arrondi (+ ombre portée) + pseudo + compteur boosters Set
+    const setKey = String(setNumber);
+    const setBoostersCount = u?.stats?.boostersBySet?.[setKey]
+        ?? (setNumber === 1 ? (u?.stats?.boostersOpened || 0) : 0);
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.font = 'bold 21px "LemonMilk", "Sans"';
+    ctx.fillStyle = isLight ? '#8A5A00' : '#FFE066';
+    ctx.shadowColor = shadowCol;
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 2;
+    ctx.fillText(`Boosters Set ${setNumber} Ouverts = ${setBoostersCount}`, leftCenterX, boosterY + boosterH + boosterGap, 440);
+    ctx.restore();
+
+    // 4. Colonne centrale : PP centrée sur la méridienne + pseudo dessous
     const ppSize = 315;
     const ppX = Math.round((W - ppSize) / 2);
-    const ppY = 300;
+    const ppY = Math.round(MID_Y - ppSize / 2);
     const avatarUrl = (member?.user || member)?.displayAvatarURL?.({ extension: 'png', size: 1024 })
         || member?.displayAvatarURL?.({ extension: 'png', size: 1024 });
 
@@ -2672,36 +2691,33 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
     ctx.shadowColor = shadowCol;
     ctx.shadowBlur = 12;
     ctx.shadowOffsetY = 3;
-    drawFittedWrappedText(ctx, masterName, W / 2, ppY + ppSize + 24, 420, 36, 22, 16);
+    drawFittedWrappedText(ctx, masterName, W / 2, ppY + ppSize + 26, 420, 36, 22, 16);
     ctx.restore();
 
-    const setKey = String(setNumber);
-    const setBoostersCount = u?.stats?.boostersBySet?.[setKey]
-        ?? (setNumber === 1 ? (u?.stats?.boostersOpened || 0) : 0);
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.font = 'bold 21px "LemonMilk", "Sans"';
-    ctx.fillStyle = isLight ? '#8A5A00' : '#FFE066';
-    ctx.shadowColor = shadowCol;
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetY = 2;
-    ctx.fillText(`Boosters Set ${setNumber} Ouverts = ${setBoostersCount}`, W / 2, ppY + ppSize + 120, 460);
-    ctx.restore();
-
-    // 5. Colonne droite : Carte flexée agrandie & remontée (centrée symétriquement) + textes resitués au-dessus et en dessous
+    // 5. Colonne droite : Ensemble ("CARTE FLEXÉE" + Carte pleine résolution + Nom) centré sur la méridienne
     const rightCenterX = W - 330;
     const flexCard = (u?.favoriteCardId && (u?.cards?.[u.favoriteCardId] || 0) > 0 && cardById.get(u.favoriteCardId))
         || cardById.get(EPSYS_FULL_ART_CARD_ID)
         || cardCatalog[0];
 
-    const cW = 375;
-    const cH = 525;
+    const cW = 364;
+    const cH = 510;
     const cX = Math.round(rightCenterX - cW / 2);
-    const cY = 228;
 
     if (flexCard) {
-        // Libellé "CARTE FLEXÉE" juste au-dessus de la carte avec ombre portée
+        const labelTopH = 26;
+        const gapTop = 14;
+        const gapBottom = 18;
+        const nameLayout = computeFittedWrappedLines(ctx, flexCard.name, 360, 26, 15, 14);
+        const nameTotalH = nameLayout.lines.length > 1
+            ? (nameLayout.fontSize + nameLayout.lineH)
+            : (nameLayout.fontSize || 26);
+
+        const rightBlockTotalH = labelTopH + gapTop + cH + gapBottom + nameTotalH;
+        const rightTopY = Math.round(MID_Y - rightBlockTotalH / 2);
+        const cY = rightTopY + labelTopH + gapTop;
+
+        // Libellé "CARTE FLEXÉE" juste au-dessus de la carte
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
@@ -2710,7 +2726,7 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
         ctx.shadowColor = shadowCol;
         ctx.shadowBlur = 12;
         ctx.shadowOffsetY = 3;
-        ctx.fillText('CARTE FLEXÉE', rightCenterX, cY - 14, cW);
+        ctx.fillText('CARTE FLEXÉE', rightCenterX, cY - gapTop, cW);
         ctx.restore();
 
         const meta = RARITY_META[flexCard.rarity] || RARITY_META['Commune'];
@@ -2725,7 +2741,7 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
             ctx.restore();
         }
 
-        // Nom de la carte sous la carte (wrap prioritaire pour afficher "Holographique" à la ligne suivante)
+        // Nom de la carte sous la carte
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
@@ -2733,7 +2749,10 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
         ctx.shadowColor = shadowCol;
         ctx.shadowBlur = 10;
         ctx.shadowOffsetY = 3;
-        drawFittedWrappedText(ctx, flexCard.name, rightCenterX, cY + cH + 18, 360, 26, 15, 14);
+        ctx.font = `bold ${nameLayout.fontSize}px "LemonMilk", "Sans"`;
+        nameLayout.lines.forEach((line, idx) => {
+            ctx.fillText(line, rightCenterX, cY + cH + gapBottom + idx * nameLayout.lineH, 360);
+        });
         ctx.restore();
     }
 
