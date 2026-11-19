@@ -2626,9 +2626,9 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
     // 3. Colonne gauche : Booster du Set + Boosters ouverts + Cartes totales du Set
     const activeBoosterPath = setAssets[setNumber]?.boosterPng || assetPaths.boosterPng;
     const leftCenterX = 330;
-    const boosterH = 480;
+    const boosterH = 468;
     const boosterGap = 16;
-    const boosterTextH = 92;
+    const boosterTextH = 110;
     const leftBlockTotalH = boosterH + boosterGap + boosterTextH;
     const boosterY = Math.round(MID_Y - leftBlockTotalH / 2);
 
@@ -2665,11 +2665,15 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
 
     ctx.font = 'bold 19px "LemonMilk", "Sans"';
     ctx.fillStyle = textColor;
-    ctx.fillText(`Cartes totales (Set ${setNumber})`, leftCenterX, textStartY + 32, 440);
+    ctx.fillText(`Cartes totales (Set ${setNumber})`, leftCenterX, textStartY + 48, 440);
 
+    ctx.shadowColor = isLight ? 'rgba(218, 165, 32, 0.70)' : 'rgba(255, 215, 0, 0.85)';
+    ctx.shadowBlur = 22;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
     ctx.font = 'bold 36px "LemonMilk", "Sans"';
     ctx.fillStyle = isLight ? '#9A6700' : '#FFD700';
-    ctx.fillText(`${setTotalCards}`, leftCenterX, textStartY + 56, 440);
+    ctx.fillText(`${setTotalCards}`, leftCenterX, textStartY + 74, 440);
     ctx.restore();
 
     // 4. Colonne centrale : PP centrée sur la méridienne + pseudo dessous
