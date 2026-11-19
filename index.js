@@ -1627,6 +1627,7 @@ client.once('ready', async () => {
 
     // Scan du Set 1 RegaDex + alerte intégrité si carte/asset manquant
     await scanSet1Cards(client);
+    await backfillRecentOpeningsTcg(client);
     restaurerNotifsTcg(client);
     setInterval(() => verifierInactiviteTradesTcg(client), 10 * 60 * 1000);
     verifierBoosterHebdoTcg(client);

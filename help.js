@@ -163,6 +163,7 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
                 `### 🧪 Mode Test & Cache Proxies (Coolify)\n` +
                 `\`!tcgx [sous-cmd]\` *(hub, open, store, claim, classeur, carte, flex, top, reset)* • Bac à sable isolé *(109/109 cartes x5, 999k pts)*\n` +
                 `\`!tcgmastertest\` • \`!tcggodpacktest\` • Tester les visuels Panthéon Maître du Set & God Pack dans ce salon\n` +
+                `\`!tcgopenlast\` *(ou \`!tcglastopen\`)* • Voir le récap des 20 dernières ouvertures + détail par sélection\n` +
                 `\`!rgdxproxies\` *(ou \`!tcgproxies\`)* • Diagnostic du volume \`TCG/Proxies\` & poids par format\n` +
                 `\`!rgdxproxies warmup\` • Pré-génère toutes les miniatures & lueurs sur le volume *(1 seule fois)*\n` +
                 `\`!rgdxproxies purge\` • Vide le cache disque pour forcer la régénération`

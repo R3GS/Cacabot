@@ -272,6 +272,7 @@ function getStoreData() {
     if (!data.pullPunishments) data.pullPunishments = {};
     if (typeof data.lastWeeklyBoosterKey !== 'string') data.lastWeeklyBoosterKey = '';
     if (!data.communityQuest) data.communityQuest = null;
+    if (!Array.isArray(data.recentOpenings)) data.recentOpenings = [];
     return data;
 }
 
@@ -603,6 +604,234 @@ async function scanSet1Cards(client = null) {
 
 function getTcgCardsCount() {
     return cardCatalog.length;
+}
+
+const MAX_RECENT_OPENINGS = 20;
+
+function recordRecentOpeningTcg(entry) {
+    if (!entry || isSandboxId(entry.userId)) return;
+    const data = getStoreData();
+    data.recentOpenings = data.recentOpenings.filter(o => o.messageId !== entry.messageId);
+    data.recentOpenings.unshift(entry);
+    if (data.recentOpenings.length > MAX_RECENT_OPENINGS) {
+        data.recentOpenings = data.recentOpenings.slice(0, MAX_RECENT_OPENINGS);
+    }
+    tcgBridge.demanderSauvegarde();
+}
+
+function parseRecapEmbedToOpening(msg, guild, botId) {
+    if (!msg || msg.author?.id !== botId || !Array.isArray(msg.embeds) || msg.embeds.length === 0) return null;
+    const recapEmbed = msg.embeds.find(e =>
+        e?.title === '📊 Récapitulatif du Booster' ||
+        (typeof e?.title === 'string' && e.title.includes('RÉCAPITULATIF') && e.title.includes('GOD PACK'))
+    );
+    if (!recapEmbed || !recapEmbed.description) return null;
+
+    const authorTitle = recapEmbed.author?.name || '';
+    const mName = authorTitle.match(/^Booster\s+.+?\s+de\s+(.+)$/i);
+    const displayName = mName ? mName[1].trim() : 'Membre inconnu';
+
+    let userId = null;
+    if (guild?.members?.cache) {
+        const lowerName = displayName.toLowerCase();
+        const memberMatch = guild.members.cache.find(m =>
+            (m.displayName && m.displayName.toLowerCase() === lowerName) ||
+            (m.user?.username && m.user.username.toLowerCase() === lowerName)
+        );
+        if (memberMatch) userId = memberMatch.id;
+    }
+
+    const cards = [];
+    for (const line of recapEmbed.description.split('\n')) {
+        const mCard = line.trim().match(/^\S+\s+\*\*([^*]+)\*\*\s+—\s+\*\*(.+?)\*\*\s+\(\*([^*]+)\*\)\s+•\s+(.+)$/);
+        if (mCard) {
+            const cardId = mCard[1].trim();
+            const catalogCard = cardById.get(cardId);
+            cards.push({
+                id: cardId,
+                name: catalogCard?.name || mCard[2].trim(),
+                rarity: catalogCard?.rarity || mCard[3].trim(),
+                isHolo: Boolean(catalogCard?.isHolo),
+                isNew: mCard[4].includes('Nouvelle')
+            });
+        }
+        if (cards.length >= 3) break;
+    }
+    if (cards.length === 0) return null;
+
+    const desc = recapEmbed.description;
+    return {
+        userId,
+        displayName,
+        channelId: msg.channelId,
+        messageId: msg.id,
+        timestamp: msg.createdTimestamp,
+        isGodPack: Boolean(recapEmbed.title?.includes('GOD PACK') || desc.includes('GOD PACK DÉCROCHÉ')),
+        luckyUsed: desc.includes('Booster Chanceux appliqué'),
+        pityUsed: desc.includes('Pity appliquée'),
+        cards
+    };
+}
+
+async function backfillRecentOpeningsTcg(client) {
+    try {
+        if (!client) return;
+        const data = getStoreData();
+        if (data.recentOpenings.length >= MAX_RECENT_OPENINGS) return;
+
+        const ch = client.channels.cache.get(TCG_CHANNEL_ID)
+            || await client.channels.fetch(TCG_CHANNEL_ID).catch(() => null);
+        if (!ch) return;
+
+        const guild = ch.guild || client.guilds.cache.get(GUILD_ID) || null;
+        const existingIds = new Set(data.recentOpenings.map(o => o.messageId));
+        const found = [];
+
+        let beforeId = undefined;
+        for (let page = 0; page < 4; page++) {
+            const batch = await ch.messages.fetch({ limit: 100, before: beforeId }).catch(() => null);
+            if (!batch || batch.size === 0) break;
+
+            for (const msg of batch.values()) {
+                if (existingIds.has(msg.id)) continue;
+                const parsed = parseRecapEmbedToOpening(msg, guild, client.user.id);
+                if (parsed) {
+                    found.push(parsed);
+                    existingIds.add(msg.id);
+                }
+            }
+
+            if (data.recentOpenings.length + found.length >= MAX_RECENT_OPENINGS) break;
+            beforeId = batch.last()?.id;
+            if (!beforeId) break;
+        }
+
+        if (found.length > 0) {
+            data.recentOpenings = [...data.recentOpenings, ...found]
+                .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+                .slice(0, MAX_RECENT_OPENINGS);
+            tcgBridge.demanderSauvegarde();
+            console.log(`📜 RegaDex : ${found.length} ouverture(s) rétroactive(s) récupérée(s) (${data.recentOpenings.length}/${MAX_RECENT_OPENINGS}).`);
+        }
+    } catch (err) {
+        console.error('Erreur backfillRecentOpeningsTcg:', err);
+    }
+}
+
+function buildOpenLastListPayload(guild) {
+    const data = getStoreData();
+    const list = (data.recentOpenings || []).slice(0, MAX_RECENT_OPENINGS);
+
+    if (list.length === 0) {
+        const emptyEmbed = new EmbedBuilder()
+            .setColor(0x95a5a6)
+            .setTitle('📜 20 dernières ouvertures RegaDex')
+            .setDescription('*Aucune ouverture enregistrée pour le moment.*');
+        return {
+            embeds: [emptyEmbed],
+            components: [new ActionRowBuilder().addComponents(buildCloseButton(EPSYS_ID))]
+        };
+    }
+
+    const lines = list.map((o, idx) => {
+        const who = o.userId ? `<@${o.userId}>` : `**${o.displayName || 'Inconnu'}**`;
+        const ts = Math.floor((o.timestamp || Date.now()) / 1000);
+        const cardsShort = (o.cards || []).map(c => {
+            const meta = RARITY_META[c.rarity] || RARITY_META['Commune'];
+            return `${meta.emoji}\`${c.id}\``;
+        }).join(' ');
+        const tag = o.isGodPack ? ' 🌟' : (o.pityUsed ? ' ✨' : (o.luckyUsed ? ' 🍀' : ''));
+        const jump = (o.channelId && o.messageId)
+            ? ` • [Voir](https://discord.com/channels/${GUILD_ID}/${o.channelId}/${o.messageId})`
+            : '';
+        return `**${idx + 1}.** <t:${ts}:R> — ${who}${tag} ➔ ${cardsShort}${jump}`;
+    });
+
+    const embed = new EmbedBuilder()
+        .setColor(0xf1c40f)
+        .setTitle(`📜 ${list.length} dernière${list.length > 1 ? 's' : ''} ouverture${list.length > 1 ? 's' : ''} RegaDex`)
+        .setDescription(
+            `${lines.join('\n')}\n\n` +
+            `-# Sélectionne une ouverture ci-dessous pour voir le détail exact dans l'ordre d'apparition (\`1/3 → 2/3 → 3/3\`).`
+        )
+        .setFooter({ text: 'Commande Epsys-Only • RegaDex TCG' });
+
+    const menu = new StringSelectMenuBuilder()
+        .setCustomId(`tcg:ol:sel:${EPSYS_ID}`)
+        .setPlaceholder('Inspecter une ouverture en détail...')
+        .addOptions(list.map((o, idx) => {
+            const member = o.userId ? guild?.members?.cache?.get(o.userId) : null;
+            const name = (member?.displayName || o.displayName || 'Inconnu').slice(0, 35);
+            const summary = (o.cards || []).map(c => `${c.id} (${c.rarity})`).join(' | ').slice(0, 100);
+            const dStr = new Date(o.timestamp || Date.now()).toLocaleTimeString('fr-FR', {
+                timeZone: 'Europe/Paris',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            return {
+                label: `#${idx + 1} • ${name} (${dStr})${o.isGodPack ? ' 🌟' : ''}`.slice(0, 100),
+                description: summary || 'Détails de l\'ouverture',
+                value: String(idx)
+            };
+        }));
+
+    return {
+        embeds: [embed],
+        components: [
+            new ActionRowBuilder().addComponents(menu),
+            new ActionRowBuilder().addComponents(buildCloseButton(EPSYS_ID))
+        ]
+    };
+}
+
+function buildOpenLastDetailPayload(entry, index, guild) {
+    const member = entry.userId ? guild?.members?.cache?.get(entry.userId) : null;
+    const who = entry.userId ? `<@${entry.userId}> (${member?.displayName || entry.displayName})` : `**${entry.displayName}**`;
+    const ts = Math.floor((entry.timestamp || Date.now()) / 1000);
+
+    const cardLines = (entry.cards || []).map((c, i) => {
+        const meta = RARITY_META[c.rarity] || RARITY_META['Commune'];
+        const state = c.isNew ? '🆕 Nouvelle' : '🔁 Doublon (+3 pts)';
+        return `**Carte ${i + 1}/3 :** ${meta.emoji} \`${c.id}\` **${c.name}** — *${c.rarity}*${c.isHolo ? ' *(Holo)*' : ''} • ${state}`;
+    });
+
+    const tags = [];
+    if (entry.isGodPack) tags.push('🌟 God Pack');
+    if (entry.luckyUsed) tags.push('🍀 Chanceux');
+    if (entry.pityUsed) tags.push('✨ Pity Rare');
+
+    const jumpLine = (entry.channelId && entry.messageId)
+        ? `\n🔗 [Aller au message d'origine](https://discord.com/channels/${GUILD_ID}/${entry.channelId}/${entry.messageId})`
+        : '';
+
+    const embed = new EmbedBuilder()
+        .setColor(entry.isGodPack ? 0xFFD700 : 0x3498db)
+        .setTitle(`🔍 Détail de l'ouverture #${index + 1}`)
+        .setDescription(
+            `👤 **Joueur :** ${who}\n` +
+            `📅 **Date :** <t:${ts}:F> (<t:${ts}:R>)\n` +
+            (tags.length > 0 ? `🏷️ **Modificateurs :** ${tags.join(' • ')}\n` : '') +
+            jumpLine +
+            `\n────────────────────────────────────────\n` +
+            cardLines.join('\n')
+        )
+        .setFooter({ text: 'Ordre exact : Carte 1/3 → Carte 2/3 → Carte 3/3' });
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tcg:ol:back:${EPSYS_ID}`)
+            .setLabel('Retour à la liste')
+            .setEmoji('⬅️')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`tcg:ol:img:${index}:${EPSYS_ID}`)
+            .setLabel('Visuel récap')
+            .setEmoji('🖼️')
+            .setStyle(ButtonStyle.Primary),
+        buildCloseButton(EPSYS_ID)
+    );
+
+    return { embeds: [embed], components: [row], files: [], attachments: [] };
 }
 
 // ==========================================
@@ -4071,6 +4300,26 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
         };
         boosterSessions.set(sentMsg.id, session);
 
+        if (!isSandboxId(userId)) {
+            recordRecentOpeningTcg({
+                userId,
+                displayName: member?.displayName || member?.user?.username || userId,
+                channelId: sentMsg.channelId,
+                messageId: sentMsg.id,
+                timestamp: Date.now(),
+                isGodPack: Boolean(draw.isGodPack),
+                luckyUsed: Boolean(draw.luckyUsed),
+                pityUsed: Boolean(draw.pityUsed),
+                cards: draw.cards.map((c, idx) => ({
+                    id: c.id,
+                    name: c.name,
+                    rarity: c.rarity,
+                    isHolo: Boolean(c.isHolo),
+                    isNew: Boolean(isNewFlags[idx])
+                }))
+            });
+        }
+
         // Si un palier a été franchi et que le récapitulatif n'est pas affiché sous 2 minutes, mention discrète dans le salon
         if (session.unlockedMilestones.length > 0 && sentMsg?.channel) {
             session.milestoneTimer = setTimeout(async () => {
@@ -5771,6 +6020,16 @@ function buildPunitionPayload(sessionId, session, guild) {
 }
 
 async function handleAdminTcgCommand(message, lowerContent) {
+    // -1. !tcgopenlast / !tcglastopen (Epsys-only)
+    if (/^!(?:tcg|regadex|rgdx|rgx)\s*(?:open\s*last|last\s*open)(?:\s|$)/i.test(lowerContent)) {
+        if (message.author.id !== EPSYS_ID) return true;
+        if (getStoreData().recentOpenings.length === 0) {
+            await backfillRecentOpeningsTcg(message.client);
+        }
+        await replySilent(message, buildOpenLastListPayload(message.guild));
+        return true;
+    }
+
     // 0. !tcgpullchance (Epsys-only)
     if (/^!(?:tcg|rgdx|regadex)\s*pull\s*chance(?:\s|$)/i.test(lowerContent)) {
         if (message.author.id !== EPSYS_ID) return true;
@@ -8808,6 +9067,51 @@ async function handleTcgInteraction(interaction) {
         return true;
     }
 
+    // ----- !TCGOPENLAST (EPSYS-ONLY) -----
+    if (action === 'ol') {
+        if (interaction.user.id !== EPSYS_ID) {
+            await interaction.reply({ content: "Réservé à Epsys 😌", ephemeral: true });
+            return true;
+        }
+        const sub = parts[2];
+        const list = getStoreData().recentOpenings || [];
+
+        if (sub === 'sel' && interaction.isStringSelectMenu()) {
+            const idx = parseInt(interaction.values[0], 10);
+            const entry = list[idx];
+            if (!entry) {
+                await interaction.reply({ content: "❌ Ouverture introuvable.", ephemeral: true });
+                return true;
+            }
+            await interaction.update(buildOpenLastDetailPayload(entry, idx, interaction.guild));
+            return true;
+        }
+
+        if (sub === 'back' && interaction.isButton()) {
+            await interaction.update({ ...buildOpenLastListPayload(interaction.guild), files: [], attachments: [] });
+            return true;
+        }
+
+        if (sub === 'img' && interaction.isButton()) {
+            const idx = parseInt(parts[3], 10);
+            const entry = list[idx];
+            if (!entry) {
+                await interaction.reply({ content: "❌ Ouverture introuvable.", ephemeral: true });
+                return true;
+            }
+            await interaction.deferUpdate();
+            const cardsObj = (entry.cards || []).map(c => cardById.get(c.id)).filter(Boolean);
+            if (cardsObj.length === 0) return true;
+            const flags = (entry.cards || []).map(c => Boolean(c.isNew));
+            const buffer = await renderBoosterRecapCanvas(cardsObj, flags, 'B', Boolean(entry.isGodPack));
+            const detail = buildOpenLastDetailPayload(entry, idx, interaction.guild);
+            detail.embeds[0].setImage('attachment://recap_openlast.jpg');
+            detail.files = [new AttachmentBuilder(buffer, { name: 'recap_openlast.jpg' })];
+            await interaction.editReply(detail);
+            return true;
+        }
+    }
+
     // ----- !TCGPULLCHANCE (EPSYS-ONLY) -----
     if (action === 'pc') {
         if (interaction.user.id !== EPSYS_ID) {
@@ -9023,6 +9327,7 @@ module.exports = {
     verifierInactiviteTradesTcg,
     verifierBoosterHebdoTcg,
     verifierQueteCommunautaireTcg,
+    backfillRecentOpeningsTcg,
     trackTcgMessagePoint,
     trackTcgVocalMinute,
     trackTcgRoulettePoint,
