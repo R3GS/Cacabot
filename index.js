@@ -524,6 +524,7 @@ const {
     verifierInactiviteTradesTcg,
     verifierBoosterHebdoTcg,
     verifierQueteCommunautaireTcg,
+    backfillRecentOpeningsTcg,
     trackTcgMessagePoint,
     trackTcgVocalMinute,
     trackTcgRoulettePoint,
