@@ -2855,7 +2855,7 @@ function buildHubEmbed(member, u) {
         name: '\u200b',
         value:
             `────────────────────────────────────────\n` +
-            `### 🌍 Quête communautaire de la semaine\n` +
+            `**🌍 Quête communautaire de la semaine**\n` +
             `\`${qBar}\` **${qPct}%** — **${quest.progress}/${quest.target}** *(${quest.label.replace(/\*\*/g, '')})*\n\n` +
             qLines.join('\n'),
         inline: false
