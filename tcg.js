@@ -2578,46 +2578,57 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
     ctx.stroke();
     ctx.restore();
 
-    // 1. Titre "MAÎTRE DU SET" en LEMONMILK Bold + une étoile de chaque côté
+    // 1. Rectangle doré d'en-tête (identique au God Pack) + Titre "MAÎTRE DU SET" + étoiles
+    ctx.fillStyle = isLight ? 'rgba(255, 248, 220, 0.90)' : 'rgba(28, 22, 8, 0.88)';
+    drawRoundRect(ctx, 48, 34, W - 96, 76, 18);
+    ctx.fill();
+
+    ctx.save();
+    ctx.strokeStyle = '#F1C40F';
+    ctx.lineWidth = 3;
+    drawRoundRect(ctx, 48, 34, W - 96, 76, 18);
+    ctx.stroke();
+    ctx.restore();
+
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = 'bold 58px "LemonMilk", "Sans"';
+    ctx.font = 'bold 48px "LemonMilk", "Sans"';
     const titleStr = 'MAÎTRE DU SET';
     const titleW = ctx.measureText(titleStr).width;
-    const titleY = 62;
-    ctx.fillStyle = textColor;
+    const titleY = 72;
+    ctx.fillStyle = isLight ? '#9A6700' : '#FFD700';
     ctx.shadowColor = shadowCol;
-    ctx.shadowBlur = 16;
-    ctx.shadowOffsetY = 4;
-    ctx.fillText(titleStr, W / 2, titleY, W - 240);
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 3;
+    ctx.fillText(titleStr, W / 2, titleY, W - 260);
     ctx.restore();
 
-    const starOffset = (titleW / 2) + 42;
-    drawFivePointStar(ctx, (W / 2) - starOffset, titleY - 2, 21, 9.5, '#FFD700', 'rgba(255, 215, 0, 0.75)');
-    drawFivePointStar(ctx, (W / 2) + starOffset, titleY - 2, 21, 9.5, '#FFD700', 'rgba(255, 215, 0, 0.75)');
+    const starOffset = (titleW / 2) + 38;
+    drawFivePointStar(ctx, (W / 2) - starOffset, titleY - 2, 19, 8.5, '#FFD700', 'rgba(255, 215, 0, 0.75)');
+    drawFivePointStar(ctx, (W / 2) + starOffset, titleY - 2, 19, 8.5, '#FFD700', 'rgba(255, 215, 0, 0.75)');
 
     // 2. Logo du Set juste en dessous
     const activeLogoPath = setAssets[setNumber]?.logo || assetPaths.set1Logo;
     if (activeLogoPath && fs.existsSync(activeLogoPath)) {
         try {
             const logoImg = await loadImage(activeLogoPath);
-            const logoH = 136;
+            const logoH = 132;
             const logoW = Math.round((logoImg.width / logoImg.height) * logoH);
             ctx.save();
             ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
             ctx.shadowBlur = 14;
-            ctx.drawImage(logoImg, Math.round((W - logoW) / 2), 104, logoW, logoH);
+            ctx.drawImage(logoImg, Math.round((W - logoW) / 2), 120, logoW, logoH);
             ctx.restore();
         } catch {}
     }
 
-    // 3. Colonne gauche : Booster du Set + compteur "Boosters Set X Ouverts = N" centré sur la méridienne
+    // 3. Colonne gauche : Booster du Set + Boosters ouverts + Cartes totales du Set
     const activeBoosterPath = setAssets[setNumber]?.boosterPng || assetPaths.boosterPng;
     const leftCenterX = 330;
-    const boosterH = 510;
-    const boosterGap = 18;
-    const boosterTextH = 24;
+    const boosterH = 480;
+    const boosterGap = 16;
+    const boosterTextH = 92;
     const leftBlockTotalH = boosterH + boosterGap + boosterTextH;
     const boosterY = Math.round(MID_Y - leftBlockTotalH / 2);
 
@@ -2638,15 +2649,27 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
     const setKey = String(setNumber);
     const setBoostersCount = u?.stats?.boostersBySet?.[setKey]
         ?? (setNumber === 1 ? (u?.stats?.boostersOpened || 0) : 0);
+    const setTotalCards = getUserCompletionStats(u || { cards: {} }, setNumber).totalCopies;
+    const textStartY = boosterY + boosterH + boosterGap;
+
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.font = 'bold 21px "LemonMilk", "Sans"';
-    ctx.fillStyle = isLight ? '#8A5A00' : '#FFE066';
     ctx.shadowColor = shadowCol;
     ctx.shadowBlur = 10;
     ctx.shadowOffsetY = 2;
-    ctx.fillText(`Boosters Set ${setNumber} Ouverts = ${setBoostersCount}`, leftCenterX, boosterY + boosterH + boosterGap, 440);
+
+    ctx.font = 'bold 21px "LemonMilk", "Sans"';
+    ctx.fillStyle = textColor;
+    ctx.fillText(`Boosters Set ${setNumber} Ouverts = ${setBoostersCount}`, leftCenterX, textStartY, 440);
+
+    ctx.font = 'bold 19px "LemonMilk", "Sans"';
+    ctx.fillStyle = textColor;
+    ctx.fillText(`Cartes totales (Set ${setNumber})`, leftCenterX, textStartY + 32, 440);
+
+    ctx.font = 'bold 36px "LemonMilk", "Sans"';
+    ctx.fillStyle = isLight ? '#9A6700' : '#FFD700';
+    ctx.fillText(`${setTotalCards}`, leftCenterX, textStartY + 56, 440);
     ctx.restore();
 
     // 4. Colonne centrale : PP centrée sur la méridienne + pseudo dessous
@@ -2717,7 +2740,7 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
         const rightTopY = Math.round(MID_Y - rightBlockTotalH / 2);
         const cY = rightTopY + labelTopH + gapTop;
 
-        // Libellé "CARTE FLEXÉE" juste au-dessus de la carte
+        // Libellé "CARTE PRÉFÉRÉE" juste au-dessus de la carte
         ctx.save();
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
@@ -2726,7 +2749,7 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
         ctx.shadowColor = shadowCol;
         ctx.shadowBlur = 12;
         ctx.shadowOffsetY = 3;
-        ctx.fillText('CARTE FLEXÉE', rightCenterX, cY - gapTop, cW);
+        ctx.fillText('CARTE PRÉFÉRÉE', rightCenterX, cY - gapTop, cW);
         ctx.restore();
 
         const meta = RARITY_META[flexCard.rarity] || RARITY_META['Commune'];
