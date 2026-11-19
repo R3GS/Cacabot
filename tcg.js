@@ -4135,7 +4135,15 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
     if (totalAvail <= 0) {
         const payload = buildOpenPromptPayload(member, u, fromHub);
         if (targetResponder.isButton?.()) {
-            const isExistingRecap = Boolean(targetResponder.message?.id && boosterSessions.has(targetResponder.message.id));
+            const isExistingRecap = Boolean(
+                targetResponder.message?.id && (
+                    boosterSessions.has(targetResponder.message.id) ||
+                    targetResponder.message.embeds?.some(e =>
+                        e?.title === '📊 Récapitulatif du Booster' ||
+                        (typeof e?.title === 'string' && e.title.includes('RÉCAPITULATIF') && e.title.includes('GOD PACK'))
+                    )
+                )
+            );
             if (!isExistingRecap) {
                 await targetResponder.deferUpdate();
                 return targetResponder.editReply({ content: null, ...payload, attachments: [] });
