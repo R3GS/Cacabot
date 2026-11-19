@@ -2612,10 +2612,10 @@ function buildHubEmbed(member, u) {
     const { nextResetTs } = getCurrentQuestWeekInfoParis();
     const qBar = buildProgressBar(quest.progress, quest.target, 14);
     const qStatus = quest.completed
-        ? `✅ **Quête terminée !** *(Récompenses distribuées aux **${quest.participants.length}** participant·e(s))*\n🔄 Prochaine quête <t:${nextResetTs}:R>`
-        : `🎁 **Récompense :** **2 boosters communautaires** + **15 pts RegaDex**\n👥 **Participant·e(s) :** **${quest.participants.length}** *(ouvre 1 booster pour participer)*\n⏳ Réinitialisation <t:${nextResetTs}:R>`;
+        ? `✅ **Quête terminée !** *(Récompenses distribuées aux **${quest.participants.length}** participant·es)*\n🔄 Prochaine quête <t:${nextResetTs}:R>`
+        : `🎁 **Récompense :** 2 boosters communautaires + 15 pts RegaDex\n👥 **Participant·e(s) :** **${quest.participants.length}** *(ouvre 1 booster pour participer)*\n⏳ Réinitialisation <t:${nextResetTs}:R>`;
     embed.addFields({
-        name: '────────────────────────────────────────\n🤝 Quête communautaire de la semaine',
+        name: '────────────────────────────────────────\n## 🌍 Quête communautaire de la semaine :',
         value: `🎯 **Objectif :** ${quest.label}\n\`${qBar}\` **${quest.progress}/${quest.target}**\n${qStatus}`,
         inline: false
     });
