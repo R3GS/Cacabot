@@ -3145,7 +3145,7 @@ function buildHelpPayload(userId) {
             `• \`!tcgtop\` — Classement du serveur\n\n` +
             `### 🛒 Boutique, Échanges & Flex\n` +
             `• \`!tcgstore\` — Dépenser tes points RegaDex\n` +
-            `• \`!tcgclaim\` — Inventaire, achats & boosters hebdomadaires *(lundi 8h)*\n` +
+            `• \`!tcgclaim\` — Inventaire, achats & boosters hebdomadaires *(vendredi 8h)*\n` +
             `• \`!trade [@membre]\` — Lancer un échange *(doublons libre, ou dernière copie à nombre et raretés identiques)*\n` +
             `• \`!flex\` *(\`!tcgflex\`)* — Montrer ta carte préférée *(<#${TCG_CHANNEL_ID}> & <#${SHITPOST_CHANNEL_ID}>)* • \`!flex @membre\`\n` +
             `• \`!flexmodify [N°Set]-[N°Carte]\` pour la changer\n` +
@@ -4254,7 +4254,15 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
 
         let sentMsg;
         if (targetResponder.isButton?.()) {
-            const isExistingRecap = Boolean(targetResponder.message?.id && boosterSessions.has(targetResponder.message.id));
+            const isExistingRecap = Boolean(
+                targetResponder.message?.id && (
+                    boosterSessions.has(targetResponder.message.id) ||
+                    targetResponder.message.embeds?.some(e =>
+                        e?.title === '📊 Récapitulatif du Booster' ||
+                        (typeof e?.title === 'string' && e.title.includes('RÉCAPITULATIF') && e.title.includes('GOD PACK'))
+                    )
+                )
+            );
             if (!isExistingRecap) {
                 await targetResponder.deferUpdate();
                 sentMsg = await targetResponder.editReply({
@@ -4751,7 +4759,7 @@ function buildSingleCardPayload(card, viewerId, options = {}) {
     if (canTransformHolo) {
         row1.addComponents(
             new ButtonBuilder()
-                .setCustomId(`tcg:cardholo:${card.id}:${ownerId}:card`)
+                .setCustomId(`tcg:cardholo:${card.id}:${viewerId}:card`)
                 .setLabel('Passer en Holo')
                 .setEmoji('✨')
                 .setStyle(ButtonStyle.Primary)
