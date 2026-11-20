@@ -4013,7 +4013,7 @@ function buildGuidePayload(userId, fromHub = true) {
             `### 📖 4. Classeur, Wishlist, Échanges & Commandes\n` +
             `• **Classeur :** filtre par catégorie, rareté ou affichage (**Tout** / **Possédées** / **Doublons**), choisis la grille (\`4\`, \`18\`, \`36\` ou \`All\`) et change le thème **Clair (W) / Nuit (B)**.\n` +
             `• **Wishlist & Doublons :** ajoute jusqu'à **5 cartes** dans ta \`!wishlist\` *(mises en avant dans \`!trade\`)* et utilise le bouton sous \`!carte\` ou \`Inspecter\` pour voir **qui a une carte en doublon** !\n` +
-            `• **Échanges (\`!trade [@]\` ou clic droit sur un membre) :** échange jusqu'à **3 cartes** sans restriction *(dons, dernières copies et raretés différentes autorisés, avec avertissement et double confirmation si inéquitable)* ! Gagne **+3 pts RegaDex** à la fermeture du fil *(1 seul bonus par fil)*.\n` +
+            `• **Échanges (\`!trade [@]\` ou clic droit sur un membre) :** échange jusqu'à **3 cartes** chacun, **+3 pts** à la fermeture du fil ! *(détails dans la section 5 ci-dessous)*\n` +
             `• **Commandes rapides :** \`!tcg\` • \`!tcghelp\` • \`!open\` / \`!tcggo\` / \`!tcgbooster\` • \`!tcgclaim\` • \`!carte [n°/nom]\` • \`!flex\` *(<#${TCG_CHANNEL_ID}> & <#${SHITPOST_CHANNEL_ID}>)*`
         )
         .setFooter({ text: `RegaDex ${SET1_NAME} • Cacabot` });
@@ -4035,7 +4035,28 @@ function buildGuidePayload(userId, fromHub = true) {
         )
     ];
 
-    return { embeds: [embed], components };
+    const tradeEmbed = new EmbedBuilder()
+        .setColor(0x3498DB)
+        .setDescription(
+            `### 🔄 5. Échanges, mode d'emploi\n` +
+            `• **Lancer :** \`!trade [@membre]\` ou clic droit sur un membre. L'autre personne **accepte ou refuse**, et le fil peut être **public** ou **silencieux**.` +
+            sep +
+            `### 🃏 Dans le fil\n` +
+            `• Chacun ajoute jusqu'à **3 cartes** *(dons, dernières copies et raretés différentes autorisés)*.\n` +
+            `• Un **repère** indique combien de cartes il manque à chacun pour finir le ${SET1_NAME}.\n` +
+            `• Quand vous êtes d'accord, vous **verrouillez** tous les deux.\n` +
+            `-# ⚠️ Toute modification déverrouille automatiquement la validation des deux joueurs.` +
+            sep +
+            `### ⚖️ Échange inéquitable\n` +
+            `• Si l'échange est déséquilibré, une **double confirmation** est demandée avant exécution. L'un des deux peut annuler : les offres sont alors déverrouillées.` +
+            sep +
+            `### ✅ Fin de l'échange\n` +
+            `• Les cartes sont échangées et un **récap en image** est posté.\n` +
+            `• **+3 pts RegaDex** à la fermeture du fil *(1 seul bonus par fil)*.\n` +
+            `• Un fil resté **inactif 24h** se ferme automatiquement.`
+        );
+
+    return { embeds: [embed, tradeEmbed], components };
 }
 
 function buildHubPayload(member, u) {
