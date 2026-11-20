@@ -761,7 +761,7 @@ async function scanSet1Cards(client = null) {
             tcgBridge.demanderSauvegarde();
         }
     }
-    newPersoCatalog.sort((a, b) => a.numValue - b.numValue);a
+    newPersoCatalog.sort((a, b) => a.numValue - b.numValue);
 
     newCatalog.sort((a, b) => a.sortIndex - b.sortIndex);
     cardCatalog = newCatalog;
