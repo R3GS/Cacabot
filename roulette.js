@@ -300,33 +300,77 @@ function getRouletteGifForOutcome(outcomeId, texte = '', gifOptions = {}) {
     if (gifOptions?.shieldBlocked) {
         return { file: 'Shield.gif', name: 'rlt_shield.gif' };
     }
+    if (outcomeId === 'bonus-elu-roulette') return { file: 'Élu.gif', name: 'rlt_elu.gif' };
+    if (outcomeId === 'bonus-epsys-photo') return { file: 'Photo.gif', name: 'rlt_photo.gif' };
+    if (outcomeId === 'bonus-epsys-goodies' || outcomeId === 'bonus-partage-bonus') {
+        return { file: 'Cadeau.gif', name: 'rlt_cadeau.gif' };
+    }
+
     const entry = ROULETTE_TABLE.find(e => e.id === outcomeId);
-    // 777.gif uniquement pour les bonus Hall of Fame (testé avant TCG pour bonus-regadex-perso)
+    // 777.gif pour les autres bonus Hall of Fame (testé avant TCG pour bonus-regadex-perso)
     if (entry && entry.type === 'bonus' && probaReelle(entry) < ROULETTE_HOF_SEUIL) {
         return { file: '777.gif', name: 'rlt_777.gif' };
     }
+    if (outcomeId === 'malus-ban') return { file: 'Ban.gif', name: 'rlt_ban.gif' };
     if (outcomeId === 'malus-prime') return { file: 'Explosion.gif', name: 'rlt_explosion.gif' };
-    if (outcomeId === 'special-tournee-generale') return { file: 'Confetti.gif', name: 'rlt_confetti.gif' };
+    if (outcomeId === 'special-tournee-generale') return { file: 'Tournée.gif', name: 'rlt_tournee.gif' };
     if (outcomeId === 'malus-chat-noir') return { file: 'Chat noir.gif', name: 'rlt_chat_noir.gif' };
+    if (['malus-pseudo-lock-semaine', 'malus-pseudo-lock-mois'].includes(outcomeId)) {
+        return { file: 'Name.gif', name: 'rlt_name.gif' };
+    }
+    if (outcomeId === 'bonus-gif-ou-audio') return { file: 'Papayou.gif', name: 'rlt_papayou.gif' };
+    if (outcomeId === 'bonus-epingle') return { file: 'Pin.gif', name: 'rlt_pin.gif' };
+    if (outcomeId === 'bonus-jackpot-boost') return { file: 'Boost.gif', name: 'rlt_boost.gif' };
+    if (['bonus-redirect-malus', 'bonus-redirect-choix'].includes(outcomeId)) {
+        return { file: 'Redirection.gif', name: 'rlt_redirection.gif' };
+    }
+    if (['bonus-tcg-15pts', 'bonus-tcg-50pts'].includes(outcomeId)) {
+        return { file: 'Points.gif', name: 'rlt_points.gif' };
+    }
     if (['bonus-bouclier', 'bonus-super-bouclier', 'bonus-anti-feur'].includes(outcomeId)) {
         return { file: 'Shield.gif', name: 'rlt_shield.gif' };
     }
     if (['bonus-cooldown-court', 'bonus-coup-triple'].includes(outcomeId)) {
         return { file: 'Fast.gif', name: 'rlt_fast.gif' };
     }
-    if (outcomeId?.startsWith('bonus-tcg-') || outcomeId === 'bonus-booster-consolation') return { file: 'TCG.gif', name: 'rlt_tcg.gif' };
+    if (outcomeId?.startsWith('bonus-tcg-') || outcomeId === 'bonus-booster-consolation') {
+        return { file: 'TCG.gif', name: 'rlt_tcg.gif' };
+    }
     if (outcomeId === 'bonus-vote-gagnant') return { file: 'Dove.gif', name: 'rlt_dove.gif' };
     if (outcomeId === 'aucun-resultat') return { file: 'No.gif', name: 'rlt_no.gif' };
     if (texte && texte.includes('Miracle !')) return { file: 'Luck.gif', name: 'rlt_luck.gif' };
-    if (ROULETTE_MUTE_MALUS_IDS.has(outcomeId) || ['malus-exclu-heure', 'malus-exclu-jour', 'malus-exclu-semaine', 'malus-ban'].includes(outcomeId)) {
+    if (ROULETTE_MUTE_MALUS_IDS.has(outcomeId) || ['malus-exclu-heure', 'malus-exclu-jour', 'malus-exclu-semaine'].includes(outcomeId)) {
         return { file: 'Mute.gif', name: 'rlt_mute.gif' };
     }
     if (outcomeId === 'malus-cooldown-45' || outcomeId === 'malus-looong-cooldown') {
         return { file: 'Cooldown.gif', name: 'rlt_cooldown.gif' };
     }
-    if (ROULETTE_TEXT_MALUS_IDS.has(outcomeId)) return { file: 'Laugh.gif', name: 'rlt_laugh.gif' };
+
+    const pickMalusGif = (pool) => {
+        if (gifOptions?.malusGifSeed !== undefined) {
+            return pool[Math.abs(gifOptions.malusGifSeed) % pool.length];
+        }
+        let h = 0;
+        for (let i = 0; i < (outcomeId || '').length; i++) h = (h * 31 + outcomeId.charCodeAt(i)) | 0;
+        return pool[Math.abs(h) % pool.length];
+    };
+    if (ROULETTE_TEXT_MALUS_IDS.has(outcomeId)) {
+        return pickMalusGif([
+            { file: 'Laugh.gif', name: 'rlt_laugh.gif' },
+            { file: 'Bandage.gif', name: 'rlt_bandage.gif' },
+            { file: 'Frown.gif', name: 'rlt_frown.gif' },
+            { file: 'Peu.gif', name: 'rlt_peu.gif' }
+        ]);
+    }
     if (entry?.type === 'bonus') return { file: 'Luck.gif', name: 'rlt_luck.gif' };
-    if (entry?.type === 'malus') return { file: 'Ghost.gif', name: 'rlt_ghost.gif' };
+    if (entry?.type === 'malus') {
+        return pickMalusGif([
+            { file: 'Ghost.gif', name: 'rlt_ghost.gif' },
+            { file: 'Bandage.gif', name: 'rlt_bandage.gif' },
+            { file: 'Frown.gif', name: 'rlt_frown.gif' },
+            { file: 'Peu.gif', name: 'rlt_peu.gif' }
+        ]);
+    }
     return null;
 }
 
@@ -5463,6 +5507,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     const gifOptions = {
         pityActive: estPityActive,
         resteChargesTriple,
+        malusGifSeed: Math.floor(Math.random() * 10000),
         avatarUrl: membre?.displayAvatarURL?.({ dynamic: true }) || undefined,
         guild
     };
@@ -6558,9 +6603,13 @@ async function handleRouletteMessage(message, response, client, helpers) {
             const bgSizeKo = bgOk ? (fs.statSync(bgFound).size / 1024).toFixed(1) : '0';
 
             const gifsAttendus = [
-                'Shield.gif', '777.gif', 'Explosion.gif', 'Confetti.gif',
+                'Shield.gif', '777.gif', 'Explosion.gif', 'Tournée.gif',
                 'Chat noir.gif', 'Fast.gif', 'TCG.gif', 'Dove.gif',
-                'No.gif', 'Luck.gif', 'Mute.gif', 'Cooldown.gif', 'Laugh.gif', 'Ghost.gif'
+                'No.gif', 'Luck.gif', 'Mute.gif', 'Cooldown.gif',
+                'Laugh.gif', 'Ghost.gif', 'Ban.gif', 'Bandage.gif',
+                'Boost.gif', 'Cadeau.gif', 'Élu.gif', 'Frown.gif',
+                'Name.gif', 'Papayou.gif', 'Peu.gif', 'Photo.gif',
+                'Pin.gif', 'Points.gif', 'Redirection.gif'
             ];
             const gifsOk = [];
             const gifsManquants = [];
@@ -6675,6 +6724,7 @@ async function handleRouletteMessage(message, response, client, helpers) {
                 : `${emojiTest} **${cible.displayName}** — ${entryTest?.desc || entryTest?.nom || outcomeId}\n-# 🧪 *Mode test (\`${command}\`) : aucun effet, stats, pity, Roulettodex ni HoF/HoS appliqué.*`;
 
             const gifOptionsTest = {
+                malusGifSeed: Math.floor(Math.random() * 10000),
                 guild: message.guild,
                 avatarUrl: cible.displayAvatarURL?.({ dynamic: true }) || undefined
             };
