@@ -3335,7 +3335,7 @@ function buildProfilePayload(member, u, fromHub = false, showRarities = false) {
         : '*Aucune carte obtenue pour le moment*';
 
     const favCard = u.favoriteCardId && (u.cards?.[u.favoriteCardId] || 0) > 0
-        ? cardById.get(u.favoriteCardId)
+        ? getCardByIdAny(u.favoriteCardId)
         : null;
 
     const unlockedSet1 = Array.isArray(u.completionMilestones?.['1']) ? u.completionMilestones['1'] : [];
@@ -6016,7 +6016,10 @@ async function executeTradeIfBothLocked(thread, trade, client) {
             freeMode
                 ? "❌ **Échange bloqué :** au moins un·e participant.e doit proposer **1 carte**."
                 : "❌ **Échange bloqué :** les **deux** participant.es doivent obligatoirement proposer au moins **1 carte** en doublon *(les dons à sens unique sont interdits)*.").catch(() => {});
-        if ([...offerA, ...offerB].some(id => persoById.has(id))) {
+        return false;
+    }
+
+    if ([...offerA, ...offerB].some(id => persoById.has(id))) {
         trade.lockedOffers[idA] = false;
         trade.lockedOffers[idB] = false;
         trade.unfairConfirm = null;
@@ -7388,17 +7391,8 @@ async function handleWishlistCommand(targetResponder, authorMember, rawArg) {
     const cardRes = resolveCardQuery(arg);
     if (cardRes.card) {
         if (cardRes.card.isPerso) {
-            return replySilent(targetResponder, `❌ Les cartes personnalisées (\`${cardRes.card.id}\`) sont **uniques et non échangeables**, impossible de les ajouter à la Wishlist.`);
+            return replyPanelSilent(targetResponder, `❌ Les cartes personnalisées (\`${cardRes.card.id}\`) sont **uniques et non échangeables**, impossible de les ajouter à la Wishlist.`, authorMember.id);
         }
-        if (u.wishlist.includes(cardRes.card.id)) {
-            u.wishlist = u.wishlist.filter(id => id !== cardRes.card.id);
-            if (!isSandboxId(authorMember.id)) tcgBridge.demanderSauvegarde();
-            return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `💔 \`${cardRes.card.id}\` retirée de ta Wishlist.`));
-        }
-
-    // Si une carte directe est tapée (!wishlist 1-84), basculer ajout/retrait
-    const cardRes = resolveCardQuery(arg);
-    if (cardRes.card) {
         if (u.wishlist.includes(cardRes.card.id)) {
             u.wishlist = u.wishlist.filter(id => id !== cardRes.card.id);
             if (!isSandboxId(authorMember.id)) tcgBridge.demanderSauvegarde();
