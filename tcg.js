@@ -663,10 +663,11 @@ async function scanSet1Cards(client = null) {
     const newPersoCatalog = [];
     const newPersoById = new Map();
     const newPersoByNumValue = new Map();
-    if (fs.existsSync(TCG_PERSO_DIR)) {
-        const persoFiles = fs.readdirSync(TCG_PERSO_DIR).filter(f => !f.startsWith('.'));
+    const resolvedPersoDir = findSubdir(TCG_ROOT, ['Cartes Perso', 'Cartes perso', 'CartesPerso']) || TCG_PERSO_DIR;
+    if (fs.existsSync(resolvedPersoDir)) {
+        const persoFiles = fs.readdirSync(resolvedPersoDir).filter(f => !f.startsWith('.'));
         for (const file of persoFiles) {
-            const fullPath = path.join(TCG_PERSO_DIR, file);
+            const fullPath = path.join(resolvedPersoDir, file);
             if (fs.statSync(fullPath).isDirectory()) continue;
 
             const parsed = parsePersoCardFilename(file);
