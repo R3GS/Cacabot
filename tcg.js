@@ -3735,7 +3735,7 @@ function buildStorePayload(member, u, fromHub = false) {
             `⚡ **Diviser le cooldown par 2** — \`${STORE_PRICES.halfCooldown} pts\`\n` +
             `-# Activé dès l'ouverture du prochain booster : celui d'après prendra **3h** au lieu de 6h.\n\n` +
             `🌟 **Taux de God Pack ×5 (5j)** — \`${STORE_PRICES.godPackBoost} pts\`\n` +
-            `-# Multiplie par **5** tes chances d'obtenir un **God Pack** pendant **5 jours** !`
+            `-# Passe tes chances d'obtenir un **God Pack** de **1% à 5%** pendant **5 jours** *(bonus personnel)*.`
         );
 
     const row = new ActionRowBuilder().addComponents(
@@ -3807,7 +3807,7 @@ function buildClaimPayload(member, u, fromHub = false) {
             `🍀 **Prochain booster chanceux :** \`${inv.luckyBooster || 0}\` ${u.activeBonuses?.luckyBooster ? '*(Déjà actif sur le prochain booster !)*' : ''}\n` +
             `✨ **Transformation Holographique :** \`${inv.holoTransform || 0}\`\n` +
             `⚡ **Demi-cooldown (3h) :** \`${inv.halfCooldown || 0}\` ${u.activeBonuses?.halfCooldown ? '*(Déjà armé sur le prochain booster !)*' : ''}\n` +
-            `🌟 **Taux God Pack ×5 (5j) :** \`${inv.godPackBoost || 0}\` ${godBoostActive ? `*(Actif jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F>)*` : ''}`
+            `🌟 **Taux God Pack ×5 (5j) :** \`${inv.godPackBoost || 0}\` ${godBoostActive ? `*(Actif pour toi : **5%** au lieu de 1% jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F>)*` : '*(1% → 5%, personnel)*'}`
         );
 
     const row = new ActionRowBuilder().addComponents(
@@ -7892,7 +7892,10 @@ async function handleTcgInteraction(interaction) {
                 `Tu as acheté : **${labels[itemKey]}** pour \`${price} pts\` *(Solde restant : **${u.points} pts**)*.` +
                 (isBoosterBuy
                     ? `\n\n🎁 Il est **prêt à ouvrir** ! *(Total disponible : **${getTotalAvailableBoosters(u)}**)*`
-                    : `\n\nSouhaites-tu l'utiliser tout de suite ou le garder dans ton inventaire (\`!regadex claim\`) ?`)
+                    : (itemKey === 'godPackBoost'
+                        ? `\n\n🎲 **Probabilités :** tes chances de tirer un **God Pack** passent de **1% à 5%** *(×5)* pendant **5 jours**.\n👤 **Bonus personnel :** il s'applique **uniquement à tes propres boosters**.`
+                        : '') +
+                      `\n\nSouhaites-tu l'utiliser tout de suite ou le garder dans ton inventaire (\`!regadex claim\`) ?`)
             );
 
         const row = new ActionRowBuilder().addComponents(
@@ -8008,7 +8011,7 @@ async function handleTcgInteraction(interaction) {
             u.activeBonuses.godPackBoostUntil = Date.now() + GOD_PACK_BOOST_DURATION_MS;
             if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
             await interaction.update({
-                content: `🌟 **Taux de God Pack ×5 activé pour 5 jours !** *(fin <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:R>)*`,
+                content: `🌟 **Taux de God Pack ×5 (1% → 5%) activé pour 5 jours !** *(fin <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:R>)*`,
                 embeds: [],
                 components: backRows,
                 files: [],
@@ -8061,7 +8064,7 @@ async function handleTcgInteraction(interaction) {
             if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
             await interaction.update(buildClaimPayload(actorMember, u, fromHub));
             await interaction.followUp({
-                content: `🌟 **Taux de God Pack ×5 activé pour 5 jours !** *(fin <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:R>)*`,
+                content: `🌟 **Taux de God Pack ×5 (1% → 5%) activé pour 5 jours !** *(fin <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:R>)*`,
                 ephemeral: true
             });
             return true;
