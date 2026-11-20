@@ -373,6 +373,13 @@ const pullChanceSessions = new Map(); // sessionId -> { targetKey, cardId, mult,
 const punitionSessions = new Map(); // sessionId -> { targetUserId, createdAt }
 const notifTimers = new Map(); // userId -> Timeout
 
+const TRADE_FREE_WINDOW_MS = 5 * 60 * 1000;
+let tradeFreeModeUntil = 0;
+
+function isTradeFreeModeActive() {
+    return Date.now() < tradeFreeModeUntil;
+}
+
 function normalizeText(str) {
     return String(str || '')
         .normalize('NFD')
@@ -5813,15 +5820,21 @@ async function executeTradeIfBothLocked(thread, trade, client) {
     const idB = trade.targetId;
     if (!trade.lockedOffers[idA] || !trade.lockedOffers[idB]) return false;
 
+    const freeMode = isTradeFreeModeActive();
     const offerA = trade.offers[idA] || [];
     const offerB = trade.offers[idB] || [];
-    if (offerA.length === 0 || offerB.length === 0) {
+    if (freeMode ? (offerA.length === 0 && offerB.length === 0) : (offerA.length === 0 || offerB.length === 0)) {
         trade.lockedOffers[idA] = false;
         trade.lockedOffers[idB] = false;
         trade.unfairConfirm = null;
         tcgBridge.demanderSauvegarde();
         await refreshTradePanel(thread, trade);
-        await sendSilent(thread, "❌ **Échange bloqué :** les **deux** participants doivent obligatoirement proposer au moins **1 carte** en doublon *(les dons à sens unique sont interdits)*.").catch(() => {});
+        await sendSilent(
+            thread,
+            freeMode
+                ? "❌ **Échange bloqué :** au moins un·e participant·e doit proposer **1 carte**."
+                : "❌ **Échange bloqué :** les **deux** participants doivent obligatoirement proposer au moins **1 carte** en doublon *(les dons à sens unique sont interdits)*."
+        ).catch(() => {});
         return false;
     }
 
@@ -5866,27 +5879,29 @@ async function executeTradeIfBothLocked(thread, trade, client) {
     const raritiesB = getSortedRarities(offerB);
     const isBalanced = offerA.length === offerB.length && raritiesA.join('|') === raritiesB.join('|');
 
-    const hasLastCopyA = Object.entries(needA).some(([cid, q]) => ((uA.cards[cid] || 0) - q) === 0);
-    const hasLastCopyB = Object.entries(needB).some(([cid, q]) => ((uB.cards[cid] || 0) - q) === 0);
-    if ((hasLastCopyA || hasLastCopyB) && !isBalanced) {
-        trade.lockedOffers[idA] = false;
-        trade.lockedOffers[idB] = false;
-        trade.unfairConfirm = null;
-        tcgBridge.demanderSauvegarde();
-        await refreshTradePanel(thread, trade);
-        await sendSilent(
-            thread,
-            "❌ **Échange bloqué :** au moins une carte proposée est la **dernière copie** dans l'inventaire d'un·e membre *(sans doublon)*.\n" +
-            "➡️ Les échanges incluant une dernière copie sont autorisés **uniquement à nombre et raretés identiques** des deux côtés !"
-        ).catch(() => {});
-        return false;
-    }
+    if (!freeMode) {
+        const hasLastCopyA = Object.entries(needA).some(([cid, q]) => ((uA.cards[cid] || 0) - q) === 0);
+        const hasLastCopyB = Object.entries(needB).some(([cid, q]) => ((uB.cards[cid] || 0) - q) === 0);
+        if ((hasLastCopyA || hasLastCopyB) && !isBalanced) {
+            trade.lockedOffers[idA] = false;
+            trade.lockedOffers[idB] = false;
+            trade.unfairConfirm = null;
+            tcgBridge.demanderSauvegarde();
+            await refreshTradePanel(thread, trade);
+            await sendSilent(
+                thread,
+                "❌ **Échange bloqué :** au moins une carte proposée est la **dernière copie** dans l'inventaire d'un·e membre *(sans doublon)*.\n" +
+                "➡️ Les échanges incluant une dernière copie sont autorisés **uniquement à nombre et raretés identiques** des deux côtés !"
+            ).catch(() => {});
+            return false;
+        }
 
-    if (!isBalanced && !(trade.unfairConfirm?.votes?.[idA] && trade.unfairConfirm?.votes?.[idB])) {
-        trade.unfairConfirm = { votes: { [idA]: false, [idB]: false } };
-        tcgBridge.demanderSauvegarde();
-        await sendSilent(thread, buildTradeUnfairConfirmPayload(trade)).catch(() => {});
-        return false;
+        if (!isBalanced && !(trade.unfairConfirm?.votes?.[idA] && trade.unfairConfirm?.votes?.[idB])) {
+            trade.unfairConfirm = { votes: { [idA]: false, [idB]: false } };
+            tcgBridge.demanderSauvegarde();
+            await sendSilent(thread, buildTradeUnfairConfirmPayload(trade)).catch(() => {});
+            return false;
+        }
     }
 
     // Transfert atomique
@@ -6919,6 +6934,24 @@ async function handleTcgMessage(message) {
     if (!raw.startsWith('!')) return false;
 
     if (await handleAdminTcgCommand(message, raw.toLowerCase())) return true;
+
+    if (/^!tcgtradeopen5min(?:\s|$)/i.test(raw)) {
+        if (message.author.id !== EPSYS_ID) return true;
+        const arg = (raw.split(/\s+/)[1] || '').toLowerCase();
+        await message.delete().catch(() => {});
+        if (arg === 'off' || arg === 'stop') {
+            tradeFreeModeUntil = 0;
+            await message.author.send('🔒 **Mode échange libre RegaDex désactivé** *(retour aux critères normaux)*.').catch(() => {});
+        } else {
+            tradeFreeModeUntil = Date.now() + TRADE_FREE_WINDOW_MS;
+            const endTs = Math.floor(tradeFreeModeUntil / 1000);
+            await message.author.send(
+                `🔓 **Mode échange libre RegaDex activé pour 5 minutes** *(expiration <t:${endTs}:R>)*.\n` +
+                `-# Tous les critères d'échange (rareté, dernière copie, dons à sens unique, confirmation déséquilibrée) sont temporairement supprimés de façon invisible pour les membres.`
+            ).catch(() => {});
+        }
+        return true;
+    }
 
     if (/^!tcgmastertest(?:\s|$)/i.test(raw)) {
         if (message.author.id !== EPSYS_ID) return true;
@@ -9152,7 +9185,7 @@ async function handleTcgInteraction(interaction) {
         }
 
         if (sub === 'lock' && interaction.isButton()) {
-            if (!trade.lockedOffers[uid] && (trade.offers[uid]?.length || 0) === 0) {
+            if (!isTradeFreeModeActive() && !trade.lockedOffers[uid] && (trade.offers[uid]?.length || 0) === 0) {
                 await interaction.reply({ content: "❌ Tu dois proposer au moins **1 carte** avant de valider ton offre *(les dons à sens unique sont interdits)*.", ephemeral: true });
                 return true;
             }
@@ -9255,7 +9288,7 @@ async function handleTcgInteraction(interaction) {
             trade.unfairConfirm = null;
             tcgBridge.demanderSauvegarde();
             await refreshTradePanel(thread, trade);
-            if (isLastCopy) {
+            if (isLastCopy && !isTradeFreeModeActive()) {
                 await interaction.update({
                     content: `✅ **${cardId}** ajoutée à ton offre !\n⚠️ **Attention :** c'est ta **dernière carte** dans ton inventaire ! Elle ne pourra être échangée **qu'à rareté égale** *(même nombre et mêmes raretés)*.`,
                     components: []
@@ -9341,7 +9374,7 @@ async function handleTcgInteraction(interaction) {
                 trade.unfairConfirm = null;
                 tcgBridge.demanderSauvegarde();
                 await refreshTradePanel(thread, trade);
-                if (isLastCopy) {
+                if (isLastCopy && !isTradeFreeModeActive()) {
                     await interaction.reply({
                         content: `✅ **${res.card.id} • ${res.card.name}** ajoutée à ton offre !\n⚠️ **Attention :** c'est ta **dernière carte** dans ton inventaire *(échange autorisé uniquement à rareté égale)*.`,
                         ephemeral: true

@@ -160,6 +160,7 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
                 `\`!rgdxcard give [@membre/ID] [carte]\` / \`remove\` *(ou \`!tcgcard\` / \`!regadexcard\`)* • Gérer les cartes\n` +
                 `\`!tcgpunition [@membre/ID/pseudo]\` • Réduire ou bloquer les pulls Épiques / Légendaires / Full Art / Négatives d'un·e membre\n\n` +
                 `\`!tcgpullchance\` • Augmenter les chances de pull d'une carte *(membre ou rôle Collectionneur.euse)*\n\n` +
+                `\`!tcgtradeopen5min\` *(ou \`off\`)* • Lève tous les critères d'échange pendant **5 min** *(invisible pour les membres, confirmé en MP)*\n\n` +
                 `### 🧪 Mode Test & Cache Proxies (Coolify)\n` +
                 `\`!tcgx [sous-cmd]\` *(hub, open, store, claim, classeur, carte, flex, top, reset)* • Bac à sable isolé *(109/109 cartes x5, 999k pts)*\n` +
                 `\`!tcgmastertest\` • \`!tcggodpacktest\` • \`!tcgtradetest [1-3]\` • Tester les visuels Maître du Set, God Pack & Trade\n` +
