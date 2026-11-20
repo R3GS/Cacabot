@@ -1811,7 +1811,7 @@ function getSanitizedWishlist(u) {
 
 function resolveCardQuery(rawQuery, preferredSetNumber = null) {
     if (!rawQuery) return { card: null, matches: [], isCodeQuery: false };
-    const q = rawQuery.trim();
+    const q = String(rawQuery).trim();
     if (!q) return { card: null, matches: [], isCodeQuery: false };
 
     const cleaned = q.replace(/^#/, '').trim();
@@ -1829,7 +1829,7 @@ function resolveCardQuery(rawQuery, preferredSetNumber = null) {
     }
 
     // 1. Format explicite 1-48, 2-48, 1-Ø12, Ø12, 48 ([SET 2] multi-sets)
-    const codeMatch = cleaned.match(/^(?:(\d+)\s*-\s*)?(Ø|O)?\s*(\d+)$/iu);
+    const codeMatch = cleaned.match(/^(?:(?:set\s*)?(\d+)\s*[-\s]\s*)?(Ø|O)?\s*(\d+)$/iu);
     if (codeMatch) {
         const explicitSet = codeMatch[1] ? parseInt(codeMatch[1], 10) : null;
         const isNeg = Boolean(codeMatch[2]);
@@ -1841,7 +1841,6 @@ function resolveCardQuery(rawQuery, preferredSetNumber = null) {
             const found = cardByNumCode.get(fullId) || cardById.get(`${explicitSet}-${numKey}`);
             if (found) return { card: found, matches: [found], isCodeQuery: true };
         } else {
-            // [SET 2] Si le numéro est saisi sans préfixe de Set, vérifier tous les Sets actifs
             const codeMatches = cardCatalog.filter(c => c.numCode.toUpperCase() === numKey.toUpperCase());
             if (codeMatches.length === 1) {
                 return { card: codeMatches[0], matches: codeMatches, isCodeQuery: true };
@@ -1856,22 +1855,106 @@ function resolveCardQuery(rawQuery, preferredSetNumber = null) {
         }
     }
 
-    // 2. Recherche par nom exact puis partiel (Sets + Cartes Perso)
+    // 2. Recherche intelligente par nom + modificateurs optionnels (rareté, holo, set)
     const normQ = normalizeText(q);
     if (!normQ) return { card: null, matches: [], isCodeQuery: false };
     const allSearchable = [...cardCatalog, ...persoCatalog];
 
-    const exact = allSearchable.filter(c => c.normalizedName === normQ || c.normalizedDisplayName === normQ);
-    if (exact.length === 1) return { card: exact[0], matches: exact, isCodeQuery: false };
-    if (exact.length > 1) return { card: null, matches: exact, isCodeQuery: false };
-
-    const partial = allSearchable.filter(c =>
-        c.normalizedName.includes(normQ) ||
-        (c.normalizedDisplayName && c.normalizedDisplayName.includes(normQ)) ||
-        c.id.toLowerCase() === cleaned.toLowerCase()
+    // 2a. Correspondance exacte brute avant extraction des mots-clés
+    const rawExact = allSearchable.filter(c =>
+        c.normalizedName === normQ ||
+        c.normalizedDisplayName === normQ ||
+        c.normalizedBaseName === normQ
     );
+    if (rawExact.length === 1) return { card: rawExact[0], matches: rawExact, isCodeQuery: false };
+    if (rawExact.length > 1) return { card: null, matches: rawExact, isCodeQuery: false };
+
+    // 2b. Extraction des mots-clés de rareté / holo / set ("epsys full art", "tasty crousty full art", etc.)
+    let stripped = ` ${normQ} `;
+    let wantedRarity = null;
+    let wantedHolo = null;
+    let wantedPerso = false;
+    let wantedSet = null;
+
+    const setInText = stripped.match(/\bset\s*(\d+)\b/);
+    if (setInText) {
+        wantedSet = parseInt(setInText[1], 10);
+        stripped = stripped.replace(/\bset\s*\d+\b/g, ' ');
+    }
+
+    if (/\b(?:full\s*arts?|fullart|fa)\b/.test(stripped)) {
+        wantedRarity = 'Full Art';
+        stripped = stripped.replace(/\b(?:full\s*arts?|fullart|fa)\b/g, ' ');
+    } else if (/\b(?:negatives?|neg)\b/.test(stripped)) {
+        wantedRarity = 'Négative';
+        stripped = stripped.replace(/\b(?:negatives?|neg)\b/g, ' ');
+    } else if (/\b(?:legendaires?|leg)\b/.test(stripped)) {
+        wantedRarity = 'Légendaire';
+        stripped = stripped.replace(/\b(?:legendaires?|leg)\b/g, ' ');
+    } else if (/\b(?:epiques?|epic)\b/.test(stripped)) {
+        wantedRarity = 'Épique';
+        stripped = stripped.replace(/\b(?:epiques?|epic)\b/g, ' ');
+    } else if (/\b(?:rares?)\b/.test(stripped)) {
+        wantedRarity = 'Rare';
+        stripped = stripped.replace(/\b(?:rares?)\b/g, ' ');
+    } else if (/\b(?:communes?|commons?)\b/.test(stripped)) {
+        wantedRarity = 'Commune';
+        stripped = stripped.replace(/\b(?:communes?|commons?)\b/g, ' ');
+    } else if (/\b(?:personnalisees?|perso|speciales?)\b/.test(stripped)) {
+        wantedPerso = true;
+        stripped = stripped.replace(/\b(?:personnalisees?|perso|speciales?)\b/g, ' ');
+    }
+
+    if (/\b(?:holographiques?|holos?)\b/.test(stripped)) {
+        wantedHolo = true;
+        stripped = stripped.replace(/\b(?:holographiques?|holos?)\b/g, ' ');
+    }
+
+    const cleanNameQuery = stripped.replace(/\s+/g, ' ').trim();
+    const filteredPool = allSearchable.filter(c => {
+        if (wantedRarity && c.rarity !== wantedRarity) return false;
+        if (wantedPerso && !c.isPerso) return false;
+        if (wantedHolo === true && !c.isHolo) return false;
+        if (wantedSet !== null && Number(c.setNumber) !== wantedSet) return false;
+        return true;
+    });
+
+    const searchPool = filteredPool.length > 0 ? filteredPool : allSearchable;
+    if (!cleanNameQuery && filteredPool.length > 0) {
+        if (filteredPool.length === 1) return { card: filteredPool[0], matches: filteredPool, isCodeQuery: false };
+        return { card: null, matches: filteredPool, isCodeQuery: false };
+    }
+
+    const effectiveQuery = cleanNameQuery || normQ;
+
+    const exactFiltered = searchPool.filter(c =>
+        c.normalizedName === effectiveQuery ||
+        c.normalizedDisplayName === effectiveQuery ||
+        c.normalizedBaseName === effectiveQuery
+    );
+    if (exactFiltered.length === 1) return { card: exactFiltered[0], matches: exactFiltered, isCodeQuery: false };
+    if (exactFiltered.length > 1) return { card: null, matches: exactFiltered, isCodeQuery: false };
+
+    const tokens = effectiveQuery.split(/\s+/).filter(Boolean);
+    const compactQ = effectiveQuery.replace(/\s+/g, '');
+    const partial = searchPool.filter(c => {
+        const hay = `${c.normalizedDisplayName || ''} ${c.normalizedBaseName || ''} ${c.normalizedName || ''}`;
+        const compactHay = hay.replace(/\s+/g, '');
+        if (hay.includes(effectiveQuery) || (compactQ.length >= 3 && compactHay.includes(compactQ))) return true;
+        if (tokens.length > 1 && tokens.every(t => hay.includes(t))) return true;
+        return c.id.toLowerCase() === cleaned.toLowerCase();
+    });
     if (partial.length === 1) return { card: partial[0], matches: partial, isCodeQuery: false };
-    return { card: null, matches: partial, isCodeQuery: false };
+    if (partial.length > 1) return { card: null, matches: partial, isCodeQuery: false };
+
+    // 2c. Fallback sur tout le catalogue (si un mot de rareté faisait partie du nom de la carte)
+    const rawTokens = normQ.split(/\s+/).filter(Boolean);
+    const fallbackMatches = allSearchable.filter(c => {
+        const hay = `${c.normalizedDisplayName || ''} ${c.normalizedBaseName || ''} ${normalizeText(c.rarity)}`;
+        return rawTokens.every(t => hay.includes(t));
+    });
+    if (fallbackMatches.length === 1) return { card: fallbackMatches[0], matches: fallbackMatches, isCodeQuery: false };
+    return { card: null, matches: fallbackMatches, isCodeQuery: false };
 }
 
 async function resolveMemberArg(message, rawArg, onResolved) {
@@ -3506,7 +3589,15 @@ function buildProfilePayload(member, u, fromHub = false, showRarities = false) {
     return { embeds: [embed], components: [row] };
 }
 
-function buildWishlistPayload(ownerMember, viewerId, fromHub = false, fromProfile = false, statusNote = null) {
+const WISH_FILTER_ORDER = ['missing', 'dups', 'all', 'owned'];
+const WISH_FILTER_LABELS = {
+    missing: 'Manquantes',
+    dups: 'Dispo en doublon',
+    all: 'Toutes les cartes',
+    owned: 'Possédées'
+};
+
+function buildWishlistPayload(ownerMember, viewerId, fromHub = false, fromProfile = false, statusNote = null, options = {}) {
     const ownerId = ownerMember.id;
     const ownerU = getOrCreateTcgUser(ownerId);
     const viewerU = getOrCreateTcgUser(viewerId);
@@ -3516,6 +3607,7 @@ function buildWishlistPayload(ownerMember, viewerId, fromHub = false, fromProfil
 
     const hubFlag = fromHub ? '1' : '0';
     const profFlag = fromProfile ? '1' : '0';
+    const addFilter = WISH_FILTER_ORDER.includes(options.addFilter) ? options.addFilter : 'missing';
 
     const lines = wishlistIds.length === 0
         ? ['*Aucune carte dans cette Wishlist pour le moment.*']
@@ -3543,7 +3635,7 @@ function buildWishlistPayload(ownerMember, viewerId, fromHub = false, fromProfil
             lines.join('\n') +
             `\n\n-# 💡 Les cartes de ta Wishlist apparaissent tout en haut avec un ❤️ quand un membre te propose un \`!trade\`.`
         )
-        .setFooter({ text: `Maximum ${MAX_WISHLIST} cartes • !tcgwishlist` });
+        .setFooter({ text: `Maximum ${MAX_WISHLIST} cartes • !wishlist [n° ou nom]` });
 
     const components = [];
 
@@ -3551,12 +3643,12 @@ function buildWishlistPayload(ownerMember, viewerId, fromHub = false, fromProfil
         if (wishlistIds.length > 0) {
             const remMenu = new StringSelectMenuBuilder()
                 .setCustomId(`tcg:wish:remsel:${ownerId}:${hubFlag}:${profFlag}`)
-                .setPlaceholder('Retirer une carte de ta Wishlist...')
+                .setPlaceholder('💔 Retirer une carte de ta Wishlist...')
                 .addOptions(wishlistIds.map(id => {
                     const c = cardById.get(id);
                     const owned = (viewerU.cards?.[id] || 0) > 0;
                     return {
-                        label: owned && c ? `${id} • ${c.name}`.slice(0, 100) : `${id} • Carte non découverte`,
+                        label: owned && c ? `${id} • ${c.name}`.slice(0, 100) : `🔒 ${id} • Carte non découverte`,
                         description: owned && c ? `${c.rarity} • Retirer de la Wishlist` : 'Retirer de la Wishlist',
                         value: id
                     };
@@ -3564,12 +3656,83 @@ function buildWishlistPayload(ownerMember, viewerId, fromHub = false, fromProfil
             components.push(new ActionRowBuilder().addComponents(remMenu));
         }
 
-        const actionRow = new ActionRowBuilder().addComponents(
+        if (wishlistIds.length < MAX_WISHLIST) {
+            const wishSet = new Set(wishlistIds);
+            const dupsCache = new Map();
+            const getDupsCount = (cid) => {
+                if (!dupsCache.has(cid)) dupsCache.set(cid, getCardDuplicateOwners(cid, ownerId).length);
+                return dupsCache.get(cid);
+            };
+
+            const pool = cardCatalog.filter(c => {
+                if (wishSet.has(c.id)) return false;
+                const qty = ownerU.cards?.[c.id] || 0;
+                if (addFilter === 'missing') return qty <= 0;
+                if (addFilter === 'dups') return qty <= 0 && getDupsCount(c.id) > 0;
+                if (addFilter === 'owned') return qty > 0;
+                return true;
+            });
+
+            if (pool.length > 0) {
+                const perPage = pool.length > 25 ? 23 : 25;
+                const totalPages = Math.max(1, Math.ceil(pool.length / perPage));
+                const safePage = Math.max(0, Math.min(options.addPage || 0, totalPages - 1));
+                const slice = pool.slice(safePage * perPage, (safePage + 1) * perPage);
+                const opts = [];
+
+                if (totalPages > 1 && safePage > 0) {
+                    opts.push({
+                        label: `⬅️ Page précédente (${safePage}/${totalPages})`,
+                        description: 'Voir les cartes précédentes',
+                        value: `__page:${safePage - 1}`
+                    });
+                }
+
+                for (const c of slice) {
+                    const meta = RARITY_META[c.rarity] || RARITY_META['Commune'];
+                    const viewerOwns = (viewerU.cards?.[c.id] || 0) > 0;
+                    const dupsCount = getDupsCount(c.id);
+                    const dupsTxt = dupsCount > 0 ? `👥 ${dupsCount} en doublon` : 'Aucun doublon dispo';
+                    opts.push({
+                        label: viewerOwns
+                            ? `${c.id} • ${c.name}`.slice(0, 100)
+                            : `🔒 ${c.id} • Carte non découverte (${c.category})`.slice(0, 100),
+                        description: viewerOwns
+                            ? `${meta.emoji} ${c.rarity} • ×${viewerU.cards[c.id]} • ${dupsTxt}`.slice(0, 100)
+                            : `${meta.emoji} ${c.rarity} • ${dupsTxt}`.slice(0, 100),
+                        value: c.id
+                    });
+                }
+
+                if (totalPages > 1 && safePage < totalPages - 1) {
+                    opts.push({
+                        label: `➡️ Page suivante (${safePage + 2}/${totalPages})`,
+                        description: 'Voir la suite des cartes',
+                        value: `__page:${safePage + 1}`
+                    });
+                }
+
+                const addMenu = new StringSelectMenuBuilder()
+                    .setCustomId(`tcg:wish:addsel:${ownerId}:${hubFlag}:${profFlag}:${addFilter}`)
+                    .setPlaceholder(`➕ Ajouter (${WISH_FILTER_LABELS[addFilter]} • ${safePage + 1}/${totalPages})...`)
+                    .addOptions(opts);
+                components.push(new ActionRowBuilder().addComponents(addMenu));
+            }
+        }
+
+        const nextFilter = WISH_FILTER_ORDER[(WISH_FILTER_ORDER.indexOf(addFilter) + 1) % WISH_FILTER_ORDER.length];
+        const rowActions = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId(`tcg:wish:add:${ownerId}:${hubFlag}:${profFlag}`)
-                .setLabel('Ajouter une carte')
-                .setEmoji('➕')
+                .setLabel('Chercher (nom/n°)')
+                .setEmoji('🔎')
                 .setStyle(ButtonStyle.Primary)
+                .setDisabled(wishlistIds.length >= MAX_WISHLIST),
+            new ButtonBuilder()
+                .setCustomId(`tcg:wish:filter:${nextFilter}:${ownerId}:${hubFlag}:${profFlag}`)
+                .setLabel(`Filtre : ${WISH_FILTER_LABELS[addFilter]}`)
+                .setEmoji('🎯')
+                .setStyle(ButtonStyle.Secondary)
                 .setDisabled(wishlistIds.length >= MAX_WISHLIST),
             new ButtonBuilder()
                 .setCustomId(`tcg:wish:clear:${ownerId}:${hubFlag}:${profFlag}`)
@@ -3578,8 +3741,11 @@ function buildWishlistPayload(ownerMember, viewerId, fromHub = false, fromProfil
                 .setStyle(ButtonStyle.Danger)
                 .setDisabled(wishlistIds.length === 0)
         );
+        components.push(rowActions);
+
+        const rowNav = new ActionRowBuilder();
         if (fromProfile) {
-            actionRow.addComponents(
+            rowNav.addComponents(
                 new ButtonBuilder()
                     .setCustomId(`tcg:profile:${ownerId}:${hubFlag}:0`)
                     .setLabel('Retour Profil')
@@ -3587,8 +3753,8 @@ function buildWishlistPayload(ownerMember, viewerId, fromHub = false, fromProfil
                     .setStyle(ButtonStyle.Secondary)
             );
         }
-        actionRow.addComponents(buildAccueilButton(viewerId), buildCloseButton(viewerId));
-        components.push(actionRow);
+        rowNav.addComponents(buildAccueilButton(viewerId), buildCloseButton(viewerId));
+        components.push(rowNav);
     } else {
         components.push(new ActionRowBuilder().addComponents(buildAccueilButton(viewerId), buildCloseButton(viewerId)));
     }
@@ -3620,7 +3786,7 @@ function buildHelpPayload(userId) {
             `### 🛒 Boutique, Échanges & Flex\n` +
             `• \`!tcgstore\` — Dépenser tes points RegaDex\n` +
             `• \`!tcgclaim\` — Inventaire, achats & boosters hebdomadaires *(vendredi 8h)*\n` +
-            `• \`!trade [@membre]\` — Lancer un échange *(doublons libre, ou dernière copie à nombre et raretés identiques)*\n` +
+            `• \`!trade [@membre]\` — Lancer un échange *(tous types d'échanges autorisés)*\n` +
             `• \`!flex\` *(\`!tcgflex\`)* — Montrer ta carte préférée *(<#${TCG_CHANNEL_ID}> & <#${SHITPOST_CHANNEL_ID}>)* • \`!flex @membre\`\n` +
             `• \`!flexmodify [N°Set]-[N°Carte]\` pour la changer\n` +
             `────────────────────────────────────────\n` +
@@ -3681,7 +3847,7 @@ function buildGuidePayload(userId, fromHub = true) {
             `### 📖 4. Classeur, Wishlist, Échanges & Commandes\n` +
             `• **Classeur :** filtre par catégorie, rareté ou affichage (**Tout** / **Possédées** / **Doublons**), choisis la grille (\`4\`, \`18\`, \`36\` ou \`All\`) et change le thème **Clair (W) / Nuit (B)**.\n` +
             `• **Wishlist & Doublons :** ajoute jusqu'à **5 cartes** dans ta \`!wishlist\` *(mises en avant dans \`!trade\`)* et utilise le bouton sous \`!carte\` ou \`Inspecter\` pour voir **qui a une carte en doublon** !\n` +
-            `• **Échanges (\`!trade [@]\` ou clic droit sur un membre) :** échange jusqu'à **3 cartes** en doublon *(libre, avec double confirmation si déséquilibré)* ou même **ta dernière copie** *(uniquement à **nombre et raretés identiques**)* ! Gagne **+3 pts RegaDex** à la fermeture du fil *(1 seul bonus par fil)*.\n` +
+            `• **Échanges (\`!trade [@]\` ou clic droit sur un membre) :** échange jusqu'à **3 cartes** sans restriction *(dons, dernières copies et raretés différentes autorisés, avec avertissement et double confirmation si inéquitable)* ! Gagne **+3 pts RegaDex** à la fermeture du fil *(1 seul bonus par fil)*.\n` +
             `• **Commandes rapides :** \`!tcg\` • \`!tcghelp\` • \`!open\` / \`!tcggo\` / \`!tcgbooster\` • \`!tcgclaim\` • \`!carte [n°/nom]\` • \`!flex\` *(<#${TCG_CHANNEL_ID}> & <#${SHITPOST_CHANNEL_ID}>)*`
         )
         .setFooter({ text: `RegaDex ${SET1_NAME} • Cacabot` });
@@ -5346,6 +5512,11 @@ function buildUnownedCardPayload(card, viewerId) {
             .setEmoji(inWishlist ? '💔' : '❤️')
             .setStyle(inWishlist ? ButtonStyle.Success : ButtonStyle.Secondary)
             .setDisabled(!inWishlist && wishlistFull),
+        new ButtonBuilder()
+            .setCustomId(`tcg:cartemissing:${viewerId}:0`)
+            .setLabel('Non découvertes')
+            .setEmoji('🔒')
+            .setStyle(ButtonStyle.Secondary),
         buildAccueilButton(viewerId),
         buildCloseButton(viewerId)
     );
@@ -5354,6 +5525,162 @@ function buildUnownedCardPayload(card, viewerId) {
         content: `🔒 Tu n'as pas encore découvert la carte \`${card.id}\` dans ton RegaDex ! La surprise reste totale 🤫`,
         components: [row]
     };
+}
+
+function buildCarteHubPayload(authorMember, channel, options = {}) {
+    const uid = authorMember.id;
+    const u = getOrCreateTcgUser(uid);
+    const data = getStoreData();
+    const activeTrade = data.activeTrades?.[channel?.id];
+
+    const ownedCards = [...cardCatalog, ...persoCatalog].filter(c => (u.cards?.[c.id] || 0) > 0);
+    const unownedCards = cardCatalog.filter(c => (u.cards?.[c.id] || 0) <= 0);
+    const mode = options.mode === 'missing' ? 'missing' : 'owned';
+
+    const embed = new EmbedBuilder()
+        .setColor(0x3498db)
+        .setTitle('🔎 Cartes RegaDex (`!carte`)')
+        .setDescription(
+            `Sélectionne directement une carte ci-dessous ou clique sur **🔎 Chercher** *(ex : \`1-84\`, \`1-Ø1\`, \`Epsys Full Art\`)*.\n\n` +
+            `• 📦 **Possédées :** \`${ownedCards.length}\` carte(s)\n` +
+            `• 🔒 **Non découvertes :** \`${unownedCards.length}\` carte(s) *(zéro spoiler : tu peux voir qui les a en doublon et les ajouter en Wishlist)*`
+        );
+
+    const components = [];
+
+    if (mode === 'missing') {
+        if (unownedCards.length > 0) {
+            const perPage = unownedCards.length > 25 ? 23 : 25;
+            const totalPages = Math.max(1, Math.ceil(unownedCards.length / perPage));
+            const safePage = Math.max(0, Math.min(options.page || 0, totalPages - 1));
+            const slice = unownedCards.slice(safePage * perPage, (safePage + 1) * perPage);
+            const opts = [];
+
+            if (totalPages > 1 && safePage > 0) {
+                opts.push({
+                    label: `⬅️ Page précédente (${safePage}/${totalPages})`,
+                    description: 'Voir les cartes non découvertes précédentes',
+                    value: `__page:${safePage - 1}`
+                });
+            }
+            for (const c of slice) {
+                const meta = RARITY_META[c.rarity] || RARITY_META['Commune'];
+                const dups = getCardDuplicateOwners(c.id, uid).length;
+                opts.push({
+                    label: `🔒 ${c.id} • Carte non découverte (${c.category})`.slice(0, 100),
+                    description: `${meta.emoji} ${c.rarity} • ${dups > 0 ? `👥 ${dups} membre(s) en doublon` : 'Aucun doublon dispo'}`.slice(0, 100),
+                    value: c.id
+                });
+            }
+            if (totalPages > 1 && safePage < totalPages - 1) {
+                opts.push({
+                    label: `➡️ Page suivante (${safePage + 2}/${totalPages})`,
+                    description: 'Voir la suite des cartes non découvertes',
+                    value: `__page:${safePage + 1}`
+                });
+            }
+
+            components.push(
+                new ActionRowBuilder().addComponents(
+                    new StringSelectMenuBuilder()
+                        .setCustomId(`tcg:cartemissingsel:${uid}`)
+                        .setPlaceholder(`🔒 Cartes non découvertes (Page ${safePage + 1}/${totalPages})...`)
+                        .addOptions(opts)
+                )
+            );
+        }
+    } else if (ownedCards.length > 0) {
+        const perPage = ownedCards.length > 25 ? 23 : 25;
+        const totalPages = Math.max(1, Math.ceil(ownedCards.length / perPage));
+        const safePage = Math.max(0, Math.min(options.page || 0, totalPages - 1));
+        const slice = ownedCards.slice(safePage * perPage, (safePage + 1) * perPage);
+        const opts = [];
+
+        if (totalPages > 1 && safePage > 0) {
+            opts.push({
+                label: `⬅️ Page précédente (${safePage}/${totalPages})`,
+                description: 'Voir tes cartes précédentes',
+                value: `__page:${safePage - 1}`
+            });
+        }
+        for (const c of slice) {
+            const meta = RARITY_META[c.rarity] || RARITY_META['Commune'];
+            opts.push({
+                label: `${c.id} • ${c.name}`.slice(0, 100),
+                description: `${meta.emoji} ${c.rarity} • ×${u.cards[c.id]}${u.favoriteCardId === c.id ? ' • ⭐ Flex' : ''}`.slice(0, 100),
+                value: c.id
+            });
+        }
+        if (totalPages > 1 && safePage < totalPages - 1) {
+            opts.push({
+                label: `➡️ Page suivante (${safePage + 2}/${totalPages})`,
+                description: 'Voir la suite de tes cartes possédées',
+                value: `__page:${safePage + 1}`
+            });
+        }
+
+        components.push(
+            new ActionRowBuilder().addComponents(
+                new StringSelectMenuBuilder()
+                    .setCustomId(`tcg:cartesel:${uid}:__hub:${DEFAULT_SET_NUMBER}`)
+                    .setPlaceholder(`📦 Tes cartes possédées (Page ${safePage + 1}/${totalPages})...`)
+                    .addOptions(opts)
+            )
+        );
+    }
+
+    const rowTools = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tcg:cartesearch:${uid}`)
+            .setLabel('Chercher (nom/n°)')
+            .setEmoji('🔎')
+            .setStyle(ButtonStyle.Primary),
+        mode === 'missing'
+            ? new ButtonBuilder()
+                .setCustomId(`tcg:cartehub:${uid}:0`)
+                .setLabel(`Possédées (${ownedCards.length})`)
+                .setEmoji('📦')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(ownedCards.length === 0)
+            : new ButtonBuilder()
+                .setCustomId(`tcg:cartemissing:${uid}:0`)
+                .setLabel(`Non découvertes (${unownedCards.length})`)
+                .setEmoji('🔒')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(unownedCards.length === 0),
+        new ButtonBuilder()
+            .setCustomId(`tcg:binder:open:${uid}:${uid}:1`)
+            .setLabel('Mon classeur')
+            .setEmoji('📖')
+            .setStyle(ButtonStyle.Secondary)
+    );
+    components.push(rowTools);
+
+    const rowNav = new ActionRowBuilder();
+    if (activeTrade) {
+        const partnerId = activeTrade.initiatorId === uid ? activeTrade.targetId : activeTrade.initiatorId;
+        rowNav.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tcg:binder:ask:${partnerId}:${uid}`)
+                .setLabel('Classeur partenaire')
+                .setEmoji('🤝')
+                .setStyle(ButtonStyle.Secondary)
+        );
+    }
+    rowNav.addComponents(buildAccueilButton(uid), buildCloseButton(uid));
+    components.push(rowNav);
+
+    if (!activeTrade) {
+        components.push(
+            new ActionRowBuilder().addComponents(
+                new UserSelectMenuBuilder()
+                    .setCustomId(`tcg:binder:pickuser:${uid}`)
+                    .setPlaceholder('Consulter le classeur d\'un autre membre...')
+            )
+        );
+    }
+
+    return { embeds: [embed], components };
 }
 
 async function sendBinderAccessWarning(targetResponder, requesterId, targetMember) {
@@ -5388,52 +5715,7 @@ async function sendBinderAccessWarning(targetResponder, requesterId, targetMembe
 async function handleCarteCommand(targetResponder, authorMember, rawArg, channel) {
     const query = (rawArg || '').trim();
     if (!query) {
-        const data = getStoreData();
-        const activeTrade = data.activeTrades?.[channel?.id];
-
-        const embed = new EmbedBuilder()
-            .setColor(0x3498db)
-            .setTitle('🔎 Rechercher une carte RegaDex (`!carte`)')
-            .setDescription(
-                `Pour afficher une carte **que tu possèdes**, tape :\n` +
-                `• \`!carte [N° Set]-[N° Carte]\` *(ex : \`!carte 1-84\`, \`!carte 1-Ø1\`)*\n` +
-                `• \`!carte [Nom]\` *(ex : \`!carte Tasty Crousty\`, \`!carte Epsys\`)*\n\n` +
-                `🔒 *Pour garder la surprise intacte, les cartes non découvertes restent verrouillées.*\n` +
-                `🔔 *Attention : consulter le classeur d'un autre membre le mentionnera pour lui demander l'accès.*`
-            );
-
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`tcg:binder:open:${authorMember.id}:${authorMember.id}:1`)
-                .setLabel('Mon classeur')
-                .setEmoji('📖')
-                .setStyle(ButtonStyle.Primary)
-        );
-
-        if (activeTrade) {
-            const partnerId = activeTrade.initiatorId === authorMember.id ? activeTrade.targetId : activeTrade.initiatorId;
-            row.addComponents(
-                new ButtonBuilder()
-                    .setCustomId(`tcg:binder:ask:${partnerId}:${authorMember.id}`)
-                    .setLabel('Classeur partenaire')
-                    .setEmoji('🤝')
-                    .setStyle(ButtonStyle.Secondary),
-                buildCloseButton(authorMember.id)
-            );
-            return replyPanelSilent(targetResponder, { embeds: [embed], components: [row] }, authorMember.id);
-        }
-
-        row.addComponents(
-            buildAccueilButton(authorMember.id),
-            buildCloseButton(authorMember.id)
-        );
-
-        const userRow = new ActionRowBuilder().addComponents(
-            new UserSelectMenuBuilder()
-                .setCustomId(`tcg:binder:pickuser:${authorMember.id}`)
-                .setPlaceholder('Consulter le classeur d\'un autre membre...')
-        );
-        return replyPanelSilent(targetResponder, { embeds: [embed], components: [row, userRow] }, authorMember.id);
+        return replyPanelSilent(targetResponder, buildCarteHubPayload(authorMember, channel), authorMember.id);
     }
 
     const u = getOrCreateTcgUser(authorMember.id);
@@ -5856,9 +6138,8 @@ function buildTradeThreadPayload(trade) {
         .setTitle('🔄 Table d\'échange RegaDex')
         .setDescription(
             `### 📜 Règles de l'échange\n` +
-            `• **Cartes :** jusqu'à **3 cartes** par personne\n` +
-            `• **Doublons :** échange libre *(double confirmation si déséquilibré)*\n` +
-            `• **Dernière copie :** autorisée uniquement à **nombre et raretés identiques**\n` +
+            `• **Cartes :** jusqu'à **3 cartes** par personne *(dons & dernières copies autorisés)*\n` +
+            `• **Liberté totale :** tous les types d'échanges sont possibles *(double confirmation si inéquitable)*\n` +
             `• **Bonus :** **+${POINTS_PER_TRADE} pts RegaDex** offerts à la fermeture *(1× par fil)*\n` +
             `-# ⚠️ Toute modification déverrouille automatiquement la validation des deux joueurs.\n` +
             `${sep}\n` +
@@ -6001,7 +6282,7 @@ function buildTradeAddCardEphemeralPayload(trade, uid, page = 0, missingOnly = f
             const inWish = partnerWishSet.has(c.id);
             const missingForPartner = (uPartner.cards?.[c.id] || 0) <= 0;
             const remainingBeforeAdd = (u.cards[c.id] || 0) - (offeredCount[c.id] || 0);
-            const lastCopyTag = remainingBeforeAdd === 1 ? ' • ⚠️ Dernière copie (même rareté)' : '';
+            const lastCopyTag = remainingBeforeAdd === 1 ? ' • ⚠️ Dernière copie' : '';
             return {
                 label: `${inWish ? '❤️ ' : ''}${c.id} • ${c.name}`.slice(0, 100),
                 description: `${c.rarity} • x${u.cards[c.id]}${inWish ? ' • ❤️ Wishlist' : ''}${missingForPartner ? ' • 🆕 Lui manque' : ''}${lastCopyTag}`.slice(0, 100),
@@ -6039,23 +6320,47 @@ function buildTradeUnfairConfirmPayload(trade) {
     const idB = trade.targetId;
     const offerA = trade.offers[idA] || [];
     const offerB = trade.offers[idB] || [];
-    const fmtRarities = (arr) => arr.map(id => {
-        const c = cardById.get(id);
-        const r = c?.rarity || 'Commune';
-        const m = RARITY_META[r] || RARITY_META['Commune'];
-        return `${m.emoji} ${r}`;
-    }).join(', ');
+    const uA = getOrCreateTcgUser(idA);
+    const uB = getOrCreateTcgUser(idB);
+    const countMap = (arr) => {
+        const m = {};
+        for (const id of arr) m[id] = (m[id] || 0) + 1;
+        return m;
+    };
+    const needA = countMap(offerA);
+    const needB = countMap(offerB);
+    const hasLastA = Object.entries(needA).some(([cid, q]) => ((uA.cards?.[cid] || 0) - q) <= 0);
+    const hasLastB = Object.entries(needB).some(([cid, q]) => ((uB.cards?.[cid] || 0) - q) <= 0);
+
+    const fmtRarities = (arr) => arr.length === 0
+        ? '*Aucune carte (don)*'
+        : arr.map(id => {
+            const c = cardById.get(id);
+            const r = c?.rarity || 'Commune';
+            const m = RARITY_META[r] || RARITY_META['Commune'];
+            return `${m.emoji} ${r}`;
+        }).join(', ');
     const vA = Boolean(trade.unfairConfirm?.votes?.[idA]);
     const vB = Boolean(trade.unfairConfirm?.votes?.[idB]);
 
+    const extraWarns = [];
+    if (offerA.length === 0 || offerB.length === 0) {
+        extraWarns.push('🎁 **Don à sens unique** *(aucune carte en retour)*');
+    }
+    if (hasLastA || hasLastB) {
+        const who = [hasLastA ? `<@${idA}>` : null, hasLastB ? `<@${idB}>` : null].filter(Boolean).join(' & ');
+        extraWarns.push(`⚠️ **Dernière copie sans doublon** engagée par ${who}`);
+    }
+
     const embed = new EmbedBuilder()
         .setColor(0xf39c12)
-        .setTitle('⚠️ Échange déséquilibré — Confirmation requise')
+        .setTitle('⚠️ Échange inéquitable — Confirmation requise')
         .setDescription(
             `Cet échange ne contient pas le même nombre ou les mêmes raretés de cartes des deux côtés :\n\n` +
             `• **<@${idA}>** (${offerA.length}) : ${fmtRarities(offerA)}\n` +
-            `• **<@${idB}>** (${offerB.length}) : ${fmtRarities(offerB)}\n\n` +
-            `Confirmez-vous cet échange ? Les **deux** participant.es doivent valider :\n` +
+            `• **<@${idB}>** (${offerB.length}) : ${fmtRarities(offerB)}\n` +
+            (extraWarns.length > 0 ? `\n${extraWarns.join('\n')}\n` : '') +
+            `\nConfirmez-vous quand même cet échange ? Les **deux** participant.es doivent valider :\n` +
             `• <@${idA}> : ${vA ? '✅ Confirmé' : '⏳ En attente'}\n` +
             `• <@${idB}> : ${vB ? '✅ Confirmé' : '⏳ En attente'}`
         );
@@ -6084,17 +6389,13 @@ async function executeTradeIfBothLocked(thread, trade, client) {
     const freeMode = isTradeFreeModeActive();
     const offerA = trade.offers[idA] || [];
     const offerB = trade.offers[idB] || [];
-    if (freeMode ? (offerA.length === 0 && offerB.length === 0) : (offerA.length === 0 || offerB.length === 0)) {
+    if (offerA.length === 0 && offerB.length === 0) {
         trade.lockedOffers[idA] = false;
         trade.lockedOffers[idB] = false;
         trade.unfairConfirm = null;
         tcgBridge.demanderSauvegarde();
         await refreshTradePanel(thread, trade);
-        await sendSilent(
-            thread,
-            freeMode
-                ? "❌ **Échange bloqué :** au moins un·e participant.e doit proposer **1 carte**."
-                : "❌ **Échange bloqué :** les **deux** participant.es doivent obligatoirement proposer au moins **1 carte** en doublon *(les dons à sens unique sont interdits)*.").catch(() => {});
+        await sendSilent(thread, "❌ **Échange bloqué :** au moins un·e participant.e doit proposer **1 carte**.").catch(() => {});
         return false;
     }
 
@@ -6149,29 +6450,11 @@ async function executeTradeIfBothLocked(thread, trade, client) {
     const raritiesB = getSortedRarities(offerB);
     const isBalanced = offerA.length === offerB.length && raritiesA.join('|') === raritiesB.join('|');
 
-    if (!freeMode) {
-        const hasLastCopyA = Object.entries(needA).some(([cid, q]) => ((uA.cards[cid] || 0) - q) === 0);
-        const hasLastCopyB = Object.entries(needB).some(([cid, q]) => ((uB.cards[cid] || 0) - q) === 0);
-        if ((hasLastCopyA || hasLastCopyB) && !isBalanced) {
-            trade.lockedOffers[idA] = false;
-            trade.lockedOffers[idB] = false;
-            trade.unfairConfirm = null;
-            tcgBridge.demanderSauvegarde();
-            await refreshTradePanel(thread, trade);
-            await sendSilent(
-                thread,
-                "❌ **Échange bloqué :** au moins une carte proposée est la **dernière copie** dans l'inventaire d'un·e membre *(sans doublon)*.\n" +
-                "➡️ Les échanges incluant une dernière copie sont autorisés **uniquement à nombre et raretés identiques** des deux côtés !"
-            ).catch(() => {});
-            return false;
-        }
-
-        if (!isBalanced && !(trade.unfairConfirm?.votes?.[idA] && trade.unfairConfirm?.votes?.[idB])) {
-            trade.unfairConfirm = { votes: { [idA]: false, [idB]: false } };
-            tcgBridge.demanderSauvegarde();
-            await sendSilent(thread, buildTradeUnfairConfirmPayload(trade)).catch(() => {});
-            return false;
-        }
+    if (!freeMode && !isBalanced && !(trade.unfairConfirm?.votes?.[idA] && trade.unfairConfirm?.votes?.[idB])) {
+        trade.unfairConfirm = { votes: { [idA]: false, [idB]: false } };
+        tcgBridge.demanderSauvegarde();
+        await sendSilent(thread, buildTradeUnfairConfirmPayload(trade)).catch(() => {});
+        return false;
     }
 
     // Transfert atomique
@@ -7439,7 +7722,25 @@ async function handleWishlistCommand(targetResponder, authorMember, rawArg) {
         const q = arg.replace(/^(?:add|ajouter|\+)\s+/i, '').trim();
         const res = resolveCardQuery(q);
         if (!res.card) {
-            return replySilent(targetResponder, `❌ Aucune carte unique trouvée pour \`${q}\`. Essaie avec son numéro exact (ex: \`1-84\`).`);
+            const pickable = (res.matches || []).filter(c => !c.isPerso && (res.isCodeQuery || (u.cards?.[c.id] || 0) > 0));
+            if (pickable.length > 0 && u.wishlist.length < MAX_WISHLIST) {
+                const menu = new StringSelectMenuBuilder()
+                    .setCustomId(`tcg:wish:addpick:${authorMember.id}:0:0`)
+                    .setPlaceholder('Plusieurs cartes correspondent, choisis...')
+                    .addOptions(pickable.slice(0, 25).map(c => {
+                        const owned = (u.cards?.[c.id] || 0) > 0;
+                        return {
+                            label: owned ? `${c.id} • ${c.name}`.slice(0, 100) : `🔒 ${c.id} • Carte non découverte`,
+                            description: owned ? `${c.rarity} • Ajouter à la Wishlist` : 'Ajouter à la Wishlist',
+                            value: c.id
+                        };
+                    }));
+                return replyPanelSilent(targetResponder, {
+                    content: `🔎 Plusieurs cartes correspondent à \`${q}\` :`,
+                    components: [new ActionRowBuilder().addComponents(menu)]
+                }, authorMember.id);
+            }
+            return replySilent(targetResponder, `❌ Aucune carte trouvée pour \`${q}\`. Utilise \`!wishlist\` pour choisir directement dans le menu !`);
         }
         if (res.card.isPerso) {
             return replySilent(targetResponder, `❌ Les cartes personnalisées (\`${res.card.id}\`) sont **uniques et non échangeables**, impossible de les ajouter à la Wishlist.`);
@@ -9097,6 +9398,126 @@ async function handleTcgInteraction(interaction) {
     }
 
     // ----- SÉLECTION & NAVIGATION CARTE (!carte) + CHANGER DE SET + DÉFINIR FLEX -----
+    if ((action === 'cartehub' || action === 'cartemissing') && interaction.isButton()) {
+        const ownerId = parts[2];
+        const page = parseInt(parts[3], 10) || 0;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+        await interaction.update({
+            content: null,
+            ...buildCarteHubPayload(actorMember, interaction.channel, { mode: action === 'cartemissing' ? 'missing' : 'owned', page }),
+            files: [],
+            attachments: []
+        });
+        return true;
+    }
+
+    if (action === 'cartemissingsel' && interaction.isStringSelectMenu()) {
+        const ownerId = parts[2];
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        const selected = interaction.values[0];
+        if (selected.startsWith('__page:')) {
+            const nextPage = parseInt(selected.slice('__page:'.length), 10) || 0;
+            const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+            await interaction.update({
+                content: null,
+                ...buildCarteHubPayload(actorMember, interaction.channel, { mode: 'missing', page: nextPage }),
+                files: [],
+                attachments: []
+            });
+            return true;
+        }
+        const card = cardById.get(selected);
+        if (!card) return interaction.reply({ content: "❌ Carte introuvable.", ephemeral: true }), true;
+        const u = getOrCreateTcgUser(ownerId);
+        const payload = (u.cards?.[card.id] || 0) > 0
+            ? buildSingleCardPayload(card, ownerId)
+            : buildUnownedCardPayload(card, ownerId);
+        await interaction.update({ content: null, embeds: [], files: [], attachments: [], ...payload });
+        return true;
+    }
+
+    if (action === 'cartesearch' && interaction.isButton()) {
+        const ownerId = parts[2];
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        const modal = new ModalBuilder()
+            .setCustomId(`tcg:cartemodalsub:${ownerId}`)
+            .setTitle('Rechercher une carte RegaDex');
+        const input = new TextInputBuilder()
+            .setCustomId('carte_query')
+            .setLabel('Nom (ex: Epsys Full Art) ou N° (ex: 1-84)')
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true)
+            .setMaxLength(80);
+        modal.addComponents(new ActionRowBuilder().addComponents(input));
+        await interaction.showModal(modal);
+        return true;
+    }
+
+    if (action === 'cartemodalsub' && interaction.isModalSubmit()) {
+        const ownerId = parts[2];
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        const query = interaction.fields.getTextInputValue('carte_query').trim();
+        const u = getOrCreateTcgUser(ownerId);
+        const res = resolveCardQuery(query);
+
+        const sendOrUpdate = async (payload) => {
+            if (interaction.isFromMessage?.()) {
+                await interaction.deferUpdate();
+                await interaction.editReply({ content: null, embeds: [], files: [], attachments: [], ...payload });
+            } else {
+                await interaction.reply({ ...payload, ephemeral: true });
+            }
+        };
+
+        if (res.card) {
+            if ((u.cards?.[res.card.id] || 0) <= 0) {
+                if (res.isCodeQuery) {
+                    await sendOrUpdate(buildUnownedCardPayload(res.card, ownerId));
+                    return true;
+                }
+                await interaction.reply({
+                    content: `🔒 Tu n'as pas encore découvert cette carte dans ton RegaDex ! La surprise reste totale 🤫`,
+                    ephemeral: true
+                });
+                return true;
+            }
+            await sendOrUpdate(buildSingleCardPayload(res.card, ownerId));
+            return true;
+        }
+
+        const ownedMatches = (res.matches || []).filter(c => (u.cards?.[c.id] || 0) > 0);
+        if (ownedMatches.length === 1) {
+            await sendOrUpdate(buildSingleCardPayload(ownedMatches[0], ownerId));
+            return true;
+        }
+        if (ownedMatches.length > 1) {
+            const menu = new StringSelectMenuBuilder()
+                .setCustomId(`tcg:cartesel:${ownerId}`)
+                .setPlaceholder('Plusieurs cartes possédées correspondent, choisis...')
+                .addOptions(ownedMatches.slice(0, 25).map(c => ({
+                    label: `${c.id} • ${c.name}`.slice(0, 100),
+                    description: `${c.category} • ${c.rarity} • ×${u.cards[c.id]}`.slice(0, 100),
+                    value: c.id
+                })));
+            await sendOrUpdate({
+                content: `🔎 **${ownedMatches.length}** carte(s) possédée(s) correspondent à \`${query}\` :`,
+                embeds: [],
+                components: [
+                    new ActionRowBuilder().addComponents(menu),
+                    new ActionRowBuilder().addComponents(buildAccueilButton(ownerId), buildCloseButton(ownerId))
+                ]
+            });
+            return true;
+        }
+
+        await interaction.reply({
+            content: `🔒 Aucune carte découverte dans ton RegaDex ne correspond à \`${query}\`.`,
+            ephemeral: true
+        });
+        return true;
+    }
+
     if (action === 'cartesel' && interaction.isStringSelectMenu()) {
         const ownerId = parts[2];
         const currentCardId = parts[3] || null;
@@ -9107,6 +9528,16 @@ async function handleTcgInteraction(interaction) {
         const selected = interaction.values[0];
         if (selected.startsWith('__page:') && currentCardId) {
             const nextMenuPage = parseInt(selected.slice('__page:'.length), 10) || 0;
+            if (currentCardId === '__hub') {
+                const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+                await interaction.update({
+                    content: null,
+                    ...buildCarteHubPayload(actorMember, interaction.channel, { mode: 'owned', page: nextMenuPage }),
+                    files: [],
+                    attachments: []
+                });
+                return true;
+            }
             const currentCard = getCardByIdAny(currentCardId);
             if (!currentCard) return true;
             await interaction.update({
@@ -9426,6 +9857,74 @@ async function handleTcgInteraction(interaction) {
             return true;
         }
 
+        if (sub === 'filter' && interaction.isButton()) {
+            const nextFilter = parts[3] || 'missing';
+            const ownerId = parts[4];
+            const fromHub = parts[5] === '1';
+            const fromProfile = parts[6] === '1';
+            if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+                await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+                return true;
+            }
+            const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+            await interaction.update({
+                content: null,
+                files: [],
+                attachments: [],
+                ...buildWishlistPayload(actorMember, ownerId, fromHub, fromProfile, null, { addPage: 0, addFilter: nextFilter })
+            });
+            return true;
+        }
+
+        if ((sub === 'addsel' || sub === 'addpick') && interaction.isStringSelectMenu()) {
+            const ownerId = parts[3];
+            const fromHub = parts[4] === '1';
+            const fromProfile = parts[5] === '1';
+            const addFilter = parts[6] || 'missing';
+            if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+                await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+                return true;
+            }
+            const selected = interaction.values[0];
+            const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+
+            if (selected.startsWith('__page:')) {
+                const nextPage = parseInt(selected.slice('__page:'.length), 10) || 0;
+                await interaction.update({
+                    content: null,
+                    files: [],
+                    attachments: [],
+                    ...buildWishlistPayload(actorMember, ownerId, fromHub, fromProfile, null, { addPage: nextPage, addFilter })
+                });
+                return true;
+            }
+
+            const card = cardById.get(selected);
+            if (!card) {
+                await interaction.reply({ content: "❌ Carte introuvable.", ephemeral: true });
+                return true;
+            }
+            const u = getOrCreateTcgUser(ownerId);
+            u.wishlist = getSanitizedWishlist(u);
+            if (u.wishlist.includes(card.id)) {
+                await interaction.reply({ content: `ℹ️ \`${card.id}\` est déjà dans ta Wishlist.`, ephemeral: true });
+                return true;
+            }
+            if (u.wishlist.length >= MAX_WISHLIST) {
+                await interaction.reply({ content: `⚠️ Ta Wishlist est déjà pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**).`, ephemeral: true });
+                return true;
+            }
+            u.wishlist.push(card.id);
+            if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
+            await interaction.update({
+                content: null,
+                files: [],
+                attachments: [],
+                ...buildWishlistPayload(actorMember, ownerId, fromHub, fromProfile, `❤️ \`${card.id}\` ajoutée à ta Wishlist !`, { addPage: 0, addFilter })
+            });
+            return true;
+        }
+
         if (sub === 'add' && interaction.isButton()) {
             const ownerId = parts[3];
             const fromHub = parts[4] === '1';
@@ -9439,7 +9938,7 @@ async function handleTcgInteraction(interaction) {
                 .setTitle('Ajouter à ta Wishlist');
             const input = new TextInputBuilder()
                 .setCustomId('wish_query')
-                .setLabel('Numéro (ex: 1-84, 1-Ø1) ou Nom de carte')
+                .setLabel('Nom (ex: Epsys Full Art) ou N° (ex: 1-84)')
                 .setStyle(TextInputStyle.Short)
                 .setRequired(true)
                 .setMaxLength(80);
@@ -9457,10 +9956,32 @@ async function handleTcgInteraction(interaction) {
                 return true;
             }
             const query = interaction.fields.getTextInputValue('wish_query').trim();
+            const u = getOrCreateTcgUser(ownerId);
+            u.wishlist = getSanitizedWishlist(u);
             const res = resolveCardQuery(query);
             if (!res.card) {
+                const pickable = (res.matches || []).filter(c => !c.isPerso && (res.isCodeQuery || (u.cards?.[c.id] || 0) > 0));
+                if (pickable.length > 0 && u.wishlist.length < MAX_WISHLIST) {
+                    const menu = new StringSelectMenuBuilder()
+                        .setCustomId(`tcg:wish:addpick:${ownerId}:${fromHub ? '1' : '0'}:${fromProfile ? '1' : '0'}`)
+                        .setPlaceholder('Plusieurs cartes correspondent, choisis...')
+                        .addOptions(pickable.slice(0, 25).map(c => {
+                            const owned = (u.cards?.[c.id] || 0) > 0;
+                            return {
+                                label: owned ? `${c.id} • ${c.name}`.slice(0, 100) : `🔒 ${c.id} • Carte non découverte`,
+                                description: owned ? `${c.rarity} • Ajouter à la Wishlist` : 'Ajouter à la Wishlist',
+                                value: c.id
+                            };
+                        }));
+                    await interaction.reply({
+                        content: `🔎 Plusieurs cartes correspondent à \`${query}\` :`,
+                        components: [new ActionRowBuilder().addComponents(menu)],
+                        ephemeral: true
+                    });
+                    return true;
+                }
                 await interaction.reply({
-                    content: `❌ Aucune carte unique trouvée pour \`${query}\`. Essaie avec son numéro exact (ex: \`1-84\`).`,
+                    content: `❌ Aucune carte unique trouvée pour \`${query}\`. Tu peux aussi utiliser le menu déroulant directement dans \`!wishlist\` !`,
                     ephemeral: true
                 });
                 return true;
@@ -9472,8 +9993,6 @@ async function handleTcgInteraction(interaction) {
                 });
                 return true;
             }
-            const u = getOrCreateTcgUser(ownerId);
-            u.wishlist = getSanitizedWishlist(u);
             if (u.wishlist.includes(res.card.id)) {
                 await interaction.reply({ content: `ℹ️ \`${res.card.id}\` est déjà dans ta Wishlist.`, ephemeral: true });
                 return true;
@@ -9777,10 +10296,6 @@ async function handleTcgInteraction(interaction) {
         }
 
         if (sub === 'lock' && interaction.isButton()) {
-            if (!isTradeFreeModeActive() && !trade.lockedOffers[uid] && (trade.offers[uid]?.length || 0) === 0) {
-                await interaction.reply({ content: "❌ Tu dois proposer au moins **1 carte** avant de valider ton offre *(les dons à sens unique sont interdits)*.", ephemeral: true });
-                return true;
-            }
             trade.lockedOffers[uid] = !trade.lockedOffers[uid];
             trade.unfairConfirm = null;
             tcgBridge.demanderSauvegarde();
@@ -9882,12 +10397,12 @@ async function handleTcgInteraction(interaction) {
             await refreshTradePanel(thread, trade);
             if (isLastCopy && !isTradeFreeModeActive()) {
                 await interaction.update({
-                    content: `✅ **${cardId}** ajoutée à ton offre !\n⚠️ **Attention :** c'est ta **dernière carte** dans ton inventaire ! Elle ne pourra être échangée **qu'à rareté égale** *(même nombre et mêmes raretés)*.`,
+                    content: `✅ **${cardId}** ajoutée à ton offre !\n⚠️ **Attention :** c'est ta **dernière carte** dans ton inventaire *(tu n'auras plus aucun exemplaire après l'échange)*.`,
                     components: []
                 });
                 await sendSilent(
                     thread,
-                    `⚠️ **Prévention :** <@${uid}> vient de proposer \`${cardId}\`${addedCard ? ` (**${addedCard.name}**)` : ''}, qui est sa **dernière carte** dans son inventaire *(échange possible uniquement avec des cartes de **même rareté**)*.`
+                    `⚠️ **Prévention :** <@${uid}> vient de proposer \`${cardId}\`${addedCard ? ` (**${addedCard.name}**)` : ''}, qui est sa **dernière carte** dans son inventaire !`
                 ).catch(() => {});
             } else {
                 await interaction.update({ content: `✅ **${cardId}** ajoutée à ton offre !`, components: [] });
@@ -9975,12 +10490,12 @@ async function handleTcgInteraction(interaction) {
                 await refreshTradePanel(thread, trade);
                 if (isLastCopy && !isTradeFreeModeActive()) {
                     await interaction.reply({
-                        content: `✅ **${res.card.id} • ${res.card.name}** ajoutée à ton offre !\n⚠️ **Attention :** c'est ta **dernière carte** dans ton inventaire *(échange autorisé uniquement à rareté égale)*.`,
+                        content: `✅ **${res.card.id} • ${res.card.name}** ajoutée à ton offre !\n⚠️ **Attention :** c'est ta **dernière carte** dans ton inventaire *(tu n'auras plus aucun exemplaire après l'échange)*.`,
                         ephemeral: true
                     });
                     await sendSilent(
                         thread,
-                        `⚠️ **Prévention :** <@${uid}> vient de proposer \`${res.card.id}\` (**${res.card.name}**), qui est sa **dernière carte** dans son inventaire *(échange possible uniquement avec des cartes de **même rareté**)*.`
+                        `⚠️ **Prévention :** <@${uid}> vient de proposer \`${res.card.id}\` (**${res.card.name}**), qui est sa **dernière carte** dans son inventaire !`
                     ).catch(() => {});
                 } else {
                     await interaction.reply({ content: `✅ **${res.card.id} • ${res.card.name}** ajoutée à ton offre !`, ephemeral: true });

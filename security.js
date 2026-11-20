@@ -301,13 +301,17 @@ const CHUT_AUTHORIZED = [
 const PHISHING_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:discor(?:d(?:app)?|cl|cb|ct|cl-app|d-nitro|d-gift|dapp|dstatus)?[-_.]+(?:gift|nitro|giveaway|drop|claim|steam|promo|boost|vip|com\.ru|xyz|tk|ga|ml|cf|gq|club|top|click|link)|steamcommuni(?:i|l)ty\.[a-z]+)\b/i;
 const slowmodeTrackers = new Map();
 const slowmodeWarnStates = new Map();
+const slowmodeWarnCooldowns = new Map();
 const slowmodeActifs = new Set();
 
-const AUTO_SLOWMODE_WINDOW_MS = 20 * 1000;
-const AUTO_SLOWMODE_WARN_THRESHOLD = 7;
-const AUTO_SLOWMODE_POST_WARN_THRESHOLD = 5;
-const AUTO_SLOWMODE_SECONDS = 15;
-const AUTO_SLOWMODE_DURATION_MS = 10 * 60 * 1000;
+const AUTO_SLOWMODE_WINDOW_MS = 15 * 1000;
+const AUTO_SLOWMODE_WARN_THRESHOLD = 15;
+const AUTO_SLOWMODE_MIN_AUTHOR_MSGS = 5;
+const AUTO_SLOWMODE_MASS_WARN_THRESHOLD = 22;
+const AUTO_SLOWMODE_POST_WARN_THRESHOLD = 12;
+const AUTO_SLOWMODE_WARN_COOLDOWN_MS = 60 * 1000;
+const AUTO_SLOWMODE_SECONDS = 10;
+const AUTO_SLOWMODE_DURATION_MS = 5 * 60 * 1000;
 const AUTO_SLOWMODE_EXEMPT_CHANNELS = [
     '1553954760900608091', // Roulette
     '1559041936256409650', // Motus
@@ -2252,7 +2256,7 @@ async function handleSecurityMessage(message) {
         return true;
     }
 
-    // 4. Slowmode d'urgence automatique (Avertissement -> Slowmode 15s pendant 10min)
+    // 4. Slowmode d'urgence automatique (Avertissement -> Slowmode 10s pendant 5min)
     const isExemptAutoSlowmode = AUTO_SLOWMODE_EXEMPT_CHANNELS instanceof Set
         ? AUTO_SLOWMODE_EXEMPT_CHANNELS.has(message.channel.id)
         : AUTO_SLOWMODE_EXEMPT_CHANNELS.includes(message.channel.id);
@@ -2268,6 +2272,7 @@ async function handleSecurityMessage(message) {
         const now = Date.now();
         const chanId = message.channel.id;
         const warnState = slowmodeWarnStates.get(chanId);
+        const slowmodeMinutes = Math.round(AUTO_SLOWMODE_DURATION_MS / 60000);
 
         if (warnState && now - warnState.warnedAt <= AUTO_SLOWMODE_WINDOW_MS) {
             warnState.count = (warnState.count || 0) + 1;
@@ -2275,6 +2280,7 @@ async function handleSecurityMessage(message) {
             if (warnState.count >= AUTO_SLOWMODE_POST_WARN_THRESHOLD) {
                 slowmodeWarnStates.delete(chanId);
                 slowmodeTrackers.delete(chanId);
+                slowmodeWarnCooldowns.delete(chanId);
                 slowmodeActifs.add(chanId);
 
                 const ancienSlowmode = message.channel.rateLimitPerUser || 0;
@@ -2289,7 +2295,7 @@ async function handleSecurityMessage(message) {
 
                 const slowmodeMsg = await message.channel.send({
                     content:
-                        `🛑 **Slowmode automatique activé** : **${AUTO_SLOWMODE_SECONDS} secondes** pendant **10 minutes** *(le spam a continué après l'avertissement)*.\n` +
+                        `🛑 **Slowmode automatique activé** : **${AUTO_SLOWMODE_SECONDS} secondes** pendant **${slowmodeMinutes} minutes** *(le spam a continué après l'avertissement)*.\n` +
                         `🛡️ *(Bouton ci-dessous réservé aux modérateurs)*`,
                     components: [stopRow],
                     flags: [MessageFlags.SuppressNotifications]
@@ -2306,7 +2312,7 @@ async function handleSecurityMessage(message) {
                     await message.channel.setRateLimitPerUser(session.ancienSlowmode, 'Fin du slowmode automatique').catch(() => {});
                     if (session.message) {
                         await session.message.edit({
-                            content: '🛑 **Slowmode automatique terminé** *(les 10 minutes sont écoulées)*.',
+                            content: `🛑 **Slowmode automatique terminé** *(les ${slowmodeMinutes} minutes sont écoulées)*.`,
                             components: []
                         }).catch(() => {});
                     }
@@ -2325,17 +2331,32 @@ async function handleSecurityMessage(message) {
         } else {
             if (warnState) slowmodeWarnStates.delete(chanId);
 
-            const logs = (slowmodeTrackers.get(chanId) || []).filter(ts => now - ts < AUTO_SLOWMODE_WINDOW_MS);
-            logs.push(now);
+            const logs = (slowmodeTrackers.get(chanId) || []).filter(entry => now - entry.ts < AUTO_SLOWMODE_WINDOW_MS);
+            logs.push({ ts: now, authorId: message.author.id });
             slowmodeTrackers.set(chanId, logs);
 
-            if (logs.length >= AUTO_SLOWMODE_WARN_THRESHOLD) {
-                slowmodeTrackers.delete(chanId);
-                slowmodeWarnStates.set(chanId, { warnedAt: now, count: 0 });
-                await message.channel.send({
-                    content: '**__Attention au spam__** ! Tout spam **continu** verra le salon d\'origine subir un **__slowmode__** !',
-                    flags: [MessageFlags.SuppressNotifications]
-                }).catch(() => {});
+            const lastWarnAt = slowmodeWarnCooldowns.get(chanId) || 0;
+            if (now - lastWarnAt >= AUTO_SLOWMODE_WARN_COOLDOWN_MS) {
+                const countsByAuthor = new Map();
+                let maxPerAuthor = 0;
+                for (const entry of logs) {
+                    const c = (countsByAuthor.get(entry.authorId) || 0) + 1;
+                    countsByAuthor.set(entry.authorId, c);
+                    if (c > maxPerAuthor) maxPerAuthor = c;
+                }
+
+                const isTargetedBurst = logs.length >= AUTO_SLOWMODE_WARN_THRESHOLD && maxPerAuthor >= AUTO_SLOWMODE_MIN_AUTHOR_MSGS;
+                const isMassBurst = logs.length >= AUTO_SLOWMODE_MASS_WARN_THRESHOLD;
+
+                if (isTargetedBurst || isMassBurst) {
+                    slowmodeTrackers.delete(chanId);
+                    slowmodeWarnStates.set(chanId, { warnedAt: now, count: 0 });
+                    slowmodeWarnCooldowns.set(chanId, now);
+                    await message.channel.send({
+                        content: '**__Attention au spam__** ! Tout spam **continu** verra le salon d\'origine subir un **__slowmode__** !',
+                        flags: [MessageFlags.SuppressNotifications]
+                    }).catch(() => {});
+                }
             }
         }
     }

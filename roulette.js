@@ -3945,14 +3945,14 @@ function buildRouletteDexPayload(cible, cat = 'all', page = 0, authorId, fromHub
     );
 
     const rowNav = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`rlt_dex:${cible.id}:${safeCat}:${safePage - 1}:${uid}:${hubFlag}`).setLabel('⬅️').setStyle(ButtonStyle.Secondary).setDisabled(safePage === 0),
-        new ButtonBuilder().setCustomId(`rlt_dex:${cible.id}:${safeCat}:${safePage + 1}:${uid}:${hubFlag}`).setLabel('➡️').setStyle(ButtonStyle.Secondary).setDisabled(safePage >= totalPages - 1),
+        new ButtonBuilder().setCustomId(`rlt_dex:${cible.id}:${safeCat}:${safePage - 1}:${uid}:${hubFlag}:prev`).setLabel('⬅️').setStyle(ButtonStyle.Secondary).setDisabled(safePage === 0),
+        new ButtonBuilder().setCustomId(`rlt_dex:${cible.id}:${safeCat}:${safePage + 1}:${uid}:${hubFlag}:next`).setLabel('➡️').setStyle(ButtonStyle.Secondary).setDisabled(safePage >= totalPages - 1),
         new ButtonBuilder().setCustomId(`rlt_stats_back_${cible.id}_${uid}_${hubFlag}`).setLabel('↩️ Stats').setStyle(ButtonStyle.Primary),
         buildRouletteAccueilButton(uid),
         buildRouletteCloseButton(uid)
     );
 
-    return { embeds: [embed], components: [rowCats, rowNav], files: [] };
+    return { embeds: [embed], components: [rowCats, rowNav], files: [], attachments: [] };
 }
 
 async function renderRouletteStatsCanvas(cible) {
@@ -8224,10 +8224,15 @@ async function handleRouletteButton(interaction, client) {
 
     if (customId.startsWith('rlt_dex:')) {
         const [, cibleId, cat, pageStr, authorId, hubFlag = '0'] = customId.split(':');
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", ephemeral: true });
+        if (!canControlRouletteOwner(interaction.user.id, authorId)) return interaction.reply({ content: "Ce n'est pas ta commande !", ephemeral: true });
+        await interaction.deferUpdate();
         const cible = interaction.guild.members.cache.get(cibleId) || await interaction.guild.members.fetch(cibleId).catch(() => null);
-        if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
-        await interaction.update(buildRouletteDexPayload(cible, cat, parseInt(pageStr, 10) || 0, authorId, hubFlag === '1'));
+        if (!cible) return interaction.followUp({ content: "Membre introuvable.", ephemeral: true });
+        await interaction.editReply({
+            ...buildRouletteDexPayload(cible, cat, parseInt(pageStr, 10) || 0, authorId, hubFlag === '1'),
+            files: [],
+            attachments: []
+        });
         return true;
     }
 
