@@ -300,7 +300,39 @@ const CHUT_AUTHORIZED = [
 // --- Trackers mémoire ---
 const PHISHING_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:discor(?:d(?:app)?|cl|cb|ct|cl-app|d-nitro|d-gift|dapp|dstatus)?[-_.]+(?:gift|nitro|giveaway|drop|claim|steam|promo|boost|vip|com\.ru|xyz|tk|ga|ml|cf|gq|club|top|click|link)|steamcommuni(?:i|l)ty\.[a-z]+)\b/i;
 const slowmodeTrackers = new Map();
+const slowmodeWarnStates = new Map();
 const slowmodeActifs = new Set();
+
+const AUTO_SLOWMODE_WINDOW_MS = 20 * 1000;
+const AUTO_SLOWMODE_WARN_THRESHOLD = 7;
+const AUTO_SLOWMODE_POST_WARN_THRESHOLD = 5;
+const AUTO_SLOWMODE_SECONDS = 15;
+const AUTO_SLOWMODE_DURATION_MS = 10 * 60 * 1000;
+const AUTO_SLOWMODE_EXEMPT_CHANNELS = [
+    '1553954760900608091', // Roulette
+    '1559041936256409650', // Motus
+    '1556089022718152764', // Rébus
+    '1559041872868024370', // Pendu
+    '1555402748193669192'  // Modération
+];
+const slowmodeSessions = new Map(); // channelId => { timeout, message, ancienSlowmode }
+
+async function nettoyerBoutonAutoSlowmode(channelId, newContent = null) {
+    const session = slowmodeSessions.get(channelId);
+    if (!session) return false;
+    clearTimeout(session.timeout);
+    slowmodeSessions.delete(channelId);
+    slowmodeActifs.delete(channelId);
+    slowmodeTrackers.delete(channelId);
+    slowmodeWarnStates.delete(channelId);
+    if (session.message) {
+        const editPayload = { components: [] };
+        if (newContent) editPayload.content = newContent;
+        await session.message.edit(editPayload).catch(() => {});
+    }
+    return true;
+}
+
 const spamTracker = new Map();
 const raidJoinTracker = new Map();
 const raidFlaggedUsers = new Map();
@@ -413,6 +445,18 @@ function initSecurityState(bridge) {
         });
         securityState.client.on('guildBanAdd', async (ban) => {
             await handleTribunalMemberRemove(ban.user, ban.guild);
+        });
+        securityState.client.on('channelUpdate', async (oldChannel, newChannel) => {
+            if (!newChannel || !slowmodeSessions.has(newChannel.id)) return;
+            const newSlow = newChannel.rateLimitPerUser || 0;
+            if (newSlow !== AUTO_SLOWMODE_SECONDS) {
+                await nettoyerBoutonAutoSlowmode(
+                    newChannel.id,
+                    newSlow === 0
+                        ? '✅ **Slowmode automatique retiré manuellement** *(retour au rythme normal)*.'
+                        : `🐢 **Slowmode automatique modifié manuellement** *(nouveau slowmode : ${formatDurationFr(newSlow * 1000)})*.`
+                );
+            }
         });
 
         // Reconnexion immédiate des tribunaux en cours (même créés avant la mise à jour)
@@ -1867,6 +1911,12 @@ async function handleSecurityMessage(message) {
                 return true;
             }
 
+            await nettoyerBoutonAutoSlowmode(
+                message.channel.id,
+                seconds === 0
+                    ? `✅ **Slowmode automatique retiré** par <@${message.author.id}> *(via \`!slowmode\`)*.`
+                    : `🐢 **Slowmode automatique remplacé** par <@${message.author.id}> *(via \`!slowmode\`)*.`
+            );
             await message.channel.setRateLimitPerUser(seconds, `Slowmode défini par ${message.author.tag}`).catch(() => {});
             const resEmbed = new EmbedBuilder()
                 .setColor(seconds === 0 ? 0x2ecc71 : 0x3498db)
@@ -2202,27 +2252,91 @@ async function handleSecurityMessage(message) {
         return true;
     }
 
-    // 4. Slowmode d'urgence automatique
-    if (message.guild && !message.author.bot && message.channel.type === ChannelType.GuildText && !slowmodeActifs.has(message.channel.id)) {
+    // 4. Slowmode d'urgence automatique (Avertissement -> Slowmode 15s pendant 10min)
+    const isExemptAutoSlowmode = AUTO_SLOWMODE_EXEMPT_CHANNELS instanceof Set
+        ? AUTO_SLOWMODE_EXEMPT_CHANNELS.has(message.channel.id)
+        : AUTO_SLOWMODE_EXEMPT_CHANNELS.includes(message.channel.id);
+
+    if (
+        message.guild &&
+        !message.author.bot &&
+        message.channel.type === ChannelType.GuildText &&
+        !isExemptAutoSlowmode &&
+        !slowmodeActifs.has(message.channel.id) &&
+        (message.channel.rateLimitPerUser || 0) < AUTO_SLOWMODE_SECONDS
+    ) {
         const now = Date.now();
-        const logs = (slowmodeTrackers.get(message.channel.id) || []).filter(e => now - e.timestamp < 8000);
-        logs.push({ userId: message.author.id, timestamp: now });
-        slowmodeTrackers.set(message.channel.id, logs);
+        const chanId = message.channel.id;
+        const warnState = slowmodeWarnStates.get(chanId);
 
-        const auteursUniques = new Set(logs.map(e => e.userId));
-        if (logs.length >= 15 && auteursUniques.size >= 3) {
-            slowmodeActifs.add(message.channel.id);
-            slowmodeTrackers.delete(message.channel.id);
+        if (warnState && now - warnState.warnedAt <= AUTO_SLOWMODE_WINDOW_MS) {
+            warnState.count = (warnState.count || 0) + 1;
 
-            const ancienSlowmode = message.channel.rateLimitPerUser || 0;
-            await message.channel.setRateLimitPerUser(10, 'Slowmode d\'urgence automatique').catch(() => {});
-            await message.channel.send('🛑 **Oula, le salon s\'emballe !** Slowmode temporaire de **10 secondes** activé pendant **3 minutes** pour apaiser les esprits.');
+            if (warnState.count >= AUTO_SLOWMODE_POST_WARN_THRESHOLD) {
+                slowmodeWarnStates.delete(chanId);
+                slowmodeTrackers.delete(chanId);
+                slowmodeActifs.add(chanId);
 
-            setTimeout(async () => {
-                await message.channel.setRateLimitPerUser(ancienSlowmode, 'Fin du slowmode d\'urgence').catch(() => {});
-                slowmodeActifs.delete(message.channel.id);
-                await message.channel.send('✅ **Fin du slowmode d\'urgence**, retour au rythme normal !').catch(() => {});
-            }, 3 * 60 * 1000);
+                const ancienSlowmode = message.channel.rateLimitPerUser || 0;
+                await message.channel.setRateLimitPerUser(AUTO_SLOWMODE_SECONDS, 'Slowmode automatique anti-spam continu').catch(() => {});
+
+                const stopRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`auto_slowmode_stop_${chanId}`)
+                        .setLabel('🔓 Retirer le slowmode')
+                        .setStyle(ButtonStyle.Secondary)
+                );
+
+                const slowmodeMsg = await message.channel.send({
+                    content:
+                        `🛑 **Slowmode automatique activé** : **${AUTO_SLOWMODE_SECONDS} secondes** pendant **10 minutes** *(le spam a continué après l'avertissement)*.\n` +
+                        `🛡️ *(Bouton ci-dessous réservé aux modérateurs)*`,
+                    components: [stopRow],
+                    flags: [MessageFlags.SuppressNotifications]
+                }).catch(() => null);
+
+                const timeout = setTimeout(async () => {
+                    const session = slowmodeSessions.get(chanId);
+                    if (!session) return;
+                    slowmodeSessions.delete(chanId);
+                    slowmodeActifs.delete(chanId);
+                    slowmodeTrackers.delete(chanId);
+                    slowmodeWarnStates.delete(chanId);
+
+                    await message.channel.setRateLimitPerUser(session.ancienSlowmode, 'Fin du slowmode automatique').catch(() => {});
+                    if (session.message) {
+                        await session.message.edit({
+                            content: '🛑 **Slowmode automatique terminé** *(les 10 minutes sont écoulées)*.',
+                            components: []
+                        }).catch(() => {});
+                    }
+                    await message.channel.send({
+                        content: '✅ **Fin du slowmode automatique**, retour au rythme normal !',
+                        flags: [MessageFlags.SuppressNotifications]
+                    }).catch(() => {});
+                }, AUTO_SLOWMODE_DURATION_MS);
+
+                slowmodeSessions.set(chanId, {
+                    timeout,
+                    message: slowmodeMsg,
+                    ancienSlowmode
+                });
+            }
+        } else {
+            if (warnState) slowmodeWarnStates.delete(chanId);
+
+            const logs = (slowmodeTrackers.get(chanId) || []).filter(ts => now - ts < AUTO_SLOWMODE_WINDOW_MS);
+            logs.push(now);
+            slowmodeTrackers.set(chanId, logs);
+
+            if (logs.length >= AUTO_SLOWMODE_WARN_THRESHOLD) {
+                slowmodeTrackers.delete(chanId);
+                slowmodeWarnStates.set(chanId, { warnedAt: now, count: 0 });
+                await message.channel.send({
+                    content: '**__Attention au spam__** ! Tout spam **continu** verra le salon d\'origine subir un **__slowmode__** !',
+                    flags: [MessageFlags.SuppressNotifications]
+                }).catch(() => {});
+            }
         }
     }
 
@@ -3661,6 +3775,12 @@ async function handleSecurityInteraction(interaction) {
             return interaction.reply({ content: "❌ Réservé aux modérateurs.", ephemeral: true });
         }
         const seconds = parseInt(interaction.values[0], 10) || 0;
+        await nettoyerBoutonAutoSlowmode(
+            interaction.channel.id,
+            seconds === 0
+                ? `✅ **Slowmode automatique retiré** par <@${interaction.user.id}> *(via \`!slowmode\`)*.`
+                : `🐢 **Slowmode automatique remplacé** par <@${interaction.user.id}> *(via \`!slowmode\`)*.`
+        );
         await interaction.channel.setRateLimitPerUser(seconds, `Slowmode défini par ${interaction.user.tag}`).catch(() => {});
 
         const resEmbed = new EmbedBuilder()
@@ -3683,10 +3803,51 @@ async function handleSecurityInteraction(interaction) {
         return true;
     }
 
+    // --- Bouton Modérateur : Retirer le slowmode automatique ---
+    if (interaction.isButton() && interaction.customId.startsWith('auto_slowmode_stop_')) {
+        if (!peutModerer(interaction.member)) {
+            return interaction.reply({ content: '❌ Seuls les modérateurs peuvent retirer le slowmode.', ephemeral: true });
+        }
+
+        const targetChanId = interaction.customId.replace('auto_slowmode_stop_', '');
+        const session = slowmodeSessions.get(targetChanId);
+
+        if (!session) {
+            slowmodeActifs.delete(targetChanId);
+            await interaction.update({
+                content: '✅ **Le slowmode automatique n\'est déjà plus actif.**',
+                components: []
+            }).catch(() => {});
+            return true;
+        }
+
+        clearTimeout(session.timeout);
+        slowmodeSessions.delete(targetChanId);
+        slowmodeActifs.delete(targetChanId);
+        slowmodeTrackers.delete(targetChanId);
+        slowmodeWarnStates.delete(targetChanId);
+
+        const restoreSeconds = session.ancienSlowmode || 0;
+        await interaction.channel.setRateLimitPerUser(restoreSeconds, `Slowmode automatique retiré par ${interaction.user.tag}`).catch(() => {});
+
+        await interaction.update({
+            content: `✅ **Slowmode automatique retiré** par <@${interaction.user.id}> *(${restoreSeconds > 0 ? `retour au slowmode initial de ${restoreSeconds}s` : 'retour au rythme normal'})*.`,
+            components: []
+        }).catch(() => {});
+
+        const logEmbed = new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle('🔓 Log — Slowmode auto retiré')
+            .setDescription(`• **Salon :** <#${targetChanId}>\n• **Modérateur :** <@${interaction.user.id}>`)
+            .setTimestamp();
+        await logModerationStaff(interaction.guild, logEmbed, { silent: true });
+        return true;
+    }
+
     // --- Bouton Déverrouiller sous l'embed de !lock ---
     if (interaction.isButton() && interaction.customId.startsWith('channel_unlock_')) {
         if (!peutModerer(interaction.member)) {
-            return interaction.reply({ content: "❌ Seuls les modérateurs peuvent déverrouiller ce salon.", ephemeral: true });
+            return interaction.reply({ content: "❌ Seul.es les modérateur.ices peuvent déverrouiller ce salon.", ephemeral: true });
         }
         const targetChanId = interaction.customId.replace('channel_unlock_', '');
         const everyoneRole = interaction.guild.roles.everyone;

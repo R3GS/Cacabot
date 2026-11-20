@@ -1242,14 +1242,14 @@ async function progressCommunityQuest(client, events, boosterOpenerId = null) {
         if (tcgChan) {
             const mentionsList = quest.participants.length > 0
                 ? quest.participants.map(id => `<@${id}>`).join(' ')
-                : '*Aucun·e participant·e*';
+                : '*Aucun·e participant.e*';
             const { nextResetTs } = getCurrentQuestWeekInfoParis();
             const embed = new EmbedBuilder()
                 .setColor(0x2ecc71)
                 .setTitle('🎉 QUÊTE COMMUNAUTAIRE TERMINÉE !')
                 .setDescription(
                     `Bravo la team ! L'objectif de la semaine a été atteint : ${quest.label} (**${quest.progress}/${quest.target}**)\n\n` +
-                    `🎁 **Récompenses distribuées à tous les participant·es :**\n` +
+                    `🎁 **Récompenses distribuées à tous les participant.es :**\n` +
                     `• **+2 Boosters communautaires** *(prêts à ouvrir, stock max ${MAX_COMMUNITY_BOOSTERS})*\n` +
                     `• **+15 points RegaDex**\n\n` +
                     `⏳ Prochaine quête communautaire : <t:${nextResetTs}:R>`
@@ -1258,7 +1258,7 @@ async function progressCommunityQuest(client, events, boosterOpenerId = null) {
                 .setTimestamp();
 
             await tcgChan.send({
-                content: `🎊 Félicitations aux participant·es : ${mentionsList}`,
+                content: `🎊 Félicitations aux participant.es : ${mentionsList}`,
                 embeds: [embed],
                 allowedMentions: { users: quest.participants }
             }).catch(() => {});
@@ -3107,12 +3107,12 @@ function buildHubEmbed(member, u) {
     const qPct = quest.target > 0 ? Math.min(100, Math.round((quest.progress / quest.target) * 100)) : 0;
     const qLines = quest.completed
         ? [
-            `• ✅ **Quête terminée !** *(Récompenses envoyées aux **${quest.participants.length}** participant·es)*`,
+            `• ✅ **Quête terminée !** *(Récompenses envoyées aux **${quest.participants.length}** participant.es)*`,
             `• 🔄 Prochaine quête : <t:${nextResetTs}:R>`
         ]
         : [
             `• Récompense : **2 boosters communautaires** + **15 pts**`,
-            `• Participant·es : **${quest.participants.length}** *(ouvre 1 booster pour participer)*`,
+            `• Participant.es : **${quest.participants.length}** *(ouvre 1 booster pour participer)*`,
             `• Fin : <t:${nextResetTs}:R>`
         ];
     embed.addFields({
@@ -5647,7 +5647,7 @@ function buildPostTradeDecisionPayload(trade) {
         .setColor(0x2ecc71)
         .setTitle('🤝 Échange terminé ! Que souhaitez-vous faire ?')
         .setDescription(
-            `Pour continuer ou clôturer le thread, les **deux** participants doivent faire le même choix :\n\n` +
+            `Pour continuer ou clôturer le thread, les **deux** participant.es doivent faire le même choix :\n\n` +
             `• <@${trade.initiatorId}> : ${labelVote(vA)}\n` +
             `• <@${trade.targetId}> : ${labelVote(vB)}\n\n` +
             (trade.tradeCount >= 1
@@ -5794,7 +5794,7 @@ function buildTradeUnfairConfirmPayload(trade) {
             `Cet échange ne contient pas le même nombre ou les mêmes raretés de cartes des deux côtés :\n\n` +
             `• **<@${idA}>** (${offerA.length}) : ${fmtRarities(offerA)}\n` +
             `• **<@${idB}>** (${offerB.length}) : ${fmtRarities(offerB)}\n\n` +
-            `Confirmez-vous cet échange ? Les **deux** participants doivent valider :\n` +
+            `Confirmez-vous cet échange ? Les **deux** participant.es doivent valider :\n` +
             `• <@${idA}> : ${vA ? '✅ Confirmé' : '⏳ En attente'}\n` +
             `• <@${idB}> : ${vB ? '✅ Confirmé' : '⏳ En attente'}`
         );
@@ -5832,8 +5832,8 @@ async function executeTradeIfBothLocked(thread, trade, client) {
         await sendSilent(
             thread,
             freeMode
-                ? "❌ **Échange bloqué :** au moins un·e participant·e doit proposer **1 carte**."
-                : "❌ **Échange bloqué :** les **deux** participants doivent obligatoirement proposer au moins **1 carte** en doublon *(les dons à sens unique sont interdits)*."
+                ? "❌ **Échange bloqué :** au moins un·e participant.e doit proposer **1 carte**."
+                : "❌ **Échange bloqué :** les **deux** participant.es doivent obligatoirement proposer au moins **1 carte** en doublon *(les dons à sens unique sont interdits)*."
         ).catch(() => {});
         return false;
     }
@@ -9156,7 +9156,7 @@ async function handleTcgInteraction(interaction) {
         }
 
         if (interaction.user.id !== trade.initiatorId && interaction.user.id !== trade.targetId) {
-            await interaction.reply({ content: "❌ Seuls les deux participants de l'échange peuvent utiliser ces contrôles.", ephemeral: true });
+            await interaction.reply({ content: "❌ Seul.es les deux participant.es de l'échange peuvent utiliser ces contrôles.", ephemeral: true });
             return true;
         }
 
@@ -9429,7 +9429,7 @@ async function handleTcgInteraction(interaction) {
             return true;
         }
         if (interaction.user.id !== trade.initiatorId && interaction.user.id !== trade.targetId) {
-            await interaction.reply({ content: "Seuls les deux participants peuvent voter !", ephemeral: true });
+            await interaction.reply({ content: "Seul.es les deux participant.es peuvent voter !", ephemeral: true });
             return true;
         }
 
