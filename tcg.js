@@ -80,7 +80,7 @@ const COMPLETION_MILESTONES = [
     { pct: 75, reward: 15 },
     { pct: 100, reward: 25 }
 ];
-const BOOSTER_GIF_DELAY_MS = 4000; // 4 secondes
+const BOOSTER_GIF_DELAY_MS = 3000; // 3 secondes
 const CARD_3_AUTO_RECAP_MS = 10 * 1000; // 10 secondes sur la carte 3 avant récap auto
 const TRADE_INACTIVITY_MS = 24 * 60 * 60 * 1000; // 24h
 const GOD_PACK_BASE_CHANCE = 0.01; // 1% de base
@@ -4327,17 +4327,33 @@ function buildStorePayload(member, u, fromHub = false) {
         storeBtn('negativeTransform', 'Full Art → Négative', '🕳️')
     );
 
-    const row3 = new ActionRowBuilder().addComponents(
+    const storeButtons = [
+        ...row.components,
+        ...row2.components,
         new ButtonBuilder()
             .setCustomId(`tcg:claim:open:${member.id}:1`)
             .setLabel('Mon Inventaire')
             .setEmoji('🎒')
-            .setStyle(ButtonStyle.Secondary),
-        buildAccueilButton(member.id),
-        buildCloseButton(member.id)
+            .setStyle(ButtonStyle.Secondary)
+    ];
+
+    const storeRows = [];
+    for (let i = 0; i < storeButtons.length; i += 3) {
+        storeRows.push(
+            new ActionRowBuilder().addComponents(
+                ...storeButtons.slice(i, i + 3)
+            )
+        );
+    }
+
+    storeRows.push(
+        new ActionRowBuilder().addComponents(
+            buildAccueilButton(member.id),
+            buildCloseButton(member.id)
+        )
     );
 
-    return { embeds: [embed], components: [row, row2, row3] };
+    return { embeds: [embed], components: storeRows };
 }
 
 function buildClaimPayload(member, u, fromHub = false) {
