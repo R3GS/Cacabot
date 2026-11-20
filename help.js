@@ -157,7 +157,8 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
                 `\`!rgdxcooldown reset [@membre/ID]\` *(ou \`!tcgcooldown\` / \`!regadexcooldown\`)* • Remet le stock gratuit à 2/2\n\n` +
                 `### 🪙 Points & Cartes\n` +
                 `\`!rgdxpts give [@membre/ID] [nb]\` / \`set\` *(ou \`!tcgpts\` / \`!regadexpts\`)* • Gérer les points\n` +
-                `\`!rgdxcard give [@membre/ID] [carte]\` / \`remove\` *(ou \`!tcgcard\` / \`!regadexcard\`)* • Gérer les cartes\n` +
+                `\`!rgdxcard give [@membre/ID] [carte]\` / \`remove\` *(ou \`!tcgcard\` / \`!regadexcard\`)* • Gérer les cartes *(compatible \`Spé-01\`)*\n` +
+                `\`!tcgperso\` *(ou \`!rgdxperso\` / \`!cartesperso\`)* • Visualiser toutes les Cartes Perso (\`TCG/Cartes Perso\`) & leurs propriétaires\n` +
                 `\`!tcgpunition [@membre/ID/pseudo]\` • Réduire ou bloquer les pulls Épiques / Légendaires / Full Art / Négatives d'un·e membre\n\n` +
                 `\`!tcgpullchance\` • Augmenter les chances de pull d'une carte *(membre ou rôle Collectionneur.euse)*\n\n` +
                 `\`!tcgtradeopen5min\` *(ou \`off\`)* • Lève tous les critères d'échange pendant **5 min** *(invisible pour les membres dans les échanges)*\n\n` +
@@ -165,8 +166,8 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
                 `\`!tcgx [sous-cmd]\` *(hub, open, store, claim, classeur, carte, flex, top, reset)* • Bac à sable isolé *(109/109 cartes x5, 999k pts)*\n` +
                 `\`!tcgmastertest\` • \`!tcggodpacktest\` • \`!tcgtradetest [1-3]\` • Tester les visuels Maître du Set, God Pack & Trade\n` +
                 `\`!tcgopenlast\` *(ou \`!tcglastopen\`)* • Voir le récap des 20 dernières ouvertures + détail par sélection\n` +
-                `\`!rgdxproxies\` *(ou \`!tcgproxies\`)* • Diagnostic du volume \`TCG/Proxies\` & poids par format\n` +
-                `\`!rgdxproxies warmup\` • Pré-génère toutes les miniatures & lueurs sur le volume *(1 seule fois)*\n` +
+                `\`!rgdxproxies\` *(ou \`!tcgproxies\`)* • Diagnostic \`TCG/Proxies\` + menu pour générer Set par Set ou Cartes Perso\n` +
+                `\`!rgdxproxies warmup [1|perso|all]\` • Pré-génère les miniatures & lueurs sur le volume *(ou via le menu)*\n` +
                 `\`!rgdxproxies purge\` • Vide le cache disque pour forcer la régénération`
             );
     }

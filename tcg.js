@@ -153,7 +153,8 @@ const RARITY_ORDER = {
     'Épique': 2,
     'Légendaire': 3,
     'Full Art': 4,
-    'Négative': 5
+    'Négative': 5,
+    'Personnalisée': 6
 };
 const RARITY_WEIGHTS = {
     'Commune': 65,
@@ -169,7 +170,8 @@ const RARITY_META = {
     'Épique': { color: 0x9b59b6, hex: '#A855F7', glow: 'rgba(168, 85, 247, 0.55)', emoji: '🟣' },
     'Légendaire': { color: 0xf1c40f, hex: '#F1C40F', glow: 'rgba(241, 196, 15, 0.55)', emoji: '🟡' },
     'Full Art': { color: 0xffffff, hex: '#FFFFFF', glow: 'rgba(255, 255, 255, 0.55)', emoji: '🌈' },
-    'Négative': { color: 0x2ecc71, hex: '#2ECC71', glow: 'rgba(46, 204, 113, 0.55)', emoji: '🕳️' }
+    'Négative': { color: 0x2ecc71, hex: '#2ECC71', glow: 'rgba(46, 204, 113, 0.55)', emoji: '🕳️' },
+    'Personnalisée': { color: 0xff6b9d, hex: '#FF6B9D', glow: 'rgba(255, 107, 157, 0.65)', emoji: '🌟' }
 };
 
 const CATEGORIES = ['Items', 'Personnages', 'Références'];
@@ -336,6 +338,7 @@ function getStoreData() {
 const TCG_ROOT = path.resolve(process.cwd(), 'TCG');
 const TCG_ASSETS_DIR = path.join(TCG_ROOT, 'Assets');
 const TCG_SET1_DIR = path.join(TCG_ROOT, 'Set 1');
+const TCG_PERSO_DIR = path.join(TCG_ROOT, 'Cartes Perso');
 const TCG_PROXIES_DIR = path.join(TCG_ROOT, 'Proxies'); // Volume persistant (/app/TCG/Proxies)
 
 const PROXY_TTL_MS = 2 * 60 * 1000; // Micro-cache RAM éphémère de 2 min sur les miniatures uniquement
@@ -344,6 +347,14 @@ const PROXY_MAX_RAM_ITEMS = 120;
 let cardCatalog = [];
 let cardById = new Map();
 let cardByNumCode = new Map();
+let persoCatalog = [];
+let persoById = new Map();
+let persoByNumValue = new Map();
+
+function getCardByIdAny(id) {
+    if (!id) return null;
+    return cardById.get(id) || persoById.get(id) || null;
+}
 let setAssets = {}; // [SET 2] Map setNumber -> { openingGif, boosterPng, eventBanner, logo }
 let assetPaths = {
     openingGif: null,
@@ -461,6 +472,41 @@ function parseCardFilename(filename, category, folderRarity, setNumber = DEFAULT
         rarity,
         isHolo,
         isNegative,
+        holoCounterpartId: null,
+        baseCounterpartId: null,
+        filePath: null,
+        filename
+    };
+}
+
+function parsePersoCardFilename(filename) {
+    if (!filename.toLowerCase().endsWith('.png')) return null;
+    const match = filename.match(/^sp[eé]\s*-\s*(\d+)(?:\s*-\s*|\s+)(.+)\.png$/iu);
+    if (!match) return null;
+
+    const rawDigits = match[1];
+    const numValue = parseInt(rawDigits, 10);
+    if (!Number.isFinite(numValue) || numValue <= 0) return null;
+
+    const id = `Spé-${rawDigits}`;
+    const rawName = match[2].trim();
+
+    return {
+        id,
+        setNumber: 'perso',
+        numCode: id,
+        numValue,
+        sortIndex: 9000000 + numValue,
+        name: rawName,
+        baseName: rawName,
+        normalizedName: normalizeText(rawName),
+        normalizedDisplayName: normalizeText(rawName),
+        normalizedBaseName: normalizeText(rawName),
+        category: 'Cartes Perso',
+        rarity: 'Personnalisée',
+        isPerso: true,
+        isHolo: false,
+        isNegative: false,
         holoCounterpartId: null,
         baseCounterpartId: null,
         filePath: null,
@@ -611,10 +657,41 @@ async function scanSet1Cards(client = null) {
         }
     }
 
+    const newPersoCatalog = [];
+    const newPersoById = new Map();
+    const newPersoByNumValue = new Map();
+    if (fs.existsSync(TCG_PERSO_DIR)) {
+        const persoFiles = fs.readdirSync(TCG_PERSO_DIR).filter(f => !f.startsWith('.'));
+        for (const file of persoFiles) {
+            const fullPath = path.join(TCG_PERSO_DIR, file);
+            if (fs.statSync(fullPath).isDirectory()) continue;
+
+            const parsed = parsePersoCardFilename(file);
+            if (!parsed) {
+                unrecognizedFiles.push(`TCG/Cartes Perso/${file}`);
+                continue;
+            }
+            parsed.filePath = fullPath;
+
+            if (newPersoByNumValue.has(parsed.numValue)) {
+                duplicateCodes.push(`${parsed.id} (${file} vs ${newPersoByNumValue.get(parsed.numValue).filename})`);
+                continue;
+            }
+
+            newPersoCatalog.push(parsed);
+            newPersoById.set(parsed.id, parsed);
+            newPersoByNumValue.set(parsed.numValue, parsed);
+        }
+    }
+    newPersoCatalog.sort((a, b) => a.numValue - b.numValue);
+
     newCatalog.sort((a, b) => a.sortIndex - b.sortIndex);
     cardCatalog = newCatalog;
     cardById = newById;
     cardByNumCode = newByNumCode;
+    persoCatalog = newPersoCatalog;
+    persoById = newPersoById;
+    persoByNumValue = newPersoByNumValue;
     proxyRamCache.clear();
     if (proxyRamClearTimer) {
         clearTimeout(proxyRamClearTimer);
@@ -622,7 +699,7 @@ async function scanSet1Cards(client = null) {
     }
     hotBuffers.clear();
 
-    console.log(`🃏 RegaDex ${SET1_NAME} scanné : ${cardCatalog.length}/109 cartes reconnues.`);
+    console.log(`🃏 RegaDex ${SET1_NAME} scanné : ${cardCatalog.length}/109 cartes reconnues (+ ${persoCatalog.length} carte(s) perso).`);
 
     const hasProblem =
         missingAssets.length > 0 ||
@@ -1657,8 +1734,21 @@ function resolveCardQuery(rawQuery, preferredSetNumber = null) {
     const q = rawQuery.trim();
     if (!q) return { card: null, matches: [], isCodeQuery: false };
 
-    // 1. Format explicite 1-48, 2-48, 1-Ø12, Ø12, 48 ([SET 2] multi-sets)
     const cleaned = q.replace(/^#/, '').trim();
+
+    // 0. Format Carte Perso : Spé-01, Spe-1, Spé 01
+    const persoMatch = cleaned.match(/^sp[eé]\s*[-]?\s*(\d+)$/iu);
+    if (persoMatch) {
+        const rawDigits = persoMatch[1];
+        const numVal = parseInt(rawDigits, 10);
+        const exactPerso = persoCatalog.find(c => c.id.toLowerCase() === `spé-${rawDigits}`.toLowerCase())
+            || persoByNumValue.get(numVal)
+            || null;
+        if (exactPerso) return { card: exactPerso, matches: [exactPerso], isCodeQuery: true };
+        return { card: null, matches: [], isCodeQuery: true };
+    }
+
+    // 1. Format explicite 1-48, 2-48, 1-Ø12, Ø12, 48 ([SET 2] multi-sets)
     const codeMatch = cleaned.match(/^(?:(\d+)\s*-\s*)?(Ø|O)?\s*(\d+)$/iu);
     if (codeMatch) {
         const explicitSet = codeMatch[1] ? parseInt(codeMatch[1], 10) : null;
@@ -1686,15 +1776,16 @@ function resolveCardQuery(rawQuery, preferredSetNumber = null) {
         }
     }
 
-    // 2. Recherche par nom exact puis partiel
+    // 2. Recherche par nom exact puis partiel (Sets + Cartes Perso)
     const normQ = normalizeText(q);
     if (!normQ) return { card: null, matches: [], isCodeQuery: false };
+    const allSearchable = [...cardCatalog, ...persoCatalog];
 
-    const exact = cardCatalog.filter(c => c.normalizedName === normQ || c.normalizedDisplayName === normQ);
+    const exact = allSearchable.filter(c => c.normalizedName === normQ || c.normalizedDisplayName === normQ);
     if (exact.length === 1) return { card: exact[0], matches: exact, isCodeQuery: false };
     if (exact.length > 1) return { card: null, matches: exact, isCodeQuery: false };
 
-    const partial = cardCatalog.filter(c =>
+    const partial = allSearchable.filter(c =>
         c.normalizedName.includes(normQ) ||
         (c.normalizedDisplayName && c.normalizedDisplayName.includes(normQ)) ||
         c.id.toLowerCase() === cleaned.toLowerCase()
@@ -2115,6 +2206,14 @@ async function getOrCreateProxyImage(sourcePath, proxyPath, targetW, targetH, fx
 }
 
 function getCardProxyPath(card, targetW, targetH) {
+    if (card.isPerso) {
+        return path.join(
+            TCG_PROXIES_DIR,
+            'Cartes Perso',
+            `${targetW}x${targetH}`,
+            card.filename
+        );
+    }
     return path.join(
         TCG_PROXIES_DIR,
         `Set ${card.setNumber || 1}`,
@@ -2210,6 +2309,20 @@ function normalizeBinderOwnedMode(val) {
 }
 
 function getFilteredSortedCards(categoryFilter, sortMode, u = null, ownedModeInput = '0', rarityCode = 'all', setNumber = DEFAULT_SET_NUMBER) {
+    if (categoryFilter === 'perso') {
+        let list = u ? persoCatalog.filter(c => (u.cards?.[c.id] || 0) > 0) : [];
+        const ownedMode = normalizeBinderOwnedMode(ownedModeInput);
+        if (ownedMode === '2' && u) {
+            list = list.filter(c => (u.cards?.[c.id] || 0) >= 2);
+        }
+        if (sortMode === 'quantity' && u) {
+            list.sort((a, b) => ((u.cards?.[b.id] || 0) - (u.cards?.[a.id] || 0)) || (a.numValue - b.numValue));
+        } else {
+            list.sort((a, b) => a.numValue - b.numValue);
+        }
+        return list;
+    }
+
     const baseList = getSetCatalog(setNumber); // [SET 2] Filtre sur le Set affiché
     let list = categoryFilter === 'complet'
         ? [...baseList]
@@ -2323,15 +2436,18 @@ async function renderBinderCanvas(targetUser, u, options) {
     const slice = cardsList.slice(safePage * grid.perPage, (safePage + 1) * grid.perPage);
 
     // En-tête (LEMON MILK Bold)
+    const isPersoView = category === 'perso';
     const setCfg = getSetConfig(setNumber);
     const ownedInView = allCategoryCards.filter(c => (u.cards?.[c.id] || 0) > 0).length;
     const totalInView = allCategoryCards.length;
     const pct = totalInView > 0 ? Math.round((ownedInView / totalInView) * 100) : 0;
-    const rarityLabel = BINDER_RARITY_CODES[rarityFilter];
-    const baseLabel = category === 'complet' ? `RegaDex • ${setCfg.shortName}` : `RegaDex • ${category}`;
+    const rarityLabel = isPersoView ? null : BINDER_RARITY_CODES[rarityFilter];
+    const baseLabel = isPersoView
+        ? 'RegaDex • Cartes Perso'
+        : (category === 'complet' ? `RegaDex • ${setCfg.shortName}` : `RegaDex • ${category}`);
     const headerTags = [];
     if (rarityLabel) headerTags.push(rarityLabel);
-    if (ownedMode === '1') headerTags.push('Possédées');
+    if (ownedMode === '1' && !isPersoView) headerTags.push('Possédées');
     else if (ownedMode === '2') headerTags.push('Doublons');
     const headerLabel = headerTags.length > 0 ? `${baseLabel} (${headerTags.join(' • ')})` : baseLabel;
 
@@ -2359,12 +2475,14 @@ async function renderBinderCanvas(targetUser, u, options) {
     ctx.font = 'bold 20px "LemonMilk", "Sans"';
     const rightSummary = ownedMode === '2'
         ? `${cardsList.length} doublon${cardsList.length > 1 ? 's' : ''}  •  Page ${safePage + 1}/${totalPages}`
-        : `${ownedInView}/${totalInView} (${pct}%)  •  Page ${safePage + 1}/${totalPages}`;
+        : (isPersoView
+            ? `${ownedInView} carte${ownedInView > 1 ? 's' : ''} perso  •  Page ${safePage + 1}/${totalPages}`
+            : `${ownedInView}/${totalInView} (${pct}%)  •  Page ${safePage + 1}/${totalPages}`);
     ctx.fillText(rightSummary, W - 56, 49, maxSideW);
 
     // Logo du Set en premier plan, petit et centré tout en haut ([SET 2] dynamique par Set)
     const activeLogoPath = setAssets[setNumber]?.logo || assetPaths.set1Logo;
-    if (activeLogoPath) {
+    if (!isPersoView && activeLogoPath) {
         const logoProxy = await loadAssetProxy(activeLogoPath, logoW, logoH, { cacheKey: `Set${setNumber}_Logo_header.png` });
         if (logoProxy?.img) {
             ctx.drawImage(logoProxy.img, logoX - logoProxy.pad, logoY - logoProxy.pad);
@@ -2785,7 +2903,7 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
 
     // 5. Colonne droite : Ensemble ("CARTE FLEXÉE" + Carte pleine résolution + Nom) centré sur la méridienne
     const rightCenterX = W - 330;
-    const flexCard = (u?.favoriteCardId && (u?.cards?.[u.favoriteCardId] || 0) > 0 && cardById.get(u.favoriteCardId))
+    const flexCard = (u?.favoriteCardId && (u?.cards?.[u.favoriteCardId] || 0) > 0 && getCardByIdAny(u.favoriteCardId))
         || cardById.get(EPSYS_FULL_ART_CARD_ID)
         || cardCatalog[0];
 
@@ -3037,7 +3155,7 @@ function buildHubEmbed(member, u) {
     if (u.pityRare) activeEffects.push('✨ **Pity Rare garantie**');
 
     const favCard = u.favoriteCardId && (u.cards?.[u.favoriteCardId] || 0) > 0
-        ? cardById.get(u.favoriteCardId)
+        ? getCardByIdAny(u.favoriteCardId)
         : null;
 
     const boosterLines = [
@@ -4679,24 +4797,39 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
 
 function buildBinderComponents(ownerId, viewerId, options, totalPages, ownerTheme = 'B') {
     const { setNumber = DEFAULT_SET_NUMBER, category, perPageMode, page, sortMode, rarityFilter = 'all', fromHub = false } = options;
+    const isPersoView = category === 'perso';
     const ownedMode = normalizeBinderOwnedMode(options.ownedMode ?? options.ownedOnly);
     const hubFlag = fromHub ? '1' : '0';
     const ownedFlag = ownedMode;
 
-    const effectiveSort = (rarityFilter !== 'all' && sortMode === 'rarity') ? 'number' : sortMode;
+    const effectiveSort = (isPersoView && sortMode === 'rarity')
+        ? 'number'
+        : ((rarityFilter !== 'all' && sortMode === 'rarity') ? 'number' : sortMode);
     const setCfg = getSetConfig(setNumber);
     const setCardsAll = getSetCatalog(setNumber);
     const countCat = (cat) => setCardsAll.filter(c => c.category === cat).length;
 
+    const uOwner = getOrCreateTcgUser(ownerId);
+    const ownedPersoCount = persoCatalog.filter(c => (uOwner.cards?.[c.id] || 0) > 0).length;
+    const catOptions = [
+        { label: `Complet ${setCfg.name} (${setCardsAll.length} cartes)`, value: 'complet', emoji: '📚', default: category === 'complet' },
+        { label: `Items (${countCat('Items')} cartes)`, value: 'Items', emoji: '🧰', default: category === 'Items' },
+        { label: `Personnages (${countCat('Personnages')} cartes)`, value: 'Personnages', emoji: '🧑', default: category === 'Personnages' },
+        { label: `Références (${countCat('Références')} cartes)`, value: 'Références', emoji: '🎬', default: category === 'Références' }
+    ];
+    if (ownedPersoCount > 0 || isPersoView) {
+        catOptions.push({
+            label: `Cartes Perso (${ownedPersoCount} carte${ownedPersoCount > 1 ? 's' : ''})`,
+            value: 'perso',
+            emoji: '🌟',
+            default: isPersoView
+        });
+    }
+
     const catMenu = new StringSelectMenuBuilder()
         .setCustomId(`tcg:bcat:${ownerId}:${viewerId}:${perPageMode}:${effectiveSort}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
         .setPlaceholder('Choisir un classeur...')
-        .addOptions([
-            { label: `Complet ${setCfg.name} (${setCardsAll.length} cartes)`, value: 'complet', emoji: '📚', default: category === 'complet' },
-            { label: `Items (${countCat('Items')} cartes)`, value: 'Items', emoji: '🧰', default: category === 'Items' },
-            { label: `Personnages (${countCat('Personnages')} cartes)`, value: 'Personnages', emoji: '🧑', default: category === 'Personnages' },
-            { label: `Références (${countCat('Références')} cartes)`, value: 'Références', emoji: '🎬', default: category === 'Références' }
-        ]);
+        .addOptions(catOptions);
 
     const nextPerPage = perPageMode === '4' ? '18' : (perPageMode === '18' ? '36' : (perPageMode === '36' ? 'all' : '4'));
     const sizeLabel = perPageMode === 'all' ? 'All' : perPageMode;
@@ -4751,19 +4884,22 @@ function buildBinderComponents(ownerId, viewerId, options, totalPages, ownerThem
             ? { label: 'Affichage : Possédées', emoji: '✅', style: ButtonStyle.Primary }
             : { label: 'Affichage : Tout', emoji: '👁️', style: ButtonStyle.Secondary });
 
+    const persoSortNext = effectiveSort === 'number' ? 'quantity' : 'number';
     const filterRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`tcg:bowned:${ownerId}:${viewerId}:${category}:${perPageMode}:${effectiveSort}:${rarityFilter}:${hubFlag}:${nextOwnedMode}`)
             .setLabel(ownedBtnCfg.label)
             .setEmoji(ownedBtnCfg.emoji)
-            .setStyle(ownedBtnCfg.style),
+            .setStyle(ownedBtnCfg.style)
+            .setDisabled(isPersoView),
         new ButtonBuilder()
             .setCustomId(`tcg:brarity:${ownerId}:${viewerId}:${category}:${perPageMode}:${nextRarity}:${nextRarity !== 'all' && effectiveSort === 'rarity' ? 'number' : effectiveSort}:${hubFlag}:${ownedFlag}`)
             .setLabel(rBtn.label)
             .setEmoji(rBtn.emoji)
-            .setStyle(rBtn.style),
+            .setStyle(rBtn.style)
+            .setDisabled(isPersoView),
         new ButtonBuilder()
-            .setCustomId(`tcg:bsort:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${nextSort}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
+            .setCustomId(`tcg:bsort:${ownerId}:${viewerId}:${category}:${perPageMode}:${page}:${isPersoView ? persoSortNext : nextSort}:${rarityFilter}:${hubFlag}:${ownedFlag}`)
             .setLabel(currentSortLabel)
             .setEmoji('🔀')
             .setStyle(ButtonStyle.Primary),
@@ -4797,15 +4933,16 @@ async function buildBinderReplyPayload(ownerMember, viewerId, options = {}) {
     const ownerUser = ownerMember.user || ownerMember;
     const u = getOrCreateTcgUser(ownerMember.id);
     const rawPerPage = options.perPageMode || '18';
-    const rarityFilter = BINDER_RARITY_CODES[options.rarityFilter] !== undefined ? options.rarityFilter : 'all';
+    const isPersoCat = options.category === 'perso';
+    const rarityFilter = isPersoCat ? 'all' : (BINDER_RARITY_CODES[options.rarityFilter] !== undefined ? options.rarityFilter : 'all');
     const rawSort = options.sortMode || 'number';
-    const ownedMode = normalizeBinderOwnedMode(options.ownedMode ?? options.ownedOnly);
+    const ownedMode = isPersoCat ? '0' : normalizeBinderOwnedMode(options.ownedMode ?? options.ownedOnly);
     const opts = {
         setNumber: options.setNumber || DEFAULT_SET_NUMBER, // [SET 2]
         category: options.category || 'complet',
         perPageMode: rawPerPage === '9' ? '4' : rawPerPage,
         page: options.page || 0,
-        sortMode: (rarityFilter !== 'all' && rawSort === 'rarity') ? 'number' : rawSort,
+        sortMode: (isPersoCat && rawSort === 'rarity') ? 'number' : ((rarityFilter !== 'all' && rawSort === 'rarity') ? 'number' : rawSort),
         rarityFilter,
         ownedMode,
         fromHub: Boolean(options.fromHub)
@@ -4815,14 +4952,18 @@ async function buildBinderReplyPayload(ownerMember, viewerId, options = {}) {
     opts.page = rendered.safePage;
     const rarityLabel = BINDER_RARITY_CODES[opts.rarityFilter];
     const ownedTag = opts.ownedMode === '2' ? ' *(Doublons x2+)*' : (opts.ownedMode === '1' ? ' *(Possédées)*' : '');
+    const catTitle = isPersoCat ? 'Cartes Perso' : (opts.category === 'complet' ? getSetConfig(opts.setNumber).name : opts.category);
+    const countTxt = isPersoCat
+        ? `**${rendered.ownedInView}** carte${rendered.ownedInView > 1 ? 's' : ''}`
+        : `**${rendered.ownedInView}/${rendered.totalInView}** cartes`;
 
     const embed = new EmbedBuilder()
         .setColor(u.theme === 'W' ? 0xecf0f1 : 0x2c3e50)
         .setAuthor({ name: `Classeur de ${ownerMember.displayName || ownerUser.username}`, iconURL: ownerUser.displayAvatarURL({ dynamic: true }) })
         .setDescription(
-            `📖 **${opts.category === 'complet' ? getSetConfig(opts.setNumber).name : opts.category}**` +
+            `📖 **${catTitle}**` +
             `${rarityLabel ? ` • 💎 **${rarityLabel}**` : ''}` +
-            `${ownedTag} • **${rendered.ownedInView}/${rendered.totalInView}** cartes • Tri : **${opts.sortMode === 'rarity' ? 'Rareté' : (opts.sortMode === 'quantity' ? 'Quantité' : 'Numéro')}**`
+            `${ownedTag} • ${countTxt} • Tri : **${opts.sortMode === 'rarity' ? 'Rareté' : (opts.sortMode === 'quantity' ? 'Quantité' : 'Numéro')}**`
         )
         .setImage('attachment://regadex_classeur.jpg')
         .setFooter({ text: `Page ${rendered.safePage + 1}/${rendered.totalPages} • Mode ${u.theme === 'W' ? 'Clair (W)' : 'Nuit (B)'} • Classeur d'un membre : !classeur @membre` });
@@ -4847,17 +4988,21 @@ function buildBinderInspectPayload(card, ownerId, viewerId, binderMsgId) {
         extraLines += `\n🃏 **Version Classique :** \`${card.baseCounterpartId}\` *(x${u.cards[card.baseCounterpartId]})*`;
     }
 
+    const rarityDesc = card.isPerso
+        ? `🌟 **Rareté :** **${card.rarity}** *(Unique & Non échangeable)*`
+        : `✨ **Rareté :** **${card.rarity}**${card.isHolo ? ' *(Holographique — 2× plus rare)*' : ''}`;
+
     const embed = new EmbedBuilder()
         .setColor(meta.color)
         .setTitle(`${meta.emoji} ${card.id} — ${card.name}`)
         .setDescription(
             `📁 **Catégorie :** ${card.category}\n` +
-            `✨ **Rareté :** **${card.rarity}**${card.isHolo ? ' *(Holographique — 2× plus rare)*' : ''}\n` +
+            `${rarityDesc}\n` +
             `📦 **Dans ton RegaDex :** \`x${qty}\`` +
             extraLines
         )
         .setImage('attachment://carte_regadex.png')
-        .setFooter({ text: `RegaDex ${SET1_NAME} • Inspection depuis le classeur` });
+        .setFooter({ text: card.isPerso ? 'RegaDex • Cartes Perso • Inspection depuis le classeur' : `RegaDex ${SET1_NAME} • Inspection depuis le classeur` });
 
     const files = [];
     if (card.filePath && fs.existsSync(card.filePath)) {
@@ -4878,24 +5023,31 @@ function buildBinderInspectPayload(card, ownerId, viewerId, binderMsgId) {
             .setLabel(isAlreadyFlex ? 'Flex actuel' : 'Définir Flex')
             .setEmoji('⭐')
             .setStyle(isAlreadyFlex ? ButtonStyle.Success : ButtonStyle.Secondary)
-            .setDisabled(isAlreadyFlex || qty <= 0),
-        new ButtonBuilder()
-            .setCustomId(`tcg:wish:toggle:${card.id}:${ownerId}:binspect:${binderMsgId}`)
-            .setLabel(inWishlist ? 'Dans la Wishlist' : '+ Wishlist')
-            .setEmoji(inWishlist ? '💔' : '❤️')
-            .setStyle(inWishlist ? ButtonStyle.Success : ButtonStyle.Secondary)
-            .setDisabled(!inWishlist && wishlistFull)
+            .setDisabled(isAlreadyFlex || qty <= 0)
     );
+    if (!card.isPerso) {
+        row1.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tcg:wish:toggle:${card.id}:${ownerId}:binspect:${binderMsgId}`)
+                .setLabel(inWishlist ? 'Dans la Wishlist' : '+ Wishlist')
+                .setEmoji(inWishlist ? '💔' : '❤️')
+                .setStyle(inWishlist ? ButtonStyle.Success : ButtonStyle.Secondary)
+                .setDisabled(!inWishlist && wishlistFull)
+        );
+    }
 
-    const canTransformHolo = !card.isHolo && Boolean(card.holoCounterpartId) && qty >= 1 && (u.inventory?.holoTransform || 0) >= 1;
+    const canTransformHolo = !card.isPerso && !card.isHolo && Boolean(card.holoCounterpartId) && qty >= 1 && (u.inventory?.holoTransform || 0) >= 1;
 
-    const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId(`tcg:carddups:${card.id}:${viewerId}`)
-            .setLabel('Qui l\'a en doublon ?')
-            .setEmoji('👥')
-            .setStyle(ButtonStyle.Secondary)
-    );
+    const row2 = new ActionRowBuilder();
+    if (!card.isPerso) {
+        row2.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tcg:carddups:${card.id}:${viewerId}`)
+                .setLabel('Qui l\'a en doublon ?')
+                .setEmoji('👥')
+                .setStyle(ButtonStyle.Secondary)
+        );
+    }
     if (canTransformHolo) {
         row2.addComponents(
             new ButtonBuilder()
@@ -4917,9 +5069,12 @@ function buildSingleCardPayload(card, viewerId, options = {}) {
     const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
     const u = getOrCreateTcgUser(viewerId);
     const qty = u.cards?.[card.id] || 0;
-    const activeSetNumber = options.setNumber || card.setNumber || DEFAULT_SET_NUMBER;
-    const setCfg = getSetConfig(activeSetNumber);
-    const setOwned = getSetCatalog(activeSetNumber).filter(c => (u.cards?.[c.id] || 0) > 0);
+    const isPersoCard = Boolean(card.isPerso) || options.setNumber === 'perso';
+    const activeSetNumber = isPersoCard ? 'perso' : (options.setNumber || card.setNumber || DEFAULT_SET_NUMBER);
+    const setCfg = isPersoCard ? { name: 'Cartes Perso', shortName: 'Perso' } : getSetConfig(Number(activeSetNumber));
+    const setOwned = isPersoCard
+        ? persoCatalog.filter(c => (u.cards?.[c.id] || 0) > 0)
+        : getSetCatalog(Number(activeSetNumber)).filter(c => (u.cards?.[c.id] || 0) > 0);
     const ownedCards = setOwned.length > 0 ? setOwned : cardCatalog.filter(c => (u.cards?.[c.id] || 0) > 0);
     const currentIdx = Math.max(0, ownedCards.findIndex(c => c.id === card.id));
     const canNav = ownedCards.length > 1;
@@ -4933,12 +5088,16 @@ function buildSingleCardPayload(card, viewerId, options = {}) {
         extraLines += `\n🃏 **Version Classique :** \`${card.baseCounterpartId}\` *(x${u.cards[card.baseCounterpartId]})*`;
     }
 
+    const rarityDesc = card.isPerso
+        ? `🌟 **Rareté :** **${card.rarity}** *(Unique & Non échangeable)*`
+        : `✨ **Rareté :** **${card.rarity}**${card.isHolo ? ' *(Holographique — 2× plus rare)*' : ''}`;
+
     const embed = new EmbedBuilder()
         .setColor(meta.color)
         .setTitle(`${meta.emoji} ${card.id} — ${card.name}`)
         .setDescription(
             `📁 **Catégorie :** ${card.category}\n` +
-            `✨ **Rareté :** **${card.rarity}**${card.isHolo ? ' *(Holographique — 2× plus rare)*' : ''}\n` +
+            `${rarityDesc}\n` +
             `📦 **Dans ton RegaDex :** \`x${qty}\`` +
             extraLines
         )
@@ -4957,6 +5116,8 @@ function buildSingleCardPayload(card, viewerId, options = {}) {
     const inWishlist = getSanitizedWishlist(u).includes(card.id);
     const wishlistFull = getSanitizedWishlist(u).length >= MAX_WISHLIST;
     const activeSets = getActiveSets();
+    const ownedPersoCount = persoCatalog.filter(c => (u.cards?.[c.id] || 0) > 0).length;
+    const setTargetsCount = activeSets.length + (ownedPersoCount > 0 || isPersoCard ? 1 : 0);
 
     const components = [];
 
@@ -5009,7 +5170,7 @@ function buildSingleCardPayload(card, viewerId, options = {}) {
         components.push(new ActionRowBuilder().addComponents(cardMenu));
     }
 
-    const canTransformHolo = !card.isHolo && Boolean(card.holoCounterpartId) && qty >= 1 && (u.inventory?.holoTransform || 0) >= 1;
+    const canTransformHolo = !card.isPerso && !card.isHolo && Boolean(card.holoCounterpartId) && qty >= 1 && (u.inventory?.holoTransform || 0) >= 1;
 
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -5029,14 +5190,18 @@ function buildSingleCardPayload(card, viewerId, options = {}) {
             .setLabel(isAlreadyFlex ? 'Flex actuel' : 'Définir Flex')
             .setEmoji('⭐')
             .setStyle(isAlreadyFlex ? ButtonStyle.Success : ButtonStyle.Secondary)
-            .setDisabled(isAlreadyFlex || qty <= 0),
-        new ButtonBuilder()
-            .setCustomId(`tcg:wish:toggle:${card.id}:${viewerId}:card`)
-            .setLabel(inWishlist ? 'Dans la Wishlist' : '+ Wishlist')
-            .setEmoji(inWishlist ? '💔' : '❤️')
-            .setStyle(inWishlist ? ButtonStyle.Success : ButtonStyle.Secondary)
-            .setDisabled(!inWishlist && wishlistFull)
+            .setDisabled(isAlreadyFlex || qty <= 0)
     );
+    if (!card.isPerso) {
+        row1.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tcg:wish:toggle:${card.id}:${viewerId}:card`)
+                .setLabel(inWishlist ? 'Dans la Wishlist' : '+ Wishlist')
+                .setEmoji(inWishlist ? '💔' : '❤️')
+                .setStyle(inWishlist ? ButtonStyle.Success : ButtonStyle.Secondary)
+                .setDisabled(!inWishlist && wishlistFull)
+        );
+    }
     if (canTransformHolo) {
         row1.addComponents(
             new ButtonBuilder()
@@ -5047,19 +5212,25 @@ function buildSingleCardPayload(card, viewerId, options = {}) {
         );
     }
 
-    // [SET 2] S'active automatiquement dès qu'un 2e Set est activé dans SETS_CONFIG
+    // S'active dès qu'un 2e Set ou des Cartes Perso sont disponibles
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`tcg:carteset:${activeSetNumber}:${card.id}:${viewerId}`)
             .setLabel(`Changer de Set (${setCfg.shortName})`)
             .setEmoji('🗂️')
             .setStyle(ButtonStyle.Secondary)
-            .setDisabled(activeSets.length <= 1),
-        new ButtonBuilder()
-            .setCustomId(`tcg:carddups:${card.id}:${viewerId}`)
-            .setLabel('Qui l\'a en doublon ?')
-            .setEmoji('👥')
-            .setStyle(ButtonStyle.Secondary),
+            .setDisabled(setTargetsCount <= 1)
+    );
+    if (!card.isPerso) {
+        row2.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tcg:carddups:${card.id}:${viewerId}`)
+                .setLabel('Qui l\'a en doublon ?')
+                .setEmoji('👥')
+                .setStyle(ButtonStyle.Secondary)
+        );
+    }
+    row2.addComponents(
         buildAccueilButton(viewerId),
         buildCloseButton(viewerId)
     );
@@ -5069,6 +5240,17 @@ function buildSingleCardPayload(card, viewerId, options = {}) {
 }
 
 function buildUnownedCardPayload(card, viewerId) {
+    if (card.isPerso) {
+        const row = new ActionRowBuilder().addComponents(
+            buildAccueilButton(viewerId),
+            buildCloseButton(viewerId)
+        );
+        return {
+            content: `🔒 Tu ne possèdes pas la carte personnalisée \`${card.id}\`. *(Carte unique & non échangeable)*`,
+            components: [row]
+        };
+    }
+
     const u = getOrCreateTcgUser(viewerId);
     const inWishlist = getSanitizedWishlist(u).includes(card.id);
     const wishlistFull = getSanitizedWishlist(u).length >= MAX_WISHLIST;
@@ -5299,7 +5481,7 @@ async function handleFlexCommand(targetResponder, authorMember, guild, rawArg) {
         const showMemberFlex = async (targetMember) => {
             if (!targetMember) return;
             const tu = getOrCreateTcgUser(targetMember.id);
-            const fav = tu.favoriteCardId ? cardById.get(tu.favoriteCardId) : null;
+            const fav = tu.favoriteCardId ? getCardByIdAny(tu.favoriteCardId) : null;
             if (!fav || (tu.cards?.[fav.id] || 0) <= 0) {
                 return replySilent(targetResponder, `❌ **${targetMember.displayName || targetMember.username}** n'a pas encore défini de carte préférée.`);
             }
@@ -5322,7 +5504,7 @@ async function handleFlexCommand(targetResponder, authorMember, guild, rawArg) {
     }
 
     // 3. Flex personnel
-    const fav = authorU.favoriteCardId ? cardById.get(authorU.favoriteCardId) : null;
+    const fav = authorU.favoriteCardId ? getCardByIdAny(authorU.favoriteCardId) : null;
     if (!fav || (authorU.cards?.[fav.id] || 0) <= 0) {
         return sendFlexPicker(targetResponder, authorMember, 0);
     }
@@ -5345,7 +5527,7 @@ async function handleFlexCommand(targetResponder, authorMember, guild, rawArg) {
 
 function sendFlexPicker(targetResponder, member, page = 0) {
     const u = getOrCreateTcgUser(member.id);
-    const owned = cardCatalog
+    const owned = [...cardCatalog, ...persoCatalog]
         .filter(c => (u.cards?.[c.id] || 0) > 0)
         .sort((a, b) => {
             const ra = RARITY_ORDER[a.rarity] ?? 0;
@@ -5833,8 +6015,14 @@ async function executeTradeIfBothLocked(thread, trade, client) {
             thread,
             freeMode
                 ? "❌ **Échange bloqué :** au moins un·e participant.e doit proposer **1 carte**."
-                : "❌ **Échange bloqué :** les **deux** participant.es doivent obligatoirement proposer au moins **1 carte** en doublon *(les dons à sens unique sont interdits)*."
-        ).catch(() => {});
+                : "❌ **Échange bloqué :** les **deux** participant.es doivent obligatoirement proposer au moins **1 carte** en doublon *(les dons à sens unique sont interdits)*.").catch(() => {});
+        if ([...offerA, ...offerB].some(id => persoById.has(id))) {
+        trade.lockedOffers[idA] = false;
+        trade.lockedOffers[idB] = false;
+        trade.unfairConfirm = null;
+        tcgBridge.demanderSauvegarde();
+        await refreshTradePanel(thread, trade);
+        await sendSilent(thread, "❌ **Échange bloqué :** les cartes personnalisées (`Spé-X`) sont **uniques et non échangeables**.").catch(() => {});
         return false;
     }
 
@@ -6336,6 +6524,334 @@ function buildPunitionPayload(sessionId, session, guild) {
     return { embeds: [embed], components: [row1, row2, row3] };
 }
 
+function walkProxyStats(dir) {
+    let files = 0;
+    let bytes = 0;
+    const byDim = {};
+    const scan = (curr) => {
+        if (!fs.existsSync(curr)) return;
+        for (const entry of fs.readdirSync(curr, { withFileTypes: true })) {
+            if (entry.name.startsWith('.')) continue;
+            const full = path.join(curr, entry.name);
+            if (entry.isDirectory()) {
+                scan(full);
+            } else if (entry.name.toLowerCase().endsWith('.png')) {
+                files++;
+                let sz = 0;
+                try { sz = fs.statSync(full).size; } catch {}
+                bytes += sz;
+                const parentName = path.basename(curr);
+                const dimKey = /^\d+x\d+$/.test(parentName) ? parentName : 'autre';
+                if (!byDim[dimKey]) byDim[dimKey] = { files: 0, bytes: 0 };
+                byDim[dimKey].files++;
+                byDim[dimKey].bytes += sz;
+            }
+        }
+    };
+    scan(dir);
+    return { files, bytes, byDim };
+}
+
+function collectProxyJobs(targetScope = 'all') {
+    const scope = String(targetScope || 'all').toLowerCase();
+    const activeSets = getActiveSets();
+    const targetSets = scope === 'all'
+        ? activeSets
+        : (scope.startsWith('set:')
+            ? activeSets.filter(s => s.number === parseInt(scope.slice(4), 10))
+            : []);
+    const includePerso = scope === 'all' || scope === 'perso';
+
+    const jobs = [];
+    const seenJobKeys = new Set();
+    const mysterySizes = new Map();
+    const logoTargets = [];
+
+    for (const setCfg of targetSets) {
+        const setCards = getSetCatalog(setCfg.number);
+        if (setCards.length === 0) continue;
+
+        if (setAssets[setCfg.number]?.logo) {
+            logoTargets.push({
+                path: setAssets[setCfg.number].logo,
+                cacheKey: `Set${setCfg.number}_Logo_header.png`
+            });
+        }
+
+        const sizeMap = new Map();
+        const catCounts = {
+            complet: setCards.length,
+            ...Object.fromEntries(CATEGORIES.map(cat => [cat, setCards.filter(c => c.category === cat).length]))
+        };
+        for (const count of Object.values(catCounts)) {
+            for (const mode of ['4', '18', '36', 'all']) {
+                const grid = getBinderGridConfig(mode, count);
+                const dims = computeBinderCardDims(1600, 900, grid);
+                const key = `${dims.cardW}x${dims.cardH}`;
+                if (!sizeMap.has(key)) {
+                    sizeMap.set(key, { w: dims.cardW, h: dims.cardH, glow: true, mystery: true });
+                }
+            }
+        }
+        if (!sizeMap.has('285x399')) {
+            sizeMap.set('285x399', { w: 285, h: 399, glow: true, mystery: false });
+        }
+
+        for (const [k, s] of sizeMap.entries()) {
+            if (s.mystery && !mysterySizes.has(k)) {
+                mysterySizes.set(k, { w: s.w, h: s.h });
+            }
+            for (const card of setCards) {
+                const jobKey = `${card.id}|${k}`;
+                if (!seenJobKeys.has(jobKey)) {
+                    seenJobKeys.add(jobKey);
+                    jobs.push({ card, w: s.w, h: s.h, glow: s.glow });
+                }
+            }
+        }
+    }
+
+    if (includePerso && persoCatalog.length > 0) {
+        const persoSizeMap = new Map();
+        for (const mode of ['4', '18', '36', 'all']) {
+            const grid = getBinderGridConfig(mode, persoCatalog.length);
+            const dims = computeBinderCardDims(1600, 900, grid);
+            const key = `${dims.cardW}x${dims.cardH}`;
+            if (!persoSizeMap.has(key)) {
+                persoSizeMap.set(key, { w: dims.cardW, h: dims.cardH, glow: true });
+            }
+        }
+        for (const [k, s] of persoSizeMap.entries()) {
+            for (const card of persoCatalog) {
+                const jobKey = `${card.id}|${k}`;
+                if (!seenJobKeys.has(jobKey)) {
+                    seenJobKeys.add(jobKey);
+                    jobs.push({ card, w: s.w, h: s.h, glow: s.glow });
+                }
+            }
+        }
+    }
+
+    return {
+        jobs,
+        mysterySizes: [...mysterySizes.values()],
+        logoTargets
+    };
+}
+
+async function runProxyWarmup(targetScope, scopeLabel, onProgressEdit) {
+    proxyWarmupRunning = true;
+    try {
+        const { jobs, mysterySizes, logoTargets } = collectProxyJobs(targetScope);
+        const totalItems = jobs.length + (assetPaths.mysteryCard ? mysterySizes.length : 0);
+        const startedAt = Date.now();
+        let done = 0;
+        let generated = 0;
+        let alreadyOnDisk = 0;
+        let failed = 0;
+        let lastEditAt = Date.now();
+
+        for (const lg of logoTargets) {
+            await loadAssetProxy(lg.path, 184, 76, { cacheKey: lg.cacheKey });
+        }
+
+        if (assetPaths.mysteryCard) {
+            for (const mSize of mysterySizes) {
+                const resM = await loadAssetProxy(assetPaths.mysteryCard, mSize.w, mSize.h, { mysteryShadow: true });
+                done++;
+                if (!resM) failed++;
+                else if (resM.fromDisk) alreadyOnDisk++;
+                else generated++;
+            }
+        }
+
+        for (const job of jobs) {
+            const resC = await loadCardProxy(job.card, job.w, job.h, { glow: job.glow });
+            done++;
+            if (!resC) failed++;
+            else if (resC.fromDisk) alreadyOnDisk++;
+            else generated++;
+
+            if (!resC?.fromDisk || done % 15 === 0) {
+                await new Promise(r => setTimeout(r, 8));
+            }
+
+            if (onProgressEdit && (Date.now() - lastEditAt >= 3000 || done === totalItems)) {
+                lastEditAt = Date.now();
+                const pct = Math.round((done / totalItems) * 100);
+                await onProgressEdit(
+                    `🔥 **Warmup RegaDex en cours (${scopeLabel})...**\n` +
+                    `• Taille actuelle : \`${job.w}×${job.h}\`\n` +
+                    `• Progression : **${done}/${totalItems}** (**${pct}%**)\n` +
+                    `• Créées : **${generated}** • Déjà prêtes : **${alreadyOnDisk}**${failed ? ` • Échecs : **${failed}**` : ''}`
+                );
+            }
+        }
+
+        proxyRamCache.clear();
+        if (proxyRamClearTimer) {
+            clearTimeout(proxyRamClearTimer);
+            proxyRamClearTimer = null;
+        }
+
+        const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
+        const stats = walkProxyStats(TCG_PROXIES_DIR);
+        const mb = (stats.bytes / (1024 * 1024)).toFixed(2);
+        const errLine = lastProxyWriteError
+            ? `\n⚠️ **Erreur d'écriture disque :** \`${lastProxyWriteError}\``
+            : '\n✅ **Volume Coolify (`/app/TCG/Proxies`) : OK et persistant !**';
+
+        if (onProgressEdit) {
+            await onProgressEdit(
+                `✅ **Warmup terminé (${scopeLabel}) en ${elapsedSec}s !**\n` +
+                `• **${generated}** miniature(s) générée(s) • **${alreadyOnDisk}** déjà en cache${failed ? ` • **${failed}** échec(s)` : ''}\n` +
+                `• Total sur disque : **${stats.files}** fichiers (**${mb} Mo** dans \`TCG/Proxies\`)` +
+                errLine
+            );
+        }
+    } finally {
+        proxyWarmupRunning = false;
+    }
+}
+
+function getPersoCardOwners(cardId) {
+    const data = getStoreData();
+    const owners = [];
+    for (const [uid, u] of Object.entries(data.users || {})) {
+        if (!isSandboxId(uid) && (u?.cards?.[cardId] || 0) > 0) {
+            owners.push(uid);
+        }
+    }
+    return owners;
+}
+
+function buildPersoAdminPayload(selectedCardId = null, requestedPage = 0, guild = null) {
+    if (persoCatalog.length === 0) {
+        const embed = new EmbedBuilder()
+            .setColor(0xff6b9d)
+            .setTitle('🌟 Cartes Perso RegaDex (0)')
+            .setDescription(
+                `Aucune carte personnalisée n'a été détectée dans \`TCG/Cartes Perso\`.\n\n` +
+                `**Format attendu :** \`Spé-01 - Nom de la carte.png\`\n` +
+                `Dépose tes cartes dans \`TCG/Cartes Perso/\` puis clique sur **🔄 Recharger** !`
+            );
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('tcg:persoview:rescan:0:none')
+                .setLabel('Recharger le dossier')
+                .setEmoji('🔄')
+                .setStyle(ButtonStyle.Primary),
+            buildCloseButton(EPSYS_ID)
+        );
+        return { embeds: [embed], files: [], components: [row] };
+    }
+
+    let selectedIdx = selectedCardId ? persoCatalog.findIndex(c => c.id === selectedCardId) : 0;
+    if (selectedIdx === -1) selectedIdx = 0;
+    const perPage = 25;
+    const totalPages = Math.max(1, Math.ceil(persoCatalog.length / perPage));
+    const safePage = selectedCardId
+        ? Math.floor(selectedIdx / perPage)
+        : Math.max(0, Math.min(requestedPage, totalPages - 1));
+    const slice = persoCatalog.slice(safePage * perPage, (safePage + 1) * perPage);
+    const card = persoCatalog[selectedIdx] || slice[0] || persoCatalog[0];
+
+    const owners = getPersoCardOwners(card.id);
+    const ownerText = owners.length > 0
+        ? owners.map(uid => `<@${uid}>`).join(', ')
+        : '*🟢 Disponible (non attribuée)*';
+
+    let assignedCount = 0;
+    const listLines = slice.map(c => {
+        const cOwners = getPersoCardOwners(c.id);
+        const marker = c.id === card.id ? '▶️ ' : '';
+        const status = cOwners.length > 0 ? `✅ ${cOwners.map(uid => `<@${uid}>`).join(', ')}` : '⚪ Libre';
+        return `${marker}\`${c.id}\` **${c.name}** — ${status}`;
+    });
+    for (const c of persoCatalog) {
+        if (getPersoCardOwners(c.id).length > 0) assignedCount++;
+    }
+
+    const embed = new EmbedBuilder()
+        .setColor(0xff6b9d)
+        .setTitle(`🌟 ${card.id} — ${card.name}`)
+        .setDescription(
+            `**📦 Total Cartes Perso :** **${persoCatalog.length}** *(Attribuées : **${assignedCount}** • Libres : **${persoCatalog.length - assignedCount}**)*\n` +
+            `**📁 Fichier :** \`TCG/Cartes Perso/${card.filename}\`\n` +
+            `**👤 Propriétaire :** ${ownerText}\n` +
+            `**⚡ Donner :** \`!tcgcard give @membre ${card.id}\`\n` +
+            `────────────────────────────────────────\n` +
+            listLines.join('\n').slice(0, 2500)
+        )
+        .setImage('attachment://carte_perso_admin.png')
+        .setFooter({ text: `Carte ${selectedIdx + 1}/${persoCatalog.length} • Page ${safePage + 1}/${totalPages} • Unique & Non échangeable` });
+
+    const files = [];
+    if (card.filePath && fs.existsSync(card.filePath)) {
+        files.push(new AttachmentBuilder(card.filePath, { name: 'carte_perso_admin.png' }));
+    }
+
+    const menu = new StringSelectMenuBuilder()
+        .setCustomId(`tcg:persoview:sel:${safePage}`)
+        .setPlaceholder(`Choisir une carte perso (${safePage + 1}/${totalPages})...`)
+        .addOptions(slice.map(c => {
+            const cOwners = getPersoCardOwners(c.id);
+            const mOwner = cOwners[0] && guild ? guild.members.cache.get(cOwners[0]) : null;
+            const ownerDesc = cOwners.length > 0
+                ? `✅ Attribuée${mOwner ? ` à ${mOwner.displayName}` : ''}`
+                : '⚪ Disponible (non attribuée)';
+            return {
+                label: `🌟 ${c.id} • ${c.name}`.slice(0, 100),
+                description: ownerDesc.slice(0, 100),
+                value: c.id,
+                default: c.id === card.id
+            };
+        }));
+
+    const btnRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tcg:persoview:card:prev:${card.id}`)
+            .setLabel('Précédente')
+            .setEmoji('◀️')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(persoCatalog.length <= 1),
+        new ButtonBuilder()
+            .setCustomId(`tcg:persoview:card:next:${card.id}`)
+            .setLabel('Suivante')
+            .setEmoji('▶️')
+            .setStyle(ButtonStyle.Secondary)
+            .setDisabled(persoCatalog.length <= 1),
+        new ButtonBuilder()
+            .setCustomId(`tcg:persoview:rescan:${safePage}:${card.id}`)
+            .setLabel('Recharger')
+            .setEmoji('🔄')
+            .setStyle(ButtonStyle.Primary),
+        buildCloseButton(EPSYS_ID)
+    );
+
+    const components = [new ActionRowBuilder().addComponents(menu), btnRow];
+    if (totalPages > 1) {
+        components.push(
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`tcg:persoview:page:${Math.max(0, safePage - 1)}:${card.id}`)
+                    .setLabel('Page préc.')
+                    .setEmoji('⏪')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(safePage <= 0),
+                new ButtonBuilder()
+                    .setCustomId(`tcg:persoview:page:${Math.min(totalPages - 1, safePage + 1)}:${card.id}`)
+                    .setLabel('Page suiv.')
+                    .setEmoji('⏩')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(safePage >= totalPages - 1)
+            )
+        );
+    }
+
+    return { embeds: [embed], files, components };
+}
+
 async function handleAdminTcgCommand(message, lowerContent) {
     // -1. !tcgopenlast / !tcglastopen (Epsys-only)
     if (/^!(?:tcg|regadex|rgdx|rgx)\s*(?:open\s*last|last\s*open)(?:\s|$)/i.test(lowerContent)) {
@@ -6545,6 +7061,30 @@ async function handleAdminTcgCommand(message, lowerContent) {
         await resolveMemberArg(message, memberToken, async (target) => {
             if (!target) return;
             const u = getOrCreateTcgUser(target.id);
+
+            if (res.card.isPerso && action === 'give') {
+                const data = getStoreData();
+                const otherOwner = Object.entries(data.users || {}).find(([uid, ud]) =>
+                    uid !== target.id && !isSandboxId(uid) && (ud?.cards?.[res.card.id] || 0) > 0
+                );
+                if (otherOwner) {
+                    await replySilent(
+                        message,
+                        `⚠️ **Carte perso unique :** \`${res.card.id}\` (**${res.card.name}**) est déjà possédée par <@${otherOwner[0]}>.\n` +
+                        `-# Si tu veux la transférer, retire-la d'abord avec \`!tcgcard remove ${otherOwner[0]} ${res.card.id}\`.`
+                    );
+                    return;
+                }
+                if ((u.cards[res.card.id] || 0) >= 1) {
+                    await replySilent(message, `ℹ️ <@${target.id}> possède déjà sa carte perso unique **${res.card.id} • ${res.card.name}** *(gardée à vie)*.`);
+                    return;
+                }
+                u.cards[res.card.id] = 1;
+                tcgBridge.demanderSauvegarde();
+                await replySilent(message, `🌟 Carte personnalisée **${res.card.id} • ${res.card.name}** attribuée **à vie** à <@${target.id}> !`);
+                return;
+            }
+
             if (action === 'give') {
                 u.cards[res.card.id] = (u.cards[res.card.id] || 0) + 1;
             } else {
@@ -6581,43 +7121,34 @@ async function handleAdminTcgCommand(message, lowerContent) {
         return true;
     }
 
-    // 6. !rgdxproxies [warmup / purge] | !tcgproxies [warmup / purge] (Epsys-only)
+    // 5bis. !tcgperso / !rgdxperso / !cartesperso (Epsys-only) — Visualiseur de toutes les Cartes Perso
+    m = lowerContent.match(/^!(?:(?:rgdx|tcg|regadex)\s*perso|cartes?\s*perso)(?:\s+(.*))?$/i);
+    if (m) {
+        if (message.author.id !== EPSYS_ID) return true;
+        const q = (m[1] || '').trim();
+        let initialCardId = null;
+        if (q) {
+            const res = resolveCardQuery(q);
+            if (res.card?.isPerso) initialCardId = res.card.id;
+            else {
+                const matchPerso = res.matches.find(c => c.isPerso);
+                if (matchPerso) initialCardId = matchPerso.id;
+            }
+        }
+        const payload = buildPersoAdminPayload(initialCardId, 0, message.guild);
+        await replySilent(message, payload);
+        return true;
+    }
+
+    // 6. !rgdxproxies [warmup [set|perso|all] / purge] | !tcgproxies (Epsys-only)
     m = lowerContent.match(/^!(?:rgdx|tcg|regadex)\s*proxies(?:\s+(.*))?$/i);
     if (m) {
         if (message.author.id !== EPSYS_ID) return true;
         const arg = (m[1] || '').trim().toLowerCase();
 
-        const walkStats = (dir) => {
-            let files = 0;
-            let bytes = 0;
-            const byDim = {};
-            const scan = (curr) => {
-                if (!fs.existsSync(curr)) return;
-                for (const entry of fs.readdirSync(curr, { withFileTypes: true })) {
-                    if (entry.name.startsWith('.')) continue;
-                    const full = path.join(curr, entry.name);
-                    if (entry.isDirectory()) {
-                        scan(full);
-                    } else if (entry.name.toLowerCase().endsWith('.png')) {
-                        files++;
-                        let sz = 0;
-                        try { sz = fs.statSync(full).size; } catch {}
-                        bytes += sz;
-                        const parentName = path.basename(curr);
-                        const dimKey = /^\d+x\d+$/.test(parentName) ? parentName : 'autre';
-                        if (!byDim[dimKey]) byDim[dimKey] = { files: 0, bytes: 0 };
-                        byDim[dimKey].files++;
-                        byDim[dimKey].bytes += sz;
-                    }
-                }
-            };
-            scan(dir);
-            return { files, bytes, byDim };
-        };
-
         if (arg === 'purge' || arg === 'clear' || arg === 'reset') {
             if (proxyWarmupRunning) {
-                await replySilent(message, '⏳ Un `!rgdxproxies warmup` est déjà en cours, attends la fin avant de purger.');
+                await replySilent(message, '⏳ Un warmup est déjà en cours, attends la fin avant de purger.');
                 return true;
             }
             proxyRamCache.clear();
@@ -6638,124 +7169,45 @@ async function handleAdminTcgCommand(message, lowerContent) {
             lastProxyWriteError = null;
             await replySilent(
                 message,
-                `🧹 **Proxies RegaDex purgés !** (${removedEntries} dossier(s) supprimé(s) dans \`TCG/Proxies\`).\n👉 Lance \`!rgdxproxies warmup\` pour tout pré-générer proprement.`
+                `🧹 **Proxies RegaDex purgés !** (${removedEntries} dossier(s) supprimé(s) dans \`TCG/Proxies\`).\n👉 Utilise \`!rgdxproxies\` pour choisir quel Set pré-générer.`
             );
             return true;
         }
 
-        if (arg === 'warmup' || arg === 'warm' || arg === 'build' || arg === 'pregen') {
-            if (cardCatalog.length === 0) {
-                await replySilent(message, `❌ Aucune carte ${SET1_NAME} chargée pour lancer le warmup.`);
+        const warmMatch = arg.match(/^(?:warmup|warm|build|pregen)(?:\s+(.+))?$/i);
+        if (warmMatch) {
+            const rawTarget = (warmMatch[1] || 'all').trim();
+            let scope = 'all';
+            let scopeLabel = 'Tous les Sets + Cartes Perso';
+            if (rawTarget === 'perso' || rawTarget === 'persos') {
+                scope = 'perso';
+                scopeLabel = 'Cartes Perso';
+            } else if (/^(?:set\s*)?(\d+)$/i.test(rawTarget)) {
+                const sNum = parseInt(rawTarget.replace(/\D/g, ''), 10);
+                scope = `set:${sNum}`;
+                scopeLabel = getSetConfig(sNum).name;
+            }
+            const prep = collectProxyJobs(scope);
+            if (prep.jobs.length === 0) {
+                await replySilent(message, `❌ Aucune carte chargée pour **${scopeLabel}**.`);
                 return true;
             }
             if (proxyWarmupRunning) {
                 await replySilent(message, '⏳ Un warmup des proxies est déjà en cours !');
                 return true;
             }
-
-            proxyWarmupRunning = true;
-            try {
-                // Collecte toutes les tailles exactes utilisées (900p + Récap Booster)
-                const sizeMap = new Map();
-                const catCounts = {
-                    complet: cardCatalog.length,
-                    ...Object.fromEntries(CATEGORIES.map(cat => [cat, cardCatalog.filter(c => c.category === cat).length]))
-                };
-                for (const count of Object.values(catCounts)) {
-                    for (const mode of ['4', '18', '36', 'all']) {
-                        const grid = getBinderGridConfig(mode, count);
-                        const dims = computeBinderCardDims(1600, 900, grid);
-                        const key = `${dims.cardW}x${dims.cardH}`;
-                        if (!sizeMap.has(key)) {
-                            sizeMap.set(key, { w: dims.cardW, h: dims.cardH, glow: true, mystery: true });
-                        }
-                    }
-                }
-                // Taille du Récapitulatif Booster
-                if (!sizeMap.has('285x399')) {
-                    sizeMap.set('285x399', { w: 285, h: 399, glow: true, mystery: false });
-                }
-
-                const sizes = [...sizeMap.values()];
-                const totalItems = sizes.reduce((acc, s) => acc + cardCatalog.length + (s.mystery ? 1 : 0), 0);
-                const startedAt = Date.now();
-                let done = 0;
-                let generated = 0;
-                let alreadyOnDisk = 0;
-                let failed = 0;
-                let lastEditAt = Date.now();
-
-                const statusMsg = await replySilent(
-                    message,
-                    `🔥 **Warmup RegaDex démarré !**\n• **${sizes.length}** formats à préparer : ${sizes.map(s => `\`${s.w}×${s.h}\``).join(', ')}\n• **${totalItems}** miniatures au total *(avec lueurs & ombres pré-cuites)*\n⏳ Progression : \`0/${totalItems}\` (0%)...`
-                );
-
-                if (assetPaths.set1Logo) {
-                    await loadAssetProxy(assetPaths.set1Logo, 184, 76, { cacheKey: 'Set1_Logo_header.png' });
-                }
-
-                for (const s of sizes) {
-                    if (s.mystery && assetPaths.mysteryCard) {
-                        const resM = await loadAssetProxy(assetPaths.mysteryCard, s.w, s.h, { mysteryShadow: true });
-                        done++;
-                        if (!resM) failed++;
-                        else if (resM.fromDisk) alreadyOnDisk++;
-                        else generated++;
-                    }
-
-                    for (const card of cardCatalog) {
-                        const resC = await loadCardProxy(card, s.w, s.h, { glow: s.glow });
-                        done++;
-                        if (!resC) failed++;
-                        else if (resC.fromDisk) alreadyOnDisk++;
-                        else generated++;
-
-                        // Cède un micro-instant à la boucle Node.js pour garder le bot fluide
-                        if (!resC?.fromDisk || done % 15 === 0) {
-                            await new Promise(r => setTimeout(r, 8));
-                        }
-
-                        if (statusMsg && (Date.now() - lastEditAt >= 3000 || done === totalItems)) {
-                            lastEditAt = Date.now();
-                            const pct = Math.round((done / totalItems) * 100);
-                            await statusMsg.edit(withSilent(
-                                `🔥 **Warmup RegaDex en cours...**\n` +
-                                `• Taille actuelle : \`${s.w}×${s.h}\`\n` +
-                                `• Progression : **${done}/${totalItems}** (**${pct}%**)\n` +
-                                `• Créées : **${generated}** • Déjà prêtes : **${alreadyOnDisk}**${failed ? ` • Échecs : **${failed}**` : ''}`
-                            )).catch(() => {});
-                        }
-                    }
-                }
-
-                proxyRamCache.clear();
-                if (proxyRamClearTimer) {
-                    clearTimeout(proxyRamClearTimer);
-                    proxyRamClearTimer = null;
-                }
-
-                const elapsedSec = ((Date.now() - startedAt) / 1000).toFixed(1);
-                const stats = walkStats(TCG_PROXIES_DIR);
-                const mb = (stats.bytes / (1024 * 1024)).toFixed(2);
-                const errLine = lastProxyWriteError
-                    ? `\n⚠️ **Erreur d'écriture disque :** \`${lastProxyWriteError}\``
-                    : '\n✅ **Volume Coolify (`/app/TCG/Proxies`) : OK et persistant !**';
-
-                if (statusMsg) {
-                    await statusMsg.edit(withSilent(
-                        `✅ **Warmup RegaDex terminé en ${elapsedSec}s !**\n` +
-                        `• **${generated}** miniature(s) générée(s) • **${alreadyOnDisk}** déjà en cache${failed ? ` • **${failed}** échec(s)` : ''}\n` +
-                        `• Total sur disque : **${stats.files}** fichiers (**${mb} Mo** dans \`TCG/Proxies\`)` +
-                        errLine
-                    )).catch(() => {});
-                }
-            } finally {
-                proxyWarmupRunning = false;
-            }
+            const totalItems = prep.jobs.length + (assetPaths.mysteryCard ? prep.mysterySizes.length : 0);
+            const statusMsg = await replySilent(
+                message,
+                `🔥 **Warmup RegaDex démarré (${scopeLabel}) !**\n• **${totalItems}** miniatures à vérifier/générer...\n⏳ Progression : \`0/${totalItems}\` (0%)...`
+            );
+            await runProxyWarmup(scope, scopeLabel, async (text) => {
+                if (statusMsg) await statusMsg.edit(withSilent(text)).catch(() => {});
+            });
             return true;
         }
 
-        const stats = walkStats(TCG_PROXIES_DIR);
+        const stats = walkProxyStats(TCG_PROXIES_DIR);
         const mb = (stats.bytes / (1024 * 1024)).toFixed(2);
         const dimLines = Object.entries(stats.byDim)
             .sort((a, b) => a[0].localeCompare(b[0]))
@@ -6765,17 +7217,44 @@ async function handleAdminTcgCommand(message, lowerContent) {
             ? `⚠️ **Erreur d'écriture détectée :** \`${lastProxyWriteError}\``
             : (stats.files > 0
                 ? '✅ **Installation confirmée :** le bot lit et écrit bien ses miniatures sur le volume.'
-                : 'ℹ️ **Cache vide pour le moment :** lance `!rgdxproxies warmup` pour tout pré-générer en une fois.');
+                : 'ℹ️ **Cache vide pour le moment :** choisis un Set dans le menu ci-dessous pour pré-générer ses miniatures.');
 
-        await replySilent(
-            message,
-            `🗂️ **Proxies RegaDex (\`TCG/Proxies\`)**\n` +
-            `${statusHeader}\n\n` +
-            `• **Total disque :** **${stats.files}** miniature(s) (**${mb} Mo**)\n` +
-            `• **Micro-cache RAM :** **${proxyRamCache.size}/${PROXY_MAX_RAM_ITEMS}** (TTL 2 min)\n` +
-            (dimLines.length > 0 ? `\n**Détail par format :**\n${dimLines.join('\n')}\n` : '\n') +
-            `\n-# Commandes : \`!rgdxproxies warmup\` (pré-générer) • \`!rgdxproxies purge\` (vider)`
-        );
+        const proxyOptions = getActiveSets().map(s => ({
+            label: `${s.name} (${getSetCardsCount(s.number)} cartes)`.slice(0, 100),
+            description: `Générer uniquement les proxies du Set ${s.number}`,
+            value: `set:${s.number}`,
+            emoji: '🃏'
+        }));
+        proxyOptions.push({
+            label: `Cartes Perso (${persoCatalog.length} carte${persoCatalog.length > 1 ? 's' : ''})`,
+            description: persoCatalog.length > 0 ? 'Générer uniquement les proxies de TCG/Cartes Perso' : 'Aucune carte perso détectée pour le moment',
+            value: 'perso',
+            emoji: '🌟'
+        });
+        proxyOptions.push({
+            label: `Tout générer (${cardCatalog.length + persoCatalog.length} cartes)`,
+            description: 'Pré-génère tous les Sets actifs + toutes les Cartes Perso',
+            value: 'all',
+            emoji: '🔥'
+        });
+
+        const proxyMenu = new StringSelectMenuBuilder()
+            .setCustomId(`tcg:proxy:gen:${EPSYS_ID}`)
+            .setPlaceholder('⚡ Choisir le Set / dossier à pré-générer...')
+            .addOptions(proxyOptions);
+
+        const closeRow = new ActionRowBuilder().addComponents(buildCloseButton(EPSYS_ID));
+
+        await replySilent(message, {
+            content:
+                `🗂️ **Proxies RegaDex (\`TCG/Proxies\`)**\n` +
+                `${statusHeader}\n\n` +
+                `• **Total disque :** **${stats.files}** miniature(s) (**${mb} Mo**)\n` +
+                `• **Micro-cache RAM :** **${proxyRamCache.size}/${PROXY_MAX_RAM_ITEMS}** (TTL 2 min)\n` +
+                (dimLines.length > 0 ? `\n**Détail par format :**\n${dimLines.join('\n')}\n` : '\n') +
+                `\n-# Commandes rapides : \`!rgdxproxies warmup [1|perso|all]\` • \`!rgdxproxies purge\``,
+            components: [new ActionRowBuilder().addComponents(proxyMenu), closeRow]
+        });
         return true;
     }
 
@@ -6878,29 +7357,44 @@ async function handleWishlistCommand(targetResponder, authorMember, rawArg) {
         const q = arg.replace(/^(?:add|ajouter|\+)\s+/i, '').trim();
         const res = resolveCardQuery(q);
         if (!res.card) {
-            return replyPanelSilent(targetResponder, `❌ Aucune carte unique trouvée pour \`${q}\`. Essaie avec son numéro exact (ex: \`1-84\`).`, authorMember.id);
+            return replySilent(targetResponder, `❌ Aucune carte unique trouvée pour \`${q}\`. Essaie avec son numéro exact (ex: \`1-84\`).`);
+        }
+        if (res.card.isPerso) {
+            return replySilent(targetResponder, `❌ Les cartes personnalisées (\`${res.card.id}\`) sont **uniques et non échangeables**, impossible de les ajouter à la Wishlist.`);
         }
         if (u.wishlist.includes(res.card.id)) {
-            return replyPanelSilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `ℹ️ \`${res.card.id}\` est déjà dans ta Wishlist.`), authorMember.id);
+            return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `ℹ️ \`${res.card.id}\` est déjà dans ta Wishlist.`));
         }
         if (u.wishlist.length >= MAX_WISHLIST) {
-            return replyPanelSilent(targetResponder, `⚠️ Ta Wishlist est pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**). Retire d'abord une carte via \`!wishlist\`.`, authorMember.id);
+            return replySilent(targetResponder, `⚠️ Ta Wishlist est pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**). Retire d'abord une carte via \`!wishlist\`.`);
         }
         u.wishlist.push(res.card.id);
         if (!isSandboxId(authorMember.id)) tcgBridge.demanderSauvegarde();
-        return replyPanelSilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `❤️ \`${res.card.id}\` ajoutée à ta Wishlist !`), authorMember.id);
+        return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `❤️ \`${res.card.id}\` ajoutée à ta Wishlist !`));
     }
 
     if (/^(?:remove|rem|retirer|del|-)\s+/i.test(arg)) {
         const q = arg.replace(/^(?:remove|rem|retirer|del|-)\s+/i, '').trim();
         const res = resolveCardQuery(q);
         if (!res.card || !u.wishlist.includes(res.card.id)) {
-            return replyPanelSilent(targetResponder, `❌ Cette carte n'est pas dans ta Wishlist.`, authorMember.id);
+            return replySilent(targetResponder, `❌ Cette carte n'est pas dans ta Wishlist.`);
         }
         u.wishlist = u.wishlist.filter(id => id !== res.card.id);
         if (!isSandboxId(authorMember.id)) tcgBridge.demanderSauvegarde();
-        return replyPanelSilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `💔 \`${res.card.id}\` retirée de ta Wishlist.`), authorMember.id);
+        return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `💔 \`${res.card.id}\` retirée de ta Wishlist.`));
     }
+
+    // Si une carte directe est tapée (!wishlist 1-84), basculer ajout/retrait
+    const cardRes = resolveCardQuery(arg);
+    if (cardRes.card) {
+        if (cardRes.card.isPerso) {
+            return replySilent(targetResponder, `❌ Les cartes personnalisées (\`${cardRes.card.id}\`) sont **uniques et non échangeables**, impossible de les ajouter à la Wishlist.`);
+        }
+        if (u.wishlist.includes(cardRes.card.id)) {
+            u.wishlist = u.wishlist.filter(id => id !== cardRes.card.id);
+            if (!isSandboxId(authorMember.id)) tcgBridge.demanderSauvegarde();
+            return replySilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `💔 \`${cardRes.card.id}\` retirée de ta Wishlist.`));
+        }
 
     // Si une carte directe est tapée (!wishlist 1-84), basculer ajout/retrait
     const cardRes = resolveCardQuery(arg);
@@ -8312,7 +8806,7 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[3];
         const viewerId = parts[4];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
-        const card = cardById.get(interaction.values[0]);
+        const card = getCardByIdAny(interaction.values[0]);
         const uOwner = getOrCreateTcgUser(ownerId);
         if (!card || (uOwner.cards?.[card.id] || 0) <= 0) {
             await interaction.reply({ content: "🔒 Tu ne possèdes pas cette carte !", ephemeral: true });
@@ -8398,6 +8892,11 @@ async function handleTcgInteraction(interaction) {
             fromHub = parts[7] === '1';
             ownedMode = normalizeBinderOwnedMode(parts[8]);
             category = interaction.values[0];
+            if (category === 'perso') {
+                rarityFilter = 'all';
+                ownedMode = '0';
+                if (sortMode === 'rarity') sortMode = 'number';
+            }
             page = 0;
         } else if (action === 'bsize' && interaction.isButton()) {
             ownerId = parts[2];
@@ -8528,13 +9027,14 @@ async function handleTcgInteraction(interaction) {
     if (action === 'cartesel' && interaction.isStringSelectMenu()) {
         const ownerId = parts[2];
         const currentCardId = parts[3] || null;
-        const activeSetNumber = parseInt(parts[4], 10) || DEFAULT_SET_NUMBER;
+        const rawSet = parts[4] || String(DEFAULT_SET_NUMBER);
+        const activeSetNumber = rawSet === 'perso' ? 'perso' : (parseInt(rawSet, 10) || DEFAULT_SET_NUMBER);
         if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
 
         const selected = interaction.values[0];
         if (selected.startsWith('__page:') && currentCardId) {
             const nextMenuPage = parseInt(selected.slice('__page:'.length), 10) || 0;
-            const currentCard = cardById.get(currentCardId);
+            const currentCard = getCardByIdAny(currentCardId);
             if (!currentCard) return true;
             await interaction.update({
                 components: buildSingleCardPayload(currentCard, ownerId, { menuPage: nextMenuPage, setNumber: activeSetNumber }).components
@@ -8542,7 +9042,7 @@ async function handleTcgInteraction(interaction) {
             return true;
         }
 
-        const card = cardById.get(selected);
+        const card = getCardByIdAny(selected);
         const u = getOrCreateTcgUser(ownerId);
         if (!card || (u.cards?.[card.id] || 0) <= 0) {
             await interaction.reply({ content: "🔒 Tu ne possèdes pas cette carte dans ton RegaDex !", ephemeral: true });
@@ -8551,7 +9051,7 @@ async function handleTcgInteraction(interaction) {
         await interaction.deferUpdate();
         await interaction.editReply({
             content: null,
-            ...buildSingleCardPayload(card, ownerId, { setNumber: card.setNumber || activeSetNumber }),
+            ...buildSingleCardPayload(card, ownerId, { setNumber: card.isPerso ? 'perso' : (card.setNumber || activeSetNumber) }),
             attachments: []
         });
         return true;
@@ -8563,9 +9063,11 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[4];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
         const u = getOrCreateTcgUser(ownerId);
-        const currentCard = cardById.get(currentCardId);
-        const activeSetNumber = currentCard?.setNumber || DEFAULT_SET_NUMBER;
-        const setOwned = getSetCatalog(activeSetNumber).filter(c => (u.cards?.[c.id] || 0) > 0);
+        const currentCard = getCardByIdAny(currentCardId);
+        const activeSetNumber = currentCard?.isPerso ? 'perso' : (currentCard?.setNumber || DEFAULT_SET_NUMBER);
+        const setOwned = activeSetNumber === 'perso'
+            ? persoCatalog.filter(c => (u.cards?.[c.id] || 0) > 0)
+            : getSetCatalog(activeSetNumber).filter(c => (u.cards?.[c.id] || 0) > 0);
         const ownedCards = setOwned.length > 0 ? setOwned : cardCatalog.filter(c => (u.cards?.[c.id] || 0) > 0);
         if (ownedCards.length === 0) {
             await interaction.reply({ content: "🔒 Tu ne possèdes aucune carte dans ton RegaDex !", ephemeral: true });
@@ -8585,28 +9087,35 @@ async function handleTcgInteraction(interaction) {
         return true;
     }
 
-    // [SET 2] Changement de Set dans !carte
+    // Changement de Set (Set 1, Set 2..., Cartes Perso) dans !carte
     if (action === 'carteset' && interaction.isButton()) {
-        const currentSetNum = parseInt(parts[2], 10) || DEFAULT_SET_NUMBER;
+        const rawCurrentSet = parts[2] || String(DEFAULT_SET_NUMBER);
         const ownerId = parts[4];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        const u = getOrCreateTcgUser(ownerId);
+        const ownedPerso = persoCatalog.filter(c => (u.cards?.[c.id] || 0) > 0);
         const activeSets = getActiveSets();
-        if (activeSets.length <= 1) {
-            await interaction.reply({ content: "⏳ Le Set 2 n'est pas encore disponible !", ephemeral: true });
+        const targets = [
+            ...activeSets.map(s => ({ key: String(s.number), label: s.name, setNum: s.number })),
+            ...(ownedPerso.length > 0 ? [{ key: 'perso', label: 'Cartes Perso', setNum: 'perso' }] : [])
+        ];
+        if (targets.length <= 1) {
+            await interaction.reply({ content: "⏳ Aucun autre Set disponible pour le moment !", ephemeral: true });
             return true;
         }
-        const curIdx = Math.max(0, activeSets.findIndex(s => s.number === currentSetNum));
-        const nextSet = activeSets[(curIdx + 1) % activeSets.length];
-        const u = getOrCreateTcgUser(ownerId);
-        const nextOwned = getSetCatalog(nextSet.number).filter(c => (u.cards?.[c.id] || 0) > 0);
+        const curIdx = Math.max(0, targets.findIndex(t => t.key === rawCurrentSet));
+        const nextTarget = targets[(curIdx + 1) % targets.length];
+        const nextOwned = nextTarget.key === 'perso'
+            ? ownedPerso
+            : getSetCatalog(nextTarget.setNum).filter(c => (u.cards?.[c.id] || 0) > 0);
         if (nextOwned.length === 0) {
-            await interaction.reply({ content: `🔒 Tu ne possèdes encore aucune carte dans le **${nextSet.name}** !`, ephemeral: true });
+            await interaction.reply({ content: `🔒 Tu ne possèdes encore aucune carte dans **${nextTarget.label}** !`, ephemeral: true });
             return true;
         }
         await interaction.deferUpdate();
         await interaction.editReply({
             content: null,
-            ...buildSingleCardPayload(nextOwned[0], ownerId, { setNumber: nextSet.number }),
+            ...buildSingleCardPayload(nextOwned[0], ownerId, { setNumber: nextTarget.setNum }),
             attachments: []
         });
         return true;
@@ -8883,6 +9392,13 @@ async function handleTcgInteraction(interaction) {
                 });
                 return true;
             }
+            if (res.card.isPerso) {
+                await interaction.reply({
+                    content: `❌ Les cartes personnalisées (\`${res.card.id}\`) sont **uniques et non échangeables**, impossible de les ajouter à la Wishlist.`,
+                    ephemeral: true
+                });
+                return true;
+            }
             const u = getOrCreateTcgUser(ownerId);
             u.wishlist = getSanitizedWishlist(u);
             if (u.wishlist.includes(res.card.id)) {
@@ -8954,7 +9470,7 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[3];
         const context = parts[4] || 'card';
         if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
-        const card = cardById.get(cardId);
+        const card = getCardByIdAny(cardId);
         const u = getOrCreateTcgUser(ownerId);
         if (!card || (u.cards?.[card.id] || 0) <= 0) {
             await interaction.reply({ content: "❌ Tu ne possèdes pas cette carte.", ephemeral: true });
@@ -9013,7 +9529,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'flexset' && interaction.isStringSelectMenu()) {
         const ownerId = parts[2];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
-        const card = cardById.get(interaction.values[0]);
+        const card = getCardByIdAny(interaction.values[0]);
         const u = getOrCreateTcgUser(ownerId);
         if (!card || (u.cards[card.id] || 0) <= 0) {
             await interaction.reply({ content: "❌ Tu ne possèdes pas cette carte.", ephemeral: true });
@@ -9361,6 +9877,13 @@ async function handleTcgInteraction(interaction) {
             }
             const query = interaction.fields.getTextInputValue('card_query');
             const res = resolveCardQuery(query);
+            if (res.card?.isPerso) {
+                await interaction.reply({
+                    content: `❌ Les cartes personnalisées (\`${res.card.id}\`) sont **uniques et non échangeables** !`,
+                    ephemeral: true
+                });
+                return true;
+            }
             const u = getOrCreateTcgUser(uid);
 
             if (res.card) {
@@ -9393,6 +9916,7 @@ async function handleTcgInteraction(interaction) {
             }
 
             const tradableMatches = res.matches.filter(c => {
+                if (c.isPerso) return false;
                 const already = trade.offers[uid].filter(id => id === c.id).length;
                 return (u.cards[c.id] || 0) - already >= 1;
             });
@@ -9686,6 +10210,99 @@ async function handleTcgInteraction(interaction) {
             data.pullPunishments = {};
             tcgBridge.demanderSauvegarde();
             await interaction.update(buildPunitionPayload(sessionId, session, interaction.guild));
+            return true;
+        }
+    }
+
+    // ----- !RGDXPROXIES SÉLECTEUR PAR SET (EPSYS-ONLY) -----
+    if (action === 'proxy' && parts[2] === 'gen' && interaction.isStringSelectMenu()) {
+        if (interaction.user.id !== EPSYS_ID) {
+            await interaction.reply({ content: "Réservé à Epsys 😌", ephemeral: true });
+            return true;
+        }
+        const scope = interaction.values[0];
+        let scopeLabel = 'Tous les Sets + Cartes Perso';
+        if (scope === 'perso') scopeLabel = 'Cartes Perso';
+        else if (scope.startsWith('set:')) scopeLabel = getSetConfig(parseInt(scope.slice(4), 10)).name;
+
+        const prep = collectProxyJobs(scope);
+        if (prep.jobs.length === 0) {
+            await interaction.reply({ content: `❌ Aucune carte chargée dans **${scopeLabel}** pour le moment.`, ephemeral: true });
+            return true;
+        }
+        if (proxyWarmupRunning) {
+            await interaction.reply({ content: '⏳ Un warmup des proxies est déjà en cours !', ephemeral: true });
+            return true;
+        }
+
+        const totalItems = prep.jobs.length + (assetPaths.mysteryCard ? prep.mysterySizes.length : 0);
+        await interaction.deferUpdate();
+        await interaction.editReply({
+            content: `🔥 **Warmup RegaDex démarré (${scopeLabel}) !**\n• **${totalItems}** miniatures à vérifier/générer...\n⏳ Progression : \`0/${totalItems}\` (0%)...`,
+            embeds: [],
+            components: [],
+            files: [],
+            attachments: []
+        });
+
+        await runProxyWarmup(scope, scopeLabel, async (text) => {
+            await interaction.editReply({
+                content: text,
+                embeds: [],
+                components: [],
+                files: [],
+                attachments: []
+            }).catch(() => {});
+        });
+        return true;
+    }
+
+    // ----- !TCGPERSO VISUALISEUR ADMIN (EPSYS-ONLY) -----
+    if (action === 'persoview') {
+        if (interaction.user.id !== EPSYS_ID) {
+            await interaction.reply({ content: "Réservé à Epsys 😌", ephemeral: true });
+            return true;
+        }
+        const sub = parts[2];
+
+        if (sub === 'sel' && interaction.isStringSelectMenu()) {
+            const cardId = interaction.values[0];
+            await interaction.deferUpdate();
+            await interaction.editReply({ content: null, ...buildPersoAdminPayload(cardId, 0, interaction.guild), attachments: [] });
+            return true;
+        }
+
+        if (sub === 'card' && interaction.isButton()) {
+            const dir = parts[3];
+            const currentId = parts[4];
+            if (persoCatalog.length === 0) {
+                await interaction.update({ content: null, ...buildPersoAdminPayload(null, 0, interaction.guild), attachments: [] });
+                return true;
+            }
+            let idx = persoCatalog.findIndex(c => c.id === currentId);
+            if (idx === -1) idx = 0;
+            const nextIdx = dir === 'prev'
+                ? (idx - 1 + persoCatalog.length) % persoCatalog.length
+                : (idx + 1) % persoCatalog.length;
+            await interaction.deferUpdate();
+            await interaction.editReply({ content: null, ...buildPersoAdminPayload(persoCatalog[nextIdx].id, 0, interaction.guild), attachments: [] });
+            return true;
+        }
+
+        if (sub === 'page' && interaction.isButton()) {
+            const targetPage = parseInt(parts[3], 10) || 0;
+            const firstOfPage = persoCatalog[targetPage * 25]?.id || null;
+            await interaction.deferUpdate();
+            await interaction.editReply({ content: null, ...buildPersoAdminPayload(firstOfPage, targetPage, interaction.guild), attachments: [] });
+            return true;
+        }
+
+        if (sub === 'rescan' && interaction.isButton()) {
+            const currentPage = parseInt(parts[3], 10) || 0;
+            const currentId = parts[4] === 'none' ? null : parts[4];
+            await interaction.deferUpdate();
+            await scanSet1Cards(client);
+            await interaction.editReply({ content: null, ...buildPersoAdminPayload(currentId, currentPage, interaction.guild), attachments: [] });
             return true;
         }
     }
