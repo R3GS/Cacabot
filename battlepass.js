@@ -19,6 +19,7 @@ let bpBridge = {
     getBattlePassData: () => ({}),
     demanderSauvegarde: () => {},
     crediterInventaireRoulette: () => {},
+    declencherHappyHourRoulette: () => {},
     rouletteBouclierActif: null,
     rouletteRedirectCharges: null,
     EPSYS_ID: '436218312574107658'
@@ -559,6 +560,7 @@ function ajouterXpEtMonteeDeNiveau(userId, p, xpBrut, titreQuete) {
     const xpGagne = Math.round(xpBrut * mult);
     p.xp += xpGagne;
 
+    const niveauAvant = p.niveau;
     const paliersDebloques = [];
     while (p.xp >= XP_PAR_NIVEAU && p.niveau < NIVEAU_MAX) {
         p.xp -= XP_PAR_NIVEAU;
@@ -582,6 +584,9 @@ function ajouterXpEtMonteeDeNiveau(userId, p, xpBrut, titreQuete) {
 
     if (p.niveau >= NIVEAU_MAX) {
         p.xp = XP_PAR_NIVEAU;
+        if (niveauAvant < NIVEAU_MAX) {
+            bpBridge.declencherHappyHourRoulette?.(30, `<@${userId}> vient d'atteindre le **Niveau ${NIVEAU_MAX} (Palier Ultime)** du Battle Pass !`);
+        }
     }
 
     // Persistance immédiate des gains
@@ -1200,6 +1205,7 @@ function reclamerRecompensesEtXP(membre) {
         }
     }
 
+    const niveauAvant = p.niveau;
     p.xp += xpGagne;
     const paliersDebloques = [];
 
@@ -1227,6 +1233,9 @@ function reclamerRecompensesEtXP(membre) {
 
     if (p.niveau >= NIVEAU_MAX) {
         p.xp = XP_PAR_NIVEAU; // Cap max
+        if (niveauAvant < NIVEAU_MAX) {
+            bpBridge.declencherHappyHourRoulette?.(30, `<@${membre.id}> vient d'atteindre le **Niveau ${NIVEAU_MAX} (Palier Ultime)** du Battle Pass !`);
+        }
     }
 
     bpBridge.demanderSauvegarde();

@@ -115,9 +115,12 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
                 `\`!stats set [@membre]\` • Panneau complet pour modifier tirages, gains, bonus & malus\n` +
                 `\`!successgive [@membre]\` • Menu pour réattribuer des succès perdus\n` +
                 `\`!rltsuccesforce [id/test] [@membre]\` • Débloque un succès de force ou teste une carte\n\n` +
-                `### 🖼️ Tests Hall of Fame / Hall of Shame & Proxies PP\n` +
-                `\`!rlthoftest [slug] [@membre]\` • Teste l'affiche Canvas **Hall of Fame** dans le salon actuel *(silencieux, ne poste pas dans le HoF)*\n` +
-                `\`!rlthostest [slug] [@membre]\` • Teste l'affiche Canvas **Hall of Shame** dans le salon actuel *(silencieux, ne poste pas dans le HoS)*\n` +
+                `### 🖼️ Tests Visuels, Tirages & Audit Assets\n` +
+                `\`!rltaudit\` • Vérifie le fond Canvas, les 14 GIFs et les permissions R/W de \`Roulette/Proxies\`\n` +
+                `\`!rltrolltest [slug|id|rien] [@membre]\` • Simule l'embed + GIF d'un tirage *(aucun effet ni stat)*\n` +
+                `\`!rolltesthof [slug] [@membre]\` / \`!rolltesthos [slug] [@membre]\` • Simule l'embed + GIF d'un ultra-rare HoF/HoS *(aucun effet)*\n` +
+                `\`!rlthoftest [slug] [@membre]\` / \`!rlthostest [slug] [@membre]\` • Teste les affiches Canvas **Hall of Fame** / **Hall of Shame**\n` +
+                `\`!rltvotetest [@membre]\` • Teste l'embed + Canvas live du **Vote Public**\n` +
                 `\`!rltproxies\` *(\`warmup\` / \`purge\`)* • Diagnostic & pré-génération du cache des avatars membres (\`Roulette/Proxies\`)\n\n` +
                 `### 🎛️ Effets & Cooldowns\n` +
                 `\`!reroll [@membre]\` • Réinitialise immédiatement le cooldown d'un·e membre\n` +
@@ -509,14 +512,16 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
                 `-# 🔒 Accès : Nécessite le rôle Roulette à récupérer dans <#1559082682313474059> ou <#1559324422165373008> !\n\n` +
                 `### 🎲 La Roulette Regaïenne\n` +
                 `Tente ta chance toutes les 15 minutes pour remporter des bonus ou subir des malus éphémères *(avec ou sans espace : \`!rltgo\`, \`!rlt state\`, \`!rltstate\`...)*.\n` +
-                `-# ⏱️ Cooldown réduit à **5 min en Happy Hour (20h00)** • Fiches en **version imagée Canvas** (switch texte dispo) !\n\n` +
+                `-# ⏱️ Cooldown à **5 min en Happy Hour** *(20h + événements RegaDex/BP)* • **Dimanche 16h30–20h** : *Roulette Maudite/Dorée (0% Rien)* !\n\n` +
                 `\`!rlt\` • Ouvrir le Hub de la roulette *(ou \`!rlt go\` / \`!rltgo\` pour tirer direct)*\n` +
-                `\`!rlt claim\` • Ouvrir ton inventaire *(boucliers, relances & récompenses)*\n` +
+                `\`!rlt claim\` • Ouvrir ton inventaire *(boucliers, redirections, Diviseur & récompenses)*\n` +
                 `\`!rlt state [@membre]\` • Carte Canvas de tes effets & malus actifs\n` +
-                `\`!rlt stats [@membre]\` • Carte Canvas du bilan complet de tes tirages\n` +
-                `\`!rlt succes [@membre]\` • Galerie Canvas des **30 succès** *(10 par page)*\n` +
+                `\`!rlt stats [@membre]\` • Carte Canvas de tes tirages + **Roulettodex**\n` +
+                `\`!rlt succes [@membre]\` • Galerie Canvas des **30 succès** *(+ **🕵️ Secrets** si débloqués)*\n` +
                 `\`!rlttop\` • Podium & classements *(Succès, Tirages, Bonus, Malus)*\n` +
-                `\`!rlt probas\` • Table complète des probabilités par onglets\n\n` +
+                `\`!rlt probas\` • Table complète des probabilités *(Bonus, Malus, Spéciaux, Ultra-Rares, Pity)*\n` +
+                `\`!rlt notif\` • Activer les alertes de fin de cooldown & MP d'interactions\n` +
+                `\`!rlt help\` • Guide interactif complet de la Roulette\n\n` +
                 `### 🎫 Le Battle Pass Mensuel\n` +
                 `Accomplis tes quêtes quotidiennes et hebdos pour débloquer 25 paliers de récompenses.\n\n` +
                 `\`!bp\` *(ou \`!pass\`)* • Ouvrir ton Battle Pass de la saison\n` +

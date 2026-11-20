@@ -311,7 +311,8 @@ let tcgBridge = {
     findMemberByName: () => ({ found: null, multiple: false, candidates: [] }),
     askDisambiguation: () => {},
     estModo: () => false,
-    trackBattlePassProgress: () => {}
+    trackBattlePassProgress: () => {},
+    declencherHappyHourRoulette: () => {}
 };
 
 function initTcgState(bridge) {
@@ -1418,6 +1419,7 @@ async function progressCommunityQuest(client, events, boosterOpenerId = null) {
                 allowedMentions: { users: quest.participants }
             }).catch(() => {});
         }
+        tcgBridge.declencherHappyHourRoulette?.(30, `Quête communautaire RegaDex terminée (${quest.label.replace(/\*\*/g, '')})`, c);
         return true;
     }
 
@@ -10397,6 +10399,29 @@ function addTcgBoostersFromRoulette(userId, qty, member) {
     return true;
 }
 
+function reduceTcgBoosterCooldown(userId, reductionMs = 3 * 60 * 60 * 1000, member = null) {
+    if (member && !hasTcgRole(member)) return { applied: false, noRole: true };
+    const u = getOrCreateTcgUser(userId);
+    if (u.freeBoosters >= MAX_FREE_BOOSTERS) {
+        return { applied: false, alreadyFull: true, freeBoosters: u.freeBoosters, maxFree: MAX_FREE_BOOSTERS };
+    }
+    const freeBefore = u.freeBoosters;
+    u.lastFreeRechargeAt = (u.lastFreeRechargeAt || Date.now()) - Math.max(0, reductionMs);
+    syncFreeBoosters(u);
+    tcgBridge.demanderSauvegarde();
+    if (getStoreData().notifs?.[userId]) {
+        armerNotifBooster(userId, tcgBridge.client);
+    }
+    return {
+        applied: true,
+        alreadyFull: false,
+        grantedFree: u.freeBoosters > freeBefore,
+        freeBoosters: u.freeBoosters,
+        maxFree: MAX_FREE_BOOSTERS,
+        nextAt: getNextBoosterTimestamp(u)
+    };
+}
+
 async function grantMinigameTcgPoints(client, userIds, points = 2) {
     if (!Array.isArray(userIds) || userIds.length === 0) return [];
     const c = client || tcgBridge.client;
@@ -10440,6 +10465,7 @@ module.exports = {
     trackTcgRoulettePoint,
     addTcgPointsFromRoulette,
     addTcgBoostersFromRoulette,
+    reduceTcgBoosterCooldown,
     grantMinigameTcgPoints,
     handleTcgTradeThreadMessage,
     handleTcgMessage,

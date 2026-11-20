@@ -379,6 +379,7 @@ const {
     ROULETTE_ETATS,
     initRouletteBridge,
     verifierHappyHour,
+    declencherHappyHourRoulette,
     initialiserWebhooksRoulette,
     assurerWebhookRoulette,
     armerNotifRoulette,
@@ -533,6 +534,7 @@ const {
     trackTcgRoulettePoint,
     addTcgPointsFromRoulette,
     addTcgBoostersFromRoulette,
+    reduceTcgBoosterCooldown,
     grantMinigameTcgPoints,
     handleTcgTradeThreadMessage,
     handleTcgMessage,
@@ -554,7 +556,8 @@ initRouletteBridge({
     trackTcgRoulettePoint: (uid, member) => trackTcgRoulettePoint(uid, member),
     hasTcgCollectorRole: (member) => hasTcgRole(member),
     addTcgPoints: (uid, pts, member) => addTcgPointsFromRoulette(uid, pts, member),
-    addTcgBoosters: (uid, qty, member) => addTcgBoostersFromRoulette(uid, qty, member)
+    addTcgBoosters: (uid, qty, member) => addTcgBoostersFromRoulette(uid, qty, member),
+    reduceTcgBoosterCooldown: (uid, ms, member) => reduceTcgBoosterCooldown(uid, ms, member)
 });
 
 
@@ -621,6 +624,7 @@ initBattlePassState({
     getBattlePassData: () => battlePassData,
     demanderSauvegarde,
     crediterInventaireRoulette,
+    declencherHappyHourRoulette: (duree, raison, cl) => declencherHappyHourRoulette(duree, raison, cl || client),
     rouletteBouclierActif,
     rouletteRedirectCharges,
     rouletteStats,
@@ -677,7 +681,8 @@ initTcgState({
     findMemberByName,
     askDisambiguation,
     estModo,
-    trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta)
+    trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta),
+    declencherHappyHourRoulette: (duree, raison, cl) => declencherHappyHourRoulette(duree, raison, cl || client)
 });
 
 ///watcher.js
@@ -1426,7 +1431,9 @@ client.once('ready', async () => {
                         { name: '📊 state — Effets et malus actifs', value: 'state' },
                         { name: '📈 stats — Statistiques de tirage', value: 'stats' },
                         { name: '🎖️ succes — Succès débloqués', value: 'succes' },
-                        { name: '🏆 top — Panthéon des succès', value: 'top' }
+                        { name: '🏆 top — Panthéon des succès', value: 'top' },
+                        { name: '🎲 probas — Table des probabilités', value: 'probas' },
+                        { name: '📖 help — Guide complet de la Roulette', value: 'help' }
                     )
             ),
 
