@@ -1088,7 +1088,7 @@ function buildRouletteNotifMenuPayload(member, ctx = 'ephem', statusNote = null)
             .setDisabled(isRepeat),
         new ButtonBuilder()
             .setCustomId(`roulette_notif:repeat_off:${userId}${ctxSuffix}`)
-            .setLabel('Que prochain tirage')
+            .setLabel('Que le prochain tirage')
             .setEmoji('1️⃣')
             .setStyle(!isRepeat ? ButtonStyle.Primary : ButtonStyle.Secondary)
             .setDisabled(!isRepeat)
