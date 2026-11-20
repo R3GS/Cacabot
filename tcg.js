@@ -6938,17 +6938,17 @@ async function handleTcgMessage(message) {
     if (/^!tcgtradeopen5min(?:\s|$)/i.test(raw)) {
         if (message.author.id !== EPSYS_ID) return true;
         const arg = (raw.split(/\s+/)[1] || '').toLowerCase();
-        await message.delete().catch(() => {});
         if (arg === 'off' || arg === 'stop') {
             tradeFreeModeUntil = 0;
-            await message.author.send('🔒 **Mode échange libre RegaDex désactivé** *(retour aux critères normaux)*.').catch(() => {});
+            await replySilent(message, '🔒 **Mode échange libre RegaDex désactivé** *(retour aux critères normaux)*.');
         } else {
             tradeFreeModeUntil = Date.now() + TRADE_FREE_WINDOW_MS;
             const endTs = Math.floor(tradeFreeModeUntil / 1000);
-            await message.author.send(
+            await replySilent(
+                message,
                 `🔓 **Mode échange libre RegaDex activé pour 5 minutes** *(expiration <t:${endTs}:R>)*.\n` +
-                `-# Tous les critères d'échange (rareté, dernière copie, dons à sens unique, confirmation déséquilibrée) sont temporairement supprimés de façon invisible pour les membres.`
-            ).catch(() => {});
+                `-# Tous les critères d'échange (rareté, dernière copie, dons à sens unique, confirmation déséquilibrée) sont temporairement supprimés sans rien afficher aux membres dans les échanges.`
+            );
         }
         return true;
     }
