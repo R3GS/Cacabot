@@ -4042,13 +4042,13 @@ function buildGuidePayload(userId, fromHub = true) {
             `• **Lancer :** \`!trade [@membre]\` ou clic droit sur un membre. L'autre personne **accepte ou refuse**, et le fil peut être **public** ou **silencieux**.` +
             sep +
             `### 🃏 Dans le fil\n` +
-            `• Chacun ajoute jusqu'à **3 cartes** *(dons, dernières copies et raretés différentes autorisés)*.\n` +
+            `• Chacun.e ajoute jusqu'à **3 cartes** *(dons, dernières copies et raretés différentes autorisés)*.\n` +
             `• Un **repère** indique combien de cartes il manque à chacun pour finir le ${SET1_NAME}.\n` +
-            `• Quand vous êtes d'accord, vous **verrouillez** tous les deux.\n` +
-            `-# ⚠️ Toute modification déverrouille automatiquement la validation des deux joueurs.` +
+            `• Quand vous êtes d'accord, vous **verrouillez** tous.tes les deux.\n` +
+            `-# ⚠️ Toute modification déverrouille automatiquement la validation des deux participant.es.` +
             sep +
             `### ⚖️ Échange inéquitable\n` +
-            `• Si l'échange est déséquilibré, une **double confirmation** est demandée avant exécution. L'un des deux peut annuler : les offres sont alors déverrouillées.` +
+            `• Si l'échange est déséquilibré, une **double confirmation** est demandée avant exécution. L'un.e des deux peut annuler : les offres sont alors déverrouillées.` +
             sep +
             `### ✅ Fin de l'échange\n` +
             `• Les cartes sont échangées et un **récap en image** est posté.\n` +
