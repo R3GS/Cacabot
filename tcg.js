@@ -4269,68 +4269,41 @@ function buildStorePayload(member, u, fromHub = false) {
         .setDescription(
             `🪙 **Ton solde :** **${u.points} points RegaDex**\n` +
             `────────────────────────────────────────\n` +
-            `🎁 **Booster ${SET1_NAME}** — \`${STORE_PRICES.booster} pts\`\n` +
-            `-# Un booster de 3 cartes ${SET1_NAME} à ouvrir quand tu veux.\n\n` +
-            `🎴 **Booster 5 cartes (${SET1_NAME})** — \`${STORE_PRICES.fiveCardBooster} pts\`\n` +
-            `-# Un gros booster contenant **5 cartes** (sans doublon dans le même pack) !\n\n` +
-            `🍀 **Prochain booster chanceux** — \`${STORE_PRICES.luckyBooster} pts\`\n` +
-            `-# Supprime toutes les cartes **Communes** de ton prochain booster.\n\n` +
             `⚡ **Diviser le cooldown par 2** — \`${STORE_PRICES.halfCooldown} pts\`\n` +
             `-# Activé dès l'ouverture du prochain booster : celui d'après prendra **3h** au lieu de 6h.\n\n` +
-            `🌟 **Taux de God Pack ×5 (5j)** — \`${STORE_PRICES.godPackBoost} pts\`\n` +
-            `-# Passe tes chances d'obtenir un **God Pack** de **1% à 5%** pendant **5 jours** *(bonus personnel)*.\n\n` +
             `✨ **Transformer une carte en Holographique** — \`${STORE_PRICES.holoTransform} pts\`\n` +
             `-# Transforme 1 de tes cartes compatibles possédées en sa version **holographique** !\n\n` +
+            `🍀 **Prochain booster chanceux** — \`${STORE_PRICES.luckyBooster} pts\`\n` +
+            `-# Supprime toutes les cartes **Communes** de ton prochain booster.\n\n` +
+            `🎁 **Booster ${SET1_NAME}** — \`${STORE_PRICES.booster} pts\`\n` +
+            `-# Un booster de 3 cartes ${SET1_NAME} à ouvrir quand tu veux.\n\n` +
+            `🌟 **Taux de God Pack ×5 (5j)** — \`${STORE_PRICES.godPackBoost} pts\`\n` +
+            `-# Passe tes chances d'obtenir un **God Pack** de **1% à 5%** pendant **5 jours** *(bonus personnel)*.\n\n` +
+            `🎴 **Booster 5 cartes (${SET1_NAME})** — \`${STORE_PRICES.fiveCardBooster} pts\`\n` +
+            `-# Un gros booster contenant **5 cartes** (sans doublon dans le même pack) !\n\n` +
             `🕳️ **Transformer une Full Art en Négative** — \`${STORE_PRICES.negativeTransform} pts\`\n` +
             `-# Transforme 1 de tes cartes **Full Art** compatibles possédées en sa version **Négative** !`
         );
 
+    const storeBtn = (key, label, emoji) => new ButtonBuilder()
+        .setCustomId(`tcg:buy:${key}:${member.id}${hubSuffix}`)
+        .setLabel(`${label} (${STORE_PRICES[key]} pts)`)
+        .setEmoji(emoji)
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(u.points < STORE_PRICES[key]);
+
+    // Ordre croissant de prix : gauche → droite, haut → bas
     const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId(`tcg:buy:booster:${member.id}${hubSuffix}`)
-            .setLabel(`Booster (${STORE_PRICES.booster} pts)`)
-            .setEmoji('🎁')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(u.points < STORE_PRICES.booster),
-        new ButtonBuilder()
-            .setCustomId(`tcg:buy:fiveCardBooster:${member.id}${hubSuffix}`)
-            .setLabel(`Booster 5 cartes (${STORE_PRICES.fiveCardBooster} pts)`)
-            .setEmoji('🎴')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(u.points < STORE_PRICES.fiveCardBooster),
-        new ButtonBuilder()
-            .setCustomId(`tcg:buy:luckyBooster:${member.id}${hubSuffix}`)
-            .setLabel(`Chanceux (${STORE_PRICES.luckyBooster} pts)`)
-            .setEmoji('🍀')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(u.points < STORE_PRICES.luckyBooster),
-        new ButtonBuilder()
-            .setCustomId(`tcg:buy:halfCooldown:${member.id}${hubSuffix}`)
-            .setLabel(`CD /2 (${STORE_PRICES.halfCooldown} pts)`)
-            .setEmoji('⚡')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(u.points < STORE_PRICES.halfCooldown)
+        storeBtn('halfCooldown', 'CD /2', '⚡'),
+        storeBtn('holoTransform', 'Holo', '✨'),
+        storeBtn('luckyBooster', 'Chanceux', '🍀'),
+        storeBtn('booster', 'Booster', '🎁'),
+        storeBtn('godPackBoost', 'God Pack ×5', '🌟')
     );
 
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId(`tcg:buy:godPackBoost:${member.id}${hubSuffix}`)
-            .setLabel(`God Pack ×5 (${STORE_PRICES.godPackBoost} pts)`)
-            .setEmoji('🌟')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(u.points < STORE_PRICES.godPackBoost),
-        new ButtonBuilder()
-            .setCustomId(`tcg:buy:holoTransform:${member.id}${hubSuffix}`)
-            .setLabel(`Holo (${STORE_PRICES.holoTransform} pts)`)
-            .setEmoji('✨')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(u.points < STORE_PRICES.holoTransform),
-        new ButtonBuilder()
-            .setCustomId(`tcg:buy:negativeTransform:${member.id}${hubSuffix}`)
-            .setLabel(`Full Art → Négative (${STORE_PRICES.negativeTransform} pts)`)
-            .setEmoji('🕳️')
-            .setStyle(ButtonStyle.Primary)
-            .setDisabled(u.points < STORE_PRICES.negativeTransform)
+        storeBtn('fiveCardBooster', 'Booster 5 cartes', '🎴'),
+        storeBtn('negativeTransform', 'Full Art → Négative', '🕳️')
     );
 
     const row3 = new ActionRowBuilder().addComponents(
@@ -4876,6 +4849,36 @@ async function envoyerPantheonTcg(client, member, card, isNew, luckyUsed = false
         embeds: [embed],
         files
     }).catch(() => {});
+}
+
+async function envoyerTransfoNegativeTcg(client, member, baseCard, negCard, isNew) {
+    if (!baseCard || !negCard || !member || isSandboxId(member.id)) return;
+
+    const c = client || tcgBridge.client;
+    if (!c) return;
+
+    const salon = c.channels.cache.get(TCG_CHANNEL_ID)
+        ?? await c.channels.fetch(TCG_CHANNEL_ID).catch(() => null);
+    if (!salon) return;
+
+    const meta = RARITY_META['Négative'];
+    const embed = new EmbedBuilder()
+        .setColor(meta.color)
+        .setTitle('🕳️ TRANSFORMATION NÉGATIVE !')
+        .setDescription(
+            `<@${member.id}> a transformé sa **Full Art** \`${baseCard.id}\` **${baseCard.name}** en **${negCard.id} — ${negCard.name}** grâce au Store !\n` +
+            (isNew ? `🆕 **Première découverte dans son RegaDex !**` : `🔁 **Nouvel exemplaire obtenu !**`)
+        )
+        .setFooter({ text: 'RegaDex • Regaïa' })
+        .setTimestamp();
+
+    const files = [];
+    if (negCard.filePath && fs.existsSync(negCard.filePath)) {
+        files.push(new AttachmentBuilder(negCard.filePath, { name: 'carte_negative.png' }));
+        embed.setImage('attachment://carte_negative.png');
+    }
+
+    await sendSilent(salon, { embeds: [embed], files }).catch(() => {});
 }
 
 async function buildGodPackPantheonPayload(member, cards, isNewFlags, theme = 'B', godBoostUsed = false, isTest = false) {
@@ -9499,6 +9502,7 @@ async function handleTcgInteraction(interaction) {
 
         await interaction.deferUpdate();
         await interaction.editReply({ content: null, embeds: [embed], files, attachments: [], components: resultRows });
+        envoyerTransfoNegativeTcg(client, interaction.member, baseCard, negCard, wasNew).catch(() => {});
         return true;
     }
 
@@ -10375,6 +10379,7 @@ async function handleTcgInteraction(interaction) {
             return true;
         }
 
+        const wasNew = (u.cards[negCard.id] || 0) === 0;
         u.inventory.negativeTransform -= 1;
         u.cards[card.id] -= 1;
         if (u.cards[card.id] <= 0) {
@@ -10417,6 +10422,7 @@ async function handleTcgInteraction(interaction) {
             embeds: [],
             components: []
         });
+        envoyerTransfoNegativeTcg(client, interaction.member, card, negCard, wasNew).catch(() => {});
         return true;
     }
 
