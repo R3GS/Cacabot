@@ -3484,7 +3484,7 @@ function buildRouletteResultEmbed(outcomeId, texte, authorId = null, auteurNom =
     if (outcomeId === 'aucun-resultat') {
         const texteAjuste = formaterEchecRoulette(texte, minsEffectives);
         texteFinal = `> *« ${texteAjuste} »*`;
-        if (subContexte) texteFinal += `\n${subContexte}`;
+        if (subContexte) texteFinal += `\n\n${subContexte}`;
     } else {
         texteFinal = formaterCitationRoulette(texte);
         if (subContexte) texteFinal += `\n${subContexte}`;
