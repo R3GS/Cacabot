@@ -2520,7 +2520,7 @@ async function renderRouletteStateCanvas(cible, guildId = null) {
     const pity = roulettePity.get(cible.id) ?? { malus: 0, nuls: 0 };
     const jackpotBoost = Math.round((rouletteJackpotBonus.get(cible.id) || 0) * 100);
     const finCd = rouletteCooldowns.get(cible.id);
-    const cdTxt = finCd && now < finCd ? `RESTE : ${formatDureeCourte(finCd - now)}` : 'PRÊT À TIRER';
+    const cdTxt = finCd && now < finCd ? `COOLDOWN : ${formatDureeCourte(finCd - now)}` : 'PRÊT À TIRER';
 
     // Header
     drawGlassPanel(ctx, 48, 36, W - 96, 130, 22, 'rgba(12, 15, 26, 0.84)', 'rgba(255, 210, 10, 0.48)', 2.5);
