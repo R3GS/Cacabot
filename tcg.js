@@ -7372,14 +7372,40 @@ async function handleTcgInteraction(interaction) {
             await interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
             return true;
         }
-        const prevSession = boosterSessions.get(interaction.message?.id);
-        if (prevSession) {
-            clearBoosterInspectTimeout(prevSession);
-            boosterSessions.delete(interaction.message.id);
-        }
-        await interaction.deferUpdate();
+        const msg = interaction.message;
+        const isBoosterRecap = Boolean(
+            msg?.id && (
+                boosterSessions.has(msg.id) ||
+                msg.embeds?.some(e =>
+                    e?.title === '📊 Récapitulatif du Booster' ||
+                    (typeof e?.title === 'string' && e.title.includes('RÉCAPITULATIF') && e.title.includes('GOD PACK'))
+                )
+            )
+        );
         const u = getOrCreateTcgUser(ownerId);
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+
+        if (isBoosterRecap) {
+            const updatedRows = (msg.components || []).map(row => {
+                const newRow = new ActionRowBuilder();
+                for (const comp of row.components) {
+                    const json = comp.toJSON();
+                    if (json.custom_id && json.custom_id.startsWith('tcg:hub:')) {
+                        json.disabled = true;
+                    }
+                    newRow.addComponents(ButtonBuilder.from(json));
+                }
+                return newRow;
+            });
+            await interaction.update({ components: updatedRows }).catch(() => {});
+            const sentHub = interaction.channel
+                ? await sendSilent(interaction.channel, buildHubPayload(actorMember, u)).catch(() => null)
+                : null;
+            if (sentHub) schedulePanelAutoDelete(sentHub);
+            return true;
+        }
+
+        await interaction.deferUpdate();
         await interaction.editReply({
             content: null,
             ...buildHubPayload(actorMember, u),
