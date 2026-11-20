@@ -480,8 +480,11 @@ function parseCardFilename(filename, category, folderRarity, setNumber = DEFAULT
 }
 
 function parsePersoCardFilename(filename) {
-    if (!filename.toLowerCase().endsWith('.png')) return null;
-    const match = filename.match(/^sp[eé]\s*-\s*(\d+)(?:\s*-\s*|\s+)(.+)\.png$/iu);
+    const normalizedFile = String(filename || '').normalize('NFC');
+    const extMatch = normalizedFile.match(/\.(png|jpe?g|webp)$/i);
+    if (!extMatch) return null;
+    const baseWithoutExt = normalizedFile.slice(0, -extMatch[0].length);
+    const match = baseWithoutExt.match(/^sp[eé]\s*[-]?\s*(\d+)(?:(?:\s*-\s*|\s+)(.+))?$/iu);
     if (!match) return null;
 
     const rawDigits = match[1];
@@ -489,7 +492,7 @@ function parsePersoCardFilename(filename) {
     if (!Number.isFinite(numValue) || numValue <= 0) return null;
 
     const id = `Spé-${rawDigits}`;
-    const rawName = match[2].trim();
+    const rawName = (match[2] || id).trim();
 
     return {
         id,
