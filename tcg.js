@@ -479,20 +479,32 @@ function parseCardFilename(filename, category, folderRarity, setNumber = DEFAULT
     };
 }
 
-function parsePersoCardFilename(filename) {
+function parsePersoCardFilename(filename, fallbackNumValue = null) {
     const normalizedFile = String(filename || '').normalize('NFC');
     const extMatch = normalizedFile.match(/\.(png|jpe?g|webp)$/i);
     if (!extMatch) return null;
-    const baseWithoutExt = normalizedFile.slice(0, -extMatch[0].length);
-    const match = baseWithoutExt.match(/^sp[eé]\s*[-]?\s*(\d+)(?:(?:\s*-\s*|\s+)(.+))?$/iu);
-    if (!match) return null;
+    const baseWithoutExt = normalizedFile.slice(0, -extMatch[0].length).trim();
+    if (!baseWithoutExt) return null;
 
-    const rawDigits = match[1];
-    const numValue = parseInt(rawDigits, 10);
-    if (!Number.isFinite(numValue) || numValue <= 0) return null;
+    const match = baseWithoutExt.match(/^sp[eé]\s*[-]?\s*(\d+)(?:(?:\s*-\s*|\s+)(.+))?$/iu);
+    let rawDigits;
+    let numValue;
+    let rawName;
+
+    if (match) {
+        rawDigits = match[1];
+        numValue = parseInt(rawDigits, 10);
+        if (!Number.isFinite(numValue) || numValue <= 0) return null;
+        rawName = (match[2] || `Spé-${rawDigits}`).trim();
+    } else if (Number.isInteger(fallbackNumValue) && fallbackNumValue > 0) {
+        numValue = fallbackNumValue;
+        rawDigits = String(numValue).padStart(2, '0');
+        rawName = baseWithoutExt;
+    } else {
+        return null;
+    }
 
     const id = `Spé-${rawDigits}`;
-    const rawName = (match[2] || id).trim();
 
     return {
         id,
@@ -665,14 +677,30 @@ async function scanSet1Cards(client = null) {
     const newPersoByNumValue = new Map();
     const resolvedPersoDir = findSubdir(TCG_ROOT, ['Cartes Perso', 'Cartes perso', 'CartesPerso']) || TCG_PERSO_DIR;
     if (fs.existsSync(resolvedPersoDir)) {
-        const persoFiles = fs.readdirSync(resolvedPersoDir).filter(f => !f.startsWith('.'));
+        const persoFiles = fs.readdirSync(resolvedPersoDir)
+            .filter(f => !f.startsWith('.'))
+            .filter(f => {
+                try { return !fs.statSync(path.join(resolvedPersoDir, f)).isDirectory(); } catch { return false; }
+            })
+            .sort((a, b) => a.localeCompare(b, 'fr', { numeric: true, sensitivity: 'base' }));
+
+        const data = getStoreData();
+        if (!data.persoCardRegistry || typeof data.persoCardRegistry !== 'object') {
+            data.persoCardRegistry = {};
+        }
+        const registry = data.persoCardRegistry;
+        let registryChanged = false;
+        const unnumberedFiles = [];
+
         for (const file of persoFiles) {
             const fullPath = path.join(resolvedPersoDir, file);
-            if (fs.statSync(fullPath).isDirectory()) continue;
-
             const parsed = parsePersoCardFilename(file);
             if (!parsed) {
-                unrecognizedFiles.push(`TCG/Cartes Perso/${file}`);
+                if (/\.(png|jpe?g|webp)$/i.test(file)) {
+                    unnumberedFiles.push(file);
+                } else {
+                    unrecognizedFiles.push(`TCG/Cartes Perso/${file}`);
+                }
                 continue;
             }
             parsed.filePath = fullPath;
@@ -682,12 +710,58 @@ async function scanSet1Cards(client = null) {
                 continue;
             }
 
+            const regKey = file.normalize('NFC');
+            if (registry[regKey] !== parsed.numValue) {
+                registry[regKey] = parsed.numValue;
+                registryChanged = true;
+            }
+
             newPersoCatalog.push(parsed);
             newPersoById.set(parsed.id, parsed);
             newPersoByNumValue.set(parsed.numValue, parsed);
         }
+
+        const reservedByOtherUnnumbered = new Set();
+        for (const f of unnumberedFiles) {
+            const k = f.normalize('NFC');
+            const savedNum = Number(registry[k]);
+            if (Number.isInteger(savedNum) && savedNum > 0 && !newPersoByNumValue.has(savedNum)) {
+                reservedByOtherUnnumbered.add(savedNum);
+            }
+        }
+
+        for (const file of unnumberedFiles) {
+            const fullPath = path.join(resolvedPersoDir, file);
+            const regKey = file.normalize('NFC');
+            let assignedNum = Number(registry[regKey]);
+
+            if (!Number.isInteger(assignedNum) || assignedNum <= 0 || newPersoByNumValue.has(assignedNum)) {
+                assignedNum = 1;
+                while (newPersoByNumValue.has(assignedNum) || reservedByOtherUnnumbered.has(assignedNum)) {
+                    assignedNum++;
+                }
+                registry[regKey] = assignedNum;
+                reservedByOtherUnnumbered.add(assignedNum);
+                registryChanged = true;
+            }
+
+            const parsed = parsePersoCardFilename(file, assignedNum);
+            if (!parsed) {
+                unrecognizedFiles.push(`TCG/Cartes Perso/${file}`);
+                continue;
+            }
+            parsed.filePath = fullPath;
+
+            newPersoCatalog.push(parsed);
+            newPersoById.set(parsed.id, parsed);
+            newPersoByNumValue.set(parsed.numValue, parsed);
+        }
+
+        if (registryChanged) {
+            tcgBridge.demanderSauvegarde();
+        }
     }
-    newPersoCatalog.sort((a, b) => a.numValue - b.numValue);
+    newPersoCatalog.sort((a, b) => a.numValue - b.numValue);a
 
     newCatalog.sort((a, b) => a.sortIndex - b.sortIndex);
     cardCatalog = newCatalog;
