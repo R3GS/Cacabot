@@ -110,11 +110,14 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
             .setColor(0xf1c40f)
             .setTitle('🎰 Roulette (Administration)')
             .setDescription(
-                `Gestion des statistiques, succès, cooldowns et effets spéciaux.\n\n` +
+                `Gestion des statistiques, succès, cooldowns, visuels HoF/HoS et effets spéciaux *(toutes les commandes fonctionnent avec ou sans espace)*.\n\n` +
                 `### 📊 Statistiques & Succès\n` +
                 `\`!stats set [@membre]\` • Panneau complet pour modifier tirages, gains, bonus & malus\n` +
                 `\`!successgive [@membre]\` • Menu pour réattribuer des succès perdus\n` +
                 `\`!rltsuccesforce [id/test] [@membre]\` • Débloque un succès de force ou teste une carte\n\n` +
+                `### 🖼️ Tests Hall of Fame / Hall of Shame\n` +
+                `\`!rlthoftest [slug] [@membre]\` • Teste l'affiche Canvas **Hall of Fame** dans le salon actuel *(silencieux, ne poste pas dans le HoF)*\n` +
+                `\`!rlthostest [slug] [@membre]\` • Teste l'affiche Canvas **Hall of Shame** dans le salon actuel *(silencieux, ne poste pas dans le HoS)*\n\n` +
                 `### 🎛️ Effets & Cooldowns\n` +
                 `\`!reroll [@membre]\` • Réinitialise immédiatement le cooldown d'un·e membre\n` +
                 `\`!bonusforce [id] [@membre]\` / \`!malusforce [id] [@membre]\` • Impose un tirage\n` +
@@ -504,13 +507,15 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
                 `Le système de casino et de progression communautaire de Regaïa.\n` +
                 `-# 🔒 Accès : Nécessite le rôle Roulette à récupérer dans <#1559082682313474059> ou <#1559324422165373008> !\n\n` +
                 `### 🎲 La Roulette Regaïenne\n` +
-                `Tente ta chance toutes les 15 minutes pour remporter des bonus ou subir des malus éphémères.\n` +
-                `-# ⏱️ Cooldown réduit à **5 min en Happy Hour (20h00)** !\n\n` +
-                `\`!rlt\` • Tenter ta chance\n` +
+                `Tente ta chance toutes les 15 minutes pour remporter des bonus ou subir des malus éphémères *(avec ou sans espace : \`!rltgo\`, \`!rlt state\`, \`!rltstate\`...)*.\n` +
+                `-# ⏱️ Cooldown réduit à **5 min en Happy Hour (20h00)** • Fiches en **version imagée Canvas** (switch texte dispo) !\n\n` +
+                `\`!rlt\` • Ouvrir le Hub de la roulette *(ou \`!rlt go\` / \`!rltgo\` pour tirer direct)*\n` +
                 `\`!rlt claim\` • Ouvrir ton inventaire *(boucliers, relances & récompenses)*\n` +
-                `\`!rlt state\` • Consulter tes transformations et effets actifs\n` +
-                `\`!rlt stats [@membre]\` • Bilan complet de tes tirages\n` +
-                `\`!rlttop\` • Le Panthéon des chasseurs de succès\n\n` +
+                `\`!rlt state [@membre]\` • Carte Canvas de tes effets & malus actifs\n` +
+                `\`!rlt stats [@membre]\` • Carte Canvas du bilan complet de tes tirages\n` +
+                `\`!rlt succes [@membre]\` • Galerie Canvas des **30 succès** *(10 par page)*\n` +
+                `\`!rlttop\` • Podium & classements *(Succès, Tirages, Bonus, Malus)*\n` +
+                `\`!rlt probas\` • Table complète des probabilités par onglets\n\n` +
                 `### 🎫 Le Battle Pass Mensuel\n` +
                 `Accomplis tes quêtes quotidiennes et hebdos pour débloquer 25 paliers de récompenses.\n\n` +
                 `\`!bp\` *(ou \`!pass\`)* • Ouvrir ton Battle Pass de la saison\n` +
