@@ -4435,10 +4435,9 @@ async function envoyerPantheonTcg(client, member, card, isNew, luckyUsed = false
     const avatar = member?.user?.displayAvatarURL?.({ dynamic: true, size: 256 })
         ?? member?.displayAvatarURL?.({ dynamic: true, size: 256 });
 
-    const rawPct = getCardPullProbability(card, luckyUsed, member.id, member);
+    const rawPct = getCardPullProbability(card, luckyUsed, null, null);
     const pctStr = formatPullPercent(rawPct);
-    const boostMult = getCardPullMultiplier(card.id, member.id, member);
-    const tauxText = `**${pctStr}%** *(/carte)*${card.isHolo ? ' *(Holo)*' : ''}${luckyUsed ? ' *(🍀 Chanceux)*' : ''}${boostMult > 1 ? ` *(🎯 ×${boostMult})*` : ''}`;
+    const tauxText = `**${pctStr}%** *(/carte)*${card.isHolo ? ' *(Holo)*' : ''}${luckyUsed ? ' *(🍀 Chanceux)*' : ''}`;
 
     const titre = card.rarity === 'Négative'
         ? '🕳️ CARTE NÉGATIVE AU PANTHÉON !'
