@@ -8,8 +8,182 @@ const {
 } = require('discord.js');
 const { createCanvas, loadImage } = require('canvas');
 
-const ROULETTE_BG_PATH = path.join(process.cwd(), 'Roulette', 'Assets', 'Background.jpg');
+const ROULETTE_BG_PATH = path.join(process.cwd(), 'Roulette', 'Assets', 'Background.png');
 const ROULETTE_GIFS_DIR = path.join(process.cwd(), 'Roulette', 'GIFs');
+const ROULETTE_PROXIES_DIR = path.join(process.cwd(), 'Roulette', 'Proxies');
+
+const RLT_PROXY_TTL_MS = 2 * 60 * 1000;
+const RLT_PROXY_MAX_RAM = 120;
+const rltAvatarProxyRam = new Map();
+const rltAvatarProxyInFlight = new Map();
+let rltProxyRamTimer = null;
+let rltLastProxyWriteError = null;
+let rltProxyWarmupRunning = false;
+
+function scheduleRltProxyRamClear() {
+    if (rltProxyRamTimer) clearTimeout(rltProxyRamTimer);
+    rltProxyRamTimer = setTimeout(() => {
+        rltAvatarProxyRam.clear();
+        rltProxyRamTimer = null;
+    }, RLT_PROXY_TTL_MS);
+}
+
+function getMemberAvatarProxyInfo(member, size = 256) {
+    const userId = member?.id || member?.user?.id;
+    const hash = member?.avatar || member?.user?.avatar || 'default';
+    const url = member?.displayAvatarURL?.({ extension: 'png', size })
+        || member?.user?.displayAvatarURL?.({ extension: 'png', size })
+        || null;
+    const filePath = userId ? path.join(ROULETTE_PROXIES_DIR, `${userId}_${hash}_${size}.png`) : null;
+    return { userId, hash, url, filePath };
+}
+
+async function loadAvatarProxy(member, size = 256) {
+    const { userId, url, filePath } = getMemberAvatarProxyInfo(member, size);
+    if (!userId || !filePath) return null;
+
+    if (rltAvatarProxyRam.has(filePath)) {
+        scheduleRltProxyRamClear();
+        return rltAvatarProxyRam.get(filePath);
+    }
+    if (rltAvatarProxyInFlight.has(filePath)) {
+        return rltAvatarProxyInFlight.get(filePath);
+    }
+
+    const promise = (async () => {
+        try {
+            if (fs.existsSync(filePath)) {
+                const img = await loadImage(filePath);
+                if (rltAvatarProxyRam.size >= RLT_PROXY_MAX_RAM) {
+                    rltAvatarProxyRam.delete(rltAvatarProxyRam.keys().next().value);
+                }
+                rltAvatarProxyRam.set(filePath, img);
+                scheduleRltProxyRamClear();
+                return img;
+            }
+            if (!url) return null;
+            const rawImg = await loadImage(url);
+            const c = createCanvas(size, size);
+            const cctx = c.getContext('2d');
+            cctx.drawImage(rawImg, 0, 0, size, size);
+            const pngBuf = c.toBuffer('image/png');
+            try {
+                fs.mkdirSync(ROULETTE_PROXIES_DIR, { recursive: true });
+                for (const existing of fs.readdirSync(ROULETTE_PROXIES_DIR)) {
+                    if (existing.startsWith(`${userId}_`) && existing.endsWith(`_${size}.png`) && path.join(ROULETTE_PROXIES_DIR, existing) !== filePath) {
+                        fs.rmSync(path.join(ROULETTE_PROXIES_DIR, existing), { force: true });
+                    }
+                }
+                fs.writeFileSync(filePath, pngBuf);
+                rltLastProxyWriteError = null;
+            } catch (err) {
+                rltLastProxyWriteError = err.message;
+            }
+            const img = await loadImage(pngBuf);
+            if (rltAvatarProxyRam.size >= RLT_PROXY_MAX_RAM) {
+                rltAvatarProxyRam.delete(rltAvatarProxyRam.keys().next().value);
+            }
+            rltAvatarProxyRam.set(filePath, img);
+            scheduleRltProxyRamClear();
+            return img;
+        } catch {
+            return null;
+        } finally {
+            rltAvatarProxyInFlight.delete(filePath);
+        }
+    })();
+
+    rltAvatarProxyInFlight.set(filePath, promise);
+    return promise;
+}
+
+function walkRouletteProxyStats() {
+    if (!fs.existsSync(ROULETTE_PROXIES_DIR)) return { files: 0, bytes: 0 };
+    let files = 0;
+    let bytes = 0;
+    try {
+        for (const f of fs.readdirSync(ROULETTE_PROXIES_DIR)) {
+            if (f.startsWith('.')) continue;
+            const st = fs.statSync(path.join(ROULETTE_PROXIES_DIR, f));
+            if (st.isFile()) {
+                files++;
+                bytes += st.size;
+            }
+        }
+    } catch {}
+    return { files, bytes };
+}
+
+function purgeRouletteProxies() {
+    rltAvatarProxyRam.clear();
+    if (rltProxyRamTimer) {
+        clearTimeout(rltProxyRamTimer);
+        rltProxyRamTimer = null;
+    }
+    let removed = 0;
+    if (fs.existsSync(ROULETTE_PROXIES_DIR)) {
+        for (const f of fs.readdirSync(ROULETTE_PROXIES_DIR)) {
+            if (f.startsWith('.')) continue;
+            try {
+                fs.rmSync(path.join(ROULETTE_PROXIES_DIR, f), { recursive: true, force: true });
+                removed++;
+            } catch {}
+        }
+    }
+    rltLastProxyWriteError = null;
+    return removed;
+}
+
+async function runRouletteAvatarWarmup(guild, onProgress) {
+    if (rltProxyWarmupRunning) return null;
+    rltProxyWarmupRunning = true;
+    const startedAt = Date.now();
+    try {
+        const members = [...(guild?.members?.cache?.values() || [])].filter(m => m && m.user && !m.user.bot);
+        const total = members.length;
+        let done = 0, generated = 0, alreadyOnDisk = 0, failed = 0;
+
+        for (const m of members) {
+            const { filePath } = getMemberAvatarProxyInfo(m, 256);
+            const existed = filePath && fs.existsSync(filePath);
+            const img = await loadAvatarProxy(m, 256);
+            done++;
+            if (img) {
+                if (existed) alreadyOnDisk++;
+                else generated++;
+            } else {
+                failed++;
+            }
+            if (onProgress && (done % 25 === 0 || done === total)) {
+                const pct = total > 0 ? Math.round((done / total) * 100) : 100;
+                await onProgress(
+                    `🔥 **Warmup PP Roulette en cours...**\n` +
+                    `• Progression : **${done}/${total}** (**${pct}%**)\n` +
+                    `• Créées : **${generated}** • Déjà en cache : **${alreadyOnDisk}**${failed ? ` • Échecs : **${failed}**` : ''}`
+                );
+            }
+        }
+
+        const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
+        const stats = walkRouletteProxyStats();
+        const mb = (stats.bytes / (1024 * 1024)).toFixed(2);
+        const errLine = rltLastProxyWriteError
+            ? `\n⚠️ **Erreur disque :** \`${rltLastProxyWriteError}\``
+            : '\n✅ **Volume (`Roulette/Proxies`) : OK et persistant !**';
+
+        if (onProgress) {
+            await onProgress(
+                `✅ **Warmup PP Roulette terminé en ${elapsed}s !**\n` +
+                `• **${generated}** PP générée(s) • **${alreadyOnDisk}** déjà prête(s)${failed ? ` • **${failed}** échec(s)` : ''}\n` +
+                `• Total sur disque : **${stats.files}** fichier(s) (**${mb} Mo**)` +
+                errLine
+            );
+        }
+        return { generated, alreadyOnDisk, failed, stats };
+    } finally {
+        rltProxyWarmupRunning = false;
+    }
+}
 
 const ROULETTE_COOLDOWN_MS = 15 * 60 * 1000;
 const ROULETTE_COOLDOWN_EXEMPT = ['744217896581857281', '902651805614358568'];
@@ -1880,12 +2054,14 @@ async function demarrerVoteRoulette(msg, membre) {
 let _cachedRouletteBg = undefined;
 async function getRouletteBg() {
     if (_cachedRouletteBg !== undefined) return _cachedRouletteBg;
-    if (!fs.existsSync(ROULETTE_BG_PATH)) {
+    const jpgFallback = ROULETTE_BG_PATH.replace(/\.png$/i, '.jpg');
+    const chosenPath = fs.existsSync(ROULETTE_BG_PATH) ? ROULETTE_BG_PATH : (fs.existsSync(jpgFallback) ? jpgFallback : null);
+    if (!chosenPath) {
         _cachedRouletteBg = null;
         return null;
     }
     try {
-        _cachedRouletteBg = await loadImage(ROULETTE_BG_PATH);
+        _cachedRouletteBg = await loadImage(chosenPath);
     } catch {
         _cachedRouletteBg = null;
     }
@@ -1897,9 +2073,69 @@ function cleanCanvasText(str) {
         .replace(/<a?:\w+:\d+>/g, '')
         .replace(/<@!?\d+>/g, '@Membre')
         .replace(/\*\*|__|~~|`/g, '')
-        .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '')
+        .replace(/[\p{Extended_Pictographic}\uFE00-\uFE0F\u200D\u20E3]/gu, '')
+        .replace(/[^\u0020-\u007E\u00C0-\u017F\u2018-\u2022\u20AC]/g, '')
         .replace(/\s+/g, ' ')
         .trim();
+}
+
+function formatRouletteDisplayName(memberOrName) {
+    const raw = typeof memberOrName === 'string'
+        ? memberOrName.trim()
+        : (memberOrName?.displayName || memberOrName?.user?.username || memberOrName?.username || 'Membre').trim();
+    if (/\(\s*OG\b/i.test(raw)) {
+        const cleaned = raw.replace(/\s*\([^)]*\bOG\b[^)]*\)/gi, '').trim();
+        if (cleaned) {
+            return cleanCanvasText(cleaned.split(/\s+/)[0] || cleaned) || 'Membre';
+        }
+        const noParens = raw.replace(/[()]/g, '').trim();
+        return cleanCanvasText(noParens.split(/\s+/)[0] || 'Membre') || 'Membre';
+    }
+    return cleanCanvasText(raw) || 'Membre';
+}
+
+function drawFivePointStar(ctx, cx, cy, outerR, innerR, fillStyle = '#FFD20A', glowCol = '#FFD20A') {
+    ctx.save();
+    if (glowCol) {
+        ctx.shadowColor = glowCol;
+        ctx.shadowBlur = 16;
+    }
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+        const r = i % 2 === 0 ? outerR : innerR;
+        const angle = (-Math.PI / 2) + (i * Math.PI / 5);
+        const x = cx + Math.cos(angle) * r;
+        const y = cy + Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fillStyle = fillStyle;
+    ctx.fill();
+    ctx.restore();
+}
+
+function drawShameEmblem(ctx, cx, cy, r, color = '#E03131') {
+    ctx.save();
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 16;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx + r * 0.96, cy + r * 0.80);
+    ctx.lineTo(cx - r * 0.96, cy + r * 0.80);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(224, 49, 49, 0.28)';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `bold ${Math.round(r * 1.1)}px "LemonMilk", "Sans"`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('!', cx, cy + r * 0.24);
+    ctx.restore();
 }
 
 function formatDureeCourte(ms) {
@@ -1958,32 +2194,50 @@ async function drawRouletteBg(ctx, W = 1600, H = 900) {
     }
 }
 
-async function drawCircularAvatar(ctx, url, cx, cy, radius, ringColor = '#FFD20A') {
+async function drawCircularAvatar(ctx, memberOrUrl, cx, cy, radius, ringColor = '#FFD20A', glowColor = null) {
     ctx.save();
+    if (glowColor) {
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 42;
+    }
     ctx.beginPath();
     ctx.arc(cx, cy, radius + 4, 0, Math.PI * 2);
     ctx.fillStyle = ringColor;
     ctx.fill();
+    ctx.restore();
 
+    ctx.save();
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.clip();
-    let drawn = false;
-    if (url) {
-        try {
-            const img = await loadImage(url);
-            ctx.drawImage(img, cx - radius, cy - radius, radius * 2, radius * 2);
-            drawn = true;
-        } catch {}
+    let img = null;
+    if (memberOrUrl && typeof memberOrUrl === 'object') {
+        img = await loadAvatarProxy(memberOrUrl, 256);
+    } else if (typeof memberOrUrl === 'string' && memberOrUrl) {
+        try { img = await loadImage(memberOrUrl); } catch {}
     }
-    if (!drawn) {
+    if (img) {
+        ctx.drawImage(img, cx - radius, cy - radius, radius * 2, radius * 2);
+    } else {
         ctx.fillStyle = '#252940';
         ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
     }
     ctx.restore();
 }
 
+function buildRouletteBar(val, max, length = 12) {
+    const ratio = max > 0 ? Math.max(0, Math.min(1, val / max)) : 0;
+    const filled = Math.round(ratio * length);
+    return '█'.repeat(filled) + '░'.repeat(Math.max(0, length - filled));
+}
+
 function buildRoulettePresentationEmbed(authorId, guildId = null) {
+    const cl = rouletteClient || bridge?.client;
+    const guild = (guildId ? cl?.guilds?.cache?.get(guildId) : null) || cl?.guilds?.cache?.first();
+    const member = authorId ? guild?.members?.cache?.get(authorId) : null;
+    const displayName = member?.displayName || 'Joueur';
+    const avatarUrl = member?.displayAvatarURL?.({ dynamic: true }) || undefined;
+
     const jackpot = authorId ? (rouletteJackpotBonus.get(authorId) || 0) : 0;
     const boostCharges = authorId ? (rouletteJackpotBoostCharges.get(authorId) || 0) : 0;
     const boostVal = boostCharges > 0 ? (rouletteJackpotBoostValue.get(authorId) || 0.25) : 0;
@@ -1993,15 +2247,23 @@ function buildRoulettePresentationEmbed(authorId, guildId = null) {
     const finCd = authorId ? (rouletteCooldowns.get(authorId) || 0) : 0;
     const enFreeRoll = Boolean(authorId && (rouletteFreeRollUntil.get(authorId) || 0) > now);
     const chargesTriple = authorId ? (rouletteCoupTripleCharges.get(authorId) || 0) : 0;
+    const rawB = authorId ? rouletteBouclierActif.get(authorId) : 0;
+    const nbBoucliers = typeof rawB === 'number' ? rawB : (rawB ? 1 : 0);
     const pity = (authorId && roulettePity.get(authorId)) || { malus: 0, nuls: 0 };
 
-    let statutTirage = '✅ **Prêt à lancer !**';
+    const stats = (authorId && rouletteStats.get(authorId)) || { tirages: 0, bonus: 0, malus: 0, rien: 0, plusGrosGain: null, pireSerie: 0 };
+    const userAchs = (authorId && rouletteAchievements.get(authorId)) || {};
+    const nbAchs = Object.keys(userAchs).filter(id => ROULETTE_ACHIEVEMENTS.some(a => a.id === id)).length;
+    const totalAchs = ROULETTE_ACHIEVEMENTS.length;
+    const achPct = totalAchs > 0 ? Math.round((nbAchs / totalAchs) * 100) : 0;
+
+    let statutTirage = '• Statut : ✅ **Prêt à tourner !**';
     if (ROULETTE_COOLDOWN_EXEMPT.includes(authorId) || enFreeRoll) {
-        statutTirage = '⚡ **Tirage à volonté actif** *(aucun cooldown)*';
+        statutTirage = '• Statut : ⚡ **Tirage à volonté actif**';
     } else if (chargesTriple > 0) {
-        statutTirage = `🎰 **Coup Triple actif** *(${chargesTriple} tirage${chargesTriple > 1 ? 's' : ''} gratuit${chargesTriple > 1 ? 's' : ''})*`;
+        statutTirage = `• Statut : 🎰 **Coup Triple** *(${chargesTriple} gratuit${chargesTriple > 1 ? 's' : ''})*`;
     } else if (finCd > now) {
-        statutTirage = `⏳ Prochain tirage **<t:${Math.ceil(finCd / 1000)}:R>**`;
+        statutTirage = `• Prochain tirage : **<t:${Math.ceil(finCd / 1000)}:R>**`;
     }
 
     const totalBoostPct = Math.round((jackpot + boostVal + (cEstSonAnniv ? 0.50 : 0)) * 100);
@@ -2010,29 +2272,57 @@ function buildRoulettePresentationEmbed(authorId, guildId = null) {
         ? rouletteHistoriqueDerniersTirages.map(h => `• **${h.nom}** ➔ ${h.gain}`).join('\n')
         : '*Aucun tirage récent pour le moment.*';
 
+    const achBar = buildRouletteBar(nbAchs, totalAchs, 14);
+    const pityMBar = buildRouletteBar(pity.malus, ROULETTE_PITY_MALUS, 6);
+    const pityNBar = buildRouletteBar(pity.nuls, ROULETTE_PITY_NULS, 6);
+
+    const statutLines = [
+        statutTirage,
+        `• Cooldown : **${happyActif ? '5 min (Happy Hour 🔥)' : '15 minutes'}**`,
+        `• Boucliers : **${nbBoucliers}** en réserve`,
+        `• Boost bonus : **+${totalBoostPct}%**`
+    ];
+    if (boostCharges > 0) statutLines.push(`• 📈 Jackpot Boost : **+${Math.round(boostVal * 100)}%** *(${boostCharges} tir.)*`);
+
+    const profilLines = [
+        `• Tirages totaux : **${stats.tirages}**`,
+        `• Bonus / Malus : **${stats.bonus} 🎉** / **${stats.malus} 💀**`,
+        `• Succès : **${nbAchs}/${totalAchs}**`,
+        `• Pire série : **${stats.pireSerie || 0}**`
+    ];
+
     const embed = new EmbedBuilder()
         .setColor(cEstSonAnniv ? 0xff69b4 : (happyActif ? 0xff6b00 : 0xffd20a))
-        .setTitle('🎰 | HUB ROULETTE REGAÏENNE | 🎰')
+        .setAuthor({ name: `${displayName} • Roulette Regaïenne`, iconURL: avatarUrl })
+        .setTitle('🎰 Tableau de bord — La Roulette Regaïenne')
         .setDescription(
-            (cEstSonAnniv ? `🎂 **JOYEUX ANNIVERSAIRE !** Boost exceptionnel **+50% de bonus** toute la journée !\n\n` : '') +
-            `Tente ta chance toutes les **15 min** *(**5 min** en Happy Hour 20h–21h${happyActif ? ' • 🔥 EN COURS' : ''})*.\n` +
-            `🏆 **HoF** ≤ ${(ROULETTE_HOF_SEUIL * 100).toFixed(2)}% (<#${ROULETTE_HOF_CHANNEL_ID}>) • 💀 **HoS** (<#${ROULETTE_HOS_CHANNEL_ID}>)`
+            (cEstSonAnniv ? `🎂 **JOYEUX ANNIVERSAIRE !** Boost exceptionnel **+50% de bonus** offert toute la journée !\n\n` : '') +
+            `Bienvenue à la **Roulette Regaïenne** !\n` +
+            `Tente ta chance pour décrocher des bonus rares, des cartes RegaDex, ou risquer les pires malus du serveur.\n\n` +
+            `### 🎖️ Progression Succès & Pity\n` +
+            `\`${achBar}\` **${achPct}%** — **${nbAchs}/${totalAchs}** succès débloqués *(\`!rlt succes\`)*\n\n` +
+            `🛡️ **Pity Malus :** \`${pityMBar}\` \`${pity.malus}/${ROULETTE_PITY_MALUS}\`  •  ` +
+            `💨 **Pity Nuls :** \`${pityNBar}\` \`${pity.nuls}/${ROULETTE_PITY_NULS}\` *(bonus garanti !)*\n` +
+            `────────────────────────────────────────`
         )
         .addFields(
+            { name: '🎯 Ton Statut', value: statutLines.join('\n'), inline: true },
+            { name: '📊 Tes Stats', value: profilLines.join('\n'), inline: true },
             {
-                name: '🎯 Ton Statut',
-                value: `${statutTirage}\n📈 Pity : **${pity.malus}/${ROULETTE_PITY_MALUS}** malus • **${pity.nuls}/${ROULETTE_PITY_NULS}** nuls` +
-                       (totalBoostPct > 0 ? `\n🍀 Boost bonus : **+${totalBoostPct}%**` : ''),
-                inline: false
-            },
-            {
-                name: '📜 Derniers tirages du serveur',
-                value: historiqueTexte,
+                name: '\u200b',
+                value:
+                    `────────────────────────────────────────\n` +
+                    `**📜 Derniers tirages du serveur**\n` +
+                    `${historiqueTexte}\n\n` +
+                    `**✨ Infos & Panthéons**\n` +
+                    `• 🔥 **Happy Hour :** Tous les soirs **20h – 21h** *(cooldown 5 min)*\n` +
+                    `• 🏆 **Hall of Fame :** Bonus ≤ **${(ROULETTE_HOF_SEUIL * 100).toFixed(2)}%** dans <#${ROULETTE_HOF_CHANNEL_ID}>\n` +
+                    `• 💀 **Hall of Shame :** Pires malus dans <#${ROULETTE_HOS_CHANNEL_ID}>`,
                 inline: false
             }
         )
         .setImage('https://img.draftbot.fr/1790778435185-73ff19eb6e704abb.gif')
-        .setFooter({ text: 'Astuce : !rlt go pour tirer direct • !rlt stats / state / succes / top / probas (avec ou sans espace)' });
+        .setFooter({ text: 'Astuce : !rlt go pour tirer direct • !rlt succes pour la galerie Canvas des succès' });
 
     return embed;
 }
@@ -2042,18 +2332,19 @@ function buildRouletteHubPayload(authorId, guildId = null, origMsgId = '') {
     const hasNotif = aUneNotifRouletteActive(authorId) || Boolean(rouletteNotifRepeat.get(authorId));
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId(`roulette_tenter_${authorId}`).setLabel('Tenter sa chance').setEmoji('🍀').setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId(`rlt_hub:state:${authorId}`).setLabel('Mon État').setEmoji('📊').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`rlt_hub:stats:${authorId}`).setLabel('Mes Stats').setEmoji('📈').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`rlt_hub:succes:${authorId}`).setLabel('Succès').setEmoji('🎖️').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`rlt_hub:claim:${authorId}`).setLabel('Inventaire').setEmoji('🎒').setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId(`rlt_probas:hub:bonus:${authorId}`).setLabel('Probabilités').setEmoji('🎲').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`rlt_hub:top:${authorId}`).setLabel('Top').setEmoji('🏆').setStyle(ButtonStyle.Secondary)
     );
     const row2 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`rlt_hub:top:${authorId}`).setLabel('Top').setEmoji('🏆').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`rlt_probas:hub:bonus:${authorId}`).setLabel('Probabilités').setEmoji('🎲').setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId(`rlt_hub:notif:${authorId}`).setLabel(hasNotif ? 'Alertes ✓' : 'Alertes').setEmoji('🔔').setStyle(hasNotif ? ButtonStyle.Primary : ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`rlt_hub:state:${authorId}`).setLabel('Mon état').setEmoji('📊').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`rlt_hub:stats:${authorId}`).setLabel('Mes stats').setEmoji('📈').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId(`rlt_hub:claim:${authorId}`).setLabel('Inventaire').setEmoji('🎒').setStyle(ButtonStyle.Secondary)
+    );
+    const row3 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`rlt_hub:notif:${authorId}`).setLabel(hasNotif ? 'Notifications ✓' : 'Notifications').setEmoji('🔔').setStyle(hasNotif ? ButtonStyle.Primary : ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`rlt_hub:close:${authorId}:${origMsgId || ''}`).setLabel('Fermer').setEmoji('🗑️').setStyle(ButtonStyle.Danger)
     );
-    return { embeds: [embed], components: [row1, row2] };
+    return { embeds: [embed], components: [row1, row2, row3] };
 }
 
 function collectRouletteStateLists(cible, guildId = null) {
@@ -2070,19 +2361,19 @@ function collectRouletteStateLists(cible, guildId = null) {
     }
     if (rouletteCouronneUntil.has(cible.id) && now < rouletteCouronneUntil.get(cible.id)) {
         const fin = rouletteCouronneUntil.get(cible.id);
-        addBonus(`👑 Couronne (fin ${tstamp(fin)})`, `Couronne (${formatDureeCourte(fin - now)})`);
+        addBonus(`👑 Couronne (fin ${tstamp(fin)})`, `Couronne (reste ${formatDureeCourte(fin - now)})`);
     }
     if (rouletteAntiFeurUntil.has(cible.id) && now < rouletteAntiFeurUntil.get(cible.id)) {
         const fin = rouletteAntiFeurUntil.get(cible.id);
-        addBonus(`🛡️ Immunité anti-feur (fin ${tstamp(fin)})`, `Immunite anti-feur (${formatDureeCourte(fin - now)})`);
+        addBonus(`🛡️ Immunité anti-feur (fin ${tstamp(fin)})`, `Immunité anti-feur (reste ${formatDureeCourte(fin - now)})`);
     }
     if (rouletteFreeRollUntil.has(cible.id) && now < rouletteFreeRollUntil.get(cible.id)) {
         const fin = rouletteFreeRollUntil.get(cible.id);
-        addBonus(`⚡ Tirage à volonté (fin ${tstamp(fin)})`, `Tirage a volonte (${formatDureeCourte(fin - now)})`);
+        addBonus(`⚡ Tirage à volonté (fin ${tstamp(fin)})`, `Tirage à volonté (reste ${formatDureeCourte(fin - now)})`);
     }
     if (rouletteImmuniteUntil.has(cible.id) && now < rouletteImmuniteUntil.get(cible.id)) {
         const fin = rouletteImmuniteUntil.get(cible.id);
-        addBonus(`🛡️ Immunité au timeout (fin ${tstamp(fin)})`, `Immunite timeout (${formatDureeCourte(fin - now)})`);
+        addBonus(`🛡️ Immunité au timeout (fin ${tstamp(fin)})`, `Immunité timeout (reste ${formatDureeCourte(fin - now)})`);
     }
     const invCible = rouletteInventaire.get(cible.id) ?? {};
     if (invCible.freeRoll1Min && invCible.freeRoll1Min > 0) {
@@ -2131,31 +2422,31 @@ function collectRouletteStateLists(cible, guildId = null) {
 
     if (rouletteDoubleTempsUntil.has(cible.id) && now < rouletteDoubleTempsUntil.get(cible.id)) {
         const fin = rouletteDoubleTempsUntil.get(cible.id);
-        addMalus(`⏳ Malus x2 pendant 24h (fin ${tstamp(fin)})`, `Malus x2 (${formatDureeCourte(fin - now)})`);
+        addMalus(`⏳ Malus x2 pendant 24h (fin ${tstamp(fin)})`, `Malus x2 (reste ${formatDureeCourte(fin - now)})`);
     }
     if (roulettePseudoLock.has(cible.id) && now < roulettePseudoLock.get(cible.id).until) {
         const lock = roulettePseudoLock.get(cible.id);
-        addMalus(`🔒 Pseudo verrouillé (${lock.pseudo}) (fin ${tstamp(lock.until)})`, `Pseudo lock: ${cleanCanvasText(lock.pseudo)} (${formatDureeCourte(lock.until - now)})`);
+        addMalus(`🔒 Pseudo verrouillé (${lock.pseudo}) (fin ${tstamp(lock.until)})`, `Pseudo lock: ${cleanCanvasText(lock.pseudo)} (reste ${formatDureeCourte(lock.until - now)})`);
     }
     if (rouletteTimeoutUntil.has(cible.id) && now < rouletteTimeoutUntil.get(cible.id)) {
         const fin = rouletteTimeoutUntil.get(cible.id);
-        addMalus(`💀 Timeout roulette (fin ${tstamp(fin)})`, `Timeout roulette (${formatDureeCourte(fin - now)})`);
+        addMalus(`💀 Timeout roulette (fin ${tstamp(fin)})`, `Timeout roulette (reste ${formatDureeCourte(fin - now)})`);
     }
     if (rouletteUwuUntil.has(cible.id) && now < rouletteUwuUntil.get(cible.id)) {
         const fin = rouletteUwuUntil.get(cible.id);
-        addMalus(`😳 Doit finir par UwU (fin ${tstamp(fin)})`, `UwU obligatoire (${formatDureeCourte(fin - now)})`);
+        addMalus(`😳 Doit finir par UwU (fin ${tstamp(fin)})`, `UwU obligatoire (reste ${formatDureeCourte(fin - now)})`);
     }
     if (rouletteLettreInterdite.has(cible.id) && now < rouletteLettreInterdite.get(cible.id).until) {
         const li = rouletteLettreInterdite.get(cible.id);
-        addMalus(`🔤 Lettre interdite : **${li.lettre}** (fin ${tstamp(li.until)})`, `Lettre interdite: ${li.lettre} (${formatDureeCourte(li.until - now)})`);
+        addMalus(`🔤 Lettre interdite : **${li.lettre}** (fin ${tstamp(li.until)})`, `Lettre interdite: ${li.lettre} (reste ${formatDureeCourte(li.until - now)})`);
     }
     if (rouletteEmojiUntil.has(cible.id) && now < rouletteEmojiUntil.get(cible.id)) {
         const fin = rouletteEmojiUntil.get(cible.id);
-        addMalus(`😀 Doit finir par un emoji (fin ${tstamp(fin)})`, `Emoji obligatoire (${formatDureeCourte(fin - now)})`);
+        addMalus(`😀 Doit finir par un emoji (fin ${tstamp(fin)})`, `Emoji obligatoire (reste ${formatDureeCourte(fin - now)})`);
     }
     if (rouletteLeetUntil.has(cible.id) && now < rouletteLeetUntil.get(cible.id)) {
         const fin = rouletteLeetUntil.get(cible.id);
-        addMalus(`🤖 Parle en l33t sp34k (fin ${tstamp(fin)})`, `Leet speak (${formatDureeCourte(fin - now)})`);
+        addMalus(`🤖 Parle en l33t sp34k (fin ${tstamp(fin)})`, `Leet speak (reste ${formatDureeCourte(fin - now)})`);
     }
     if ((rouletteCooldown45Charges.get(cible.id) || 0) > 0) {
         const q = rouletteCooldown45Charges.get(cible.id);
@@ -2167,7 +2458,7 @@ function collectRouletteStateLists(cible, guildId = null) {
     }
     if (rouletteEchoUntil.has(cible.id) && now < rouletteEchoUntil.get(cible.id)) {
         const fin = rouletteEchoUntil.get(cible.id);
-        addMalus(`🪞 Écho condescendant (1 msg sur 3) (fin ${tstamp(fin)})`, `Echo condescendant (${formatDureeCourte(fin - now)})`);
+        addMalus(`🪞 Écho condescendant (1 msg sur 3) (fin ${tstamp(fin)})`, `Écho condescendant (reste ${formatDureeCourte(fin - now)})`);
     }
 
     const tf = rouletteTransfos.get(cible.id) ?? {};
@@ -2182,7 +2473,7 @@ function collectRouletteStateLists(cible, guildId = null) {
     };
     for (const [k, fin] of Object.entries(tf)) {
         if (now < fin && libTf[k]) {
-            addMalus(`${libTf[k]} (fin ${tstamp(fin)})`, `${cleanCanvasText(libTf[k])} (${formatDureeCourte(fin - now)})`);
+            addMalus(`${libTf[k]} (fin ${tstamp(fin)})`, `${cleanCanvasText(libTf[k])} (reste ${formatDureeCourte(fin - now)})`);
         }
     }
 
@@ -2229,22 +2520,21 @@ async function renderRouletteStateCanvas(cible, guildId = null) {
     const pity = roulettePity.get(cible.id) ?? { malus: 0, nuls: 0 };
     const jackpotBoost = Math.round((rouletteJackpotBonus.get(cible.id) || 0) * 100);
     const finCd = rouletteCooldowns.get(cible.id);
-    const cdTxt = finCd && now < finCd ? `COOLDOWN : ${formatDureeCourte(finCd - now)}` : 'PRET A TIRER';
+    const cdTxt = finCd && now < finCd ? `RESTE : ${formatDureeCourte(finCd - now)}` : 'PRÊT À TIRER';
 
     // Header
     drawGlassPanel(ctx, 48, 36, W - 96, 130, 22, 'rgba(12, 15, 26, 0.84)', 'rgba(255, 210, 10, 0.48)', 2.5);
-    const avatarUrl = cible.user?.displayAvatarURL?.({ extension: 'png', size: 256 }) || cible.displayAvatarURL?.({ extension: 'png', size: 256 });
-    await drawCircularAvatar(ctx, avatarUrl, 118, 101, 46, '#FFD20A');
+    await drawCircularAvatar(ctx, cible, 118, 101, 46, '#FFD20A');
 
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
     ctx.fillStyle = '#FFD20A';
     ctx.font = 'bold 20px "LemonMilk", "Sans"';
-    ctx.fillText('ETAT ACTIF ROULETTE', 190, 74);
+    ctx.fillText('ÉTAT ACTIF ROULETTE', 190, 74);
 
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 36px "LemonMilk", "Sans"';
-    ctx.fillText(cleanCanvasText(cible.displayName || 'Membre'), 190, 118, 860);
+    ctx.fillText(formatRouletteDisplayName(cible), 190, 118, 860);
 
     drawGlassPanel(ctx, W - 430, 66, 355, 68, 16, finCd && now < finCd ? 'rgba(230, 126, 34, 0.25)' : 'rgba(0, 191, 25, 0.25)', finCd && now < finCd ? '#E67E22' : '#00BF19', 2);
     ctx.textAlign = 'center';
@@ -2402,18 +2692,17 @@ async function renderRouletteAchievementsCanvas(cible, page = 0) {
 
     // Header
     drawGlassPanel(ctx, 48, 30, W - 96, 118, 20, 'rgba(12, 15, 26, 0.85)', 'rgba(255, 210, 10, 0.5)', 2.5);
-    const avatarUrl = cible.user?.displayAvatarURL?.({ extension: 'png', size: 256 }) || cible.displayAvatarURL?.({ extension: 'png', size: 256 });
-    await drawCircularAvatar(ctx, avatarUrl, 112, 89, 42, '#FFD20A');
+    await drawCircularAvatar(ctx, cible, 112, 89, 42, '#FFD20A');
 
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
     ctx.fillStyle = '#FFD20A';
     ctx.font = 'bold 20px "LemonMilk", "Sans"';
-    ctx.fillText(`SUCCES ROULETTE • PAGE ${safePage + 1}/${totalPages}`, 178, 66);
+    ctx.fillText(`SUCCÈS ROULETTE • PAGE ${safePage + 1}/${totalPages}`, 178, 66);
 
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 32px "LemonMilk", "Sans"';
-    ctx.fillText(cleanCanvasText(cible.displayName || 'Membre'), 178, 108, 680);
+    ctx.fillText(formatRouletteDisplayName(cible), 178, 108, 680);
 
     // Barre de progression droite
     const barX = 940, barY = 90, barW = 560, barH = 22;
@@ -2558,8 +2847,7 @@ async function renderRouletteStatsCanvas(cible) {
 
     // Header
     drawGlassPanel(ctx, 48, 36, W - 96, 150, 24, 'rgba(12, 15, 26, 0.85)', 'rgba(255, 210, 10, 0.5)', 2.5);
-    const avatarUrl = cible.user?.displayAvatarURL?.({ extension: 'png', size: 256 }) || cible.displayAvatarURL?.({ extension: 'png', size: 256 });
-    await drawCircularAvatar(ctx, avatarUrl, 130, 111, 52, isAddict ? '#FF6B00' : '#FFD20A');
+    await drawCircularAvatar(ctx, cible, 130, 111, 52, isAddict ? '#FF6B00' : '#FFD20A');
 
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
@@ -2569,7 +2857,7 @@ async function renderRouletteStatsCanvas(cible) {
 
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 40px "LemonMilk", "Sans"';
-    ctx.fillText(cleanCanvasText(cible.displayName || 'Membre'), 210, 126, 780);
+    ctx.fillText(formatRouletteDisplayName(cible), 210, 126, 780);
 
     drawGlassPanel(ctx, W - 410, 68, 330, 86, 18, 'rgba(255, 210, 10, 0.14)', '#FFD20A', 2);
     ctx.textAlign = 'center';
@@ -2752,14 +3040,14 @@ async function renderRouletteCollectorPosterCanvas(membre, entry, lanceur = null
     await drawRouletteBg(ctx, W, H);
 
     const accent = isHof ? '#FFD20A' : '#E03131';
-    const overlay = isHof ? 'rgba(28, 20, 6, 0.50)' : 'rgba(32, 6, 10, 0.56)';
+    const overlay = isHof ? 'rgba(28, 20, 6, 0.44)' : 'rgba(32, 6, 10, 0.48)';
     ctx.fillStyle = overlay;
     ctx.fillRect(0, 0, W, H);
 
     // Cadre collector extérieur
     drawGlassPanel(ctx, 52, 44, W - 104, H - 88, 28, 'rgba(10, 12, 22, 0.84)', accent, 4);
 
-    // Bannière supérieure
+    // Bannière supérieure + étoiles / emblèmes de chaque côté
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'center';
     ctx.fillStyle = accent;
@@ -2767,39 +3055,49 @@ async function renderRouletteCollectorPosterCanvas(membre, entry, lanceur = null
     const bannerTxt = `${isTest ? '[TEST] ' : ''}${isHof ? 'HALL OF FAME DE LA ROULETTE' : 'HALL OF SHAME DE LA ROULETTE'}`;
     ctx.fillText(bannerTxt, W / 2, 106);
 
-    const estRedirige = lanceur && membre && lanceur.id !== membre.id;
-    let sousTitre = isHof ? 'EXPLOIT ULTRA RARE DECROCHE' : 'MALUS LEGENDAIRE SUBI';
-    if (isHof && estPartage) sousTitre = `EXPLOIT PARTAGE PAR ${cleanCanvasText(lanceur.displayName || 'Un membre')}`;
-    else if (isHof && estRedirige) sousTitre = `CADEAU OFFERT PAR ${cleanCanvasText(lanceur.displayName || 'Un membre')}`;
-    else if (!isHof && estRedirige) sousTitre = `VICTIME PAR RICOCHET (${cleanCanvasText(lanceur.displayName || 'Un membre')})`;
+    const bannerHalfW = ctx.measureText(bannerTxt).width / 2;
+    if (isHof) {
+        drawFivePointStar(ctx, W / 2 - bannerHalfW - 34, 105, 16, 7, '#FFD20A', '#FFD20A');
+        drawFivePointStar(ctx, W / 2 + bannerHalfW + 34, 105, 16, 7, '#FFD20A', '#FFD20A');
+    } else {
+        drawShameEmblem(ctx, W / 2 - bannerHalfW - 34, 105, 14, '#E03131');
+        drawShameEmblem(ctx, W / 2 + bannerHalfW + 34, 105, 14, '#E03131');
+    }
 
-    ctx.fillStyle = 'rgba(255,255,255,0.78)';
+    const estRedirige = lanceur && membre && lanceur.id !== membre.id;
+    let sousTitre = isHof ? 'EXPLOIT ULTRA RARE DÉCROCHÉ' : 'MALUS LÉGENDAIRE SUBI';
+    if (isHof && estPartage) sousTitre = `EXPLOIT PARTAGÉ PAR ${formatRouletteDisplayName(lanceur)}`;
+    else if (isHof && estRedirige) sousTitre = `CADEAU OFFERT PAR ${formatRouletteDisplayName(lanceur)}`;
+    else if (!isHof && estRedirige) sousTitre = `VICTIME PAR RICOCHET (${formatRouletteDisplayName(lanceur)})`;
+
+    ctx.fillStyle = 'rgba(255,255,255,0.82)';
     ctx.font = 'bold 20px "LemonMilk", "Sans"';
     ctx.fillText(sousTitre, W / 2, 148, W - 200);
 
-    // Avatar central
-    const avatarUrl = membre?.user?.displayAvatarURL?.({ extension: 'png', size: 512 }) || membre?.displayAvatarURL?.({ extension: 'png', size: 512 });
-    await drawCircularAvatar(ctx, avatarUrl, W / 2, 316, 110, accent);
+    // Avatar central avec lueur dorée (HoF) ou rouge (HoS)
+    await drawCircularAvatar(ctx, membre, W / 2, 304, 106, accent, accent);
 
-    const nom = cleanCanvasText(membre?.displayName ?? membre?.user?.username ?? 'Un membre');
+    const nom = formatRouletteDisplayName(membre);
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 46px "LemonMilk", "Sans"';
-    ctx.fillText(nom, W / 2, 472, W - 220);
+    ctx.fillText(nom, W / 2, 456, W - 220);
 
-    // Carte résultat
-    drawGlassPanel(ctx, 180, 520, W - 360, 190, 22, isHof ? 'rgba(255, 210, 10, 0.14)' : 'rgba(224, 49, 49, 0.16)', accent, 2.5);
+    // Carte résultat centrée verticalement entre le pseudo (456) et le pied de page (804)
+    const boxY = 544;
+    const boxH = 190;
+    drawGlassPanel(ctx, 180, boxY, W - 360, boxH, 22, isHof ? 'rgba(255, 210, 10, 0.14)' : 'rgba(224, 49, 49, 0.16)', accent, 2.5);
     ctx.fillStyle = accent;
     ctx.font = 'bold 38px "LemonMilk", "Sans"';
-    ctx.fillText(cleanCanvasText(entry.nom), W / 2, 594, W - 420);
+    ctx.fillText(cleanCanvasText(entry.nom), W / 2, boxY + 72, W - 420);
 
     const { n, pct } = probaAffichee(probaReelle(entry));
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 24px "LemonMilk", "Sans"';
-    ctx.fillText(`RARETE : 1 SUR ${n} (${pct}%)`, W / 2, 660);
+    ctx.fillText(`RARETÉ : 1 SUR ${n} (${pct}%)`, W / 2, boxY + 138);
 
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.fillStyle = 'rgba(255,255,255,0.62)';
     ctx.font = 'bold 18px "LemonMilk", "Sans"';
-    ctx.fillText(`REGAIA • ${new Date().toLocaleDateString('fr-FR')}`, W / 2, 785);
+    ctx.fillText(`REGAÏA • ${new Date().toLocaleDateString('fr-FR')}`, W / 2, 804);
 
     return canvas.toBuffer('image/jpeg', { quality: 0.94 });
 }
@@ -3214,9 +3512,9 @@ async function renderRouletteTopCanvas(guild, entries, authorId, mode = 'succes'
 
     // Podium Top 3
     const podiumOrder = [
-        { idx: 1, x: 100, y: 158, w: 420, h: 240, rank: '#2', ring: '#C0C0C0' },
-        { idx: 0, x: 560, y: 132, w: 480, h: 266, rank: '#1', ring: '#FFD700' },
-        { idx: 2, x: 1080, y: 168, w: 420, h: 230, rank: '#3', ring: '#CD7F32' }
+        { idx: 1, x: 100, y: 158, w: 420, h: 240, rank: '#2', ring: '#C0C0C0', avY: 66, rankY: 132, nameY: 168 },
+        { idx: 0, x: 560, y: 132, w: 480, h: 266, rank: '#1', ring: '#FFD700', avY: 72, rankY: 142, nameY: 188 },
+        { idx: 2, x: 1080, y: 168, w: 420, h: 230, rank: '#3', ring: '#CD7F32', avY: 66, rankY: 128, nameY: 160 }
     ];
 
     for (const pod of podiumOrder) {
@@ -3225,17 +3523,16 @@ async function renderRouletteTopCanvas(guild, entries, authorId, mode = 'succes'
         const cx = pod.x + pod.w / 2;
         if (entry) {
             const m = guild?.members?.cache?.get(entry.uid);
-            const avUrl = m?.user?.displayAvatarURL?.({ extension: 'png', size: 256 }) || m?.displayAvatarURL?.({ extension: 'png', size: 256 });
-            await drawCircularAvatar(ctx, avUrl, cx, pod.y + 76, pod.idx === 0 ? 48 : 42, pod.ring);
+            await drawCircularAvatar(ctx, m || null, cx, pod.y + pod.avY, pod.idx === 0 ? 48 : 40, pod.ring);
             ctx.fillStyle = pod.ring;
             ctx.font = 'bold 24px "LemonMilk", "Sans"';
-            ctx.fillText(pod.rank, cx, pod.y + 148);
+            ctx.fillText(pod.rank, cx, pod.y + pod.rankY);
             ctx.fillStyle = '#FFFFFF';
             ctx.font = 'bold 24px "LemonMilk", "Sans"';
-            ctx.fillText(cleanCanvasText(m?.displayName || 'Ancien membre'), cx, pod.y + 184, pod.w - 40);
+            ctx.fillText(formatRouletteDisplayName(m || 'Ancien membre'), cx, pod.y + pod.nameY, pod.w - 40);
             ctx.fillStyle = accent;
             ctx.font = 'bold 20px "LemonMilk", "Sans"';
-            ctx.fillText(cleanCanvasText(entry.label), cx, pod.y + pod.h - 32, pod.w - 40);
+            ctx.fillText(cleanCanvasText(entry.label), cx, pod.y + pod.h - 26, pod.w - 40);
         } else {
             ctx.fillStyle = 'rgba(255,255,255,0.35)';
             ctx.font = 'bold 24px "LemonMilk", "Sans"';
@@ -3264,7 +3561,7 @@ async function renderRouletteTopCanvas(guild, entries, authorId, mode = 'succes'
             const m = guild?.members?.cache?.get(e.uid);
             ctx.fillStyle = '#FFFFFF';
             ctx.font = 'bold 22px "LemonMilk", "Sans"';
-            ctx.fillText(cleanCanvasText(m?.displayName || 'Ancien membre'), rx + 92, ry + rh / 2, 390);
+            ctx.fillText(formatRouletteDisplayName(m || 'Ancien membre'), rx + 92, ry + rh / 2, 390);
             ctx.textAlign = 'right';
             ctx.fillStyle = accent;
             ctx.font = 'bold 20px "LemonMilk", "Sans"';
@@ -4517,7 +4814,8 @@ function parseRouletteCommand(raw) {
         '!resetrlt': '!resetrlt', '!resetroulettestate': '!resetrlt', '!rltreset': '!resetrlt',
         '!removestate': '!removestate', '!rltremovestate': '!removestate',
         '!rltsuccesforce': '!rltsuccesforce', '!roulettesuccesforce': '!rltsuccesforce',
-        '!rltsuccessforce': '!rltsuccesforce', '!roulettesuccessforce': '!rltsuccesforce'
+        '!rltsuccessforce': '!rltsuccesforce', '!roulettesuccessforce': '!rltsuccesforce',
+        '!rltproxies': '!rltproxies', '!rouletteproxies': '!rltproxies', '!rltppproxies': '!rltproxies'
     };
 
     if (directMap[first]) {
@@ -4573,6 +4871,7 @@ function parseRouletteCommand(raw) {
         if (second === 'removestate' || (second === 'remove' && third === 'state')) {
             return { command: '!removestate', args: tokens.slice(second === 'remove' ? 3 : 2) };
         }
+        if (second === 'proxies' || second === 'proxy') return { command: '!rltproxies', args: tokens.slice(2) };
         return { command: '!rlt', args: tokens.slice(1) };
     }
 
@@ -4679,13 +4978,66 @@ async function handleRouletteMessage(message, response, client, helpers) {
         return true;
     }
 
-    if (['!reroll', '!bonusforce', '!malusforce', '!rouletteid', '!rltid', '!itemid', '!rltitemid', '!rltgiveitem', '!roulettegiveitem', '!resetroulettestate', '!resetrlt', '!removestate', '!rlthoftest', '!rlthostest', ...adminSuccesAliases].includes(command)) {
+    if (['!reroll', '!bonusforce', '!malusforce', '!rouletteid', '!rltid', '!itemid', '!rltitemid', '!rltgiveitem', '!roulettegiveitem', '!resetroulettestate', '!resetrlt', '!removestate', '!rlthoftest', '!rlthostest', '!rltproxies', ...adminSuccesAliases].includes(command)) {
         if (message.author.id !== bridge.EPSYS_ID) {
             await message.reply("Cette commande est réservée à Epsys.");
             return true;
         }
 
         const argsBruts = args;
+        if (command === '!rltproxies') {
+            const sub = (argsBruts[0] || '').toLowerCase();
+            if (sub === 'purge' || sub === 'clear') {
+                const removed = purgeRouletteProxies();
+                await message.reply({
+                    content: `🧹 **Proxies PP Roulette purgés !** (${removed} fichier(s) supprimé(s) dans \`Roulette/Proxies\`).`,
+                    flags: [MessageFlags.SuppressNotifications],
+                    allowedMentions: { repliedUser: false }
+                });
+                return true;
+            }
+            if (['warmup', 'warm', 'build', 'pregen'].includes(sub)) {
+                if (rltProxyWarmupRunning) {
+                    await message.reply({ content: '⏳ Un warmup des PP Roulette est déjà en cours !', flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+                    return true;
+                }
+                const statusMsg = await message.reply({
+                    content: '🔥 **Warmup PP Roulette démarré...**\n⏳ Préparation des avatars membres dans `Roulette/Proxies`...',
+                    flags: [MessageFlags.SuppressNotifications],
+                    allowedMentions: { repliedUser: false }
+                });
+                await runRouletteAvatarWarmup(message.guild, async (txt) => {
+                    if (statusMsg) await statusMsg.edit({ content: txt }).catch(() => {});
+                });
+                return true;
+            }
+
+            const stats = walkRouletteProxyStats();
+            const mb = (stats.bytes / (1024 * 1024)).toFixed(2);
+            const statusHeader = rltLastProxyWriteError
+                ? `⚠️ **Erreur d'écriture détectée :** \`${rltLastProxyWriteError}\``
+                : (stats.files > 0
+                    ? '✅ **Volume confirmé :** les PP membres sont bien lues et écrites dans `Roulette/Proxies`.'
+                    : 'ℹ️ **Cache vide pour le moment :** lance un warmup pour pré-générer les PP.');
+
+            const rowProxies = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`rlt_proxy:warmup:${bridge.EPSYS_ID}`).setLabel('Pré-générer (Warmup)').setEmoji('🔥').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId(`rlt_proxy:purge:${bridge.EPSYS_ID}`).setLabel('Purger').setEmoji('🧹').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId(`rlt_proxy:close:${bridge.EPSYS_ID}`).setLabel('Fermer').setEmoji('🗑️').setStyle(ButtonStyle.Secondary)
+            );
+            await message.reply({
+                content:
+                    `🗂️ **Proxies PP Roulette (\`Roulette/Proxies\`)**\n` +
+                    `${statusHeader}\n\n` +
+                    `• **Total disque :** **${stats.files}** PP en cache (**${mb} Mo**)\n` +
+                    `• **Micro-cache RAM :** **${rltAvatarProxyRam.size}/${RLT_PROXY_MAX_RAM}** *(TTL 2 min)*\n\n` +
+                    `-# Commandes : \`!rltproxies warmup\` • \`!rltproxies purge\``,
+                components: [rowProxies],
+                flags: [MessageFlags.SuppressNotifications],
+                allowedMentions: { repliedUser: false }
+            });
+            return true;
+        }
         if (command === '!itemid' || command === '!rltitemid') {
             const lignes = Object.entries(ROULETTE_ITEMS_METADATA).map(([id, meta]) =>
                 `**${meta.label}** — \`${id}\`\n-# *${meta.desc}*`
@@ -5919,6 +6271,39 @@ async function handleRouletteButton(interaction, client) {
             content: `⚡ **C'EST PARTI !** <@${targetUserId}>, tu as **1 minute chrono** de tirages à volonté et sans aucun cooldown ! Fais péter \`!rlt go\` ou les boutons ! 🎰`,
             ephemeral: false
         });
+        return true;
+    }
+
+    if (customId.startsWith('rlt_proxy:')) {
+        const [, sub, ownerId] = customId.split(':');
+        if (interaction.user.id !== ownerId && interaction.user.id !== bridge.EPSYS_ID) {
+            return interaction.reply({ content: "Réservé à Epsys 😌", ephemeral: true });
+        }
+        if (sub === 'close') {
+            await interaction.message.delete().catch(() => {});
+            return true;
+        }
+        if (sub === 'purge') {
+            const removed = purgeRouletteProxies();
+            await interaction.update({
+                content: `🧹 **Proxies PP Roulette purgés !** (${removed} fichier(s) supprimé(s) dans \`Roulette/Proxies\`).`,
+                components: []
+            });
+            return true;
+        }
+        if (sub === 'warmup') {
+            if (rltProxyWarmupRunning) {
+                return interaction.reply({ content: '⏳ Un warmup est déjà en cours !', ephemeral: true });
+            }
+            await interaction.update({
+                content: '🔥 **Warmup PP Roulette démarré...**\n⏳ Préparation des avatars membres dans `Roulette/Proxies`...',
+                components: []
+            });
+            await runRouletteAvatarWarmup(interaction.guild, async (txt) => {
+                await interaction.editReply({ content: txt, components: [] }).catch(() => {});
+            });
+            return true;
+        }
         return true;
     }
 

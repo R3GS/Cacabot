@@ -115,9 +115,10 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
                 `\`!stats set [@membre]\` • Panneau complet pour modifier tirages, gains, bonus & malus\n` +
                 `\`!successgive [@membre]\` • Menu pour réattribuer des succès perdus\n` +
                 `\`!rltsuccesforce [id/test] [@membre]\` • Débloque un succès de force ou teste une carte\n\n` +
-                `### 🖼️ Tests Hall of Fame / Hall of Shame\n` +
+                `### 🖼️ Tests Hall of Fame / Hall of Shame & Proxies PP\n` +
                 `\`!rlthoftest [slug] [@membre]\` • Teste l'affiche Canvas **Hall of Fame** dans le salon actuel *(silencieux, ne poste pas dans le HoF)*\n` +
-                `\`!rlthostest [slug] [@membre]\` • Teste l'affiche Canvas **Hall of Shame** dans le salon actuel *(silencieux, ne poste pas dans le HoS)*\n\n` +
+                `\`!rlthostest [slug] [@membre]\` • Teste l'affiche Canvas **Hall of Shame** dans le salon actuel *(silencieux, ne poste pas dans le HoS)*\n` +
+                `\`!rltproxies\` *(\`warmup\` / \`purge\`)* • Diagnostic & pré-génération du cache des avatars membres (\`Roulette/Proxies\`)\n\n` +
                 `### 🎛️ Effets & Cooldowns\n` +
                 `\`!reroll [@membre]\` • Réinitialise immédiatement le cooldown d'un·e membre\n` +
                 `\`!bonusforce [id] [@membre]\` / \`!malusforce [id] [@membre]\` • Impose un tirage\n` +
