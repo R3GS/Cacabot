@@ -4236,6 +4236,8 @@ function buildGuidePayload(userId, fromHub = true, chapter = 'home') {
 
     return { embeds: [embed], components };
 }
+
+function buildHubPayload(member, u) {
     const embed = buildHubEmbed(member, u);
     const components = buildHubComponents(member.id, u);
     const files = [];
