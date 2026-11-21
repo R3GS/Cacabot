@@ -1718,9 +1718,11 @@ async function handleBattlePassInteraction(interaction) {
     if (!id.startsWith('bp_')) return false;
 
     const parts = id.split('_');
-    const action = parts[1];
-    const authorId = parts[2];
-    const targetId = parts[3] || authorId;
+    const isClaimAll = parts[1] === 'claim' && parts[2] === 'all';
+
+    const action = isClaimAll ? 'claim' : parts[1];
+    const authorId = isClaimAll ? parts[3] : parts[2];
+    const targetId = isClaimAll ? authorId : (parts[3] || authorId);
 
     if (interaction.user.id !== authorId) {
         return interaction.reply({ content: "Ce n'est pas ton menu 😌", ephemeral: true });

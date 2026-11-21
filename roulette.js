@@ -2417,6 +2417,30 @@ function buildInventaireEmbed(membre) {
         }
     }
 
+    const userId = membre.id;
+    const pity = roulettePity.get(userId) ?? { malus: 0, nuls: 0 };
+    const rawBoucliers = rouletteBouclierActif.get(userId);
+    const boucliers = typeof rawBoucliers === 'number' ? rawBoucliers : (rawBoucliers ? 1 : 0);
+
+    const boostJackpot = rouletteJackpotBonus.get(userId) || 0;
+    const boostCharges = rouletteJackpotBoostCharges.get(userId) || 0;
+    const boostValeur = boostCharges > 0
+        ? (rouletteJackpotBoostValue.get(userId) || 0)
+        : 0;
+    const boostTotal = Math.round((boostJackpot + boostValeur) * 100);
+
+    const finCooldown = rouletteCooldowns.get(userId) || 0;
+    const maintenant = Date.now();
+    const cooldownTexte = ROULETTE_COOLDOWN_EXEMPT.includes(userId)
+        ? '⚡ Exempté'
+        : (rouletteFreeRollUntil.get(userId) || 0) > maintenant
+            ? '⚡ Tirage à volonté'
+            : (rouletteCoupTripleCharges.get(userId) || 0) > 0
+                ? '🎰 Coup Triple actif'
+                : finCooldown > maintenant
+                    ? `<t:${Math.ceil(finCooldown / 1000)}:R>`
+                    : '✅ Prêt à tourner';
+
     const avatarInv = membre?.displayAvatarURL?.({ dynamic: true }) || membre?.user?.displayAvatarURL?.({ dynamic: true }) || undefined;
     const embed = new EmbedBuilder()
         .setColor(0xffd20a)
@@ -2426,7 +2450,17 @@ function buildInventaireEmbed(membre) {
             items.length > 0
                 ? items.join('\n\n') + "\n\n*Choisis la récompense à activer dans le menu déroulant ci-dessous :*"
                 : "*Ton inventaire est vide pour le moment.*"
-        );
+        )
+        .addFields({
+            name: '📊 Statistiques de roulette',
+            value:
+                `🍀 **Pity malus :** ${pity.malus}/${ROULETTE_PITY_MALUS}\n` +
+                `🍀 **Pity nuls :** ${pity.nuls}/${ROULETTE_PITY_NULS}\n` +
+                `📈 **Boost bonus :** +${boostTotal}%` +
+                (boostCharges > 0 ? ` (${boostCharges} tirage(s) boosté(s))` : '') + '\n' +
+                `⏳ **Cooldown :** ${cooldownTexte}\n` +
+                `🛡️ **Boucliers :** ${boucliers} charge(s)`
+        });
 
     let row = null;
     if (options.length > 0) {
