@@ -1924,16 +1924,16 @@ function resolveCardQuery(rawQuery, preferredSetNumber = null) {
     }
 
     const hasFullArt = /\b(?:full\s*arts?|fullart|fa)\b/.test(stripped);
-    const hasNegative = /\b(?:negatives?|neg)\b/.test(stripped);
+    const hasNegative = /\b(?:negatives?|negatifs?|neg)\b/.test(stripped);
 
     if (hasFullArt || hasNegative) {
-        // "Full Art Négative" désigne toujours la version Négative.
+        // "Full Art Négative" ou "Full Art Négatif" désigne la Négative.
         // "Full Art" seul désigne exclusivement la Full Art normale.
         wantedRarity = hasNegative ? 'Négative' : 'Full Art';
 
         stripped = stripped
             .replace(/\b(?:full\s*arts?|fullart|fa)\b/g, ' ')
-            .replace(/\b(?:negatives?|neg)\b/g, ' ');
+            .replace(/\b(?:negatives?|negatifs?|neg)\b/g, ' ');
     } else if (/\b(?:legendaires?|leg)\b/.test(stripped)) {
         wantedRarity = 'Légendaire';
         stripped = stripped.replace(/\b(?:legendaires?|leg)\b/g, ' ');
