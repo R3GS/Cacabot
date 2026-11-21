@@ -7122,23 +7122,34 @@ function buildPullChancePayload(sessionId, session, guild) {
         : '*Aucune carte sélectionnée*';
     const multLabel = session.mult === 1
         ? '×1 *(Retirer le boost)*'
-        : (session.mult === PULL_BOOST_GUARANTEED
+        : session.mult === PULL_BOOST_GUARANTEED
             ? '🎯 **Garantie 1× (par booster)**'
-            : (session.mult === PULL_BOOST_TRIPLE
-                ? '🤡 **Full Troll 3× (tout le booster, tout set)**'
-                : `**×${session.mult}**`));
+            : session.mult === PULL_BOOST_ONCE
+                ? '🎁 **Garantie au prochain booster uniquement**'
+                : session.mult === PULL_BOOST_TRIPLE
+                    ? '🤡 **Full Troll 3× (tout le booster, tout set)**'
+                    : `**×${session.mult}**`;
 
     const activeLines = [];
     for (const [tKey, cardMap] of Object.entries(boosts)) {
         if (!cardMap || typeof cardMap !== 'object') continue;
-        const entries = Object.entries(cardMap).filter(([, m]) => m === PULL_BOOST_GUARANTEED || m === PULL_BOOST_TRIPLE || (typeof m === 'number' && m > 1));
+        const entries = Object.entries(cardMap).filter(([, m]) =>
+            m === PULL_BOOST_GUARANTEED ||
+            m === PULL_BOOST_ONCE ||
+            m === PULL_BOOST_TRIPLE ||
+            (typeof m === 'number' && m > 1)
+        );
         if (entries.length === 0) continue;
         const tStr = tKey === PULL_BOOST_ROLE_KEY ? `<@&${TCG_ROLE_ID}>` : `<@${tKey}>`;
         const cStr = entries.map(([cid, m]) => {
             const c = cardById.get(cid);
             const boostTxt = m === PULL_BOOST_TRIPLE
                 ? '🤡 **Full Troll 3×**'
-                : (m === PULL_BOOST_GUARANTEED ? '🎯 **Garantie 1×**' : `**×${m}**`);
+                : m === PULL_BOOST_GUARANTEED
+                    ? '🎯 **Garantie 1×**'
+                    : m === PULL_BOOST_ONCE
+                        ? '🎁 **Garantie prochain booster**'
+                        : `**×${m}**`;
             return `\`${cid}\` ${c ? c.name : ''} (${boostTxt})`;
         }).join(', ');
         activeLines.push(`• ${tStr} : ${cStr}`);
@@ -7247,9 +7258,13 @@ function buildPullChancePayload(sessionId, session, guild) {
             .setLabel(
                 session.mult === 1
                     ? 'Retirer le boost'
-                    : (session.mult === PULL_BOOST_GUARANTEED
+                    : session.mult === PULL_BOOST_GUARANTEED
                         ? 'Appliquer : Garantie 1×'
-                        : (session.mult === PULL_BOOST_TRIPLE ? 'Appliquer : Full Troll 3×' : `Appliquer ×${session.mult}`))
+                        : session.mult === PULL_BOOST_ONCE
+                            ? 'Garantir au prochain booster'
+                            : session.mult === PULL_BOOST_TRIPLE
+                                ? 'Appliquer : Full Troll 3×'
+                                : `Appliquer ×${session.mult}`
             )
             .setEmoji('✅')
             .setStyle(ButtonStyle.Success)
@@ -11644,7 +11659,7 @@ async function handleTcgInteraction(interaction) {
 
             if (session.mult === PULL_BOOST_ONCE && session.targetKey === PULL_BOOST_ROLE_KEY) {
                 await interaction.reply({
-                    content: "❌ La garantie au prochain booster est réservée à un joueur précis.",
+                    content: "❌ Pour garantir une carte au prochain booster, sélectionne d'abord un membre précis dans le menu « Ou choisir un·e membre spécifique... », puis clique à nouveau sur « Garantir au prochain booster ».",
                     ephemeral: true
                 });
                 return true;
