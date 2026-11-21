@@ -11632,6 +11632,16 @@ async function handleTcgInteraction(interaction) {
             await interaction.update(buildPullChancePayload(sessionId, session, interaction.guild));
             return true;
         }
+
+        if (sub === 'apply' && interaction.isButton()) {
+            if (!session.targetKey || !session.cardId) {
+                await interaction.reply({
+                    content: "❌ Choisis une cible et une carte.",
+                    ephemeral: true
+                });
+                return true;
+            }
+
             if (session.mult === PULL_BOOST_ONCE && session.targetKey === PULL_BOOST_ROLE_KEY) {
                 await interaction.reply({
                     content: "❌ La garantie au prochain booster est réservée à un joueur précis.",
@@ -11639,6 +11649,7 @@ async function handleTcgInteraction(interaction) {
                 });
                 return true;
             }
+
             if (!data.pullBoosts) data.pullBoosts = {};
             if (
                 session.mult !== PULL_BOOST_GUARANTEED &&
