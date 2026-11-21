@@ -1537,6 +1537,8 @@ client.once('ready', async () => {
             .addUserOption(opt => opt.setName('membre').setDescription('Qui fuir')),
         new SlashCommandBuilder().setName('court').setDescription('Prendre la fuite (raccourci)')
             .addUserOption(opt => opt.setName('membre').setDescription('Qui fuir')),
+        new SlashCommandBuilder().setName('spin').setDescription('Tourner sur soi-même ou avec quelqu’un')
+            .addUserOption(opt => opt.setName('membre').setDescription('Avec qui tourner')),
         new SlashCommandBuilder().setName('explode').setDescription('Exploser sans aucune raison'),
         new SlashCommandBuilder().setName('explose').setDescription('Exploser sans aucune raison (raccourci)'),
         new SlashCommandBuilder().setName('die').setDescription('Mourir dans d\'atroces souffrances')
