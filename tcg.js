@@ -4006,53 +4006,219 @@ function buildHelpPayload(userId) {
     return { embeds: [embed], components: [row] };
 }
 
-function buildGuidePayload(userId, fromHub = true) {
-    const sep = '\n────────────────────────────────────────\n';
+function buildGuidePayload(userId, fromHub = true, chapter = 'home') {
+    const chapters = {
+        home: {
+            title: '📘 Guide du RegaDex',
+            description:
+                `Bienvenue dans le guide du **RegaDex** !\n\n` +
+                `Collectionne les **109 cartes** du **${SET1_NAME}**, ` +
+                `ouvre des boosters, gagne des points et échange avec les autres membres.\n\n` +
+                `📚 **Choisis un chapitre dans le menu ci-dessous** pour découvrir les règles et fonctionnalités du TCG.\n\n` +
+                `💡 *Tu peux changer de chapitre à tout moment sans quitter ce message.*`
+        },
+
+        boosters: {
+            title: '🎁 Boosters & Notifications',
+            description:
+                `### 🎁 Boosters gratuits\n` +
+                `• **1 booster toutes les 6 heures**, avec un maximum de **2 boosters gratuits** en réserve.\n` +
+                `• **Vendredi à 8h :** un booster hebdomadaire offert, avec un stock limité à **2**.\n` +
+                `• **Quêtes communautaires :** chaque lundi à 8h, un objectif collectif est lancé. Les membres ayant participé en ouvrant un booster peuvent gagner **2 boosters communautaires et 15 points** si l'objectif est atteint.\n\n` +
+                `### 🃏 Ouverture\n` +
+                `• Un booster classique contient **3 cartes différentes**.\n` +
+                `• Les cartes sont révélées de la plus commune à la plus rare.\n` +
+                `• **God Pack :** **0,1 %** de chance de base, ou **1 %** avec le bonus ×10 actif.\n\n` +
+                `### ✨ Pity\n` +
+                `Si ton booster contient **3 Communes**, le prochain garantit au moins **une Rare**.\n\n` +
+                `### 🔔 Notifications\n` +
+                `Avec \`!tcgnotif\`, choisis d'être prévenu à chaque recharge ou lorsque ta réserve atteint **2/2**.\n` +
+                `Tes préférences sont conservées et modifiables à tout moment.`
+        },
+
+        rarities: {
+            title: '✨ Raretés & Cartes spéciales',
+            description:
+                `### 🎲 Probabilités de tirage\n` +
+                `⚪ **Commune :** \`64,25 %\`\n` +
+                `🔵 **Rare :** \`22 %\`\n` +
+                `🟣 **Épique :** \`8 %\`\n` +
+                `🟡 **Légendaire :** \`5 %\`\n` +
+                `🌈 **Full Art :** \`0,6 %\`\n` +
+                `🕳️ **Négative :** \`0,15 %\`\n\n` +
+                `### 🌟 Cartes spéciales\n` +
+                `• **Holographiques :** certaines cartes possèdent une version Holo avec son propre numéro, deux fois plus rare que la version originale.\n` +
+                `• **Négatives :** **13 cartes secrètes**, numérotées de \`1-Ø1\` à \`1-Ø13\`.\n` +
+                `• **Full Art :** des cartes particulièrement rares à collectionner.\n\n` +
+                `💡 *Les probabilités affichées sont les taux de base, avant application des bonus et garanties.*`
+        },
+
+        points: {
+            title: '🪙 Points & Boutique',
+            description:
+                `### 💰 Gagner des points\n` +
+                `• **15 messages :** +1 point\n` +
+                `• **10 minutes en vocal** (3 membres minimum, hors AFK) : +1 point\n` +
+                `• **1 roulette :** +1 point, hors gains supplémentaires\n` +
+                `• **1 booster ouvert :** +5 points\n` +
+                `• **1 doublon obtenu :** +3 points\n` +
+                `• **1 échange terminé :** +3 points par fil\n` +
+                `• **Victoire Motus, Rébus ou Pendu :** +2 points\n\n` +
+                `### 🏆 Complétion du Set\n` +
+                `• **25 %, 50 % et 75 % :** +15 points à chaque palier\n` +
+                `• **100 % :** +25 points et **2 boosters de Maître**\n\n` +
+                `### 🛒 Boutique RegaDex\n` +
+                `🎁 **Booster :** ${STORE_PRICES.booster} pts\n` +
+                `🎴 **Booster 5 cartes :** ${STORE_PRICES.fiveCardBooster} pts\n` +
+                `🍀 **Booster Chanceux :** ${STORE_PRICES.luckyBooster} pts\n` +
+                `✨ **Transformation Holo :** ${STORE_PRICES.holoTransform} pts\n` +
+                `🕳️ **Transformation Négative :** ${STORE_PRICES.negativeTransform} pts\n` +
+                `⚡ **Demi-cooldown :** ${STORE_PRICES.halfCooldown} pts\n` +
+                `🔄 **Seconde Chance :** ${STORE_PRICES.secondChance} pts\n` +
+                `🌟 **God Pack ×10 (5 jours) :** ${STORE_PRICES.godPackBoost} pts\n\n` +
+                `Les objets achetés sont accessibles dans ton **inventaire** via \`!tcgclaim\`.`
+        },
+
+        binder: {
+            title: '📖 Classeur & Wishlist',
+            description:
+                `### 📚 Ton classeur\n` +
+                `Retrouve toutes tes cartes avec \`!classeur\`.\n\n` +
+                `• Filtre par **catégorie** et par **rareté**.\n` +
+                `• Affiche toutes les cartes, uniquement celles possédées ou tes doublons.\n` +
+                `• Choisis l'affichage **4, 18, 36 ou All**.\n` +
+                `• Change le thème entre **Clair (W)** et **Nuit (B)**.\n\n` +
+                `### 👀 Collections des autres\n` +
+                `Tu peux consulter librement les classeurs des autres membres, sans autorisation préalable.\n\n` +
+                `### 💜 Wishlist\n` +
+                `• Ajoute jusqu'à **${MAX_WISHLIST} cartes recherchées** avec \`!wishlist\`.\n` +
+                `• Tes cartes recherchées sont mises en avant lors des échanges.\n\n` +
+                `### 🔍 Inspection des cartes\n` +
+                `Avec \`!carte [numéro ou nom]\`, consulte une carte et découvre **qui la possède en doublon**.\n\n` +
+                `💡 *Utilise aussi \`!flex\` pour montrer ta carte préférée !*`
+        },
+
+        trades: {
+            title: '🔄 Échanges entre membres',
+            description:
+                `### 🤝 Lancer un échange\n` +
+                `Utilise \`!trade @membre\` ou le menu contextuel Discord sur un membre.\n` +
+                `La personne invitée peut **accepter ou refuser**.\n` +
+                `Le fil d'échange peut être public ou silencieux.\n\n` +
+                `### 🃏 Proposer des cartes\n` +
+                `• Chaque participant peut proposer jusqu'à **3 cartes**.\n` +
+                `• Les dons, dernières copies et échanges de raretés différentes sont autorisés.\n` +
+                `• Un indicateur montre les cartes manquantes pour terminer le Set.\n\n` +
+                `### 🔒 Validation\n` +
+                `• Les deux participants doivent **verrouiller leur offre**.\n` +
+                `• Toute modification déverrouille automatiquement les deux offres.\n` +
+                `• Un échange déséquilibré demande une **double confirmation**.\n\n` +
+                `### ✅ Fin de l'échange\n` +
+                `• Les cartes sont transférées et un récapitulatif visuel est publié.\n` +
+                `• **+3 points RegaDex** sont accordés à la fermeture du fil (une seule fois).\n` +
+                `• Un fil inactif pendant **24 heures** se ferme automatiquement.`
+        },
+
+        commands: {
+            title: '⌨️ Commandes utiles',
+            description:
+                `### 🏠 Navigation\n` +
+                `• \`!tcg\` — Tableau de bord\n` +
+                `• \`!tcg profil\` — Profil et statistiques\n` +
+                `• \`!tcg guide\` — Ce guide\n` +
+                `• \`!tcg credits\` — Crédits\n\n` +
+                `### 🎁 Boosters\n` +
+                `• \`!open\` — Ouvrir un booster\n` +
+                `• \`!tcgnotif\` — Notifications\n` +
+                `• \`!tcgclaim\` — Inventaire\n` +
+                `• \`!tcgstore\` — Boutique\n\n` +
+                `### 📚 Collection\n` +
+                `• \`!classeur\` — Collection\n` +
+                `• \`!carte [numéro ou nom]\` — Inspecter une carte\n` +
+                `• \`!wishlist\` — Cartes recherchées\n` +
+                `• \`!tcgtop\` — Classement\n\n` +
+                `### 🔄 Interactions\n` +
+                `• \`!trade @membre\` — Échanger\n` +
+                `• \`!flex\` — Montrer sa carte préférée\n` +
+                `• \`!flexmodify [Set]-[Carte]\` — Modifier sa carte favorite\n\n` +
+                `💡 *Les alias \`!regadex\` et \`!rgdx\` sont également disponibles.*`
+        }
+    };
+
+    const selected = chapters[chapter] || chapters.home;
 
     const embed = new EmbedBuilder()
         .setColor(0x3498DB)
-        .setTitle(`📘 Guide complet du RegaDex TCG — ${SET1_NAME}`)
-        .setDescription(
-            `Collectionne les **109 cartes** du **${SET1_NAME}** *(Items, Personnages & Références)* en ouvrant des boosters et en échangeant tes cartes !\n` +
-            sep +
-            `### 🎁 1. Boosters & Notifications\n` +
-            `• Tu reçois **1 booster gratuit toutes les 6h** *(max **2** en attente)*.\n` +
-            `• **Bonus du vendredi 8h 📅 :** un booster offert chaque vendredi *(stock hebdo limité à **2/2** max)*.\n` +
-            `• **Quêtes communautaires 🤝 :** chaque lundi 8h, un objectif collectif ! Tous ceux ayant ouvert un booster avant la fin gagnent **2 boosters communautaires** + **15 pts**.\n` +
-            `• Chaque booster contient **3 cartes uniques**, révélées de la plus commune à la plus rare *(1% de chance de **God Pack** !)*. \n` +
-            `• **Système de Pity :** si un booster ne te donne que **3 Communes**, ton prochain booster garantit au moins **1 carte Rare**.\n` +
-            `• **Notifications 🔔 :** règle ton choix une bonne fois pour toutes *(à chaque booster ou à 2/2, ici ou en MP)* — il reste sauvegardé même après avoir atteint 2/2 et est modifiable/désactivable à tout moment !` +
-            sep +
-            `### ✨ 2. Raretés, Holos & Négatives\n` +
-            `• **Taux de tirage :**\n` +
-            `  ⚪ Commune \`64,25%\` • 🔵 Rare \`22%\` • 🟣 Épique \`8%\`\n` +
-            `  🟡 Légendaire \`5%\` • 🌈 Full Art \`0,6%\` • 🕳️ Négative \`0,15%\`\n` +
-            `• **Cartes Holographiques :** certaines cartes ont une version *Holo* avec leur propre numéro, **2× plus rare** que l'originale.\n` +
-            `• **Cartes Négatives :** **13 cartes secrètes** numérotées \`1-Ø1\` à \`1-Ø13\`, les plus rares du ${SET1_NAME}.` +
-            sep +
-            `### 🪙 3. Points RegaDex & Store\n` +
-            `• **Comment gagner des points :**\n` +
-            `  15 messages = **+1pt** • 10 min en vocal *(≥ 3 membres, hors AFK)* = **+1pt**\n` +
-            `  1 roulette = **+1pt** *(+ gains rares)* • 1 booster ouvert = **+5pts** • 1 doublon = **+3pts**\n` +
-            `  1 fil d'échange terminé = **+3pts** *(1×/fil)* • Victoire Motus/Rébus/Pendu = **+2pts**\n` +
-            `  **Paliers de complétion :** **+15pts** à \`25%\`, \`50%\`, \`75%\` • **+25pts + 2 boosters de Maître** à \`100%\`\n` +
-            `• **RegaDex Store (\`🛒 Store\`) :** les boosters achetés sont **prêts à ouvrir** tout de suite, et les bonus vont dans ton **🎒 Inventaire** (\`!tcgclaim\`) :\n` +
-            `  • 🎁 **Booster** (\`100 pts\`) — Un booster supplémentaire à ouvrir.\n` +
-                        `  • 🍀 **Chanceux** (\`75 pts\`) — Retire toutes les *Communes* du prochain booster.\n` +
-            `  • ✨ **Transfo Holo** (\`50 pts\`) — Transforme une carte compatible possédée en *Holo*.\n` +
-            `  • ⚡ **Cooldown /2** (\`25 pts\`) — Le prochain rechargement gratuit passe à **3h** au lieu de 6h.\n` +
-            `  • 🌟 **Taux God Pack ×10 (5j)** (\`150 pts\`) — Multiplie par 10 tes chances de **God Pack** pendant 5 jours.` +
-            sep +
-            `### 📖 4. Classeur, Wishlist, Échanges & Commandes\n` +
-            `• **Classeur :** filtre par catégorie, rareté ou affichage (**Tout** / **Possédées** / **Doublons**), choisis la grille (\`4\`, \`18\`, \`36\` ou \`All\`) et change le thème **Clair (W) / Nuit (B)**.\n` +
-            `• **Wishlist & Doublons :** ajoute jusqu'à **5 cartes** dans ta \`!wishlist\` *(mises en avant dans \`!trade\`)* et utilise le bouton sous \`!carte\` ou \`Inspecter\` pour voir **qui a une carte en doublon** !\n` +
-            `• **Échanges (\`!trade [@]\` ou clic droit sur un membre) :** échange jusqu'à **3 cartes** chacun, **+3 pts** à la fermeture du fil ! *(détails dans la section 5 ci-dessous)*\n` +
-            `• **Commandes rapides :** \`!tcg\` • \`!tcghelp\` • \`!open\` / \`!tcggo\` / \`!tcgbooster\` • \`!tcgclaim\` • \`!carte [n°/nom]\` • \`!flex\` *(<#${TCG_CHANNEL_ID}> & <#${SHITPOST_CHANNEL_ID}>)*`
-        )
-        .setFooter({ text: `RegaDex ${SET1_NAME} • Cacabot` });
+        .setTitle(selected.title)
+        .setDescription(selected.description)
+        .setFooter({
+            text: `RegaDex • ${SET1_NAME} • Guide interactif`
+        });
+
+    const menu = new StringSelectMenuBuilder()
+        .setCustomId(`tcg:guidechapter:${userId}:${fromHub ? 1 : 0}`)
+        .setPlaceholder('📚 Sélectionner un chapitre...')
+        .addOptions([
+            {
+                label: 'Accueil du guide',
+                value: 'home',
+                emoji: '🏠',
+                description: 'Présentation du RegaDex',
+                default: chapter === 'home'
+            },
+            {
+                label: 'Boosters & Notifications',
+                value: 'boosters',
+                emoji: '🎁',
+                description: 'Recharges, God Packs, Pity et alertes',
+                default: chapter === 'boosters'
+            },
+            {
+                label: 'Raretés & Cartes spéciales',
+                value: 'rarities',
+                emoji: '✨',
+                description: 'Taux de tirage, Holos et Négatives',
+                default: chapter === 'rarities'
+            },
+            {
+                label: 'Points & Boutique',
+                value: 'points',
+                emoji: '🪙',
+                description: 'Gains, prix et bonus',
+                default: chapter === 'points'
+            },
+            {
+                label: 'Classeur & Wishlist',
+                value: 'binder',
+                emoji: '📖',
+                description: 'Collection, filtres et doublons',
+                default: chapter === 'binder'
+            },
+            {
+                label: 'Échanges',
+                value: 'trades',
+                emoji: '🔄',
+                description: 'Proposer et valider un échange',
+                default: chapter === 'trades'
+            },
+            {
+                label: 'Commandes utiles',
+                value: 'commands',
+                emoji: '⌨️',
+                description: 'Toutes les commandes principales',
+                default: chapter === 'commands'
+            }
+        ]);
 
     const components = [
+        new ActionRowBuilder().addComponents(menu),
         new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tcg:guidehome:${userId}:${fromHub ? 1 : 0}`)
+                .setLabel('Accueil du guide')
+                .setEmoji('📘')
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(chapter === 'home'),
             new ButtonBuilder()
                 .setCustomId(`tcg:help:${userId}:1`)
                 .setLabel('Commandes')
@@ -4068,31 +4234,8 @@ function buildGuidePayload(userId, fromHub = true) {
         )
     ];
 
-    const tradeEmbed = new EmbedBuilder()
-        .setColor(0x3498DB)
-        .setDescription(
-            `### 🔄 5. Échanges, mode d'emploi\n` +
-            `• **Lancer :** \`!trade [@membre]\` ou clic droit sur un membre. L'autre personne **accepte ou refuse**, et le fil peut être **public** ou **silencieux**.` +
-            sep +
-            `### 🃏 Dans le fil\n` +
-            `• Chacun.e ajoute jusqu'à **3 cartes** *(dons, dernières copies et raretés différentes autorisés)*.\n` +
-            `• Un **repère** indique combien de cartes il manque à chacun pour finir le ${SET1_NAME}.\n` +
-            `• Quand vous êtes d'accord, vous **verrouillez** tous.tes les deux.\n` +
-            `-# ⚠️ Toute modification déverrouille automatiquement la validation des deux participant.es.` +
-            sep +
-            `### ⚖️ Échange inéquitable\n` +
-            `• Si l'échange est déséquilibré, une **double confirmation** est demandée avant exécution. L'un.e des deux peut annuler : les offres sont alors déverrouillées.` +
-            sep +
-            `### ✅ Fin de l'échange\n` +
-            `• Les cartes sont échangées et un **récap en image** est posté.\n` +
-            `• **+3 pts RegaDex** à la fermeture du fil *(1 seul bonus par fil)*.\n` +
-            `• Un fil resté **inactif 24h** se ferme automatiquement.`
-        );
-
-    return { embeds: [embed, tradeEmbed], components };
+    return { embeds: [embed], components };
 }
-
-function buildHubPayload(member, u) {
     const embed = buildHubEmbed(member, u);
     const components = buildHubComponents(member.id, u);
     const files = [];
@@ -4323,10 +4466,10 @@ function buildStorePayload(member, u, fromHub = false) {
         .setDescription(
             `🪙 **Ton solde :** **${u.points} points RegaDex**\n` +
             `────────────────────────────────────────\n` +
-            `⚡ **Diviser le cooldown par 2** — \`${STORE_PRICES.halfCooldown} pts\`\n` +
-            `-# Activé dès l'ouverture du prochain booster : celui d'après prendra **3h** au lieu de 6h.\n\n` +
             `🔄 **Seconde Chance** — \`${STORE_PRICES.secondChance} pts\`\n` +
             `-# Active une relance pour ton prochain booster : choisis **une Commune** du récapitulatif et remplace-la par un nouveau tirage normal.\n\n` +
+            `⚡ **Diviser le cooldown par 2** — \`${STORE_PRICES.halfCooldown} pts\`\n` +
+            `-# Activé dès l'ouverture du prochain booster : celui d'après prendra **3h** au lieu de 6h.\n\n` +
             `✨ **Transformer une carte en Holographique** — \`${STORE_PRICES.holoTransform} pts\`\n` +
             `-# Transforme 1 de tes cartes compatibles possédées en sa version **holographique** !\n\n` +
             `🍀 **Prochain booster chanceux** — \`${STORE_PRICES.luckyBooster} pts\`\n` +
@@ -8879,16 +9022,74 @@ async function handleTcgInteraction(interaction) {
         return true;
     }
 
-    // ----- GUIDE -----
+    // ----- GUIDE INTERACTIF -----
     if (action === 'guide' && interaction.isButton()) {
         const ownerId = parts[2];
         const fromHub = parts[3] === '1';
+
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            await interaction.reply({
+                content: "Pas pour toi 😌",
+                ephemeral: true
+            });
             return true;
         }
-        const payload = buildGuidePayload(ownerId, fromHub);
-        await interaction.update({ content: null, files: [], attachments: [], ...payload });
+
+        await interaction.update({
+            content: null,
+            files: [],
+            attachments: [],
+            ...buildGuidePayload(ownerId, fromHub, 'home')
+        });
+
+        return true;
+    }
+
+    // ----- CHOIX DU CHAPITRE -----
+    if (action === 'guidechapter' && interaction.isStringSelectMenu()) {
+        const ownerId = parts[2];
+        const fromHub = parts[3] === '1';
+
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+            await interaction.reply({
+                content: "Pas pour toi 😌",
+                ephemeral: true
+            });
+            return true;
+        }
+
+        const chapter = interaction.values[0];
+
+        await interaction.update({
+            content: null,
+            files: [],
+            attachments: [],
+            ...buildGuidePayload(ownerId, fromHub, chapter)
+        });
+
+        return true;
+    }
+
+    // ----- RETOUR À L'ACCUEIL DU GUIDE -----
+    if (action === 'guidehome' && interaction.isButton()) {
+        const ownerId = parts[2];
+        const fromHub = parts[3] === '1';
+
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+            await interaction.reply({
+                content: "Pas pour toi 😌",
+                ephemeral: true
+            });
+            return true;
+        }
+
+        await interaction.update({
+            content: null,
+            files: [],
+            attachments: [],
+            ...buildGuidePayload(ownerId, fromHub, 'home')
+        });
+
         return true;
     }
 
