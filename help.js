@@ -610,7 +610,7 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
                 `Toutes les commandes animées pour interagir avec les membres du serveur.\n` +
                 `*Mentionne un membre (ex: \`!kiss @membre\`) ou utilise la commande solo.*\n\n` +
                 `### 💖 Affection & Rizz\n` +
-                `\`kiss\` • \`hug\` • \`danse\` • \`rizz\` • \`lovecalc @user1 @user2\`\n\n` +
+                `\`kiss\` • \`hug\` • \`danse\` • \`spin\` • \`rizz\` • \`lovecalc @user1 @user2\`\n\n` +
                 `### 💥 Bagarre & Provoc\n` +
                 `\`punch\` • \`bang\` • \`insult\` • \`ban\` • \`bait\`\n\n` +
                 `### 😆 Humeurs & Réactions\n` +

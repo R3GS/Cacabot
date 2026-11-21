@@ -10,6 +10,7 @@ const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, MessageFlags
 const INTERACTION_COMMANDS = {
     "!kiss": "needsKiss", "!bisou": "needsKiss",
     "!run": "needsRun", "!court": "needsRun",
+    "!spin": "needsSpin",
     "!hug": "needsHug", "!calin": "needsHug",
     "!danse": "needsDance", "!dance": "needsDance",
     "!insult": "needsInsult",
@@ -28,7 +29,7 @@ const INTERACTION_COMMANDS = {
 const MESSAGE_FLAGS = [...new Set(Object.values(INTERACTION_COMMANDS))];
 
 const BUTTON_PREFIXES = [
-    "run_join_", "kiss_back_", "hug_back_", "dance_join_", "dance_back_",
+    "run_join_", "spin_join_", "kiss_back_", "hug_back_", "dance_join_", "dance_back_",
     "insult_back_", "laugh_with_", "rizz_back_", "bang_back_", "punch_back_", "die_with_",
     "palaref_aussi_", "palaref_with_", "jailaref_with_", "explode_with_", "bait_venge_",
     "cry_with_"
@@ -385,6 +386,56 @@ function buildCryEmbed(description) {
 }
 
 // =========================
+//     LOGIQUE !SPIN
+// =========================
+
+const spinFs = require('fs');
+const spinPath = require('path');
+const { AttachmentBuilder } = require('discord.js');
+
+const SPIN_GIF_DIR = spinPath.resolve(process.cwd(), 'GIF', 'Spin');
+
+function buildSpinPayload(description) {
+    let files = [];
+
+    try {
+        const gifs = spinFs.readdirSync(SPIN_GIF_DIR)
+            .filter(file => file.toLowerCase().endsWith('.gif'))
+            .filter(file => spinFs.statSync(
+                spinPath.join(SPIN_GIF_DIR, file)
+            ).isFile());
+
+        if (gifs.length > 0) {
+            const selected = gifs[Math.floor(Math.random() * gifs.length)];
+
+            files = [
+                new AttachmentBuilder(
+                    spinPath.join(SPIN_GIF_DIR, selected),
+                    { name: 'spin.gif' }
+                )
+            ];
+        }
+    } catch (error) {
+        console.error('[SPIN] Erreur lecture GIF/Spin :', error);
+    }
+
+    const embed = new EmbedBuilder()
+        .setColor(0x9b59b6)
+        .setDescription(description);
+
+    if (files.length > 0) {
+        embed.setImage('attachment://spin.gif');
+    } else {
+        embed.addFields({
+            name: '⚠️ GIF indisponible',
+            value: 'Aucun GIF trouvé dans `GIF/Spin/`.'
+        });
+    }
+
+    return { embeds: [embed], files };
+}
+
+// =========================
 //   COMMANDES (messages)
 // =========================
 
@@ -490,6 +541,72 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
     const row = new ActionRowBuilder().addComponents(runJoinButton);
     return message.reply({ embeds: [embed], components: [row], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
 }
+
+    // !spin
+    if (response?.needsSpin) {
+        let cible = message.mentions.users.first() || replyCible;
+        const auteurNom = message.member?.displayName ?? message.author.username;
+
+        if (!cible) {
+            const args = message.content.trim().split(/\s+/).slice(1).join(" ");
+
+            if (args.length > 0) {
+                const result = findMemberByName(message.guild, args);
+
+                if (result.multiple) {
+                    askDisambiguation(
+                        message,
+                        message.guild,
+                        result.candidates,
+                        (user) => runInteractionMessage(
+                            message,
+                            response,
+                            client,
+                            { findMemberByName, askDisambiguation },
+                            user
+                        )
+                    );
+                    return;
+                }
+
+                if (result.found) cible = result.found.user;
+            }
+        }
+
+        let description;
+
+        if (!cible || cible.id === message.author.id) {
+            description = `🌀 **${auteurNom}** tourne sur soi-même !`;
+        } else if (cible.id === client.user.id) {
+            description = `🌀 **${auteurNom}** tourne avec moi ! Wouuuh !`;
+        } else {
+            const cibleNom =
+                message.guild?.members.cache.get(cible.id)?.displayName ??
+                cible.username;
+
+            description = `🌀 **${auteurNom}** tourne avec **${cibleNom}** !`;
+        }
+
+        const payload = buildSpinPayload(description);
+
+        if (!cible || cible.id === message.author.id) {
+            const button = new ButtonBuilder()
+                .setCustomId(`spin_join_${message.author.id}`)
+                .setLabel('Tourner avec')
+                .setEmoji('🌀')
+                .setStyle(ButtonStyle.Primary);
+
+            payload.components = [
+                new ActionRowBuilder().addComponents(button)
+            ];
+        }
+
+        return message.reply({
+            ...payload,
+            flags: [MessageFlags.SuppressNotifications],
+            allowedMentions: { repliedUser: false }
+        });
+    }
 
     // !hug
     if (response?.needsHug) {
@@ -1278,6 +1395,42 @@ async function runInteractionButton(interaction) {
     }
 
     // =========================
+    // BOUTON SPIN JOIN
+    // =========================
+
+    if (interaction.isButton() &&
+        interaction.customId.startsWith('spin_join_')) {
+
+        const originalAuthorId =
+            interaction.customId.slice('spin_join_'.length);
+
+        if (interaction.user.id === originalAuthorId) {
+            return interaction.reply({
+                content: '🌀 Tu tournes déjà !',
+                ephemeral: true
+            });
+        }
+
+        const originalAuthorNom =
+            interaction.guild?.members.cache.get(originalAuthorId)?.displayName ??
+            'quelqu’un';
+
+        const joinNom =
+            interaction.member?.displayName ??
+            interaction.user.username;
+
+        const payload = buildSpinPayload(
+            `🌀 **${joinNom}** rejoint **${originalAuthorNom}** pour tourner !`
+        );
+
+        return interaction.reply({
+            ...payload,
+            flags: [MessageFlags.SuppressNotifications],
+            allowedMentions: { repliedUser: false }
+        });
+    }
+
+    // =========================
     // BOUTON KISS BACK
     // =========================
 
@@ -1684,7 +1837,7 @@ async function handleInteractionSlash(interaction, client) {
         explose: 'explode'
     };
     const cmd = aliasMap[interaction.commandName] || interaction.commandName;
-    const slashInteractions = ['kiss', 'hug', 'run', 'danse', 'insult', 'rire', 'rizz', 'bang', 'punch', 'die', 'cry', 'palaref', 'jailaref', 'explode', 'bait', 'ban'];
+    const slashInteractions = ['kiss', 'hug', 'run', 'spin', 'danse', 'insult', 'rire', 'rizz', 'bang', 'punch', 'die', 'cry', 'palaref', 'jailaref', 'explode', 'bait', 'ban'];
     if (!slashInteractions.includes(cmd)) return false;
 
     const auteurNom = interaction.member?.displayName ?? interaction.user.username;
@@ -1706,6 +1859,32 @@ async function handleInteractionSlash(interaction, client) {
         if (cibleUser.id === client.user.id) return interaction.reply({ embeds: [buildHugEmbed(auteurNom, "Cacabot").setDescription(`🫂 **${auteurNom}** me fait un câlin !`)] });
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`hug_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🫂 Câliner en retour").setStyle(ButtonStyle.Primary));
         return interaction.reply({ embeds: [buildHugEmbed(auteurNom, cibleNom)], components: [row] });
+    }
+        if (cmd === 'spin') {
+        const description = !cibleUser || cibleUser.id === auteurId
+            ? `🌀 **${auteurNom}** tourne sur soi-même !`
+            : cibleUser.id === client.user.id
+                ? `🌀 **${auteurNom}** tourne avec moi ! Wouuuh !`
+                : `🌀 **${auteurNom}** tourne avec **${cibleNom}** !`;
+
+        const payload = buildSpinPayload(description);
+
+        if (!cibleUser || cibleUser.id === auteurId) {
+            payload.components = [
+                new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`spin_join_${auteurId}`)
+                        .setLabel('Tourner avec')
+                        .setEmoji('🌀')
+                        .setStyle(ButtonStyle.Primary)
+                )
+            ];
+        }
+
+        return interaction.reply({
+            ...payload,
+            allowedMentions: { parse: [] }
+        });
     }
     if (cmd === 'run') {
         if (!cibleUser || cibleUser.id === auteurId) {
