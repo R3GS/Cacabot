@@ -1468,6 +1468,7 @@ function armerNotifRoulette(userId, channelId, client) {
     rouletteNotifTimers.set(userId, timer);
 }
 
+function buildCooldownQuickUsePayload(member, finCooldown) {
     const userId = member?.id || member?.user?.id;
     const ts = Math.ceil(finCooldown / 1000);
     const dejaAlerte = aUneNotifRouletteActive(userId) || Boolean(rouletteNotifRepeat.get(userId));
