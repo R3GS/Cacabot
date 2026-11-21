@@ -1818,7 +1818,20 @@ async function runInteractionButton(interaction) {
 // =========================
 
 async function handleInteractionMessage(message, response, client, helpers) {
+    const command = message.content.trim().split(/\s+/)[0].toLowerCase();
+
+    if (command === '!spin') {
+        await runInteractionMessage(
+            message,
+            { ...response, needsSpin: true },
+            client,
+            helpers
+        );
+        return true;
+    }
+
     if (!MESSAGE_FLAGS.some(flag => response?.[flag])) return false;
+
     await runInteractionMessage(message, response, client, helpers);
     return true;
 }
