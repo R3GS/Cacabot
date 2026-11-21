@@ -83,10 +83,11 @@ const COMPLETION_MILESTONES = [
 const BOOSTER_GIF_DELAY_MS = 3000; // 3 secondes
 const CARD_3_AUTO_RECAP_MS = 10 * 1000; // 10 secondes sur la carte 3 avant récap auto
 const TRADE_INACTIVITY_MS = 24 * 60 * 60 * 1000; // 24h
-const GOD_PACK_BASE_CHANCE = 0.01; // 1% de base
-const GOD_PACK_BOOST_MULT = 5; // x5 pendant 5 jours (5%)
+const GOD_PACK_BASE_CHANCE = 0.001; // 0,1% de base
+const GOD_PACK_BOOST_MULT = 10; // x10 pendant 5 jours (1%)
 const GOD_PACK_BOOST_DURATION_MS = 5 * 24 * 60 * 60 * 1000;
 const EPSYS_FULL_ART_CARD_ID = '1-84';
+
 
 const COMMUNITY_QUEST_POOL = [
     { type: 'open_boosters', target: 80, label: 'Ouvrir **80 boosters** au total' },
@@ -123,7 +124,8 @@ function getSetCardsCount(setNumber = DEFAULT_SET_NUMBER) {
 const PULL_BOOST_ROLE_KEY = 'ROLE_TCG';
 const PULL_BOOST_GUARANTEED = 'GUARANTEED';
 const PULL_BOOST_TRIPLE = 'GUARANTEED_X3';
-const PULL_MULTIPLIERS = [1, 2, 3, 5, 10, 20, 50, 100, PULL_BOOST_GUARANTEED, PULL_BOOST_TRIPLE];
+const PULL_BOOST_ONCE = 'GUARANTEED_NEXT_BOOSTER';
+const PULL_MULTIPLIERS = [1, 2, 3, 5, 10, 20, 50, 100, PULL_BOOST_GUARANTEED, PULL_BOOST_ONCE, PULL_BOOST_TRIPLE];
 const PUNITION_RARITIES = [
     { code: 'E', rarity: 'Épique', emoji: '🟣' },
     { code: 'L', rarity: 'Légendaire', emoji: '🟡' },
@@ -138,7 +140,8 @@ const STORE_PRICES = {
     luckyBooster: 75,
     holoTransform: 50,
     negativeTransform: 1000,
-    halfCooldown: 25,
+    halfCooldown: 35,
+    secondChance: 25,
     godPackBoost: 150
 };
 
@@ -161,12 +164,12 @@ const RARITY_ORDER = {
     'Personnalisée': 6
 };
 const RARITY_WEIGHTS = {
-    'Commune': 65,
+    'Commune': 64.25,
     'Rare': 22,
     'Épique': 8,
-    'Légendaire': 3,
-    'Full Art': 1.5,
-    'Négative': 0.5
+    'Légendaire': 5,
+    'Full Art': 0.6,
+    'Négative': 0.15
 };
 const RARITY_META = {
     'Commune': { color: 0xe6d5b8, hex: '#E6D5B8', glow: 'rgba(230, 213, 184, 0.55)', emoji: '⚪' },
@@ -1128,12 +1131,14 @@ function getOrCreateTcgxSandbox(forceReset = false) {
                 luckyBooster: 99,
                 holoTransform: 99,
                 halfCooldown: 99,
+                secondChance: 99,
                 godPackBoost: 99
             },
             activeBonuses: {
                 luckyBooster: false,
                 halfCooldown: false,
-                godPackBoostUntil: 0
+                godPackBoostUntil: 0,
+                secondChance: false
             },
             pityRare: false,
             theme: 'B',
@@ -1189,6 +1194,7 @@ function getOrCreateTcgUser(userId) {
                 holoTransform: 0,
                 negativeTransform: 0,
                 halfCooldown: 0,
+                secondChance: 0,
                 godPackBoost: 0
             },
             activeBonuses: {
@@ -1228,8 +1234,10 @@ function getOrCreateTcgUser(userId) {
     if (typeof u.inventory.fiveCardBooster !== 'number') u.inventory.fiveCardBooster = 0;
     if (typeof u.inventory.negativeTransform !== 'number') u.inventory.negativeTransform = 0;
     if (typeof u.inventory.godPackBoost !== 'number') u.inventory.godPackBoost = 0;
+    if (typeof u.inventory.secondChance !== 'number') u.inventory.secondChance = 0;
     if (!u.activeBonuses) u.activeBonuses = { luckyBooster: false, halfCooldown: false, godPackBoostUntil: 0 };
     if (typeof u.activeBonuses.godPackBoostUntil !== 'number') u.activeBonuses.godPackBoostUntil = 0;
+    if (typeof u.activeBonuses.secondChance !== 'boolean') u.activeBonuses.secondChance = false;
     if (typeof u.pityRare !== 'boolean') u.pityRare = false;
     if (u.theme !== 'W' && u.theme !== 'B') u.theme = 'B';
     if (u.notifFreq !== 'each' && u.notifFreq !== 'full') u.notifFreq = 'each';
@@ -2044,6 +2052,30 @@ function isCardPullGuaranteed(cardId, userId = null, member = null) {
     return false;
 }
 
+function getNextBoosterGuaranteedCards(userId, setPool) {
+    if (!userId || isSandboxId(userId)) return [];
+    const boosts = getStoreData().pullBoosts?.[userId] || {};
+    return setPool.filter(c => boosts[c.id] === PULL_BOOST_ONCE);
+}
+
+function consumeNextBoosterGuarantees(userId, cards) {
+    if (!userId || isSandboxId(userId) || !cards.length) return;
+    const data = getStoreData();
+    const map = data.pullBoosts?.[userId];
+    if (!map) return;
+    let changed = false;
+    for (const card of cards) {
+        if (map[card.id] === PULL_BOOST_ONCE) {
+            delete map[card.id];
+            changed = true;
+        }
+    }
+    if (changed) {
+        if (!Object.keys(map).length) delete data.pullBoosts[userId];
+        tcgBridge.demanderSauvegarde();
+    }
+}
+
 function getTripleTrollCards(userId = null, member = null) {
     if (isSandboxId(userId)) return [];
     const data = getStoreData();
@@ -2238,7 +2270,8 @@ function drawBoosterCards(u, userId = null, member = null, setNumber = DEFAULT_S
     }
 
     const setPool = getSetCatalog(setNumber); // [SET 2] Pool limité au Set du booster ouvert
-    const guaranteedPool = setPool.filter(c => isCardPullGuaranteed(c.id, userId, member));
+    const onceCards = getNextBoosterGuaranteedCards(userId, setPool);
+    const guaranteedPool = setPool.filter(c => isCardPullGuaranteed(c.id, userId, member) || onceCards.some(once => once.id === c.id));
     const guaranteedCards = guaranteedPool.length > cardCount
         ? [...guaranteedPool].sort(() => Math.random() - 0.5).slice(0, cardCount)
         : guaranteedPool;
@@ -2261,6 +2294,7 @@ function drawBoosterCards(u, userId = null, member = null, setNumber = DEFAULT_S
                 if (a.isHolo !== b.isHolo) return a.isHolo ? 1 : -1;
                 return a.sortIndex - b.sortIndex;
             });
+            consumeNextBoosterGuarantees(userId, onceCards.filter(c => godCards.some(g => g.id === c.id)));
             // La pityRare déjà active est conservée pour le booster suivant
             return {
                 cards: godCards,
@@ -2326,6 +2360,7 @@ function drawBoosterCards(u, userId = null, member = null, setNumber = DEFAULT_S
     const allCommunes = picked.length === cardCount && picked.every(c => c.rarity === 'Commune');
     u.pityRare = allCommunes;
 
+    consumeNextBoosterGuarantees(userId, onceCards.filter(c => picked.some(g => g.id === c.id)));
     return { cards: picked, luckyUsed: luckyActive, pityUsed: pityActive, triggeredNextPity: allCommunes, isGodPack: false, godBoostUsed: godBoostActive };
 }
 
@@ -3463,7 +3498,7 @@ function buildHubEmbed(member, u) {
     if (u.activeBonuses?.luckyBooster) activeEffects.push('🍀 **Booster Chanceux** *(sans Communes)*');
     if (u.activeBonuses?.halfCooldown) activeEffects.push('⚡ **Cooldown /2** *(3h)*');
     if (u.activeBonuses?.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil) {
-        activeEffects.push(`🌟 **Taux God Pack ×5** *(fin <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:R>)*`);
+        activeEffects.push(`🌟 **Taux God Pack ×10** *(fin <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:R>)*`);
     }
     if (u.pityRare) activeEffects.push('✨ **Pity Rare garantie**');
 
@@ -3675,7 +3710,7 @@ function buildProfilePayload(member, u, fromHub = false, showRarities = false) {
         ? masteredKeys.map(k => `🏆 **Maître du ${getSetConfig(Number(k)).name}**`).join(' • ')
         : '*Aucun rang de Maître pour le moment*';
     const godBoostLine = (u.activeBonuses?.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil)
-        ? `\n• 🌟 **Taux God Pack ×5 :** actif jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F>`
+        ? `\n• 🌟 **Taux God Pack ×10 :** actif jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F>`
         : '';
 
     const wishlistIds = getSanitizedWishlist(u);
@@ -3990,8 +4025,8 @@ function buildGuidePayload(userId, fromHub = true) {
             sep +
             `### ✨ 2. Raretés, Holos & Négatives\n` +
             `• **Taux de tirage :**\n` +
-            `  ⚪ Commune \`65%\` • 🔵 Rare \`22%\` • 🟣 Épique \`8%\`\n` +
-            `  🟡 Légendaire \`3%\` • 🌈 Full Art \`1,5%\` • 🕳️ Négative \`0,5%\`\n` +
+            `  ⚪ Commune \`64,25%\` • 🔵 Rare \`22%\` • 🟣 Épique \`8%\`\n` +
+            `  🟡 Légendaire \`5%\` • 🌈 Full Art \`0,6%\` • 🕳️ Négative \`0,15%\`\n` +
             `• **Cartes Holographiques :** certaines cartes ont une version *Holo* avec leur propre numéro, **2× plus rare** que l'originale.\n` +
             `• **Cartes Négatives :** **13 cartes secrètes** numérotées \`1-Ø1\` à \`1-Ø13\`, les plus rares du ${SET1_NAME}.` +
             sep +
@@ -4003,12 +4038,10 @@ function buildGuidePayload(userId, fromHub = true) {
             `  **Paliers de complétion :** **+15pts** à \`25%\`, \`50%\`, \`75%\` • **+25pts + 2 boosters de Maître** à \`100%\`\n` +
             `• **RegaDex Store (\`🛒 Store\`) :** les boosters achetés sont **prêts à ouvrir** tout de suite, et les bonus vont dans ton **🎒 Inventaire** (\`!tcgclaim\`) :\n` +
             `  • 🎁 **Booster** (\`100 pts\`) — Un booster supplémentaire à ouvrir.\n` +
-            `  • 🍀 **Chanceux** (\`75 pts\`) — Retire toutes les *Communes* du prochain booster.\n` +
+                        `  • 🍀 **Chanceux** (\`75 pts\`) — Retire toutes les *Communes* du prochain booster.\n` +
             `  • ✨ **Transfo Holo** (\`50 pts\`) — Transforme une carte compatible possédée en *Holo*.\n` +
             `  • ⚡ **Cooldown /2** (\`25 pts\`) — Le prochain rechargement gratuit passe à **3h** au lieu de 6h.\n` +
-            `  • 🌟 **Taux God Pack ×5 (5j)** (\`150 pts\`) — Multiplie par 5 tes chances de **God Pack** pendant 5 jours.\n` +
-            `  • 🎴 **Booster 5 cartes** (\`175 pts\`) — Un booster de **5 cartes** *(sans toucher à ton cooldown gratuit)*.\n` +
-            `  • 🕳️ **Full Art → Négative** (\`1000 pts\`) — Transforme une carte **Full Art** possédée en sa version **Négative**.` +
+            `  • 🌟 **Taux God Pack ×10 (5j)** (\`150 pts\`) — Multiplie par 10 tes chances de **God Pack** pendant 5 jours.` +
             sep +
             `### 📖 4. Classeur, Wishlist, Échanges & Commandes\n` +
             `• **Classeur :** filtre par catégorie, rareté ou affichage (**Tout** / **Possédées** / **Doublons**), choisis la grille (\`4\`, \`18\`, \`36\` ou \`All\`) et change le thème **Clair (W) / Nuit (B)**.\n` +
@@ -4132,7 +4165,7 @@ function buildOpenPromptPayload(member, u, fromHub = false) {
         unactivatedReminders.push(`⚡ **Cooldown /2** (\`${u.inventory.halfCooldown}\` en inventaire)`);
     }
     if ((u.inventory?.godPackBoost || 0) > 0 && !(u.activeBonuses?.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil)) {
-        unactivatedReminders.push(`🌟 **Taux God Pack ×5** (\`${u.inventory.godPackBoost}\` en inventaire)`);
+        unactivatedReminders.push(`🌟 **Taux God Pack ×10** (\`${u.inventory.godPackBoost}\` en inventaire)`);
     }
     const reminderBlock = unactivatedReminders.length > 0
         ? `\n\n💡 *Rappel : tu as des bonus non activés dans ton inventaire (\`!regadex claim\`) :*\n${unactivatedReminders.map(r => `• ${r}`).join('\n')}`
@@ -4292,6 +4325,8 @@ function buildStorePayload(member, u, fromHub = false) {
             `────────────────────────────────────────\n` +
             `⚡ **Diviser le cooldown par 2** — \`${STORE_PRICES.halfCooldown} pts\`\n` +
             `-# Activé dès l'ouverture du prochain booster : celui d'après prendra **3h** au lieu de 6h.\n\n` +
+            `🔄 **Seconde Chance** — \`${STORE_PRICES.secondChance} pts\`\n` +
+            `-# Active une relance pour ton prochain booster : choisis **une Commune** du récapitulatif et remplace-la par un nouveau tirage normal.\n\n` +
             `✨ **Transformer une carte en Holographique** — \`${STORE_PRICES.holoTransform} pts\`\n` +
             `-# Transforme 1 de tes cartes compatibles possédées en sa version **holographique** !\n\n` +
             `🍀 **Prochain booster chanceux** — \`${STORE_PRICES.luckyBooster} pts\`\n` +
@@ -4299,7 +4334,7 @@ function buildStorePayload(member, u, fromHub = false) {
             `🎁 **Booster ${SET1_NAME}** — \`${STORE_PRICES.booster} pts\`\n` +
             `-# Un booster de 3 cartes ${SET1_NAME} à ouvrir quand tu veux.\n\n` +
             `🌟 **Taux de God Pack ×5 (5j)** — \`${STORE_PRICES.godPackBoost} pts\`\n` +
-            `-# Passe tes chances d'obtenir un **God Pack** de **1% à 5%** pendant **5 jours** *(bonus personnel)*.\n\n` +
+            `-# Passe tes chances d'obtenir un **God Pack** de **0,1% à 1%** pendant **5 jours** *(bonus personnel)*.\n\n` +
             `🎴 **Booster 5 cartes (${SET1_NAME})** — \`${STORE_PRICES.fiveCardBooster} pts\`\n` +
             `-# Un gros booster contenant **5 cartes** (sans doublon dans le même pack) !\n\n` +
             `🕳️ **Transformer une Full Art en Négative** — \`${STORE_PRICES.negativeTransform} pts\`\n` +
@@ -4315,6 +4350,7 @@ function buildStorePayload(member, u, fromHub = false) {
 
     // Ordre croissant de prix : gauche → droite, haut → bas
     const row = new ActionRowBuilder().addComponents(
+        storeBtn('secondChance', 'Seconde Chance', '🔄'),
         storeBtn('halfCooldown', 'CD /2', '⚡'),
         storeBtn('holoTransform', 'Holo', '✨'),
         storeBtn('luckyBooster', 'Chanceux', '🍀'),
@@ -4381,7 +4417,8 @@ function buildClaimPayload(member, u, fromHub = false) {
             `✨ **Transformation Holographique :** \`${inv.holoTransform || 0}\`\n` +
             `🕳️ **Transformation Full Art → Négative :** \`${inv.negativeTransform || 0}\`\n` +
             `⚡ **Demi-cooldown (3h) :** \`${inv.halfCooldown || 0}\` ${u.activeBonuses?.halfCooldown ? '*(Déjà armé sur le prochain booster !)*' : ''}\n` +
-            `🌟 **Taux God Pack ×5 (5j) :** \`${inv.godPackBoost || 0}\` ${godBoostActive ? `*(Actif pour toi : **5%** au lieu de 1% jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F>)*` : '*(1% → 5%, personnel)*'}`
+            `🔄 **Seconde Chance :** \`${inv.secondChance || 0}\` ${u.activeBonuses?.secondChance ? '*(Armée pour le prochain booster)*' : ''}\n` +
+            `🌟 **Taux God Pack ×5 (5j) :** \`${inv.godPackBoost || 0}\` ${godBoostActive ? `*(Actif pour toi : **1%** au lieu de 0,1% jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F>)*` : '*(1% → 5%, personnel)*'}`
         );
 
     const row = new ActionRowBuilder().addComponents(
@@ -4425,6 +4462,12 @@ function buildClaimPayload(member, u, fromHub = false) {
             .setStyle(ButtonStyle.Primary)
             .setDisabled((inv.holoTransform || 0) <= 0),
         new ButtonBuilder()
+            .setCustomId(`tcg:use:secondChance:${member.id}${hubSuffix}`)
+            .setLabel(`Seconde Chance (${inv.secondChance || 0})`)
+            .setEmoji('🔄')
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled((inv.secondChance || 0) <= 0 || Boolean(u.activeBonuses?.secondChance)),
+        new ButtonBuilder()
             .setCustomId(`tcg:use:negativeTransform:${member.id}${hubSuffix}`)
             .setLabel(`Négative (${inv.negativeTransform || 0})`)
             .setEmoji('🕳️')
@@ -4435,11 +4478,11 @@ function buildClaimPayload(member, u, fromHub = false) {
             .setLabel('RegaDex Store')
             .setEmoji('🛒')
             .setStyle(ButtonStyle.Secondary),
-        buildAccueilButton(member.id),
-        buildCloseButton(member.id)
+        buildAccueilButton(member.id)
     );
+    const row3 = new ActionRowBuilder().addComponents(buildCloseButton(member.id));
 
-    return { embeds: [embed], components: [row, row2] };
+    return { embeds: [embed], components: [row, row2, row3] };
 }
 
 function buildTopEmbed(guild, mode = 'total') {
@@ -4688,7 +4731,7 @@ function buildBoosterRecapEmbed(member, session, u) {
 
     const bonusInfo = [];
     if (session.fiveCardUsed) bonusInfo.push(`🎴 **Booster ${session.cards.length} cartes**`);
-    if (session.isGodPack) bonusInfo.push(`🌟 **GOD PACK DÉCROCHÉ !** *(Tirage légendaire${session.godBoostUsed ? ' • Boost ×5 actif' : ''})*`);
+    if (session.isGodPack) bonusInfo.push(`🌟 **GOD PACK DÉCROCHÉ !** *(Tirage légendaire${session.godBoostUsed ? ' • Boost ×10 actif' : ''})*`);
     if (session.luckyUsed) bonusInfo.push('🍀 Booster Chanceux appliqué');
     if (session.pityUsed) bonusInfo.push('✨ Pity appliquée (Rare garantie)');
     if (session.halfCdUsed) bonusInfo.push('⚡ Demi-cooldown activé (3h)');
@@ -4789,6 +4832,17 @@ async function buildBoosterRecapPayload(member, session) {
                     .setStyle(ButtonStyle.Success)
             )
         );
+    }
+
+    if (session.secondChanceAvailable && !session.secondChanceUsed) {
+        const rerollButtons = session.cards.map((card, i) => ({ card, i }))
+            .filter(({ card }) => card.rarity === 'Commune')
+            .map(({ card, i }) => new ButtonBuilder()
+                .setCustomId(`tcg:secondchance:${i}:${session.userId}`)
+                .setLabel(`Relancer carte ${i + 1}`)
+                .setEmoji('🔄')
+                .setStyle(ButtonStyle.Primary));
+        if (rerollButtons.length) components.push(new ActionRowBuilder().addComponents(...rerollButtons));
     }
 
     return {
@@ -4935,7 +4989,7 @@ async function buildGodPackPantheonPayload(member, cards, isNewFlags, theme = 'B
         )
         .addFields(
             { name: '👤 Collectionneur·euse', value: `<@${member.id}>`, inline: true },
-            { name: '🎲 Taux du God Pack', value: godBoostUsed ? '**5%** *(×5 actif)*' : '**1%** *(Base)*', inline: true },
+            { name: '🎲 Taux du God Pack', value: godBoostUsed ? '**1%** *(×10 actif)*' : '**0,1%** *(Base)*', inline: true },
             { name: '📅 Date du tirage', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
         )
         .setImage('attachment://godpack_pantheon.jpg')
@@ -5118,11 +5172,19 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             }
         }
 
+        // Seconde Chance : consommée sur ce booster uniquement.
+        const secondChanceArmed = Boolean(u.activeBonuses.secondChance);
+        u.activeBonuses.secondChance = false;
+
         // Tirage des cartes (3 ou 5)
         const cardCount = isFiveCard ? 5 : 3;
         const draw = drawBoosterCards(u, userId, member, DEFAULT_SET_NUMBER, cardCount);
         if (!draw.isGodPack) {
             u.activeBonuses.luckyBooster = false;
+        }
+
+        if (secondChanceArmed && !draw.cards.some(c => c.rarity === 'Commune')) {
+            u.inventory.secondChance = (u.inventory.secondChance || 0) + 1;
         }
 
         const isNewFlags = [];
@@ -5231,6 +5293,8 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             isGodPack: Boolean(draw.isGodPack),
             godBoostUsed: Boolean(draw.godBoostUsed),
             halfCdUsed,
+            secondChanceAvailable: secondChanceArmed && draw.cards.some(c => c.rarity === 'Commune'),
+            secondChanceUsed: false,
             triggeredNextPity: draw.triggeredNextPity,
             fromHub: Boolean(fromHub),
             step: 0,
@@ -7152,6 +7216,14 @@ function buildPullChancePayload(sessionId, session, guild) {
                         default: session.mult === PULL_BOOST_GUARANTEED
                     };
                 }
+                if (m === PULL_BOOST_ONCE) {
+                    return {
+                        label: '🎁 Garantie au prochain booster seulement',
+                        description: 'Une seule carte garantie, puis bonus supprimé',
+                        value: PULL_BOOST_ONCE,
+                        default: session.mult === PULL_BOOST_ONCE
+                    };
+                }
                 if (m === PULL_BOOST_TRIPLE) {
                     return {
                         label: '🤡 Full Troll 3× (Tout le booster)',
@@ -8489,7 +8561,17 @@ async function handleTcgMessage(message) {
                 await sent.edit({ content: null, ...payload });
                 return;
             }
-            await sendBinderAccessWarning(message, message.author.id, targetMember);
+            const sent = await replyPanelSilent(
+                message,
+                '📖 Chargement du classeur RegaDex...',
+                message.author.id
+            );
+            const payload = await buildBinderReplyPayload(
+                targetMember,
+                message.author.id,
+                { fromHub: false }
+            );
+            await sent.edit({ content: null, ...payload });
         });
         return true;
     }
@@ -8594,7 +8676,14 @@ async function handleTcgSlash(interaction) {
             schedulePanelAutoDelete(msg);
             return true;
         }
-        await sendBinderAccessWarning(interaction, interaction.user.id, cible);
+        await deferReplySilent(interaction);
+        const payload = await buildBinderReplyPayload(
+            cible,
+            interaction.user.id,
+            { fromHub: false }
+        );
+        const msg = await interaction.editReply(payload);
+        schedulePanelAutoDelete(msg);
         return true;
     }
     if (sub === 'carte') {
@@ -8880,6 +8969,81 @@ async function handleTcgInteraction(interaction) {
         } else if (session.hasReachedRecap) {
             await triggerSessionPantheonIfNeeded(client, actorMember, session).catch(() => {});
         }
+        return true;
+    }
+
+    // ----- SECONDE CHANCE : RELANCER UNE COMMUNE DU RÉCAP -----
+    if (action === 'secondchance' && interaction.isButton()) {
+        const cardIndex = Number(parts[2]);
+        const ownerId = parts[3];
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+            await interaction.reply({ content: 'Ce booster ne t’appartient pas !', ephemeral: true });
+            return true;
+        }
+        const session = boosterSessions.get(interaction.message.id);
+        if (!session || !session.hasReachedRecap || !session.secondChanceAvailable || session.secondChanceUsed ||
+            !Number.isInteger(cardIndex) || cardIndex < 0 || cardIndex >= session.cards.length ||
+            session.cards[cardIndex]?.rarity !== 'Commune') {
+            await interaction.reply({ content: '⏳ Cette relance n’est plus disponible.', ephemeral: true });
+            return true;
+        }
+        session.secondChanceUsed = true; // verrou anti double-clic
+        await interaction.deferUpdate();
+        const u = getOrCreateTcgUser(ownerId);
+        const oldCard = session.cards[cardIndex];
+        const pool = getSetCatalog(oldCard.setNumber || DEFAULT_SET_NUMBER)
+            .filter(c => !session.cards.some((other, i) => i !== cardIndex && other.id === c.id));
+        const raritySums = getRarityBaseWeightSums();
+        const newCard = pickWeightedCard(pool, raritySums, ownerId, interaction.member);
+        if (!newCard) {
+            session.secondChanceUsed = false;
+            await interaction.followUp({ content: '❌ Aucun tirage disponible. Réessaie.', ephemeral: true });
+            return true;
+        }
+
+        // Retirer l'ancienne carte, puis recalculer le statut du nouvel exemplaire.
+        const oldWasDuplicate = !session.isNewFlags[cardIndex];
+        u.cards[oldCard.id] = Math.max(0, (u.cards[oldCard.id] || 0) - 1);
+        if (u.cards[oldCard.id] === 0) delete u.cards[oldCard.id];
+        const newWasDuplicate = (u.cards[newCard.id] || 0) > 0;
+        u.cards[newCard.id] = (u.cards[newCard.id] || 0) + 1;
+        session.cards[cardIndex] = newCard;
+        session.isNewFlags[cardIndex] = !newWasDuplicate;
+        const duplicateDelta = Number(newWasDuplicate) - Number(oldWasDuplicate);
+        const pointsDelta = duplicateDelta * POINTS_PER_DUPLICATE;
+        u.points += pointsDelta;
+        session.ptsEarned += pointsDelta;
+        u.stats.duplicatesObtained = Math.max(0, (u.stats.duplicatesObtained || 0) + duplicateDelta);
+        u.pityRare = session.cards.every(c => c.rarity === 'Commune');
+        session.triggeredNextPity = u.pityRare;
+        session.secondChanceAvailable = false;
+        session.recapBuffer = null;
+        session.recapTheme = null;
+
+        const milestone = checkAndGrantCompletionMilestones(ownerId, oldCard.setNumber || DEFAULT_SET_NUMBER);
+        if (milestone?.unlocked?.length) {
+            session.unlockedMilestones.push(...milestone.unlocked);
+            session.milestoneBonusPts += milestone.totalBonusPts || 0;
+        }
+        if (!isSandboxId(ownerId)) {
+            if (duplicateDelta > 0) tcgBridge.trackBattlePassProgress(ownerId, 'tcg_doublon', duplicateDelta);
+            const questType = { Rare: 'pull_rare', 'Épique': 'pull_epic', 'Légendaire': 'pull_legendary', 'Full Art': 'pull_fullart' }[newCard.rarity];
+            if (questType) await progressCommunityQuest(client, [{ type: questType, amount: 1 }], ownerId).catch(() => {});
+            const entry = getStoreData().recentOpenings?.find(o => o.messageId === interaction.message.id);
+            if (entry?.cards?.[cardIndex]) {
+                entry.cards[cardIndex] = { id: newCard.id, name: newCard.name, rarity: newCard.rarity,
+                    isHolo: Boolean(newCard.isHolo), isNew: !newWasDuplicate };
+            }
+            tcgBridge.demanderSauvegarde();
+        }
+        const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
+        await envoyerPantheonTcg(client, actorMember, newCard, !newWasDuplicate, false).catch(() => {});
+        const payload = await buildBoosterRecapPayload(actorMember, session);
+        await interaction.editReply({ content: null, ...payload, attachments: [] });
+        await interaction.followUp({
+            content: `🔄 **Seconde Chance !** ${oldCard.name} → **${newCard.name}** (${newCard.rarity}).`,
+            ephemeral: true
+        });
         return true;
     }
 
@@ -9267,7 +9431,8 @@ async function handleTcgInteraction(interaction) {
             fiveCardBooster: '🎴 Booster 5 cartes',
             holoTransform: '✨ Transformer une carte en Holographique',
             halfCooldown: '⚡ Diviser le cooldown du prochain booster par 2',
-            godPackBoost: '🌟 Taux de God Pack ×5 (5j)'
+            secondChance: '🔄 Seconde Chance',
+            godPackBoost: '🌟 Taux de God Pack ×10 (5j)'
         };
 
         const isBoosterBuy = itemKey === 'booster' || itemKey === 'fiveCardBooster';
@@ -9281,7 +9446,7 @@ async function handleTcgInteraction(interaction) {
                         ? `\n\n🎴 Il est **prêt à ouvrir** ! *(Boosters 5 cartes en stock : **${u.inventory.fiveCardBooster}**)*`
                         : `\n\n🎁 Il est **prêt à ouvrir** ! *(Total disponible : **${getTotalAvailableBoosters(u)}**)*`)
                     : (itemKey === 'godPackBoost'
-                        ? `\n\n🎲 **Probabilités :** tes chances de tirer un **God Pack** passent de **1% à 5%** *(×5)* pendant **5 jours**.\n👤 **Bonus personnel :** il s'applique **uniquement à tes propres boosters**.`
+                        ? `\n\n🎲 **Probabilités :** tes chances de tirer un **God Pack** passent de **1% à 5%** *(×10)* pendant **5 jours**.\n👤 **Bonus personnel :** il s'applique **uniquement à tes propres boosters**.`
                         : '') +
                       `\n\nSouhaites-tu l'utiliser tout de suite ou le garder dans ton inventaire (\`!regadex claim\`) ?`)
             );
@@ -9395,10 +9560,33 @@ async function handleTcgInteraction(interaction) {
             });
             return true;
         }
+        if (itemKey === 'secondChance') {
+            if (u.activeBonuses.secondChance) {
+                await interaction.reply({ content: '⚠️ Seconde Chance déjà armée pour ton prochain booster !', ephemeral: true });
+                return true;
+            }
+            u.inventory.secondChance -= 1;
+            u.activeBonuses.secondChance = true;
+            if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
+            await interaction.update({
+                content: '🔄 **Seconde Chance armée !** Tu pourras relancer une Commune du prochain booster depuis son récapitulatif.',
+                embeds: [], components: backRows, files: [], attachments: []
+            });
+            return true;
+        }
+        if (itemKey === 'secondChance') {
+            if (u.activeBonuses.secondChance) return interaction.reply({ content: '⚠️ Seconde Chance déjà armée !', ephemeral: true }), true;
+            u.inventory.secondChance -= 1;
+            u.activeBonuses.secondChance = true;
+            if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
+            await interaction.update(buildClaimPayload(actorMember, u, fromHub));
+            await interaction.followUp({ content: '🔄 **Seconde Chance armée !** Choisis une Commune à relancer dans le récapitulatif du prochain booster.', ephemeral: true });
+            return true;
+        }
         if (itemKey === 'godPackBoost') {
             if (u.activeBonuses.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil) {
                 await interaction.reply({
-                    content: `⚠️ Ton bonus **God Pack ×5** est déjà actif jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F> !`,
+                    content: `⚠️ Ton bonus **God Pack ×10** est déjà actif jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F> !`,
                     ephemeral: true
                 });
                 return true;
@@ -9407,7 +9595,7 @@ async function handleTcgInteraction(interaction) {
             u.activeBonuses.godPackBoostUntil = Date.now() + GOD_PACK_BOOST_DURATION_MS;
             if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
             await interaction.update({
-                content: `🌟 **Taux de God Pack ×5 (1% → 5%) activé pour 5 jours !** *(fin <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:R>)*`,
+                content: `🌟 **Taux de God Pack ×5 (0,1% → 1%) activé pour 5 jours !** *(fin <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:R>)*`,
                 embeds: [],
                 components: backRows,
                 files: [],
@@ -9618,18 +9806,52 @@ async function handleTcgInteraction(interaction) {
                 await interaction.editReply(payload);
                 return true;
             }
-            const realRequesterId = isSandboxId(viewerId) ? interaction.user.id : viewerId;
-            const targetMember = await interaction.guild.members.fetch(targetId).catch(() => ({ id: targetId, displayName: 'ce membre' }));
-            await sendBinderAccessWarning(interaction, realRequesterId, targetMember);
+            const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
+            if (!targetMember) {
+                await interaction.reply({
+                    content: "❌ Impossible de trouver ce membre.",
+                    ephemeral: true
+                });
+                return true;
+            }
+
+            await deferReplySilent(interaction);
+            const payload = await buildBinderReplyPayload(
+                targetMember,
+                viewerId,
+                { fromHub: false }
+            );
+            await interaction.editReply(payload);
             return true;
         }
 
         if (sub === 'ask' && interaction.isButton()) {
             const targetId = parts[3];
             const viewerId = parts[4];
-            if (interaction.user.id !== viewerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
-            const targetMember = await interaction.guild.members.fetch(targetId).catch(() => ({ id: targetId, displayName: 'ce membre' }));
-            await sendBinderAccessWarning(interaction, viewerId, targetMember);
+
+            if (interaction.user.id !== viewerId) {
+                return interaction.reply({
+                    content: "Pas pour toi 😌",
+                    ephemeral: true
+                }), true;
+            }
+
+            const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
+            if (!targetMember) {
+                await interaction.reply({
+                    content: "❌ Impossible de trouver ce membre.",
+                    ephemeral: true
+                });
+                return true;
+            }
+
+            await deferReplySilent(interaction);
+            const payload = await buildBinderReplyPayload(
+                targetMember,
+                viewerId,
+                { fromHub: false }
+            );
+            await interaction.editReply(payload);
             return true;
         }
 
@@ -11397,7 +11619,11 @@ async function handleTcgInteraction(interaction) {
         }
         if (sub === 'mult' && interaction.isStringSelectMenu()) {
             const rawVal = interaction.values[0];
-            if (rawVal === PULL_BOOST_GUARANTEED || rawVal === PULL_BOOST_TRIPLE) {
+            if (
+                rawVal === PULL_BOOST_GUARANTEED ||
+                rawVal === PULL_BOOST_ONCE ||
+                rawVal === PULL_BOOST_TRIPLE
+            ) {
                 session.mult = rawVal;
             } else {
                 const mVal = parseInt(rawVal, 10);
@@ -11406,13 +11632,20 @@ async function handleTcgInteraction(interaction) {
             await interaction.update(buildPullChancePayload(sessionId, session, interaction.guild));
             return true;
         }
-        if (sub === 'apply' && interaction.isButton()) {
-            if (!session.targetKey || !session.cardId) {
-                await interaction.reply({ content: "❌ Choisis une cible et une carte.", ephemeral: true });
+            if (session.mult === PULL_BOOST_ONCE && session.targetKey === PULL_BOOST_ROLE_KEY) {
+                await interaction.reply({
+                    content: "❌ La garantie au prochain booster est réservée à un joueur précis.",
+                    ephemeral: true
+                });
                 return true;
             }
             if (!data.pullBoosts) data.pullBoosts = {};
-            if (session.mult !== PULL_BOOST_GUARANTEED && session.mult !== PULL_BOOST_TRIPLE && session.mult <= 1) {
+            if (
+                session.mult !== PULL_BOOST_GUARANTEED &&
+                session.mult !== PULL_BOOST_ONCE &&
+                session.mult !== PULL_BOOST_TRIPLE &&
+                session.mult <= 1
+            ) {
                 if (data.pullBoosts[session.targetKey]) {
                     delete data.pullBoosts[session.targetKey][session.cardId];
                     if (Object.keys(data.pullBoosts[session.targetKey]).length === 0) {
