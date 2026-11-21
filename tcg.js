@@ -3498,7 +3498,7 @@ function buildHubEmbed(member, u) {
     if (u.activeBonuses?.luckyBooster) activeEffects.push('🍀 **Booster Chanceux** *(sans Communes)*');
     if (u.activeBonuses?.halfCooldown) activeEffects.push('⚡ **Cooldown /2** *(3h)*');
     if (u.activeBonuses?.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil) {
-        activeEffects.push(`🌟 **Taux God Pack ×10** *(fin <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:R>)*`);
+        activeEffects.push(`🌟 **Taux God Pack ×25** *(fin <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:R>)*`);
     }
     if (u.pityRare) activeEffects.push('✨ **Pity Rare garantie**');
 
@@ -3710,7 +3710,7 @@ function buildProfilePayload(member, u, fromHub = false, showRarities = false) {
         ? masteredKeys.map(k => `🏆 **Maître du ${getSetConfig(Number(k)).name}**`).join(' • ')
         : '*Aucun rang de Maître pour le moment*';
     const godBoostLine = (u.activeBonuses?.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil)
-        ? `\n• 🌟 **Taux God Pack ×10 :** actif jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F>`
+        ? `\n• 🌟 **Taux God Pack ×25 :** actif jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F>`
         : '';
 
     const wishlistIds = getSanitizedWishlist(u);
@@ -4028,7 +4028,7 @@ function buildGuidePayload(userId, fromHub = true, chapter = 'home') {
                 `### 🃏 Ouverture\n` +
                 `• Un booster classique contient **3 cartes différentes**.\n` +
                 `• Les cartes sont révélées de la plus commune à la plus rare.\n` +
-                `• **God Pack :** **0,1 %** de chance de base, ou **1 %** avec le bonus ×10 actif.\n\n` +
+                `• **God Pack :** **0,1 %** de chance de base, ou **2,5 %** avec le bonus ×25 actif.\n\n` +
                 `### ✨ Pity\n` +
                 `Si ton booster contient **3 Communes**, le prochain garantit au moins **une Rare**.\n\n` +
                 `### 🔔 Notifications\n` +
@@ -4075,7 +4075,7 @@ function buildGuidePayload(userId, fromHub = true, chapter = 'home') {
                 `🕳️ **Transformation Négative :** ${STORE_PRICES.negativeTransform} pts\n` +
                 `⚡ **Demi-cooldown :** ${STORE_PRICES.halfCooldown} pts\n` +
                 `🔄 **Seconde Chance :** ${STORE_PRICES.secondChance} pts\n` +
-                `🌟 **God Pack ×10 (5 jours) :** ${STORE_PRICES.godPackBoost} pts\n\n` +
+                `🌟 **God Pack ×25 (5 jours) :** ${STORE_PRICES.godPackBoost} pts\n\n` +
                 `Les objets achetés sont accessibles dans ton **inventaire** via \`!tcgclaim\`.`
         },
 
@@ -4310,7 +4310,7 @@ function buildOpenPromptPayload(member, u, fromHub = false) {
         unactivatedReminders.push(`⚡ **Cooldown /2** (\`${u.inventory.halfCooldown}\` en inventaire)`);
     }
     if ((u.inventory?.godPackBoost || 0) > 0 && !(u.activeBonuses?.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil)) {
-        unactivatedReminders.push(`🌟 **Taux God Pack ×10** (\`${u.inventory.godPackBoost}\` en inventaire)`);
+        unactivatedReminders.push(`🌟 **Taux God Pack ×25** (\`${u.inventory.godPackBoost}\` en inventaire)`);
     }
     const reminderBlock = unactivatedReminders.length > 0
         ? `\n\n💡 *Rappel : tu as des bonus non activés dans ton inventaire (\`!regadex claim\`) :*\n${unactivatedReminders.map(r => `• ${r}`).join('\n')}`
@@ -4876,7 +4876,7 @@ function buildBoosterRecapEmbed(member, session, u) {
 
     const bonusInfo = [];
     if (session.fiveCardUsed) bonusInfo.push(`🎴 **Booster ${session.cards.length} cartes**`);
-    if (session.isGodPack) bonusInfo.push(`🌟 **GOD PACK DÉCROCHÉ !** *(Tirage légendaire${session.godBoostUsed ? ' • Boost ×10 actif' : ''})*`);
+    if (session.isGodPack) bonusInfo.push(`🌟 **GOD PACK DÉCROCHÉ !** *(Tirage légendaire${session.godBoostUsed ? ' • Boost ×25 actif' : ''})*`);
     if (session.luckyUsed) bonusInfo.push('🍀 Booster Chanceux appliqué');
     if (session.pityUsed) bonusInfo.push('✨ Pity appliquée (Rare garantie)');
     if (session.halfCdUsed) bonusInfo.push('⚡ Demi-cooldown activé (3h)');
@@ -8298,7 +8298,7 @@ function normalizeTcgSubcommand(rawSub, rawRest = '') {
         sub = 'notif';
     } else if (sub === 'inventaire' || sub === 'inv') {
         sub = 'claim';
-    } else if (sub === 'boutique') {
+    } else if (sub === 'boutique' || sub === 'shop') {
         sub = 'store';
     }
 
@@ -8310,7 +8310,7 @@ function parseTcgCommand(content) {
     if (!trimmed.startsWith('!')) return null;
 
     // 1. Commandes préfixées !tcg / !regadex / !rgdx (avec ou sans espace)
-    let m = trimmed.match(/^!(?:regadex|rgdx|tcg)\s*(flexmodify|flex|boosteropen|openbooster|boostergo|gobooster|open|booster|go|store|boutique|claim|inventaire|inv|classeur|collection|carte|trade|top|notifs?|profile|profil|wishlist|credits|guide|help|aide|hub)(?:\s+(.*))?$/i);
+    let m = trimmed.match(/^!(?:regadex|rgdx|tcg)\s*(flexmodify|flex|boosteropen|openbooster|boostergo|gobooster|open|booster|go|store|shop|boutique|claim|inventaire|inv|classeur|collection|carte|trade|top|notifs?|profile|profil|wishlist|credits|guide|help|aide|hub)(?:\s+(.*))?$/i);
     if (m) {
         return normalizeTcgSubcommand(m[1], m[2] || '');
     }
@@ -9650,7 +9650,7 @@ async function handleTcgInteraction(interaction) {
             holoTransform: '✨ Transformer une carte en Holographique',
             halfCooldown: '⚡ Diviser le cooldown du prochain booster par 2',
             secondChance: '🔄 Seconde Chance',
-            godPackBoost: '🌟 Taux de God Pack ×10 (5j)'
+            godPackBoost: '🌟 Taux de God Pack ×25 (5j)'
         };
 
         const isBoosterBuy = itemKey === 'booster' || itemKey === 'fiveCardBooster';
@@ -9804,7 +9804,7 @@ async function handleTcgInteraction(interaction) {
         if (itemKey === 'godPackBoost') {
             if (u.activeBonuses.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil) {
                 await interaction.reply({
-                    content: `⚠️ Ton bonus **God Pack ×10** est déjà actif jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F> !`,
+                    content: `⚠️ Ton bonus **God Pack ×25** est déjà actif jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F> !`,
                     ephemeral: true
                 });
                 return true;
@@ -9813,7 +9813,7 @@ async function handleTcgInteraction(interaction) {
             u.activeBonuses.godPackBoostUntil = Date.now() + GOD_PACK_BOOST_DURATION_MS;
             if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
             await interaction.update({
-                content: `🌟 **Taux de God Pack ×5 (0,1% → 2,5%) activé pour 5 jours !** *(fin <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:R>)*`,
+                content: `🌟 **Taux de God Pack ×25 (0,1% → 2,5%) activé pour 5 jours !** *(fin <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:R>)*`,
                 embeds: [],
                 components: backRows,
                 files: [],
