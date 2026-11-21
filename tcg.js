@@ -453,7 +453,15 @@ function parseCardFilename(filename, category, folderRarity, setNumber = DEFAULT
     const rawName = match[4].trim();
     const isHolo = /\bholo$/i.test(rawName);
     const baseName = rawName.replace(/\s+holo$/i, '').trim();
-    const displayName = isHolo ? rawName.replace(/\bholo$/i, 'Holographique') : rawName;
+
+    let displayName = isHolo
+        ? rawName.replace(/\bholo$/i, 'Holographique')
+        : rawName;
+
+    // Afficher explicitement "Négative" sans modifier le nom de base.
+    if (isNegative && !/\bnégative$/i.test(displayName)) {
+        displayName += ' Négative';
+    }
 
     let rarity = folderRarity;
     if (folderRarity === 'Full Art & Négative') {
@@ -1899,14 +1907,8 @@ function resolveCardQuery(rawQuery, preferredSetNumber = null) {
     if (!normQ) return { card: null, matches: [], isCodeQuery: false };
     const allSearchable = [...cardCatalog, ...persoCatalog];
 
-    // 2a. Correspondance exacte brute avant extraction des mots-clés
-    const rawExact = allSearchable.filter(c =>
-        c.normalizedName === normQ ||
-        c.normalizedDisplayName === normQ ||
-        c.normalizedBaseName === normQ
-    );
-    if (rawExact.length === 1) return { card: rawExact[0], matches: rawExact, isCodeQuery: false };
-    if (rawExact.length > 1) return { card: null, matches: rawExact, isCodeQuery: false };
+    // 2a. Les correspondances exactes seront vérifiées après
+    // l'analyse des modificateurs de rareté et de variante.
 
     // 2b. Extraction des mots-clés de rareté / holo / set ("epsys full art", "tasty crousty full art", etc.)
     let stripped = ` ${normQ} `;
@@ -1921,12 +1923,17 @@ function resolveCardQuery(rawQuery, preferredSetNumber = null) {
         stripped = stripped.replace(/\bset\s*\d+\b/g, ' ');
     }
 
-    if (/\b(?:full\s*arts?|fullart|fa)\b/.test(stripped)) {
-        wantedRarity = 'Full Art';
-        stripped = stripped.replace(/\b(?:full\s*arts?|fullart|fa)\b/g, ' ');
-    } else if (/\b(?:negatives?|neg)\b/.test(stripped)) {
-        wantedRarity = 'Négative';
-        stripped = stripped.replace(/\b(?:negatives?|neg)\b/g, ' ');
+    const hasFullArt = /\b(?:full\s*arts?|fullart|fa)\b/.test(stripped);
+    const hasNegative = /\b(?:negatives?|neg)\b/.test(stripped);
+
+    if (hasFullArt || hasNegative) {
+        // "Full Art Négative" désigne toujours la version Négative.
+        // "Full Art" seul désigne exclusivement la Full Art normale.
+        wantedRarity = hasNegative ? 'Négative' : 'Full Art';
+
+        stripped = stripped
+            .replace(/\b(?:full\s*arts?|fullart|fa)\b/g, ' ')
+            .replace(/\b(?:negatives?|neg)\b/g, ' ');
     } else if (/\b(?:legendaires?|leg)\b/.test(stripped)) {
         wantedRarity = 'Légendaire';
         stripped = stripped.replace(/\b(?:legendaires?|leg)\b/g, ' ');
@@ -1958,7 +1965,14 @@ function resolveCardQuery(rawQuery, preferredSetNumber = null) {
         return true;
     });
 
-    const searchPool = filteredPool.length > 0 ? filteredPool : allSearchable;
+    // Ne jamais ignorer une rareté explicitement demandée.
+    const searchPool = (wantedRarity || wantedPerso || wantedHolo || wantedSet !== null)
+        ? filteredPool
+        : allSearchable;
+
+    if (searchPool.length === 0) {
+        return { card: null, matches: [], isCodeQuery: false };
+    }
     if (!cleanNameQuery && filteredPool.length > 0) {
         if (filteredPool.length === 1) return { card: filteredPool[0], matches: filteredPool, isCodeQuery: false };
         return { card: null, matches: filteredPool, isCodeQuery: false };
