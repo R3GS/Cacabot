@@ -4483,7 +4483,7 @@ function buildStorePayload(member, u, fromHub = false) {
             `🎴 **Booster 5 cartes (${SET1_NAME})** — \`${STORE_PRICES.fiveCardBooster} pts\`\n` +
             `-# Un gros booster contenant **5 cartes** (sans doublon dans le même pack) !\n\n` +
             `🕳️ **Transformer une Full Art en Négative** — \`${STORE_PRICES.negativeTransform} pts\`\n` +
-            `-# Transforme 1 de tes cartes **Full Art** compatibles possédées en sa version **Négative** !`
+            `-# Transforme 1 de tes cartes **Full Art** possédées en sa version **Négative** !`
         );
 
     const storeBtn = (key, label, emoji) => new ButtonBuilder()
