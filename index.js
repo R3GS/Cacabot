@@ -383,6 +383,7 @@ const {
     initialiserWebhooksRoulette,
     assurerWebhookRoulette,
     armerNotifRoulette,
+    restaurerNotifsRoulette,
     deverrouillerSucces,
     rouletteNotifs,
     rouletteAntiFeurUntil,
@@ -1651,7 +1652,7 @@ client.once('ready', async () => {
     }, 60 * 1000);
 
     // Réarmement des alertes roulette, votes publics et des rappels
-    for (const [uid, chId] of rouletteNotifs) armerNotifRoulette(uid, chId, client);
+    restaurerNotifsRoulette(client);
     if (typeof restaurerVotesRoulette === 'function') restaurerVotesRoulette(client);
     if (typeof restaurerRappels === 'function') restaurerRappels();
 

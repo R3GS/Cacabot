@@ -1308,91 +1308,166 @@ function aUneNotifRouletteActive(userId) {
     return rouletteNotifs.has(userId) && Date.now() < fin;
 }
 
+
 function armerNotifRoulette(userId, channelId, client) {
-    if (rouletteNotifTimers.has(userId)) {
-        clearTimeout(rouletteNotifTimers.get(userId));
+    const ancienTimer = rouletteNotifTimers.get(userId);
+    if (ancienTimer) {
+        clearTimeout(ancienTimer);
         rouletteNotifTimers.delete(userId);
     }
 
-    const fin = rouletteCooldowns.get(userId) ?? 0;
-    const now = Date.now();
-
-    // Si le cooldown est fini depuis plus de 2 heures, purge silencieuse
-    if (now >= fin && (now - fin > 2 * 60 * 60 * 1000)) {
-        rouletteNotifs.delete(userId);
-        bridge.demanderSauvegarde();
+    if (!client || !channelId) {
+        console.warn(`[ROULETTE NOTIF] Client ou destination absent pour ${userId}`);
         return;
     }
 
-    const delai = Math.max(fin - now, 1000);
+    const fin = rouletteCooldowns.get(userId) ?? 0;
+    const delai = Math.max(fin - Date.now(), 1000);
 
     const timer = setTimeout(async () => {
+        // Ne pas exécuter un ancien timer remplacé.
+        if (rouletteNotifTimers.get(userId) !== timer) return;
         rouletteNotifTimers.delete(userId);
 
-        if (!rouletteNotifs.has(userId)) return;
-        rouletteNotifs.delete(userId);
-        bridge.demanderSauvegarde();
+        // Notification désactivée ou remplacée entre-temps.
+        if (rouletteNotifs.get(userId) !== channelId) return;
 
         const finActuelle = rouletteCooldowns.get(userId) ?? 0;
+
+        // Le cooldown a changé : on attend la nouvelle échéance.
         if (Date.now() < finActuelle) {
-            rouletteNotifs.set(userId, channelId);
-            return armerNotifRoulette(userId, channelId, client);
-        }
-
-        // Cas 1 : Envoi en Message Privé (MP) avec repli automatique sur le salon si les MP sont fermés
-        if (channelId === 'MP') {
-            const user = client.users.cache.get(userId) || await client.users.fetch(userId).catch(() => null);
-            let mpReussi = false;
-
-            if (user) {
-                const row = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder()
-                        .setLabel('🎰 Aller au salon #roulette')
-                        .setStyle(ButtonStyle.Link)
-                        .setURL('https://discord.com/channels/720057528351850547/1553954760900608091')
-                );
-                mpReussi = await user.send({
-                    content: `🎰 <@${userId}>, ton cooldown roulette sur **Regaïa** est terminé ! Tu peux relancer ton tirage dès maintenant :`,
-                    components: [row]
-                }).then(() => true).catch(() => false);
-            }
-
-            // Si le MP a échoué (MP fermés), on ping sur le salon roulette pour ne jamais laisser le/la membre sans alerte !
-            if (!mpReussi) {
-                const salonSecours = client.channels.cache.get(ROULETTE_SALON_ID) || await client.channels.fetch(ROULETTE_SALON_ID).catch(() => null);
-                if (salonSecours) {
-                    const rowTenter = new ActionRowBuilder().addComponents(
-                        new ButtonBuilder().setCustomId(`roulette_tenter_${userId}`).setLabel('🎰 Tenter sa chance').setStyle(ButtonStyle.Primary)
-                    );
-                    await salonSecours.send({
-                        content: `🎰 <@${userId}>, ton cooldown roulette est terminé ! *(Tes MP Discord étant fermés, je te préviens ici)*`,
-                        components: [rowTenter],
-                        allowedMentions: { users: [userId] }
-                    }).catch(() => {});
-                }
-            }
+            armerNotifRoulette(userId, channelId, client);
             return;
         }
 
-        // Cas 2 : Envoi sur le salon demandé
-        const salon = client.channels.cache.get(channelId) || await client.channels.fetch(channelId).catch(() => null);
-        if (!salon) return;
-
         const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId(`roulette_tenter_${userId}`).setLabel('🎰 Tenter sa chance').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder()
+                .setCustomId(`roulette_tenter_${userId}`)
+                .setLabel('🎰 Tenter sa chance')
+                .setStyle(ButtonStyle.Primary)
         );
 
-        await salon.send({
-            content: `🎰 <@${userId}>, ton cooldown roulette est terminé ! Clique ci-dessous pour relancer immédiatement :`,
-            components: [row],
-            allowedMentions: { users: [userId] }
-        }).catch(() => {});
+        let envoiReussi = false;
+
+        const envoyerDansSalon = async (salonId, secours = false) => {
+            try {
+                const salon = client.channels.cache.get(salonId)
+                    || await client.channels.fetch(salonId);
+
+                if (!salon || typeof salon.send !== 'function') {
+                    throw new Error('Salon introuvable ou non accessible');
+                }
+
+                await salon.send({
+                    content: secours
+                        ? `🎰 <@${userId}>, ton cooldown roulette est terminé ! *(Notification envoyée ici car la destination initiale est indisponible.)*`
+                        : `🎰 <@${userId}>, ton cooldown roulette est terminé ! Clique ci-dessous pour relancer immédiatement :`,
+                    components: [row],
+                    allowedMentions: { users: [userId] }
+                });
+
+                return true;
+            } catch (error) {
+                console.warn(
+                    `[ROULETTE NOTIF] Échec salon ${salonId} pour ${userId} :`,
+                    error.message
+                );
+                return false;
+            }
+        };
+
+        try {
+            if (channelId === 'MP') {
+                try {
+                    const user = client.users.cache.get(userId)
+                        || await client.users.fetch(userId);
+
+                    const rowMp = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setLabel('🎰 Aller au salon #roulette')
+                            .setStyle(ButtonStyle.Link)
+                            .setURL('https://discord.com/channels/720057528351850547/1553954760900608091')
+                    );
+
+                    await user.send({
+                        content: `🎰 <@${userId}>, ton cooldown roulette sur **Regaïa** est terminé ! Tu peux relancer ton tirage dès maintenant :`,
+                        components: [rowMp]
+                    });
+
+                    envoiReussi = true;
+                } catch (error) {
+                    console.warn(
+                        `[ROULETTE NOTIF] MP impossible pour ${userId} :`,
+                        error.message
+                    );
+                }
+            } else {
+                envoiReussi = await envoyerDansSalon(channelId);
+            }
+
+            // Destination indisponible : secours dans #roulette.
+            if (!envoiReussi && channelId !== ROULETTE_SALON_ID) {
+                envoiReussi = await envoyerDansSalon(
+                    ROULETTE_SALON_ID,
+                    true
+                );
+            }
+
+            // Une autre notification a pu être créée pendant l'envoi.
+            // Ne jamais supprimer ou reprogrammer la nouvelle.
+            if (rouletteNotifs.get(userId) !== channelId) return;
+            if (rouletteNotifTimers.has(userId)) return;
+
+            if (envoiReussi) {
+                // Suppression UNIQUEMENT après confirmation d'envoi.
+                rouletteNotifs.delete(userId);
+                bridge.demanderSauvegarde();
+
+                console.log(
+                    `[ROULETTE NOTIF] Notification envoyée à ${userId}`
+                );
+            } else {
+                // Aucun envoi réussi : conserver l'alerte.
+                console.error(
+                    `[ROULETTE NOTIF] Échec total pour ${userId}. Nouvelle tentative dans 60 secondes.`
+                );
+
+                const retryTimer = setTimeout(() => {
+                    if (rouletteNotifTimers.get(userId) !== retryTimer) return;
+                    rouletteNotifTimers.delete(userId);
+
+                    if (rouletteNotifs.get(userId) === channelId) {
+                        armerNotifRoulette(userId, channelId, client);
+                    }
+                }, 60 * 1000);
+
+                rouletteNotifTimers.set(userId, retryTimer);
+            }
+        } catch (error) {
+            console.error(
+                `[ROULETTE NOTIF] Erreur inattendue pour ${userId} :`,
+                error
+            );
+
+            if (rouletteNotifs.get(userId) === channelId &&
+                !rouletteNotifTimers.has(userId)) {
+                const retryTimer = setTimeout(() => {
+                    if (rouletteNotifTimers.get(userId) !== retryTimer) return;
+                    rouletteNotifTimers.delete(userId);
+
+                    if (rouletteNotifs.get(userId) === channelId) {
+                        armerNotifRoulette(userId, channelId, client);
+                    }
+                }, 60 * 1000);
+
+                rouletteNotifTimers.set(userId, retryTimer);
+            }
+        }
     }, Math.min(delai, 2 ** 31 - 1));
 
     rouletteNotifTimers.set(userId, timer);
 }
 
-function buildCooldownQuickUsePayload(member, finCooldown) {
     const userId = member?.id || member?.user?.id;
     const ts = Math.ceil(finCooldown / 1000);
     const dejaAlerte = aUneNotifRouletteActive(userId) || Boolean(rouletteNotifRepeat.get(userId));
@@ -1441,14 +1516,18 @@ function buildRouletteNotifMenuPayload(member, ctx = 'ephem', statusNote = null)
     const ctxSuffix = ctx === 'pub' ? ':pub' : ':ephem';
 
     let statusText = '🔕 **Alerte actuelle :** Désactivée';
-    if (currentNotif) {
+    if (isRepeat) {
+        const target = savedTarget || currentNotif;
+
+        statusText = target === 'MP'
+            ? '🔁 **Notifications automatiques : ACTIVÉES**\n📩 Destination : Messages privés\n✅ Rappel après chaque cooldown.'
+            : target
+                ? `🔁 **Notifications automatiques : ACTIVÉES**\n🔔 Destination : <#${target}>\n✅ Rappel après chaque cooldown.`
+                : '🔁 **Notifications automatiques : ACTIVÉES**\n✅ Rappel après chaque cooldown.';
+    } else if (currentNotif) {
         statusText = currentNotif === 'MP'
-            ? '📩 **Alerte actuelle :** Active en **Message Privé**'
-            : `🔔 **Alerte actuelle :** Active dans <#${currentNotif}>`;
-    } else if (isRepeat && savedTarget) {
-        statusText = savedTarget === 'MP'
-            ? '🔁 **Alerte auto :** En **Message Privé** après chaque tirage'
-            : `🔁 **Alerte auto :** Dans <#${savedTarget}> après chaque tirage`;
+            ? '📩 **Alerte ponctuelle :** Active en Message Privé'
+            : `🔔 **Alerte ponctuelle :** Active dans <#${currentNotif}>`;
     }
 
     const repeatText = isRepeat
@@ -9016,9 +9095,40 @@ async function handleRoulettePseudoLock(oldMember, newMember) {
 
 function restaurerNotifsRoulette(client) {
     if (!client) return;
+
+    let restaurees = 0;
+
+    // Restaurer les alertes ponctuelles enregistrées.
     for (const [userId, channelId] of rouletteNotifs.entries()) {
+        if (!channelId) continue;
+
         armerNotifRoulette(userId, channelId, client);
+        restaurees++;
     }
+
+    // Vérifier les abonnements automatiques.
+    for (const [userId, actif] of rouletteNotifRepeat.entries()) {
+        if (!actif) continue;
+
+        const fin = rouletteCooldowns.get(userId) ?? 0;
+        if (Date.now() >= fin) continue;
+
+        const target = rouletteNotifTarget.get(userId)
+            || rouletteNotifs.get(userId)
+            || ROULETTE_SALON_ID;
+
+        if (!rouletteNotifs.has(userId)) {
+            rouletteNotifs.set(userId, target);
+            armerNotifRoulette(userId, target, client);
+            restaurees++;
+        }
+    }
+
+    bridge.demanderSauvegarde();
+
+    console.log(
+        `[ROULETTE NOTIF] Restauration terminée : ${restaurees} notification(s) programmée(s).`
+    );
 }
 
 module.exports = {
