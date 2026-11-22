@@ -4564,8 +4564,7 @@ function libelleProbaRoulette(outcomeId) {
     if (outcomeId === 'aucun-resultat') {
         const taux = getTauxEchecRoulette();
         if (taux <= 0) return '0%';
-        const { n, pct } = probaAffichee(taux);
-        return `1/${n} | ${pct}%`;
+        return `${(taux * 100).toFixed(2).replace(/\.?0+$/, '')}%`;
     }
     const entry = ROULETTE_TABLE.find(e => e.id === outcomeId);
     if (!entry) return null;
@@ -4595,8 +4594,7 @@ function libelleProbaFooter(outcomeId) {
     if (outcomeId === 'aucun-resultat') {
         const taux = getTauxEchecRoulette();
         if (taux <= 0) return '0%';
-        const { n, pct } = probaAffichee(taux);
-        return `1/${n} (${pct}%)`;
+        return `${(taux * 100).toFixed(2).replace(/\.?0+$/, '')}%`;
     }
     const entry = ROULETTE_TABLE.find(e => e.id === outcomeId);
     if (!entry) return null;
@@ -4836,7 +4834,7 @@ function buildRoulettePaytableEmbed(category = 'all') {
             .setTitle('🍀 Probabilités — Rien, Pity & Règles')
             .setDescription(
                 (maudite ? `🌘 **ÉVÉNEMENT ROULETTE MAUDITE / DORÉE EN COURS !** *(0% Rien jusqu'à 20h00)*\n\n` : '') +
-                `**😶 RIEN :**\n${maudite ? '**0%** — Désactivé pendant l\'événement du dimanche !' : '**1/2** (~50%) — Aucun effet (cooldown normal)'}\n\n` +
+                `**😶 RIEN :**\n${maudite ? '**0%** — Désactivé pendant l\'événement du dimanche !' : `**${ROULETTE_TAUX_ECHEC * 100}%** — Aucun effet (cooldown normal)`}\n\n` +
                 `**🍀 SYSTÈME DE PITY :**\nAprès **${ROULETTE_PITY_MALUS} malus** ou **${ROULETTE_PITY_NULS} résultats nuls** consécutifs, un **bonus est garanti** au tirage suivant.\n\n` +
                 `**🌘 ROULETTE MAUDITE / DORÉE :**\n• Tous les **dimanches 16h30–20h00** : **0% Rien** *(100% Bonus ou Malus, les ultra-rares restent rares)*.\n\n` +
                 `**🔥 HAPPY HOUR & JACKPOT :**\n• Tous les soirs **20h–21h** : cooldown à **5 min** pour tout le monde.\n` +
