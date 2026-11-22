@@ -99,7 +99,20 @@ const COMMUNITY_QUEST_POOL = [
 ];
 
 const POINTS_PER_BOOSTER = 5;
-const POINTS_PER_DUPLICATE = 3;
+
+const POINTS_PER_DUPLICATE_BY_RARITY = {
+    'Commune': 1,
+    'Rare': 3,
+    'Épique': 5,
+    'Légendaire': 10,
+    'Full Art': 20,
+    'Négative': 30
+};
+
+function getDuplicatePoints(card) {
+    return POINTS_PER_DUPLICATE_BY_RARITY[card?.rarity] ?? 0;
+}
+
 const POINTS_PER_TRADE = 3;
 const MESSAGES_PER_POINT = 15;
 const VOCAL_MINUTES_PER_POINT = 10;
@@ -135,14 +148,15 @@ const PUNITION_RARITIES = [
 const PUNITION_LEVELS = [1, 0.5, 0.2, 0.1, 0];
 
 const STORE_PRICES = {
-    booster: 100,
-    fiveCardBooster: 175,
-    luckyBooster: 75,
-    holoTransform: 50,
-    negativeTransform: 1000,
-    halfCooldown: 35,
+    focus: 15,
     secondChance: 25,
-    godPackBoost: 150
+    halfCooldown: 35,
+    holoTransform: 50,
+    luckyBooster: 75,
+    booster: 100,
+    godPackBoost: 150,
+    fiveCardBooster: 175,
+    negativeTransform: 1000
 };
 
 const CREDITS_LINKS = {
@@ -171,6 +185,22 @@ const RARITY_WEIGHTS = {
     'Full Art': 0.6,
     'Négative': 0.15
 };
+
+const FOCUS_RARITY_WEIGHTS = {
+    'Commune': 63.1,
+    'Rare': 22,
+    'Épique': 8,
+    'Légendaire': 5,
+    'Full Art': 1.5,
+    'Négative': 0.4
+};
+
+const FOCUS_CATEGORY_WEIGHTS = {
+    selected: 60,
+    other: 20
+};
+
+const FOCUS_CHARGES_PER_PURCHASE = 2;
 const RARITY_META = {
     'Commune': { color: 0xe6d5b8, hex: '#E6D5B8', glow: 'rgba(230, 213, 184, 0.55)', emoji: '⚪' },
     'Rare': { color: 0x009dff, hex: '#009DFF', glow: 'rgba(0, 157, 255, 0.55)', emoji: '🔵' },
@@ -386,6 +416,9 @@ let proxyWarmupRunning = false;
 const hotBuffers = new Map();     // buffers des pièces jointes les plus envoyées
 const boostersEnCours = new Set();
 const boosterSessions = new Map(); // messageId -> session
+const pendingFocusChoices = new Map(); // userId -> sélection Focus en attente
+const focusConfirmationsEnCours = new Set();
+const FOCUS_CHOICE_TIMEOUT_MS = 60 * 1000;
 const pendingConfirms = new Map(); // confirmId -> payload
 const binderReturnStates = new Map(); // binderMsgId -> { ownerId, viewerId, category, perPageMode, page, sortMode, rarityFilter, ownedOnly, fromHub, expiresAt }
 const pullChanceSessions = new Map(); // sessionId -> { targetKey, cardId, mult, cardPage, createdAt }
@@ -859,14 +892,62 @@ function getTcgCardsCount() {
 const MAX_RECENT_OPENINGS = 20;
 
 function recordRecentOpeningTcg(entry) {
-    if (!entry || isSandboxId(entry.userId)) return;
-    const data = getStoreData();
-    data.recentOpenings = data.recentOpenings.filter(o => o.messageId !== entry.messageId);
-    data.recentOpenings.unshift(entry);
-    if (data.recentOpenings.length > MAX_RECENT_OPENINGS) {
-        data.recentOpenings = data.recentOpenings.slice(0, MAX_RECENT_OPENINGS);
+    if (!entry || isSandboxId(entry.userId)) return false;
+
+    if (
+        typeof entry.messageId !== 'string' ||
+        !entry.messageId.trim()
+    ) {
+        console.warn(
+            '[RegaDex] Historique : ouverture ignorée, messageId invalide.'
+        );
+        return false;
     }
-    tcgBridge.demanderSauvegarde();
+
+    try {
+        const data = getStoreData();
+
+        const previousOpenings = Array.isArray(data.recentOpenings)
+            ? data.recentOpenings
+            : [];
+
+        const updatedOpenings = previousOpenings
+            .filter(o =>
+                o &&
+                typeof o === 'object' &&
+                typeof o.messageId === 'string' &&
+                o.messageId !== entry.messageId
+            );
+
+        updatedOpenings.unshift(entry);
+
+        data.recentOpenings = updatedOpenings
+            .sort((a, b) =>
+                (Number(b.timestamp) || 0) -
+                (Number(a.timestamp) || 0)
+            )
+            .slice(0, MAX_RECENT_OPENINGS);
+
+        try {
+            tcgBridge.demanderSauvegarde();
+        } catch (saveError) {
+            console.error(
+                `[RegaDex] Historique enregistré en mémoire mais demande de sauvegarde échouée pour ${entry.messageId} :`,
+                saveError
+            );
+
+            return false;
+        }
+
+        return true;
+    } catch (err) {
+        console.error(
+            `[RegaDex] Impossible d'enregistrer l'ouverture ${entry.messageId} dans l'historique :`,
+            err
+        );
+
+        return false;
+    }
 }
 
 function parseRecapEmbedToOpening(msg, guild, botId) {
@@ -926,8 +1007,26 @@ function parseRecapEmbedToOpening(msg, guild, botId) {
 async function backfillRecentOpeningsTcg(client) {
     try {
         if (!client) return;
+
         const data = getStoreData();
-        if (data.recentOpenings.length >= MAX_RECENT_OPENINGS) return;
+
+        // Compatibilité avec les sauvegardes anciennes
+        // ou les historiques partiellement corrompus.
+        if (!Array.isArray(data.recentOpenings)) {
+            data.recentOpenings = [];
+        }
+
+        data.recentOpenings = data.recentOpenings.filter(
+            entry =>
+                entry &&
+                typeof entry === 'object' &&
+                typeof entry.messageId === 'string' &&
+                entry.messageId.length > 0
+        );
+
+        if (data.recentOpenings.length >= MAX_RECENT_OPENINGS) {
+            return;
+        }
 
         const ch = client.channels.cache.get(TCG_CHANNEL_ID)
             || await client.channels.fetch(TCG_CHANNEL_ID).catch(() => null);
@@ -1040,17 +1139,55 @@ function buildOpenLastDetailPayload(entry, index, guild) {
     const ts = Math.floor((entry.timestamp || Date.now()) / 1000);
 
     const totalEntryCards = (entry.cards || []).length || 3;
+
+    const recordedPoints = (
+        typeof entry.pointsEarned === 'number' &&
+        Number.isFinite(entry.pointsEarned)
+    )
+        ? entry.pointsEarned
+        : null;
+
     const cardLines = (entry.cards || []).map((c, i) => {
         const meta = RARITY_META[c.rarity] || RARITY_META['Commune'];
-        const state = c.isNew ? '🆕 Nouvelle' : '🔁 Doublon (+3 pts)';
-        return `**Carte ${i + 1}/${totalEntryCards} :** ${meta.emoji} \`${c.id}\` **${c.name}** — *${c.rarity}*${c.isHolo ? ' *(Holo)*' : ''} • ${state}`;
+
+        let state;
+
+        if (c.isNew) {
+            state = '🆕 Nouvelle';
+        } else if (
+            typeof c.duplicatePoints === 'number' &&
+            Number.isFinite(c.duplicatePoints)
+        ) {
+            state = `🔁 Doublon (+${c.duplicatePoints} pts)`;
+        } else {
+            state = '🔁 Doublon';
+        }
+
+        return (
+            `**Carte ${i + 1}/${totalEntryCards} :** ` +
+            `${meta.emoji} \`${c.id}\` **${c.name}** — ` +
+            `*${c.rarity}*` +
+            `${c.isHolo ? ' *(Holo)*' : ''} • ${state}`
+        );
     });
 
     const tags = [];
-    if (totalEntryCards > 3) tags.push(`🎴 Booster ${totalEntryCards} cartes`);
+
+    if (totalEntryCards > 3) {
+        tags.push(`🎴 Booster ${totalEntryCards} cartes`);
+    }
+
     if (entry.isGodPack) tags.push('🌟 God Pack');
     if (entry.luckyUsed) tags.push('🍀 Chanceux');
     if (entry.pityUsed) tags.push('✨ Pity Rare');
+
+    if (entry.focusUsed && entry.focusCategory) {
+        tags.push(`🎯 Focus : ${entry.focusCategory}`);
+    }
+
+    const pointsLine = recordedPoints !== null
+        ? `🪙 **Points gagnés :** +${recordedPoints}\n`
+        : '';
 
     const jumpLine = (entry.channelId && entry.messageId)
         ? `\n🔗 [Aller au message d'origine](https://discord.com/channels/${GUILD_ID}/${entry.channelId}/${entry.messageId})`
@@ -1064,7 +1201,10 @@ function buildOpenLastDetailPayload(entry, index, guild) {
         .setDescription(
             `👤 **Joueur :** ${who}\n` +
             `📅 **Date :** <t:${ts}:F> (<t:${ts}:R>)\n` +
-            (tags.length > 0 ? `🏷️ **Modificateurs :** ${tags.join(' • ')}\n` : '') +
+            (tags.length > 0
+                ? `🏷️ **Modificateurs :** ${tags.join(' • ')}\n`
+                : '') +
+            pointsLine +
             jumpLine +
             `\n────────────────────────────────────────\n` +
             cardLines.join('\n')
@@ -1136,11 +1276,14 @@ function getOrCreateTcgxSandbox(forceReset = false) {
                 weeklyBooster: 2,
                 communityBooster: 2,
                 masterBooster: 2,
+                fiveCardBooster: 99,
                 luckyBooster: 99,
                 holoTransform: 99,
+                negativeTransform: 99,
                 halfCooldown: 99,
                 secondChance: 99,
-                godPackBoost: 99
+                godPackBoost: 99,
+                focus: 99
             },
             activeBonuses: {
                 luckyBooster: false,
@@ -1168,8 +1311,32 @@ function getOrCreateTcgxSandbox(forceReset = false) {
                 tcgxSandboxUser.cards[c.id] = 5;
             }
         }
-        if (tcgxSandboxUser.points < 900000) tcgxSandboxUser.points = 999999;
-        if ((tcgxSandboxUser.inventory?.booster || 0) < 50) tcgxSandboxUser.inventory.booster = 999;
+        if (tcgxSandboxUser.points < 900000) {
+            tcgxSandboxUser.points = 999999;
+        }
+
+        if ((tcgxSandboxUser.inventory?.booster || 0) < 50) {
+            tcgxSandboxUser.inventory.booster = 999;
+        }
+
+        // Initialiser les objets manquants dans les anciennes
+        // sessions de test, sans recharger les stocks à
+        // chaque consultation.
+        const sandboxItems = {
+            fiveCardBooster: 99,
+            negativeTransform: 99,
+            focus: 99
+        };
+
+        for (const [item, initialQuantity] of Object.entries(sandboxItems)) {
+            if (
+                !Number.isSafeInteger(tcgxSandboxUser.inventory[item]) ||
+                tcgxSandboxUser.inventory[item] < 0
+            ) {
+                tcgxSandboxUser.inventory[item] = initialQuantity;
+            }
+        }
+
         if (!Array.isArray(tcgxSandboxUser.wishlist)) tcgxSandboxUser.wishlist = [];
         if (!tcgxSandboxUser.completionMilestones) tcgxSandboxUser.completionMilestones = {};
         if (!tcgxSandboxUser.masteredSets) tcgxSandboxUser.masteredSets = { '1': Date.now() };
@@ -1203,11 +1370,13 @@ function getOrCreateTcgUser(userId) {
                 negativeTransform: 0,
                 halfCooldown: 0,
                 secondChance: 0,
-                godPackBoost: 0
+                godPackBoost: 0,
+                focus: 0
             },
             activeBonuses: {
                 luckyBooster: false,
                 halfCooldown: false,
+                secondChance: false,
                 godPackBoostUntil: 0
             },
             pityRare: false,
@@ -1233,7 +1402,22 @@ function getOrCreateTcgUser(userId) {
     if (typeof u.freeBoosters !== 'number') u.freeBoosters = 1;
     if (!u.lastFreeRechargeAt) u.lastFreeRechargeAt = Date.now();
     if (!u.currentRechargeMs) u.currentRechargeMs = BOOSTER_COOLDOWN_MS;
-    if (!u.inventory) u.inventory = { booster: 0, fiveCardBooster: 0, weeklyBooster: 0, communityBooster: 0, masterBooster: 0, luckyBooster: 0, holoTransform: 0, negativeTransform: 0, halfCooldown: 0, godPackBoost: 0 };
+    if (!u.inventory) {
+        u.inventory = {
+            booster: 0,
+            fiveCardBooster: 0,
+            weeklyBooster: 0,
+            communityBooster: 0,
+            masterBooster: 0,
+            luckyBooster: 0,
+            holoTransform: 0,
+            negativeTransform: 0,
+            halfCooldown: 0,
+            secondChance: 0,
+            godPackBoost: 0,
+            focus: 0
+        };
+    }
     if (typeof u.inventory.weeklyBooster !== 'number') u.inventory.weeklyBooster = 0;
     if (u.inventory.weeklyBooster > MAX_WEEKLY_BOOSTERS) u.inventory.weeklyBooster = MAX_WEEKLY_BOOSTERS;
     if (typeof u.inventory.communityBooster !== 'number') u.inventory.communityBooster = 0;
@@ -1243,6 +1427,14 @@ function getOrCreateTcgUser(userId) {
     if (typeof u.inventory.negativeTransform !== 'number') u.inventory.negativeTransform = 0;
     if (typeof u.inventory.godPackBoost !== 'number') u.inventory.godPackBoost = 0;
     if (typeof u.inventory.secondChance !== 'number') u.inventory.secondChance = 0;
+    // Une charge Focus est toujours un entier positif ou nul.
+    // Conserver les charges valides déjà achetées.
+    if (
+        !Number.isSafeInteger(u.inventory.focus) ||
+        u.inventory.focus < 0
+    ) {
+        u.inventory.focus = 0;
+    }
     if (!u.activeBonuses) u.activeBonuses = { luckyBooster: false, halfCooldown: false, godPackBoostUntil: 0 };
     if (typeof u.activeBonuses.godPackBoostUntil !== 'number') u.activeBonuses.godPackBoostUntil = 0;
     if (typeof u.activeBonuses.secondChance !== 'boolean') u.activeBonuses.secondChance = false;
@@ -2147,14 +2339,24 @@ function getRarityPunishmentFactor(rarity, userId = null) {
     return 1;
 }
 
-function getEffectiveCardWeight(card, raritySums, userId = null, member = null) {
+function getEffectiveCardWeight(
+    card,
+    raritySums,
+    userId = null,
+    member = null,
+    rarityWeights = RARITY_WEIGHTS
+) {
     if (!card) return 0;
+
     const punishFactor = getRarityPunishmentFactor(card.rarity, userId);
     if (punishFactor <= 0) return 0;
-    const rarityW = RARITY_WEIGHTS[card.rarity] || 0;
+
+    const rarityW = rarityWeights[card.rarity] || 0;
     const denom = raritySums[card.rarity] || 1;
+
     const cardBaseShare = rarityW * ((card.isHolo ? 1 : 2) / denom);
     const mult = getCardPullMultiplier(card.id, userId, member);
+
     return cardBaseShare * mult * punishFactor;
 }
 
@@ -2205,35 +2407,275 @@ function formatPullPercent(pct) {
 
 function pickWeightedCard(candidates, raritySums, userId = null, member = null) {
     if (!candidates || candidates.length === 0) return null;
-    const weights = candidates.map(c => getEffectiveCardWeight(c, raritySums, userId, member));
-    const totalWeight = weights.reduce((s, w) => s + w, 0);
-    if (totalWeight <= 0) return candidates[Math.floor(Math.random() * candidates.length)];
+
+    const weightedCandidates = candidates
+        .map(card => ({
+            card,
+            weight: getEffectiveCardWeight(
+                card,
+                raritySums,
+                userId,
+                member
+            )
+        }))
+        .filter(entry =>
+            Number.isFinite(entry.weight) &&
+            entry.weight > 0
+        );
+
+    if (weightedCandidates.length === 0) {
+        return null;
+    }
+
+    const totalWeight = weightedCandidates.reduce(
+        (sum, entry) => sum + entry.weight,
+        0
+    );
 
     let roll = Math.random() * totalWeight;
-    for (let i = 0; i < candidates.length; i++) {
-        roll -= weights[i];
-        if (roll <= 0) return candidates[i];
+
+    for (const entry of weightedCandidates) {
+        roll -= entry.weight;
+
+        if (roll <= 0) {
+            return entry.card;
+        }
     }
-    return candidates[candidates.length - 1];
+
+    return weightedCandidates[weightedCandidates.length - 1].card;
 }
 
-function drawGodPackCards(setNumber = DEFAULT_SET_NUMBER, userId = null, member = null, cardCount = 3) {
+function pickFocusCard(
+    candidates,
+    raritySums,
+    userId = null,
+    member = null,
+    focusCategory = null,
+    forcedRarity = null
+) {
+    const categories = ['Items', 'Personnages', 'Références'];
+
+    if (!candidates?.length) return null;
+
+    if (!categories.includes(focusCategory)) {
+        return pickWeightedCard(candidates, raritySums, userId, member);
+    }
+
+    const rarityWeights = FOCUS_RARITY_WEIGHTS;
+
+    const weightedCandidates = candidates.filter(c =>
+        getEffectiveCardWeight(
+            c,
+            raritySums,
+            userId,
+            member,
+            rarityWeights
+        ) > 0
+    );
+
+    // Ne jamais réintroduire une carte interdite par un poids nul.
+    const available = weightedCandidates;
+
+    if (available.length === 0) {
+        return null;
+    }
+
+    const weightedPick = (pool) => {
+        if (!pool.length) return null;
+
+        const entries = pool
+            .map(card => ({
+                card,
+                weight: getEffectiveCardWeight(
+                    card,
+                    raritySums,
+                    userId,
+                    member,
+                    rarityWeights
+                )
+            }))
+            .filter(entry =>
+                Number.isFinite(entry.weight) &&
+                entry.weight > 0
+            );
+
+        if (entries.length === 0) {
+            return null;
+        }
+
+        const total = entries.reduce(
+            (sum, entry) => sum + entry.weight,
+            0
+        );
+
+        let roll = Math.random() * total;
+
+        for (const entry of entries) {
+            roll -= entry.weight;
+
+            if (roll <= 0) {
+                return entry.card;
+            }
+        }
+
+        return entries[entries.length - 1].card;
+    };
+
+    let rarity = forcedRarity;
+
+    if (!rarity) {
+        const rarityTotals = new Map();
+
+        for (const card of available) {
+            const weight = getEffectiveCardWeight(
+                card,
+                raritySums,
+                userId,
+                member,
+                rarityWeights
+            );
+
+            rarityTotals.set(
+                card.rarity,
+                (rarityTotals.get(card.rarity) || 0) + weight
+            );
+        }
+
+        const entries = [...rarityTotals.entries()]
+            .filter(([, weight]) => weight > 0);
+
+        const total = entries.reduce(
+            (sum, [, weight]) => sum + weight,
+            0
+        );
+
+        if (total <= 0) {
+            return weightedPick(available);
+        }
+
+        let roll = Math.random() * total;
+
+        for (const [candidateRarity, weight] of entries) {
+            roll -= weight;
+
+            if (roll <= 0) {
+                rarity = candidateRarity;
+                break;
+            }
+        }
+
+        if (!rarity) rarity = entries[entries.length - 1][0];
+    }
+
+    const rarityPool = available.filter(c => c.rarity === rarity);
+
+    if (!rarityPool.length) {
+        // Une rareté explicitement imposée ne peut jamais
+        // être remplacée silencieusement par une autre.
+        // L'appelant décidera comment gérer l'absence
+        // de candidat autorisé.
+        if (forcedRarity) {
+            return null;
+        }
+
+        return weightedPick(available);
+    }
+
+    const availableCategories = categories.filter(category =>
+        rarityPool.some(c => c.category === category)
+    );
+
+    if (!availableCategories.length) {
+        return weightedPick(rarityPool);
+    }
+
+    const categoryWeights = availableCategories.map(category => ({
+        category,
+        weight: category === focusCategory
+            ? FOCUS_CATEGORY_WEIGHTS.selected
+            : FOCUS_CATEGORY_WEIGHTS.other
+    }));
+
+    const totalCategoryWeight = categoryWeights.reduce(
+        (sum, entry) => sum + entry.weight,
+        0
+    );
+
+    let categoryRoll = Math.random() * totalCategoryWeight;
+    let selectedCategory = categoryWeights[categoryWeights.length - 1].category;
+
+    for (const entry of categoryWeights) {
+        categoryRoll -= entry.weight;
+
+        if (categoryRoll <= 0) {
+            selectedCategory = entry.category;
+            break;
+        }
+    }
+
+    const finalPool = rarityPool.filter(
+        c => c.category === selectedCategory
+    );
+
+    return weightedPick(finalPool);
+}
+
+function drawGodPackCards(
+    setNumber = DEFAULT_SET_NUMBER,
+    userId = null,
+    member = null,
+    cardCount = 3,
+    focusCategory = null
+) {
     const setPool = getSetCatalog(setNumber);
     const raritySums = getRarityBaseWeightSums();
     const picked = [];
     const pickedIds = new Set();
 
     const pickByRarity = (targetRarity) => {
-        let candidates = setPool.filter(c => c.rarity === targetRarity && !pickedIds.has(c.id) && getEffectiveCardWeight(c, raritySums, userId, member) > 0);
+        const rarityWeights = focusCategory
+            ? FOCUS_RARITY_WEIGHTS
+            : RARITY_WEIGHTS;
+
+        // Ne retenir que les cartes autorisées par les poids
+        // effectifs, y compris les punitions de rareté.
+        const candidates = setPool.filter(c =>
+            c.rarity === targetRarity &&
+            !pickedIds.has(c.id) &&
+            getEffectiveCardWeight(
+                c,
+                raritySums,
+                userId,
+                member,
+                rarityWeights
+            ) > 0
+        );
+
         if (candidates.length === 0) {
-            candidates = setPool.filter(c => c.rarity === targetRarity && !pickedIds.has(c.id));
+            return null;
         }
-        if (candidates.length === 0) return null;
-        const c = pickWeightedCard(candidates, raritySums, userId, member);
+
+        const c = focusCategory
+            ? pickFocusCard(
+                candidates,
+                raritySums,
+                userId,
+                member,
+                focusCategory,
+                targetRarity
+            )
+            : pickWeightedCard(
+                candidates,
+                raritySums,
+                userId,
+                member
+            );
+
         if (c) {
             picked.push(c);
             pickedIds.add(c.id);
         }
+
         return c;
     };
 
@@ -2247,8 +2689,23 @@ function drawGodPackCards(setNumber = DEFAULT_SET_NUMBER, userId = null, member 
 
     while (picked.length < cardCount) {
         const roll = Math.random();
-        const extraRarity = roll < 0.45 ? 'Légendaire' : (roll < 0.80 ? 'Full Art' : 'Négative');
-        if (!pickByRarity(extraRarity) && !pickByRarity('Légendaire') && !pickByRarity('Full Art') && !pickByRarity('Épique')) {
+
+        const extraRarity =
+            roll < 0.45
+                ? 'Légendaire'
+                : (roll < 0.80 ? 'Full Art' : 'Négative');
+
+        // Un God Pack ne contient que des Légendaires,
+        // Full Art et Négatives.
+        // Si ces raretés sont indisponibles, le tirage
+        // incomplet sera refusé par drawBoosterCards,
+        // qui poursuivra avec un booster normal.
+        if (
+            !pickByRarity(extraRarity) &&
+            !pickByRarity('Légendaire') &&
+            !pickByRarity('Full Art') &&
+            !pickByRarity('Négative')
+        ) {
             break;
         }
     }
@@ -2264,22 +2721,53 @@ function drawGodPackCards(setNumber = DEFAULT_SET_NUMBER, userId = null, member 
     return picked;
 }
 
-function drawBoosterCards(u, userId = null, member = null, setNumber = DEFAULT_SET_NUMBER, cardCount = 3) {
-    const tripleCards = getTripleTrollCards(userId, member);
+function drawBoosterCards(
+    u,
+    userId = null,
+    member = null,
+    setNumber = DEFAULT_SET_NUMBER,
+    cardCount = 3,
+    focusCategory = null
+) {
+    // Les tirages forcés ne doivent utiliser que les cartes
+    // appartenant au set du booster en cours.
+    const tripleCards = getTripleTrollCards(userId, member)
+        .filter(c =>
+            (c.setNumber || DEFAULT_SET_NUMBER) === setNumber
+        );
+
     if (tripleCards.length > 0) {
+        const pityWasActive = Boolean(u.pityRare);
         const pickedTriple = [];
+
         for (let i = 0; i < cardCount; i++) {
-            pickedTriple.push(tripleCards[i % tripleCards.length]);
+            pickedTriple.push(
+                tripleCards[i % tripleCards.length]
+            );
         }
-        const allCommunes = pickedTriple.length === cardCount && pickedTriple.every(c => c.rarity === 'Commune');
-        u.pityRare = allCommunes;
+
+        const allCommunes =
+            pickedTriple.length === cardCount &&
+            pickedTriple.every(c => c.rarity === 'Commune');
+
+        const rareObtained = pickedTriple.some(
+            c => c.rarity === 'Rare'
+        );
+
+        // Un tirage forcé ne doit pas faire disparaître
+        // une pity si aucune Rare n'a été obtenue.
+        u.pityRare =
+            allCommunes ||
+            (pityWasActive && !rareObtained);
+
         return {
             cards: pickedTriple,
             luckyUsed: false,
-            pityUsed: false,
-            triggeredNextPity: allCommunes,
+            pityUsed: pityWasActive && rareObtained,
+            triggeredNextPity: u.pityRare,
             isGodPack: false,
-            godBoostUsed: false
+            godBoostUsed: false,
+            consumedGuaranteeCards: []
         };
     }
 
@@ -2293,31 +2781,100 @@ function drawBoosterCards(u, userId = null, member = null, setNumber = DEFAULT_S
     const godBoostActive = Boolean(u.activeBonuses?.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil);
     const godChance = godBoostActive ? (GOD_PACK_BASE_CHANCE * GOD_PACK_BOOST_MULT) : GOD_PACK_BASE_CHANCE;
     if (Math.random() < godChance) {
-        const godCards = drawGodPackCards(setNumber, userId, member, cardCount);
-        if (godCards.length === cardCount) {
+        const godCards = drawGodPackCards(
+            setNumber,
+            userId,
+            member,
+            cardCount,
+            focusCategory
+        );
+        // Une garantie administrative reste prioritaire,
+        // mais elle ne doit pas dénaturer un God Pack.
+        // Si une carte garantie est de rareté inférieure
+        // à Légendaire, le booster suit le tirage normal.
+        const godCompatibleRarities = new Set([
+            'Légendaire',
+            'Full Art',
+            'Négative'
+        ]);
+
+        const guaranteesCompatibleWithGodPack =
+            guaranteedCards.every(c =>
+                godCompatibleRarities.has(c.rarity)
+            );
+
+        if (
+            godCards.length === cardCount &&
+            guaranteesCompatibleWithGodPack
+        ) {
             for (const gCard of guaranteedCards) {
                 if (!godCards.some(c => c.id === gCard.id)) {
-                    const replaceIdx = godCards.findIndex(c => !guaranteedCards.some(gc => gc.id === c.id));
-                    if (replaceIdx !== -1) godCards[replaceIdx] = gCard;
+                    const replaceIdx = godCards.findIndex(c =>
+                        !guaranteedCards.some(gc => gc.id === c.id)
+                    );
+
+                    if (replaceIdx !== -1) {
+                        godCards[replaceIdx] = gCard;
+                    }
                 }
             }
-            godCards.sort((a, b) => {
-                const ra = RARITY_ORDER[a.rarity] ?? 0;
-                const rb = RARITY_ORDER[b.rarity] ?? 0;
-                if (ra !== rb) return ra - rb;
-                if (a.isHolo !== b.isHolo) return a.isHolo ? 1 : -1;
-                return a.sortIndex - b.sortIndex;
-            });
-            consumeNextBoosterGuarantees(userId, onceCards.filter(c => godCards.some(g => g.id === c.id)));
-            // La pityRare déjà active est conservée pour le booster suivant
+
+            // Vérifier la composition APRÈS remplacement
+            // par les éventuelles cartes garanties.
+            const hasLegendary = godCards.some(
+                c => c.rarity === 'Légendaire'
+            );
+
+            const hasFullArt = godCards.some(
+                c => c.rarity === 'Full Art'
+            );
+
+            const onlyGodRarities = godCards.every(c =>
+                c.rarity === 'Légendaire' ||
+                c.rarity === 'Full Art' ||
+                c.rarity === 'Négative'
+            );
+
+            // Le God Pack doit conserver au minimum
+            // une Légendaire et une Full Art.
+            // Sinon, abandonner ce tirage exceptionnel
+            // et continuer avec un booster normal.
+            if (hasLegendary && hasFullArt && onlyGodRarities) {
+                godCards.sort((a, b) => {
+                    const ra = RARITY_ORDER[a.rarity] ?? 0;
+                    const rb = RARITY_ORDER[b.rarity] ?? 0;
+                    if (ra !== rb) return ra - rb;
+                    if (a.isHolo !== b.isHolo) return a.isHolo ? 1 : -1;
+                    return a.sortIndex - b.sortIndex;
+                });
+
+                // Les garanties à usage unique ne sont pas encore consommées.
+            // Elles seront validées après publication du booster.
+            // Conserver la pity en attente si le God Pack
+            // n'a pas satisfait la garantie d'une carte Rare.
+            const rareObtainedInGodPack = godCards.some(
+                c => c.rarity === 'Rare'
+            );
+
+            const pityUsedInGodPack =
+                Boolean(u.pityRare) && rareObtainedInGodPack;
+
+            if (pityUsedInGodPack) {
+                u.pityRare = false;
+            }
+
             return {
                 cards: godCards,
                 luckyUsed: false,
-                pityUsed: false,
-                triggeredNextPity: false,
+                pityUsed: pityUsedInGodPack,
+                triggeredNextPity: Boolean(u.pityRare),
                 isGodPack: true,
-                godBoostUsed: godBoostActive
+                godBoostUsed: godBoostActive,
+                consumedGuaranteeCards: onceCards.filter(c =>
+                    godCards.some(g => g.id === c.id)
+                )
             };
+            }
         }
     }
 
@@ -2337,31 +2894,122 @@ function drawBoosterCards(u, userId = null, member = null, setNumber = DEFAULT_S
         }
     }
 
-    // Si pityRare est actif : garantir 1 carte de rareté 'Rare' (s'il reste de la place)
+    // Si pityRare est actif : tenter de garantir une Rare
+    // parmi les cartes effectivement autorisées.
     if (pityActive && slots > 0 && !picked.some(c => c.rarity === 'Rare')) {
-        const rareCandidates = setPool.filter(c => c.rarity === 'Rare' && !pickedIds.has(c.id));
+        const rarityWeights = focusCategory
+            ? FOCUS_RARITY_WEIGHTS
+            : RARITY_WEIGHTS;
+
+        const rareCandidates = setPool.filter(c =>
+            c.rarity === 'Rare' &&
+            !pickedIds.has(c.id) &&
+            getEffectiveCardWeight(
+                c,
+                raritySums,
+                userId,
+                member,
+                rarityWeights
+            ) > 0
+        );
+
         if (rareCandidates.length > 0) {
-            const c = pickWeightedCard(rareCandidates, raritySums, userId, member);
-            picked.push(c);
-            pickedIds.add(c.id);
-            slots--;
+            const c = focusCategory
+                ? pickFocusCard(
+                    rareCandidates,
+                    raritySums,
+                    userId,
+                    member,
+                    focusCategory,
+                    'Rare'
+                )
+                : pickWeightedCard(
+                    rareCandidates,
+                    raritySums,
+                    userId,
+                    member
+                );
+
+            // Ne jamais ajouter une carte inexistante.
+            if (c) {
+                picked.push(c);
+                pickedIds.add(c.id);
+                slots--;
+            }
         }
     }
 
     for (let i = 0; i < slots; i++) {
-        let pool = setPool.filter(c => !(luckyActive && c.rarity === 'Commune') && !pickedIds.has(c.id) && getEffectiveCardWeight(c, raritySums, userId, member) > 0);
+        const rarityWeights = focusCategory
+            ? FOCUS_RARITY_WEIGHTS
+            : RARITY_WEIGHTS;
+
+        let pool = setPool.filter(c =>
+            !(luckyActive && c.rarity === 'Commune') &&
+            !pickedIds.has(c.id) &&
+            getEffectiveCardWeight(
+                c,
+                raritySums,
+                userId,
+                member,
+                rarityWeights
+            ) > 0
+        );
+
+        // Ne jamais annuler silencieusement la promesse
+        // du Booster Chanceux : aucune Commune.
+        // Si aucun candidat non Commun n'est disponible,
+        // le tirage sera incomplet et l'ouverture échouera
+        // avant publication, avec restauration des ressources.
+        if (pool.length === 0 && luckyActive) {
+            console.warn(
+                `[RegaDex] Booster Chanceux impossible pour ${userId} : ` +
+                'aucune carte non Commune autorisée disponible.'
+            );
+            break;
+        }
+
+        // Pour un booster normal, aucune carte interdite
+        // par un poids nul ne doit être réintroduite.
+        // Le contrôle commun ci-dessous gère le pool vide.
+
+        // Le pool contient uniquement des cartes dont le poids
+        // effectif est strictement positif.
+        // Ne pas réintroduire les cartes exclues par une punition.
         if (pool.length === 0) {
-            pool = setPool.filter(c => !pickedIds.has(c.id) && getEffectiveCardWeight(c, raritySums, userId, member) > 0);
+            console.warn(
+                `[RegaDex] Aucun candidat autorisé pour le booster de ${userId}.`
+            );
+            break;
         }
-        const fallback = pool.length > 0 ? pool : setPool.filter(c => !pickedIds.has(c.id));
-        const chosenCard = pickWeightedCard(fallback, raritySums, userId, member);
-        if (chosenCard) {
-            picked.push(chosenCard);
-            pickedIds.add(chosenCard.id);
+
+        const chosenCard = focusCategory
+            ? pickFocusCard(
+                pool,
+                raritySums,
+                userId,
+                member,
+                focusCategory
+            )
+            : pickWeightedCard(
+                pool,
+                raritySums,
+                userId,
+                member
+            );
+
+        if (!chosenCard) {
+            console.warn(
+                `[RegaDex] Tirage impossible pour ${userId} : poids disponibles nuls.`
+            );
+            break;
         }
+
+        picked.push(chosenCard);
+        pickedIds.add(chosenCard.id);
     }
 
-    // Trier de la plus commune à la plus rare
+    // Trier de la plus commune à la plus rare.
     picked.sort((a, b) => {
         const ra = RARITY_ORDER[a.rarity] ?? 0;
         const rb = RARITY_ORDER[b.rarity] ?? 0;
@@ -2370,12 +3018,32 @@ function drawBoosterCards(u, userId = null, member = null, setNumber = DEFAULT_S
         return a.sortIndex - b.sortIndex;
     });
 
-    // Mise à jour Pity : si toutes les cartes sont Communes, le PROCHAIN booster aura 1 Rare garantie
-    const allCommunes = picked.length === cardCount && picked.every(c => c.rarity === 'Commune');
-    u.pityRare = allCommunes;
+    // Une pity active n'est consommée que si le booster
+    // contient effectivement une carte Rare.
+    const allCommunes =
+        picked.length === cardCount &&
+        picked.every(c => c.rarity === 'Commune');
 
-    consumeNextBoosterGuarantees(userId, onceCards.filter(c => picked.some(g => g.id === c.id)));
-    return { cards: picked, luckyUsed: luckyActive, pityUsed: pityActive, triggeredNextPity: allCommunes, isGodPack: false, godBoostUsed: godBoostActive };
+    const rareObtained = picked.some(c => c.rarity === 'Rare');
+
+    const pityStillPending = pityActive && !rareObtained;
+
+    u.pityRare = allCommunes || pityStillPending;
+
+    // Reporter la consommation des garanties jusqu'à la publication.
+    const consumedGuaranteeCards = onceCards.filter(c =>
+        picked.some(g => g.id === c.id)
+    );
+
+    return {
+        cards: picked,
+        luckyUsed: luckyActive,
+        pityUsed: pityActive && rareObtained,
+        triggeredNextPity: u.pityRare,
+        isGodPack: false,
+        godBoostUsed: godBoostActive,
+        consumedGuaranteeCards
+    };
 }
 
 // ==========================================
@@ -4044,7 +4712,8 @@ function buildGuidePayload(userId, fromHub = true, chapter = 'home') {
                 `• Les cartes sont révélées de la plus commune à la plus rare.\n` +
                 `• **God Pack :** **0,1 %** de chance de base, ou **2,5 %** avec le bonus ×25 actif.\n\n` +
                 `### ✨ Pity\n` +
-                `Si ton booster contient **3 Communes**, le prochain garantit au moins **une Rare**.\n\n` +
+                `Si ton booster contient **uniquement des Communes**, une garantie Rare s'active pour le prochain booster.\n` +
+                `Si une punition empêche d'obtenir une Rare, la garantie reste en attente jusqu'à ce qu'une Rare soit obtenue.\n\n` +
                 `### 🔔 Notifications\n` +
                 `Avec \`!tcgnotif\`, choisis d'être prévenu à chaque recharge ou lorsque ta réserve atteint **2/2**.\n` +
                 `Tes préférences sont conservées et modifiables à tout moment.`
@@ -4075,14 +4744,24 @@ function buildGuidePayload(userId, fromHub = true, chapter = 'home') {
                 `• **10 minutes en vocal** (3 membres minimum, hors AFK) : +1 point\n` +
                 `• **1 roulette :** +1 point, hors gains supplémentaires\n` +
                 `• **1 booster ouvert :** +5 points\n` +
-                `• **1 doublon obtenu :** +3 points\n` +
+                `• **Doublon Commune :** +1 point\n` +
+                `• **Doublon Rare :** +3 points\n` +
+                `• **Doublon Épique :** +5 points\n` +
+                `• **Doublon Légendaire :** +10 points\n` +
+                `• **Doublon Full Art :** +20 points\n` +
+                `• **Doublon Négative :** +30 points\n` +
                 `• **1 échange terminé :** +3 points par fil\n` +
                 `• **Victoire Motus, Rébus ou Pendu :** +2 points\n\n` +
                 `### 🏆 Complétion du Set\n` +
                 `• **25 %, 50 % et 75 % :** +15 points à chaque palier\n` +
                 `• **100 % :** +25 points et **2 boosters de Maître**\n\n` +
                 `### 🛒 Boutique RegaDex\n` +
-                `🎁 **Booster :** ${STORE_PRICES.booster} pts\n` +
+                `🎯 **Focus RegaDex (2 charges) :** ${STORE_PRICES.focus} pts\n` +
+                `• Choisis une catégorie avant chaque booster : Items, Personnages ou Références.\n` +
+                `• Catégorie choisie : **60 %** ; autres catégories : **20 %** chacune.\n` +
+                `• Avec Focus : **1,5 % Full Art** et **0,4 % Négative**.\n` +
+                `• Les doublons restent possibles et aucune nouvelle carte n'est garantie.\n\n` +
+                `🎁 **Booster classique (3 cartes) :** ${STORE_PRICES.booster} pts\n` +
                 `🎴 **Booster 5 cartes :** ${STORE_PRICES.fiveCardBooster} pts\n` +
                 `🍀 **Booster Chanceux :** ${STORE_PRICES.luckyBooster} pts\n` +
                 `✨ **Transformation Holo :** ${STORE_PRICES.holoTransform} pts\n` +
@@ -4090,6 +4769,7 @@ function buildGuidePayload(userId, fromHub = true, chapter = 'home') {
                 `⚡ **Demi-cooldown :** ${STORE_PRICES.halfCooldown} pts\n` +
                 `🔄 **Seconde Chance :** ${STORE_PRICES.secondChance} pts\n` +
                 `🌟 **God Pack ×25 (5 jours) :** ${STORE_PRICES.godPackBoost} pts\n\n` +
+                `💡 **Seconde Chance :** permet de remplacer une Commune de ton prochain booster par un nouveau tirage normal.\n` +
                 `Les objets achetés sont accessibles dans ton **inventaire** via \`!tcgclaim\`.`
         },
 
@@ -4129,7 +4809,9 @@ function buildGuidePayload(userId, fromHub = true, chapter = 'home') {
                 `• Un échange déséquilibré demande une **double confirmation**.\n\n` +
                 `### ✅ Fin de l'échange\n` +
                 `• Les cartes sont transférées et un récapitulatif visuel est publié.\n` +
-                `• **+3 points RegaDex** sont accordés à la fermeture du fil (une seule fois).\n` +
+                `• Chaque participant reçoit **+3 points RegaDex** dès le premier échange validé du fil.\n` +
+                `• Ce bonus est attribué **une seule fois par fil**, même si plusieurs échanges sont réalisés.\n` +
+                `• Après chaque échange, les participants peuvent décider de continuer ou de fermer le fil.\n` +
                 `• Un fil inactif pendant **24 heures** se ferme automatiquement.`
         },
 
@@ -4482,6 +5164,11 @@ function buildStorePayload(member, u, fromHub = false) {
         .setDescription(
             `🪙 **Ton solde :** **${u.points} points RegaDex**\n` +
             `────────────────────────────────────────\n` +
+            `🎯 **Focus RegaDex (2 charges)** — \`${STORE_PRICES.focus} pts\`\n` +
+            `-# Avant chaque booster, choisis librement une catégorie : **Items**, **Personnages** ou **Références**.\n` +
+            `-# Catégorie choisie : **60%** • Autres catégories : **20% chacune**.\n` +
+            `-# Full Art : **1,5%** • Négative : **0,4%** avec Focus.\n` +
+            `-# ⚠️ **Fair-play :** aucune carte nouvelle ou rare n'est garantie. Doublons possibles, pity et God Packs inchangés.\n\n` +
             `🔄 **Seconde Chance** — \`${STORE_PRICES.secondChance} pts\`\n` +
             `-# Active une relance pour ton prochain booster : choisis **une Commune** du récapitulatif et remplace-la par un nouveau tirage normal.\n\n` +
             `⚡ **Diviser le cooldown par 2** — \`${STORE_PRICES.halfCooldown} pts\`\n` +
@@ -4492,7 +5179,7 @@ function buildStorePayload(member, u, fromHub = false) {
             `-# Supprime toutes les cartes **Communes** de ton prochain booster.\n\n` +
             `🎁 **Booster ${SET1_NAME}** — \`${STORE_PRICES.booster} pts\`\n` +
             `-# Un booster de 3 cartes ${SET1_NAME} à ouvrir quand tu veux.\n\n` +
-            `🌟 **Taux de God Pack ×5 (5j)** — \`${STORE_PRICES.godPackBoost} pts\`\n` +
+            `🌟 **Taux de God Pack ×25 (5j)** — \`${STORE_PRICES.godPackBoost} pts\`\n` +
             `-# Passe tes chances d'obtenir un **God Pack** de **0,1% à 2,5%** pendant **5 jours** *(bonus personnel)*.\n\n` +
             `🎴 **Booster 5 cartes (${SET1_NAME})** — \`${STORE_PRICES.fiveCardBooster} pts\`\n` +
             `-# Un gros booster contenant **5 cartes** (sans doublon dans le même pack) !\n\n` +
@@ -4509,15 +5196,16 @@ function buildStorePayload(member, u, fromHub = false) {
 
     // Ordre croissant de prix : gauche → droite, haut → bas
     const row = new ActionRowBuilder().addComponents(
+        storeBtn('focus', 'Focus', '🎯'),
         storeBtn('secondChance', 'Seconde Chance', '🔄'),
         storeBtn('halfCooldown', 'CD /2', '⚡'),
         storeBtn('holoTransform', 'Holo', '✨'),
-        storeBtn('luckyBooster', 'Chanceux', '🍀'),
-        storeBtn('booster', 'Booster', '🎁'),
-        storeBtn('godPackBoost', 'God Pack ×5', '🌟')
+        storeBtn('luckyBooster', 'Chanceux', '🍀')
     );
 
     const row2 = new ActionRowBuilder().addComponents(
+        storeBtn('booster', 'Booster', '🎁'),
+        storeBtn('godPackBoost', 'God Pack ×25', '🌟'),
         storeBtn('fiveCardBooster', 'Booster 5 cartes', '🎴'),
         storeBtn('negativeTransform', 'Full Art → Négative', '🕳️')
     );
@@ -4533,10 +5221,30 @@ function buildStorePayload(member, u, fromHub = false) {
     ];
 
     const storeRows = [];
-    for (let i = 0; i < storeButtons.length; i += 3) {
+
+    // Maximum de 4 lignes d'articles.
+    // La cinquième est réservée à Accueil / Fermer.
+    // Chaque ligne Discord peut contenir jusqu'à 5 boutons.
+    const STORE_BUTTONS_PER_ROW = 3;
+    const MAX_STORE_ITEM_ROWS = 4;
+
+    for (
+        let i = 0;
+        i < storeButtons.length;
+        i += STORE_BUTTONS_PER_ROW
+    ) {
+        if (storeRows.length >= MAX_STORE_ITEM_ROWS) {
+            throw new Error(
+                '[RegaDex] Store : trop de boutons pour les lignes disponibles.'
+            );
+        }
+
         storeRows.push(
             new ActionRowBuilder().addComponents(
-                ...storeButtons.slice(i, i + 3)
+                ...storeButtons.slice(
+                    i,
+                    i + STORE_BUTTONS_PER_ROW
+                )
             )
         );
     }
@@ -4548,7 +5256,10 @@ function buildStorePayload(member, u, fromHub = false) {
         )
     );
 
-    return { embeds: [embed], components: storeRows };
+    return {
+        embeds: [embed],
+        components: storeRows
+    };
 }
 
 function buildClaimPayload(member, u, fromHub = false) {
@@ -4572,12 +5283,13 @@ function buildClaimPayload(member, u, fromHub = false) {
             `🎁 **Boosters prêts à ouvrir :** \`${getTotalAvailableBoosters(u)}\` *(${SET1_NAME})*\n` +
             boosterSubBlock +
             `🎴 **Boosters 5 cartes :** \`${inv.fiveCardBooster || 0}\`\n` +
+            `🎯 **Focus RegaDex :** \`${inv.focus || 0}\` charge(s) disponibles\n` +
             `🍀 **Prochain booster chanceux :** \`${inv.luckyBooster || 0}\` ${u.activeBonuses?.luckyBooster ? '*(Déjà actif sur le prochain booster !)*' : ''}\n` +
             `✨ **Transformation Holographique :** \`${inv.holoTransform || 0}\`\n` +
             `🕳️ **Transformation Full Art → Négative :** \`${inv.negativeTransform || 0}\`\n` +
             `⚡ **Demi-cooldown (3h) :** \`${inv.halfCooldown || 0}\` ${u.activeBonuses?.halfCooldown ? '*(Déjà armé sur le prochain booster !)*' : ''}\n` +
             `🔄 **Seconde Chance :** \`${inv.secondChance || 0}\` ${u.activeBonuses?.secondChance ? '*(Armée pour le prochain booster)*' : ''}\n` +
-            `🌟 **Taux God Pack ×5 (5j) :** \`${inv.godPackBoost || 0}\` ${godBoostActive ? `*(Actif pour toi : **2,5%** au lieu de 0,1% jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F>)*` : '*(1% → 2,5%, personnel)*'}`
+            `🌟 **Taux God Pack ×25 (5j) :** \`${inv.godPackBoost || 0}\` ${godBoostActive ? `*(Actif pour toi : **2,5%** au lieu de 0,1% jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F>)*` : '*(0,1% → 2,5%, personnel)*'}`
         );
 
     const row = new ActionRowBuilder().addComponents(
@@ -4884,13 +5596,33 @@ function buildBoosterRecapEmbed(member, session, u) {
 
     const lines = session.cards.map((c, i) => {
         const meta = RARITY_META[c.rarity] || RARITY_META['Commune'];
-        const tag = session.isNewFlags[i] ? '🆕 Nouvelle' : '🔁 Doublon (+3 pts)';
+        const tag = session.isNewFlags[i]
+            ? '🆕 Nouvelle'
+            : `🔁 Doublon (+${getDuplicatePoints(c)} pts)`;
+
         return `${meta.emoji} **${c.id}** — **${c.name}** (*${c.rarity}*) • ${tag}`;
     });
 
     const bonusInfo = [];
-    if (session.fiveCardUsed) bonusInfo.push(`🎴 **Booster ${session.cards.length} cartes**`);
-    if (session.isGodPack) bonusInfo.push(`🌟 **GOD PACK DÉCROCHÉ !** *(Tirage légendaire${session.godBoostUsed ? ' • Boost ×25 actif' : ''})*`);
+
+    if (session.fiveCardUsed) {
+        bonusInfo.push(`🎴 **Booster ${session.cards.length} cartes**`);
+    }
+
+    if (session.focusUsed && session.focusCategory) {
+        bonusInfo.push(
+            `🎯 **Focus RegaDex utilisé : ${session.focusCategory}**` +
+            ` *(1 charge consommée)*`
+        );
+    }
+
+    if (session.isGodPack) {
+        bonusInfo.push(
+            `🌟 **GOD PACK DÉCROCHÉ !** ` +
+            `*(Tirage légendaire${session.godBoostUsed ? ' • Boost ×25 actif' : ''})*`
+        );
+    }
+
     if (session.luckyUsed) bonusInfo.push('🍀 Booster Chanceux appliqué');
     if (session.pityUsed) bonusInfo.push('✨ Pity appliquée (Rare garantie)');
     if (session.halfCdUsed) bonusInfo.push('⚡ Demi-cooldown activé (3h)');
@@ -5238,7 +5970,180 @@ async function triggerSessionPantheonIfNeeded(client, member, session) {
     }
 }
 
-async function startBoosterOpening(targetResponder, member, client, fromHub = false, boosterType = 'normal') {
+async function showFocusChoice(
+    interaction,
+    member,
+    fromHub = false,
+    boosterType = 'normal'
+) {
+    const userId = member.id;
+    const u = getOrCreateTcgUser(userId);
+    const charges = u.inventory?.focus || 0;
+
+    if (boostersEnCours.has(userId)) {
+        await interaction.reply({
+            content: "⏳ Tu as déjà une ouverture de booster en cours.",
+            ephemeral: true
+        });
+        return;
+    }
+
+    const existingFocusChoice = pendingFocusChoices.get(userId);
+
+    if (existingFocusChoice) {
+        if (Date.now() < existingFocusChoice.expiresAt) {
+            await interaction.reply({
+                content:
+                    "🎯 Tu as déjà un menu Focus en attente.\n" +
+                    "Termine ton choix sur ce menu ou attends son expiration.",
+                ephemeral: true
+            });
+            return;
+        }
+
+        pendingFocusChoices.delete(userId);
+    }
+
+    const isFiveCard = boosterType === 'five';
+
+    const available = isFiveCard
+        ? (u.inventory?.fiveCardBooster || 0)
+        : getTotalAvailableBoosters(u);
+
+    if (available <= 0) {
+        await interaction.reply({
+            content: "❌ Tu n'as aucun booster de ce type disponible.",
+            ephemeral: true
+        });
+        return;
+    }
+
+    if (charges <= 0) {
+        await startBoosterOpening(
+            interaction,
+            member,
+            interaction.client,
+            fromHub,
+            boosterType
+        );
+        return;
+    }
+
+    const token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+
+    pendingFocusChoices.set(userId, {
+        token,
+        boosterType,
+        fromHub,
+        expiresAt: Date.now() + FOCUS_CHOICE_TIMEOUT_MS
+    });
+
+    const embed = new EmbedBuilder()
+        .setColor(0x9b59b6)
+        .setTitle('🎯 Focus RegaDex — Choisis ton ouverture')
+        .setDescription(
+            `Tu possèdes **${charges} charge(s) Focus**.\n\n` +
+            `**Avec Focus :**\n` +
+            `• Catégorie choisie : **60 %**\n` +
+            `• Autres catégories : **20 % chacune**\n` +
+            `• Full Art : **1,5 %** de poids de base\n` +
+            `• Négative : **0,4 %** de poids de base\n\n` +
+            `**Ouverture normale :** aucun Focus consommé.\n\n` +
+            `⚠️ **Fair-play :** le Focus ne garantit ni carte manquante, ` +
+            `ni carte rare. Les doublons restent possibles. ` +
+            `Les chances de God Pack et la pity ne changent pas.\n\n` +
+            `⏳ Tu disposes de **60 secondes** pour choisir. ` +
+            `Sans réponse, l'ouverture est annulée et rien n'est consommé.`
+        );
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tcg:focuspick:items:${userId}:${token}`)
+            .setLabel('Items')
+            .setEmoji('📦')
+            .setStyle(ButtonStyle.Primary),
+
+        new ButtonBuilder()
+            .setCustomId(`tcg:focuspick:personnages:${userId}:${token}`)
+            .setLabel('Personnages')
+            .setEmoji('👤')
+            .setStyle(ButtonStyle.Primary),
+
+        new ButtonBuilder()
+            .setCustomId(`tcg:focuspick:references:${userId}:${token}`)
+            .setLabel('Références')
+            .setEmoji('📚')
+            .setStyle(ButtonStyle.Primary),
+
+        new ButtonBuilder()
+            .setCustomId(`tcg:focuspick:normal:${userId}:${token}`)
+            .setLabel('Ouvrir normalement')
+            .setEmoji('🎁')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    try {
+        await interaction.reply({
+            embeds: [embed],
+            components: [row],
+            ephemeral: true
+        });
+
+        // Expiration automatique du menu Focus.
+        // Le token évite qu'un ancien timer annule un menu plus récent.
+        const focusTimeout = setTimeout(async () => {
+            const pending = pendingFocusChoices.get(userId);
+
+            if (!pending || pending.token !== token) {
+                return;
+            }
+
+            if (Date.now() < pending.expiresAt) {
+                return;
+            }
+
+            pendingFocusChoices.delete(userId);
+
+            try {
+                await interaction.editReply({
+                    content:
+                        '⏳ **Choix Focus expiré.**\n' +
+                        'Aucun booster et aucune charge Focus ' +
+                        "n'ont été consommés.\n" +
+                        'Tu peux relancer une ouverture quand tu veux.',
+                    embeds: [],
+                    components: [],
+                    attachments: []
+                });
+            } catch (err) {
+                console.error(
+                    `[RegaDex] Impossible de fermer le menu Focus de ${userId} :`,
+                    err
+                );
+            }
+        }, FOCUS_CHOICE_TIMEOUT_MS);
+
+        focusTimeout.unref?.();
+
+    } catch (err) {
+        const pending = pendingFocusChoices.get(userId);
+
+        if (pending?.token === token) {
+            pendingFocusChoices.delete(userId);
+        }
+
+        throw err;
+    }
+}
+
+async function startBoosterOpening(
+    targetResponder,
+    member,
+    client,
+    fromHub = false,
+    boosterType = 'normal',
+    focusCategory = null
+) {
     const userId = member.id;
     const isFiveCard = boosterType === 'five';
     if (cardCatalog.length === 0) {
@@ -5288,6 +6193,38 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
         }
     }
 
+    const validFocusCategories = ['Items', 'Personnages', 'Références'];
+
+    if (focusCategory !== null && !validFocusCategories.includes(focusCategory)) {
+        return replySilent(targetResponder, "❌ Catégorie Focus invalide.");
+    }
+
+    if (focusCategory && (u.inventory?.focus || 0) <= 0) {
+        return replySilent(targetResponder, "❌ Tu n'as plus de charges Focus.");
+    }
+
+    // État du joueur avant toute consommation ou attribution.
+    // Le verrou d'ouverture protège ces données des autres ouvertures
+    // de boosters du même joueur pendant cette opération.
+    const openingSnapshot = {
+        cards: { ...u.cards },
+        points: u.points,
+        freeBoosters: u.freeBoosters,
+        lastFreeRechargeAt: u.lastFreeRechargeAt,
+        currentRechargeMs: u.currentRechargeMs,
+        inventory: { ...u.inventory },
+        activeBonuses: { ...u.activeBonuses },
+        pityRare: u.pityRare,
+        stats: {
+            ...u.stats,
+            boostersBySet: { ...(u.stats?.boostersBySet || {}) }
+        }
+    };
+
+    // Une fois le message publié, on ne doit plus annuler
+    // automatiquement les cartes ou les ressources.
+    let boosterPublished = false;
+
     boostersEnCours.add(userId);
 
     try {
@@ -5335,19 +6272,72 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
         const secondChanceArmed = Boolean(u.activeBonuses.secondChance);
         u.activeBonuses.secondChance = false;
 
-        // Tirage des cartes (3 ou 5)
+        // Tirage des cartes (3 ou 5), avec Focus facultatif.
         const cardCount = isFiveCard ? 5 : 3;
-        const draw = drawBoosterCards(u, userId, member, DEFAULT_SET_NUMBER, cardCount);
+
+        const draw = drawBoosterCards(
+            u,
+            userId,
+            member,
+            DEFAULT_SET_NUMBER,
+            cardCount,
+            focusCategory
+        );
+
+        if (!draw?.cards || draw.cards.length !== cardCount) {
+            throw new Error(
+                `Tirage incomplet : ${draw?.cards?.length || 0}/${cardCount} cartes.`
+            );
+        }
+
+        // Un Booster Chanceux ne doit jamais produire
+        // de Commune, y compris lorsqu'une carte est
+        // imposée par une garantie administrative.
+        // Le God Pack est exempté : il ne consomme pas
+        // le bonus Chanceux.
+        if (
+            !draw.isGodPack &&
+            u.activeBonuses?.luckyBooster &&
+            draw.cards.some(c => c.rarity === 'Commune')
+        ) {
+            throw new Error(
+                'Tirage incompatible avec le Booster Chanceux : ' +
+                'une carte Commune a été imposée.'
+            );
+        }
+
+        // Réserver la charge Focus avant publication.
+        // Si l'envoi du booster échoue, le snapshot restaurera
+        // automatiquement cette charge avec les autres ressources.
+        const focusUsed = Boolean(focusCategory);
+
+        if (focusUsed) {
+            if (
+                !Number.isSafeInteger(u.inventory?.focus) ||
+                u.inventory.focus <= 0
+            ) {
+                throw new Error(
+                    'Charge Focus indisponible au moment du tirage.'
+                );
+            }
+
+            u.inventory.focus -= 1;
+        }
+
+        // Le bonus Chanceux est désarmé uniquement
+        // si le tirage n'est pas un God Pack.
         if (!draw.isGodPack) {
             u.activeBonuses.luckyBooster = false;
         }
 
+        // Rendre Seconde Chance si aucune Commune n'a été tirée.
         if (secondChanceArmed && !draw.cards.some(c => c.rarity === 'Commune')) {
             u.inventory.secondChance = (u.inventory.secondChance || 0) + 1;
         }
 
         const isNewFlags = [];
         let duplicatesInPack = 0;
+        let duplicatePointsEarned = 0;
 
         for (const card of draw.cards) {
             const before = u.cards[card.id] || 0;
@@ -5357,38 +6347,64 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             } else {
                 isNewFlags.push(false);
                 duplicatesInPack++;
+                duplicatePointsEarned += getDuplicatePoints(card);
             }
         }
 
-        const ptsEarned = POINTS_PER_BOOSTER + (duplicatesInPack * POINTS_PER_DUPLICATE);
+        const ptsEarned = POINTS_PER_BOOSTER + duplicatePointsEarned;
         u.points += ptsEarned;
+
+        // Un seul booster ouvert = une seule ouverture comptabilisée.
         u.stats.boostersOpened = (u.stats.boostersOpened || 0) + 1;
+
         if (!u.stats.boostersBySet) u.stats.boostersBySet = {};
+
         // [SET 2] Remplacer DEFAULT_SET_NUMBER par le setNumber du booster ouvert
-        u.stats.boostersBySet[String(DEFAULT_SET_NUMBER)] = (u.stats.boostersBySet[String(DEFAULT_SET_NUMBER)] || 0) + 1;
-        u.stats.duplicatesObtained = (u.stats.duplicatesObtained || 0) + duplicatesInPack;
+        u.stats.boostersBySet[String(DEFAULT_SET_NUMBER)] =
+            (u.stats.boostersBySet[String(DEFAULT_SET_NUMBER)] || 0) + 1;
 
-        // [SET 2] Adapter le setNumber selon le booster ouvert
-        const milestoneInfo = checkAndGrantCompletionMilestones(userId, DEFAULT_SET_NUMBER);
+        u.stats.duplicatesObtained =
+            (u.stats.duplicatesObtained || 0) + duplicatesInPack;
 
-        if (!isSandboxId(userId)) {
-            tcgBridge.trackBattlePassProgress(userId, 'tcg_booster', 1);
-            if (duplicatesInPack > 0) {
-                tcgBridge.trackBattlePassProgress(userId, 'tcg_doublon', duplicatesInPack);
+        // Les récompenses de complétion seront calculées et attribuées
+        // uniquement après confirmation de la publication du booster.
+        // Cela évite de débloquer un palier pour une ouverture
+        // dont le message Discord n'a pas pu être créé.
+        let milestoneInfo = {
+            unlocked: [],
+            totalBonusPts: 0,
+            masteredSets: []
+        };
+
+        // Les événements externes seront déclenchés après confirmation
+        // de la publication du message d'ouverture.
+        // On prépare uniquement les données nécessaires.
+        const boosterQuestEvents = [
+            { type: 'open_boosters', amount: 1 }
+        ];
+
+        for (const c of draw.cards) {
+            if (c.rarity === 'Rare') {
+                boosterQuestEvents.push({
+                    type: 'pull_rare',
+                    amount: 1
+                });
+            } else if (c.rarity === 'Épique') {
+                boosterQuestEvents.push({
+                    type: 'pull_epic',
+                    amount: 1
+                });
+            } else if (c.rarity === 'Légendaire') {
+                boosterQuestEvents.push({
+                    type: 'pull_legendary',
+                    amount: 1
+                });
+            } else if (c.rarity === 'Full Art') {
+                boosterQuestEvents.push({
+                    type: 'pull_fullart',
+                    amount: 1
+                });
             }
-
-            const qEvents = [{ type: 'open_boosters', amount: 1 }];
-            for (const c of draw.cards) {
-                if (c.rarity === 'Rare') qEvents.push({ type: 'pull_rare', amount: 1 });
-                else if (c.rarity === 'Épique') qEvents.push({ type: 'pull_epic', amount: 1 });
-                else if (c.rarity === 'Légendaire') qEvents.push({ type: 'pull_legendary', amount: 1 });
-                else if (c.rarity === 'Full Art') qEvents.push({ type: 'pull_fullart', amount: 1 });
-            }
-            await progressCommunityQuest(client, qEvents, userId).catch(() => {});
-
-            const data = getStoreData();
-            if (data.notifs?.[userId]) armerNotifBooster(userId, client);
-            tcgBridge.demanderSauvegarde();
         }
 
         const gifEmbed = new EmbedBuilder()
@@ -5403,7 +6419,55 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
         }
 
         let sentMsg;
-        if (targetResponder.isButton?.()) {
+
+        const isFocusChoiceButton = Boolean(
+            targetResponder.isButton?.() &&
+            targetResponder.customId?.startsWith('tcg:focuspick:')
+        );
+
+        if (isFocusChoiceButton) {
+            // Accuser réception de l'interaction Focus.
+            await targetResponder.deferUpdate();
+
+            if (!targetResponder.channel) {
+                throw new Error(
+                    'Impossible de trouver le salon pour publier le booster Focus.'
+                );
+            }
+
+            // Publier le booster avant d'annoncer sa réussite.
+            sentMsg = await sendSilent(
+                targetResponder.channel,
+                {
+                    embeds: [gifEmbed],
+                    files
+                }
+            );
+
+            if (!sentMsg?.id) {
+                throw new Error(
+                    'Impossible de confirmer la publication du booster Focus.'
+                );
+            }
+
+            // Le message public existe.
+            // Un échec de modification du menu éphémère ne doit
+            // pas annuler une ouverture déjà publiée.
+            try {
+                await targetResponder.editReply({
+                    content: '✅ Booster publié dans le salon !',
+                    embeds: [],
+                    components: [],
+                    attachments: []
+                });
+            } catch (focusMenuError) {
+                console.warn(
+                    `[RegaDex] Menu Focus non actualisé pour ${userId} :`,
+                    focusMenuError
+                );
+            }
+
+        } else if (targetResponder.isButton?.()) {
             const isExistingRecap = Boolean(
                 targetResponder.message?.id && (
                     boosterSessions.has(targetResponder.message.id) ||
@@ -5413,8 +6477,10 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
                     )
                 )
             );
+
             if (!isExistingRecap) {
                 await targetResponder.deferUpdate();
+
                 sentMsg = await targetResponder.editReply({
                     content: null,
                     embeds: [gifEmbed],
@@ -5423,17 +6489,107 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
                     attachments: []
                 });
             } else {
-                sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], files, fetchReply: true }));
-                disableBoosterOpenButtonOnMessage(targetResponder.message).catch(() => {});
+                sentMsg = await targetResponder.reply(
+                    withSilent({
+                        embeds: [gifEmbed],
+                        files,
+                        fetchReply: true
+                    })
+                );
+
+                disableBoosterOpenButtonOnMessage(
+                    targetResponder.message
+                ).catch(() => {});
             }
+
         } else if (targetResponder.isRepliable?.()) {
             if (targetResponder.deferred || targetResponder.replied) {
-                sentMsg = await targetResponder.followUp(withSilent({ embeds: [gifEmbed], files, fetchReply: true }));
+                sentMsg = await targetResponder.followUp(
+                    withSilent({
+                        embeds: [gifEmbed],
+                        files,
+                        fetchReply: true
+                    })
+                );
             } else {
-                sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], files, fetchReply: true }));
+                sentMsg = await targetResponder.reply(
+                    withSilent({
+                        embeds: [gifEmbed],
+                        files,
+                        fetchReply: true
+                    })
+                );
             }
+
         } else {
-            sentMsg = await targetResponder.reply(withSilent({ embeds: [gifEmbed], files }));
+            sentMsg = await targetResponder.reply(
+                withSilent({
+                    embeds: [gifEmbed],
+                    files
+                })
+            );
+        }
+
+        if (!sentMsg?.id) {
+            throw new Error(
+                'Impossible de confirmer la création du message du booster.'
+            );
+        }
+
+        // À partir de maintenant, Discord possède un message
+        // d'ouverture : on ne restaure plus automatiquement
+        // les ressources du joueur.
+        boosterPublished = true;
+
+        // La charge Focus a déjà été réservée avant publication.
+        // Elle est maintenant définitivement affectée à ce booster.
+        // Aucun second débit n'est nécessaire.
+
+        // Le message du booster est publié.
+        // Les erreurs des traitements secondaires ne doivent plus
+        // empêcher la création de la session d'ouverture.
+
+        const guaranteesToConsume = draw.consumedGuaranteeCards || [];
+
+        if (guaranteesToConsume.length > 0) {
+            try {
+                consumeNextBoosterGuarantees(
+                    userId,
+                    guaranteesToConsume
+                );
+            } catch (guaranteeError) {
+                console.error(
+                    `[RegaDex] Erreur de validation des garanties pour ${userId} :`,
+                    guaranteeError
+                );
+            }
+        }
+
+        // Les récompenses de complétion sont indépendantes
+        // de l'affichage des cartes du booster.
+        try {
+            milestoneInfo = checkAndGrantCompletionMilestones(
+                userId,
+                DEFAULT_SET_NUMBER
+            );
+        } catch (milestoneError) {
+            console.error(
+                `[RegaDex] Erreur de complétion après ouverture pour ${userId} :`,
+                milestoneError
+            );
+        }
+
+        // Une erreur de demande de sauvegarde ne doit pas
+        // bloquer la navigation dans un booster déjà publié.
+        if (!isSandboxId(userId)) {
+            try {
+                tcgBridge.demanderSauvegarde();
+            } catch (saveError) {
+                console.error(
+                    `[RegaDex] Erreur de sauvegarde après ouverture pour ${userId} :`,
+                    saveError
+                );
+            }
         }
 
         const session = {
@@ -5441,6 +6597,7 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             cards: draw.cards,
             isNewFlags,
             ptsEarned,
+            boosterSequence: u.stats.boostersOpened,
             unlockedMilestones: milestoneInfo.unlocked,
             milestoneBonusPts: milestoneInfo.totalBonusPts,
             pendingMasterSets: milestoneInfo.masteredSets || [],
@@ -5449,6 +6606,8 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
             luckyUsed: draw.luckyUsed,
             pityUsed: draw.pityUsed,
             fiveCardUsed: isFiveCard,
+            focusUsed: Boolean(focusCategory),
+            focusCategory: focusCategory || null,
             isGodPack: Boolean(draw.isGodPack),
             godBoostUsed: Boolean(draw.godBoostUsed),
             halfCdUsed,
@@ -5470,6 +6629,79 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
         cancelPanelAutoDelete(sentMsg.id);
         boosterSessions.set(sentMsg.id, session);
 
+        // La session existe désormais et le booster est publié.
+        // Les événements externes ne doivent pas interrompre
+        // l'ouverture si l'un de leurs traitements échoue.
+        if (!isSandboxId(userId)) {
+            // Les erreurs du Battle Pass, synchrones ou
+            // asynchrones, ne doivent pas interrompre le booster.
+            const trackBoosterBattlePass = (type, amount) => {
+                try {
+                    const result = tcgBridge.trackBattlePassProgress(
+                        userId,
+                        type,
+                        amount
+                    );
+
+                    Promise.resolve(result).catch(err => {
+                        console.error(
+                            `[RegaDex] Erreur Battle Pass ${type} pour ${userId} :`,
+                            err
+                        );
+                    });
+                } catch (err) {
+                    console.error(
+                        `[RegaDex] Erreur Battle Pass ${type} pour ${userId} :`,
+                        err
+                    );
+                }
+            };
+
+            trackBoosterBattlePass('tcg_booster', 1);
+
+            if (duplicatesInPack > 0) {
+                trackBoosterBattlePass(
+                    'tcg_doublon',
+                    duplicatesInPack
+                );
+            }
+
+            // L'ouverture du booster ne doit jamais attendre
+            // la fin des appels Discord de la quête communautaire.
+            // La progression est lancée immédiatement, mais
+            // sa finalisation ne bloque pas l'animation.
+            try {
+                void progressCommunityQuest(
+                    client,
+                    boosterQuestEvents,
+                    userId
+                ).catch(err => {
+                    console.error(
+                        `[RegaDex] Erreur de progression communautaire pour ${userId} :`,
+                        err
+                    );
+                });
+            } catch (err) {
+                console.error(
+                    `[RegaDex] Impossible de lancer la progression communautaire pour ${userId} :`,
+                    err
+                );
+            }
+
+            try {
+                const data = getStoreData();
+
+                if (data.notifs?.[userId]) {
+                    armerNotifBooster(userId, client);
+                }
+            } catch (err) {
+                console.error(
+                    `[RegaDex] Erreur de notification booster pour ${userId} :`,
+                    err
+                );
+            }
+        }
+
         if (!isSandboxId(userId)) {
             recordRecentOpeningTcg({
                 userId,
@@ -5477,15 +6709,31 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
                 channelId: sentMsg.channelId,
                 messageId: sentMsg.id,
                 timestamp: Date.now(),
+
                 isGodPack: Boolean(draw.isGodPack),
                 luckyUsed: Boolean(draw.luckyUsed),
                 pityUsed: Boolean(draw.pityUsed),
+
+                // Informations sur le Focus utilisé.
+                focusUsed: Boolean(focusCategory),
+                focusCategory: focusCategory || null,
+                focusChargesConsumed: focusCategory ? 1 : 0,
+
+                // Récompenses obtenues lors de cette ouverture.
+                pointsEarned: ptsEarned,
+                duplicatesObtained: duplicatesInPack,
+
                 cards: draw.cards.map((c, idx) => ({
                     id: c.id,
                     name: c.name,
                     rarity: c.rarity,
                     isHolo: Boolean(c.isHolo),
-                    isNew: Boolean(isNewFlags[idx])
+                    isNew: Boolean(isNewFlags[idx]),
+
+                    // Montant réellement attribué au doublon.
+                    duplicatePoints: isNewFlags[idx]
+                        ? 0
+                        : getDuplicatePoints(c)
                 }))
             });
         }
@@ -5543,7 +6791,111 @@ async function startBoosterOpening(targetResponder, member, client, fromHub = fa
         }, BOOSTER_GIF_DELAY_MS);
     } catch (err) {
         boostersEnCours.delete(userId);
-        console.error('Erreur startBoosterOpening:', err);
+
+        console.error(
+            `[RegaDex] Erreur d'ouverture du booster pour ${userId} :`,
+            err
+        );
+
+        if (!boosterPublished) {
+            // L'animation n'a pas été confirmée comme publiée.
+            // Restaurer uniquement les données concernées
+            // par cette tentative d'ouverture.
+            u.cards = openingSnapshot.cards;
+            u.points = openingSnapshot.points;
+            u.freeBoosters = openingSnapshot.freeBoosters;
+            u.lastFreeRechargeAt = openingSnapshot.lastFreeRechargeAt;
+            u.currentRechargeMs = openingSnapshot.currentRechargeMs;
+
+            // Restaurer exactement les clés du snapshot,
+            // sans laisser de propriétés créées pendant l'ouverture.
+            // On conserve les références des objets existants.
+            for (const key of Object.keys(u.inventory)) {
+                if (!Object.prototype.hasOwnProperty.call(
+                    openingSnapshot.inventory,
+                    key
+                )) {
+                    delete u.inventory[key];
+                }
+            }
+
+            Object.assign(
+                u.inventory,
+                openingSnapshot.inventory
+            );
+
+            for (const key of Object.keys(u.activeBonuses)) {
+                if (!Object.prototype.hasOwnProperty.call(
+                    openingSnapshot.activeBonuses,
+                    key
+                )) {
+                    delete u.activeBonuses[key];
+                }
+            }
+
+            Object.assign(
+                u.activeBonuses,
+                openingSnapshot.activeBonuses
+            );
+
+            u.pityRare = openingSnapshot.pityRare;
+            u.stats = openingSnapshot.stats;
+
+            if (!isSandboxId(userId)) {
+                try {
+                    tcgBridge.demanderSauvegarde();
+                } catch (saveError) {
+                    console.error(
+                        `[RegaDex] Échec de la demande de sauvegarde après restauration pour ${userId} :`,
+                        saveError
+                    );
+                }
+            }
+
+            console.warn(
+                `[RegaDex] État mémoire restauré après échec de publication pour ${userId}.`
+            );
+        } else {
+            console.error(
+                `[RegaDex] Erreur après publication du booster ${userId}. ` +
+                `Aucune restauration automatique pour éviter les doublons.`
+            );
+        }
+
+        const errorMessage = !boosterPublished
+            ? "❌ L'ouverture de ton booster a échoué.\n" +
+              "Tes ressources ont été restaurées. " +
+              "Tu peux réessayer."
+            : "⚠️ Une erreur est survenue après la publication de ton booster.\n" +
+              "Ne relance pas immédiatement l'ouverture : " +
+              "vérifie ton inventaire et contacte un administrateur " +
+              "si le récapitulatif ne s'affiche pas.";
+
+        try {
+            if (targetResponder.isRepliable?.()) {
+                if (targetResponder.deferred || targetResponder.replied) {
+                    await targetResponder.followUp({
+                        content: errorMessage,
+                        ephemeral: true
+                    });
+                } else {
+                    await targetResponder.reply({
+                        content: errorMessage,
+                        ephemeral: true
+                    });
+                }
+            } else if (targetResponder.channel) {
+                await sendSilent(
+                    targetResponder.channel,
+                    errorMessage
+                );
+            }
+        } catch (notificationError) {
+            console.error(
+                `[RegaDex] Impossible de signaler l'erreur d'ouverture pour ${userId} :`,
+                notificationError
+            );
+        }
     }
 }
 
@@ -6804,14 +8156,24 @@ function buildPostTradeDecisionPayload(trade) {
                 : `-# 🗑️ Aucun échange effectué : si vous fermez, le thread sera **supprimé**.`)
         );
 
+    // Chaque décision est liée au numéro de l'échange
+    // qui vient d'être terminé.
+    // Les anciens boutons deviennent invalides dès
+    // qu'un nouvel échange est effectué.
+    const decisionVersion = trade.tradeCount || 0;
+
     const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`tcg:trpost:again:${trade.id}`)
+            .setCustomId(
+                `tcg:trpost:again:${trade.id}:${decisionVersion}`
+            )
             .setLabel('Faire un autre échange')
             .setEmoji('🔄')
             .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
-            .setCustomId(`tcg:trpost:close:${trade.id}`)
+            .setCustomId(
+                `tcg:trpost:close:${trade.id}:${decisionVersion}`
+            )
             .setLabel('Fermer le thread')
             .setEmoji('🔒')
             .setStyle(ButtonStyle.Danger)
@@ -7093,9 +8455,36 @@ async function executeTradeIfBothLocked(thread, trade, client) {
     }
     trade.lastActivityAt = Date.now();
 
-    const tradeMilestones = [];
-    const masteredAfterTrade = [];
-    for (const setCfg of getActiveSets()) {
+    // Les cartes ont été transférées.
+    // Bloquer les interactions pendant la finalisation
+    // des annonces et du récapitulatif.
+    trade.finalizing = true;
+
+    // Conserver offerA et offerB pour les récapitulatifs,
+    // mais vider les offres actives immédiatement.
+    trade.offers = {
+        [idA]: [],
+        [idB]: []
+    };
+
+    trade.lockedOffers = {
+        [idA]: false,
+        [idB]: false
+    };
+
+    trade.unfairConfirm = null;
+
+    // Enregistrer le transfert et le verrou
+    // avant les opérations réseau suivantes.
+    tcgBridge.demanderSauvegarde();
+
+    // Protéger toute la finalisation après le transfert.
+    // Les cartes ont déjà changé de propriétaire :
+    // une erreur d'annonce ne doit pas bloquer le thread.
+    try {
+        const tradeMilestones = [];
+        const masteredAfterTrade = [];
+        for (const setCfg of getActiveSets()) {
         const msA = checkAndGrantCompletionMilestones(idA, setCfg.number);
         if (msA.unlocked.length > 0) {
             tradeMilestones.push(`<@${idA}> : ${msA.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts${m.pct === 100 ? ' & +2 Boosters de Maître' : ''})`).join(', ')}`);
@@ -7109,11 +8498,51 @@ async function executeTradeIfBothLocked(thread, trade, client) {
         for (const sNum of (msB.masteredSets || [])) masteredAfterTrade.push({ uid: idB, setNumber: sNum });
     }
 
-    await progressCommunityQuest(client, [{ type: 'trades', amount: 1 }]).catch(() => {});
-
-    tcgBridge.trackBattlePassProgress(idA, 'tcg_trade', 1);
-    tcgBridge.trackBattlePassProgress(idB, 'tcg_trade', 1);
+    // Les transferts, statistiques et récompenses
+    // sont déjà enregistrés en mémoire.
+    // Demander leur sauvegarde avant toute attente réseau.
     tcgBridge.demanderSauvegarde();
+
+    // Rétablir la progression Battle Pass pour
+    // les deux participants de l'échange validé.
+    try {
+        tcgBridge.trackBattlePassProgress(idA, 'tcg_trade', 1);
+    } catch (err) {
+        console.error(
+            `[RegaDex] Erreur Battle Pass échange pour ${idA} :`,
+            err
+        );
+    }
+
+    try {
+        tcgBridge.trackBattlePassProgress(idB, 'tcg_trade', 1);
+    } catch (err) {
+        console.error(
+            `[RegaDex] Erreur Battle Pass échange pour ${idB} :`,
+            err
+        );
+    }
+
+    // La quête communautaire est indépendante
+    // de la finalisation de cet échange.
+    try {
+        void Promise.resolve(
+            progressCommunityQuest(
+                client,
+                [{ type: 'trades', amount: 1 }]
+            )
+        ).catch(err => {
+            console.error(
+                '[RegaDex] Erreur de progression communautaire après échange :',
+                err
+            );
+        });
+    } catch (err) {
+        console.error(
+            '[RegaDex] Impossible de lancer la progression communautaire après échange :',
+            err
+        );
+    }
 
     const guild = thread.guild;
     const mA = await guild.members.fetch(idA).catch(() => null);
@@ -7170,18 +8599,103 @@ async function executeTradeIfBothLocked(thread, trade, client) {
         }).catch(() => {});
     }
 
-    // Réinitialiser les offres et afficher la proposition de suite / fermeture
-    trade.offers = { [idA]: [], [idB]: [] };
-    trade.lockedOffers = { [idA]: false, [idB]: false };
-    trade.postTradeVotes = { [idA]: null, [idB]: null };
+    // Les offres ont déjà été vidées après le transfert.
+    trade.postTradeVotes = {
+        [idA]: null,
+        [idB]: null
+    };
 
+    // Désactiver l'ancien panneau d'échange.
     if (trade.statusMessageId) {
-        const oldPanel = await thread.messages.fetch(trade.statusMessageId).catch(() => null);
-        if (oldPanel) await oldPanel.edit({ components: [] }).catch(() => {});
+        const oldPanel = await thread.messages
+            .fetch(trade.statusMessageId)
+            .catch(() => null);
+
+        if (oldPanel) {
+            await oldPanel.edit({
+                components: []
+            }).catch(() => {});
+        }
+
         trade.statusMessageId = null;
     }
 
-    await sendSilent(thread, buildPostTradeDecisionPayload(trade)).catch(() => {});
+        // Enregistrer le message de décision réellement envoyé.
+        const decisionMessage = await sendSilent(
+            thread,
+            buildPostTradeDecisionPayload(trade)
+        );
+
+        trade.postTradeMessageId = decisionMessage.id;
+        tcgBridge.demanderSauvegarde();
+
+    } catch (err) {
+        console.error(
+            `[RegaDex] Erreur pendant la finalisation de l'échange dans ${thread.id} :`,
+            err
+        );
+
+        // Les cartes ont déjà été transférées.
+        // Ne jamais recommencer le transfert ici.
+        // Préparer uniquement une nouvelle phase de décision.
+        trade.postTradeVotes = {
+            [idA]: null,
+            [idB]: null
+        };
+
+        // L'ancien panneau ne doit plus autoriser
+        // la modification des offres.
+        if (trade.statusMessageId) {
+            try {
+                const oldPanel = await thread.messages.fetch(
+                    trade.statusMessageId
+                );
+
+                await oldPanel.edit({
+                    components: []
+                });
+            } catch (panelError) {
+                console.error(
+                    '[RegaDex] Impossible de désactiver l’ancien panneau :',
+                    panelError
+                );
+            }
+
+            trade.statusMessageId = null;
+        }
+
+        // Tenter de proposer les choix de fin d'échange,
+        // même si le récapitulatif a échoué.
+        try {
+            const decisionMessage = await sendSilent(
+                thread,
+                buildPostTradeDecisionPayload(trade)
+            );
+
+            trade.postTradeMessageId = decisionMessage.id;
+            tcgBridge.demanderSauvegarde();
+        } catch (decisionError) {
+            console.error(
+                '[RegaDex] Impossible de restaurer les choix de fin d’échange :',
+                decisionError
+            );
+        }
+
+    } finally {
+        // Toujours libérer le verrou, même si le rendu,
+        // une annonce ou la récupération a échoué.
+        trade.finalizing = false;
+
+        try {
+            tcgBridge.demanderSauvegarde();
+        } catch (saveError) {
+            console.error(
+                '[RegaDex] Impossible de demander la sauvegarde après échange :',
+                saveError
+            );
+        }
+    }
+
     return true;
 }
 
@@ -7224,6 +8738,7 @@ async function handleTcgTradeThreadMessage(message) {
 async function verifierInactiviteTradesTcg(client) {
     const data = getStoreData();
     if (!data.activeTrades) return;
+
     const now = Date.now();
     let changed = false;
 
@@ -7233,9 +8748,82 @@ async function verifierInactiviteTradesTcg(client) {
             changed = true;
             continue;
         }
+
+        // Récupérer une finalisation interrompue sans
+        // transférer les cartes une deuxième fois.
+        if (
+            trade.finalizing &&
+            now - (trade.lastActivityAt || now) >= 5 * 60 * 1000
+        ) {
+            try {
+                const thread = await client.channels.fetch(threadId);
+
+                if (!thread) {
+                    throw new Error('Thread introuvable');
+                }
+
+                // Désactiver l'ancien panneau d'offres.
+                if (trade.statusMessageId) {
+                    const oldPanel = await thread.messages
+                        .fetch(trade.statusMessageId)
+                        .catch(() => null);
+
+                    if (oldPanel) {
+                        await oldPanel.edit({
+                            components: []
+                        });
+                    }
+
+                    trade.statusMessageId = null;
+                }
+
+                // Préserver les votes existants lorsqu'ils
+                // ont déjà été enregistrés.
+                if (!trade.postTradeVotes) {
+                    trade.postTradeVotes = {
+                        [trade.initiatorId]: null,
+                        [trade.targetId]: null
+                    };
+                }
+
+                // Créer le message de décision de secours.
+                const decisionMessage = await sendSilent(
+                    thread,
+                    buildPostTradeDecisionPayload(trade)
+                );
+
+                // Enregistrer le seul message autorisé
+                // à recevoir les prochains votes.
+                trade.postTradeMessageId = decisionMessage.id;
+
+                trade.finalizing = false;
+                trade.lastActivityAt = Date.now();
+                changed = true;
+
+                console.log(
+                    `[RegaDex] Échange ${threadId} récupéré après interruption.`
+                );
+
+            } catch (err) {
+                console.error(
+                    `[RegaDex] Échec de récupération de l'échange ${threadId} :`,
+                    err
+                );
+            }
+
+            continue;
+        }
+
+        // Ne pas fermer un échange en cours de finalisation.
+        if (trade.finalizing) continue;
+
         if (now - (trade.lastActivityAt || now) >= TRADE_INACTIVITY_MS) {
-            const thread = await client.channels.fetch(threadId).catch(() => null);
+            const thread = await client.channels
+                .fetch(threadId)
+                .catch(() => null);
+
             const hadTrades = (trade.tradeCount || 0) >= 1;
+
             if (thread) {
                 if (hadTrades) {
                     await sendTradeRewardBeforeClose(thread, trade);
@@ -7245,12 +8833,15 @@ async function verifierInactiviteTradesTcg(client) {
                     await thread.delete().catch(() => {});
                 }
             }
+
             delete data.activeTrades[threadId];
             changed = true;
         }
     }
 
-    if (changed) tcgBridge.demanderSauvegarde();
+    if (changed) {
+        tcgBridge.demanderSauvegarde();
+    }
 }
 
 // ==========================================
@@ -9126,12 +10717,24 @@ async function handleTcgInteraction(interaction) {
     if (action === 'open' && interaction.isButton()) {
         const ownerId = parts[2];
         const fromHub = parts[3] === '1';
+
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Ce bouton ne t'est pas destiné !", ephemeral: true });
+            await interaction.reply({
+                content: "Ce bouton ne t'est pas destiné !",
+                ephemeral: true
+            });
             return true;
         }
+
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
-        await startBoosterOpening(interaction, actorMember, client, fromHub);
+
+        await showFocusChoice(
+            interaction,
+            actorMember,
+            fromHub,
+            'normal'
+        );
+
         return true;
     }
 
@@ -9139,12 +10742,129 @@ async function handleTcgInteraction(interaction) {
     if (action === 'open5' && interaction.isButton()) {
         const ownerId = parts[2];
         const fromHub = parts[3] === '1';
+
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Ce bouton ne t'est pas destiné !", ephemeral: true });
+            await interaction.reply({
+                content: "Ce bouton ne t'est pas destiné !",
+                ephemeral: true
+            });
             return true;
         }
+
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
-        await startBoosterOpening(interaction, actorMember, client, fromHub, 'five');
+
+        await showFocusChoice(
+            interaction,
+            actorMember,
+            fromHub,
+            'five'
+        );
+
+        return true;
+    }
+
+    // ----- CONFIRMATION DU CHOIX FOCUS -----
+    if (action === 'focuspick' && interaction.isButton()) {
+        const choice = parts[2];
+        const ownerId = parts[3];
+        const token = parts[4];
+
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+            await interaction.reply({
+                content: "Ce menu Focus ne t'appartient pas !",
+                ephemeral: true
+            });
+            return true;
+        }
+
+        const pending = pendingFocusChoices.get(ownerId);
+
+        if (!pending || pending.token !== token) {
+            await interaction.reply({
+                content: "❌ Ce choix Focus n'est plus valide. Relance une ouverture.",
+                ephemeral: true
+            });
+            return true;
+        }
+
+        if (Date.now() >= pending.expiresAt) {
+            pendingFocusChoices.delete(ownerId);
+
+            await interaction.update({
+                content: "⏳ Choix Focus expiré. Aucun booster ni aucune charge n'a été consommé.",
+                embeds: [],
+                components: [],
+                attachments: []
+            });
+
+            return true;
+        }
+
+        const categoryByChoice = {
+            items: 'Items',
+            personnages: 'Personnages',
+            references: 'Références',
+            normal: null
+        };
+
+        if (!Object.prototype.hasOwnProperty.call(categoryByChoice, choice)) {
+            await interaction.reply({
+                content: "❌ Choix Focus invalide.",
+                ephemeral: true
+            });
+            return true;
+        }
+
+        if (
+            boostersEnCours.has(ownerId) ||
+            focusConfirmationsEnCours.has(ownerId)
+        ) {
+            await interaction.reply({
+                content: "⏳ Une ouverture est déjà en cours.",
+                ephemeral: true
+            });
+            return true;
+        }
+
+        const focusCategory = categoryByChoice[choice];
+        const u = getOrCreateTcgUser(ownerId);
+
+        if (focusCategory && (u.inventory?.focus || 0) <= 0) {
+            pendingFocusChoices.delete(ownerId);
+
+            await interaction.update({
+                content: "❌ Tu n'as plus de charges Focus. Aucun booster n'a été consommé.",
+                embeds: [],
+                components: [],
+                attachments: []
+            });
+
+            return true;
+        }
+
+        // Réserver immédiatement cette confirmation.
+        // Aucun await entre la vérification et la réservation.
+        focusConfirmationsEnCours.add(ownerId);
+        pendingFocusChoices.delete(ownerId);
+
+        try {
+            const actorMember = buildTcgMemberProxy(
+                interaction.member,
+                ownerId
+            );
+
+            await startBoosterOpening(
+                interaction,
+                actorMember,
+                client,
+                pending.fromHub,
+                pending.boosterType,
+                focusCategory
+            );
+        } finally {
+            focusConfirmationsEnCours.delete(ownerId);
+        }
+
         return true;
     }
 
@@ -9219,17 +10939,89 @@ async function handleTcgInteraction(interaction) {
             await interaction.reply({ content: '⏳ Cette relance n’est plus disponible.', ephemeral: true });
             return true;
         }
-        session.secondChanceUsed = true; // verrou anti double-clic
-        await interaction.deferUpdate();
+        // Verrou immédiat contre les doubles clics.
+        session.secondChanceUsed = true;
+
+        try {
+            await interaction.deferUpdate();
+        } catch (err) {
+            // Aucune carte n'a encore été modifiée :
+            // autoriser une nouvelle tentative.
+            session.secondChanceUsed = false;
+
+            console.error(
+                `[RegaDex] Impossible d'acquitter Seconde Chance pour ${ownerId} :`,
+                err
+            );
+
+            return true;
+        }
+
         const u = getOrCreateTcgUser(ownerId);
         const oldCard = session.cards[cardIndex];
-        const pool = getSetCatalog(oldCard.setNumber || DEFAULT_SET_NUMBER)
-            .filter(c => !session.cards.some((other, i) => i !== cardIndex && other.id === c.id));
-        const raritySums = getRarityBaseWeightSums();
-        const newCard = pickWeightedCard(pool, raritySums, ownerId, interaction.member);
-        if (!newCard) {
+
+        // Une carte déjà échangée ou retirée de la collection
+        // ne peut plus être remplacée par Seconde Chance.
+        if (
+            !oldCard ||
+            !Number.isSafeInteger(u.cards?.[oldCard.id]) ||
+            u.cards[oldCard.id] <= 0
+        ) {
             session.secondChanceUsed = false;
-            await interaction.followUp({ content: '❌ Aucun tirage disponible. Réessaie.', ephemeral: true });
+
+            await interaction.followUp({
+                content:
+                    '❌ Impossible de relancer cette carte : ' +
+                    'tu ne possèdes plus cet exemplaire dans ta collection.',
+                ephemeral: true
+            });
+
+            return true;
+        }
+
+        // Une Seconde Chance doit réellement changer la carte.
+        // Exclure l'ancienne carte et les autres cartes
+        // déjà présentes dans ce booster.
+        const pool = getSetCatalog(
+            oldCard.setNumber || DEFAULT_SET_NUMBER
+        ).filter(c =>
+            c.id !== oldCard.id &&
+            !session.cards.some(
+                (other, i) =>
+                    i !== cardIndex &&
+                    other.id === c.id
+            )
+        );
+
+        const raritySums = getRarityBaseWeightSums();
+
+        const newCard = pickWeightedCard(
+            pool,
+            raritySums,
+            ownerId,
+            interaction.member
+        );
+        const validNewCard =
+            newCard &&
+            newCard.id !== oldCard.id &&
+            (newCard.setNumber || DEFAULT_SET_NUMBER) ===
+                (oldCard.setNumber || DEFAULT_SET_NUMBER) &&
+            !session.cards.some(
+                (other, i) =>
+                    i !== cardIndex &&
+                    other.id === newCard.id
+            );
+
+        if (!validNewCard) {
+            session.secondChanceUsed = false;
+
+            await interaction.followUp({
+                content:
+                    '❌ Aucun tirage valide disponible pour cette relance. ' +
+                    'Réessaie.',
+                ephemeral: true
+            });
+
             return true;
         }
 
@@ -9242,12 +11034,44 @@ async function handleTcgInteraction(interaction) {
         session.cards[cardIndex] = newCard;
         session.isNewFlags[cardIndex] = !newWasDuplicate;
         const duplicateDelta = Number(newWasDuplicate) - Number(oldWasDuplicate);
-        const pointsDelta = duplicateDelta * POINTS_PER_DUPLICATE;
+        const oldDuplicatePoints = oldWasDuplicate ? getDuplicatePoints(oldCard) : 0;
+        const newDuplicatePoints = newWasDuplicate ? getDuplicatePoints(newCard) : 0;
+        const pointsDelta = newDuplicatePoints - oldDuplicatePoints;
+
         u.points += pointsDelta;
         session.ptsEarned += pointsDelta;
-        u.stats.duplicatesObtained = Math.max(0, (u.stats.duplicatesObtained || 0) + duplicateDelta);
-        u.pityRare = session.cards.every(c => c.rarity === 'Commune');
-        session.triggeredNextPity = u.pityRare;
+
+        u.stats.duplicatesObtained = Math.max(
+            0,
+            (u.stats.duplicatesObtained || 0) + duplicateDelta
+        );
+
+        // Recalculer la pity de cette session sans modifier
+        // celle d'un booster ouvert ultérieurement.
+        const allCommunesAfterSecondChance =
+            session.cards.length > 0 &&
+            session.cards.every(c => c.rarity === 'Commune');
+
+        const rarePresentAfterSecondChance =
+            session.cards.some(c => c.rarity === 'Rare');
+
+        const pityForThisSession =
+            allCommunesAfterSecondChance ||
+            (
+                Boolean(session.triggeredNextPity) &&
+                !rarePresentAfterSecondChance
+            );
+
+        // La pity globale ne peut être recalculée que si
+        // aucune ouverture plus récente n'a eu lieu.
+        if (
+            Number.isSafeInteger(session.boosterSequence) &&
+            session.boosterSequence === u.stats.boostersOpened
+        ) {
+            u.pityRare = pityForThisSession;
+        }
+
+        session.triggeredNextPity = pityForThisSession;
         session.secondChanceAvailable = false;
         session.recapBuffer = null;
         session.recapTheme = null;
@@ -9258,15 +11082,88 @@ async function handleTcgInteraction(interaction) {
             session.milestoneBonusPts += milestone.totalBonusPts || 0;
         }
         if (!isSandboxId(ownerId)) {
-            if (duplicateDelta > 0) tcgBridge.trackBattlePassProgress(ownerId, 'tcg_doublon', duplicateDelta);
-            const questType = { Rare: 'pull_rare', 'Épique': 'pull_epic', 'Légendaire': 'pull_legendary', 'Full Art': 'pull_fullart' }[newCard.rarity];
-            if (questType) await progressCommunityQuest(client, [{ type: questType, amount: 1 }], ownerId).catch(() => {});
-            const entry = getStoreData().recentOpenings?.find(o => o.messageId === interaction.message.id);
+            // Mettre à jour l'historique avant tout appel réseau.
+            const entry = getStoreData().recentOpenings?.find(
+                o => o.messageId === interaction.message.id
+            );
+
             if (entry?.cards?.[cardIndex]) {
-                entry.cards[cardIndex] = { id: newCard.id, name: newCard.name, rarity: newCard.rarity,
-                    isHolo: Boolean(newCard.isHolo), isNew: !newWasDuplicate };
+                entry.cards[cardIndex] = {
+                    id: newCard.id,
+                    name: newCard.name,
+                    rarity: newCard.rarity,
+                    isHolo: Boolean(newCard.isHolo),
+                    isNew: !newWasDuplicate,
+                    duplicatePoints: newWasDuplicate
+                        ? getDuplicatePoints(newCard)
+                        : 0
+                };
+
+                entry.pointsEarned = session.ptsEarned;
+
+                entry.duplicatesObtained = session.isNewFlags.filter(
+                    isNew => !isNew
+                ).length;
+
+                entry.pityUsed = Boolean(session.pityUsed);
             }
+
+            // La nouvelle carte, les points et la pity
+            // sont déjà modifiés : sauvegarder immédiatement.
             tcgBridge.demanderSauvegarde();
+
+            // Le Battle Pass ne doit pas bloquer la relance.
+            if (duplicateDelta > 0) {
+                try {
+                    Promise.resolve(
+                        tcgBridge.trackBattlePassProgress(
+                            ownerId,
+                            'tcg_doublon',
+                            duplicateDelta
+                        )
+                    ).catch(err => {
+                        console.error(
+                            '[RegaDex] Erreur Battle Pass Seconde Chance :',
+                            err
+                        );
+                    });
+                } catch (err) {
+                    console.error(
+                        '[RegaDex] Impossible de lancer le Battle Pass Seconde Chance :',
+                        err
+                    );
+                }
+            }
+
+            // Même principe pour la quête communautaire.
+            const questType = {
+                Rare: 'pull_rare',
+                'Épique': 'pull_epic',
+                'Légendaire': 'pull_legendary',
+                'Full Art': 'pull_fullart'
+            }[newCard.rarity];
+
+            if (questType) {
+                try {
+                    void Promise.resolve(
+                        progressCommunityQuest(
+                            client,
+                            [{ type: questType, amount: 1 }],
+                            ownerId
+                        )
+                    ).catch(err => {
+                        console.error(
+                            '[RegaDex] Erreur quête Seconde Chance :',
+                            err
+                        );
+                    });
+                } catch (err) {
+                    console.error(
+                        '[RegaDex] Impossible de lancer la quête Seconde Chance :',
+                        err
+                    );
+                }
+            }
         }
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
         await envoyerPantheonTcg(client, actorMember, newCard, !newWasDuplicate, false).catch(() => {});
@@ -9647,6 +11544,50 @@ async function handleTcgInteraction(interaction) {
             return true;
         }
 
+        if (itemKey === 'focus') {
+            const charges = FOCUS_CHARGES_PER_PURCHASE;
+
+            u.points -= price;
+            u.inventory.focus = (u.inventory.focus || 0) + charges;
+
+            if (!isSandboxId(ownerId)) {
+                tcgBridge.trackBattlePassProgress(ownerId, 'tcg_store_buy', 1);
+                tcgBridge.demanderSauvegarde();
+            }
+
+            const focusEmbed = new EmbedBuilder()
+                .setColor(0x9b59b6)
+                .setTitle('🎯 Focus RegaDex acheté !')
+                .setDescription(
+                    `🪙 **Prix :** ${price} points\n` +
+                    `🎯 **Charges obtenues :** +${charges}\n` +
+                    `🎒 **Charges disponibles :** ${u.inventory.focus}\n` +
+                    `💰 **Solde restant :** ${u.points} points\n\n` +
+                    `**Comment ça marche ?**\n` +
+                    `Avant l'ouverture d'un booster, tu pourras choisir ` +
+                    `une catégorie à favoriser : **Items**, **Personnages** ` +
+                    `ou **Références**.\n\n` +
+                    `• Catégorie choisie : **60 %**\n` +
+                    `• Autres catégories : **20 % chacune**\n` +
+                    `• Full Art : **1,5 %**\n` +
+                    `• Négative : **0,4 %**\n\n` +
+                    `⚠️ **Information importante — Fair-play**\n` +
+                    `Le Focus augmente tes chances, mais ne garantit ` +
+                    `aucune carte manquante ou rare. Les doublons restent ` +
+                    `possibles. La pity et les chances de God Pack ` +
+                    `restent inchangées.\n\n` +
+                    `Tu pourras aussi ouvrir normalement sans utiliser ` +
+                    `de charge Focus.`
+                );
+
+            await interaction.reply({
+                embeds: [focusEmbed],
+                ephemeral: true
+            });
+
+            return true;
+        }
+
         u.points -= price;
         u.inventory[itemKey] = (u.inventory[itemKey] || 0) + 1;
 
@@ -9747,11 +11688,21 @@ async function handleTcgInteraction(interaction) {
         }
 
         if (itemKey === 'booster') {
-            await startBoosterOpening(interaction, actorMember, client, fromHub);
+            await showFocusChoice(
+                interaction,
+                actorMember,
+                fromHub,
+                'normal'
+            );
             return true;
         }
         if (itemKey === 'fiveCardBooster') {
-            await startBoosterOpening(interaction, actorMember, client, fromHub, 'five');
+            await showFocusChoice(
+                interaction,
+                actorMember,
+                fromHub,
+                'five'
+            );
             return true;
         }
         if (itemKey === 'negativeTransform') {
@@ -9804,15 +11755,6 @@ async function handleTcgInteraction(interaction) {
                 content: '🔄 **Seconde Chance armée !** Tu pourras relancer une Commune du prochain booster depuis son récapitulatif.',
                 embeds: [], components: backRows, files: [], attachments: []
             });
-            return true;
-        }
-        if (itemKey === 'secondChance') {
-            if (u.activeBonuses.secondChance) return interaction.reply({ content: '⚠️ Seconde Chance déjà armée !', ephemeral: true }), true;
-            u.inventory.secondChance -= 1;
-            u.activeBonuses.secondChance = true;
-            if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
-            await interaction.update(buildClaimPayload(actorMember, u, fromHub));
-            await interaction.followUp({ content: '🔄 **Seconde Chance armée !** Choisis une Commune à relancer dans le récapitulatif du prochain booster.', ephemeral: true });
             return true;
         }
         if (itemKey === 'godPackBoost') {
@@ -11437,7 +13379,24 @@ async function handleTcgInteraction(interaction) {
         }
 
         if (interaction.user.id !== trade.initiatorId && interaction.user.id !== trade.targetId) {
-            await interaction.reply({ content: "❌ Seul.es les deux participant.es de l'échange peuvent utiliser ces contrôles.", ephemeral: true });
+            await interaction.reply({
+                content: "❌ Seul.es les deux participant.es de l'échange peuvent utiliser ces contrôles.",
+                ephemeral: true
+            });
+            return true;
+        }
+
+        // Refuser les anciens boutons et menus pendant
+        // la finalisation d'un transfert déjà effectué.
+        if (trade.finalizing) {
+            await interaction.reply({
+                content:
+                    '⏳ **Échange en cours de finalisation.**\n' +
+                    'Les cartes ont déjà été transférées. ' +
+                    'Attends les boutons permettant de continuer ' +
+                    'ou de fermer cet échange.',
+                ephemeral: true
+            });
             return true;
         }
 
@@ -11509,9 +13468,22 @@ async function handleTcgInteraction(interaction) {
             trade.unfairConfirm = null;
             trade.lockedOffers[trade.initiatorId] = false;
             trade.lockedOffers[trade.targetId] = false;
+
             tcgBridge.demanderSauvegarde();
+
+            // Acquitter le clic avant le rafraîchissement
+            // du panneau principal de l'échange.
+            await interaction.update({
+                content:
+                    `❌ **Confirmation annulée par <@${uid}>** ` +
+                    `*(échange déséquilibré)*. ` +
+                    `Les offres ont été déverrouillées.`,
+                embeds: [],
+                components: []
+            });
+
             await refreshTradePanel(thread, trade);
-            await interaction.update({ content: `❌ **Confirmation annulée par <@${uid}>** *(échange déséquilibré)*. Les offres ont été déverrouillées.`, embeds: [], components: [] });
+
             return true;
         }
 
@@ -11546,37 +13518,80 @@ async function handleTcgInteraction(interaction) {
 
         if (sub === 'addsel' && interaction.isStringSelectMenu()) {
             if (trade.offers[uid].length >= 3) {
-                await interaction.reply({ content: "⚠️ Limite de 3 cartes atteinte.", ephemeral: true });
+                await interaction.reply({
+                    content: '⚠️ Limite de 3 cartes atteinte.',
+                    ephemeral: true
+                });
                 return true;
             }
+
             const cardId = interaction.values[0];
+            const selectedCard = cardById.get(cardId);
+
+            // Refuser les identifiants disparus du catalogue
+            // et les cartes personnalisées non échangeables.
+            if (!selectedCard || selectedCard.isPerso) {
+                await interaction.update({
+                    content:
+                        '❌ Cette carte n’est plus disponible ' +
+                        'pour les échanges. Ouvre à nouveau le menu.',
+                    components: []
+                });
+
+                return true;
+            }
+
             const u = getOrCreateTcgUser(uid);
-            const already = trade.offers[uid].filter(id => id === cardId).length;
-            const remainingBefore = (u.cards[cardId] || 0) - already;
+            const already = trade.offers[uid].filter(
+                id => id === cardId
+            ).length;
+
+            const remainingBefore =
+                (u.cards[cardId] || 0) - already;
             if (remainingBefore < 1) {
                 await interaction.reply({ content: "❌ Tu ne possèdes plus d'exemplaire disponible pour cette carte.", ephemeral: true });
                 return true;
             }
             const isLastCopy = remainingBefore === 1;
             const addedCard = cardById.get(cardId);
+
             trade.offers[uid].push(cardId);
             trade.lockedOffers[trade.initiatorId] = false;
             trade.lockedOffers[trade.targetId] = false;
             trade.unfairConfirm = null;
+
             tcgBridge.demanderSauvegarde();
-            await refreshTradePanel(thread, trade);
+
+            // Répondre immédiatement à Discord avant de
+            // rafraîchir le panneau public de l'échange.
             if (isLastCopy && !isTradeFreeModeActive()) {
                 await interaction.update({
-                    content: `✅ **${cardId}** ajoutée à ton offre !\n⚠️ **Attention :** c'est ta **dernière carte** dans ton inventaire *(tu n'auras plus aucun exemplaire après l'échange)*.`,
+                    content:
+                        `✅ **${cardId}** ajoutée à ton offre !\n` +
+                        `⚠️ **Attention :** c'est ta **dernière carte** ` +
+                        `dans ton inventaire *(tu n'auras plus aucun ` +
+                        `exemplaire après l'échange)*.`,
                     components: []
                 });
+
+                await refreshTradePanel(thread, trade);
+
                 await sendSilent(
                     thread,
-                    `⚠️ **Prévention :** <@${uid}> vient de proposer \`${cardId}\`${addedCard ? ` (**${addedCard.name}**)` : ''}, qui est sa **dernière carte** dans son inventaire !`
+                    `⚠️ **Prévention :** <@${uid}> vient de proposer ` +
+                    `\`${cardId}\`` +
+                    `${addedCard ? ` (**${addedCard.name}**)` : ''}, ` +
+                    `qui est sa **dernière carte** dans son inventaire !`
                 ).catch(() => {});
             } else {
-                await interaction.update({ content: `✅ **${cardId}** ajoutée à ton offre !`, components: [] });
+                await interaction.update({
+                    content: `✅ **${cardId}** ajoutée à ton offre !`,
+                    components: []
+                });
+
+                await refreshTradePanel(thread, trade);
             }
+
             return true;
         }
 
@@ -11601,16 +13616,52 @@ async function handleTcgInteraction(interaction) {
         }
 
         if (sub === 'remsel' && interaction.isStringSelectMenu()) {
-            const idx = parseInt(interaction.values[0].split(':')[0], 10);
-            if (isNaN(idx) || idx < 0 || idx >= trade.offers[uid].length) return true;
+            const selectedValue = interaction.values[0] || '';
+            const separatorIndex = selectedValue.indexOf(':');
+
+            const idx = Number(
+                selectedValue.slice(0, separatorIndex)
+            );
+
+            const expectedCardId =
+                separatorIndex >= 0
+                    ? selectedValue.slice(separatorIndex + 1)
+                    : '';
+
+            // Un menu ancien ne doit jamais retirer
+            // une autre carte après modification de l'offre.
+            if (
+                separatorIndex < 0 ||
+                !Number.isSafeInteger(idx) ||
+                idx < 0 ||
+                idx >= trade.offers[uid].length ||
+                trade.offers[uid][idx] !== expectedCardId
+            ) {
+                await interaction.update({
+                    content:
+                        '⏳ Cette sélection n’est plus à jour. ' +
+                        'Ouvre à nouveau le menu de retrait.',
+                    components: []
+                });
+
+                return true;
+            }
+
             const [removed] = trade.offers[uid].splice(idx, 1);
+
             trade.lockedOffers[trade.initiatorId] = false;
             trade.lockedOffers[trade.targetId] = false;
             trade.unfairConfirm = null;
+
             tcgBridge.demanderSauvegarde();
 
+            await interaction.update({
+                content: `🗑️ **${removed}** retirée de ton offre.`,
+                components: []
+            });
+
             await refreshTradePanel(thread, trade);
-            await interaction.update({ content: `🗑️ **${removed}** retirée de ton offre.`, components: [] });
+
             return true;
         }
 
@@ -11652,24 +13703,46 @@ async function handleTcgInteraction(interaction) {
                     return true;
                 }
                 const isLastCopy = remainingBefore === 1;
+
                 trade.offers[uid].push(res.card.id);
                 trade.lockedOffers[trade.initiatorId] = false;
                 trade.lockedOffers[trade.targetId] = false;
                 trade.unfairConfirm = null;
+
                 tcgBridge.demanderSauvegarde();
-                await refreshTradePanel(thread, trade);
+
+                // Acquitter la fenêtre de recherche avant
+                // toute opération réseau supplémentaire.
                 if (isLastCopy && !isTradeFreeModeActive()) {
                     await interaction.reply({
-                        content: `✅ **${res.card.id} • ${res.card.name}** ajoutée à ton offre !\n⚠️ **Attention :** c'est ta **dernière carte** dans ton inventaire *(tu n'auras plus aucun exemplaire après l'échange)*.`,
+                        content:
+                            `✅ **${res.card.id} • ${res.card.name}** ` +
+                            `ajoutée à ton offre !\n` +
+                            `⚠️ **Attention :** c'est ta **dernière carte** ` +
+                            `dans ton inventaire *(tu n'auras plus aucun ` +
+                            `exemplaire après l'échange)*.`,
                         ephemeral: true
                     });
+
+                    await refreshTradePanel(thread, trade);
+
                     await sendSilent(
                         thread,
-                        `⚠️ **Prévention :** <@${uid}> vient de proposer \`${res.card.id}\` (**${res.card.name}**), qui est sa **dernière carte** dans son inventaire !`
+                        `⚠️ **Prévention :** <@${uid}> vient de proposer ` +
+                        `\`${res.card.id}\` (**${res.card.name}**), ` +
+                        `qui est sa **dernière carte** dans son inventaire !`
                     ).catch(() => {});
                 } else {
-                    await interaction.reply({ content: `✅ **${res.card.id} • ${res.card.name}** ajoutée à ton offre !`, ephemeral: true });
+                    await interaction.reply({
+                        content:
+                            `✅ **${res.card.id} • ${res.card.name}** ` +
+                            `ajoutée à ton offre !`,
+                        ephemeral: true
+                    });
+
+                    await refreshTradePanel(thread, trade);
                 }
+
                 return true;
             }
 
@@ -11707,14 +13780,73 @@ async function handleTcgInteraction(interaction) {
     if (action === 'trpost' && interaction.isButton()) {
         const choice = parts[2];
         const threadId = parts[3];
+        const decisionVersion = parts[4];
+
         const data = getStoreData();
         const trade = data.activeTrades?.[threadId];
+
         if (!trade || trade.closed) {
-            await interaction.reply({ content: "❌ Ce thread est déjà clôturé.", ephemeral: true });
+            await interaction.reply({
+                content: "❌ Ce thread est déjà clôturé.",
+                ephemeral: true
+            });
             return true;
         }
-        if (interaction.user.id !== trade.initiatorId && interaction.user.id !== trade.targetId) {
-            await interaction.reply({ content: "Seul.es les deux participant.es peuvent voter !", ephemeral: true });
+
+        if (
+            interaction.user.id !== trade.initiatorId &&
+            interaction.user.id !== trade.targetId
+        ) {
+            await interaction.reply({
+                content: "Seul.es les deux participant.es peuvent voter !",
+                ephemeral: true
+            });
+            return true;
+        }
+
+        // Les anciens boutons sans version et ceux
+        // d'un échange précédent sont invalides.
+        if (
+            decisionVersion !== String(trade.tradeCount || 0)
+        ) {
+            await interaction.reply({
+                content:
+                    '⏳ **Ce message de décision est obsolète.**\n' +
+                    'Utilise les boutons du dernier échange terminé.',
+                ephemeral: true
+            });
+            return true;
+        }
+
+        // Seul le message de décision enregistré
+        // peut accepter un vote.
+        if (
+            !trade.postTradeMessageId ||
+            interaction.message.id !== trade.postTradeMessageId
+        ) {
+            await interaction.reply({
+                content:
+                    '⏳ Ce panneau de décision est obsolète ou ' +
+                    'n’a pas pu être restauré correctement.',
+                ephemeral: true
+            });
+            return true;
+        }
+
+        // Un vote de fin d'échange n'est autorisé
+        // que pendant la phase de décision.
+        if (
+            trade.finalizing ||
+            trade.statusMessageId ||
+            !trade.postTradeVotes ||
+            !['again', 'close'].includes(choice)
+        ) {
+            await interaction.reply({
+                content:
+                    '⏳ Ce choix n’est plus disponible. ' +
+                    'Utilise les contrôles de l’échange actuel.',
+                ephemeral: true
+            });
             return true;
         }
 
@@ -11726,14 +13858,100 @@ async function handleTcgInteraction(interaction) {
         const vB = trade.postTradeVotes[trade.targetId];
 
         if (vA === 'again' && vB === 'again') {
-            trade.offers = { [trade.initiatorId]: [], [trade.targetId]: [] };
-            trade.lockedOffers = { [trade.initiatorId]: false, [trade.targetId]: false };
-            trade.postTradeVotes = { [trade.initiatorId]: null, [trade.targetId]: null };
-            trade.unfairConfirm = null;
-            await interaction.update({ content: '🔄 **Nouvel échange lancé !**', embeds: [], components: [] });
-            const panel = await sendSilent(interaction.channel, buildTradeThreadPayload(trade));
-            trade.statusMessageId = panel.id;
+            // Bloquer les autres interactions pendant
+            // la création du nouveau panneau.
+            trade.finalizing = true;
             tcgBridge.demanderSauvegarde();
+
+            try {
+                // Acquitter l'interaction sans supprimer
+                // immédiatement les boutons existants.
+                await interaction.deferUpdate();
+
+                // Préparer le nouvel échange.
+                trade.offers = {
+                    [trade.initiatorId]: [],
+                    [trade.targetId]: []
+                };
+
+                trade.lockedOffers = {
+                    [trade.initiatorId]: false,
+                    [trade.targetId]: false
+                };
+
+                trade.unfairConfirm = null;
+
+                // Créer le panneau avant de désactiver
+                // les anciens boutons de décision.
+                const panel = await sendSilent(
+                    interaction.channel,
+                    buildTradeThreadPayload(trade)
+                );
+
+                trade.statusMessageId = panel.id;
+
+                trade.postTradeVotes = {
+                    [trade.initiatorId]: null,
+                    [trade.targetId]: null
+                };
+
+                tcgBridge.demanderSauvegarde();
+
+                // Le nouveau panneau existe :
+                // les anciens boutons peuvent être retirés.
+                await interaction.editReply({
+                    content: '🔄 **Nouvel échange lancé !**',
+                    embeds: [],
+                    components: []
+                }).catch(err => {
+                    console.error(
+                        '[RegaDex] Impossible de désactiver les anciens boutons de décision :',
+                        err
+                    );
+                });
+
+            } catch (err) {
+                console.error(
+                    `[RegaDex] Impossible de lancer le nouvel échange dans ${threadId} :`,
+                    err
+                );
+
+                // Si aucun nouveau panneau n'a été créé,
+                // restaurer une phase de décision utilisable.
+                if (!trade.statusMessageId) {
+                    trade.postTradeVotes = {
+                        [trade.initiatorId]: null,
+                        [trade.targetId]: null
+                    };
+
+                    tcgBridge.demanderSauvegarde();
+
+                    try {
+                        if (interaction.deferred || interaction.replied) {
+                            await interaction.editReply(
+                                buildPostTradeDecisionPayload(trade)
+                            );
+                        } else {
+                            await interaction.reply({
+                                content:
+                                    '❌ Impossible de relancer l’échange. ' +
+                                    'Réessaie avec les boutons de décision.',
+                                ephemeral: true
+                            });
+                        }
+                    } catch (restoreError) {
+                        console.error(
+                            '[RegaDex] Impossible de restaurer les boutons de décision :',
+                            restoreError
+                        );
+                    }
+                }
+
+            } finally {
+                trade.finalizing = false;
+                tcgBridge.demanderSauvegarde();
+            }
+
             return true;
         }
 

@@ -37,22 +37,74 @@ async function loadAll() {
         const channel = await client.channels.fetch(BACKUP_CHANNEL_ID).catch(() => null);
         let jsonRecord = null;
 
-        // 1. Cherche d'abord le dernier fichier de sauvegarde dans ton salon Discord
+        // 1. Rechercher les sauvegardes dans les 100 derniers
+        // messages du salon, même si d'autres messages
+        // ont été publiés après la dernière sauvegarde.
         if (channel) {
-            const messages = await channel.messages.fetch({ limit: 10 }).catch(() => null);
-            const backupMsg = messages?.find(m =>
-                m.attachments.some(attachment => attachment.name === 'cacabot_backup.json')
-            );
+            const messages = await channel.messages
+                .fetch({ limit: 100 })
+                .catch(err => {
+                    console.error(
+                        '❌ Impossible de lire le salon de sauvegarde :',
+                        err
+                    );
+                    return null;
+                });
 
-            if (backupMsg) {
-                const targetAttachment = backupMsg.attachments.find(a => a.name === 'cacabot_backup.json');
-                if (targetAttachment) {
-                    const res = await fetch(targetAttachment.url);
-                    const parsed = await res.json();
-                    if (parsed && typeof parsed === 'object') {
-                        jsonRecord = parsed;
-                        console.log('✅ Données chargées depuis le salon de backup Discord !');
+            const backupMessages = messages
+                ? [...messages.values()].filter(m =>
+                    m.attachments.some(
+                        attachment =>
+                            attachment.name === 'cacabot_backup.json'
+                    )
+                )
+                : [];
+
+            // Essayer les sauvegardes de la plus récente
+            // à la plus ancienne si l'une est corrompue.
+            for (const backupMsg of backupMessages) {
+                const attachment = backupMsg.attachments.find(
+                    a => a.name === 'cacabot_backup.json'
+                );
+
+                if (!attachment) continue;
+
+                try {
+                    const res = await fetch(attachment.url);
+
+                    if (!res.ok) {
+                        throw new Error(
+                            `Téléchargement HTTP ${res.status}`
+                        );
                     }
+
+                    const parsed = await res.json();
+
+                    if (
+                        !parsed ||
+                        typeof parsed !== 'object' ||
+                        Array.isArray(parsed) ||
+                        !parsed.tcgData ||
+                        typeof parsed.tcgData !== 'object' ||
+                        !parsed.tcgData.users
+                    ) {
+                        throw new Error(
+                            'Structure de sauvegarde invalide'
+                        );
+                    }
+
+                    jsonRecord = parsed;
+
+                    console.log(
+                        '✅ Données chargées depuis le salon de backup Discord !'
+                    );
+
+                    break;
+                } catch (err) {
+                    console.error(
+                        `⚠️ Sauvegarde Discord ${backupMsg.id} inutilisable :`,
+                        err
+                    );
                 }
             }
         }
@@ -60,12 +112,25 @@ async function loadAll() {
         // Le chargement se fait désormais à 100% depuis le salon Discord <#1553954760900608091> ou #json
 
         if (!jsonRecord) {
-            console.warn('⚠️ Aucune donnée précédente trouvée, démarrage à zéro.');
-            donneesChargees = true;
-            if (channel) {
-                await saveAll();
-            }
-            return;
+            console.error(
+                '🚨 Aucune sauvegarde Cacabot valide trouvée !'
+            );
+
+            console.error(
+                '🚨 Chargement des données annulé pour éviter ' +
+                'de remplacer les sauvegardes existantes ' +
+                'par des données vides.'
+            );
+
+            // Ne jamais autoriser les sauvegardes tant
+            // qu'aucune sauvegarde valide n'a été chargée.
+            donneesChargees = false;
+
+            // Arrêter le bot plutôt que démarrer avec
+            // des inventaires, statistiques et points vides.
+            throw new Error(
+                'DÉMARRAGE ANNULÉ : aucune sauvegarde valide disponible.'
+            );
         }
 
         // Mise à jour en place pour conserver les références mémoire de tous les modules
@@ -121,7 +186,18 @@ async function loadAll() {
             }
         }
     } catch (err) {
-        console.error('Erreur chargement des données:', err);
+        // Interdire les sauvegardes si le chargement
+        // des données a échoué.
+        donneesChargees = false;
+
+        console.error(
+            '🚨 Échec critique du chargement des données Cacabot :',
+            err
+        );
+
+        // Propager l'erreur pour interrompre
+        // l'initialisation normale du bot.
+        throw err;
     }
 }
 
@@ -304,6 +380,8 @@ const { getHelpResponse, handleHelpMessage, handleHelpInteraction } = require('.
 ///minijeux.js
 const {
     MOTUS_CHANNEL_ID,
+    REBUS_CHANNEL_ID,
+    isRebusSessionActive,
     initMinijeuxState,
     envoyerMotusQuotidien,
     lancerSessionRebus,
@@ -1863,9 +1941,40 @@ client.on('messageReactionRemove', async (reaction, user) => {
     await handleSecurityReactionRemove(reaction, user);
 });
 
+function estSessionMiniJeuActive(channelId) {
+    const maintenant = Date.now();
+
+    if (channelId === MOTUS_CHANNEL_ID) {
+        return Boolean(
+            motusData?.mot &&
+            !motusData.termine &&
+            motusData.expireAt > maintenant
+        );
+    }
+
+    if (channelId === REBUS_CHANNEL_ID) {
+        return isRebusSessionActive();
+    }
+
+    if (channelId === PENDU_CHANNEL_ID) {
+        return Boolean(
+            penduData?.mot &&
+            !penduData.termine &&
+            penduData.expireAt > maintenant
+        );
+    }
+
+    return false;
+}
+
 const dernierAuteurParSalon = new Map();
 client.on('messageCreate', async (message) => {
     await handleRouletteCouronne(message, dernierAuteurParSalon);
+
+    // Les malus textuels ne modifient pas les propositions
+    // pendant une session de Motus, Rébus ou Pendu.
+    if (estSessionMiniJeuActive(message.channelId)) return;
+
     await handleRouletteTransfoMessage(message, client);
 });
 

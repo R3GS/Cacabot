@@ -40,15 +40,15 @@ const initMotusState = initMinijeuxState;
 const MOTUS_6_LETTRES = [
     "ABIMER", "ABRUTI", "ABSENT", "ABUSER", "ACACIA", "ACCORD", "ACCROC", "ACCUSE", "ACHETE", "ACQUIS",
     "ACTEUR", "ACTIFS", "ACTION", "ADAPTE", "ADEPTE", "ADHERE", "ADIEUX", "ADMIRE", "ADOPTE", "ADOREE",
-    "ADULTE", "AFFAIS", "AFFAME", "AFFECT", "AFFILE", "AFFINE", "AFFLUE", "AFFOLE", "AFFRON", "AGACER",
+    "ADULTE", "AFFLUX", "AFFAME", "AFFECT", "AFFILE", "AFFINE", "AFFLUE", "AFFOLE", "AFFRES", "AGACER",
     "AGENDA", "AGENTS", "AGILES", "AGITER", "AGNEAU", "AGRUME", "AIDANT", "AIGLES", "AIMANT", "AJOUTE",
     "AJUSTE", "ALARME", "ALBUMS", "ALCOVE", "ALERTE", "ALEVIN", "ALIGNE", "ALLAIT", "ALLANT", "ALLEGE",
     "ALLIER", "ALLUME", "ALPINS", "ALTERE", "AMANTS", "AMENDE", "AMICAL", "AMIRAL", "AMITIE", "AMORCE",
     "AMOURS", "AMUSER", "ANANAS", "ANCIEN", "ANCRES", "ANEMIE", "ANGINE", "ANGLES", "ANIMER", "ANNEAU",
     "ANNEES", "ANNEXE", "ANNULE", "ANODIN", "ANORAK", "APERCU", "APLOMB", "APOTRE", "APPART", "APPELE",
-    "APPELS", "APPORT", "APPUIS", "APPRET", "APTERE", "ARABES", "ARBRES", "ARCEAU", "ARCHER", "ARCHES",
-    "ARDENT", "ARDOISE", "ARGENT", "ARGILE", "ARMADA", "ARMEES", "ARMURE", "ARRETE", "ARRIVE", "ARROSE",
-    "ASPECT", "ASSAUT", "ASSURE", "ASTUCE", "ATELIER", "ATOUTS", "ATTIRE", "AUDACE", "AUGURE", "AUMONE",
+    "APPELS", "APPORT", "APPUIS", "APPRET", "APNEES", "ARABES", "ARBRES", "ARCEAU", "ARCHER", "ARCHES",
+    "ARDENT", "ARDUES", "ARGENT", "ARGILE", "ARMADA", "ARMEES", "ARMURE", "ARRETE", "ARRIVE", "ARROSE",
+    "ASPECT", "ASSAUT", "ASSURE", "ASTUCE", "ATAXIE", "ATOUTS", "ATTIRE", "AUDACE", "AUGURE", "AUMONE",
     "AURORE", "AUTEUR", "AVANCE", "AVARIE", "AVENIR", "AVERER", "AVERTI", "AVOINE", "AVOIRS", "AVOUER",
     "BABINE", "BAGAGE", "BAGUES", "BAISER", "BAISSE", "BALADE", "BALAIS", "BALCON", "BALLES", "BALLON",
     "BAMBOU", "BANANE", "BANDES", "BANQUE", "BARBES", "BARONS", "BARQUE", "BARRER", "BASSIN", "BATEAU",
@@ -72,10 +72,10 @@ const MOTUS_6_LETTRES = [
     "GENOUX", "GESTES", "GIBIER", "GIRAFE", "GLACES", "GLACON", "GLISSE", "GLOBAL", "GOUTER", "GRADES",
     "GRAINE", "GRAINS", "GRANDE", "GRAPHE", "GROTTE", "GROUPE", "HABITS", "HACHIS", "HALLES", "HAMACS",
     "HANGAR", "HASARD", "HAUTES", "HERBES", "HEURES", "HIBOUX", "HOMMES", "HOTELS", "HUILER", "HUMAIN",
-    "HUMOUR", "HYMNES", "ICONES", "IDEALS", "IDIOTS", "IMAGES", "IMPACT", "INDICE", "INVITE", "ISOLER",
-    "JAMBES", "JARDIN", "JAUNES", "JETONS", "JOCKEY", "JOUETS", "JOYEUX", "JUGES", "JUMEAU", "JUNGLE",
-    "JUPES", "JUSTES", "LACETS", "LAINES", "LANCER", "LAPINS", "LARGES", "LARMES", "LAVAGE", "LETTRE",
-    "LEVEES", "LIBRES", "LIGNES", "LIMITS", "LIVRES", "LOISIR", "LOUVES", "LOYERS", "LUTTES", "MACHIN",
+    "HUMOUR", "HYMNES", "ICONES", "IDEAUX", "IDIOTS", "IMAGES", "IMPACT", "INDICE", "INVITE", "ISOLER",
+    "JAMBES", "JARDIN", "JAUNES", "JETONS", "JOCKEY", "JOUETS", "JOYEUX", "JUGENT", "JUMEAU", "JUNGLE",
+    "JUREES", "JUSTES", "LACETS", "LAINES", "LANCER", "LAPINS", "LARGES", "LARMES", "LAVAGE", "LETTRE",
+    "LEVEES", "LIBRES", "LIGNES", "LIMBES", "LIVRES", "LOISIR", "LOUVES", "LOYERS", "LUTTES", "MACHIN",
     "MADAME", "MAGIES", "MAIRES", "MAISON", "MALADE", "MANCHE", "MANEGE", "MANGER", "MARAIS", "MARCHE",
     "MARRON", "MASQUE", "MASSES", "MATCHS", "MATINS", "MAUDIT", "MELONS", "MENACE", "MERITE", "MEUBLE",
     "MICROS", "MILIEU", "MINCES", "MINUTE", "MIROIR", "MISERE", "MIXEUR", "MODELE", "MOMENT", "MONDES",
@@ -91,46 +91,115 @@ const MOTUS_6_LETTRES = [
     "PRIERE", "PRINCE", "PRISON", "PRISES", "PROCES", "PROFIL", "PROJET", "PROMET", "PROPRE", "QUATRE",
     "RACINE", "RADARS", "RADIOS", "RAISIN", "RAMPES", "RANGES", "RAPIDE", "RAYONS", "REBORD", "RECITS",
     "RECORD", "REFLET", "REFUGE", "REGARD", "REGLES", "REGRET", "REINES", "RELAIS", "REMEDE", "REMISE",
-    "RENARD", "REPOND", "REPOS", "RESEAU", "RESINE", "RESTES", "RETOUR", "REVUES", "RIDEAU", "RISQUE",
+    "RENARD", "REPOND", "REPLIS", "RESEAU", "RESINE", "RESTES", "RETOUR", "REVUES", "RIDEAU", "RISQUE",
     "RIVAGE", "ROCHER", "ROMANS", "ROSACE", "ROUGES", "ROULES", "ROUTES", "RUBANS", "RUINES", "SABLES",
     "SABRES", "SACHET", "SAISON", "SALADE", "SALLES", "SALONS", "SAPINS", "SAUTER", "SAVANT", "SAVEUR",
     "SAVONS", "SCEAUX", "SCENES", "SEJOUR", "SENTIR", "SIECLE", "SIGNAL", "SIGNES", "SIMPLE", "SINGES",
     "SIRENE", "SOEURS", "SOLDAT", "SOLEIL", "SOMMET", "SONGES", "SORTIE", "SOUCIS", "SOUPES", "SOURCE",
     "SOURIS", "SPORTS", "STAGES", "STATUE", "STATUT", "STRESS", "STYLES", "SUCRES", "SUITES", "TABLES",
-    "TACHES", "TAILLE", "TALENT", "TALONS", "TAPIS", "TARIFS", "TARTES", "TEINTE", "TEMPLE", "TENDRE",
+    "TACHES", "TAILLE", "TALENT", "TALONS", "TAPAGE", "TARIFS", "TARTES", "TEINTE", "TEMPLE", "TENDRE",
     "TENUES", "TERMES", "TERRES", "TIGRES", "TISSUS", "TITRES", "TOILES", "TOMBES", "TONNER", "TORDRE",
-    "TORTUE", "TOUCHE", "TOURNE", "TOURS", "TRACES", "TRAINS", "TRAITE", "TRAMES", "TRESOR", "TRIBUS",
-    "TRICOT", "TRONCS", "TROUPE", "TUBES", "TUMEUR", "TUNNEL", "USINES", "VAGUES", "VALEUR", "VALISE",
+    "TORTUE", "TOUCHE", "TOURNE", "TOURTE", "TRACES", "TRAINS", "TRAITE", "TRAMES", "TRESOR", "TRIBUS",
+    "TRICOT", "TRONCS", "TROUPE", "TUBAGE", "TUMEUR", "TUNNEL", "USINES", "VAGUES", "VALEUR", "VALISE",
     "VALLEE", "VAPEUR", "VEINES", "VENINS", "VENTRE", "VERRES", "VERROU", "VERSES", "VERTUS", "VIANDE",
     "VIBRER", "VILLES", "VIOLON", "VIRAGE", "VISAGE", "VISITE", "VIVANT", "VOILES", "VOISIN", "VOLEUR",
-    "VOYAGE", "WAGONS", "ZEBRES", "ZIGZAG"
+    "VOYAGE", "WAGONS", "ZEBRES", "ZIGZAG",
+
+    // Extension du dictionnaire : mots de 6 lettres
+    "ABORDE", "ABOUTI", "ABSOLU", "ACCENT", "ACHATS", "ACIDES", "ACIERS", "ACTUEL", "AFFUTE", "AIGUES",
+    "AJOURE", "ALLEES", "ALLURE", "AMENES", "ANCRER", "ANGORA", "ARCADE", "ARRETS", "ASPIRE", "ATOMES",
+    "BACHES", "BALISE", "BANALS", "BARILS", "BAVOIR", "BEGUES", "BEIGES", "BELLES", "BERGES", "BILANS",
+    "BILLET", "BISEAU", "BLANCS", "BLEUES", "BLOUSE", "BOITES", "BONNES", "BORDES", "BORNES", "BOUCHE",
+    "BRECHE", "BRISES", "BRODER", "BRUITS", "BULLES", "CABLES", "CACHER", "CADRES", "CALMES", "CANAUX",
+    "CANNES", "CAPTER", "CARRES", "CARTES", "CENDRE", "CERISE", "CHAISE", "CHANTS", "CHARGE", "CHARME",
+    "CHAUDS", "CHENES", "CHERES", "CHOISI", "CHOQUE", "CHOSES", "CIBLES", "CIERGE", "CINTRE", "CLAIRE",
+    "CLARTE", "CLOUER", "COCHER", "COEURS", "COLLES", "COMBLE", "CONCIS", "CONGES", "CONTES", "CORAIL",
+    "CORDON", "CORNES", "COULES", "COUPER", "COURBE", "COUVRE", "CRANES", "CREUSE", "CROISE", "CROUTE",
+    "CUISES", "CULTES", "DATTES", "DEBILE", "DECALE", "DECORE", "DEFIER", "DEGATS", "DEHORS", "DELAIS",
+    "DEMONS", "DENIER", "DEPENS", "DESIRS", "DETOUR", "DEVOUE", "DICTER", "DIGUES", "DINERS", "DIVERS",
+    "DOIGTS", "DOLMEN", "DONNER", "DOREES", "DORMIR", "DOSAGE", "DOUCES", "DOUTER", "DOUVES", "DRAPES",
+    "DROLES", "ECLATS", "ECOUTE", "ECRITS", "EFFACE", "EGALES", "ELEGIE", "ELEVES", "ELIXIR", "EMPARE",
+    "EMPIRE", "EMPLOI", "ENFERS", "ENJEUX", "ENORME", "ENTIER", "ENVOIS", "EPAVES", "EPOUSE", "ERGOTS",
+    "ERRANT", "ESSAIS", "ESSORE", "ETALER", "ETOFFE", "ETRIER", "EVASER", "EXCITE", "EXIGER", "FACONS",
+    "FAIBLE", "FAITES", "FARDER", "FERMES", "FERREE", "FETARD", "FEUTRE", "FIBRES", "FICHES", "FIERES",
+    "FILTRE", "FINALE", "FLANCS", "FLEAUX", "FLOCON", "FLORAL", "FLUTES", "FONDRE", "FORCER", "FORGES",
+    "FOUETS", "FOURMI", "FRAISE", "FRAPPE", "FREINS", "FRISER", "FUGUES", "GACHER", "GALETS", "GARDER",
+    "GAZONS", "GELULE", "GENTIL", "GERANT", "GIVREE", "GLANER", "GOMMES", "GORGER", "GOUJON", "GOUTTE",
+    "GRACES", "GRANDI", "GRAPPE", "GRAVES", "GREVES", "GRILLE", "GRIMPE", "GRISER", "GROGNE", "GROSSE",
+    "GUERIR", "GUIDES", "HABILE", "HAINES", "HALTES", "HANTES", "HAREMS", "HIVERS", "HONORE", "HUMBLE",
+    "HURLER", "IDEALE", "IGNORE", "IMPOSE", "INCITE", "INERTE", "INFINI", "INJURE", "INNOVE", "INSERE",
+    "INTIME", "IRONIE", "ISARDS", "JALOUX", "JANTES", "JURONS", "LACHER", "LAVOIR", "LEGALE", "LENTES",
+    "LIBERE", "LIERRE", "LIMITE", "LITRES", "LIVRER", "LOCALE", "LOGEES", "LONGUE", "LOUCHE", "LOYALE",
+    "LUMENS", "MACHER", "MAIGRE", "MALINS", "MANUEL", "MARGES", "MARINE", "MEFIER", "MENAGE", "MENTAL",
+    "MERLES", "METIER", "MOELLE", "MONTEE", "MOTARD", "MOULER", "NAGENT", "NAITRE", "NAPPER", "NEUTRE",
+    "NICHES", "NIVEAU", "NOYAUX", "OCEANS", "OFFERT", "ONDULE", "ORGUES", "OUBLIE", "OUVERT", "PAIRES",
+    "PALMES", "PATINS", "PAUMES", "PECHER", "PEIGNE", "PELAGE", "PERDRE", "PERMET", "PETITS", "PIERRE",
+    "PINCES", "PLAIRE", "PLEINE", "PLIAGE", "PLUIES", "POIGNE", "POLIES", "PONCER", "POSENT", "POTAGE",
+    "POUTRE", "PRENDS", "PRETER", "PRIERA", "PRIMES", "PULPES", "QUARTS", "QUETES", "RACHAT", "RAILLE",
+    "RANGER", "RAVIES", "REBOND", "RECUSE", "RENDRE", "RENFLE", "REPOSE", "RETARD", "RETENU", "REVEIL",
+    "RIGOLE", "ROBOTS", "RONDES", "ROUVRE", "RUGBYS", "RURALE", "SACRES", "SATINS", "SAUVES", "SECHER",
+    "SEMBLE", "SERRES", "SERVIR", "SILICE", "SITUER", "SOIGNE", "SONDES", "SONNER", "SORTIR", "SOURDS",
+    "STABLE", "SUIVRE", "TARDER", "TASSER", "TEMOIN", "TESTER", "TETUES", "TOMBER", "USAGES", "VENTES",
+    "VERGER", "VERSER", "VESTES", "VIGNES",
 ].filter(w => w.length === 6);
 
 const MOTUS_7_LETTRES = [
     "ABANDON", "ABATTEZ", "ABATTRE", "ABIMENT", "ABRICOT", "ABSENCE", "ACCEPTE", "ACCORDE", "ACCUEIL", "ACHETEZ",
     "ACTIVEE", "ADAPTEZ", "ADHERER", "ADMIREZ", "ADOPTEZ", "ADRESSE", "AFFAIRE", "AFFICHE", "AFFRONT", "AGACANT",
     "AGRANDI", "ALARMES", "ALIGNER", "ALLIAGE", "ALLUMER", "ALTERER", "AMATEUR", "AMPOULE", "ANALYSE", "ANCIENS",
-    "ANIMAUX", "ANNONCE", "APAISEZ", "APPELLE", "APPLIQUE", "APPORTS", "APPREND", "APPRETE", "ARBITRE", "ARCHERS",
+    "ANIMAUX", "ANNONCE", "APAISEZ", "APPELLE", "APPUIES", "APPORTS", "APPREND", "APPRETE", "ARBITRE", "ARCHERS",
     "ARDOISE", "ARGENTS", "ARRETES", "ARRIVEE", "ARROSEZ", "ARTICLE", "ARTISAN", "ASPECTS", "ASSISTE", "ASSOCIE",
     "ASSUREZ", "ATTAQUE", "ATTEINT", "ATTENTE", "ATTIRER", "ATTRAIT", "AUBERGE", "AVANCES", "AVENIRS", "AVERTIR",
-    "BAGARRE", "BATEAUX", "BICYCLE", "BISTROT", "BONHEUR", "BOUTEILLE", "BUREAUX", "CAPRICE", "CHATEAU", "CHOCOLAT",
+    "BAGARRE", "BATEAUX", "BICYCLE", "BISTROT", "BONHEUR", "BOUCLES", "BUREAUX", "CAPRICE", "CHATEAU", "CHORALE",
     "CLAVIER", "COFFRET", "COPAINS", "COULEUR", "COURAGE", "COUTEAU", "CUISINE", "DANGERS", "DESTINS", "DIAMANT",
     "DIPLOME", "DRAPEAU", "ECLIPSE", "ENFANTS", "ENIGMES", "ETOILES", "FAMILLE", "FANTOME", "FLAMMES", "FLEUVES",
     "FORTUNE", "FOUDRES", "FROMAGE", "GALAXIE", "GATEAUX", "GLACONS", "GUITARE", "HORIZON", "JOURNAL", "JOURNEE",
     "JUNGLES", "LANGAGE", "LEGENDE", "LIVRETS", "LUMIERE", "LUNETTE", "MACHINE", "MAISONS", "MANIERE", "MESSAGE",
-    "MINUTES", "MIRACLE", "MONSTRE", "MUSIQUE", "MYSTERE", "NATIONS", "NAVIGUE", "NOUVEAU", "NUMEROS", "OCEANS",
+    "MINUTES", "MIRACLE", "MONSTRE", "MUSIQUE", "MYSTERE", "NATIONS", "NAVIGUE", "NOUVEAU", "NUMEROS", "OCTOBRE",
     "OISEAUX", "ORANGES", "PANIERS", "PAQUETS", "PARFUMS", "PATRONS", "PENSEES", "PIERRES", "PLANETE", "POISSON",
-    "POLICES", "POMPIER", "PORTAIL", "POUVOIR", "PRINCES", "PROPOSE", "RACINES", "RAYONS", "REGARDS", "RESEAUX",
+    "POLICES", "POMPIER", "PORTAIL", "POUVOIR", "PRINCES", "PROPOSE", "RACINES", "RAYURES", "REGARDS", "RESEAUX",
     "RIDEAUX", "RIVAGES", "ROCHERS", "SAISONS", "SALADES", "SECRETS", "SERPENT", "SILENCE", "SOLEILS", "SOMMETS",
     "SOURCES", "TABLEAU", "TALENTS", "TORTUES", "TOURNER", "TRAVAIL", "TRESORS", "TROUPES", "TUNNELS", "VACANCE",
-    "VALEURS", "VALISES", "VAPEURS", "VICTOIRE", "VILLAGE", "VISAGES", "VOITURE", "VOYAGES", "VOYANTS", "CIRCULE",
-    "CONSEIL", "CONTACT", "CORRECT", "COURRIER", "CREATIF", "CRISTAL", "CULTURE", "DECIDER", "DEFENSE", "DISCUTE",
+    "VALEURS", "VALISES", "VAPEURS", "VIOLETS", "VILLAGE", "VISAGES", "VOITURE", "VOYAGES", "VOYANTS", "CIRCULE",
+    "CONSEIL", "CONTACT", "CORRECT", "COURSES", "CREATIF", "CRISTAL", "CULTURE", "DECIDER", "DEFENSE", "DISCUTE",
     "ECHELLE", "EMOTION", "ENERGIE", "ESPACES", "ESSENCE", "EXEMPLE", "FACTEUR", "FESTIFS", "FIDELES", "FINALES",
-    "FLEXION", "FORMULE", "GLISSES", "HABITAT", "HARMONIE", "HAUTEUR", "HORREUR", "HUMOURS", "INVENTE", "LECTEUR",
+    "FLEXION", "FORMULE", "GLISSES", "HABITAT", "HASARDS", "HAUTEUR", "HORREUR", "HURLENT", "INVENTE", "LECTEUR",
     "LOGIQUE", "LUNAIRE", "MEMOIRE", "MEMBRES", "MENSUEL", "NATURES", "OPINION", "ORIGINE", "PARFUME", "PARTAGE",
-    "PASSION", "PENSEUR", "PISTONS", "POETIQUE", "PORTIER", "POTIONS", "PRESENT", "RAPIDES", "RECOLTE", "REFLETS",
-    "REGULER", "RELIURE", "REPOSER", "SECONDE", "SENTIER", "STATION", "TACTILE", "TEMPLES", "TERRAINS", "THEATRE",
-    "UNIVERS", "VALIDES", "VARIETE"
+    "PASSION", "PENSEUR", "PISTONS", "POTAGER", "PORTIER", "POTIONS", "PRESENT", "RAPIDES", "RECOLTE", "REFLETS",
+    "REGULER", "RELIURE", "REPOSER", "SECONDE", "SENTIER", "STATION", "TACTILE", "TEMPLES", "TERREAU", "THEATRE",
+    "UNIVERS", "VALIDES", "VARIETE",
+
+    // Extension du dictionnaire : mots de 7 lettres
+    "ABORDER", "ABSENTS", "ABSOLUE", "ACCENTS", "ACCROCS", "ACHETER", "ACTEURS", "ACTIONS", "ADAPTER", "ADEPTES",
+    "ADJOINT", "ADMIRER", "ADOPTER", "AFFINER", "AFFIRME", "AFFOLER", "AGRUMES", "AIGLONS", "AIMERAI", "AJOUTER",
+    "ALIGNEE", "ALPINES", "AMENAGE", "AMITIES", "AMORCER", "ANCRAGE", "APPELER", "ARCADES", "ARMURES", "ARRETER",
+    "ARROSER", "ASSISES", "ASSUMER", "AVANCER", "AVOCATS", "BAGAGES", "BALADES", "BALCONS", "BANANES", "BARQUES",
+    "BAVARDS", "BEIGNET", "BERGERS", "BESOINS", "BILLETS", "BLAGUES", "BLANCHE", "BLESSER", "BLOQUER", "BORDURE",
+    "BOUCHEE", "BOUQUET", "BOUTONS", "BRANCHE", "BRILLER", "BRISURE", "BROCHER", "BRONZER", "BRUYERE", "CABANES",
+    "CACHETS", "CAHIERS", "CALCULE", "CAMIONS", "CANARDS", "CARAFES", "CARTONS", "CASQUES", "CAVERNE", "CENTRES",
+    "CERCLES", "CHAISES", "CHALEUR", "CHAMBRE", "CHANCES", "CHANGER", "CHANSON", "CHARGER", "CHARIOT", "CHARMEZ",
+    "CHAUFFE", "CHEMINS", "CHEVEUX", "CHIFFRE", "CHOISIR", "CHOQUER", "CIGALES", "CIMENTS", "CIRQUES", "CITRONS",
+    "CLASSES", "CLIENTS", "CLOCHES", "CLOISON", "COLERES", "COLLINE", "COMBATS", "COMETES", "COMIQUE", "COMPTES",
+    "CONCERT", "CONTENU", "CORBEAU", "CORDEES", "COSTUME", "COUPLES", "COURANT", "COURBES", "COUSINS", "COUVERT",
+    "CRAYONS", "CROCHET", "CROISER", "CURIEUX", "DANSENT", "DEBATTU", "DEBUTER", "DECOUPE", "DEGOUTS", "DELICES",
+    "DEMANDE", "DENTIER", "DEPARTS", "DEPISTE", "DESSERT", "DETOURS", "DEVENIR", "DEVOIRS", "DILEMME", "DIRECTS",
+    "DISQUES", "DIVERSE", "DOLLARS", "DOUCEUR", "DRAGONS", "ECLAIRS", "ECOUTER", "EFFACER", "EFFORTS", "EGLISES",
+    "ELEMENT", "ELIXIRS", "EMPLOIS", "ENFERME", "ENORMES", "ENTENDS", "ENTREES", "ENVIEUX", "EPARGNE", "EPISODE",
+    "EPOQUES", "EPUISEE", "EQUIPES", "ERREURS", "ESPOIRS", "ESPRITS", "ESSAYER", "ESTIMER", "EVASION", "EXAMENS",
+    "EXPERTS", "FACILES", "FARINES", "FATIGUE", "FAVEURS", "FEMININ", "FENETRE", "FERMETE", "FIGURES", "FLECHES",
+    "FONDANT", "FOURMIS", "FRAGILE", "FRAPPER", "FRAUDES", "FUSIONS", "GARDIEN", "GAZELLE", "GEANTES", "GENTILS",
+    "GESTION", "GLISSER", "GOUTERS", "GRAINES", "GRAMMES", "GRANDES", "GRAVIER", "GRIFFES", "GRIMPER", "GROTTES",
+    "GROUPES", "GUERRES", "HABITER", "HAMEAUX", "HEUREUX", "HUITRES", "HUMAINS", "HUMIDES", "IMAGINE", "IMPACTS",
+    "IMPLANT", "IMPORTE", "INCITER", "INCONNU", "INDICES", "INFINIE", "INQUIET", "INSPIRE", "INSTANT", "INTENSE",
+    "INTERET", "INVITER", "JAMBONS", "JARDINS", "JAUNIES", "JOUERAI", "JONCHER", "JUSTICE", "LACHERS", "LAMPION",
+    "LARGUER", "LIBERTE", "LIMACES", "LISIERE", "MAGIQUE", "MALADIE", "MARCHER", "MARTEAU", "MASQUES", "MATIERE",
+    "MAUVAIS", "MELANGE", "MENAGER", "METIERS", "MIROIRS", "MODELES", "MODERNE", "MONTAGE", "MOTEURS", "MOULINS",
+    "NAVIRES", "NIVEAUX", "NUANCES", "ORGANES", "OUVRAGE", "OUVRIER", "PAPIERS", "PARADES", "PASSAGE", "PAYSAGE",
+    "PERDANT", "PERIODE", "PILOTES", "PLAINES", "PLANTES", "PLAQUES", "PLATEAU", "PLEURER", "PLUMAGE", "POESIES",
+    "PREMIER", "PRENDRE", "PRISONS", "PROGRES", "PROJETS", "PROMETS", "PROTEGE", "QUELQUE", "RAISONS", "RAVIVER",
+    "RAYONNE", "REJOINS", "REMONTE", "RENARDS", "RENDUES", "RETARDS", "REUNION", "ROULEAU", "ROUTIER", "RYTHMES",
+    "SAVOIRS", "SEJOURS", "SEMAINE", "SINCERE", "SOUTIEN", "TARDIVE", "TENSION", "TERRAIN", "TORRENT", "TOUCHER",
+    "TRICHER", "TRIPLES", "URGENCE", "VELOURS", "VERGERS", "VERSANT", "VERTIGE", "VESTIGE", "VISITER",
 ].filter(w => w.length === 7);
 
 function getMotusDateKey() {
@@ -1240,7 +1309,7 @@ function buildRebusGuideEmbed() {
             `• Un thème différent chaque jour : 🎬 Films, 🎮 Jeux Vidéo, 📺 Séries TV ou ⛩️ Animés & Mangas.\n\n` +
             `### 🎯 Règles du jeu\n` +
             `• Déchiffre les emojis et écris directement le titre dans le salon *(les petites fautes de frappe déclenchent une réaction 🔥)*.\n` +
-            `• Le bouton **💡 Demander un indice** (ou l'indice auto à mi-temps) aide à débloquer la manche.\n` +
+            `• Un **indice automatique** est révélé après **2 min 30** si la manche n'est pas terminée.\n` +
             `• Si personne ne joue sur une manche, la partie se met en **pause** pour ne pas tourner dans le vide.\n\n` +
             `### 🏆 Récompenses\n` +
             `• **+1 point** par manche remportée au classement (\`!rebustop\` & \`!pendutop\`).\n` +
@@ -1324,15 +1393,6 @@ function buildRebusEmbed(manche, item, expireAt) {
             `💬 *Tape directement le titre dans ce salon !*`
         )
         .setFooter({ text: `Manche ${manche}/5 • Le/la premier.e qui trouve marque 1 point` });
-}
-
-function buildRebusRow(manche) {
-    return new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId(`rebus_demander_indice_${manche}`)
-            .setLabel('💡 Demander un indice')
-            .setStyle(ButtonStyle.Secondary)
-    );
 }
 
 async function lancerSessionRebus(guild) {
@@ -1481,10 +1541,9 @@ async function passerMancheSuivanteRebus(guild) {
 
     const { MessageFlags } = require('discord.js');
     const embed = buildRebusEmbed(rebusSession.manche, item, rebusSession.expireAt);
-    const rowIndice = buildRebusRow(rebusSession.manche);
-    await channel.send({ embeds: [embed], components: [rowIndice], flags: [MessageFlags.SuppressNotifications] });
+    await channel.send({ embeds: [embed], flags: [MessageFlags.SuppressNotifications] });
 
-    // Indice automatique à 2 min 30 (mi-temps) si personne n'a cliqué sur le bouton avant
+    // Indice automatique à 2 min 30 (mi-temps), sans bouton d'indice manuel
     const mancheEnCours = rebusSession.manche;
     setTimeout(async () => {
         if (!rebusSession.active || !rebusSession.currentItem || rebusSession.manche !== mancheEnCours || rebusSession.indiceAffiche) return;
@@ -1907,15 +1966,12 @@ async function handleRebusButton(interaction) {
         return true;
     }
 
-    // Gestion du bouton "💡 Demander un indice"
+    // Neutraliser les anciens boutons d'indice encore présents sur Discord.
     if (interaction.customId.startsWith('rebus_demander_indice_')) {
-        if (!rebusSession.active || !rebusSession.currentItem) {
-            return interaction.reply({ content: "Aucune manche active.", ephemeral: true });
-        }
-        rebusSession.aEuActiviteManche = true;
-        const indice = genererIndiceRebus(rebusSession.currentItem);
-        rebusSession.indiceAffiche = true;
-        await interaction.reply({ content: `💡 **Indice débloqué par ${interaction.member.displayName} :**\n${indice}` });
+        await interaction.reply({
+            content: "💡 Le bouton d'indice manuel a été supprimé. L'indice arrive automatiquement à mi-temps.",
+            ephemeral: true
+        });
         return true;
     }
 
@@ -2190,9 +2246,14 @@ async function handleJeuPtsInteraction(interaction) {
     return false;
 }
 
+function isRebusSessionActive() {
+    return Boolean(rebusSession.active);
+}
+
 module.exports = {
     MOTUS_CHANNEL_ID,
     REBUS_CHANNEL_ID,
+    isRebusSessionActive,
     initMinijeuxState,
     initMotusState,
     getMotusDateKey,

@@ -285,7 +285,7 @@ const ROULETTE_TEXT_MALUS_IDS = new Set([
 ]);
 const ROULETTE_ROLE_ADDICT_ID = '1555245236249436160';
 const ROULETTE_ADDICT_SEUIL = 500;
-const ROULETTE_TAUX_ECHEC = 0.5;
+const ROULETTE_TAUX_ECHEC = 0.4;
 const ROULETTE_PITY_MALUS = 3;
 const ROULETTE_PITY_NULS = 5;
 
@@ -3240,7 +3240,7 @@ function buildRoulettePresentationEmbed(authorId, guildId = null) {
         `• Tirages totaux : **${stats.tirages}**`,
         `• Bonus / Malus : **${stats.bonus}** / **${stats.malus}**`,
         `• Succès : **${nbAchs}/${totalAchs}**`,
-        `• Effets actifs : **${resumeEtat.bonus.length}** bonus / **${resumeEtat.malus.length}** malus *(\`!rlt state\`)*`,
+        `• Effets actifs : **${resumeEtat.bonus.length}** bonus / **${resumeEtat.malus.length}** malus`,
         `• Pire série : **${stats.pireSerie || 0}**`
     ];
 
