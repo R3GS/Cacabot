@@ -2295,18 +2295,43 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'bonus-epingle':
             crediterInventaireRoulette(member.id, 'epingleSalon', 1);
             return `📌 **${auteurNom}** a gagné le droit d'**épingler un message** dans ce salon !\n-# 🎒 *Stocké dans ton inventaire (\`!rlt claim\` pour l'utiliser quand tu veux).*`;
-        case 'bonus-tcg-15pts':
-            bridge.addTcgPoints?.(member.id, 15, member);
-            return `🪙 **${auteurNom}** remporte **+15 points RegaDex** ! *(Ajoutés immédiatement à ton solde)*`;
-        case 'bonus-tcg-50pts':
-            bridge.addTcgPoints?.(member.id, 50, member);
-            return `💰 **${auteurNom}** remporte **+50 points RegaDex** ! *(Ajoutés immédiatement à ton solde)*`;
-        case 'bonus-tcg-1booster':
-            bridge.addTcgBoosters?.(member.id, 1, member);
+        case 'bonus-tcg-15pts': {
+            const reward = bridge.addTcgPoints?.(member.id, 15, member);
+
+            if (!reward?.applied) {
+                return `🪙 **${auteurNom}** a tiré **+15 points RegaDex**, mais doit posséder le rôle Collectionneur.euse pour les recevoir !`;
+            }
+
+            return `🪙 **${auteurNom}** remporte **+15 points RegaDex** !\n💰 **Nouveau solde : ${reward.balance} points RegaDex**`;
+        }
+
+        case 'bonus-tcg-50pts': {
+            const reward = bridge.addTcgPoints?.(member.id, 50, member);
+
+            if (!reward?.applied) {
+                return `💰 **${auteurNom}** a tiré **+50 points RegaDex**, mais doit posséder le rôle Collectionneur.euse pour les recevoir !`;
+            }
+
+            return `💰 **${auteurNom}** remporte **+50 points RegaDex** !\n💰 **Nouveau solde : ${reward.balance} points RegaDex**`;
+        }
+        case 'bonus-tcg-1booster': {
+            const recompense = bridge.addTcgBoosters?.(member.id, 1, member);
+
+            if (!recompense) {
+                return `🃏 **${auteurNom}** a tiré **+1 Booster RegaDex**, mais doit posséder le rôle Collectionneur.euse pour le recevoir !`;
+            }
+
             return `🃏 **${auteurNom}** remporte **+1 Booster RegaDex** ! *(Prêt à ouvrir dans <#1572007962199851059>)*`;
-        case 'bonus-tcg-5boosters':
-            bridge.addTcgBoosters?.(member.id, 5, member);
+        }
+        case 'bonus-tcg-5boosters': {
+            const recompense = bridge.addTcgBoosters?.(member.id, 5, member);
+
+            if (!recompense) {
+                return `🎁 **${auteurNom}** a tiré **+5 Boosters RegaDex**, mais doit posséder le rôle Collectionneur.euse pour les recevoir !`;
+            }
+
             return `🎁 **${auteurNom}** décroche **+5 Boosters RegaDex** ! *(Prêts à ouvrir dans <#1572007962199851059>)*`;
+        }
         case 'bonus-booster-consolation': {
             const resRed = bridge.reduceTcgBoosterCooldown?.(member.id, 3 * 60 * 60 * 1000, member);
             if (resRed?.alreadyFull) {
@@ -5147,6 +5172,10 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
 
     const outcomeId = tirerRoulette(authorId, guild?.id, isTcgCollector);
 
+    // +1 point RegaDex par tirage, indépendant du Battle Pass.
+    const recompenseTcgRoulette = bridge.trackTcgRoulettePoint?.(authorId, membre);
+    const soldeRouletteTcg = recompenseTcgRoulette?.nouveauSolde ?? null;
+
     // ==========================================
     //  BRANCHEMENT BATTLE PASS (ROULETTE ROLL & BONUS)
     // ==========================================
@@ -5162,10 +5191,6 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         }
 
         const estNeutre = (outcomeId === 'aucun-resultat') && nbMalusCumules === 0 && (rouletteBouclierActif.get(authorId) || 0) === 0;
-
-        if (bridge.trackTcgRoulettePoint) {
-            bridge.trackTcgRoulettePoint(authorId, membre);
-        }
 
         bridge.trackBattlePassProgress(authorId, 'roulette_roll', 1, {
             isHappyHour: estHappyHour(),
@@ -5357,7 +5382,13 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
             deverrouillerSucces(authorId, 'pare-balles', channel);
         }
         const msgRestantes = restantes > 0 ? ` (${restantes} charge${restantes > 1 ? 's' : ''} restante${restantes > 1 ? 's' : ''})` : '';
-        const texteBouclier = `🛡️ **${auteurNom}** évite le malus **${ROULETTE_NOMS[outcomeId]}** grâce à son bouclier !${msgRestantes}`;
+
+        const ligneSoldeBouclier = soldeRouletteTcg !== null
+            ? `\n\n🃏 **Participation Roulette : +1 point RegaDex**\n💰 **Nouveau solde : ${soldeRouletteTcg} points RegaDex**`
+            : '';
+
+        const texteBouclier = `🛡️ **${auteurNom}** évite le malus **${ROULETTE_NOMS[outcomeId]}** grâce à son bouclier !${msgRestantes}${ligneSoldeBouclier}`;
+
         const gifOptions = {
             shieldBlocked: true,
             pityActive: estPityActive,
@@ -5365,6 +5396,7 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
             avatarUrl: membre?.displayAvatarURL?.({ dynamic: true }) || undefined,
             guild
         };
+
         const embed = buildRouletteResultEmbed(outcomeId, texteBouclier, authorId, auteurNom, cooldownMinutes, gifOptions);
         const gifShield = getRouletteOutcomeGifAttachment(outcomeId, texteBouclier, gifOptions);
         return {
@@ -5617,7 +5649,16 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     const noteBouclierModo = (!prefixeRedirect && estModoImmuniseMute && bCharges > 0)
         ? `\n-# 🛡️ *Bouclier conservé (${bCharges} charge${bCharges > 1 ? 's' : ''}) : les mutes ne consomment pas le bouclier des modos.*`
         : '';
-    const texteComplet = prefixeRedirect + texte + extraVoteTexte + noteBouclierModo;
+    const estBonusPointsTcg = ['bonus-tcg-15pts', 'bonus-tcg-50pts'].includes(outcomeId);
+
+    const ligneSoldeTcg = soldeRouletteTcg !== null
+        ? estBonusPointsTcg
+            ? `\n\n🃏 **Participation Roulette : +1 point RegaDex supplémentaire**`
+            : `\n\n🃏 **Participation Roulette : +1 point RegaDex**\n💰 **Nouveau solde : ${soldeRouletteTcg} points RegaDex**`
+        : '';
+
+    const texteComplet = prefixeRedirect + texte + extraVoteTexte + noteBouclierModo + ligneSoldeTcg;
+
     const gifOptions = {
         pityActive: estPityActive,
         resteChargesTriple,
@@ -5625,7 +5666,15 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         avatarUrl: membre?.displayAvatarURL?.({ dynamic: true }) || undefined,
         guild
     };
-    const embed = buildRouletteResultEmbed(outcomeId, texteComplet, authorId, auteurNom, cooldownMinutes, gifOptions);
+
+    const embed = buildRouletteResultEmbed(
+        outcomeId,
+        texteComplet,
+        authorId,
+        auteurNom,
+        cooldownMinutes,
+        gifOptions
+    );
     let voteExpireAt = null;
     if (!voteObj) {
         const gifOutcome = getRouletteOutcomeGifAttachment(outcomeId, texteComplet, gifOptions);
@@ -5663,8 +5712,27 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         gifOptions,
         differe: differes.length > 0 ? async () => {
             await Promise.all(differes.map(d => d.action()));
-            const lignesFinales = [...textesImmediatesSansDiffere, ...differes.map(d => d.texteFinal)].join('\n');
-            return buildRouletteResultEmbed(outcomeId, prefixeRedirect + lignesFinales + extraVoteTexte + noteBouclierModo, authorId, auteurNom, cooldownMinutes, gifOptions);
+
+            const lignesFinales = [
+                ...textesImmediatesSansDiffere,
+                ...differes.map(d => d.texteFinal)
+            ].join('\n');
+
+            const texteFinalComplet =
+                prefixeRedirect +
+                lignesFinales +
+                extraVoteTexte +
+                noteBouclierModo +
+                ligneSoldeTcg;
+
+            return buildRouletteResultEmbed(
+                outcomeId,
+                texteFinalComplet,
+                authorId,
+                auteurNom,
+                cooldownMinutes,
+                gifOptions
+            );
         } : null
     };
 }

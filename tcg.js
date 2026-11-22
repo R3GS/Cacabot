@@ -1582,7 +1582,7 @@ async function verifierQueteCommunautaireTcg(client) {
                     .setDescription(
                         `Une nouvelle semaine RegaDex commence !\n\n` +
                         `🎯 **Objectif :** ${quest.label}\n` +
-                        `🎁 **Récompense collective :** **2 boosters communautaires** *(stock max 2)* + **15 pts RegaDex**\n` +
+                        `🎁 **Récompense collective :** **jusqu'à 2 boosters communautaires** *(selon la place disponible, stock max ${MAX_COMMUNITY_BOOSTERS})* + **15 points RegaDex par participant.e**\n` +
                         `👥 **Comment être éligible :** ouvre au moins **1 booster** pendant que la quête est encore en cours !\n` +
                         `⏳ **Réinitialisation :** <t:${nextResetTs}:R>`
                     )
@@ -1639,23 +1639,49 @@ async function progressCommunityQuest(client, events, boosterOpenerId = null) {
                 ? quest.participants.map(id => `<@${id}>`).join(' ')
                 : '*Aucun·e participant.e*';
             const { nextResetTs } = getCurrentQuestWeekInfoParis();
+
+            const soldesParticipants = quest.participants.map(uid => {
+                const u = getOrCreateTcgUser(uid);
+                return `• <@${uid}> — 💰 **Nouveau solde : ${u.points || 0} points RegaDex**`;
+            });
+
+            const MAX_SOLDES_EMBED = 2500;
+            const soldesAffiches = [];
+            let longueurSoldes = 0;
+
+            for (const ligne of soldesParticipants) {
+                if (longueurSoldes + ligne.length + 1 > MAX_SOLDES_EMBED) break;
+
+                soldesAffiches.push(ligne);
+                longueurSoldes += ligne.length + 1;
+            }
+
+            const nbSoldesRestants = soldesParticipants.length - soldesAffiches.length;
+
+            const texteSoldes = soldesAffiches.join('\n') +
+                (nbSoldesRestants > 0
+                    ? `\n\n*${nbSoldesRestants} autre(s) participant(s) récompensé(s), non affiché(s) ici.*`
+                    : '');
+
             const embed = new EmbedBuilder()
                 .setColor(0x2ecc71)
                 .setTitle('🎉 QUÊTE COMMUNAUTAIRE TERMINÉE !')
                 .setDescription(
                     `Bravo la team ! L'objectif de la semaine a été atteint : ${quest.label} (**${quest.progress}/${quest.target}**)\n\n` +
-                    `🎁 **Récompenses distribuées à tous les participant.es :**\n` +
-                    `• **+2 Boosters communautaires** *(prêts à ouvrir, stock max ${MAX_COMMUNITY_BOOSTERS})*\n` +
-                    `• **+15 points RegaDex**\n\n` +
-                    `⏳ Prochaine quête communautaire : <t:${nextResetTs}:R>`
+                    `🎁 **Récompenses de la quête communautaire :**\n` +
+                    `• **Jusqu'à +2 Boosters communautaires** *(selon la place disponible, stock max ${MAX_COMMUNITY_BOOSTERS})*\n` +
+                    `• **+15 points RegaDex par participant.e**\n\n` +
+                    `💰 **Nouveaux soldes des participants :**\n` +
+                    (texteSoldes || '*Aucun participant*') +
+                    `\n\n⏳ Prochaine quête communautaire : <t:${nextResetTs}:R>`
                 )
                 .setFooter({ text: `RegaDex ${SET1_NAME} • Quête communautaire` })
                 .setTimestamp();
 
-            await tcgChan.send({
-                content: `🎊 Félicitations aux participant.es : ${mentionsList}`,
+            await sendSilent(tcgChan, {
+                content: `🎊 **Quête communautaire RegaDex terminée !** ${quest.participants.length} participant(s) récompensé(s).`,
                 embeds: [embed],
-                allowedMentions: { users: quest.participants }
+                allowedMentions: { parse: [] }
             }).catch(() => {});
         }
         tcgBridge.declencherHappyHourRoulette?.(30, `Quête communautaire RegaDex terminée (${quest.label.replace(/\*\*/g, '')})`, c);
@@ -1666,7 +1692,13 @@ async function progressCommunityQuest(client, events, boosterOpenerId = null) {
     return false;
 }
 
+let distributionHebdoEnCours = false;
+
 async function verifierBoosterHebdoTcg(client) {
+    if (distributionHebdoEnCours) return false;
+
+    distributionHebdoEnCours = true;
+
     try {
         const now = new Date();
         const paris = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
@@ -1680,13 +1712,37 @@ async function verifierBoosterHebdoTcg(client) {
 
         const data = getStoreData();
         if (data.lastWeeklyBoosterKey === fridayKey) return false;
-        data.lastWeeklyBoosterKey = fridayKey;
 
-        const guild = client.guilds.cache.get(GUILD_ID) || await client.guilds.fetch(GUILD_ID).catch(() => null);
+        const guild = client.guilds.cache.get(GUILD_ID)
+            || await client.guilds.fetch(GUILD_ID).catch(() => null);
+
         if (!guild) return false;
 
-        await guild.members.fetch().catch(() => {});
-        const targets = [...guild.members.cache.values()].filter(m => !m.user.bot && hasTcgRole(m));
+        // Une récupération incomplète des membres ne doit pas
+        // déclencher une distribution partielle.
+        try {
+            await guild.members.fetch();
+        } catch (err) {
+            console.error(
+                '[RegaDex] Impossible de récupérer les membres pour les boosters hebdomadaires :',
+                err
+            );
+            return false;
+        }
+
+        const targets = [...guild.members.cache.values()]
+            .filter(m => !m.user.bot && hasTcgRole(m));
+
+        if (targets.length === 0) {
+            console.warn(
+                '[RegaDex] Distribution hebdomadaire ignorée : aucun membre Collectionneur.euse trouvé.'
+            );
+            return false;
+        }
+
+        // Marquer la distribution uniquement lorsque le serveur
+        // et la liste des membres ont été récupérés.
+        data.lastWeeklyBoosterKey = fridayKey;
 
         let credited = 0;
         let capped = 0;
@@ -1710,11 +1766,13 @@ async function verifierBoosterHebdoTcg(client) {
                 .setTitle('📅 Booster hebdomadaire du vendredi offert !')
                 .setDescription(
                     `Bon vendredi les collectionneur·euses ! ☀️\n` +
-                    `**+1 Booster gratuit hebdomadaire** vient d'être ajouté à tes boosters prêts à ouvrir !\n\n` +
+                    (credited > 0
+                        ? `**+1 Booster gratuit hebdomadaire** a été ajouté aux stocks des membres éligibles !\n\n`
+                        : `Aucun booster supplémentaire n'a été distribué cette semaine : les membres éligibles sont déjà au plafond de stockage.\n\n`) +
                     `• 🎁 **Bénéficiaires :** **${credited}** membre${credited > 1 ? 's' : ''} crédité${credited > 1 ? 's' : ''}` +
                     (capped > 0 ? ` *(${capped} déjà au plafond de ${MAX_WEEKLY_BOOSTERS}/${MAX_WEEKLY_BOOSTERS})*` : '') + `\n` +
                     `• 📦 **Stock hebdo max :** **${MAX_WEEKLY_BOOSTERS}/${MAX_WEEKLY_BOOSTERS}** *(pense à ouvrir tes boosters avant vendredi prochain pour ne pas bloquer le suivant !)*\n\n` +
-                    `👉 Tape \`!tcggo\` ou \`!open\` pour l'ouvrir !`
+                    `👉 Tape \`!tcggo\` ou \`!open\` pour gérer tes boosters !`
                 )
                 .setFooter({ text: `RegaDex ${SET1_NAME} • Bonus du vendredi 8h` })
                 .setTimestamp();
@@ -1729,6 +1787,8 @@ async function verifierBoosterHebdoTcg(client) {
     } catch (err) {
         console.error('Erreur verifierBoosterHebdoTcg:', err);
         return false;
+    } finally {
+        distributionHebdoEnCours = false;
     }
 }
 
@@ -1915,10 +1975,16 @@ function trackTcgVocalMinute(userId, member, voiceChannelId) {
 }
 
 function trackTcgRoulettePoint(userId, member) {
-    if (!member?.roles?.cache?.has(TCG_ROLE_ID)) return;
+    if (!member?.roles?.cache?.has(TCG_ROLE_ID)) return null;
+
     const u = getOrCreateTcgUser(userId);
     u.points += 1;
     tcgBridge.demanderSauvegarde();
+
+    return {
+        pointsGagnes: 1,
+        nouveauSolde: u.points
+    };
 }
 
 // ==========================================
@@ -3658,7 +3724,9 @@ async function renderBoosterRecapCanvas(cards, isNewFlags, theme = 'B', isGodPac
         ctx.textBaseline = 'top';
         ctx.font = 'bold 18px "LemonMilk", "Sans"';
         ctx.fillStyle = isGodPack ? (isLight ? '#7A5200' : '#FFE066') : (isLight ? '#111111' : '#FFFFFF');
-        const statusTxt = isNewFlags[i] ? 'NOUVELLE !' : 'DOUBLON (+3 PTS)';
+        const statusTxt = isNewFlags[i]
+            ? 'NOUVELLE !'
+            : `DOUBLON (+${getDuplicatePoints(card)} PTS)`;
         ctx.fillText(`${card.id} • ${card.rarity} • ${statusTxt}`, pos.x + cardW / 2, pos.y + cardH + 10, isFivePack ? cardW + 70 : cardW + 90);
     }
 
@@ -4436,7 +4504,7 @@ function buildProfilePayload(member, u, fromHub = false, showRarities = false) {
             `### 🎯 Progression Points RegaDex *(Solde : **${u.points} pts**)*\n` +
             `• 💬 **Messages :** \`${buildProgressBar(msgCur, MESSAGES_PER_POINT, 10)}\` **${msgCur}/${MESSAGES_PER_POINT}** *(+1 pt à 15)*\n` +
             `• 🎙️ **Vocal :** \`${buildProgressBar(vocCur, VOCAL_MINUTES_PER_POINT, 10)}\` **${vocCur}/${VOCAL_MINUTES_PER_POINT} min** *(+1 pt / 10 min, ≥ 3 membres, hors AFK)*\n` +
-            `-# 💡 Autres gains : Roulette **+1 pt** • Booster ouvert **+5 pts** • Doublon **+3 pts** • Échange **+3 pts** *(1×/fil)*\n` +
+            `-# 💡 Autres gains : Roulette **+1 pt** • Booster ouvert **+5 pts** • Doublons **+1 à +30 pts selon rareté** • Échange **+3 pts** *(1×/fil)*\n` +
             `────────────────────────────────────────\n` +
             `### 📊 Statistiques de collection\n` +
             `• 🎁 **Boosters ouverts :** **${u.stats?.boostersOpened || 0}**\n` +
@@ -5513,7 +5581,9 @@ function buildBoosterCardEmbed(member, session, stepIndex) {
             `🆔 **Numéro :** \`${card.id}\`\n` +
             `📁 **Catégorie :** \`${card.category}\`\n` +
             `✨ **Rareté :** **${card.rarity}**${card.isHolo ? ' **(Holographique)**' : ''}\n` +
-            (isNew ? `🆕 **NOUVELLE CARTE AJOUTÉE AU REGADEX !**` : `🔁 **Doublon !** *+3 points RegaDex gagnés*`)
+            (isNew
+                ? `🆕 **NOUVELLE CARTE AJOUTÉE AU REGADEX !**`
+                : `🔁 **Doublon !** **+${getDuplicatePoints(card)} points RegaDex gagnés**`)
         )
         .setImage('attachment://carte_booster.png')
         .setFooter({ text: `Booster ${totalCards > 3 ? `${totalCards} cartes ` : ''}${SET1_NAME} • Révélation ${stepIndex + 1}/${totalCards}` });
@@ -5650,7 +5720,8 @@ function buildBoosterRecapEmbed(member, session, u) {
         .setTitle(recapTitle)
         .setDescription(
             lines.join('\n') +
-            `\n\n🪙 **Points RegaDex gagnés :** **+${session.ptsEarned} pts**${milestoneNote} *(Solde : ${u.points} pts)*` +
+            `\n\n🪙 **Points RegaDex gagnés :** **+${session.ptsEarned} pts**${milestoneNote}` +
+            `\n💰 **Nouveau solde : ${u.points} points RegaDex**` +
             `\n📚 **Progression ${SET1_NAME} :** **${comp.uniqueCount}/${comp.totalSet}** (${pctSet}%)` +
             cooldownLine +
             (bonusInfo.length > 0 ? `\n\n${bonusInfo.join('\n')}` : '')
@@ -5921,7 +5992,8 @@ async function buildMasterSetPantheonPayload(member, u, setNumber = DEFAULT_SET_
         .setDescription(
             `Immense bravo à <@${member.id}> qui vient de compléter les **${setCfg.totalExpected} cartes** du **${setCfg.name}** !\n\n` +
             `🏆 **Rang permanent débloqué :** **Maître du ${setCfg.name}**\n` +
-            `🎁 **Récompenses :** **+25 points RegaDex** & **+2 Boosters de Maître**`
+            `🎁 **Récompenses :** **+25 points RegaDex** & **+2 Boosters de Maître**\n` +
+            `💰 **Nouveau solde : ${u.points || 0} points RegaDex**`
         )
         .setImage('attachment://maitre_du_set.jpg')
         .setFooter({ text: 'Panthéon RegaDex • Regaïa' })
@@ -8484,19 +8556,40 @@ async function executeTradeIfBothLocked(thread, trade, client) {
     try {
         const tradeMilestones = [];
         const masteredAfterTrade = [];
-        for (const setCfg of getActiveSets()) {
-        const msA = checkAndGrantCompletionMilestones(idA, setCfg.number);
-        if (msA.unlocked.length > 0) {
-            tradeMilestones.push(`<@${idA}> : ${msA.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts${m.pct === 100 ? ' & +2 Boosters de Maître' : ''})`).join(', ')}`);
-        }
-        for (const sNum of (msA.masteredSets || [])) masteredAfterTrade.push({ uid: idA, setNumber: sNum });
 
-        const msB = checkAndGrantCompletionMilestones(idB, setCfg.number);
-        if (msB.unlocked.length > 0) {
-            tradeMilestones.push(`<@${idB}> : ${msB.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts${m.pct === 100 ? ' & +2 Boosters de Maître' : ''})`).join(', ')}`);
+        for (const setCfg of getActiveSets()) {
+            const msA = checkAndGrantCompletionMilestones(idA, setCfg.number);
+
+            if (msA.unlocked.length > 0) {
+                const soldeA = getOrCreateTcgUser(idA).points || 0;
+
+                tradeMilestones.push(
+                    `<@${idA}> : ${msA.unlocked.map(m =>
+                        `**${m.pct}%** (+${m.reward} pts${m.pct === 100 ? ' & +2 Boosters de Maître' : ''})`
+                    ).join(', ')}\n💰 **Nouveau solde : ${soldeA} points RegaDex**`
+                );
+            }
+
+            for (const sNum of (msA.masteredSets || [])) {
+                masteredAfterTrade.push({ uid: idA, setNumber: sNum });
+            }
+
+            const msB = checkAndGrantCompletionMilestones(idB, setCfg.number);
+
+            if (msB.unlocked.length > 0) {
+                const soldeB = getOrCreateTcgUser(idB).points || 0;
+
+                tradeMilestones.push(
+                    `<@${idB}> : ${msB.unlocked.map(m =>
+                        `**${m.pct}%** (+${m.reward} pts${m.pct === 100 ? ' & +2 Boosters de Maître' : ''})`
+                    ).join(', ')}\n💰 **Nouveau solde : ${soldeB} points RegaDex**`
+                );
+            }
+
+            for (const sNum of (msB.masteredSets || [])) {
+                masteredAfterTrade.push({ uid: idB, setNumber: sNum });
+            }
         }
-        for (const sNum of (msB.masteredSets || [])) masteredAfterTrade.push({ uid: idB, setNumber: sNum });
-    }
 
     // Les transferts, statistiques et récompenses
     // sont déjà enregistrés en mémoire.
@@ -8699,20 +8792,48 @@ async function executeTradeIfBothLocked(thread, trade, client) {
     return true;
 }
 
+const annoncesPointsEchangeEnCours = new Set();
+
 async function sendTradeRewardBeforeClose(thread, trade) {
-    if (!thread || !trade || !trade.pointsRewarded || trade.rewardAnnounced) return;
-    trade.rewardAnnounced = true;
-    const uA = getOrCreateTcgUser(trade.initiatorId);
-    const uB = getOrCreateTcgUser(trade.targetId);
-    const embed = new EmbedBuilder()
-        .setColor(0xf1c40f)
-        .setTitle('🪙 Points RegaDex gagnés !')
-        .setDescription(
-            `Merci pour votre échange ! Vous avez chacun gagné **+${POINTS_PER_TRADE} points RegaDex** *(1 seul bonus par fil d'échange)* :\n\n` +
-            `• <@${trade.initiatorId}> : **+${POINTS_PER_TRADE} pts** *(Nouveau solde : **${uA.points} pts**)*\n` +
-            `• <@${trade.targetId}> : **+${POINTS_PER_TRADE} pts** *(Nouveau solde : **${uB.points} pts**)*`
+    if (!thread || !trade) return false;
+
+    // Rien à annoncer, ou annonce déjà effectuée.
+    if (!trade.pointsRewarded || trade.rewardAnnounced) return true;
+
+    // Une autre tentative est déjà en cours.
+    if (annoncesPointsEchangeEnCours.has(thread.id)) return false;
+
+    annoncesPointsEchangeEnCours.add(thread.id);
+
+    try {
+        const uA = getOrCreateTcgUser(trade.initiatorId);
+        const uB = getOrCreateTcgUser(trade.targetId);
+
+        const embed = new EmbedBuilder()
+            .setColor(0xf1c40f)
+            .setTitle('🪙 Points RegaDex gagnés !')
+            .setDescription(
+                `Merci pour votre échange ! Vous avez chacun gagné **+${POINTS_PER_TRADE} points RegaDex** *(1 seul bonus par fil d'échange)* :\n\n` +
+                `• <@${trade.initiatorId}> : **+${POINTS_PER_TRADE} pts** *(Nouveau solde : **${uA.points} pts**)*\n` +
+                `• <@${trade.targetId}> : **+${POINTS_PER_TRADE} pts** *(Nouveau solde : **${uB.points} pts**)*`
+            );
+
+        await sendSilent(thread, { embeds: [embed] });
+
+        trade.rewardAnnounced = true;
+        tcgBridge.demanderSauvegarde();
+
+        return true;
+    } catch (err) {
+        console.error(
+            `[RegaDex] Impossible d'annoncer les points de l'échange ${thread.id} :`,
+            err
         );
-    await sendSilent(thread, { embeds: [embed] }).catch(() => {});
+
+        return false;
+    } finally {
+        annoncesPointsEchangeEnCours.delete(thread.id);
+    }
 }
 
 async function handleTcgTradeThreadMessage(message) {
@@ -8743,10 +8864,18 @@ async function verifierInactiviteTradesTcg(client) {
     let changed = false;
 
     for (const [threadId, trade] of Object.entries(data.activeTrades)) {
-        if (!trade || trade.closed) {
+        if (!trade) {
             delete data.activeTrades[threadId];
             changed = true;
             continue;
+        }
+
+        // Une fermeture demandée mais non terminée doit
+        // rester suivie pour permettre une nouvelle tentative.
+        if (trade.closed) {
+            trade.closed = false;
+            trade.lastActivityAt = Date.now() - TRADE_INACTIVITY_MS;
+            changed = true;
         }
 
         // Récupérer une finalisation interrompue sans
@@ -8822,15 +8951,44 @@ async function verifierInactiviteTradesTcg(client) {
                 .fetch(threadId)
                 .catch(() => null);
 
+            if (!thread) {
+                console.warn(
+                    `[RegaDex] Échange ${threadId} expiré : thread inaccessible, fermeture reportée.`
+                );
+                continue;
+            }
+
             const hadTrades = (trade.tradeCount || 0) >= 1;
 
-            if (thread) {
-                if (hadTrades) {
-                    await sendTradeRewardBeforeClose(thread, trade);
-                    await thread.setLocked(true).catch(() => {});
-                    await thread.setArchived(true).catch(() => {});
-                } else {
-                    await thread.delete().catch(() => {});
+            if (hadTrades) {
+                const annonceOk = await sendTradeRewardBeforeClose(thread, trade);
+
+                if (!annonceOk) {
+                    console.warn(
+                        `[RegaDex] Échange ${threadId} : annonce des points impossible, fermeture reportée.`
+                    );
+                    continue;
+                }
+
+                try {
+                    await thread.setLocked(true);
+                    await thread.setArchived(true);
+                } catch (err) {
+                    console.error(
+                        `[RegaDex] Impossible d'archiver l'échange ${threadId} :`,
+                        err
+                    );
+                    continue;
+                }
+            } else {
+                try {
+                    await thread.delete();
+                } catch (err) {
+                    console.error(
+                        `[RegaDex] Impossible de supprimer l'échange inactif ${threadId} :`,
+                        err
+                    );
+                    continue;
                 }
             }
 
@@ -11876,7 +12034,8 @@ async function handleTcgInteraction(interaction) {
         }
 
         const msTxt = negMilestones.unlocked.length > 0
-            ? `\n\n🏆 **Palier(s) de complétion atteint(s) :** ${negMilestones.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts${m.pct === 100 ? ' & +2 Boosters de Maître' : ''})`).join(', ')}`
+            ? `\n\n🏆 **Palier(s) de complétion atteint(s) :** ${negMilestones.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts${m.pct === 100 ? ' & +2 Boosters de Maître' : ''})`).join(', ')}` +
+              `\n💰 **Nouveau solde : ${u.points || 0} points RegaDex**`
             : '';
 
         const embed = new EmbedBuilder()
@@ -11940,7 +12099,8 @@ async function handleTcgInteraction(interaction) {
         }
 
         const msTxt = holoMilestones.unlocked.length > 0
-            ? `\n\n🏆 **Palier(s) de complétion atteint(s) :** ${holoMilestones.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts${m.pct === 100 ? ' & +2 Boosters de Maître' : ''})`).join(', ')}`
+            ? `\n\n🏆 **Palier(s) de complétion atteint(s) :** ${holoMilestones.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts${m.pct === 100 ? ' & +2 Boosters de Maître' : ''})`).join(', ')}` +
+              `\n💰 **Nouveau solde : ${u.points || 0} points RegaDex**`
             : '';
 
         const embed = new EmbedBuilder()
@@ -12732,7 +12892,8 @@ async function handleTcgInteraction(interaction) {
         }
 
         const msTxt = holoMilestones.unlocked.length > 0
-            ? `\n🏆 **Palier(s) atteint(s) :** ${holoMilestones.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts)`).join(', ')}`
+            ? `\n🏆 **Palier(s) atteint(s) :** ${holoMilestones.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts)`).join(', ')}` +
+              `\n💰 **Nouveau solde : ${u.points || 0} points RegaDex**`
             : '';
 
         await interaction.update({
@@ -12847,7 +13008,8 @@ async function handleTcgInteraction(interaction) {
         }
 
         const msTxt = negMilestones.unlocked.length > 0
-            ? `\n🏆 **Palier(s) atteint(s) :** ${negMilestones.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts)`).join(', ')}`
+            ? `\n🏆 **Palier(s) atteint(s) :** ${negMilestones.unlocked.map(m => `**${m.pct}%** (+${m.reward} pts)`).join(', ')}` +
+              `\n💰 **Nouveau solde : ${u.points || 0} points RegaDex**`
             : '';
 
         await interaction.update({
@@ -13405,22 +13567,52 @@ async function handleTcgInteraction(interaction) {
         const thread = interaction.channel;
 
         if (sub === 'cancel' && interaction.isButton()) {
-            trade.closed = true;
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
             const hadTrades = (trade.tradeCount || 0) >= 1;
-            delete data.activeTrades[threadId];
-            tcgBridge.demanderSauvegarde();
-            await replySilent(interaction, `❌ Échange annulé par <@${uid}>. Fermeture du thread...`);
+
             if (hadTrades) {
-                await sendTradeRewardBeforeClose(thread, trade);
-            }
-            setTimeout(async () => {
-                if (hadTrades) {
-                    await thread.setLocked(true).catch(() => {});
-                    await thread.setArchived(true).catch(() => {});
-                } else {
-                    await thread.delete().catch(() => {});
+                const annonceOk = await sendTradeRewardBeforeClose(thread, trade);
+
+                if (!annonceOk) {
+                    await interaction.editReply(
+                        '⚠️ Impossible d’annoncer les points RegaDex pour le moment. ' +
+                        'La fermeture est reportée et pourra être réessayée.'
+                    );
+                    return true;
                 }
-            }, 3000);
+            }
+
+            try {
+                if (hadTrades) {
+                    await thread.setLocked(true);
+                    await thread.setArchived(true);
+                } else {
+                    await thread.delete();
+                }
+
+                trade.closed = true;
+                delete data.activeTrades[threadId];
+                tcgBridge.demanderSauvegarde();
+
+                await interaction.editReply(
+                    `✅ Échange annulé par <@${uid}>. Thread fermé.`
+                ).catch(() => {});
+            } catch (err) {
+                console.error(
+                    `[RegaDex] Impossible de fermer l'échange ${threadId} :`,
+                    err
+                );
+
+                trade.lastActivityAt = Date.now() - TRADE_INACTIVITY_MS;
+                tcgBridge.demanderSauvegarde();
+
+                await interaction.editReply(
+                    '⚠️ La fermeture Discord a échoué. ' +
+                    'L’échange reste enregistré pour une nouvelle tentative.'
+                ).catch(() => {});
+            }
+
             return true;
         }
 
@@ -13956,29 +14148,66 @@ async function handleTcgInteraction(interaction) {
         }
 
         if (vA === 'close' && vB === 'close') {
-            trade.closed = true;
-            const hadTrades = (trade.tradeCount || 0) >= 1;
-            delete data.activeTrades[threadId];
-            tcgBridge.demanderSauvegarde();
+            await interaction.deferUpdate();
 
-            await interaction.update({
-                content: hadTrades
-                    ? '🔒 **Les deux membres ont validé la fermeture.** Le thread est désormais verrouillé et archivé.'
-                    : '🗑️ **Fermeture validée.** Suppression du thread...',
-                embeds: [],
-                components: []
-            });
+            const hadTrades = (trade.tradeCount || 0) >= 1;
+
             if (hadTrades) {
-                await sendTradeRewardBeforeClose(interaction.channel, trade);
-            }
-            setTimeout(async () => {
-                if (hadTrades) {
-                    await interaction.channel.setLocked(true).catch(() => {});
-                    await interaction.channel.setArchived(true).catch(() => {});
-                } else {
-                    await interaction.channel.delete().catch(() => {});
+                const annonceOk = await sendTradeRewardBeforeClose(
+                    interaction.channel,
+                    trade
+                );
+
+                if (!annonceOk) {
+                    await interaction.followUp({
+                        content:
+                            '⚠️ Impossible d’annoncer les points RegaDex. ' +
+                            'La fermeture est reportée pour permettre une nouvelle tentative.',
+                        flags: MessageFlags.Ephemeral
+                    }).catch(() => {});
+
+                    return true;
                 }
-            }, 2500);
+            }
+
+            try {
+                if (hadTrades) {
+                    await interaction.channel.setLocked(true);
+                    await interaction.channel.setArchived(true);
+                } else {
+                    await interaction.channel.delete();
+                }
+
+                trade.closed = true;
+                delete data.activeTrades[threadId];
+                tcgBridge.demanderSauvegarde();
+
+                if (hadTrades) {
+                    await interaction.editReply({
+                        content:
+                            '🔒 **Les deux membres ont validé la fermeture.** ' +
+                            'Le thread est désormais verrouillé et archivé.',
+                        embeds: [],
+                        components: []
+                    }).catch(() => {});
+                }
+            } catch (err) {
+                console.error(
+                    `[RegaDex] Impossible de fermer l'échange ${threadId} :`,
+                    err
+                );
+
+                trade.lastActivityAt = Date.now() - TRADE_INACTIVITY_MS;
+                tcgBridge.demanderSauvegarde();
+
+                await interaction.followUp({
+                    content:
+                        '⚠️ La fermeture du thread a échoué. ' +
+                        'L’échange reste enregistré pour une nouvelle tentative.',
+                    flags: MessageFlags.Ephemeral
+                }).catch(() => {});
+            }
+
             return true;
         }
 
@@ -14314,11 +14543,15 @@ async function handleTcgInteraction(interaction) {
 }
 
 function addTcgPointsFromRoulette(userId, points, member) {
-    if (!member || !hasTcgRole(member)) return false;
+    if (!member || !hasTcgRole(member)) {
+        return { applied: false, balance: null };
+    }
+
     const u = getOrCreateTcgUser(userId);
     u.points = (u.points || 0) + points;
     tcgBridge.demanderSauvegarde();
-    return true;
+
+    return { applied: true, balance: u.points };
 }
 
 function addTcgBoostersFromRoulette(userId, qty, member) {
@@ -14354,23 +14587,35 @@ function reduceTcgBoosterCooldown(userId, reductionMs = 3 * 60 * 60 * 1000, memb
 
 async function grantMinigameTcgPoints(client, userIds, points = 2) {
     if (!Array.isArray(userIds) || userIds.length === 0) return [];
+
     const c = client || tcgBridge.client;
     if (!c) return [];
-    const guild = c.guilds.cache.get(GUILD_ID) || await c.guilds.fetch(GUILD_ID).catch(() => null);
+
+    const guild = c.guilds.cache.get(GUILD_ID)
+        || await c.guilds.fetch(GUILD_ID).catch(() => null);
+
     if (!guild) return [];
 
     const rewarded = [];
+    rewarded.balances = {};
+
     for (const uid of [...new Set(userIds)]) {
-        const member = guild.members.cache.get(uid) || await guild.members.fetch(uid).catch(() => null);
+        const member = guild.members.cache.get(uid)
+            || await guild.members.fetch(uid).catch(() => null);
+
         if (member && hasTcgRole(member)) {
             const u = getOrCreateTcgUser(uid);
             u.points = (u.points || 0) + points;
+
             rewarded.push(uid);
+            rewarded.balances[uid] = u.points;
         }
     }
+
     if (rewarded.length > 0) {
         tcgBridge.demanderSauvegarde();
     }
+
     return rewarded;
 }
 

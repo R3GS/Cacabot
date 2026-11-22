@@ -41,24 +41,54 @@ async function loadAll() {
         // messages du salon, même si d'autres messages
         // ont été publiés après la dernière sauvegarde.
         if (channel) {
-            const messages = await channel.messages
-                .fetch({ limit: 100 })
-                .catch(err => {
+            const backupMessages = [];
+            let avantMessageId = null;
+            let messagesExamines = 0;
+            const MAX_MESSAGES_BACKUP = 1000;
+
+            while (messagesExamines < MAX_MESSAGES_BACKUP) {
+                let messages;
+
+                try {
+                    messages = await channel.messages.fetch({
+                        limit: 100,
+                        ...(avantMessageId
+                            ? { before: avantMessageId }
+                            : {})
+                    });
+                } catch (err) {
                     console.error(
-                        '❌ Impossible de lire le salon de sauvegarde :',
+                        '❌ Impossible de poursuivre la recherche des sauvegardes :',
                         err
                     );
-                    return null;
-                });
+                    break;
+                }
 
-            const backupMessages = messages
-                ? [...messages.values()].filter(m =>
-                    m.attachments.some(
-                        attachment =>
-                            attachment.name === 'cacabot_backup.json'
+                if (!messages.size) break;
+
+                messagesExamines += messages.size;
+
+                const lot = [...messages.values()];
+
+                backupMessages.push(
+                    ...lot.filter(m =>
+                        m.attachments.some(
+                            attachment =>
+                                attachment.name === 'cacabot_backup.json'
+                        )
                     )
-                )
-                : [];
+                );
+
+                // Discord renvoie les messages les plus récents en premier.
+                avantMessageId = lot[lot.length - 1].id;
+
+                if (messages.size < 100) break;
+            }
+
+            console.log(
+                `💾 ${backupMessages.length} sauvegarde(s) trouvée(s) ` +
+                `parmi ${messagesExamines} messages Discord.`
+            );
 
             // Essayer les sauvegardes de la plus récente
             // à la plus ancienne si l'une est corrompue.
@@ -137,6 +167,7 @@ async function loadAll() {
         topData.messages = jsonRecord.messages ?? {};
         birthdayData.birthdays = jsonRecord.birthdays ?? {};
         birthdayData.channels = jsonRecord.birthdayChannels ?? {};
+        birthdayData.lastAnnouncements = jsonRecord.birthdayLastAnnouncements ?? {};
         
         Object.assign(dailyData, jsonRecord.daily ?? {});
         Object.assign(weeklyData, jsonRecord.weekly ?? {});
@@ -203,27 +234,32 @@ async function loadAll() {
 
 let lastsaveSaveTime = null;
 let messagesSinceLastsaveSave = 0;
-let sauvegardeEnCours = false;
-let reSauvegardeDemandee = false;
 
-async function saveAll() {
-    if (!donneesChargees) { console.warn('⚠️ Sauvegarde ignorée : données non chargées'); return; }
-    if (sauvegardeEnCours) {
-        reSauvegardeDemandee = true;
-        return;
-    }
-    sauvegardeEnCours = true;
-    try {
+// Chaque sauvegarde attend la précédente.
+// Une erreur n'empêche pas les tentatives suivantes.
+let fileSauvegardes = Promise.resolve();
+
+function saveAll() {
+    const operation = fileSauvegardes
+        .catch(() => {})
+        .then(async () => {
+            if (!donneesChargees) {
+                throw new Error('Sauvegarde impossible : données non chargées.');
+            }
+
+            try {
         const channel = await client.channels.fetch(BACKUP_CHANNEL_ID).catch(() => null);
         if (!channel) {
-            console.error('❌ Salon de sauvegarde introuvable ! Vérifie l\'ID ou les permissions de Cacabot.');
-            return;
+            throw new Error(
+                'Salon de sauvegarde introuvable ! Vérifie l’ID ou les permissions de Cacabot.'
+            );
         }
 
         const payload = {
             messages: topData.messages,
             birthdays: birthdayData.birthdays,
             birthdayChannels: birthdayData.channels,
+            birthdayLastAnnouncements: birthdayData.lastAnnouncements ?? {},
             daily: dailyData,
             weekly: weeklyData,
             monthly: monthlyData,
@@ -265,48 +301,130 @@ async function saveAll() {
         lastsaveSaveTime = new Date();
         console.log(`💾 Nouvelle sauvegarde postée dans #${channel.name}`);
 
-        // Nettoyage instantané en 1 seule requête (évite de faire ramer le bot avec 15 suppressions individuelles)
-        const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
-        if (messages) {
-            const sauvegardes = [...messages.values()]
-                .filter(m => m.attachments.some(attachment => attachment.name === 'cacabot_backup.json'));
+        // Conserver les 10 sauvegardes les plus récentes.
+        // Rechercher également les anciennes sauvegardes
+        // situées au-delà des 100 derniers messages.
 
-            for (const m of sauvegardes.slice(10)) {
-                await m.delete().catch(() => {});
+        const sauvegardes = [];
+        let avantMessageId = null;
+        let messagesExamines = 0;
+        const MAX_MESSAGES_NETTOYAGE = 1000;
+
+        while (messagesExamines < MAX_MESSAGES_NETTOYAGE) {
+            let messages;
+
+            try {
+                messages = await channel.messages.fetch({
+                    limit: 100,
+                    ...(avantMessageId
+                        ? { before: avantMessageId }
+                        : {})
+                });
+            } catch (err) {
+                console.warn(
+                    '⚠️ Nettoyage des sauvegardes interrompu :',
+                    err
+                );
+                break;
             }
+
+            if (!messages.size) break;
+
+            messagesExamines += messages.size;
+
+            const lot = [...messages.values()];
+
+            sauvegardes.push(
+                ...lot.filter(m =>
+                    m.attachments.some(
+                        attachment =>
+                            attachment.name === 'cacabot_backup.json'
+                    )
+                )
+            );
+
+            avantMessageId = lot[lot.length - 1].id;
+
+            if (messages.size < 100) break;
         }
-    } catch (err) {
-        console.error('Erreur sauvegarde Discord:', err);
-    } finally {
-        sauvegardeEnCours = false;
-        if (reSauvegardeDemandee) {
-            reSauvegardeDemandee = false;
-            saveAll().catch(() => {});
+
+        // On ne supprime jamais les 10 sauvegardes les plus récentes.
+        for (const ancienneSauvegarde of sauvegardes.slice(10)) {
+            await ancienneSauvegarde.delete().catch(err => {
+                console.warn(
+                    `⚠️ Impossible de supprimer l'ancienne sauvegarde ` +
+                    `${ancienneSauvegarde.id} :`,
+                    err
+                );
+            });
         }
-    }
+            } catch (err) {
+                console.error('Erreur sauvegarde Discord:', err);
+                throw err;
+            }
+        });
+
+    fileSauvegardes = operation;
+
+    return operation;
 }
 
-setInterval(() => saveAll(), 30 * 60 * 1000); // Sauvegarde automatique toutes les 30 minutes
+setInterval(() => {
+    saveAll().catch(err => {
+        console.error('❌ Sauvegarde automatique échouée :', err);
+    });
+}, 30 * 60 * 1000);
 
 let saveEnAttente = null;
+
 function demanderSauvegarde() {
+    if (!donneesChargees) return;
     if (saveEnAttente) return;
-    saveEnAttente = setTimeout(async () => {
+
+    saveEnAttente = setTimeout(() => {
         saveEnAttente = null;
-        await saveAll().catch(() => {});
+
+        saveAll().catch(err => {
+            console.error('❌ Sauvegarde différée échouée :', err);
+        });
     }, 10000);
 }
 
-process.on('SIGTERM', async () => {
-    console.log('🛑 SIGTERM reçu, sauvegarde avant arrêt...');
-    await saveAll();
-    process.exit(0);
+let arretEnCours = false;
+
+async function arreterAvecSauvegarde(signal) {
+    if (arretEnCours) return;
+    arretEnCours = true;
+
+    console.log(`🛑 ${signal} reçu, sauvegarde avant arrêt...`);
+
+    if (saveEnAttente) {
+        clearTimeout(saveEnAttente);
+        saveEnAttente = null;
+    }
+
+    // Laisse une chance aux sauvegardes déjà demandées
+    // et enregistre une dernière fois l'état courant.
+    const sauvegardeFinale = saveAll();
+
+    try {
+        await sauvegardeFinale;
+        console.log('✅ Sauvegarde finale effectuée.');
+        process.exitCode = 0;
+    } catch (err) {
+        console.error('🚨 Sauvegarde finale échouée :', err);
+        process.exitCode = 1;
+    } finally {
+        process.exit();
+    }
+}
+
+process.on('SIGTERM', () => {
+    arreterAvecSauvegarde('SIGTERM').catch(console.error);
 });
 
-process.on('SIGINT', async () => {
-    console.log('🛑 SIGINT reçu, sauvegarde avant arrêt...');
-    await saveAll();
-    process.exit(0);
+process.on('SIGINT', () => {
+    arreterAvecSauvegarde('SIGINT').catch(console.error);
 });
 
 // Empêche le bot de crasher sur les rejets Discord bénins (suppression, timeout ou ack)
@@ -893,6 +1011,8 @@ async function disableButtons(interaction) {
 
     // Ping Notifs Shorts quand Gappy sort un nouveau TikTok
     client.on('messageCreate', async (message) => {
+        if (!donneesChargees) return;
+
         if (message.author.id === client.user.id) {
             topData.messages['1503495713097519355'] = (topData.messages['1503495713097519355'] || 0) + 1;
             return;
@@ -1092,12 +1212,8 @@ async function disableButtons(interaction) {
             trackBattlePassProgress(uid, 'minijeu_part', 1);
         }
 
-        // Sauvegarde tous les 75 messages
+        // Comptage des messages avant sauvegarde
         messagesSinceLastsaveSave++;
-        if (messagesSinceLastsaveSave >= 75) {
-            messagesSinceLastsaveSave = 0;
-            saveAll();
-        }
 
         const todayKey = getTodayKey();
         if (!dailyData[todayKey]) dailyData[todayKey] = {};
@@ -1113,6 +1229,17 @@ async function disableButtons(interaction) {
         if (!monthlyData[monthKey]) monthlyData[monthKey] = {};
         if (!monthlyData[monthKey][uid]) monthlyData[monthKey][uid] = 0;
         monthlyData[monthKey][uid]++;
+                // Sauvegarde après mise à jour de tous les compteurs
+        if (messagesSinceLastsaveSave >= 75) {
+            messagesSinceLastsaveSave = 0;
+
+            saveAll().catch(err => {
+                console.error(
+                    '❌ Sauvegarde des 75 messages échouée :',
+                    err
+                );
+            });
+        }
     }
 
     const isExplicitCommand = message.content.trim().startsWith('!');
@@ -1186,8 +1313,24 @@ async function disableButtons(interaction) {
     // !save
     if (response?.needsSave) {
         if (message.author.id !== '436218312574107658') return;
-        await saveAll();
-        return message.reply('\ud83d\udcbe Sauvegarde forc\u00e9e effectu\u00e9e !');
+
+        try {
+            await saveAll();
+
+            return message.reply(
+                '💾 Sauvegarde forcée effectuée avec succès !'
+            );
+        } catch (err) {
+            console.error(
+                '❌ Échec de la sauvegarde forcée :',
+                err
+            );
+
+            return message.reply(
+                '❌ Impossible de sauvegarder les données actuellement. ' +
+                'Vérifie le salon de sauvegarde Discord et les logs de Cacabot.'
+            ).catch(() => {});
+        }
     }
 
     // !helpx
@@ -1257,6 +1400,15 @@ async function disableButtons(interaction) {
 
 client.on('interactionCreate', async (interaction) => {
 try {
+    if (!donneesChargees) {
+        if (interaction.isRepliable()) {
+            await interaction.reply({
+                content: '⏳ Cacabot charge ses données. Réessaie dans quelques instants.',
+                flags: MessageFlags.Ephemeral
+            }).catch(() => {});
+        }
+        return;
+    }
 
     // =========================
     //   COMMANDES SLASH (/)
@@ -1700,22 +1852,34 @@ client.once('ready', async () => {
             .setType(ApplicationCommandType.User)
     ].map(cmd => cmd.toJSON());
 
+    // Priorité absolue : charger les données persistantes
+    // avant les requêtes de déploiement des commandes Discord.
+    await loadAll();
+
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     const REGAIA_GUILD_ID = '720057528351850547';
 
     for (const guild of client.guilds.cache.values()) {
         const body = guild.id === REGAIA_GUILD_ID ? slashCommands : [];
-        await rest.put(Routes.applicationGuildCommands(client.user.id, guild.id), { body })
-            .then(() => {
-                if (guild.id === REGAIA_GUILD_ID) {
-                    console.log(`✅ Commandes Slash (/) déployées exclusivement sur ${guild.name}`);
-                }
-            })
-            .catch(err => console.error(`Erreur déploiement Slash sur ${guild.name}:`, err.message));
-    }
 
-    // Chargement immédiat des données sans attendre
-    await loadAll();
+        try {
+            await rest.put(
+                Routes.applicationGuildCommands(client.user.id, guild.id),
+                { body }
+            );
+
+            if (guild.id === REGAIA_GUILD_ID) {
+                console.log(
+                    `✅ Commandes Slash (/) déployées exclusivement sur ${guild.name}`
+                );
+            }
+        } catch (err) {
+            console.error(
+                `Erreur déploiement Slash sur ${guild.name}:`,
+                err.message
+            );
+        }
+    }
 
     // Scan du Set 1 RegaDex + alerte intégrité si carte/asset manquant
     await scanSet1Cards(client);
@@ -1906,6 +2070,8 @@ client.once('ready', async () => {
 // =========================
 
 client.on('messageReactionAdd', async (reaction, user) => {
+    if (!donneesChargees) return;
+
     await handleSecurityReactionAdd(reaction, user);
 
     if (user.bot) return;
@@ -1938,6 +2104,8 @@ client.on('messageReactionAdd', async (reaction, user) => {
 });
 
 client.on('messageReactionRemove', async (reaction, user) => {
+    if (!donneesChargees) return;
+
     await handleSecurityReactionRemove(reaction, user);
 });
 
@@ -1969,6 +2137,8 @@ function estSessionMiniJeuActive(channelId) {
 
 const dernierAuteurParSalon = new Map();
 client.on('messageCreate', async (message) => {
+    if (!donneesChargees) return;
+
     await handleRouletteCouronne(message, dernierAuteurParSalon);
 
     // Les malus textuels ne modifient pas les propositions
@@ -1979,6 +2149,8 @@ client.on('messageCreate', async (message) => {
 });
 
 client.on('guildMemberUpdate', async (oldMember, newMember) => {
+    if (!donneesChargees) return;
+
     await handleRoulettePseudoLock(oldMember, newMember);
 });
 
@@ -1987,10 +2159,15 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
 // =========================
 
 client.on('guildMemberAdd', async (member) => {
-    if (!topData.messages[member.id]) {
+    if (!donneesChargees) return;
+    if (!Object.prototype.hasOwnProperty.call(topData.messages, member.id)) {
         topData.messages[member.id] = 0;
-        saveAll();
-        console.log(`✅ Nouveau membre : ${member.displayName} ajouté au top`);
+
+        demanderSauvegarde();
+
+        console.log(
+            `✅ Nouveau membre : ${member.displayName} ajouté au top`
+        );
     }
 
     await handleWelcomeMemberAdd(member);
@@ -1998,6 +2175,8 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
+    if (!donneesChargees) return;
+
     if (oldState.channelId && !newState.channelId) {
         const bpJoueur = battlePassData?.joueurs?.[newState.id];
         if (bpJoueur) bpJoueur.vocalCurrentSessionMinutes = 0;

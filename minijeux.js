@@ -682,7 +682,14 @@ async function handleMotusMessage(message, response, client, helpers) {
                     minijeuxBridge.demanderSauvegarde();
 
                     const tcgRewardM1 = await minijeuxBridge.grantTcgPoints?.([message.author.id], 2) || [];
-                    const ligneTcgM1 = tcgRewardM1.length > 0 ? `\n🃏 **Bonus RegaDex :** **+2 points RegaDex** pour <@${message.author.id}> !\n` : '';
+                    const soldeTcgM1 = tcgRewardM1.balances?.[message.author.id];
+
+                    const ligneTcgM1 = tcgRewardM1.includes(message.author.id)
+                        ? `\n🃏 **Bonus RegaDex :** **+2 points RegaDex** pour <@${message.author.id}> !` +
+                          (Number.isFinite(soldeTcgM1)
+                              ? `\n💰 **Nouveau solde : ${soldeTcgM1} points RegaDex**\n`
+                              : '\n')
+                        : '';
 
                     const embedManche1 = new EmbedBuilder()
                         .setColor(0x2ecc71)
@@ -727,7 +734,14 @@ async function handleMotusMessage(message, response, client, helpers) {
                 minijeuxBridge.demanderSauvegarde();
 
                 const tcgRewardM2 = await minijeuxBridge.grantTcgPoints?.([message.author.id], 2) || [];
-                const ligneTcgM2 = tcgRewardM2.length > 0 ? `\n🃏 **Bonus RegaDex :** **+2 points RegaDex** pour <@${message.author.id}> !` : '';
+                const soldeTcgM2 = tcgRewardM2.balances?.[message.author.id];
+
+                const ligneTcgM2 = tcgRewardM2.includes(message.author.id)
+                    ? `\n🃏 **Bonus RegaDex :** **+2 points RegaDex** pour <@${message.author.id}> !` +
+                      (Number.isFinite(soldeTcgM2)
+                          ? `\n💰 **Nouveau solde : ${soldeTcgM2} points RegaDex**`
+                          : '')
+                    : '';
 
                 const prochainRdv = motusData.heureSession === 10 
                     ? 'Rendez-vous ce soir à 19h00 pour le Motus difficile (7 lettres) !' 
@@ -1675,7 +1689,15 @@ async function terminerSessionRebus(channel) {
         ? `🤝 **ÉGALITÉ AU SOMMET !** Victoire partagée entre ${vainqueurs.join(' et ')} (**${maxScore} pts**) !`
         : `Félicitations à ${vainqueurs[0]} pour cette victoire (**${maxScore} pts**) !`;
     if (tcgRewardRebus.length > 0) {
-        texteVictoire += `\n🃏 **Bonus RegaDex :** **+2 points RegaDex** pour ${tcgRewardRebus.map(id => `<@${id}>`).join(', ')} !`;
+        texteVictoire += `\n\n🃏 **Bonus RegaDex :** **+2 points RegaDex** par gagnant !`;
+
+        for (const uid of tcgRewardRebus) {
+            const soldeRebus = tcgRewardRebus.balances?.[uid];
+
+            texteVictoire += Number.isFinite(soldeRebus)
+                ? `\n• <@${uid}> — 💰 **Nouveau solde : ${soldeRebus} points RegaDex**`
+                : `\n• <@${uid}> — 🃏 **+2 points RegaDex attribués**`;
+        }
     }
 
     const embedVictoire = new EmbedBuilder()

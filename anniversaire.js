@@ -61,59 +61,273 @@ function estAnniversaireAujourdhui(guildId, userId) {
 }
 
 const dejaSouhaites = new Set();
+let verificationAnniversairesEnCours = false;
+
+function getDateParisKey(date = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Europe/Paris',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).formatToParts(date);
+
+    const valeurs = Object.fromEntries(
+        parts.map(part => [part.type, part.value])
+    );
+
+    return `${valeurs.year}-${valeurs.month}-${valeurs.day}`;
+}
 
 async function checkBirthdays(client) {
-    const now = new Date();
-    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-    const today = `${String(parisNow.getDate()).padStart(2, '0')}/${String(parisNow.getMonth() + 1).padStart(2, '0')}`;
-    const data = birthdayState.getBirthdayData();
+    if (verificationAnniversairesEnCours) return;
+    verificationAnniversairesEnCours = true;
 
-    for (const guild of client.guilds.cache.values()) {
-        const guildBirthdays = data.birthdays[guild.id] ?? {};
-        for (const [userId, date] of Object.entries(guildBirthdays)) {
-            if (date !== today) continue;
+    try {
+        const dateKey = getDateParisKey();
+        const today = `${dateKey.slice(8, 10)}/${dateKey.slice(5, 7)}`;
+        const data = birthdayState.getBirthdayData();
 
-            const cleSouhait = `${today}_${guild.id}_${userId}`;
-            if (dejaSouhaites.has(cleSouhait)) continue;
-
-            const channel = guild.channels.cache.get(getBirthdayChannelId(guild.id));
-            if (!channel) continue;
-
-            dejaSouhaites.add(cleSouhait);
-
-            if (userId === client.user.id) {
-                await channel.send('JOYEUX ANNIVERSAIRE À MOI !! 🎉🎉🎉');
-                await channel.send('https://cdn.discordapp.com/attachments/1480756332373213275/1506635925126512790/dance.gif');
-                continue;
-            }
-
-            const member = guild.members.cache.get(userId);
-            if (member?.user.bot) {
-                await channel.send(`JOYEUX ANNIVERSAIRE, COLLÈGUE <@${userId}> ! 🎉\nTu fais partie des bots qui rendent ce serveur encore meilleur, alors, que ta vie reste longue et belle <3`);
-                await channel.send('https://cdn.discordapp.com/attachments/1480756332373213275/1506636764771778660/cyclops-ryu.gif');
-                continue;
-            }
-
-            await channel.send(`<@${userId}> JOYEUX ANNIVERSAIRE !!! 🎉🎉🎉`);
-            await channel.send(BIRTHDAY_GIF);
+        if (!data.lastAnnouncements) {
+            data.lastAnnouncements = {};
         }
+
+        for (const guild of client.guilds.cache.values()) {
+            const guildBirthdays = data.birthdays[guild.id] ?? {};
+
+            for (const [userId, date] of Object.entries(guildBirthdays)) {
+                if (date !== today) continue;
+
+                const cleSouhait = `${guild.id}_${userId}`;
+                const cleMemoire = `${dateKey}_${cleSouhait}`;
+
+                if (dejaSouhaites.has(cleMemoire)) continue;
+                if (data.lastAnnouncements[cleSouhait] === dateKey) continue;
+
+                const channelId = getBirthdayChannelId(guild.id);
+                const channel = guild.channels.cache.get(channelId)
+                    || await guild.channels.fetch(channelId).catch(() => null);
+
+                if (!channel || !channel.isTextBased()) continue;
+
+                // Recherche complète des annonces du jour dans l'historique.
+                // Si la vérification est incomplète, aucune annonce n'est envoyée.
+                let annonceExistante = false;
+                let historiqueVerifie = false;
+                let avantMessageId = null;
+
+                const MAX_PAGES_ANNIVERSAIRE = 100;
+
+                try {
+                    for (let page = 0; page < MAX_PAGES_ANNIVERSAIRE; page++) {
+                        const messages = await channel.messages.fetch({
+                            limit: 100,
+                            ...(avantMessageId
+                                ? { before: avantMessageId }
+                                : {})
+                        });
+
+                        if (messages.size === 0) {
+                            historiqueVerifie = true;
+                            break;
+                        }
+
+                        const lot = [...messages.values()].sort(
+                            (a, b) => b.createdTimestamp - a.createdTimestamp
+                        );
+
+                        for (const message of lot) {
+                            const dateMessage = getDateParisKey(message.createdAt);
+
+                            if (dateMessage < dateKey) {
+                                historiqueVerifie = true;
+                                break;
+                            }
+
+                            if (dateMessage !== dateKey) continue;
+                            if (message.author.id !== client.user.id) continue;
+
+                            const estAnnonce =
+                                userId === client.user.id
+                                    ? message.content ===
+                                        'JOYEUX ANNIVERSAIRE À MOI !! 🎉🎉🎉'
+                                    : message.content.startsWith(
+                                        `JOYEUX ANNIVERSAIRE, COLLÈGUE <@${userId}> !`
+                                    ) ||
+                                    message.content ===
+                                        `<@${userId}> JOYEUX ANNIVERSAIRE !!! 🎉🎉🎉`;
+
+                            if (estAnnonce) {
+                                annonceExistante = true;
+                                historiqueVerifie = true;
+                                break;
+                            }
+                        }
+
+                        if (historiqueVerifie) break;
+
+                        avantMessageId = lot[lot.length - 1].id;
+
+                        if (lot.length < 100) {
+                            historiqueVerifie = true;
+                            break;
+                        }
+                    }
+                } catch (err) {
+                    console.error(
+                        '❌ Vérification historique anniversaire échouée :',
+                        err
+                    );
+                }
+
+                if (!historiqueVerifie) {
+                    console.warn(
+                        `⚠️ Annonce anniversaire bloquée pour ${userId} : ` +
+                        'historique non vérifié intégralement.'
+                    );
+                    continue;
+                }
+
+                if (annonceExistante) {
+                    dejaSouhaites.add(cleMemoire);
+                    data.lastAnnouncements[cleSouhait] = dateKey;
+
+                    try {
+                        await birthdayState.saveBirthdays();
+                    } catch (err) {
+                        console.error(
+                            '❌ Impossible de sauvegarder une annonce existante :',
+                            err
+                        );
+                    }
+
+                    continue;
+                }
+
+                // Éviter une nouvelle tentative pendant cette exécution.
+                dejaSouhaites.add(cleMemoire);
+
+                try {
+                    let messageAnniversaire;
+                    let gifAnniversaire;
+
+                    if (userId === client.user.id) {
+                        messageAnniversaire =
+                            'JOYEUX ANNIVERSAIRE À MOI !! 🎉🎉🎉';
+
+                        gifAnniversaire =
+                            'https://cdn.discordapp.com/attachments/1480756332373213275/1506635925126512790/dance.gif';
+                    } else {
+                        const member = guild.members.cache.get(userId);
+
+                        if (member?.user.bot) {
+                            messageAnniversaire =
+                                `JOYEUX ANNIVERSAIRE, COLLÈGUE <@${userId}> ! 🎉\n` +
+                                'Tu fais partie des bots qui rendent ce serveur encore meilleur, alors, que ta vie reste longue et belle <3';
+
+                            gifAnniversaire =
+                                'https://cdn.discordapp.com/attachments/1480756332373213275/1506636764771778660/cyclops-ryu.gif';
+                        } else {
+                            messageAnniversaire =
+                                `<@${userId}> JOYEUX ANNIVERSAIRE !!! 🎉🎉🎉`;
+
+                            gifAnniversaire = BIRTHDAY_GIF;
+                        }
+                    }
+
+                    // La mention est envoyée une seule fois.
+                    await channel.send(messageAnniversaire);
+
+                    // Enregistrer immédiatement l'annonce après l'envoi.
+                    data.lastAnnouncements[cleSouhait] = dateKey;
+
+                    try {
+                        await birthdayState.saveBirthdays();
+                    } catch (err) {
+                        console.error(
+                            '❌ Sauvegarde de l’annonce d’anniversaire échouée :',
+                            err
+                        );
+                    }
+
+                    // Le GIF ne doit jamais déclencher une seconde mention.
+                    await channel.send(gifAnniversaire).catch(err => {
+                        console.warn(
+                            '⚠️ GIF d’anniversaire non envoyé :',
+                            err
+                        );
+                    });
+
+                } catch (err) {
+                    dejaSouhaites.delete(cleMemoire);
+
+                    console.error(
+                        `❌ Erreur anniversaire pour ${userId} :`,
+                        err
+                    );
+                }
+            }
+        }
+    } finally {
+        verificationAnniversairesEnCours = false;
     }
 }
 
+let birthdayTimer = null;
+
 function scheduleBirthdayCheck(client) {
-    // Vérification immédiate au démarrage sans attendre minuit
-    checkBirthdays(client).catch(() => {});
+    if (birthdayTimer) {
+        clearTimeout(birthdayTimer);
+        birthdayTimer = null;
+    }
 
-    const now = new Date();
-    const parisNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-    const parisMidnight = new Date(parisNow);
-    parisMidnight.setHours(24, 0, 0, 0);
-    const delay = parisMidnight - parisNow;
+    // Vérification immédiate au démarrage.
+    checkBirthdays(client).catch(err => {
+        console.error(
+            '❌ Erreur vérification anniversaires au démarrage :',
+            err
+        );
+    });
 
-    setTimeout(async () => {
-        await checkBirthdays(client);
-        scheduleBirthdayCheck(client);
-    }, delay);
+    function programmerProchaineVerification() {
+        const maintenant = new Date();
+
+        const parties = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Europe/Paris',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hourCycle: 'h23'
+        }).formatToParts(maintenant);
+
+        const valeurs = Object.fromEntries(
+            parties.map(part => [part.type, part.value])
+        );
+
+        const secondesDepuisMinuit =
+            Number(valeurs.hour) * 3600 +
+            Number(valeurs.minute) * 60 +
+            Number(valeurs.second);
+
+        // Vérification à intervalles réguliers :
+        // le suivi persistant empêche les doubles annonces.
+        const secondesAvantProchainControle =
+            300 - (secondesDepuisMinuit % 300);
+
+        birthdayTimer = setTimeout(async () => {
+            try {
+                await checkBirthdays(client);
+            } catch (err) {
+                console.error(
+                    '❌ Erreur vérification anniversaires :',
+                    err
+                );
+            } finally {
+                programmerProchaineVerification();
+            }
+        }, secondesAvantProchainControle * 1000);
+    }
+
+    programmerProchaineVerification();
 }
 
 // =========================

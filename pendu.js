@@ -803,7 +803,15 @@ async function handlePenduMessage(message, response, client, helpers) {
                         : `🏆 **Vainqueur de la manche :** <@${vainqueurs[0]}> (avec **${maxBonnes}** bonne(s) lettre(s)) !\n⭐ **Récompense :** +3 points au classement hebdomadaire !`;
 
                     if (tcgRewardPendu.length > 0) {
-                        texteAnnonceVictoire += `\n🃏 **Bonus RegaDex :** **+2 points RegaDex** pour ${tcgRewardPendu.map(id => `<@${id}>`).join(', ')} !`;
+                        texteAnnonceVictoire += `\n\n🃏 **Bonus RegaDex :** **+2 points RegaDex** par gagnant.e !`;
+
+                        for (const uid of tcgRewardPendu) {
+                            const soldePendu = tcgRewardPendu.balances?.[uid];
+
+                            texteAnnonceVictoire += Number.isFinite(soldePendu)
+                                ? `\n• <@${uid}> — 💰 **Nouveau solde : ${soldePendu} points RegaDex**`
+                                : `\n• <@${uid}> — 🃏 **+2 points RegaDex attribués**`;
+                        }
                     }
 
                     if (session.coupDePoker) {
