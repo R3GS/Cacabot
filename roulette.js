@@ -275,6 +275,19 @@ const ROULETTE_MUTE_MALUS_IDS = new Set([
     'malus-timeout-5min',
     'malus-timeout-20min'
 ]);
+// Identifiant Discord du rôle de modération.
+const ROULETTE_ROLE_MODO_MENTION_ID = 'TON_ID_DE_ROLE_MODO';
+
+function estMuteRedirigeVersModo(outcomeId, membre) {
+    return ROULETTE_MUTE_MALUS_IDS.has(outcomeId)
+        && Boolean(membre && bridge.estModo(membre));
+}
+
+function mentionRoleModoRoulette() {
+    return /^\d{17,20}$/.test(ROULETTE_ROLE_MODO_MENTION_ID)
+        ? `<@&${ROULETTE_ROLE_MODO_MENTION_ID}>`
+        : 'la modération';
+}
 const ROULETTE_TEXT_MALUS_IDS = new Set([
     'malus-boomer', 'malus-bebe', 'malus-uwu-24h', 'malus-emoji', 'malus-emoji-only',
     'malus-leet', 'malus-caps', 'malus-sans-voyelle', 'malus-sans-consonne',
@@ -5411,8 +5424,43 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
         if (ciblesMalusIds.length > 0) {
             rouletteRedirectChoixCible.delete(authorId);
             const ciblesChoisies = await resoudreCibles(ciblesMalusIds);
-            const ciblesEligibles = ciblesChoisies.filter(m => !estProtegeAntiAcharnement(m.id));
-            const ciblesProtegees = ciblesChoisies.filter(m => estProtegeAntiAcharnement(m.id));
+
+            // Restitue les redirections dont la cible
+            // n'est plus accessible sur le serveur.
+            const idsResolus = new Set(ciblesChoisies.map(m => m.id));
+            const ciblesIntrouvables = ciblesMalusIds.filter(
+                id => !idsResolus.has(id)
+            );
+
+            for (const _id of ciblesIntrouvables) {
+                crediterInventaireRoulette(authorId, 'redirectChoix', 1);
+            }
+
+            if (ciblesIntrouvables.length > 0) {
+                prefixeRedirect +=
+                    `↩️ **${ciblesIntrouvables.length} redirection(s) remboursée(s)** : ` +
+                    `cible(s) introuvable(s) sur le serveur.\n`;
+            }
+
+            const ciblesModosProtegees = ciblesChoisies.filter(
+                m => estMuteRedirigeVersModo(outcomeId, m)
+            );
+
+            const ciblesAntiAcharnement = ciblesChoisies.filter(
+                m => !estMuteRedirigeVersModo(outcomeId, m)
+                    && estProtegeAntiAcharnement(m.id)
+            );
+
+            const ciblesProtegees = [
+                ...ciblesModosProtegees,
+                ...ciblesAntiAcharnement
+            ];
+
+            const ciblesEligibles = ciblesChoisies.filter(
+                m => !estMuteRedirigeVersModo(outcomeId, m)
+                    && !estProtegeAntiAcharnement(m.id)
+            );
+
             for (const _prot of ciblesProtegees) {
                 crediterInventaireRoulette(authorId, 'redirectChoix', 1);
             }
@@ -5420,9 +5468,9 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
                 cibles = ciblesEligibles;
                 deverrouillerSucces(authorId, 'sniper-impitoyable', channel);
                 const nomsUniques = [...new Set(ciblesEligibles.map(m => m.displayName))].map(n => `**${n}**`).join(', ');
-                prefixeRedirect = ciblesEligibles.length > 1
-                    ? `🎯 **${auteurNom}** avait cumulé **${ciblesEligibles.length} redirections de malus**, envoyé simultanément vers ${nomsUniques} !\n`
-                    : `🎯 **${auteurNom}** avait choisi de rediriger son malus, envoyé vers **${ciblesEligibles[0].displayName}** !\n`;
+                prefixeRedirect += ciblesEligibles.length > 1
+                    ? `🎯 **${auteurNom}** avait cumulé **${ciblesEligibles.length} redirections de malus**, envoyées simultanément vers ${nomsUniques} !\n`
+                    : `🎯 **${auteurNom}** avait choisi de rediriger son malus vers **${ciblesEligibles[0].displayName}** !\n`;
                 for (const cid of new Set(ciblesEligibles.map(m => m.id))) {
                     enregistrerRedirectRecu(cid);
                     pingsRedirection.push({
@@ -5435,18 +5483,62 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
                         `💀 **${auteurNom}** t'a redirigé le malus Roulette **${ROULETTE_NOMS[outcomeId] || outcomeId}** !`
                     );
                 }
-                if (ciblesProtegees.length > 0) {
-                    const nomsProt = [...new Set(ciblesProtegees.map(m => `**${m.displayName}**`))].join(', ');
-                    prefixeRedirect += `🛡️ *Redirection(s) vers ${nomsProt} remboursée(s) (protection anti-acharnement 24h).* \n`;
+                if (ciblesModosProtegees.length > 0) {
+                    const nomsModos = [...new Set(
+                        ciblesModosProtegees.map(m => `<@${m.id}>`)
+                    )].join(', ');
+
+                    prefixeRedirect +=
+                        `🛡️ **Redirection remboursée !** ${nomsModos} ` +
+                        `fait partie de ${mentionRoleModoRoulette()}. ` +
+                        `Le mute ne s'applique pas à la modération : ` +
+                        `aucun effet sur la cible et ` +
+                        `**${ciblesModosProtegees.length} redirection(s) restituée(s)**.\n`;
+                }
+
+                if (ciblesAntiAcharnement.length > 0) {
+                    const nomsProt = [...new Set(
+                        ciblesAntiAcharnement.map(m => `**${m.displayName}**`)
+                    )].join(', ');
+
+                    prefixeRedirect +=
+                        `🛡️ Redirection(s) vers ${nomsProt} remboursée(s) ` +
+                        `(protection anti-acharnement 24h).\n`;
                 }
             } else if (ciblesProtegees.length > 0) {
-                const nomsProt = [...new Set(ciblesProtegees.map(m => `**${m.displayName}**`))].join(', ');
-                prefixeRedirect = `🛡️ **${auteurNom}** : ta redirection vers ${nomsProt} a été **remboursée** (3 malus redirigés déjà reçus en 24h) — tu subis donc le malus !\n`;
+                if (ciblesModosProtegees.length > 0) {
+                    const nomsModos = [...new Set(
+                        ciblesModosProtegees.map(m => `<@${m.id}>`)
+                    )].join(', ');
+
+                    prefixeRedirect +=
+                        `🛡️ **Redirection remboursée !**\n` +
+                        `${nomsModos} fait partie de ${mentionRoleModoRoulette()}.\n` +
+                        `Le mute ne s'applique pas à la modération : ` +
+                        `**aucun effet sur la cible**.\n` +
+                        `↩️ **${ciblesModosProtegees.length} redirection(s) restituée(s)**.\n`;
+                }
+
+                if (ciblesAntiAcharnement.length > 0) {
+                    const nomsProt = [...new Set(
+                        ciblesAntiAcharnement.map(m => `**${m.displayName}**`)
+                    )].join(', ');
+
+                    prefixeRedirect +=
+                        `🛡️ Redirection vers ${nomsProt} remboursée ` +
+                        `(protection anti-acharnement 24h).\n`;
+                }
+
+                prefixeRedirect +=
+                    `💀 **${auteurNom}** conserve donc le malus.\n`;
             }
         } else {
             const charges = rouletteRedirectCharges.get(authorId) || 0;
             if (charges > 0) {
-                const candidats = membresTop30Roulette(guild, authorId).filter(m => !estProtegeAntiAcharnement(m.id));
+                const candidats = membresTop30Roulette(guild, authorId).filter(
+                    m => !estProtegeAntiAcharnement(m.id)
+                        && !estMuteRedirigeVersModo(outcomeId, m)
+                );
                 if (candidats.length > 0) {
                     const cibleAlea = candidats[Math.floor(Math.random() * candidats.length)];
                     cibles = [cibleAlea];
@@ -7731,7 +7823,32 @@ async function handleRouletteButton(interaction, client) {
             return interaction.reply({ content: `❌ **${cible.displayName}** ne participe pas à la roulette (rôle manquant) !`, ephemeral: true });
         }
         if (estProtegeAntiAcharnement(cible.id)) {
-            return interaction.reply({ content: ROULETTE_ANTI_ACHARNEMENT_MSG, ephemeral: true });
+            return interaction.reply({
+                content: ROULETTE_ANTI_ACHARNEMENT_MSG,
+                ephemeral: true
+            });
+        }
+
+        // Protection des membres de la modération contre
+        // les redirections de mutes de 3, 5 et 20 minutes.
+        if (estMuteRedirigeVersModo(outcomeId, cible)) {
+            const embedRemboursement = new EmbedBuilder()
+                .setColor(0x3498DB)
+                .setTitle('🛡️ REDIRECTION REMBOURSÉE')
+                .setDescription(
+                    `Le malus **${ROULETTE_NOMS[outcomeId] || outcomeId}** ` +
+                    `ne peut pas être redirigé vers <@${cible.id}>.\n\n` +
+                    `Cette personne fait partie de ${mentionRoleModoRoulette()} ` +
+                    `et bénéficie d'une protection contre les mutes.\n\n` +
+                    `✅ **Aucun effet appliqué à la cible.**\n` +
+                    `↩️ **Redirection conservée dans ton inventaire.**\n` +
+                    `💀 **Le malus initial reste inchangé.**`
+                );
+
+            return interaction.reply({
+                embeds: [embedRemboursement],
+                flags: MessageFlags.Ephemeral
+            });
         }
 
         // Décrémente la charge

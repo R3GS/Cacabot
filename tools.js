@@ -16,7 +16,12 @@ const {
 } = require('discord.js');
 
 const EPSYS_ID = '436218312574107658';
+const BUG_AUTORISE_ID = '704593833421438996';
 const MODO_ROLE_ID = '720081311716606004';
+
+function estAutoriseBug(userId) {
+    return userId === EPSYS_ID || userId === BUG_AUTORISE_ID;
+}
 
 let toolsState = {
     client: null,
@@ -460,7 +465,7 @@ function buildBugListEmbed(bugs) {
     });
 
     embed.setDescription(desc);
-    embed.setFooter({ text: "Epsys-only • !bug en répondant pour ajouter • !bug resolve [N] pour retirer" });
+    embed.setFooter({ text: "!bug [texte] ou en réponse • !bug resolve [N] pour retirer" });
     return embed;
 }
 
@@ -1057,13 +1062,15 @@ async function handleToolsMessage(message, response, client) {
         return true;
     }
 
-    // !bug & !bugs (Epsys-only)
+    // !bug (Epsys + utilisatrice autorisée) / !bugs (Epsys-only)
     if (command === '!bug' || command === '!bugs') {
-        if (message.author.id !== EPSYS_ID) return true;
+        if (command === '!bugs' && message.author.id !== EPSYS_ID) return true;
+        if (command === '!bug' && !estAutoriseBug(message.author.id)) return true;
 
         const args = raw.split(/\s+/);
         const sub = args[1]?.toLowerCase();
         const repliedMsgId = message.reference?.messageId;
+        const texteBug = raw.slice(command.length).trim();
 
         if (sub === 'clear' || sub === 'reset') {
             bugsList.length = 0;
@@ -1076,60 +1083,108 @@ async function handleToolsMessage(message, response, client) {
             if (isNaN(indexToRemove) || indexToRemove < 0 || indexToRemove >= bugsList.length) {
                 return message.reply("Usage : `!bug resolve [numéro]` (ex: `!bug resolve 1`).");
             }
+
             const supprime = bugsList.splice(indexToRemove, 1)[0];
             toolsState.demanderSauvegarde?.();
-            return message.reply(`✅ **Bug n°${indexToRemove + 1} résolu :**\n> *« ${supprime.content ? supprime.content.slice(0, 80) : 'Image/Fichier'} »* de **${supprime.author}**`);
+
+            return message.reply(
+                `✅ **Bug n°${indexToRemove + 1} résolu :**\n` +
+                `> *« ${supprime.content ? supprime.content.slice(0, 80) : 'Image/Fichier'} »* de **${supprime.author}**`
+            );
         }
 
-        // Si !bug seul : afficher la liste des bugs enregistrés avec menu de résolution rapide
-        if (!repliedMsgId) {
+        // !bug seul : afficher la liste des bugs enregistrés
+        if (!texteBug && !repliedMsgId && message.attachments.size === 0) {
             const embed = buildBugListEmbed(bugsList);
             const components = [];
+
             if (bugsList.length > 0) {
                 const options = bugsList.slice(0, 25).map((b, idx) => ({
                     label: `Bug #${idx + 1} (${b.author})`.slice(0, 50),
                     description: (b.content || 'Image / Média').slice(0, 50),
                     value: String(idx)
                 }));
+
                 const menu = new StringSelectMenuBuilder()
                     .setCustomId('bug_resolve_select')
                     .setPlaceholder('✅ Marquer un bug comme résolu...')
                     .addOptions(options);
+
                 components.push(new ActionRowBuilder().addComponents(menu));
             }
+
             return message.reply({ embeds: [embed], components });
         }
 
-        // Si !bug en répondant à un message : répertorier le message dans la liste
-        const cibleMsg = await message.channel.messages.fetch(repliedMsgId).catch(() => null);
-        if (!cibleMsg) {
-            return message.reply("❌ Impossible de récupérer le message répondu.");
+        let cibleMsg = message;
+
+        // !bug en réponse, sans texte : enregistrer le message cité
+        if (repliedMsgId && !texteBug) {
+            cibleMsg = await message.channel.messages.fetch(repliedMsgId).catch(() => null);
+
+            if (!cibleMsg) {
+                return message.reply("❌ Impossible de récupérer le message répondu.");
+            }
         }
 
-        const membreAuteur = cibleMsg.member?.displayName ?? cibleMsg.author.username;
-        const hasImage = cibleMsg.attachments.size > 0;
-        const msgUrl = cibleMsg.url;
+        // !bug [texte] : enregistrer directement la description saisie
+        // !bug [texte] en réponse : conserver aussi le lien du message cité
+        let contenu = texteBug || cibleMsg.content || '';
+        let auteur = cibleMsg.member?.displayName ?? cibleMsg.author.username;
+        let auteurId = cibleMsg.author.id;
+        let url = cibleMsg.url;
+        let channelId = cibleMsg.channel.id;
+        let hasImage = cibleMsg.attachments.size > 0;
 
-        const dejaPresent = bugsList.some(b => b.id === cibleMsg.id);
-        if (!dejaPresent) {
-            bugsList.push({
-                id: cibleMsg.id,
-                author: membreAuteur,
-                authorId: cibleMsg.author.id,
-                channelId: cibleMsg.channel.id,
-                url: msgUrl,
-                content: cibleMsg.content || '',
-                hasImage: hasImage,
-                timestamp: Date.now()
-            });
-            toolsState.demanderSauvegarde?.();
+        if (texteBug) {
+            auteur = message.member?.displayName ?? message.author.username;
+            auteurId = message.author.id;
+
+            if (repliedMsgId) {
+                const messageCite = await message.channel.messages.fetch(repliedMsgId).catch(() => null);
+
+                if (messageCite) {
+                    url = messageCite.url;
+                    channelId = messageCite.channel.id;
+                    hasImage = hasImage || messageCite.attachments.size > 0;
+                }
+            }
         }
+
+        if (!contenu.trim() && !hasImage) {
+            return message.reply(
+                "❌ Précise un bug avec `!bug [texte]`, ajoute une image, " +
+                "ou réponds à un message avec `!bug`."
+            );
+        }
+
+        const bugId = texteBug ? message.id : cibleMsg.id;
+        const dejaPresent = bugsList.some(b => b.id === bugId);
+
+        if (dejaPresent) {
+            return message.reply("⚠️ Ce bug est déjà présent dans la liste !");
+        }
+
+        bugsList.push({
+            id: bugId,
+            author: auteur,
+            authorId: auteurId,
+            channelId,
+            url,
+            content: contenu,
+            hasImage,
+            timestamp: Date.now()
+        });
+
+        toolsState.demanderSauvegarde?.();
 
         const embedListe = buildBugListEmbed(bugsList);
+
         await message.reply({
             content: "🐛 **Bug répertorié dans la liste avec succès !**",
             embeds: [embedListe]
         });
+
         return true;
     }
 
@@ -1570,8 +1625,11 @@ async function handleToolsInteraction(interaction, client) {
 
     // Résolution d'un bug en 1 clic via le menu
     if (interaction.isStringSelectMenu() && interaction.customId === 'bug_resolve_select') {
-        if (interaction.user.id !== EPSYS_ID) {
-            return interaction.reply({ content: "Seule Epsys peut résoudre les bugs 😌", ephemeral: true });
+        if (!estAutoriseBug(interaction.user.id)) {
+            return interaction.reply({
+                content: "🛡️ Tu n'as pas l'autorisation de résoudre les bugs.",
+                ephemeral: true
+            });
         }
 
         const idx = parseInt(interaction.values[0], 10);
