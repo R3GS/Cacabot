@@ -71,6 +71,18 @@ const SET1_NAME = SETS_CONFIG[1].name;
 const BOOSTER_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6h
 const HALF_COOLDOWN_MS = 3 * 60 * 60 * 1000; // 3h
 const MAX_FREE_BOOSTERS = 2;
+const MAX_FREE_RESERVE_LEVEL = 2;
+
+function getFreeReserveLevel(u) {
+    return Math.min(
+        MAX_FREE_RESERVE_LEVEL,
+        Math.max(0, Math.floor(Number(u?.freeReserveLevel) || 0))
+    );
+}
+
+function getMaxFreeBoosters(u) {
+    return MAX_FREE_BOOSTERS + getFreeReserveLevel(u);
+}
 const MAX_WEEKLY_BOOSTERS = 2; // Plafond de boosters du vendredi 8h
 const MAX_COMMUNITY_BOOSTERS = 2; // Plafond de boosters communautaires
 const MAX_WISHLIST = 5;
@@ -156,7 +168,9 @@ const STORE_PRICES = {
     booster: 100,
     godPackBoost: 150,
     fiveCardBooster: 175,
-    negativeTransform: 1000
+    negativeTransform: 650,
+    freeReserve1: 500,
+    freeReserve2: 750
 };
 
 const CREDITS_LINKS = {
@@ -419,6 +433,9 @@ const boosterSessions = new Map(); // messageId -> session
 const pendingFocusChoices = new Map(); // userId -> sélection Focus en attente
 const focusConfirmationsEnCours = new Set();
 const FOCUS_CHOICE_TIMEOUT_MS = 60 * 1000;
+
+const pendingHalfCooldownChoices = new Map();
+const HALF_COOLDOWN_CHOICE_TIMEOUT_MS = 60 * 1000;
 const pendingConfirms = new Map(); // confirmId -> payload
 const binderReturnStates = new Map(); // binderMsgId -> { ownerId, viewerId, category, perPageMode, page, sortMode, rarityFilter, ownedOnly, fromHub, expiresAt }
 const pullChanceSessions = new Map(); // sessionId -> { targetKey, cardId, mult, cardPage, createdAt }
@@ -1269,6 +1286,7 @@ function getOrCreateTcgxSandbox(forceReset = false) {
             vocalMinutes: 0,
             cards,
             freeBoosters: MAX_FREE_BOOSTERS,
+            freeReserveLevel: 0,
             lastFreeRechargeAt: Date.now(),
             currentRechargeMs: BOOSTER_COOLDOWN_MS,
             inventory: {
@@ -1357,6 +1375,7 @@ function getOrCreateTcgUser(userId) {
             vocalMinutes: 0,
             cards: {},
             freeBoosters: 1, // 1er booster prêt à l'arrivée dans le TCG
+            freeReserveLevel: 0, // Extension permanente de réserve : 0, 1 ou 2
             lastFreeRechargeAt: Date.now(),
             currentRechargeMs: BOOSTER_COOLDOWN_MS,
             inventory: {
@@ -1400,6 +1419,7 @@ function getOrCreateTcgUser(userId) {
     if (typeof u.vocalMinutes !== 'number') u.vocalMinutes = 0;
     if (!u.cards) u.cards = {};
     if (typeof u.freeBoosters !== 'number') u.freeBoosters = 1;
+    u.freeReserveLevel = getFreeReserveLevel(u);
     if (!u.lastFreeRechargeAt) u.lastFreeRechargeAt = Date.now();
     if (!u.currentRechargeMs) u.currentRechargeMs = BOOSTER_COOLDOWN_MS;
     if (!u.inventory) {
@@ -1458,8 +1478,10 @@ function getOrCreateTcgUser(userId) {
 
 function syncFreeBoosters(u) {
     const now = Date.now();
-    if (u.freeBoosters >= MAX_FREE_BOOSTERS) {
-        u.freeBoosters = MAX_FREE_BOOSTERS;
+    const maxFree = getMaxFreeBoosters(u);
+
+    if (u.freeBoosters >= maxFree) {
+        u.freeBoosters = maxFree;
         u.lastFreeRechargeAt = now;
         u.currentRechargeMs = BOOSTER_COOLDOWN_MS;
         return;
@@ -1474,15 +1496,15 @@ function syncFreeBoosters(u) {
         u.currentRechargeMs = BOOSTER_COOLDOWN_MS;
         elapsed = now - u.lastFreeRechargeAt;
 
-        if (u.freeBoosters < MAX_FREE_BOOSTERS && elapsed >= BOOSTER_COOLDOWN_MS) {
+        if (u.freeBoosters < maxFree && elapsed >= BOOSTER_COOLDOWN_MS) {
             const extra = Math.floor(elapsed / BOOSTER_COOLDOWN_MS);
-            u.freeBoosters = Math.min(MAX_FREE_BOOSTERS, u.freeBoosters + extra);
+            u.freeBoosters = Math.min(maxFree, u.freeBoosters + extra);
             u.lastFreeRechargeAt += extra * BOOSTER_COOLDOWN_MS;
         }
     }
 
-    if (u.freeBoosters >= MAX_FREE_BOOSTERS) {
-        u.freeBoosters = MAX_FREE_BOOSTERS;
+    if (u.freeBoosters >= maxFree) {
+        u.freeBoosters = maxFree;
         u.lastFreeRechargeAt = now;
         u.currentRechargeMs = BOOSTER_COOLDOWN_MS;
     }
@@ -1490,7 +1512,7 @@ function syncFreeBoosters(u) {
 
 function getNextBoosterTimestamp(u) {
     syncFreeBoosters(u);
-    if (u.freeBoosters >= MAX_FREE_BOOSTERS) return null;
+    if (u.freeBoosters >= getMaxFreeBoosters(u)) return null;
     const stepMs = u.currentRechargeMs || BOOSTER_COOLDOWN_MS;
     return (u.lastFreeRechargeAt || Date.now()) + stepMs;
 }
@@ -1498,8 +1520,10 @@ function getNextBoosterTimestamp(u) {
 function getFullBoosterTimestamp(u) {
     const nextTs = getNextBoosterTimestamp(u);
     if (!nextTs) return null;
-    if (u.freeBoosters === 0) return nextTs + BOOSTER_COOLDOWN_MS;
-    return nextTs;
+
+    const missing = getMaxFreeBoosters(u) - u.freeBoosters;
+
+    return nextTs + Math.max(0, missing - 1) * BOOSTER_COOLDOWN_MS;
 }
 
 function getTotalAvailableBoosters(u) {
@@ -1808,7 +1832,7 @@ function armerNotifBooster(userId, client) {
 
     const nextAt = getNextBoosterTimestamp(u);
     if (!nextAt) {
-        // Choix permanent conservé même lorsque le stock est plein (2/2)
+        // Choix permanent conservé même lorsque le stock atteint sa capacité individuelle maximale.
         notif.notifyAt = null;
         notif.armedAtFreeCount = u.freeBoosters;
         tcgBridge.demanderSauvegarde();
@@ -1830,8 +1854,10 @@ function armerNotifBooster(userId, client) {
         const userObj = getOrCreateTcgUser(userId);
         const currentFreq = latestNotif.frequency === 'full' ? 'full' : 'each';
 
+        const maxFree = getMaxFreeBoosters(userObj);
+
         if (currentFreq === 'full') {
-            if (userObj.freeBoosters < MAX_FREE_BOOSTERS && getNextBoosterTimestamp(userObj)) {
+            if (userObj.freeBoosters < maxFree && getNextBoosterTimestamp(userObj)) {
                 return armerNotifBooster(userId, client);
             }
             latestNotif.notifyAt = null;
@@ -1841,7 +1867,7 @@ function armerNotifBooster(userId, client) {
             if (userObj.freeBoosters <= (latestNotif.armedAtFreeCount ?? 0) && getNextBoosterTimestamp(userObj)) {
                 return armerNotifBooster(userId, client);
             }
-            if (userObj.freeBoosters < MAX_FREE_BOOSTERS && getNextBoosterTimestamp(userObj)) {
+            if (userObj.freeBoosters < maxFree && getNextBoosterTimestamp(userObj)) {
                 armerNotifBooster(userId, client);
             } else {
                 latestNotif.notifyAt = null;
@@ -1858,9 +1884,9 @@ function armerNotifBooster(userId, client) {
                 .setTitle('🃏 Booster gratuit RegaDex disponible !')
                 .setDescription(
                     `Ton **Booster gratuit ${SET1_NAME}** est prêt !\n` +
-                    `Stock gratuit actuel : **${userObj.freeBoosters}/${MAX_FREE_BOOSTERS}**\n\n` +
+                    `Stock gratuit actuel : **${userObj.freeBoosters}/${getMaxFreeBoosters(userObj)}**\n\n` +
                     `👉 Tu peux taper \`!tcg\` ou \`!open\`, ou cliquer directement sur **🎁 Ouvrir le booster** ci-dessous.\n` +
-                    `*(Sinon, tu peux aussi le garder au chaud dans ton inventaire jusqu'à **2/2** max !)*`
+                    `*(Sinon, tu peux aussi le garder au chaud dans ton inventaire jusqu'à **${getMaxFreeBoosters(userObj)} boosters gratuits** max !)*`
                 );
 
             const channelRow = new ActionRowBuilder().addComponents(
@@ -1879,7 +1905,7 @@ function armerNotifBooster(userId, client) {
                     .setTitle('🃏 Booster gratuit RegaDex disponible !')
                     .setDescription(
                         `Ton **Booster gratuit ${SET1_NAME}** est prêt dans <#${TCG_CHANNEL_ID}> !\n` +
-                        `Stock gratuit actuel : **${userObj.freeBoosters}/${MAX_FREE_BOOSTERS}**\n\n` +
+                        `Stock gratuit actuel : **${userObj.freeBoosters}/${getMaxFreeBoosters(userObj)}**\n\n` +
                         `👉 Rejoins le salon <#${TCG_CHANNEL_ID}> et fais \`!tcg\` ou \`!open\` pour l'ouvrir, ou garde-le au chaud dans ton stock !`
                     );
                 const dmRow = new ActionRowBuilder().addComponents(
@@ -4240,8 +4266,8 @@ function buildHubEmbed(member, u) {
     const pct = comp.totalSet > 0 ? Math.round((comp.uniqueCount / comp.totalSet) * 100) : 0;
     const bar = buildProgressBar(comp.uniqueCount, comp.totalSet, 16);
 
-    const timerLine = u.freeBoosters >= MAX_FREE_BOOSTERS
-        ? '• Recharge : **Stock max (`2/2`)**'
+    const timerLine = u.freeBoosters >= getMaxFreeBoosters(u)
+        ? `• Recharge : **Stock max (\`${u.freeBoosters}/${getMaxFreeBoosters(u)}\`)**`
         : `• Prochain : <t:${Math.floor(nextTs / 1000)}:R>`;
 
     const activeEffects = [];
@@ -4258,7 +4284,8 @@ function buildHubEmbed(member, u) {
 
     const boosterLines = [
         `• Prêts à ouvrir : **${totalAvail}**`,
-        `• Gratuits : **${u.freeBoosters}/${MAX_FREE_BOOSTERS}**`
+        `• Gratuits : **${u.freeBoosters}/${getMaxFreeBoosters(u)}**`,
+        `• Extension de réserve : **${getFreeReserveLevel(u)}/${MAX_FREE_RESERVE_LEVEL}**${getFreeReserveLevel(u) === MAX_FREE_RESERVE_LEVEL ? ' *(MAX)*' : ''}`
     ];
     if ((u.inventory?.weeklyBooster || 0) > 0) {
         boosterLines.push(`• Hebdos (Vendredi) : **${u.inventory.weeklyBooster}/${MAX_WEEKLY_BOOSTERS}**`);
@@ -4562,14 +4589,13 @@ function buildWishlistPayload(ownerMember, viewerId, fromHub = false, fromProfil
         ? ['*Aucune carte dans cette Wishlist pour le moment.*']
         : wishlistIds.map((id, idx) => {
             const c = cardById.get(id);
-            const viewerOwns = (viewerU.cards?.[id] || 0) > 0;
             const ownerQty = ownerU.cards?.[id] || 0;
             const ownedTag = ownerQty > 0 ? ` *(déjà obtenue ×${ownerQty})*` : '';
-            if (viewerOwns && c) {
+            if (c) {
                 const meta = RARITY_META[c.rarity] || RARITY_META['Commune'];
                 return `**${idx + 1}.** ${meta.emoji} \`${c.id}\` **${c.name}** *(${c.rarity})*${ownedTag}`;
             }
-            return `**${idx + 1}.** 🔒 \`${id}\` *(Carte non découverte)*${ownedTag}`;
+            return `**${idx + 1}.** \`${id}\` *(Carte indisponible dans le catalogue)*${ownedTag}`;
         });
 
     const embed = new EmbedBuilder()
@@ -4595,10 +4621,9 @@ function buildWishlistPayload(ownerMember, viewerId, fromHub = false, fromProfil
                 .setPlaceholder('💔 Retirer une carte de ta Wishlist...')
                 .addOptions(wishlistIds.map(id => {
                     const c = cardById.get(id);
-                    const owned = (viewerU.cards?.[id] || 0) > 0;
                     return {
-                        label: owned && c ? `${id} • ${c.name}`.slice(0, 100) : `🔒 ${id} • Carte non découverte`,
-                        description: owned && c ? `${c.rarity} • Retirer de la Wishlist` : 'Retirer de la Wishlist',
+                        label: c ? `${id} • ${c.name}`.slice(0, 100) : `${id} • Carte indisponible`,
+                        description: c ? `${c.rarity} • Retirer de la Wishlist` : 'Retirer de la Wishlist',
                         value: id
                     };
                 }));
@@ -4643,12 +4668,10 @@ function buildWishlistPayload(ownerMember, viewerId, fromHub = false, fromProfil
                     const dupsCount = getDupsCount(c.id);
                     const dupsTxt = dupsCount > 0 ? `👥 ${dupsCount} en doublon` : 'Aucun doublon dispo';
                     opts.push({
-                        label: viewerOwns
-                            ? `${c.id} • ${c.name}`.slice(0, 100)
-                            : `🔒 ${c.id} • Carte non découverte (${c.category})`.slice(0, 100),
+                        label: `${viewerOwns ? '' : '🔒 '}${c.id} • ${c.name}`.slice(0, 100),
                         description: viewerOwns
                             ? `${meta.emoji} ${c.rarity} • ×${viewerU.cards[c.id]} • ${dupsTxt}`.slice(0, 100)
-                            : `${meta.emoji} ${c.rarity} • ${dupsTxt}`.slice(0, 100),
+                            : `${meta.emoji} ${c.rarity} • Non possédée • ${dupsTxt}`.slice(0, 100),
                         value: c.id
                     });
                 }
@@ -4683,6 +4706,12 @@ function buildWishlistPayload(ownerMember, viewerId, fromHub = false, fromProfil
                 .setEmoji('🎯')
                 .setStyle(ButtonStyle.Secondary)
                 .setDisabled(wishlistIds.length >= MAX_WISHLIST),
+            new ButtonBuilder()
+                .setCustomId(`tcg:wish:dups:${ownerId}`)
+                .setLabel('Trouver les doublons')
+                .setEmoji('👥')
+                .setStyle(ButtonStyle.Success)
+                .setDisabled(wishlistIds.length === 0),
             new ButtonBuilder()
                 .setCustomId(`tcg:wish:clear:${ownerId}:${hubFlag}:${profFlag}`)
                 .setLabel('Vider')
@@ -4772,7 +4801,10 @@ function buildGuidePayload(userId, fromHub = true, chapter = 'home') {
             title: '🎁 Boosters & Notifications',
             description:
                 `### 🎁 Boosters gratuits\n` +
-                `• **1 booster toutes les 6 heures**, avec un maximum de **2 boosters gratuits** en réserve.\n` +
+                `• **1 booster toutes les 6 heures**, avec une capacité initiale de **2 boosters gratuits** en réserve.\n` +
+                `• 📦 **Extension de réserve I :** ${STORE_PRICES.freeReserve1} points pour passer définitivement à **3 boosters gratuits**.\n` +
+                `• 📦 **Extension de réserve II :** ${STORE_PRICES.freeReserve2} points pour passer définitivement à **4 boosters gratuits**.\n` +
+                `• Ces améliorations sont permanentes, communes à tous les Sets et ne modifient pas la fréquence de recharge.\n` +
                 `• **Vendredi à 8h :** un booster hebdomadaire offert, avec un stock limité à **2**.\n` +
                 `• **Quêtes communautaires :** chaque lundi à 8h, un objectif collectif est lancé. Les membres ayant participé en ouvrant un booster peuvent gagner **2 boosters communautaires et 15 points** si l'objectif est atteint.\n\n` +
                 `### 🃏 Ouverture\n` +
@@ -4783,7 +4815,7 @@ function buildGuidePayload(userId, fromHub = true, chapter = 'home') {
                 `Si ton booster contient **uniquement des Communes**, une garantie Rare s'active pour le prochain booster.\n` +
                 `Si une punition empêche d'obtenir une Rare, la garantie reste en attente jusqu'à ce qu'une Rare soit obtenue.\n\n` +
                 `### 🔔 Notifications\n` +
-                `Avec \`!tcgnotif\`, choisis d'être prévenu à chaque recharge ou lorsque ta réserve atteint **2/2**.\n` +
+                `Avec \`!tcgnotif\`, choisis d'être prévenu.e à chaque recharge ou lorsque ta réserve atteint sa **capacité maximale (2/2, 3/3 ou 4/4)**.\n` +
                 `Tes préférences sont conservées et modifiables à tout moment.`
         },
 
@@ -4835,10 +4867,16 @@ function buildGuidePayload(userId, fromHub = true, chapter = 'home') {
                 `✨ **Transformation Holo :** ${STORE_PRICES.holoTransform} pts\n` +
                 `🕳️ **Transformation Négative :** ${STORE_PRICES.negativeTransform} pts\n` +
                 `⚡ **Demi-cooldown :** ${STORE_PRICES.halfCooldown} pts\n` +
+                `-# Avant une ouverture compatible, Cacabot te propose automatiquement d'utiliser ou de conserver ton demi-cooldown grâce aux boutons **Activer** et **Garder**.\n` +
+                `-# Une seule charge est consommée par recharge. Si tu possèdes aussi un Focus, son choix est proposé en premier.\n` +
                 `🔄 **Seconde Chance :** ${STORE_PRICES.secondChance} pts\n` +
                 `🌟 **God Pack ×25 (5 jours) :** ${STORE_PRICES.godPackBoost} pts\n\n` +
+                `### 📦 Améliorations permanentes\n` +
+                `📦 **Extension de réserve I (2 → 3) :** ${STORE_PRICES.freeReserve1} pts\n` +
+                `📦 **Extension de réserve II (3 → 4) :** ${STORE_PRICES.freeReserve2} pts\n` +
+                `-# Augmente uniquement la capacité de stockage des boosters gratuits générés toutes les 6 heures.\n\n` +
                 `💡 **Seconde Chance :** permet de remplacer une Commune de ton prochain booster par un nouveau tirage normal.\n` +
-                `Les objets achetés sont accessibles dans ton **inventaire** via \`!tcgclaim\`.`
+                `Les objets achetés sont accessibles dans ton **inventaire** via \`!tcgclaim\`. Les extensions de réserve s'appliquent immédiatement et définitivement après confirmation de l'achat.`
         },
 
         binder: {
@@ -5070,9 +5108,7 @@ function buildOpenPromptPayload(member, u, fromHub = false) {
     if ((u.inventory?.luckyBooster || 0) > 0 && !u.activeBonuses?.luckyBooster) {
         unactivatedReminders.push(`🍀 **Booster Chanceux** (\`${u.inventory.luckyBooster}\` en inventaire)`);
     }
-    if ((u.inventory?.halfCooldown || 0) > 0 && !u.activeBonuses?.halfCooldown) {
-        unactivatedReminders.push(`⚡ **Cooldown /2** (\`${u.inventory.halfCooldown}\` en inventaire)`);
-    }
+    // Le demi-cooldown est désormais proposé automatiquement avant ouverture.
     if ((u.inventory?.godPackBoost || 0) > 0 && !(u.activeBonuses?.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil)) {
         unactivatedReminders.push(`🌟 **Taux God Pack ×25** (\`${u.inventory.godPackBoost}\` en inventaire)`);
     }
@@ -5091,8 +5127,10 @@ function buildOpenPromptPayload(member, u, fromHub = false) {
 
     const desc = (totalAvail > 0 || fiveCardCount > 0)
         ? `### Vous avez **${totalAvail + fiveCardCount} booster${(totalAvail + fiveCardCount) > 1 ? 's' : ''} prêt${(totalAvail + fiveCardCount) > 1 ? 's' : ''} à ouvrir** !\nEn ouvrir un maintenant ?\n\n` +
-          `🎁 **Gratuits :** \`${u.freeBoosters}/${MAX_FREE_BOOSTERS}\`${extraLine}${fiveLine}` +
-          (nextTs ? `\n⏱️ Prochain booster gratuit <t:${Math.floor(nextTs / 1000)}:R>` : '\n✅ Jauge gratuite pleine (`2/2`)') +
+          `🎁 **Gratuits :** \`${u.freeBoosters}/${getMaxFreeBoosters(u)}\`${extraLine}${fiveLine}` +
+          (nextTs
+              ? `\n⏱️ Prochain booster gratuit <t:${Math.floor(nextTs / 1000)}:R>`
+              : `\n✅ Jauge gratuite pleine (\`${u.freeBoosters}/${getMaxFreeBoosters(u)}\`)`) +
           reminderBlock
         : `### Vous n'avez aucun booster disponible pour le moment.\n` +
           `⏱️ Prochain booster gratuit <t:${Math.floor(nextTs / 1000)}:R>\n` +
@@ -5148,9 +5186,15 @@ function buildNotifMenuPayload(member, u, fromHub = false, statusNote = null, ep
     const freq = (currentNotif?.frequency === 'full' || (!currentNotif && u.notifFreq === 'full')) ? 'full' : 'each';
     const modeTag = fromHub ? ':1' : (ephemeralMode ? ':ephem' : '');
 
+    const maxFree = getMaxFreeBoosters(u);
+    const fullStockLabel = `${maxFree}/${maxFree}`;
+
     let statusText = '🔕 **Notifications actuelles :** Désactivées';
     if (currentNotif) {
-        const freqTxt = freq === 'full' ? 'tous les 2 boosters *(2/2)*' : 'à chaque booster *(1/2 & 2/2)*';
+        const freqTxt = freq === 'full'
+            ? `lorsque la réserve est pleine (${fullStockLabel})`
+            : 'à chaque booster gratuit';
+
         statusText = currentNotif.mode === 'dm'
             ? `📩 **Notifications actuelles :** Actives en **Message Privé** *(${freqTxt})*`
             : `🔔 **Notifications actuelles :** Actives **dans ce salon** *(${freqTxt})*`;
@@ -5158,13 +5202,17 @@ function buildNotifMenuPayload(member, u, fromHub = false, statusNote = null, ep
 
     let timerLine = '';
     if (!nextTs) {
-        timerLine = `✅ Ta jauge de boosters gratuits est actuellement pleine (**${u.freeBoosters}/${MAX_FREE_BOOSTERS}**).\n\n`;
+        timerLine = `✅ Ta jauge de boosters gratuits est actuellement pleine (**${u.freeBoosters}/${maxFree}**).\n\n`;
     } else if (freq === 'full') {
-        timerLine = `⏱️ Stock plein (**2/2**) prêt **<t:${Math.floor(fullTs / 1000)}:R>**` +
-            (u.freeBoosters === 0 ? ` *(1er booster <t:${Math.floor(nextTs / 1000)}:R>)*` : '') + '.\n\n';
+        timerLine = `⏱️ Stock plein (**${fullStockLabel}**) prêt **<t:${Math.floor(fullTs / 1000)}:R>**` +
+            (nextTs !== fullTs
+                ? ` *(prochain booster <t:${Math.floor(nextTs / 1000)}:R>)*`
+                : '') + '.\n\n';
     } else {
         timerLine = `⏱️ Prochain booster gratuit prêt **<t:${Math.floor(nextTs / 1000)}:R>**` +
-            (u.freeBoosters === 0 && fullTs ? ` *(stock 2/2 <t:${Math.floor(fullTs / 1000)}:R>)*` : '') + '.\n\n';
+            (fullTs && fullTs !== nextTs
+                ? ` *(stock ${fullStockLabel} <t:${Math.floor(fullTs / 1000)}:R>)*`
+                : '') + '.\n\n';
     }
 
     const embed = new EmbedBuilder()
@@ -5172,8 +5220,9 @@ function buildNotifMenuPayload(member, u, fromHub = false, statusNote = null, ep
         .setAuthor({ name: `Notifications Booster • ${member.displayName}`, iconURL: member.displayAvatarURL({ dynamic: true }) })
         .setTitle('🔔 Notifications de boosters gratuits')
         .setDescription(
+            `📦 **Réserve actuelle :** ${u.freeBoosters}/${maxFree}\n\n` +
             timerLine +
-            `🎯 **Fréquence :** ${freq === 'full' ? 'Tous les 2 boosters *(stock 2/2 plein)*' : 'À chaque booster *(1/2 puis 2/2)*'}\n` +
+            `🎯 **Fréquence :** ${freq === 'full' ? `Réserve pleine *(${fullStockLabel})*` : 'À chaque booster gratuit'}\n` +
             statusText +
             `\n-# 💡 Ce choix reste **sauvegardé définitivement** entre tes ouvertures *(modifiable ou désactivable à tout moment)*.` +
             (statusNote ? `\n\n${statusNote}` : '')
@@ -5187,7 +5236,7 @@ function buildNotifMenuPayload(member, u, fromHub = false, statusNote = null, ep
             .setStyle(freq === 'each' ? ButtonStyle.Primary : ButtonStyle.Secondary),
         new ButtonBuilder()
             .setCustomId(`tcg:notif:freq_full:${member.id}${modeTag}`)
-            .setLabel('Me prévenir tous les 2 boosters')
+            .setLabel(`Réserve pleine (${fullStockLabel})`)
             .setEmoji('📦')
             .setStyle(freq === 'full' ? ButtonStyle.Primary : ButtonStyle.Secondary)
     );
@@ -5225,6 +5274,18 @@ function buildNotifMenuPayload(member, u, fromHub = false, statusNote = null, ep
 function buildStorePayload(member, u, fromHub = false) {
     const hubSuffix = fromHub ? ':1' : '';
 
+    const reserveLevel = getFreeReserveLevel(u);
+    const reserveMax = reserveLevel >= MAX_FREE_RESERVE_LEVEL;
+    const reserveKey = reserveLevel === 0 ? 'freeReserve1' : 'freeReserve2';
+    const reservePrice = STORE_PRICES[reserveKey];
+
+    const reserveDescription = reserveMax
+        ? `📦 **Extension de réserve — MAX**\n` +
+          `-# Ta capacité permanente maximale de **4 boosters gratuits** est atteinte.`
+        : `📦 **Extension de réserve ${reserveLevel === 0 ? 'I' : 'II'}** — \`${reservePrice} pts\`\n` +
+          `-# Augmente définitivement ta réserve de **${getMaxFreeBoosters(u)} à ${getMaxFreeBoosters(u) + 1} boosters gratuits**.\n` +
+          `-# Recharge inchangée : **1 booster toutes les 6h**.`;
+
     const embed = new EmbedBuilder()
         .setColor(0x9b59b6)
         .setAuthor({ name: `RegaDex Store • ${member.displayName}`, iconURL: member.displayAvatarURL({ dynamic: true }) })
@@ -5240,7 +5301,8 @@ function buildStorePayload(member, u, fromHub = false) {
             `🔄 **Seconde Chance** — \`${STORE_PRICES.secondChance} pts\`\n` +
             `-# Active une relance pour ton prochain booster : choisis **une Commune** du récapitulatif et remplace-la par un nouveau tirage normal.\n\n` +
             `⚡ **Diviser le cooldown par 2** — \`${STORE_PRICES.halfCooldown} pts\`\n` +
-            `-# Activé dès l'ouverture du prochain booster : celui d'après prendra **3h** au lieu de 6h.\n\n` +
+            `-# Avant chaque ouverture compatible, choisis **Activer** ou **Garder**. Divise par deux le temps de recharge restant de ton prochain booster gratuit.\n` +
+            `-# Aucune activation manuelle nécessaire. Tes charges inutilisées restent dans ton inventaire.\n\n` +
             `✨ **Transformer une carte en Holographique** — \`${STORE_PRICES.holoTransform} pts\`\n` +
             `-# Transforme 1 de tes cartes compatibles possédées en sa version **holographique** !\n\n` +
             `🍀 **Prochain booster chanceux** — \`${STORE_PRICES.luckyBooster} pts\`\n` +
@@ -5252,7 +5314,8 @@ function buildStorePayload(member, u, fromHub = false) {
             `🎴 **Booster 5 cartes (${SET1_NAME})** — \`${STORE_PRICES.fiveCardBooster} pts\`\n` +
             `-# Un gros booster contenant **5 cartes** (sans doublon dans le même pack) !\n\n` +
             `🕳️ **Transformer une Full Art en Négative** — \`${STORE_PRICES.negativeTransform} pts\`\n` +
-            `-# Transforme 1 de tes cartes **Full Art** possédées en sa version **Négative** !`
+            `-# Transforme 1 de tes cartes **Full Art** possédées en sa version **Négative** !\n\n` +
+            reserveDescription
         );
 
     const storeBtn = (key, label, emoji) => new ButtonBuilder()
@@ -5278,9 +5341,30 @@ function buildStorePayload(member, u, fromHub = false) {
         storeBtn('negativeTransform', 'Full Art → Négative', '🕳️')
     );
 
-    const storeButtons = [
+    const reserveButton = new ButtonBuilder()
+        .setCustomId(`tcg:buy:${reserveKey}:${member.id}${hubSuffix}`)
+        .setLabel(
+            reserveMax
+                ? 'Réserve MAX (4/4)'
+                : `Réserve +1 (${reservePrice} pts)`
+        )
+        .setEmoji('📦')
+        .setStyle(reserveMax ? ButtonStyle.Secondary : ButtonStyle.Success)
+        .setDisabled(reserveMax || u.points < reservePrice);
+
+    const itemButtons = [
         ...row.components,
-        ...row2.components,
+        ...row2.components
+    ];
+
+    if (!reserveMax && reserveLevel === 0) {
+        itemButtons.splice(itemButtons.length - 1, 0, reserveButton);
+    } else {
+        itemButtons.push(reserveButton);
+    }
+
+    const storeButtons = [
+        ...itemButtons,
         new ButtonBuilder()
             .setCustomId(`tcg:claim:open:${member.id}:1`)
             .setLabel('Mon Inventaire')
@@ -5349,13 +5433,15 @@ function buildClaimPayload(member, u, fromHub = false) {
         .setDescription(
             `Voici tes bonus en réserve :\n\n` +
             `🎁 **Boosters prêts à ouvrir :** \`${getTotalAvailableBoosters(u)}\` *(${SET1_NAME})*\n` +
+            `🆓 **Boosters gratuits :** \`${u.freeBoosters}/${getMaxFreeBoosters(u)}\`\n` +
+            `📦 **Extension de réserve :** \`${getFreeReserveLevel(u)}/${MAX_FREE_RESERVE_LEVEL}\` ${getFreeReserveLevel(u) === MAX_FREE_RESERVE_LEVEL ? '*(Capacité maximale atteinte)*' : '*(Amélioration permanente)*'}\n` +
             boosterSubBlock +
             `🎴 **Boosters 5 cartes :** \`${inv.fiveCardBooster || 0}\`\n` +
             `🎯 **Focus RegaDex :** \`${inv.focus || 0}\` charge(s) disponibles\n` +
             `🍀 **Prochain booster chanceux :** \`${inv.luckyBooster || 0}\` ${u.activeBonuses?.luckyBooster ? '*(Déjà actif sur le prochain booster !)*' : ''}\n` +
             `✨ **Transformation Holographique :** \`${inv.holoTransform || 0}\`\n` +
             `🕳️ **Transformation Full Art → Négative :** \`${inv.negativeTransform || 0}\`\n` +
-            `⚡ **Demi-cooldown (3h) :** \`${inv.halfCooldown || 0}\` ${u.activeBonuses?.halfCooldown ? '*(Déjà armé sur le prochain booster !)*' : ''}\n` +
+            `⚡ **Demi-cooldown (3h) :** \`${inv.halfCooldown || 0}\` ${u.activeBonuses?.halfCooldown ? '*(Déjà armé sur le prochain booster compatible !)*' : (inv.halfCooldown || 0) > 0 ? '*(Proposé avant chaque ouverture compatible)*' : ''}\n` +
             `🔄 **Seconde Chance :** \`${inv.secondChance || 0}\` ${u.activeBonuses?.secondChance ? '*(Armée pour le prochain booster)*' : ''}\n` +
             `🌟 **Taux God Pack ×25 (5j) :** \`${inv.godPackBoost || 0}\` ${godBoostActive ? `*(Actif pour toi : **2,5%** au lieu de 0,1% jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F>)*` : '*(0,1% → 2,5%, personnel)*'}`
         );
@@ -5695,7 +5781,7 @@ function buildBoosterRecapEmbed(member, session, u) {
 
     if (session.luckyUsed) bonusInfo.push('🍀 Booster Chanceux appliqué');
     if (session.pityUsed) bonusInfo.push('✨ Pity appliquée (Rare garantie)');
-    if (session.halfCdUsed) bonusInfo.push('⚡ Demi-cooldown activé (3h)');
+    if (session.halfCdUsed) bonusInfo.push('⚡ Demi-cooldown appliqué — recharge divisée par deux !');
     if (session.triggeredNextPity) bonusInfo.push('🛡️ Que des Communes : ton **prochain** booster aura une **Rare** garantie !');
     if (Array.isArray(session.unlockedMilestones) && session.unlockedMilestones.length > 0) {
         for (const ms of session.unlockedMilestones) {
@@ -5706,7 +5792,7 @@ function buildBoosterRecapEmbed(member, session, u) {
 
     const cooldownLine = nextTs
         ? `\n⏱️ **Prochain booster gratuit :** <t:${Math.floor(nextTs / 1000)}:R>`
-        : `\n✅ **Jauge gratuite pleine :** \`${u.freeBoosters}/${MAX_FREE_BOOSTERS}\``;
+        : `\n✅ **Jauge gratuite pleine :** \`${u.freeBoosters}/${getMaxFreeBoosters(u)}\``;
 
     const recapColor = session.isGodPack ? 0xFFD700 : (u.theme === 'W' ? 0xffffff : 0x111216);
     const milestoneNote = session.milestoneBonusPts > 0 ? ` *(+${session.milestoneBonusPts} pts de palier)*` : '';
@@ -6060,6 +6146,30 @@ async function showFocusChoice(
         return;
     }
 
+    if (focusConfirmationsEnCours.has(userId)) {
+        await interaction.reply({
+            content: "⏳ Une confirmation d'ouverture est déjà en cours.",
+            ephemeral: true
+        });
+        return;
+    }
+
+    const existingHalfCooldownChoice = pendingHalfCooldownChoices.get(userId);
+
+    if (existingHalfCooldownChoice) {
+        if (Date.now() < existingHalfCooldownChoice.expiresAt) {
+            await interaction.reply({
+                content:
+                    "⚡ Tu as déjà un choix de demi-cooldown en attente.\n" +
+                    "Termine ton choix ou attends son expiration.",
+                ephemeral: true
+            });
+            return;
+        }
+
+        pendingHalfCooldownChoices.delete(userId);
+    }
+
     const existingFocusChoice = pendingFocusChoices.get(userId);
 
     if (existingFocusChoice) {
@@ -6091,7 +6201,7 @@ async function showFocusChoice(
     }
 
     if (charges <= 0) {
-        await startBoosterOpening(
+        await showHalfCooldownChoice(
             interaction,
             member,
             interaction.client,
@@ -6208,13 +6318,164 @@ async function showFocusChoice(
     }
 }
 
+function canOfferHalfCooldown(u, boosterType = 'normal') {
+    if (u.activeBonuses?.halfCooldown) return false;
+    if ((u.inventory?.halfCooldown || 0) <= 0) return false;
+
+    const maxFree = getMaxFreeBoosters(u);
+
+    const consumesFreeBooster =
+        boosterType !== 'five' &&
+        u.freeBoosters > 0;
+
+    const freeAfterOpening =
+        u.freeBoosters - (consumesFreeBooster ? 1 : 0);
+
+    const startsNewRecharge =
+        consumesFreeBooster &&
+        u.freeBoosters >= maxFree;
+
+    if (freeAfterOpening >= maxFree) return false;
+
+    if (
+        !startsNewRecharge &&
+        u.currentRechargeMs === HALF_COOLDOWN_MS
+    ) {
+        return false;
+    }
+
+    return true;
+}
+
+async function showHalfCooldownChoice(
+    interaction,
+    member,
+    client,
+    fromHub = false,
+    boosterType = 'normal',
+    focusCategory = null
+) {
+    const userId = member.id;
+    const u = getOrCreateTcgUser(userId);
+
+    if (!canOfferHalfCooldown(u, boosterType)) {
+        return startBoosterOpening(
+            interaction,
+            member,
+            client,
+            fromHub,
+            boosterType,
+            focusCategory
+        );
+    }
+
+    const charges = u.inventory.halfCooldown;
+    const token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+
+    pendingHalfCooldownChoices.set(userId, {
+        token,
+        boosterType,
+        fromHub,
+        focusCategory,
+        expiresAt: Date.now() + HALF_COOLDOWN_CHOICE_TIMEOUT_MS
+    });
+
+    const embed = new EmbedBuilder()
+        .setColor(0xf1c40f)
+        .setTitle('⚡ Demi-cooldown disponible !')
+        .setDescription(
+            `Tu possèdes **${charges} demi-cooldown${charges > 1 ? 's' : ''}** dans ton inventaire.\n\n` +
+            `Souhaites-tu utiliser une charge pour réduire de moitié le temps de recharge de ton prochain booster gratuit ?\n\n` +
+            `⏱️ **Recharge :** ~~6 heures~~ → **3 heures**\n` +
+            `-# Si une recharge est déjà en cours, son temps restant sera divisé par deux.\n\n` +
+            (focusCategory
+                ? `🎯 **Focus sélectionné :** ${focusCategory}\n\n`
+                : '') +
+            `🟢 **Activer :** utilise une charge et ouvre ton booster.\n` +
+            `🔴 **Garder :** conserve ton bonus et ouvre ton booster.\n\n` +
+            `-# Sans réponse après 60 secondes, l'ouverture est annulée et rien n'est consommé.`
+        );
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`tcg:halfcdpick:activate:${userId}:${token}`)
+            .setLabel('Activer')
+            .setEmoji('⚡')
+            .setStyle(ButtonStyle.Success),
+
+        new ButtonBuilder()
+            .setCustomId(`tcg:halfcdpick:keep:${userId}:${token}`)
+            .setLabel('Garder')
+            .setEmoji('📦')
+            .setStyle(ButtonStyle.Danger)
+    );
+
+    try {
+        const payload = {
+            content: null,
+            embeds: [embed],
+            components: [row]
+        };
+
+        if (interaction.customId?.startsWith('tcg:focuspick:')) {
+            await interaction.update({
+                ...payload,
+                attachments: []
+            });
+        } else {
+            await interaction.reply({
+                ...payload,
+                ephemeral: true
+            });
+        }
+
+        const halfCooldownTimeout = setTimeout(async () => {
+            const pending = pendingHalfCooldownChoices.get(userId);
+
+            if (!pending || pending.token !== token) return;
+            if (Date.now() < pending.expiresAt) return;
+
+            pendingHalfCooldownChoices.delete(userId);
+
+            try {
+                await interaction.editReply({
+                    content:
+                        '⏳ **Choix demi-cooldown expiré.**\n' +
+                        "Aucun booster ni aucun bonus n'a été consommé.\n" +
+                        'Tu peux relancer une ouverture quand tu veux.',
+                    embeds: [],
+                    components: [],
+                    attachments: []
+                });
+            } catch (err) {
+                console.error(
+                    `[RegaDex] Impossible de fermer le menu demi-cooldown de ${userId} :`,
+                    err
+                );
+            }
+        }, HALF_COOLDOWN_CHOICE_TIMEOUT_MS);
+
+        halfCooldownTimeout.unref?.();
+
+    } catch (err) {
+        const pending = pendingHalfCooldownChoices.get(userId);
+
+        if (pending?.token === token) {
+            pendingHalfCooldownChoices.delete(userId);
+        }
+
+        throw err;
+    }
+}
+
 async function startBoosterOpening(
     targetResponder,
     member,
     client,
     fromHub = false,
     boosterType = 'normal',
-    focusCategory = null
+    focusCategory = null,
+    useHalfCooldown = false
 ) {
     const userId = member.id;
     const isFiveCard = boosterType === 'five';
@@ -6275,6 +6536,15 @@ async function startBoosterOpening(
         return replySilent(targetResponder, "❌ Tu n'as plus de charges Focus.");
     }
 
+    if (useHalfCooldown && !canOfferHalfCooldown(u, boosterType)) {
+        return replySilent(targetResponder, {
+            content:
+                "❌ Le demi-cooldown sélectionné n'est plus disponible.\n" +
+                "Aucun booster ni aucun bonus n'a été consommé.",
+            ephemeral: true
+        });
+    }
+
     // État du joueur avant toute consommation ou attribution.
     // Le verrou d'ouverture protège ces données des autres ouvertures
     // de boosters du même joueur pendant cette opération.
@@ -6305,7 +6575,7 @@ async function startBoosterOpening(
         } else {
             // Ordre de consommation : gratuit -> hebdo -> communautaire -> maître -> inventaire
             if (u.freeBoosters > 0) {
-                const wasFull = u.freeBoosters >= MAX_FREE_BOOSTERS;
+                const wasFull = u.freeBoosters >= getMaxFreeBoosters(u);
                 u.freeBoosters -= 1;
                 if (wasFull) {
                     u.lastFreeRechargeAt = Date.now();
@@ -6322,22 +6592,48 @@ async function startBoosterOpening(
             }
         }
 
-        // Consommer le demi-cooldown si armé
+        // Demi-cooldown sélectionné avant ouverture ou déjà armé manuellement.
         let halfCdUsed = false;
-        if (u.activeBonuses.halfCooldown) {
-            u.activeBonuses.halfCooldown = false;
-            halfCdUsed = true;
-            if (u.freeBoosters < MAX_FREE_BOOSTERS) {
-                if (u.currentRechargeMs !== HALF_COOLDOWN_MS) {
-                    const remaining = (u.lastFreeRechargeAt + u.currentRechargeMs) - Date.now();
-                    if (remaining > 0) {
-                        u.currentRechargeMs = HALF_COOLDOWN_MS;
-                        u.lastFreeRechargeAt = Date.now() - Math.max(0, HALF_COOLDOWN_MS - Math.ceil(remaining / 2));
-                    } else {
-                        u.currentRechargeMs = HALF_COOLDOWN_MS;
-                    }
-                }
+
+        const halfCooldownArmed = Boolean(u.activeBonuses.halfCooldown);
+
+        const halfCooldownAvailable =
+            halfCooldownArmed ||
+            (
+                useHalfCooldown &&
+                (u.inventory?.halfCooldown || 0) > 0
+            );
+
+        if (
+            halfCooldownAvailable &&
+            u.freeBoosters < getMaxFreeBoosters(u) &&
+            u.currentRechargeMs !== HALF_COOLDOWN_MS
+        ) {
+            if (halfCooldownArmed) {
+                // Charge déjà débitée lors de l'activation manuelle.
+                u.activeBonuses.halfCooldown = false;
+            } else {
+                // Charge sélectionnée dans le menu de préouverture.
+                u.inventory.halfCooldown -= 1;
             }
+
+            halfCdUsed = true;
+
+            const now = Date.now();
+            const currentRechargeMs =
+                u.currentRechargeMs || BOOSTER_COOLDOWN_MS;
+
+            const remaining = Math.max(
+                0,
+                (u.lastFreeRechargeAt + currentRechargeMs) - now
+            );
+
+            u.currentRechargeMs = HALF_COOLDOWN_MS;
+
+            u.lastFreeRechargeAt = now - Math.max(
+                0,
+                HALF_COOLDOWN_MS - Math.ceil(remaining / 2)
+            );
         }
 
         // Seconde Chance : consommée sur ce booster uniquement.
@@ -6494,7 +6790,10 @@ async function startBoosterOpening(
 
         const isFocusChoiceButton = Boolean(
             targetResponder.isButton?.() &&
-            targetResponder.customId?.startsWith('tcg:focuspick:')
+            (
+                targetResponder.customId?.startsWith('tcg:focuspick:') ||
+                targetResponder.customId?.startsWith('tcg:halfcdpick:')
+            )
         );
 
         if (isFocusChoiceButton) {
@@ -7482,8 +7781,23 @@ function buildUnownedCardPayload(card, viewerId) {
         buildCloseButton(viewerId)
     );
 
+    const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
+
+    const embed = new EmbedBuilder()
+        .setColor(meta.color)
+        .setTitle(`${meta.emoji} ${card.id} — ${card.name}`.slice(0, 256))
+        .setDescription(
+            `💎 **Rareté :** ${card.rarity}\n` +
+            `📂 **Catégorie :** ${card.category}\n` +
+            `📚 **Collection :** ${getSetConfig(card.setNumber || DEFAULT_SET_NUMBER).name}\n\n` +
+            `🔒 Tu ne possèdes pas encore cette carte.\n` +
+            `Tu peux rechercher ses doublons ou l'ajouter à ta Wishlist !`
+        )
+        .setFooter({ text: 'RegaDex • Carte non possédée' });
+
     return {
-        content: `🔒 Tu n'as pas encore découvert la carte \`${card.id}\` dans ton RegaDex ! La surprise reste totale 🤫`,
+        content: null,
+        embeds: [embed],
         components: [row]
     };
 }
@@ -7504,7 +7818,7 @@ function buildCarteHubPayload(authorMember, channel, options = {}) {
         .setDescription(
             `Sélectionne directement une carte ci-dessous ou clique sur **🔎 Chercher** *(ex : \`1-84\`, \`1-Ø1\`, \`Epsys Full Art\`)*.\n\n` +
             `• 📦 **Possédées :** \`${ownedCards.length}\` carte(s)\n` +
-            `• 🔒 **Non découvertes :** \`${unownedCards.length}\` carte(s) *(zéro spoiler : tu peux voir qui les a en doublon et les ajouter en Wishlist)*`
+            `• 🔒 **Non découvertes :** \`${unownedCards.length}\` carte(s) *(consulte leurs noms, recherche leurs doublons ou ajoute-les à ta Wishlist)*`
         );
 
     const components = [];
@@ -7528,7 +7842,7 @@ function buildCarteHubPayload(authorMember, channel, options = {}) {
                 const meta = RARITY_META[c.rarity] || RARITY_META['Commune'];
                 const dups = getCardDuplicateOwners(c.id, uid).length;
                 opts.push({
-                    label: `🔒 ${c.id} • Carte non découverte (${c.category})`.slice(0, 100),
+                    label: `🔒 ${c.id} • ${c.name}`.slice(0, 100),
                     description: `${meta.emoji} ${c.rarity} • ${dups > 0 ? `👥 ${dups} membre(s) en doublon` : 'Aucun doublon dispo'}`.slice(0, 100),
                     value: c.id
                 });
@@ -7682,59 +7996,47 @@ async function handleCarteCommand(targetResponder, authorMember, rawArg, channel
     const u = getOrCreateTcgUser(authorMember.id);
     const res = resolveCardQuery(query);
 
-    // 1. Correspondance unique : vérifier la possession avant tout affichage (zéro spoiler)
-    if (res.card) {
-        if ((u.cards?.[res.card.id] || 0) <= 0) {
-            if (res.isCodeQuery) {
-                return replyPanelSilent(targetResponder, buildUnownedCardPayload(res.card, authorMember.id), authorMember.id);
-            }
-            return replyPanelSilent(
-                targetResponder,
-                `🔒 Tu n'as pas encore découvert cette carte dans ton RegaDex ! La surprise reste totale 🤫`,
-                authorMember.id
-            );
-        }
-        const payload = buildSingleCardPayload(res.card, authorMember.id);
+    const matches = res.card ? [res.card] : (res.matches || []);
+
+    if (matches.length === 1) {
+        const card = matches[0];
+        const payload = (u.cards?.[card.id] || 0) > 0
+            ? buildSingleCardPayload(card, authorMember.id)
+            : buildUnownedCardPayload(card, authorMember.id);
+
         return replyPanelSilent(targetResponder, payload, authorMember.id);
     }
 
-    // 2. Correspondances multiples : ne proposer QUE les cartes possédées
-    if (res.matches.length > 1) {
-        const ownedMatches = res.matches.filter(c => (u.cards?.[c.id] || 0) > 0);
-        if (ownedMatches.length === 0) {
-            return replyPanelSilent(
-                targetResponder,
-                `🔒 Tu ne possèdes aucune carte correspondant à cette recherche dans ton RegaDex !`,
-                authorMember.id
-            );
-        }
-        if (ownedMatches.length === 1) {
-            const payload = buildSingleCardPayload(ownedMatches[0], authorMember.id);
-            return replyPanelSilent(targetResponder, payload, authorMember.id);
-        }
+    if (matches.length > 1) {
+        const opts = matches.slice(0, 25).map(c => {
+            const qty = u.cards?.[c.id] || 0;
+            return {
+                label: `${qty > 0 ? '' : '🔒 '}${c.id} • ${c.name}`.slice(0, 100),
+                description: `${c.category} • ${c.rarity} • ${qty > 0 ? `Possédée ×${qty}` : 'Non possédée'}`.slice(0, 100),
+                value: c.id
+            };
+        });
 
-        const opts = ownedMatches.slice(0, 25).map(c => ({
-            label: `${c.id} • ${c.name}`.slice(0, 100),
-            description: `${c.category} • ${c.rarity} • x${u.cards[c.id]}`,
-            value: c.id
-        }));
         const menu = new StringSelectMenuBuilder()
             .setCustomId(`tcg:cartesel:${authorMember.id}`)
-            .setPlaceholder('Plusieurs cartes possédées correspondent, choisis...')
+            .setPlaceholder('Plusieurs cartes correspondent, choisis...')
             .addOptions(opts);
+
         const navRow = new ActionRowBuilder().addComponents(
             buildAccueilButton(authorMember.id),
             buildCloseButton(authorMember.id)
         );
+
         return replyPanelSilent(targetResponder, {
-            content: `🔎 **${ownedMatches.length}** carte(s) possédée(s) correspondent à \`${query}\` :`,
+            content: `🔎 **${matches.length}** carte(s) correspondent à \`${query}\` :` +
+                (matches.length > 25 ? '\n-# Seuls les 25 premiers résultats sont affichés. Précise ta recherche.' : ''),
             components: [new ActionRowBuilder().addComponents(menu), navRow]
         }, authorMember.id);
     }
 
     return replyPanelSilent(
         targetResponder,
-        `🔒 Aucune carte découverte dans ton RegaDex ne correspond à \`${query}\`. Tape \`!carte\` pour voir les formats.`,
+        `❌ Aucune carte du catalogue ne correspond à \`${query}\`. Tape \`!carte\` pour consulter le catalogue.`,
         authorMember.id
     );
 }
@@ -9878,23 +10180,39 @@ async function handleAdminTcgCommand(message, lowerContent) {
     m = lowerContent.match(/^!(?:rgdx|tcg|regadex)\s*cooldown\s*reset(?:\s+(.*))?$/i);
     if (m) {
         if (message.author.id !== EPSYS_ID) return true;
+
         const memberQuery = message.content.trim().replace(/^!(?:rgdx|tcg|regadex)\s*cooldown\s*reset\s*/i, '').trim();
-        if (!memberQuery && message.mentions.users.size === 0) {
-            const u = getOrCreateTcgUser(message.author.id);
-            u.freeBoosters = MAX_FREE_BOOSTERS;
+
+        const resetMemberCooldown = async (userId) => {
+            const u = getOrCreateTcgUser(userId);
+            const maxFree = getMaxFreeBoosters(u);
+
+            u.freeBoosters = maxFree;
             u.lastFreeRechargeAt = Date.now();
+            u.currentRechargeMs = BOOSTER_COOLDOWN_MS;
+
+            if (getStoreData().notifs?.[userId]) {
+                armerNotifBooster(userId, message.client);
+            }
+
             tcgBridge.demanderSauvegarde();
-            await replySilent(message, `⏱️ Cooldown booster RegaDex réinitialisé pour <@${message.author.id}> (**2/2 gratuits** prêts) !`);
+
+            await replySilent(
+                message,
+                `⏱️ Cooldown booster RegaDex réinitialisé pour <@${userId}> (**${maxFree}/${maxFree} gratuits** prêts) !`
+            );
+        };
+
+        if (!memberQuery && message.mentions.users.size === 0) {
+            await resetMemberCooldown(message.author.id);
             return true;
         }
+
         await resolveMemberArg(message, memberQuery, async (target) => {
             if (!target) return;
-            const u = getOrCreateTcgUser(target.id);
-            u.freeBoosters = MAX_FREE_BOOSTERS;
-            u.lastFreeRechargeAt = Date.now();
-            tcgBridge.demanderSauvegarde();
-            await replySilent(message, `⏱️ Cooldown booster RegaDex réinitialisé pour <@${target.id}> (**2/2 gratuits** prêts) !`);
+            await resetMemberCooldown(target.id);
         });
+
         return true;
     }
 
@@ -10134,7 +10452,12 @@ async function handleWishlistCommand(targetResponder, authorMember, rawArg) {
         const q = arg.replace(/^(?:add|ajouter|\+)\s+/i, '').trim();
         const res = resolveCardQuery(q);
         if (!res.card) {
-            const pickable = (res.matches || []).filter(c => !c.isPerso && (res.isCodeQuery || (u.cards?.[c.id] || 0) > 0));
+            const pickable = (res.matches || []).filter(c => !c.isPerso && !u.wishlist.includes(c.id));
+
+            if (pickable.length > 0 && u.wishlist.length >= MAX_WISHLIST) {
+                return replySilent(targetResponder, `⚠️ Ta Wishlist est pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**).`);
+            }
+
             if (pickable.length > 0 && u.wishlist.length < MAX_WISHLIST) {
                 const menu = new StringSelectMenuBuilder()
                     .setCustomId(`tcg:wish:addpick:${authorMember.id}:0:0`)
@@ -10142,8 +10465,8 @@ async function handleWishlistCommand(targetResponder, authorMember, rawArg) {
                     .addOptions(pickable.slice(0, 25).map(c => {
                         const owned = (u.cards?.[c.id] || 0) > 0;
                         return {
-                            label: owned ? `${c.id} • ${c.name}`.slice(0, 100) : `🔒 ${c.id} • Carte non découverte`,
-                            description: owned ? `${c.rarity} • Ajouter à la Wishlist` : 'Ajouter à la Wishlist',
+                            label: `${owned ? '' : '🔒 '}${c.id} • ${c.name}`.slice(0, 100),
+                            description: `${c.rarity} • ${owned ? 'Possédée' : 'Non possédée'} • Ajouter à la Wishlist`.slice(0, 100),
                             value: c.id
                         };
                     }));
@@ -10196,6 +10519,11 @@ async function handleWishlistCommand(targetResponder, authorMember, rawArg) {
         u.wishlist.push(cardRes.card.id);
         if (!isSandboxId(authorMember.id)) tcgBridge.demanderSauvegarde();
         return replyPanelSilent(targetResponder, buildWishlistPayload(authorMember, authorMember.id, false, false, `❤️ \`${cardRes.card.id}\` ajoutée à ta Wishlist !`), authorMember.id);
+    }
+
+    // Plusieurs cartes correspondent : ouvrir le menu d'ajout.
+    if ((cardRes.matches || []).some(c => !c.isPerso)) {
+        return handleWishlistCommand(targetResponder, authorMember, `add ${arg}`);
     }
 
     // Sinon consulter la wishlist d'un membre mentionné / cherché
@@ -11011,13 +11339,115 @@ async function handleTcgInteraction(interaction) {
                 ownerId
             );
 
-            await startBoosterOpening(
+            await showHalfCooldownChoice(
                 interaction,
                 actorMember,
                 client,
                 pending.fromHub,
                 pending.boosterType,
                 focusCategory
+            );
+        } finally {
+            focusConfirmationsEnCours.delete(ownerId);
+        }
+
+        return true;
+    }
+
+    // ----- CONFIRMATION DU DEMI-COOLDOWN -----
+    if (action === 'halfcdpick' && interaction.isButton()) {
+        const choice = parts[2];
+        const ownerId = parts[3];
+        const token = parts[4];
+
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+            await interaction.reply({
+                content: "Ce menu demi-cooldown ne t'appartient pas !",
+                ephemeral: true
+            });
+            return true;
+        }
+
+        if (!['activate', 'keep'].includes(choice)) {
+            await interaction.reply({
+                content: '❌ Choix demi-cooldown invalide.',
+                ephemeral: true
+            });
+            return true;
+        }
+
+        const pending = pendingHalfCooldownChoices.get(ownerId);
+
+        if (!pending || pending.token !== token) {
+            await interaction.reply({
+                content: "❌ Ce choix n'est plus valide. Relance une ouverture.",
+                ephemeral: true
+            });
+            return true;
+        }
+
+        if (Date.now() >= pending.expiresAt) {
+            pendingHalfCooldownChoices.delete(ownerId);
+
+            await interaction.update({
+                content: "⏳ Choix expiré. Aucun booster ni aucun bonus n'a été consommé.",
+                embeds: [],
+                components: [],
+                attachments: []
+            });
+
+            return true;
+        }
+
+        if (
+            boostersEnCours.has(ownerId) ||
+            focusConfirmationsEnCours.has(ownerId)
+        ) {
+            await interaction.reply({
+                content: '⏳ Une ouverture est déjà en cours.',
+                ephemeral: true
+            });
+            return true;
+        }
+
+        const u = getOrCreateTcgUser(ownerId);
+
+        if (
+            choice === 'activate' &&
+            !canOfferHalfCooldown(u, pending.boosterType)
+        ) {
+            pendingHalfCooldownChoices.delete(ownerId);
+
+            await interaction.update({
+                content:
+                    "⚠️ Ce demi-cooldown ne peut plus être utilisé actuellement.\n" +
+                    "Aucun booster ni aucun bonus n'a été consommé. Relance une ouverture.",
+                embeds: [],
+                components: [],
+                attachments: []
+            });
+
+            return true;
+        }
+
+        // Réserver le choix avant tout await pour éviter les doubles clics.
+        focusConfirmationsEnCours.add(ownerId);
+        pendingHalfCooldownChoices.delete(ownerId);
+
+        try {
+            const actorMember = buildTcgMemberProxy(
+                interaction.member,
+                ownerId
+            );
+
+            await startBoosterOpening(
+                interaction,
+                actorMember,
+                client,
+                pending.fromHub,
+                pending.boosterType,
+                pending.focusCategory,
+                choice === 'activate'
             );
         } finally {
             focusConfirmationsEnCours.delete(ownerId);
@@ -11403,9 +11833,11 @@ async function handleTcgInteraction(interaction) {
                 armerNotifBooster(ownerId, client);
             }
             tcgBridge.demanderSauvegarde();
+            const maxFree = getMaxFreeBoosters(u);
+
             const note = u.notifFreq === 'full'
-                ? '📦 *Mode sélectionné : **tous les 2 boosters (stock 2/2)**.*'
-                : '🔔 *Mode sélectionné : **à chaque booster (1/2 puis 2/2)**.*';
+                ? `📦 *Mode sélectionné : **réserve pleine (${maxFree}/${maxFree})**.*`
+                : '🔔 *Mode sélectionné : **à chaque nouveau booster gratuit**.*';
             await interaction.update({
                 content: null,
                 files: [],
@@ -11446,11 +11878,16 @@ async function handleTcgInteraction(interaction) {
         armerNotifBooster(ownerId, client);
         tcgBridge.demanderSauvegarde();
 
-        const freqLabel = chosenFreq === 'full' ? 'tous les 2 boosters (2/2)' : 'à chaque booster';
+        const maxFree = getMaxFreeBoosters(u);
+        const freqLabel = chosenFreq === 'full'
+            ? `lorsque ta réserve est pleine (${maxFree}/${maxFree})`
+            : 'à chaque nouveau booster gratuit';
+
         const modeLabel = sub === 'dm' ? 'en MP' : 'dans ce salon';
+
         const confirmNote = targetTs
             ? `✅ *C'est enregistré ! Je te préviendrai **${modeLabel}** (${freqLabel}) <t:${Math.floor(targetTs / 1000)}:R>, puis automatiquement à chaque futur cycle.*`
-            : `✅ *C'est enregistré ! Ton stock est actuellement plein (**2/2**), je te préviendrai **${modeLabel}** (${freqLabel}) dès que tu ouvriras un booster.*`;
+            : `✅ *C'est enregistré ! Ton stock est actuellement plein (**${maxFree}/${maxFree}**). Je reprendrai les notifications **${modeLabel}** (${freqLabel}) dès qu'une nouvelle recharge sera possible.*`;
 
         if (isNotifPanel) {
             await interaction.update({
@@ -11621,6 +12058,139 @@ async function handleTcgInteraction(interaction) {
         return true;
     }
 
+    if (action === 'reservecancel' && interaction.isButton()) {
+        const ownerId = parts[2];
+
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+            await interaction.reply({
+                content: 'Pas pour toi 😌',
+                ephemeral: true
+            });
+            return true;
+        }
+
+        await interaction.update({
+            content: '❌ Achat annulé. Aucun point dépensé.',
+            embeds: [],
+            components: []
+        });
+
+        return true;
+    }
+
+    if (action === 'reserveconf' && interaction.isButton()) {
+        const ownerId = parts[2];
+        const requestedLevel = Number(parts[3]);
+
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+            await interaction.reply({
+                content: 'Pas pour toi 😌',
+                ephemeral: true
+            });
+            return true;
+        }
+
+        if (!hasTcgRole(interaction.member) && interaction.user.id !== EPSYS_ID) {
+            await interaction.reply({
+                content: '❌ Tu dois posséder le rôle Collectionneur.euse.',
+                ephemeral: true
+            });
+            return true;
+        }
+
+        const u = getOrCreateTcgUser(ownerId);
+        const currentLevel = getFreeReserveLevel(u);
+
+        if (
+            ![1, 2].includes(requestedLevel) ||
+            requestedLevel !== currentLevel + 1 ||
+            currentLevel >= MAX_FREE_RESERVE_LEVEL
+        ) {
+            await interaction.update({
+                content: '⚠️ Cette offre est expirée ou cette extension a déjà été achetée. Rouvre le Store.',
+                embeds: [],
+                components: []
+            });
+            return true;
+        }
+
+        const price = STORE_PRICES[`freeReserve${requestedLevel}`];
+
+        if (u.points < price) {
+            await interaction.update({
+                content: "❌ Tu n'as plus assez de points RegaDex pour cet achat.",
+                embeds: [],
+                components: []
+            });
+            return true;
+        }
+
+        syncFreeBoosters(u);
+
+        const oldMax = getMaxFreeBoosters(u);
+        const wasFull = u.freeBoosters >= oldMax;
+
+        // Mutation synchrone avant tout await :
+        // une même extension ne peut pas être achetée deux fois.
+        u.points -= price;
+        u.freeReserveLevel = requestedLevel;
+
+        if (wasFull) {
+            u.lastFreeRechargeAt = Date.now();
+            u.currentRechargeMs = BOOSTER_COOLDOWN_MS;
+        }
+
+        const newMax = getMaxFreeBoosters(u);
+        const nextAt = getNextBoosterTimestamp(u);
+
+        if (!isSandboxId(ownerId)) {
+            tcgBridge.demanderSauvegarde();
+
+            if (getStoreData().notifs?.[ownerId]) {
+                armerNotifBooster(ownerId, client);
+            }
+
+            tcgBridge.trackBattlePassProgress(
+                ownerId,
+                'tcg_store_buy',
+                1
+            );
+        }
+
+        const doneEmbed = new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle('📦 Extension de réserve achetée !')
+            .setDescription(
+                `🎉 Ta réserve de boosters gratuits a été améliorée définitivement !\n\n` +
+                `📈 **Capacité :** ${oldMax} → **${newMax} boosters gratuits**\n` +
+                `🎁 **Stock actuel :** ${u.freeBoosters}/${newMax}\n` +
+                `🏆 **Niveau :** ${requestedLevel}/${MAX_FREE_RESERVE_LEVEL}\n` +
+                `🪙 **Prix payé :** ${price} pts\n` +
+                `💰 **Solde restant :** ${u.points} pts\n\n` +
+                (nextAt
+                    ? `⏱️ **Prochain booster gratuit :** <t:${Math.floor(nextAt / 1000)}:R>\n\n`
+                    : '') +
+                `-# La fréquence de recharge reste inchangée : 1 booster toutes les 6 heures.`
+            );
+
+        const doneRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`tcg:store:open:${ownerId}:1`)
+                .setLabel('Retour au Store')
+                .setEmoji('🛒')
+                .setStyle(ButtonStyle.Primary),
+            buildCloseButton(ownerId)
+        );
+
+        await interaction.update({
+            content: null,
+            embeds: [doneEmbed],
+            components: [doneRow]
+        });
+
+        return true;
+    }
+
     if (action === 'buy' && interaction.isButton()) {
         const itemKey = parts[2];
         const ownerId = parts[3];
@@ -11632,6 +12202,58 @@ async function handleTcgInteraction(interaction) {
         const u = getOrCreateTcgUser(ownerId);
         if (!price || u.points < price) {
             await interaction.reply({ content: "❌ Tu n'as pas assez de points RegaDex !", ephemeral: true });
+            return true;
+        }
+
+        if (itemKey === 'freeReserve1' || itemKey === 'freeReserve2') {
+            const currentLevel = getFreeReserveLevel(u);
+            const requestedLevel = itemKey === 'freeReserve1' ? 1 : 2;
+
+            if (
+                requestedLevel !== currentLevel + 1 ||
+                currentLevel >= MAX_FREE_RESERVE_LEVEL
+            ) {
+                await interaction.reply({
+                    content: '⚠️ Cette offre est expirée ou déjà achetée. Rouvre le Store.',
+                    ephemeral: true
+                });
+                return true;
+            }
+
+            const confEmbed = new EmbedBuilder()
+                .setColor(0x9b59b6)
+                .setTitle(`📦 Confirmation — Extension de réserve ${requestedLevel === 1 ? 'I' : 'II'}`)
+                .setDescription(
+                    `📈 **Capacité actuelle :** ${getMaxFreeBoosters(u)} boosters gratuits\n` +
+                    `📦 **Nouvelle capacité :** ${getMaxFreeBoosters(u) + 1} boosters gratuits\n\n` +
+                    `🪙 **Prix :** ${price} pts\n` +
+                    `💰 **Solde actuel :** ${u.points} pts\n` +
+                    `💰 **Solde après achat :** ${u.points - price} pts\n\n` +
+                    `♾️ Cette amélioration est **permanente** et commune à tous les Sets.\n` +
+                    `⏱️ La recharge reste de **6 heures** par booster.\n` +
+                    `🎁 Aucun booster supplémentaire n'est offert immédiatement.\n\n` +
+                    `Confirmer cet achat ?`
+                );
+
+            const confRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`tcg:reserveconf:${ownerId}:${requestedLevel}`)
+                    .setLabel(`Confirmer (${price} pts)`)
+                    .setEmoji('✅')
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId(`tcg:reservecancel:${ownerId}`)
+                    .setLabel('Annuler')
+                    .setEmoji('❌')
+                    .setStyle(ButtonStyle.Secondary)
+            );
+
+            await interaction.reply({
+                embeds: [confEmbed],
+                components: [confRow],
+                ephemeral: true
+            });
+
             return true;
         }
 
@@ -12626,38 +13248,36 @@ async function handleTcgInteraction(interaction) {
             }
         };
 
-        if (res.card) {
-            if ((u.cards?.[res.card.id] || 0) <= 0) {
-                if (res.isCodeQuery) {
-                    await sendOrUpdate(buildUnownedCardPayload(res.card, ownerId));
-                    return true;
-                }
-                await interaction.reply({
-                    content: `🔒 Tu n'as pas encore découvert cette carte dans ton RegaDex ! La surprise reste totale 🤫`,
-                    ephemeral: true
-                });
-                return true;
-            }
-            await sendOrUpdate(buildSingleCardPayload(res.card, ownerId));
+        const matches = res.card ? [res.card] : (res.matches || []);
+
+        if (matches.length === 1) {
+            const card = matches[0];
+
+            await sendOrUpdate(
+                (u.cards?.[card.id] || 0) > 0
+                    ? buildSingleCardPayload(card, ownerId)
+                    : buildUnownedCardPayload(card, ownerId)
+            );
             return true;
         }
 
-        const ownedMatches = (res.matches || []).filter(c => (u.cards?.[c.id] || 0) > 0);
-        if (ownedMatches.length === 1) {
-            await sendOrUpdate(buildSingleCardPayload(ownedMatches[0], ownerId));
-            return true;
-        }
-        if (ownedMatches.length > 1) {
+        if (matches.length > 1) {
             const menu = new StringSelectMenuBuilder()
                 .setCustomId(`tcg:cartesel:${ownerId}`)
-                .setPlaceholder('Plusieurs cartes possédées correspondent, choisis...')
-                .addOptions(ownedMatches.slice(0, 25).map(c => ({
-                    label: `${c.id} • ${c.name}`.slice(0, 100),
-                    description: `${c.category} • ${c.rarity} • ×${u.cards[c.id]}`.slice(0, 100),
-                    value: c.id
-                })));
+                .setPlaceholder('Plusieurs cartes correspondent, choisis...')
+                .addOptions(matches.slice(0, 25).map(c => {
+                    const qty = u.cards?.[c.id] || 0;
+
+                    return {
+                        label: `${qty > 0 ? '' : '🔒 '}${c.id} • ${c.name}`.slice(0, 100),
+                        description: `${c.category} • ${c.rarity} • ${qty > 0 ? `Possédée ×${qty}` : 'Non possédée'}`.slice(0, 100),
+                        value: c.id
+                    };
+                }));
+
             await sendOrUpdate({
-                content: `🔎 **${ownedMatches.length}** carte(s) possédée(s) correspondent à \`${query}\` :`,
+                content: `🔎 **${matches.length}** carte(s) correspondent à \`${query}\` :` +
+                    (matches.length > 25 ? '\n-# Seuls les 25 premiers résultats sont affichés. Précise ta recherche.' : ''),
                 embeds: [],
                 components: [
                     new ActionRowBuilder().addComponents(menu),
@@ -12668,7 +13288,7 @@ async function handleTcgInteraction(interaction) {
         }
 
         await interaction.reply({
-            content: `🔒 Aucune carte découverte dans ton RegaDex ne correspond à \`${query}\`.`,
+            content: `❌ Aucune carte du catalogue ne correspond à \`${query}\`.`,
             ephemeral: true
         });
         return true;
@@ -12704,15 +13324,28 @@ async function handleTcgInteraction(interaction) {
 
         const card = getCardByIdAny(selected);
         const u = getOrCreateTcgUser(ownerId);
-        if (!card || (u.cards?.[card.id] || 0) <= 0) {
-            await interaction.reply({ content: "🔒 Tu ne possèdes pas cette carte dans ton RegaDex !", ephemeral: true });
+
+        if (!card) {
+            await interaction.reply({
+                content: '❌ Carte introuvable dans le catalogue.',
+                ephemeral: true
+            });
             return true;
         }
+
+        const payload = (u.cards?.[card.id] || 0) > 0
+            ? buildSingleCardPayload(card, ownerId, {
+                setNumber: card.isPerso ? 'perso' : (card.setNumber || activeSetNumber)
+            })
+            : buildUnownedCardPayload(card, ownerId);
+
         await interaction.deferUpdate();
         await interaction.editReply({
             content: null,
-            ...buildSingleCardPayload(card, ownerId, { setNumber: card.isPerso ? 'perso' : (card.setNumber || activeSetNumber) }),
-            attachments: []
+            embeds: [],
+            files: [],
+            attachments: [],
+            ...payload
         });
         return true;
     }
@@ -13035,9 +13668,9 @@ async function handleTcgInteraction(interaction) {
         }
 
         const card = cardById.get(cardId);
-        const viewerU = getOrCreateTcgUser(interaction.user.id);
-        const viewerOwns = (viewerU.cards?.[cardId] || 0) > 0;
-        const cardTitle = viewerOwns && card ? `\`${card.id}\` **${card.name}**` : `\`${cardId}\``;
+        const cardTitle = card
+            ? `\`${card.id}\` **${card.name}**`
+            : `\`${cardId}\``;
 
         const dups = getCardDuplicateOwners(cardId, interaction.user.id);
         if (dups.length === 0) {
@@ -13069,6 +13702,143 @@ async function handleTcgInteraction(interaction) {
     // ----- WISHLIST (5 CARTES MAX) -----
     if (action === 'wish') {
         const sub = parts[2];
+
+        // Recherche des propriétaires de doublons de la Wishlist
+        if (sub === 'dups' && interaction.isButton()) {
+            const ownerId = parts[3];
+
+            if (!canControlTcgOwner(interaction.user.id, ownerId)) {
+                await interaction.reply({
+                    content: "Pas pour toi 😌",
+                    ephemeral: true
+                });
+                return true;
+            }
+
+            if (!hasTcgRole(interaction.member) && interaction.user.id !== EPSYS_ID) {
+                await interaction.reply({
+                    content: `🔒 Réservé aux membres ayant le rôle <@&${TCG_ROLE_ID}>.`,
+                    ephemeral: true
+                });
+                return true;
+            }
+
+            const u = getOrCreateTcgUser(ownerId);
+            const wishlistIds = getSanitizedWishlist(u);
+
+            if (wishlistIds.length === 0) {
+                await interaction.reply({
+                    content: '❤️ Ta Wishlist est vide pour le moment.',
+                    ephemeral: true
+                });
+                return true;
+            }
+
+            await interaction.deferReply({
+                flags: MessageFlags.Ephemeral
+            });
+
+            const results = wishlistIds.map(cardId => ({
+                cardId,
+                card: cardById.get(cardId),
+                owners: getCardDuplicateOwners(
+                    cardId,
+                    interaction.user.id
+                )
+            }));
+
+            const memberIds = [...new Set(
+                results.flatMap(result =>
+                    result.owners.map(owner => owner.uid)
+                )
+            )];
+
+            // Récupération des membres par lots.
+            for (let i = 0; i < memberIds.length; i += 100) {
+                await interaction.guild.members.fetch({
+                    user: memberIds.slice(i, i + 100)
+                }).catch(() => {});
+            }
+
+            // Exclure les bots et les anciens membres du serveur.
+            for (const result of results) {
+                result.owners = result.owners.filter(owner => {
+                    const member = interaction.guild.members.cache.get(owner.uid);
+                    return member && !member.user.bot;
+                });
+            }
+
+            const matchedCards = results.filter(
+                result => result.owners.length > 0
+            ).length;
+
+            const uniqueOwners = new Set(
+                results.flatMap(result =>
+                    result.owners.map(owner => owner.uid)
+                )
+            );
+
+            const totalDuplicates = results.reduce(
+                (total, result) =>
+                    total + result.owners.reduce(
+                        (sum, owner) => sum + owner.extra,
+                        0
+                    ),
+                0
+            );
+
+            const embed = new EmbedBuilder()
+                .setColor(0xe91e63)
+                .setTitle('👥 Doublons de ta Wishlist')
+                .setDescription(
+                    `🔎 **Cartes trouvées :** ${matchedCards}/${wishlistIds.length}\n` +
+                    `👤 **Collectionneur·euses :** ${uniqueOwners.size}\n` +
+                    `🔁 **Doublons recensés :** ${totalDuplicates}\n\n` +
+                    `Voici les membres possédant plusieurs exemplaires des cartes que tu recherches.`
+                )
+                .setFooter({
+                    text: 'RegaDex • Les échanges nécessitent l’accord des propriétaires.'
+                })
+                .setTimestamp();
+
+            for (const result of results) {
+                const { cardId, card, owners } = result;
+
+                const meta = RARITY_META[card?.rarity]
+                    || RARITY_META['Commune'];
+
+                const title = card
+                    ? `${meta.emoji} ${cardId} — ${card.name}`
+                    : `${cardId} — Carte indisponible`;
+
+                const visibleOwners = owners.slice(0, 20);
+
+                const lines = visibleOwners.map(owner =>
+                    `• <@${owner.uid}> — **${owner.extra}** doublon${owner.extra > 1 ? 's' : ''}`
+                );
+
+                if (owners.length > visibleOwners.length) {
+                    lines.push(
+                        `*… et ${owners.length - visibleOwners.length} autre(s) membre(s).*`
+                    );
+                }
+
+                embed.addFields({
+                    name: `${title} (${owners.length})`.slice(0, 256),
+                    value: lines.length > 0
+                        ? lines.join('\n').slice(0, 1024)
+                        : '*😔 Aucun doublon trouvé.*',
+                    inline: false
+                });
+            }
+
+            await interaction.editReply({
+                embeds: [embed],
+                allowedMentions: { parse: [] }
+            });
+
+            return true;
+        }
 
         if (sub === 'open' && interaction.isButton()) {
             const ownerId = parts[3];
@@ -13234,28 +14004,50 @@ async function handleTcgInteraction(interaction) {
             u.wishlist = getSanitizedWishlist(u);
             const res = resolveCardQuery(query);
             if (!res.card) {
-                const pickable = (res.matches || []).filter(c => !c.isPerso && (res.isCodeQuery || (u.cards?.[c.id] || 0) > 0));
-                if (pickable.length > 0 && u.wishlist.length < MAX_WISHLIST) {
+                const matches = (res.matches || []).filter(c => !c.isPerso);
+                const pickable = matches.filter(c => !u.wishlist.includes(c.id));
+
+                if (matches.length > 0 && pickable.length === 0) {
+                    await interaction.reply({
+                        content: 'ℹ️ Toutes les cartes correspondant à cette recherche sont déjà dans ta Wishlist.',
+                        ephemeral: true
+                    });
+                    return true;
+                }
+
+                if (pickable.length > 0 && u.wishlist.length >= MAX_WISHLIST) {
+                    await interaction.reply({
+                        content: `⚠️ Ta Wishlist est pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**).`,
+                        ephemeral: true
+                    });
+                    return true;
+                }
+
+                if (pickable.length > 0) {
                     const menu = new StringSelectMenuBuilder()
                         .setCustomId(`tcg:wish:addpick:${ownerId}:${fromHub ? '1' : '0'}:${fromProfile ? '1' : '0'}`)
                         .setPlaceholder('Plusieurs cartes correspondent, choisis...')
                         .addOptions(pickable.slice(0, 25).map(c => {
                             const owned = (u.cards?.[c.id] || 0) > 0;
+
                             return {
-                                label: owned ? `${c.id} • ${c.name}`.slice(0, 100) : `🔒 ${c.id} • Carte non découverte`,
-                                description: owned ? `${c.rarity} • Ajouter à la Wishlist` : 'Ajouter à la Wishlist',
+                                label: `${owned ? '' : '🔒 '}${c.id} • ${c.name}`.slice(0, 100),
+                                description: `${c.rarity} • ${owned ? 'Possédée' : 'Non possédée'} • Ajouter à la Wishlist`.slice(0, 100),
                                 value: c.id
                             };
                         }));
+
                     await interaction.reply({
-                        content: `🔎 Plusieurs cartes correspondent à \`${query}\` :`,
+                        content: `🔎 **${pickable.length}** carte(s) disponibles correspondent à \`${query}\` :` +
+                            (pickable.length > 25 ? '\n-# Seuls les 25 premiers résultats sont affichés. Précise ta recherche.' : ''),
                         components: [new ActionRowBuilder().addComponents(menu)],
                         ephemeral: true
                     });
                     return true;
                 }
+
                 await interaction.reply({
-                    content: `❌ Aucune carte unique trouvée pour \`${query}\`. Tu peux aussi utiliser le menu déroulant directement dans \`!wishlist\` !`,
+                    content: `❌ Aucune carte échangeable trouvée pour \`${query}\`.`,
                     ephemeral: true
                 });
                 return true;
@@ -14563,24 +15355,39 @@ function addTcgBoostersFromRoulette(userId, qty, member) {
 }
 
 function reduceTcgBoosterCooldown(userId, reductionMs = 3 * 60 * 60 * 1000, member = null) {
-    if (member && !hasTcgRole(member)) return { applied: false, noRole: true };
-    const u = getOrCreateTcgUser(userId);
-    if (u.freeBoosters >= MAX_FREE_BOOSTERS) {
-        return { applied: false, alreadyFull: true, freeBoosters: u.freeBoosters, maxFree: MAX_FREE_BOOSTERS };
+    if (member && !hasTcgRole(member)) {
+        return { applied: false, noRole: true };
     }
+
+    const u = getOrCreateTcgUser(userId);
+    const maxFree = getMaxFreeBoosters(u);
+
+    if (u.freeBoosters >= maxFree) {
+        return {
+            applied: false,
+            alreadyFull: true,
+            freeBoosters: u.freeBoosters,
+            maxFree
+        };
+    }
+
     const freeBefore = u.freeBoosters;
+
     u.lastFreeRechargeAt = (u.lastFreeRechargeAt || Date.now()) - Math.max(0, reductionMs);
+
     syncFreeBoosters(u);
     tcgBridge.demanderSauvegarde();
+
     if (getStoreData().notifs?.[userId]) {
         armerNotifBooster(userId, tcgBridge.client);
     }
+
     return {
         applied: true,
         alreadyFull: false,
         grantedFree: u.freeBoosters > freeBefore,
         freeBoosters: u.freeBoosters,
-        maxFree: MAX_FREE_BOOSTERS,
+        maxFree,
         nextAt: getNextBoosterTimestamp(u)
     };
 }
