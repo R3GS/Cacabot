@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { validateBackup } = require('./backup-validator.js');
+const { acquireInstanceGuard } = require('./instance-guard.js');
 
 let topData = { messages: {} };
 let birthdayData = { birthdays: {}, channels: {} };
@@ -2569,4 +2570,20 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     await handleVoiceStateUpdate(oldState, newState);
 });
 
-client.login(process.env.TOKEN);
+// Ne pas ouvrir une session Discord si une autre instance locale
+// utilise déjà le même jeton. Le verrou est libéré par l'OS au crash.
+async function demarrerAvecVerrou() {
+    const verrou = await acquireInstanceGuard(process.env.TOKEN);
+    console.log('🔒 Verrou local Cacabot actif (port ' + verrou.port + ').');
+    try {
+        await client.login(process.env.TOKEN);
+    } catch (error) {
+        await verrou.release();
+        throw error;
+    }
+}
+
+demarrerAvecVerrou().catch(error => {
+    console.error('🚨 Démarrage Cacabot refusé :', error);
+    process.exitCode = 1;
+});
