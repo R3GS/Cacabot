@@ -3646,8 +3646,20 @@ async function renderBinderCanvas(targetUser, u, options) {
         ctx.fillText(`${card.id} • x${count}`, cx, cardY + cardH + 4, cellW - 8);
     }
 
+    let buffer;
+    try {
+        buffer = await new Promise((resolve, reject) => {
+            canvas.toBuffer((error, jpeg) => {
+                if (error) reject(error);
+                else resolve(jpeg);
+            }, 'image/jpeg', { quality: 0.90, progressive: false, chromaSubsampling: true });
+        });
+    } finally {
+        canvas.width = canvas.height = 0; // Libère la surface Cairo après l'encodage.
+    }
+
     return {
-        buffer: toJpeg(canvas, 0.90),
+        buffer,
         totalPages,
         safePage,
         ownedInView,

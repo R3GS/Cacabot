@@ -296,7 +296,7 @@ const ROULETTE_TEXT_MALUS_IDS = new Set([
     'malus-mots-melanges', 'malus-lettres-melangees', 'malus-mocking',
     'malus-begaiement', 'malus-publicite', 'malus-autocorrect', 'malus-oyez'
 ]);
-const ROULETTE_ROLE_ADDICT_ID = '1555245236249436160';
+const ROULETTE_ROLE_JOUEUR_ID = '1558968669751615528';
 const ROULETTE_ADDICT_SEUIL = 500;
 const ROULETTE_TAUX_ECHEC = 0.4;
 const ROULETTE_PITY_MALUS = 3;
@@ -4584,8 +4584,8 @@ async function verifierRoleGamblingAddict(membre) {
     if (!membre) return;
     const stats = rouletteStats.get(membre.id);
     if (!stats || stats.tirages < ROULETTE_ADDICT_SEUIL) return;
-    if (membre.roles.cache.has(ROULETTE_ROLE_ADDICT_ID)) return;
-    await membre.roles.add(ROULETTE_ROLE_ADDICT_ID, `Gambling addict : ${stats.tirages} rolls`).catch(() => {});
+    if (membre.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID)) return;
+    await membre.roles.add(ROULETTE_ROLE_JOUEUR_ID, `Gambling addict : ${stats.tirages} rolls`).catch(() => {});
 }
 
 async function renderRouletteCollectorPosterCanvas(membre, entry, lanceur = null, estPartage = false, isHof = true, isTest = false) {
@@ -4765,8 +4765,6 @@ async function envoyerHallOfShame(guild, membre, entry, lanceur = null) {
         flags: [MessageFlags.SuppressNotifications]
     }).catch(() => {});
 }
-
-const ROULETTE_ROLE_JOUEUR_ID = '1558968669751615528';
 
 function buildMenuChoixMembreRoulette(guild, authorId, customId, placeholder) {
     return new UserSelectMenuBuilder()
