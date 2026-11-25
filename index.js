@@ -2314,7 +2314,10 @@ client.once('ready', async () => {
     // Réessayer également sans redémarrer Cacabot lorsqu'une
     // attribution est restée en attente après une erreur réseau
     // ou un échec de sauvegarde.
+    let repriseRecompensesPenduEnCours = false;
     const repriseRecompensesPenduInterval = setInterval(async () => {
+        if (repriseRecompensesPenduEnCours) return;
+        repriseRecompensesPenduEnCours = true;
         try {
             // La réconciliation doit précéder la reprise des gains.
             await reconcilierPublicationPendu(client);
@@ -2325,6 +2328,8 @@ client.once('ready', async () => {
                 'ou de reprise échouée :',
                 error
             );
+        } finally {
+            repriseRecompensesPenduEnCours = false;
         }
     }, 60 * 1000);
 
