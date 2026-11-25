@@ -9475,13 +9475,18 @@ async function handleRouletteButton(interaction, client) {
         if (res.attenteChoix) rouletteChoixEnAttente.add(envoye.id);
         if (res.vote) await demarrerVoteRoulette(envoye, res.vote);
         if (res.differe) {
-            setTimeout(async () => {
-                const embedFinal = await res.differe();
-                const dFin = embedFinal?.data?.description || '';
-                if (dFin && !dFin.includes(tagUtilise)) embedFinal.setDescription(`${dFin}\n${tagUtilise}`);
-                memoriserResultatRoulette(envoye.id, embedFinal, res.outcomeId, res.gifOptions);
-                envoye.edit({ embeds: [embedFinal] }).catch(() => {});
+            const timerDiffere = setTimeout(async () => {
+                try {
+                    const embedFinal = await res.differe();
+                    const dFin = embedFinal?.data?.description || '';
+                    if (dFin && !dFin.includes(tagUtilise)) embedFinal.setDescription(`${dFin}\n${tagUtilise}`);
+                    memoriserResultatRoulette(envoye.id, embedFinal, res.outcomeId, res.gifOptions);
+                    await envoye.edit({ embeds: [embedFinal] }).catch(() => {});
+                } catch (err) {
+                    console.warn('[ROULETTE] Résultat différé échoué :', err);
+                }
             }, 10000);
+            timerDiffere.unref?.();
         }
         return true;
     }
@@ -9512,11 +9517,16 @@ async function handleRouletteButton(interaction, client) {
         if (res.attenteChoix) rouletteChoixEnAttente.add(envoye.id);
         if (res.vote) await demarrerVoteRoulette(envoye, res.vote);
         if (res.differe) {
-            setTimeout(async () => {
-                const embedFinal = await res.differe();
-                memoriserResultatRoulette(envoye.id, embedFinal, res.outcomeId, res.gifOptions);
-                envoye.edit({ embeds: [embedFinal] }).catch(() => {});
+            const timerDiffere = setTimeout(async () => {
+                try {
+                    const embedFinal = await res.differe();
+                    memoriserResultatRoulette(envoye.id, embedFinal, res.outcomeId, res.gifOptions);
+                    await envoye.edit({ embeds: [embedFinal] }).catch(() => {});
+                } catch (err) {
+                    console.warn('[ROULETTE] Résultat différé échoué :', err);
+                }
             }, 10000);
+            timerDiffere.unref?.();
         }
         return true;
     }
