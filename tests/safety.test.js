@@ -8,6 +8,8 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 
+const { validateBackup } = require('../backup-validator.js');
+
 const fichiers = [
   "index.js",
   "repliques.js",
@@ -70,4 +72,38 @@ test('RegaDex : registre anti-doublons et file de récompenses', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'tcg.js'), 'utf8');
     assert.match(source, /minigameRewardLedger/);
     assert.match(source, /fileAttributionsMinijeux/);
+});
+
+test('restauration : accepte une copie structurellement complète sans la modifier', () => {
+    const backup = {
+        messages: { '123': 5 },
+        tcgData: { users: { '123': { points: 42, cards: { abc: 1 } } } },
+        battlePassData: { joueurs: { '123': { xp: 10 } } },
+        motusStats: {}, penduStats: {}, roulette: {}
+    };
+    const before = JSON.stringify(backup);
+    assert.equal(validateBackup(backup).valid, true);
+    assert.equal(JSON.stringify(backup), before);
+    assert.equal(backup.tcgData.users['123'].cards.abc, 1);
+});
+
+test('restauration : rejette les sauvegardes partielles sans effacer les inventaires', () => {
+    const complete = {
+        messages: {}, tcgData: { users: { '123': { points: 42 } } },
+        battlePassData: {}, motusStats: {}, penduStats: {}, roulette: {}
+    };
+    for (const section of ['messages', 'tcgData', 'battlePassData', 'motusStats', 'penduStats', 'roulette']) {
+        const partial = structuredClone(complete);
+        delete partial[section];
+        assert.equal(validateBackup(partial).valid, false, section);
+    }
+    const brokenUser = structuredClone(complete);
+    brokenUser.tcgData.users['123'] = null;
+    assert.equal(validateBackup(brokenUser).valid, false);
+    assert.equal(complete.tcgData.users['123'].points, 42);
+});
+
+test('restauration : index utilise le validateur avant chargement', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+    assert.match(source, /validateBackup\(parsed\)/);
 });
