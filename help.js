@@ -838,7 +838,7 @@ async function runHelpInteraction(interaction) {
         const authorId = parts[2];
         const originalMessageId = parts[3] || '';
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            return interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
         }
 
         const category = interaction.values[0];
@@ -854,7 +854,7 @@ async function runHelpInteraction(interaction) {
         const authorId = parts[2];
         const originalMessageId = parts[3] || '';
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            return interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
         }
 
         const embed = buildHelpxHomeEmbed(interaction.user, botAvatarUrl);
@@ -869,7 +869,7 @@ async function runHelpInteraction(interaction) {
         const authorId = parts[2];
         const originalMessageId = parts[3] || '';
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Tu ne peux pas supprimer ce message !", ephemeral: true });
+            return interaction.reply({ content: "Tu ne peux pas supprimer ce message !", flags: 64 });
         }
 
         await interaction.message.delete().catch(() => {});
@@ -886,7 +886,7 @@ async function runHelpInteraction(interaction) {
         const authorId = parts[2];
         const originalMessageId = parts[3] || '';
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            return interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
         }
 
         const category = interaction.values[0];
@@ -902,7 +902,7 @@ async function runHelpInteraction(interaction) {
         const authorId = parts[2];
         const originalMessageId = parts[3] || '';
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            return interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
         }
 
         const embed = buildHelpmHomeEmbed(interaction.user, botAvatarUrl);
@@ -917,7 +917,7 @@ async function runHelpInteraction(interaction) {
         const authorId = parts[2];
         const originalMessageId = parts[3] || '';
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Tu ne peux pas supprimer ce message !", ephemeral: true });
+            return interaction.reply({ content: "Tu ne peux pas supprimer ce message !", flags: 64 });
         }
 
         await interaction.message.delete().catch(() => {});
@@ -934,7 +934,7 @@ async function runHelpInteraction(interaction) {
         const authorId = parts[2];
         const originalMessageId = parts[3] || '';
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
+            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", flags: 64 });
         }
 
         const category = interaction.values[0];
@@ -950,7 +950,7 @@ async function runHelpInteraction(interaction) {
         const authorId = parts[2];
         const originalMessageId = parts[3] || '';
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
+            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", flags: 64 });
         }
 
         const embed = buildHelpHomeEmbed(interaction.user, botAvatarUrl);
@@ -965,7 +965,7 @@ async function runHelpInteraction(interaction) {
         const authorId = parts[2];
         const originalMessageId = parts[3] || '';
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Tu ne peux pas supprimer ce message !", ephemeral: true });
+            return interaction.reply({ content: "Tu ne peux pas supprimer ce message !", flags: 64 });
         }
 
         await interaction.message.delete().catch(() => {});
