@@ -6164,19 +6164,19 @@ async function triggerSessionPantheonIfNeeded(client, member, session) {
     if (isSandboxId(session.userId)) return;
 
     if (session.isGodPack) {
-        await envoyerGodPackPantheonTcg(client, member, session).catch(() => {});
+        await envoyerGodPackPantheonTcg(client, member, session).catch(err => console.error('[TCG] Annonce God Pack échouée :', err));
     } else {
         for (let i = 0; i < session.cards.length; i++) {
             const pulledCard = session.cards[i];
             if (pulledCard.rarity === 'Full Art' || pulledCard.rarity === 'Négative') {
-                await envoyerPantheonTcg(client, member, pulledCard, session.isNewFlags[i], session.luckyUsed).catch(() => {});
+                await envoyerPantheonTcg(client, member, pulledCard, session.isNewFlags[i], session.luckyUsed).catch(err => console.error('[TCG] Annonce de carte rare échouée :', err));
             }
         }
     }
 
     if (Array.isArray(session.pendingMasterSets) && session.pendingMasterSets.length > 0) {
         for (const sNum of session.pendingMasterSets) {
-            await envoyerMaitreDuSetPantheonTcg(client, member, sNum).catch(() => {});
+            await envoyerMaitreDuSetPantheonTcg(client, member, sNum).catch(err => console.error('[TCG] Annonce maître du set échouée :', err));
         }
     }
 }
