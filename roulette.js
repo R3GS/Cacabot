@@ -7805,7 +7805,17 @@ async function handleRouletteMessage(message, response, client, helpers) {
 
     const estSalonAutorise = message.channel.id === ROULETTE_SALON_ID || message.channel.id === ROULETTE_SALON_ADMIN_ID;
     if (ROULETTE_COMMANDES_PUBLIQUES.includes(command) && !estSalonAutorise) {
-        await message.reply(`🎰 <@${message.author.id}>, la roulette et toutes ses commandes se passent exclusivement dans le salon dédié : <#${ROULETTE_SALON_ID}>\n(Si tu n'as pas accès à ce salon, c'est que tu n'as pas encore choisi tes rôles dans <#1559082682313474059>)`);
+        const avertissement = await message.reply({
+            content: `🎰 <@${message.author.id}>, la roulette et toutes ses commandes se passent exclusivement dans le salon dédié : <#${ROULETTE_SALON_ID}>\n(Si tu n'as pas accès à ce salon, c'est que tu n'as pas encore choisi tes rôles dans <#1559082682313474059>)`,
+            allowedMentions: { repliedUser: false }
+        }).catch(() => null);
+        if (avertissement) {
+            const nettoyage = setTimeout(() => {
+                avertissement.delete().catch(() => {});
+                message.delete().catch(() => {});
+            }, 8000);
+            nettoyage.unref?.();
+        }
         return true;
     }
 
@@ -9467,6 +9477,10 @@ async function handleRouletteButton(interaction, client) {
                 : '⚡ **Tirage à volonté (1 min) activé !** Ton tirage vient d\'être lancé dans le salon.',
             components: []
         });
+        const confirmationTimer = setTimeout(() => {
+            interaction.deleteReply().catch(() => {});
+        }, 3000);
+        confirmationTimer.unref?.();
 
         const envoye = await interaction.channel.send({
             embeds: res.embeds,

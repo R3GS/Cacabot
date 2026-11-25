@@ -279,11 +279,12 @@ async function replySilent(target, payload) {
     return target.reply(data);
 }
 
-async function replyTempSilent(message, payload, delayMs = 8000) {
+async function replyTempSilent(message, payload, delayMs = 8000, deleteTriggerMessage = false) {
     const sent = await replySilent(message, payload).catch(() => null);
     if (sent && typeof sent.delete === 'function') {
         const timer = setTimeout(() => {
             sent.delete().catch(() => {});
+            if (deleteTriggerMessage) message.delete().catch(() => {});
         }, delayMs);
         timer.unref?.();
     }
@@ -8571,7 +8572,7 @@ function buildTradeThreadPayload(trade) {
             `### 📜 Règles de l'échange\n` +
             `• **Cartes :** jusqu'à **3 cartes** par personne *(dons & dernières copies autorisés)*\n` +
             `• **Liberté totale :** tous les types d'échanges sont possibles *(double confirmation si inéquitable)*\n` +
-            `• **Bonus :** **+${POINTS_PER_TRADE} pts RegaDex** offerts à la fermeture *(1× par fil)*\n` +
+            `• **Bonus :** **+${POINTS_PER_TRADE} pts RegaDex** crédités à chacun dès le premier échange réussi *(1× par fil ; rappel publié à la fermeture)*\n` +
             `-# ⚠️ Toute modification déverrouille automatiquement la validation des deux joueurs.\n` +
             `${sep}\n` +
             `### 📊 Repère — ${SET1_NAME}\n` +
@@ -9161,6 +9162,9 @@ async function executeTradeIfBothLocked(thread, trade, client) {
         .setDescription(
             `**${nameA}** (<@${idA}>) a donné :\n${formatOfferLines(offerA)}\n\n` +
             `**${nameB}** (<@${idB}>) a donné :\n${formatOfferLines(offerB)}` +
+            (trade.tradeCount === 1
+                ? `\n\n🪙 **Bonus de trade :** chacun a reçu **+${POINTS_PER_TRADE} points RegaDex**.`
+                : '') +
             (tradeMilestones.length > 0 ? `\n\n🏆 **Palier(s) de complétion atteint(s) :**\n${tradeMilestones.map(l => `• ${l}`).join('\n')}` : '')
         )
         .setImage('attachment://trade_recap.jpg')
@@ -9312,9 +9316,9 @@ async function sendTradeRewardBeforeClose(thread, trade) {
 
         const embed = new EmbedBuilder()
             .setColor(0xf1c40f)
-            .setTitle('🪙 Points RegaDex gagnés !')
+            .setTitle('🪙 Rappel du bonus RegaDex')
             .setDescription(
-                `Merci pour votre échange ! Vous avez chacun gagné **+${POINTS_PER_TRADE} points RegaDex** *(1 seul bonus par fil d'échange)* :\n\n` +
+                `Les **+${POINTS_PER_TRADE} points RegaDex** ont déjà été crédités à chacun lors du premier échange réussi de ce fil *(bonus unique par fil)* :\n\n` +
                 `• <@${trade.initiatorId}> : **+${POINTS_PER_TRADE} pts** *(Nouveau solde : **${uA.points} pts**)*\n` +
                 `• <@${trade.targetId}> : **+${POINTS_PER_TRADE} pts** *(Nouveau solde : **${uB.points} pts**)*`
             );
@@ -10914,7 +10918,9 @@ async function handleTcgMessage(message) {
     if (!hasTcgRole(message.member)) {
         await replyTempSilent(
             message,
-            `🔒 <@${message.author.id}>, le **RegaDex TCG** et toutes ses commandes se passent exclusivement dans le salon dédié : <#${TCG_CHANNEL_ID}>\n(Si tu n'as pas accès à ce salon, c'est que tu n'as pas encore choisi le rôle <@&${TCG_ROLE_ID}> dans <#${ROLE_CHANNEL_ID}>)`
+            `🔒 <@${message.author.id}>, le **RegaDex TCG** et toutes ses commandes se passent exclusivement dans le salon dédié : <#${TCG_CHANNEL_ID}>\n(Si tu n'as pas accès à ce salon, c'est que tu n'as pas encore choisi le rôle <@&${TCG_ROLE_ID}> dans <#${ROLE_CHANNEL_ID}>)`,
+            8000,
+            true
         );
         return true;
     }
@@ -10922,7 +10928,9 @@ async function handleTcgMessage(message) {
     if (parsed.sub === 'flex' && !isAllowedFlexChannel(message.channel)) {
         await replyTempSilent(
             message,
-            `⭐ <@${message.author.id}>, la commande \`!flex\` est uniquement autorisée dans <#${TCG_CHANNEL_ID}> et <#${SHITPOST_CHANNEL_ID}>.`
+            `⭐ <@${message.author.id}>, la commande \`!flex\` est uniquement autorisée dans <#${TCG_CHANNEL_ID}> et <#${SHITPOST_CHANNEL_ID}>.`,
+            8000,
+            true
         );
         return true;
     }
@@ -10930,7 +10938,9 @@ async function handleTcgMessage(message) {
     if (parsed.sub !== 'flex' && !isAllowedTcgChannel(message.channel)) {
         await replyTempSilent(
             message,
-            `🃏 <@${message.author.id}>, le **RegaDex TCG** et ses commandes se passent exclusivement dans le salon dédié : <#${TCG_CHANNEL_ID}> *(seul \`!flex\` / \`!tcg flex\` est autorisé dans <#${TCG_CHANNEL_ID}> et <#${SHITPOST_CHANNEL_ID}>)*.\n(Si tu n'as pas accès à ce salon, c'est que tu n'as pas encore choisi le rôle <@&${TCG_ROLE_ID}> dans <#${ROLE_CHANNEL_ID}>)`
+            `🃏 <@${message.author.id}>, le **RegaDex TCG** et ses commandes se passent exclusivement dans le salon dédié : <#${TCG_CHANNEL_ID}> *(seul \`!flex\` / \`!tcg flex\` est autorisé dans <#${TCG_CHANNEL_ID}> et <#${SHITPOST_CHANNEL_ID}>)*.\n(Si tu n'as pas accès à ce salon, c'est que tu n'as pas encore choisi le rôle <@&${TCG_ROLE_ID}> dans <#${ROLE_CHANNEL_ID}>)`,
+            8000,
+            true
         );
         return true;
     }
