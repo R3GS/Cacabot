@@ -923,7 +923,7 @@ for (const p of lemonMilkPaths) {
             registerFont(p, { family: 'LemonMilk', weight: 'bold' });
             registerFont(p, { family: 'LemonMilk', weight: 'normal' });
             break;
-        } catch(e) {}
+        } catch (e) { console.warn('[INDEX] Chargement de police impossible :', p, e); }
     }
 }
 
@@ -1152,7 +1152,7 @@ async function disableButtons(interaction) {
             return newRow;
         });
         await msg.edit({ components: newRows });
-    } catch (e) {}
+    } catch (e) { if (e?.code !== 10008) console.warn('[INDEX] Désactivation des boutons échouée :', e); }
 }
 
 // =========================
@@ -2049,7 +2049,7 @@ try {
         } else if (interaction.deferred) {
             await interaction.followUp({ content: "Une erreur est survenue lors de l'exécution.", ephemeral: true }).catch(() => {});
         }
-    } catch {}
+    } catch (replyError) { console.warn('[INDEX] Notification d’erreur impossible :', replyError); }
 }
 });
 
