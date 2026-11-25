@@ -6357,7 +6357,7 @@ function modifierStatRoulette(targetUserId, statKey, action, valeurDirecte = nul
 
 async function handleRouletteStatsInteraction(interaction) {
     if (interaction.user.id !== bridge.EPSYS_ID) {
-        return interaction.reply({ content: "Ce panneau est réservé à Epsys 😌", ephemeral: true });
+        return interaction.reply({ content: "Ce panneau est réservé à Epsys 😌", flags: 64 });
     }
 
     const id = interaction.customId;
@@ -6496,7 +6496,7 @@ async function handleRouletteStatsInteraction(interaction) {
         const num = parseInt(valStr, 10);
 
         if (isNaN(num) || num < 0) {
-            return interaction.reply({ content: "❌ Nombre invalide ! Entre un nombre entier positif.", ephemeral: true });
+            return interaction.reply({ content: "❌ Nombre invalide ! Entre un nombre entier positif.", flags: 64 });
         }
 
         const nouveau = modifierStatRoulette(targetUserId, selectedStat, 'set', num);
@@ -6602,7 +6602,7 @@ function buildSuccessGiveComponents(targetUserId, page = 0) {
 
 async function handleSuccessGiveInteraction(interaction) {
     if (interaction.user.id !== bridge.EPSYS_ID) {
-        return interaction.reply({ content: "Ce panneau est réservé à Epsys 😌", ephemeral: true });
+        return interaction.reply({ content: "Ce panneau est réservé à Epsys 😌", flags: 64 });
     }
 
     const id = interaction.customId;
@@ -6613,7 +6613,7 @@ async function handleSuccessGiveInteraction(interaction) {
         const targetUserId = interaction.values[0];
         const cible = interaction.guild?.members.cache.get(targetUserId);
         if (cible?.user?.bot) {
-            return interaction.reply({ content: "❌ Tu ne peux pas donner de succès à un bot !", ephemeral: true });
+            return interaction.reply({ content: "❌ Tu ne peux pas donner de succès à un bot !", flags: 64 });
         }
         const embed = buildSuccessGiveEmbed(interaction.guild, targetUserId, page);
         const components = buildSuccessGiveComponents(targetUserId, page);
@@ -8037,7 +8037,7 @@ async function handleRouletteSlash(interaction, client) {
     if ((cmd === 'roulette' || cmd === 'rlt') && !estSalonSlashAutorise) {
         await interaction.reply({
             content: `🎰 La roulette et toutes ses commandes sont réservées au salon <#${ROULETTE_SALON_ID}> !`,
-            ephemeral: true
+            flags: 64
         });
         return true;
     }
@@ -8313,7 +8313,7 @@ async function handleRouletteButton(interaction, client) {
     if (interaction.isButton() && customId.startsWith('rlt_close:')) {
         const ownerId = customId.split(':')[1];
         if (!canControlRouletteOwner(interaction.user.id, ownerId)) {
-            return interaction.reply({ content: "Seul l'auteur de ce menu peut le fermer !", ephemeral: true });
+            return interaction.reply({ content: "Seul l'auteur de ce menu peut le fermer !", flags: 64 });
         }
         const msg = interaction.message;
         cancelRouletteHubAutoDelete(msg?.id);
@@ -8338,13 +8338,13 @@ async function handleRouletteButton(interaction, client) {
         const voteData = rouletteVotesPublics.get(msgId);
 
         if (!voteData) {
-            return interaction.reply({ content: "Ce vote est trop ancien ou introuvable.", ephemeral: true });
+            return interaction.reply({ content: "Ce vote est trop ancien ou introuvable.", flags: 64 });
         }
         if (voteData.cloture || Date.now() >= voteData.expireAt) {
-            return interaction.reply({ content: "Ce vote public est déjà clôturé !", ephemeral: true });
+            return interaction.reply({ content: "Ce vote public est déjà clôturé !", flags: 64 });
         }
         if (!voteData.isTest && interaction.user.id === voteData.targetId) {
-            return interaction.reply({ content: "Tu n'as pas le droit de voter sur ton propre sort 😌", ephemeral: true });
+            return interaction.reply({ content: "Tu n'as pas le droit de voter sur ton propre sort 😌", flags: 64 });
         }
 
         if (!Array.isArray(voteData.pour)) voteData.pour = [];
@@ -8385,7 +8385,7 @@ async function handleRouletteButton(interaction, client) {
             components: [buildVoteRouletteRow(voteData.pour.length, voteData.contre.length, false)]
         });
         planifierMajCanvasVoteRoulette(msgId, voteData, client, interaction.guild);
-        await interaction.followUp({ content: feedback, ephemeral: true });
+        await interaction.followUp({ content: feedback, flags: 64 });
         return true;
     }
 
@@ -8395,34 +8395,34 @@ async function handleRouletteButton(interaction, client) {
         const outcomeId = parts.slice(4).join('_');
 
         if (interaction.user.id !== targetUserId) {
-            return interaction.reply({ content: "Ce n'est pas ton privilège de vote à utiliser 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ton privilège de vote à utiliser 😌", flags: 64 });
         }
 
         const charges = rouletteVoteRedirectCharges.get(targetUserId) || 0;
         if (charges <= 0) {
-            return interaction.reply({ content: "Tu n'as plus de charges de redirection de vote disponibles !", ephemeral: true });
+            return interaction.reply({ content: "Tu n'as plus de charges de redirection de vote disponibles !", flags: 64 });
         }
 
         const selectedId = interaction.values[0];
         if (selectedId === targetUserId) {
-            return interaction.reply({ content: "❌ Tu ne peux pas te renvoyer le malus à toi-même !", ephemeral: true });
+            return interaction.reply({ content: "❌ Tu ne peux pas te renvoyer le malus à toi-même !", flags: 64 });
         }
 
         const cible = interaction.guild?.members.cache.get(selectedId)
             || await interaction.guild?.members?.fetch?.(selectedId).catch(() => null);
         if (!cible) {
-            return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
+            return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", flags: 64 });
         }
         if (cible.user?.bot) {
-            return interaction.reply({ content: "❌ Les bots sont insensibles aux malus de la roulette !", ephemeral: true });
+            return interaction.reply({ content: "❌ Les bots sont insensibles aux malus de la roulette !", flags: 64 });
         }
         if (ROULETTE_ROLE_JOUEUR_ID && !cible.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID)) {
-            return interaction.reply({ content: `❌ **${cible.displayName}** ne participe pas à la roulette (rôle manquant) !`, ephemeral: true });
+            return interaction.reply({ content: `❌ **${cible.displayName}** ne participe pas à la roulette (rôle manquant) !`, flags: 64 });
         }
         if (estProtegeAntiAcharnement(cible.id)) {
             return interaction.reply({
                 content: ROULETTE_ANTI_ACHARNEMENT_MSG,
-                ephemeral: true
+                flags: 64
             });
         }
 
@@ -8495,7 +8495,7 @@ async function handleRouletteButton(interaction, client) {
         const resteMsg = restantes > 0 ? ` (${restantes} charge${restantes > 1 ? 's' : ''} restante${restantes > 1 ? 's' : ''})` : ' *(c\'était ta dernière charge !)*';
         await interaction.reply({
             content: `🎯 **${interaction.member.displayName}** utilise son privilège de vote populaire et renvoie le malus **${ROULETTE_NOMS[outcomeId] || outcomeId}** sur <@${cible.id}> !${resteMsg}\n> ${texteCible}`,
-            ephemeral: false
+            flags: 0
         });
         return true;
     }
@@ -8503,7 +8503,7 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('rlt_claim_menu_')) {
         const targetUserId = customId.split('_')[3];
         if (interaction.user.id !== targetUserId) {
-            return interaction.reply({ content: "Ce n'est pas ton inventaire 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ton inventaire 😌", flags: 64 });
         }
 
         const itemChoisi = interaction.values[0];
@@ -8512,14 +8512,14 @@ async function handleRouletteButton(interaction, client) {
         if ((itemChoisi === 'coupTriple' || itemChoisi === 'freeRoll1Min') && ROULETTE_COOLDOWN_EXEMPT.includes(targetUserId)) {
             return interaction.reply({
                 content: "❌ Tu es déjà exempté.e de cooldown en permanence ! Cet objet reste conservé dans ton inventaire.",
-                ephemeral: true
+                flags: 64
             });
         }
 
         if (itemChoisi === 'ticketSkip') {
             const finCd = rouletteCooldowns.get(targetUserId);
             if (!finCd || Date.now() >= finCd) {
-                return interaction.reply({ content: "❌ Tu n'as aucun cooldown actif à réinitialiser ! Ton **Coupe-file** est conservé dans ton inventaire.", ephemeral: true });
+                return interaction.reply({ content: "❌ Tu n'as aucun cooldown actif à réinitialiser ! Ton **Coupe-file** est conservé dans ton inventaire.", flags: 64 });
             }
         } else if (itemChoisi === 'eponge') {
             const nowCk = Date.now();
@@ -8533,7 +8533,7 @@ async function handleRouletteButton(interaction, client) {
                 if (nowCk < fin) aMalus = true;
             }
             if (!aMalus) {
-                return interaction.reply({ content: "❌ Tu n'as aucun malus textuel actif à effacer ! Ton **Éponge à malus** est conservée dans ton inventaire.", ephemeral: true });
+                return interaction.reply({ content: "❌ Tu n'as aucun malus textuel actif à effacer ! Ton **Éponge à malus** est conservée dans ton inventaire.", flags: 64 });
             }
         }
 
@@ -8561,13 +8561,13 @@ async function handleRouletteButton(interaction, client) {
             return interaction.reply({
                 content: `⚠️ Tu as déjà un effet **${dejaActifRaison}** actif ! Veux-tu vraiment activer celui-ci maintenant pour le cumuler ?`,
                 components: [rowConf],
-                ephemeral: true
+                flags: 64
             });
         }
 
         const consomme = consommerInventaireRoulette(targetUserId, itemChoisi);
         if (!consomme) {
-            return interaction.reply({ content: "Tu n'as plus cette récompense en réserve ou elle a déjà été activée !", ephemeral: true });
+            return interaction.reply({ content: "Tu n'as plus cette récompense en réserve ou elle a déjà été activée !", flags: 64 });
         }
 
         let messageConfirmation = "";
@@ -8644,7 +8644,7 @@ async function handleRouletteButton(interaction, client) {
             await interaction.followUp({
                 content: `✍️ **PSEUDO AU CHOIX (48h) :** Sélectionne ci-dessous le membre du serveur dont tu veux changer le pseudo :`,
                 components: [rowUser],
-                ephemeral: true
+                flags: 64
             });
             return true;
         } else if (itemChoisi === 'pseudoLockSemaine') {
@@ -8657,7 +8657,7 @@ async function handleRouletteButton(interaction, client) {
             await interaction.followUp({
                 content: `🗿 **GRAVÉ DANS LA ROCHE (7 JOURS) :** Sélectionne ci-dessous le membre du serveur dont tu veux verrouiller le pseudo :`,
                 components: [rowUser],
-                ephemeral: true
+                flags: 64
             });
             return true;
         } else if (itemChoisi === 'epingleSalon') {
@@ -8674,7 +8674,7 @@ async function handleRouletteButton(interaction, client) {
             collector.on('end', (collected, reason) => {
                 if (collected.size === 0) {
                     crediterInventaireRoulette(targetUserId, 'epingleSalon', 1);
-                    interaction.followUp({ content: `⏳ Temps écoulé ! Ton bonus **Message épinglé** a été replacé dans ton inventaire (\`!rlt claim\`).`, ephemeral: true }).catch(() => {});
+                    interaction.followUp({ content: `⏳ Temps écoulé ! Ton bonus **Message épinglé** a été replacé dans ton inventaire (\`!rlt claim\`).`, flags: 64 }).catch(() => {});
                 }
             });
         } else if (itemChoisi === 'redirectChoix') {
@@ -8687,7 +8687,7 @@ async function handleRouletteButton(interaction, client) {
             await interaction.followUp({
                 content: `🎯 **REDIRECTION DE MALUS AU CHOIX :** Sélectionne ci-dessous le membre qui subira ton prochain malus à ta place :`,
                 components: [rowUser],
-                ephemeral: true
+                flags: 64
             });
             return true;
         } else if (itemChoisi === 'redirectBonusChoix') {
@@ -8700,7 +8700,7 @@ async function handleRouletteButton(interaction, client) {
             await interaction.followUp({
                 content: `🎀 **REDIRECTION DE BONUS AU CHOIX :** Sélectionne ci-dessous le membre qui recevra ton prochain bonus à ta place :`,
                 components: [rowUser],
-                ephemeral: true
+                flags: 64
             });
             return true;
         } else if (itemChoisi === 'partageBonus') {
@@ -8713,7 +8713,7 @@ async function handleRouletteButton(interaction, client) {
             await interaction.followUp({
                 content: `🤝 **PARTAGE DE BONUS AU CHOIX :** Sélectionne ci-dessous le membre avec qui tu souhaites partager ton prochain bonus :`,
                 components: [rowUser],
-                ephemeral: true
+                flags: 64
             });
             return true;
         } else if (itemChoisi === 'echangeurPoison') {
@@ -8722,7 +8722,7 @@ async function handleRouletteButton(interaction, client) {
                 crediterInventaireRoulette(targetUserId, 'echangeurPoison', 1);
                 return interaction.reply({
                     content: "❌ **Aucun malus actif !** Tu n'as aucun malus à transférer pour le moment. Ton **Échangeur de poison** reste dans ton inventaire !",
-                    ephemeral: true
+                    flags: 64
                 });
             }
 
@@ -8745,7 +8745,7 @@ async function handleRouletteButton(interaction, client) {
             await interaction.followUp({
                 content: `🧪 **ÉCHANGEUR DE POISON :** Choisis d'abord le malus que tu souhaites transférer à quelqu'un :`,
                 components: [rowMalus],
-                ephemeral: true
+                flags: 64
             });
             return true;
         } else if (itemChoisi === 'diviseur') {
@@ -8753,7 +8753,7 @@ async function handleRouletteButton(interaction, client) {
                 crediterInventaireRoulette(targetUserId, 'diviseur', 1);
                 return interaction.reply({
                     content: "❌ C'est l'**Happy Hour** ! Le **Diviseur (2h)** ne s'applique pas pendant l'Happy Hour — il reste dans ton inventaire.",
-                    ephemeral: true
+                    flags: 64
                 });
             }
             const nowDiv = Date.now();
@@ -8792,19 +8792,19 @@ async function handleRouletteButton(interaction, client) {
         const isEphInv = Boolean(interaction.message?.flags?.has?.(MessageFlags.Ephemeral));
         await interaction.update(buildRouletteInventairePayload(member, targetUserId, { home: !isEphInv, close: true })).catch(() => {});
 
-        await interaction.followUp({ content: messageConfirmation, ephemeral: false });
+        await interaction.followUp({ content: messageConfirmation, flags: 0 });
         return true;
     }
 
     if (customId.startsWith('rlt_claim_freeroll_')) {
         const targetUserId = customId.split('_')[3];
         if (interaction.user.id !== targetUserId) {
-            return interaction.reply({ content: "Ce n'est pas ton cadeau 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ton cadeau 😌", flags: 64 });
         }
 
         const consomme = consommerInventaireRoulette(targetUserId, 'freeRoll1Min');
         if (!consomme) {
-            return interaction.reply({ content: "Tu n'as plus ce bonus en réserve ou il a déjà été activé !", ephemeral: true });
+            return interaction.reply({ content: "Tu n'as plus ce bonus en réserve ou il a déjà été activé !", flags: 64 });
         }
 
         const nowBtnFr = Date.now();
@@ -8829,7 +8829,7 @@ async function handleRouletteButton(interaction, client) {
 
         await interaction.reply({
             content: `⚡ **C'EST PARTI !** <@${targetUserId}>, tu as **1 minute chrono** de tirages à volonté et sans aucun cooldown ! Fais péter \`!rlt go\` ou les boutons ! 🎰`,
-            ephemeral: false
+            flags: 0
         });
         return true;
     }
@@ -8837,7 +8837,7 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('rlt_proxy:')) {
         const [, sub, ownerId] = customId.split(':');
         if (interaction.user.id !== ownerId && interaction.user.id !== bridge.EPSYS_ID) {
-            return interaction.reply({ content: "Réservé à Epsys 😌", ephemeral: true });
+            return interaction.reply({ content: "Réservé à Epsys 😌", flags: 64 });
         }
         if (sub === 'close') {
             await interaction.message.delete().catch(() => {});
@@ -8853,7 +8853,7 @@ async function handleRouletteButton(interaction, client) {
         }
         if (sub === 'warmup') {
             if (rltProxyWarmupRunning) {
-                return interaction.reply({ content: '⏳ Un warmup est déjà en cours !', ephemeral: true });
+                return interaction.reply({ content: '⏳ Un warmup est déjà en cours !', flags: 64 });
             }
             await interaction.update({
                 content: '🔥 **Warmup PP Roulette démarré...**\n⏳ Préparation des avatars membres dans `Roulette/Proxies`...',
@@ -8870,7 +8870,7 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('rlt_hub:')) {
         const [, action, authorId, origMsgId = ''] = customId.split(':');
         if (!canControlRouletteOwner(interaction.user.id, authorId)) {
-            return interaction.reply({ content: "Ce n'est pas ton hub roulette 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ton hub roulette 😌", flags: 64 });
         }
 
         if (action === 'close') {
@@ -8890,7 +8890,7 @@ async function handleRouletteButton(interaction, client) {
             }
             await interaction.reply({
                 ...buildRouletteInventairePayload(member, authorId, { home: false, close: true }),
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -8899,7 +8899,7 @@ async function handleRouletteButton(interaction, client) {
             if (interaction.message?.id && rouletteHubAutoDeleteTimers.has(interaction.message.id)) {
                 scheduleRouletteHubAutoDelete(interaction.message);
             }
-            await interaction.reply({ ...buildRouletteNotifMenuPayload(member, 'ephem'), ephemeral: true });
+            await interaction.reply({ ...buildRouletteNotifMenuPayload(member, 'ephem'), flags: 64 });
             return true;
         }
 
@@ -8964,9 +8964,9 @@ async function handleRouletteButton(interaction, client) {
 
         if (type === 'stats' || type === 'state') {
             const [, , targetId, nextView, authorId, hubFlag = '0'] = parts;
-            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", ephemeral: true });
+            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", flags: 64 });
             const cible = interaction.guild?.members?.cache?.get(targetId) || await interaction.guild?.members?.fetch?.(targetId).catch(() => null);
-            if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
+            if (!cible) return interaction.reply({ content: "Membre introuvable.", flags: 64 });
             await interaction.deferUpdate();
             const payload = type === 'stats'
                 ? await buildRouletteStatsPayload(cible, authorId, nextView, hubFlag === '1')
@@ -8977,9 +8977,9 @@ async function handleRouletteButton(interaction, client) {
 
         if (type === 'succes') {
             const [, , targetId, nextView, pageStr, authorId, hubFlag = '0'] = parts;
-            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", ephemeral: true });
+            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", flags: 64 });
             const cible = interaction.guild?.members?.cache?.get(targetId) || await interaction.guild?.members?.fetch?.(targetId).catch(() => null);
-            if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
+            if (!cible) return interaction.reply({ content: "Membre introuvable.", flags: 64 });
             await interaction.deferUpdate();
             const payload = await buildRouletteAchievementsPayload(cible, parseInt(pageStr, 10) || 0, authorId, nextView, hubFlag === '1');
             await interaction.editReply({ ...payload, files: payload.files ?? [], attachments: [] });
@@ -8988,7 +8988,7 @@ async function handleRouletteButton(interaction, client) {
 
         if (type === 'top') {
             const [, , nextView, mode, authorId, hubFlag = '0'] = parts;
-            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", ephemeral: true });
+            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", flags: 64 });
             await interaction.deferUpdate();
             const payload = await buildRouletteTopPayload(interaction.guild, authorId, mode, nextView, hubFlag === '1');
             await interaction.editReply({ ...payload, files: payload.files ?? [], attachments: [] });
@@ -8999,7 +8999,7 @@ async function handleRouletteButton(interaction, client) {
 
     if (customId.startsWith('rlt_top_mode:')) {
         const [, view, authorId, hubFlag = '0'] = customId.split(':');
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ton classement !", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ton classement !", flags: 64 });
         const mode = interaction.values[0];
         await interaction.deferUpdate();
         const payload = await buildRouletteTopPayload(interaction.guild, authorId, mode, view, hubFlag === '1');
@@ -9009,7 +9009,7 @@ async function handleRouletteButton(interaction, client) {
 
     if (customId.startsWith('rlt_probas:')) {
         const [, ctx, cat, authorId, outcomeId = '', failIndex = '0'] = customId.split(':');
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", flags: 64 });
         const payload = buildRoulettePaytablePayload(cat, ctx, authorId, outcomeId, failIndex);
         const components = [...(payload.components || [])];
         if (ctx === 'res' && rouletteChoixEnAttente.has(interaction.message.id) && components.length < 5) {
@@ -9024,12 +9024,12 @@ async function handleRouletteButton(interaction, client) {
         const decision = parts[1];
         if (decision === 'no') {
             const ownerId = parts[2];
-            if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
             return interaction.update({ content: '👌 D\'accord, l\'objet reste bien au chaud dans ton inventaire.', components: [] });
         }
         const itemChoisi = parts[2];
         const targetUserId = parts[3];
-        if (interaction.user.id !== targetUserId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+        if (interaction.user.id !== targetUserId) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
 
         const consomme = consommerInventaireRoulette(targetUserId, itemChoisi);
         if (!consomme) {
@@ -9077,14 +9077,14 @@ async function handleRouletteButton(interaction, client) {
         const view = parts[4] || 'img';
         const fromHub = parts[5] === '1';
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Ce n'est pas ton menu d'inspection 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ton menu d'inspection 😌", flags: 64 });
         }
 
         const cibleId = interaction.values[0];
-        if (cibleId === 'aucun') return interaction.reply({ content: "Aucun autre joueur éligible à inspecter.", ephemeral: true });
+        if (cibleId === 'aucun') return interaction.reply({ content: "Aucun autre joueur éligible à inspecter.", flags: 64 });
         const cible = interaction.guild.members.cache.get(cibleId) || await interaction.guild.members.fetch(cibleId).catch(() => null);
-        if (!cible) return interaction.reply({ content: "Membre introuvable sur le serveur.", ephemeral: true });
-        if (cible.user?.bot) return interaction.reply({ content: "❌ Impossible d'inspecter un bot !", ephemeral: true });
+        if (!cible) return interaction.reply({ content: "Membre introuvable sur le serveur.", flags: 64 });
+        if (cible.user?.bot) return interaction.reply({ content: "❌ Impossible d'inspecter un bot !", flags: 64 });
 
         await interaction.deferUpdate();
         if (type === 'state') {
@@ -9109,19 +9109,19 @@ async function handleRouletteButton(interaction, client) {
         const authorId = parts[3];
         const view = parts[4] || 'img';
         const fromHub = parts[5] === '1';
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", flags: 64 });
         const cible = interaction.guild.members.cache.get(cibleId) || await interaction.guild.members.fetch(cibleId).catch(() => null);
-        if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
+        if (!cible) return interaction.reply({ content: "Membre introuvable.", flags: 64 });
         await interaction.update(buildRouletteSecretAchievementsPayload(cible, authorId, view, fromHub));
         return true;
     }
 
     if (customId.startsWith('rlt_dex:')) {
         const [, cibleId, cat, pageStr, authorId, hubFlag = '0'] = customId.split(':');
-        if (!canControlRouletteOwner(interaction.user.id, authorId)) return interaction.reply({ content: "Ce n'est pas ta commande !", ephemeral: true });
+        if (!canControlRouletteOwner(interaction.user.id, authorId)) return interaction.reply({ content: "Ce n'est pas ta commande !", flags: 64 });
         await interaction.deferUpdate();
         const cible = interaction.guild.members.cache.get(cibleId) || await interaction.guild.members.fetch(cibleId).catch(() => null);
-        if (!cible) return interaction.followUp({ content: "Membre introuvable.", ephemeral: true });
+        if (!cible) return interaction.followUp({ content: "Membre introuvable.", flags: 64 });
         await interaction.editReply({
             ...buildRouletteDexPayload(cible, cat, parseInt(pageStr, 10) || 0, authorId, hubFlag === '1'),
             files: [],
@@ -9137,9 +9137,9 @@ async function handleRouletteButton(interaction, client) {
         const authorId = parts[4];
         const view = parts[5] || 'img';
         const fromHub = parts[6] === '1';
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", flags: 64 });
         const cible = interaction.guild.members.cache.get(cibleId) || await interaction.guild.members.fetch(cibleId).catch(() => null);
-        if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
+        if (!cible) return interaction.reply({ content: "Membre introuvable.", flags: 64 });
         await interaction.deferUpdate();
         const payload = await buildRouletteAchievementsPayload(cible, page, authorId, view, fromHub);
         await interaction.editReply({ ...payload, files: payload.files ?? [], attachments: [] });
@@ -9150,9 +9150,9 @@ async function handleRouletteButton(interaction, client) {
         const cibleId = parts[3];
         const authorId = parts[4];
         const fromHub = parts[5] === '1';
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", flags: 64 });
         const cible = interaction.guild.members.cache.get(cibleId) || await interaction.guild.members.fetch(cibleId).catch(() => null);
-        if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
+        if (!cible) return interaction.reply({ content: "Membre introuvable.", flags: 64 });
         await interaction.deferUpdate();
         const payload = await buildRouletteStatsPayload(cible, authorId, 'img', fromHub);
         await interaction.editReply({ ...payload, files: payload.files ?? [], attachments: [] });
@@ -9160,20 +9160,20 @@ async function handleRouletteButton(interaction, client) {
     }
     if (customId.startsWith('roulette_id_')) {
         const [, , type, authorId] = customId.split('_');
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
         await interaction.update({ embeds: [buildRouletteTypeEmbed(type)] });
         return true;
     }
     if (customId.startsWith('roulette_probas_pres_')) {
         const authorId = customId.split('_')[3];
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", flags: 64 });
         const payload = buildRoulettePaytablePayload('bonus', 'pres', authorId);
         await interaction.update({ ...payload, files: [], attachments: [] });
         return true;
     }
     if (customId.startsWith('roulette_back_pres_')) {
         const authorId = customId.split('_')[3];
-        if (!canControlRouletteOwner(interaction.user.id, authorId)) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
+        if (!canControlRouletteOwner(interaction.user.id, authorId)) return interaction.reply({ content: "C'est pas ton tirage 😌", flags: 64 });
         const payload = buildRouletteHubPayload(authorId, interaction.guildId);
         await interaction.update({ content: null, ...payload, files: [], attachments: [] });
         if (interaction.message) scheduleRouletteHubAutoDelete(interaction.message);
@@ -9181,11 +9181,11 @@ async function handleRouletteButton(interaction, client) {
     }
     if (customId.startsWith('roulette_tenter_')) {
         const authorId = customId.split('_')[2];
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", flags: 64 });
         const res = await tirerEtConstruireResultatRoulette(authorId, interaction.guild, interaction.channel, client);
         if (res.cooldown) {
             const member = interaction.member || { id: authorId, displayName: interaction.user.username, user: interaction.user };
-            await interaction.reply({ ...buildCooldownQuickUsePayload(member, res.finCooldown), ephemeral: true });
+            await interaction.reply({ ...buildCooldownQuickUsePayload(member, res.finCooldown), flags: 64 });
             return true;
         }
         await interaction.deferUpdate();
@@ -9210,7 +9210,7 @@ async function handleRouletteButton(interaction, client) {
     }
     if (customId.startsWith('roulette_fallback_')) {
         const authorId = customId.split('_')[2];
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", flags: 64 });
         await interaction.deferUpdate();
         const outcomeId = interaction.values[0];
         const auteurNom = interaction.member?.displayName ?? interaction.user.username;
@@ -9241,13 +9241,13 @@ async function handleRouletteButton(interaction, client) {
             const member = interaction.member || { id: interaction.user.id, displayName: interaction.user.username, user: interaction.user };
             await interaction.reply({
                 ...buildRouletteNotifMenuPayload(member, 'ephem'),
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
 
         if (ownerId && interaction.user.id !== ownerId) {
-            return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            return interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
         }
 
         const userId = ownerId || interaction.user.id;
@@ -9360,7 +9360,7 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('roulette_notif_mp') || customId.startsWith('roulette_notifmp_')) {
         const userId = interaction.user.id;
         const fin = rouletteCooldowns.get(userId) ?? 0;
-        if (Date.now() >= fin) return interaction.reply({ content: "Ton cooldown est déjà terminé ! 🎰", ephemeral: true });
+        if (Date.now() >= fin) return interaction.reply({ content: "Ton cooldown est déjà terminé ! 🎰", flags: 64 });
 
         rouletteNotifs.set(userId, 'MP');
         armerNotifRoulette(userId, 'MP', client);
@@ -9368,7 +9368,7 @@ async function handleRouletteButton(interaction, client) {
         const member = interaction.member || { id: userId, displayName: interaction.user.username, user: interaction.user };
         await interaction.reply({
             ...buildRouletteNotifMenuPayload(member, 'ephem', `✅ *C'est noté ! Je te préviendrai **en MP** <t:${Math.ceil(fin / 1000)}:R>.*`),
-            ephemeral: true
+            flags: 64
         });
         return true;
     }
@@ -9376,7 +9376,7 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('roulette_notif')) {
         const userId = interaction.user.id;
         const fin = rouletteCooldowns.get(userId) ?? 0;
-        if (Date.now() >= fin) return interaction.reply({ content: "Ton cooldown est déjà terminé ! 🎰", ephemeral: true });
+        if (Date.now() >= fin) return interaction.reply({ content: "Ton cooldown est déjà terminé ! 🎰", flags: 64 });
 
         rouletteNotifs.set(userId, interaction.channelId);
         armerNotifRoulette(userId, interaction.channelId, client);
@@ -9384,7 +9384,7 @@ async function handleRouletteButton(interaction, client) {
         const member = interaction.member || { id: userId, displayName: interaction.user.username, user: interaction.user };
         await interaction.reply({
             ...buildRouletteNotifMenuPayload(member, 'ephem', `✅ *C'est noté ! Je te préviendrai **dans ce salon** <t:${Math.ceil(fin / 1000)}:R>.*`),
-            ephemeral: true
+            flags: 64
         });
         return true;
     }
@@ -9392,7 +9392,7 @@ async function handleRouletteButton(interaction, client) {
         const member = interaction.member;
         return interaction.reply({
             ...buildRouletteInventairePayload(member, interaction.user.id, { home: false, close: true }),
-            ephemeral: true
+            flags: 64
         });
     }
 
@@ -9401,13 +9401,13 @@ async function handleRouletteButton(interaction, client) {
         const decision = parts[1];
         if (decision === 'no') {
             const ownerId = parts[2];
-            if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
             return interaction.update({ content: "👌 D'accord, ton objet reste dans ton inventaire !", components: [] });
         }
 
         const itemKey = parts[2];
         const userId = parts[3];
-        if (interaction.user.id !== userId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+        if (interaction.user.id !== userId) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
 
         const consomme = consommerInventaireRoulette(userId, itemKey);
         if (!consomme) {
@@ -9500,11 +9500,11 @@ async function handleRouletteButton(interaction, client) {
             const member = interaction.member || { id: clickerId, displayName: interaction.user.username, user: interaction.user };
             return interaction.reply({
                 ...buildCooldownQuickUsePayload(member, res.finCooldown),
-                ephemeral: true
+                flags: 64
             });
         }
 
-        await interaction.reply({ content: "🎲 Tirage envoyé dans le salon !", ephemeral: true }).catch(() => {});
+        await interaction.reply({ content: "🎲 Tirage envoyé dans le salon !", flags: 64 }).catch(() => {});
 
         const envoye = await interaction.channel.send({
             embeds: res.embeds,
@@ -9545,7 +9545,7 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('rlt_claim_sel_')) {
         const [, , , actionType, targetUserId] = customId.split('_');
         if (interaction.user.id !== targetUserId) {
-            return interaction.reply({ content: "Ce n'est pas ton bonus à configurer 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ton bonus à configurer 😌", flags: 64 });
         }
         const selectedId = interaction.values[0];
         if (selectedId === 'aucun') {
@@ -9556,21 +9556,21 @@ async function handleRouletteButton(interaction, client) {
         const cible = interaction.guild?.members.cache.get(selectedId)
             || await interaction.guild?.members?.fetch?.(selectedId).catch(() => null);
         if (!cible) {
-            return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
+            return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", flags: 64 });
         }
         if (cible.user?.bot) {
-            return interaction.reply({ content: "❌ Tu ne peux pas sélectionner un bot !", ephemeral: true });
+            return interaction.reply({ content: "❌ Tu ne peux pas sélectionner un bot !", flags: 64 });
         }
         if (ROULETTE_ROLE_JOUEUR_ID && !cible.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID)) {
-            return interaction.reply({ content: `❌ **${cible.displayName}** ne participe pas à la roulette (rôle manquant) ! Choisis un.e autre joueur.euse.`, ephemeral: true });
+            return interaction.reply({ content: `❌ **${cible.displayName}** ne participe pas à la roulette (rôle manquant) ! Choisis un.e autre joueur.euse.`, flags: 64 });
         }
 
         if (actionType === 'redirectChoix') {
             if (cible.id === targetUserId) {
-                return interaction.reply({ content: "❌ Tu ne peux pas te renvoyer ton propre malus à toi-même !", ephemeral: true });
+                return interaction.reply({ content: "❌ Tu ne peux pas te renvoyer ton propre malus à toi-même !", flags: 64 });
             }
             if (estProtegeAntiAcharnement(cible.id)) {
-                return interaction.reply({ content: ROULETTE_ANTI_ACHARNEMENT_MSG, ephemeral: true });
+                return interaction.reply({ content: ROULETTE_ANTI_ACHARNEMENT_MSG, flags: 64 });
             }
             const liste = ajouterCibleListe(rouletteRedirectChoixCible, targetUserId, cible.id);
             bridge.demanderSauvegarde();
@@ -9584,7 +9584,7 @@ async function handleRouletteButton(interaction, client) {
 
         if (actionType === 'redirectBonusChoix') {
             if (cible.id === targetUserId) {
-                return interaction.reply({ content: "❌ Tu ne peux pas te rediriger ton bonus à toi-même !", ephemeral: true });
+                return interaction.reply({ content: "❌ Tu ne peux pas te rediriger ton bonus à toi-même !", flags: 64 });
             }
             const liste = ajouterCibleListe(rouletteRedirectBonusChoixCible, targetUserId, cible.id);
             bridge.demanderSauvegarde();
@@ -9598,7 +9598,7 @@ async function handleRouletteButton(interaction, client) {
 
         if (actionType === 'partageBonus') {
             if (cible.id === targetUserId) {
-                return interaction.reply({ content: "❌ Tu ne peux pas partager ton bonus avec toi-même !", ephemeral: true });
+                return interaction.reply({ content: "❌ Tu ne peux pas partager ton bonus avec toi-même !", flags: 64 });
             }
             const liste = ajouterCibleListe(roulettePartageBonusChoixCible, targetUserId, cible.id);
             bridge.demanderSauvegarde();
@@ -9634,7 +9634,7 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('rlt_poison_selmalus_')) {
         const targetUserId = customId.split('_')[3];
         if (interaction.user.id !== targetUserId) {
-            return interaction.reply({ content: "Ce n'est pas ton objet 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ton objet 😌", flags: 64 });
         }
         const malusChoisi = interaction.values[0];
         const rowUser = new ActionRowBuilder().addComponents(
@@ -9654,7 +9654,7 @@ async function handleRouletteButton(interaction, client) {
         const malusKey = parts.slice(4).join('_');
 
         if (interaction.user.id !== targetUserId) {
-            return interaction.reply({ content: "Ce n'est pas ton objet 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ton objet 😌", flags: 64 });
         }
 
         const selectedId = interaction.values[0];
@@ -9665,14 +9665,14 @@ async function handleRouletteButton(interaction, client) {
         }
         const cible = interaction.guild?.members.cache.get(selectedId)
             || await interaction.guild?.members?.fetch?.(selectedId).catch(() => null);
-        if (!cible) return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
-        if (cible.user?.bot) return interaction.reply({ content: "❌ Tu ne peux pas transférer de malus à un bot !", ephemeral: true });
-        if (cible.id === targetUserId) return interaction.reply({ content: "❌ Tu ne peux pas t'envoyer ton propre malus !", ephemeral: true });
+        if (!cible) return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", flags: 64 });
+        if (cible.user?.bot) return interaction.reply({ content: "❌ Tu ne peux pas transférer de malus à un bot !", flags: 64 });
+        if (cible.id === targetUserId) return interaction.reply({ content: "❌ Tu ne peux pas t'envoyer ton propre malus !", flags: 64 });
         if (ROULETTE_ROLE_JOUEUR_ID && !cible.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID)) {
-            return interaction.reply({ content: `❌ **${cible.displayName}** ne participe pas à la roulette (rôle manquant) !`, ephemeral: true });
+            return interaction.reply({ content: `❌ **${cible.displayName}** ne participe pas à la roulette (rôle manquant) !`, flags: 64 });
         }
         if (estProtegeAntiAcharnement(cible.id)) {
-            return interaction.reply({ content: ROULETTE_ANTI_ACHARNEMENT_MSG, ephemeral: true });
+            return interaction.reply({ content: ROULETTE_ANTI_ACHARNEMENT_MSG, flags: 64 });
         }
 
         const transfertResult = transfererMalus(targetUserId, cible.id, malusKey, interaction.guild);
@@ -9704,7 +9704,7 @@ async function handleRouletteButton(interaction, client) {
         const nouveauPseudo = interaction.fields.getTextInputValue('nouveau_pseudo_val').trim();
         const cible = interaction.guild?.members.cache.get(cibleId)
             || await interaction.guild?.members?.fetch?.(cibleId).catch(() => null);
-        if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
+        if (!cible) return interaction.reply({ content: "Membre introuvable.", flags: 64 });
 
         const lockExistant = roulettePseudoLock.get(cible.id);
         const originalNickname = lockExistant?.originalNickname !== undefined ? lockExistant.originalNickname : (cible.nickname ?? null);
@@ -9718,7 +9718,7 @@ async function handleRouletteButton(interaction, client) {
 
         await interaction.reply({
             content: `✅ <@${cible.id}> est renommé·e en **${nouveauPseudo}** par <@${targetUserId}>, verrouillé pendant **${labelDuree}** !`,
-            ephemeral: false
+            flags: 0
         });
         return true;
     }
@@ -9726,12 +9726,12 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('roulette_probas_res_')) {
         const [, , , authorId, outcomeId, failIndex] = customId.split('_');
         const payload = buildRoulettePaytablePayload('bonus', 'res', interaction.user.id, outcomeId, failIndex);
-        await interaction.reply({ ...payload, ephemeral: true });
+        await interaction.reply({ ...payload, flags: 64 });
         return true;
     }
     if (customId.startsWith('roulette_back_res_')) {
         const [, , , authorId, outcomeId, failIndex] = customId.split('_');
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", flags: 64 });
         const memo = rouletteResultats.get(interaction.message.id);
         let embed = memo?.embed || (memo?.data ? memo : null);
         const storedOutcomeId = memo?.outcomeId || outcomeId;
