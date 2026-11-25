@@ -644,7 +644,7 @@ async function handleAnniversaireSlash(interaction) {
         const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
         const date = guildBirthdays[cibleUser.id];
         const nom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
-        if (!date) return interaction.reply({ content: `🎂 **${nom}** n'a pas encore enregistré son anniversaire.`, ephemeral: true });
+        if (!date) return interaction.reply({ content: `🎂 **${nom}** n'a pas encore enregistré son anniversaire.`, flags: 64 });
         const [d, m] = date.split('/').map(Number);
         const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -667,11 +667,11 @@ async function handleAnniversaireSlash(interaction) {
             jour <= new Date(2000, mois, 0).getDate();
 
         if (!dateValide) {
-            return interaction.reply({ content: "Date invalide ! Utilise le format `JJ/MM` (ex : `24/07`).", ephemeral: true });
+            return interaction.reply({ content: "Date invalide ! Utilise le format `JJ/MM` (ex : `24/07`).", flags: 64 });
         }
         const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
         if (cibleUser.id !== interaction.user.id && !estAutoriseModif(interaction.member, cibleUser.id)) {
-            return interaction.reply({ content: "❌ Tu ne peux enregistrer que ton propre anniversaire ! Seul un modérateur ou Epsys peut modifier celui d'un autre membre.", ephemeral: true });
+            return interaction.reply({ content: "❌ Tu ne peux enregistrer que ton propre anniversaire ! Seul un modérateur ou Epsys peut modifier celui d'un autre membre.", flags: 64 });
         }
         const nom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
         guildBirthdays[cibleUser.id] = date;
@@ -681,7 +681,7 @@ async function handleAnniversaireSlash(interaction) {
 
     if (sub === 'list') {
         const entries = Object.entries(guildBirthdays);
-        if (entries.length === 0) return interaction.reply({ content: "Aucun anniversaire enregistré !", ephemeral: true });
+        if (entries.length === 0) return interaction.reply({ content: "Aucun anniversaire enregistré !", flags: 64 });
         const authorId = interaction.user.id;
         const PAGE_SIZE = 10;
 
@@ -710,7 +710,7 @@ async function handleAnniversaireSlash(interaction) {
 
     if (sub === 'next') {
         const entries = Object.entries(guildBirthdays);
-        if (entries.length === 0) return interaction.reply({ content: "Aucun anniversaire enregistré !", ephemeral: true });
+        if (entries.length === 0) return interaction.reply({ content: "Aucun anniversaire enregistré !", flags: 64 });
         const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const toDate = (str) => {
@@ -732,10 +732,10 @@ async function handleAnniversaireSlash(interaction) {
     if (sub === 'remove') {
         const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
         if (cibleUser.id !== interaction.user.id && !estAutoriseModif(interaction.member, cibleUser.id)) {
-            return interaction.reply({ content: "❌ Tu ne peux supprimer que ton propre anniversaire ! Seul un modérateur ou Epsys peut supprimer celui d'un autre membre.", ephemeral: true });
+            return interaction.reply({ content: "❌ Tu ne peux supprimer que ton propre anniversaire ! Seul un modérateur ou Epsys peut supprimer celui d'un autre membre.", flags: 64 });
         }
         if (!guildBirthdays[cibleUser.id]) {
-            return interaction.reply({ content: "Cet anniversaire n'est pas enregistré !", ephemeral: true });
+            return interaction.reply({ content: "Cet anniversaire n'est pas enregistré !", flags: 64 });
         }
         const nom = interaction.guild?.members.cache.get(cibleUser.id)?.displayName ?? cibleUser.username;
         delete guildBirthdays[cibleUser.id];
@@ -783,7 +783,7 @@ async function handleAnniversaireButton(interaction) {
             jour <= new Date(2000, mois, 0).getDate();
 
         if (!dateValide) {
-            return interaction.reply({ content: "❌ Date invalide ! Utilise le format `JJ/MM` (ex : `24/07`).", ephemeral: true });
+            return interaction.reply({ content: "❌ Date invalide ! Utilise le format `JJ/MM` (ex : `24/07`).", flags: 64 });
         }
 
         const guildBirthdays = getGuildBirthdays(interaction.guild.id);
@@ -792,7 +792,7 @@ async function handleAnniversaireButton(interaction) {
 
         return interaction.reply({
             content: `🎂 **C'est noté !** Ton anniversaire a été enregistré le **${dateSaisie}** ! Tu auras ton ping de fête le jour J ! 🎉`,
-            ephemeral: true
+            flags: 64
         });
     }
 
@@ -805,7 +805,7 @@ async function handleAnniversaireButton(interaction) {
     const action = parts[5];
 
     if (interaction.user.id !== authorId) {
-        await interaction.reply({ content: "Ce bouton ne t'est pas destiné !", ephemeral: true });
+        await interaction.reply({ content: "Ce bouton ne t'est pas destiné !", flags: 64 });
         return true;
     }
 

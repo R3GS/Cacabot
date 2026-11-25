@@ -456,7 +456,9 @@ async function lancerPenduQuotidien(guild, force = false) {
             bonnesLettresParJoueur: {},
             dernierCoup: null,
             compteurMessagesLongs: 0,
-            messageId: null
+            messageId: null,
+            // Identifiant immuable, même si l'embed est republié plus bas.
+            sessionId: require('node:crypto').randomUUID()
         };
 
         const embed = buildPenduEmbed(nouvelleSession);
@@ -484,7 +486,9 @@ async function lancerPenduQuotidien(guild, force = false) {
         try {
             await penduBridge.saveAll();
         } catch (error) {
-            penduBridge.setPenduPublicationPending(null);
+            // Un échec réseau ne prouve pas que Discord n'a pas reçu
+            // la sauvegarde : garder le journal et bloquer un relancement.
+            penduBridge.setPenduPublicationPending(publicationPending);
 
             console.error(
                 '[PENDU] Publication annulée : intention non sauvegardée.',
@@ -2092,7 +2096,8 @@ async function attribuerRecompensesRevelationPendu(
     }
 
     // Identifiant stable de la partie, y compris après redémarrage.
-    const rewardKey = `pendu:${session.dateKey}:${session.messageId || 'legacy'}`;
+    const rewardKey = session.recompensesRewardKey ||
+        `pendu:${session.dateKey}:${session.sessionId || session.messageId || 'legacy'}`;
 
     if (!session.recompensesClassementTraitees) {
         const stats = penduBridge.getPenduStats();
@@ -2257,7 +2262,7 @@ async function handlePenduButton(interaction) {
         ) {
             await interaction.followUp({
                 content: "Aucune partie de Pendu n'est actuellement en cours !",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -2265,7 +2270,7 @@ async function handlePenduButton(interaction) {
         if (session.messageId !== interaction.message?.id) {
             await interaction.followUp({
                 content: "⚠️ Ce bouton appartient à un ancien message du Pendu. Utilise celui de la partie actuelle !",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -2273,7 +2278,7 @@ async function handlePenduButton(interaction) {
         if (session.erreursCollectives >= 5) {
             await interaction.followUp({
                 content: "⚠️ Trop dangereux ! Il ne reste qu'une seule erreur avant le pendu (5/6), vous ne pouvez plus sacrifier de vie !",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -2285,7 +2290,7 @@ async function handlePenduButton(interaction) {
         if (session.votesPacte.includes(uid)) {
             await interaction.followUp({
                 content: "Tu as déjà voté pour ce pacte ! Attends que d'autres joueurs votent.",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -2311,7 +2316,7 @@ async function handlePenduButton(interaction) {
                     `🕯️ <@${uid}> a voté pour le **Pacte du Pendu** ` +
                     `(${session.votesPacte.length}/3 votes requis pour ` +
                     `sacrifier 1 vie contre 1 indice) !`,
-                ephemeral: false
+                flags: 0
             });
 
             return true;
@@ -2432,7 +2437,7 @@ async function handlePenduButton(interaction) {
         if (interaction.user.id !== EPSYS_ID) {
             await interaction.reply({
                 content: "Seule Epsys peut arrêter ce test.",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -2443,7 +2448,7 @@ async function handlePenduButton(interaction) {
         if (!session || session.messageId !== interaction.message?.id) {
             await interaction.reply({
                 content: "⚠️ Ce bouton appartient à un ancien test du Pendu.",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -2474,12 +2479,12 @@ async function handlePenduButton(interaction) {
 
         return interaction.reply({
             embeds: [buildPenduStatsEmbed(membre)],
-            ephemeral: true
+            flags: 64
         });
     }
 
     if (customId === 'pendu_view_guide') {
-        return interaction.reply({ embeds: [buildPenduGuideEmbed()], ephemeral: true });
+        return interaction.reply({ embeds: [buildPenduGuideEmbed()], flags: 64 });
     }
 
     if (customId.startsWith('pendu_view_hebdo_') || customId.startsWith('pendu_hebdo_')) {
@@ -2500,7 +2505,7 @@ async function handlePenduButton(interaction) {
         return interaction.reply({
             embeds: [embed],
             components: [row],
-            ephemeral: true
+            flags: 64
         });
     }
 
@@ -2595,7 +2600,13 @@ async function reconcilierPublicationPendu(client) {
     const messageActuel = sessionActuelle?.messageId || null;
     const messagePrecedent = pending.previousMessageId || null;
 
-    const memePublication = messageActuel === trouve.id;
+    // Un rappel peut remplacer messageId après la publication initiale.
+    // L'identifiant de session, lui, ne change jamais.
+    const memePublication = messageActuel === trouve.id || (
+        typeof pending.session.sessionId === 'string' &&
+        pending.session.sessionId.length > 0 &&
+        sessionActuelle?.sessionId === pending.session.sessionId
+    );
 
     const ancienneSessionAttendue =
         messageActuel === messagePrecedent &&

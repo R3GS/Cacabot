@@ -469,7 +469,7 @@ function initSecurityState(bridge) {
             setTimeout(() => verifierWarnsExpires(), 15000);
             setTimeout(() => verifierDestitutionsExpirees(), 15000);
         } else {
-            securityState.client.once('ready', () => {
+            securityState.client.once('clientReady', () => {
                 synchroniserTribunauxExistants();
                 setTimeout(() => verifierWarnsExpires(), 15000);
                 setTimeout(() => verifierDestitutionsExpirees(), 15000);
@@ -2703,17 +2703,17 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isUserSelectMenu() && interaction.customId.startsWith('bt_select_user_')) {
         const authorId = interaction.customId.replace('bt_select_user_', '');
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande peut sélectionner le membre.", ephemeral: true });
+            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande peut sélectionner le membre.", flags: 64 });
         }
 
         const selectedUserId = interaction.values[0];
         if (selectedUserId === interaction.user.id) {
-            return interaction.reply({ content: "❌ Tu ne peux pas lancer une procédure contre toi-même !", ephemeral: true });
+            return interaction.reply({ content: "❌ Tu ne peux pas lancer une procédure contre toi-même !", flags: 64 });
         }
 
         const cible = interaction.guild?.members?.cache?.get(selectedUserId) ?? await interaction.guild?.members?.fetch(selectedUserId).catch(() => null);
         if (!cible) {
-            return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
+            return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", flags: 64 });
         }
 
         const sessionId = `bt_${Date.now()}_${interaction.user.id}`;
@@ -2739,9 +2739,9 @@ async function handleSecurityInteraction(interaction) {
         const sessionId = interaction.customId.replace(isMp ? 'bt_toggle_mp_' : 'bt_toggle_ticket_', '');
         const session = bantempSessions.get(sessionId);
 
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
         if (interaction.user.id !== session.authorId) {
-            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande peut modifier ces options.", ephemeral: true });
+            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande peut modifier ces options.", flags: 64 });
         }
 
         if (isMp) session.mp = !session.mp;
@@ -2757,9 +2757,9 @@ async function handleSecurityInteraction(interaction) {
         const sessionId = interaction.customId.replace('bt_set_reason_', '');
         const session = bantempSessions.get(sessionId);
 
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
         if (interaction.user.id !== session.authorId) {
-            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande peut modifier ces options.", ephemeral: true });
+            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande peut modifier ces options.", flags: 64 });
         }
 
         const modal = new ModalBuilder()
@@ -2785,7 +2785,7 @@ async function handleSecurityInteraction(interaction) {
         const sessionId = interaction.customId.replace('bt_modal_reason_', '');
         const session = bantempSessions.get(sessionId);
 
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
         session.raison = interaction.fields.getTextInputValue('reason_text').trim() || "Suspicion de bot / Comportement inadapté";
 
         const { embed, rows } = buildBantempConfigPanel(sessionId);
@@ -2798,9 +2798,9 @@ async function handleSecurityInteraction(interaction) {
         const sessionId = interaction.customId.replace('bt_cancel_', '');
         const session = bantempSessions.get(sessionId);
 
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
         if (interaction.user.id !== session.authorId) {
-            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande peut annuler.", ephemeral: true });
+            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande peut annuler.", flags: 64 });
         }
 
         bantempSessions.delete(sessionId);
@@ -2813,9 +2813,9 @@ async function handleSecurityInteraction(interaction) {
         const sessionId = interaction.customId.replace('bt_confirm_', '');
         const session = bantempSessions.get(sessionId);
 
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
         if (interaction.user.id !== session.authorId) {
-            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande peut confirmer.", ephemeral: true });
+            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande peut confirmer.", flags: 64 });
         }
 
         await interaction.update({ content: "⏳ **Mise en place de la procédure et isolement en cours...**", embeds: [], components: [] });
@@ -2980,7 +2980,7 @@ async function handleSecurityInteraction(interaction) {
     // ==========================================
     if (interaction.isButton() && interaction.customId.startsWith('tribunal_')) {
         if (!estModo(interaction.member)) {
-            return interaction.reply({ content: "❌ Seuls les modérateurs peuvent utiliser ces boutons.", ephemeral: true });
+            return interaction.reply({ content: "❌ Seuls les modérateurs peuvent utiliser ces boutons.", flags: 64 });
         }
 
         const [, action, targetId] = interaction.customId.split('_');
@@ -3116,7 +3116,7 @@ async function handleSecurityInteraction(interaction) {
     // Bouton de fermeture automatique si le membre a quitté le serveur
     if (interaction.isButton() && interaction.customId.startsWith('tribunal_force_close_')) {
         if (!estModo(interaction.member)) {
-            return interaction.reply({ content: "❌ Seuls les modérateurs peuvent utiliser ce bouton.", ephemeral: true });
+            return interaction.reply({ content: "❌ Seuls les modérateurs peuvent utiliser ce bouton.", flags: 64 });
         }
         const targetId = interaction.customId.replace('tribunal_force_close_', '');
         await interaction.reply("🗑️ **Archivage et suppression automatique du salon tribunal en cours...**");
@@ -3144,7 +3144,7 @@ async function handleSecurityInteraction(interaction) {
     // Changement de page dans la liste des archives
     if (interaction.isButton() && interaction.customId.startsWith('arch_page_')) {
         if (!estModo(interaction.member)) {
-            return interaction.reply({ content: "❌ Seuls les modérateurs peuvent naviguer dans les archives.", ephemeral: true });
+            return interaction.reply({ content: "❌ Seuls les modérateurs peuvent naviguer dans les archives.", flags: 64 });
         }
 
         const parts = interaction.customId.split('_');
@@ -3160,7 +3160,7 @@ async function handleSecurityInteraction(interaction) {
     // Sélection d'une archive dans le menu contextuel
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('arch_select_')) {
         if (!estModo(interaction.member)) {
-            return interaction.reply({ content: "❌ Seuls les modérateurs peuvent consulter les archives.", ephemeral: true });
+            return interaction.reply({ content: "❌ Seuls les modérateurs peuvent consulter les archives.", flags: 64 });
         }
 
         const selectedId = parseInt(interaction.values[0], 10);
@@ -3168,12 +3168,12 @@ async function handleSecurityInteraction(interaction) {
         const archive = archives.find(a => a.id === selectedId);
 
         if (!archive) {
-            return interaction.reply({ content: `❌ Dossier #${selectedId} introuvable dans l'index.`, ephemeral: true });
+            return interaction.reply({ content: `❌ Dossier #${selectedId} introuvable dans l'index.`, flags: 64 });
         }
 
         const filePath = path.join(ARCHIVES_DIR, archive.fileName);
         if (!fs.existsSync(filePath)) {
-            return interaction.reply({ content: `❌ Le fichier texte \`${archive.fileName}\` est introuvable sur le disque.`, ephemeral: true });
+            return interaction.reply({ content: `❌ Le fichier texte \`${archive.fileName}\` est introuvable sur le disque.`, flags: 64 });
         }
 
         await interaction.deferReply();
@@ -3207,21 +3207,21 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isButton() && interaction.customId.startsWith('rolebtn_')) {
         const roleId = interaction.customId.replace('rolebtn_', '');
         const role = interaction.guild?.roles.cache.get(roleId);
-        if (!role) return interaction.reply({ content: "❌ Ce rôle n'existe plus !", ephemeral: true });
+        if (!role) return interaction.reply({ content: "❌ Ce rôle n'existe plus !", flags: 64 });
 
         const member = interaction.member;
         if (member.roles.cache.has(roleId)) {
-            return interaction.reply({ content: `Tu as déjà le rôle **${role.name}** !`, ephemeral: true });
+            return interaction.reply({ content: `Tu as déjà le rôle **${role.name}** !`, flags: 64 });
         } else {
             await member.roles.add(roleId).catch(() => {});
-            return interaction.reply({ content: `✅ Tu as reçu le rôle **${role.name}** !`, ephemeral: true });
+            return interaction.reply({ content: `✅ Tu as reçu le rôle **${role.name}** !`, flags: 64 });
         }
     }
 
     // Actions de modération sur les comptes récents
     if (interaction.isButton() && interaction.customId.startsWith('mod_action_')) {
         if (!estModo(interaction.member) && !interaction.member.permissions.has('KickMembers')) {
-            return interaction.reply({ content: "Permission insuffisante.", ephemeral: true });
+            return interaction.reply({ content: "Permission insuffisante.", flags: 64 });
         }
 
         const parts = interaction.customId.split('_');
@@ -3235,13 +3235,13 @@ async function handleSecurityInteraction(interaction) {
 
         if (action === 'kick') {
             const cible = await interaction.guild.members.fetch(targetId).catch(() => null);
-            if (!cible) return interaction.reply({ content: "Membre déjà parti.", ephemeral: true });
+            if (!cible) return interaction.reply({ content: "Membre déjà parti.", flags: 64 });
             await cible.kick(`Expulsé par ${interaction.user.tag}`)
                 .then(async () => {
                     await interaction.message.edit({ components: [] }).catch(() => {});
                     interaction.reply(`👢 <@${targetId}> expulsé.e du serveur.`);
                 })
-                .catch(() => interaction.reply({ content: "Impossible d'expulser ce membre.", ephemeral: true }));
+                .catch(() => interaction.reply({ content: "Impossible d'expulser ce membre.", flags: 64 }));
             return;
         }
 
@@ -3251,7 +3251,7 @@ async function handleSecurityInteraction(interaction) {
                     await interaction.message.edit({ components: [] }).catch(() => {});
                     interaction.reply(`🔨 <@${targetId}> banni.e définitivement.`);
                 })
-                .catch(() => interaction.reply({ content: "Impossible de bannir ce membre.", ephemeral: true }));
+                .catch(() => interaction.reply({ content: "Impossible de bannir ce membre.", flags: 64 }));
             return;
         }
     }
@@ -3266,7 +3266,7 @@ async function handleSecurityInteraction(interaction) {
         const authorId = parts[2];
         const originalMsgId = parts[3] || '';
         if (interaction.user.id !== authorId && interaction.user.id !== securityState.EPSYS_ID) {
-            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande (ou Epsys) peut fermer ce message.", ephemeral: true });
+            return interaction.reply({ content: "❌ Seul le modérateur ayant lancé la commande (ou Epsys) peut fermer ce message.", flags: 64 });
         }
         await interaction.message.delete().catch(() => {});
         if (originalMsgId) {
@@ -3280,13 +3280,13 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isUserSelectMenu() && interaction.customId.startsWith('ban_select_user_')) {
         const sessionId = interaction.customId.replace('ban_select_user_', '');
         const session = banSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
-        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", flags: 64 });
 
         const targetId = interaction.values[0];
         const targetMember = interaction.guild.members.cache.get(targetId) ?? await interaction.guild.members.fetch(targetId).catch(() => null);
         const errHier = verifierHierarchieSanction(interaction.member, targetMember, targetId, { checkAction: 'ban' });
-        if (errHier) return interaction.reply({ content: errHier, ephemeral: true });
+        if (errHier) return interaction.reply({ content: errHier, flags: 64 });
 
         session.targetId = targetId;
         session.targetTag = targetMember?.user?.tag || targetMember?.displayName || targetId;
@@ -3301,8 +3301,8 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('ban_purge_')) {
         const sessionId = interaction.customId.replace('ban_purge_', '');
         const session = banSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
-        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur de la commande peut modifier cette option.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur de la commande peut modifier cette option.", flags: 64 });
 
         session.purgeSeconds = parseInt(interaction.values[0], 10) || 0;
         const { embed, components } = buildBanConfirmPanel(sessionId);
@@ -3314,8 +3314,8 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isButton() && interaction.customId.startsWith('ban_reason_')) {
         const sessionId = interaction.customId.replace('ban_reason_', '');
         const session = banSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
-        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur de la commande peut modifier la raison.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur de la commande peut modifier la raison.", flags: 64 });
 
         const modal = new ModalBuilder().setCustomId(`ban_modal_reason_${sessionId}`).setTitle('📝 Raison du bannissement');
         const input = new TextInputBuilder()
@@ -3333,7 +3333,7 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isModalSubmit() && interaction.customId.startsWith('ban_modal_reason_')) {
         const sessionId = interaction.customId.replace('ban_modal_reason_', '');
         const session = banSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
         session.raison = interaction.fields.getTextInputValue('reason_text').trim() || 'Aucune raison précisée';
         const { embed, components } = buildBanConfirmPanel(sessionId);
         await interaction.update({ embeds: [embed], components });
@@ -3344,8 +3344,8 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isButton() && interaction.customId.startsWith('ban_cancel_')) {
         const sessionId = interaction.customId.replace('ban_cancel_', '');
         const session = banSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
-        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut annuler.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut annuler.", flags: 64 });
 
         banSessions.delete(sessionId);
         const cancelEmbed = new EmbedBuilder().setColor(0x95a5a6).setTitle('❌ Bannissement annulé').setDescription('Aucune action n\'a été effectuée.');
@@ -3359,8 +3359,8 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isButton() && interaction.customId.startsWith('ban_confirm_')) {
         const sessionId = interaction.customId.replace('ban_confirm_', '');
         const session = banSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
-        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut confirmer ce ban.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut confirmer ce ban.", flags: 64 });
 
         const targetMember = await interaction.guild.members.fetch(session.targetId).catch(() => null);
         const targetUser = targetMember?.user ?? await interaction.client.users.fetch(session.targetId).catch(() => null);
@@ -3413,7 +3413,7 @@ async function handleSecurityInteraction(interaction) {
             await logModerationStaff(interaction.guild, logEmbed, { silent: true });
             banSessions.delete(sessionId);
         } catch (err) {
-            await interaction.reply({ content: `❌ Impossible de bannir ce membre (${err.message}).`, ephemeral: true });
+            await interaction.reply({ content: `❌ Impossible de bannir ce membre (${err.message}).`, flags: 64 });
         }
         return true;
     }
@@ -3422,15 +3422,15 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isUserSelectMenu() && interaction.customId.startsWith('kick_select_user_')) {
         const sessionId = interaction.customId.replace('kick_select_user_', '');
         const session = kickSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
-        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", flags: 64 });
 
         const targetId = interaction.values[0];
         const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
-        if (!targetMember) return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
+        if (!targetMember) return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", flags: 64 });
 
         const errHier = verifierHierarchieSanction(interaction.member, targetMember, targetId, { checkAction: 'kick' });
-        if (errHier) return interaction.reply({ content: errHier, ephemeral: true });
+        if (errHier) return interaction.reply({ content: errHier, flags: 64 });
 
         session.targetId = targetId;
         session.targetTag = targetMember.user?.tag || targetMember.displayName;
@@ -3451,8 +3451,8 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isButton() && interaction.customId.startsWith('kick_cancel_')) {
         const sessionId = interaction.customId.replace('kick_cancel_', '');
         const session = kickSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
-        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut annuler.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut annuler.", flags: 64 });
         kickSessions.delete(sessionId);
         await interaction.update({ embeds: [new EmbedBuilder().setColor(0x95a5a6).setTitle('❌ Expulsion annulée')], components: [] });
         return true;
@@ -3461,11 +3461,11 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isButton() && interaction.customId.startsWith('kick_confirm_')) {
         const sessionId = interaction.customId.replace('kick_confirm_', '');
         const session = kickSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
-        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut confirmer.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut confirmer.", flags: 64 });
 
         const targetMember = await interaction.guild.members.fetch(session.targetId).catch(() => null);
-        if (!targetMember) return interaction.reply({ content: "❌ Membre déjà parti.", ephemeral: true });
+        if (!targetMember) return interaction.reply({ content: "❌ Membre déjà parti.", flags: 64 });
 
         const mpEmbed = new EmbedBuilder().setColor(0xe67e22).setTitle('👢 Tu as été expulsé(e) de Regaïa').setDescription(`• **Raison :** \`${session.raison}\``).setTimestamp();
         const mpOk = await envoyerMpSanction(targetMember, mpEmbed);
@@ -3489,7 +3489,7 @@ async function handleSecurityInteraction(interaction) {
             await logModerationStaff(interaction.guild, logEmbed, { silent: true });
             kickSessions.delete(sessionId);
         } catch (err) {
-            await interaction.reply({ content: `❌ Impossible d'expulser ce membre (${err.message}).`, ephemeral: true });
+            await interaction.reply({ content: `❌ Impossible d'expulser ce membre (${err.message}).`, flags: 64 });
         }
         return true;
     }
@@ -3498,15 +3498,15 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isUserSelectMenu() && interaction.customId.startsWith('mute_select_user_')) {
         const sessionId = interaction.customId.replace('mute_select_user_', '');
         const session = muteSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
-        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", flags: 64 });
 
         const targetId = interaction.values[0];
         const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
-        if (!targetMember) return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
+        if (!targetMember) return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", flags: 64 });
 
         const errHier = verifierHierarchieSanction(interaction.member, targetMember, targetId, { checkAction: 'mute' });
-        if (errHier) return interaction.reply({ content: errHier, ephemeral: true });
+        if (errHier) return interaction.reply({ content: errHier, flags: 64 });
 
         session.targetId = targetId;
         session.targetTag = targetMember.user?.tag || targetMember.displayName;
@@ -3520,8 +3520,8 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isButton() && interaction.customId.startsWith('mute_reason_')) {
         const sessionId = interaction.customId.replace('mute_reason_', '');
         const session = muteSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
-        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut modifier la raison.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut modifier la raison.", flags: 64 });
 
         const modal = new ModalBuilder().setCustomId(`mute_modal_reason_${sessionId}`).setTitle('📝 Raison du mute');
         const input = new TextInputBuilder()
@@ -3539,7 +3539,7 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isModalSubmit() && interaction.customId.startsWith('mute_modal_reason_')) {
         const sessionId = interaction.customId.replace('mute_modal_reason_', '');
         const session = muteSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
         session.raison = interaction.fields.getTextInputValue('reason_text').trim() || 'Comportement inadapté';
         const { embed, components } = buildMuteDurationPanel(sessionId);
         await interaction.update({ embeds: [embed], components });
@@ -3549,8 +3549,8 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isButton() && interaction.customId.startsWith('mute_cancel_')) {
         const sessionId = interaction.customId.replace('mute_cancel_', '');
         const session = muteSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
-        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut annuler.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut annuler.", flags: 64 });
         muteSessions.delete(sessionId);
         await interaction.update({ embeds: [new EmbedBuilder().setColor(0x95a5a6).setTitle('❌ Mute annulé')], components: [] });
         return true;
@@ -3559,14 +3559,14 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('mute_duration_')) {
         const sessionId = interaction.customId.replace('mute_duration_', '');
         const session = muteSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
-        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur de la commande peut choisir la durée.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur de la commande peut choisir la durée.", flags: 64 });
 
         const targetMember = await interaction.guild.members.fetch(session.targetId).catch(() => null);
-        if (!targetMember) return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
+        if (!targetMember) return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", flags: 64 });
 
         const ms = parseDurationMs(interaction.values[0]);
-        if (!ms) return interaction.reply({ content: "❌ Durée invalide.", ephemeral: true });
+        if (!ms) return interaction.reply({ content: "❌ Durée invalide.", flags: 64 });
 
         try {
             const publicEmbed = await executerMute({
@@ -3581,7 +3581,7 @@ async function handleSecurityInteraction(interaction) {
             muteSessions.delete(sessionId);
             await interaction.update({ embeds: [publicEmbed], components: [] });
         } catch (err) {
-            await interaction.reply({ content: `❌ Impossible de mute ce membre (${err.message}).`, ephemeral: true });
+            await interaction.reply({ content: `❌ Impossible de mute ce membre (${err.message}).`, flags: 64 });
         }
         return true;
     }
@@ -3589,11 +3589,11 @@ async function handleSecurityInteraction(interaction) {
     // --- !unmute : Sélection membre ---
     if (interaction.isUserSelectMenu() && interaction.customId.startsWith('unmute_select_user_')) {
         const authorId = interaction.customId.replace('unmute_select_user_', '');
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", flags: 64 });
 
         const targetId = interaction.values[0];
         const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
-        if (!targetMember) return interaction.reply({ content: "❌ Membre introuvable.", ephemeral: true });
+        if (!targetMember) return interaction.reply({ content: "❌ Membre introuvable.", flags: 64 });
         if (!targetMember.isCommunicationDisabled()) {
             return interaction.update({ embeds: [new EmbedBuilder().setColor(0x95a5a6).setDescription(`ℹ️ <@${targetId}> n'est pas en sourdine actuellement.`)], components: [] });
         }
@@ -3617,7 +3617,7 @@ async function handleSecurityInteraction(interaction) {
     // --- !warns : Sélection membre ---
     if (interaction.isUserSelectMenu() && interaction.customId.startsWith('warns_select_user_')) {
         const authorId = interaction.customId.replace('warns_select_user_', '');
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", flags: 64 });
 
         const targetId = interaction.values[0];
         const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
@@ -3630,7 +3630,7 @@ async function handleSecurityInteraction(interaction) {
     // --- !unwarn & alerte 60 jours ---
     if (interaction.isUserSelectMenu() && interaction.customId.startsWith('unwarn_select_user_')) {
         const authorId = interaction.customId.replace('unwarn_select_user_', '');
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", flags: 64 });
 
         const targetId = interaction.values[0];
         const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
@@ -3641,7 +3641,7 @@ async function handleSecurityInteraction(interaction) {
     }
 
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('unwarn_pick_')) {
-        if (!peutModerer(interaction.member)) return interaction.reply({ content: "❌ Réservé aux modérateurs.", ephemeral: true });
+        if (!peutModerer(interaction.member)) return interaction.reply({ content: "❌ Réservé aux modérateurs.", flags: 64 });
         const targetId = interaction.customId.replace('unwarn_pick_', '');
         const selectedWarnId = interaction.values[0];
         const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
@@ -3652,7 +3652,7 @@ async function handleSecurityInteraction(interaction) {
     }
 
     if (interaction.isButton() && (interaction.customId.startsWith('unwarn_remove_') || interaction.customId.startsWith('warn60_remove_'))) {
-        if (!peutModerer(interaction.member)) return interaction.reply({ content: "❌ Seuls les modérateurs peuvent retirer un avertissement.", ephemeral: true });
+        if (!peutModerer(interaction.member)) return interaction.reply({ content: "❌ Seuls les modérateurs peuvent retirer un avertissement.", flags: 64 });
 
         const is60 = interaction.customId.startsWith('warn60_remove_');
         const parts = interaction.customId.split('_');
@@ -3709,7 +3709,7 @@ async function handleSecurityInteraction(interaction) {
     }
 
     if (interaction.isButton() && (interaction.customId.startsWith('unwarn_keep_') || interaction.customId.startsWith('warn60_keep_'))) {
-        if (!peutModerer(interaction.member)) return interaction.reply({ content: "❌ Seuls les modérateurs peuvent utiliser ce bouton.", ephemeral: true });
+        if (!peutModerer(interaction.member)) return interaction.reply({ content: "❌ Seuls les modérateurs peuvent utiliser ce bouton.", flags: 64 });
 
         const parts = interaction.customId.split('_');
         const targetId = parts[2];
@@ -3732,7 +3732,7 @@ async function handleSecurityInteraction(interaction) {
         const targetId = parts[3];
 
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: `❌ Seul(e) <@${authorId}> (auteur du 5ème warn) peut décider de cette sanction !`, ephemeral: true });
+            return interaction.reply({ content: `❌ Seul(e) <@${authorId}> (auteur du 5ème warn) peut décider de cette sanction !`, flags: 64 });
         }
 
         const targetMember = await interaction.guild.members.fetch(targetId).catch(() => null);
@@ -3749,7 +3749,7 @@ async function handleSecurityInteraction(interaction) {
         }
 
         if (action === 'mute7d') {
-            if (!targetMember) return interaction.reply({ content: "❌ Ce membre n'est plus sur le serveur.", ephemeral: true });
+            if (!targetMember) return interaction.reply({ content: "❌ Ce membre n'est plus sur le serveur.", flags: 64 });
             const ms = 7 * 24 * 60 * 60 * 1000;
             await targetMember.timeout(ms, `Palier 5/6 warn — décision de ${interaction.user.tag}`).catch(() => {});
             await envoyerMpSanction(targetMember, new EmbedBuilder().setColor(0xe74c3c).setTitle('🔇 Sanction Palier 5/6 sur Regaïa').setDescription('Suite à ton 5ème avertissement, tu as reçu un mute de **7 jours**.').setTimestamp());
@@ -3764,14 +3764,14 @@ async function handleSecurityInteraction(interaction) {
         }
 
         if (action === 'kick') {
-            if (!targetMember) return interaction.reply({ content: "❌ Ce membre n'est déjà plus sur le serveur.", ephemeral: true });
+            if (!targetMember) return interaction.reply({ content: "❌ Ce membre n'est déjà plus sur le serveur.", flags: 64 });
             await envoyerMpSanction(targetMember, new EmbedBuilder().setColor(0xe67e22).setTitle('👢 Sanction Palier 5/6 sur Regaïa').setDescription('Suite à ton 5ème avertissement, tu as été expulsé(e) du serveur.').setTimestamp());
             try {
                 await targetMember.kick(`Palier 5/6 warn — décision de ${interaction.user.tag}`);
                 const embed = new EmbedBuilder().setColor(0xe67e22).setTitle('👢 Palier 5/6 — Membre expulsé').setDescription(`<@${targetId}> a été expulsé(e) par <@${authorId}>.`).setTimestamp();
                 await interaction.update({ content: null, embeds: [embed], components: [] });
             } catch (err) {
-                await interaction.reply({ content: `❌ Impossible d'expulser (${err.message}).`, ephemeral: true });
+                await interaction.reply({ content: `❌ Impossible d'expulser (${err.message}).`, flags: 64 });
             }
             return true;
         }
@@ -3783,7 +3783,7 @@ async function handleSecurityInteraction(interaction) {
                 const embed = new EmbedBuilder().setColor(0xe03131).setTitle('🔨 Palier 5/6 — Membre banni').setDescription(`<@${targetId}> a été banni(e) définitivement par <@${authorId}>.`).setTimestamp();
                 await interaction.update({ content: null, embeds: [embed], components: [] });
             } catch (err) {
-                await interaction.reply({ content: `❌ Impossible de bannir (${err.message}).`, ephemeral: true });
+                await interaction.reply({ content: `❌ Impossible de bannir (${err.message}).`, flags: 64 });
             }
             return true;
         }
@@ -3793,7 +3793,7 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('slowmode_select_')) {
         const authorId = interaction.customId.replace('slowmode_select_', '');
         if (interaction.user.id !== authorId && !peutModerer(interaction.member)) {
-            return interaction.reply({ content: "❌ Réservé aux modérateurs.", ephemeral: true });
+            return interaction.reply({ content: "❌ Réservé aux modérateurs.", flags: 64 });
         }
         const seconds = parseInt(interaction.values[0], 10) || 0;
         await nettoyerBoutonAutoSlowmode(
@@ -3827,7 +3827,7 @@ async function handleSecurityInteraction(interaction) {
     // --- Bouton Modérateur : Retirer le slowmode automatique ---
     if (interaction.isButton() && interaction.customId.startsWith('auto_slowmode_stop_')) {
         if (!peutModerer(interaction.member)) {
-            return interaction.reply({ content: '❌ Seuls les modérateurs peuvent retirer le slowmode.', ephemeral: true });
+            return interaction.reply({ content: '❌ Seuls les modérateurs peuvent retirer le slowmode.', flags: 64 });
         }
 
         const targetChanId = interaction.customId.replace('auto_slowmode_stop_', '');
@@ -3868,7 +3868,7 @@ async function handleSecurityInteraction(interaction) {
     // --- Bouton Déverrouiller sous l'embed de !lock ---
     if (interaction.isButton() && interaction.customId.startsWith('channel_unlock_')) {
         if (!peutModerer(interaction.member)) {
-            return interaction.reply({ content: "❌ Seul.es les modérateur.ices peuvent déverrouiller ce salon.", ephemeral: true });
+            return interaction.reply({ content: "❌ Seul.es les modérateur.ices peuvent déverrouiller ce salon.", flags: 64 });
         }
         const targetChanId = interaction.customId.replace('channel_unlock_', '');
         const everyoneRole = interaction.guild.roles.everyone;
@@ -3899,16 +3899,16 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isUserSelectMenu() && interaction.customId.startsWith('desti_select_user_')) {
         const sessionId = interaction.customId.replace('desti_select_user_', '');
         const session = destiSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
-        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Ce menu ne t'appartient pas.", flags: 64 });
 
         const targetId = interaction.values[0];
-        if (targetId === securityState.EPSYS_ID) return interaction.reply({ content: "❌ Impossible de viser **Epsys** !", ephemeral: true });
-        if (targetId === interaction.client?.user?.id) return interaction.reply({ content: "❌ Impossible de viser Cacabot !", ephemeral: true });
+        if (targetId === securityState.EPSYS_ID) return interaction.reply({ content: "❌ Impossible de viser **Epsys** !", flags: 64 });
+        if (targetId === interaction.client?.user?.id) return interaction.reply({ content: "❌ Impossible de viser Cacabot !", flags: 64 });
 
         const targetMember = interaction.guild.members.cache.get(targetId) ?? await interaction.guild.members.fetch(targetId).catch(() => null);
         if (!targetMember || !estModo(targetMember)) {
-            return interaction.reply({ content: `❌ <@${targetId}> ne possède pas le rôle modérateur.`, ephemeral: true });
+            return interaction.reply({ content: `❌ <@${targetId}> ne possède pas le rôle modérateur.`, flags: 64 });
         }
 
         session.targetId = targetId;
@@ -3923,8 +3923,8 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isButton() && interaction.customId.startsWith('desti_reason_')) {
         const sessionId = interaction.customId.replace('desti_reason_', '');
         const session = destiSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
-        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut modifier la raison.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut modifier la raison.", flags: 64 });
 
         const modal = new ModalBuilder().setCustomId(`desti_modal_reason_${sessionId}`).setTitle('📝 Motif du vote de destitution');
         const input = new TextInputBuilder()
@@ -3942,7 +3942,7 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isModalSubmit() && interaction.customId.startsWith('desti_modal_reason_')) {
         const sessionId = interaction.customId.replace('desti_modal_reason_', '');
         const session = destiSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
         session.raison = interaction.fields.getTextInputValue('reason_text').trim() || 'Comportement incompatible avec le rôle de modérateur';
         const { embed, components } = buildDestiConfirmPanel(sessionId);
         await interaction.update({ embeds: [embed], components });
@@ -3952,8 +3952,8 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isButton() && interaction.customId.startsWith('desti_cancel_')) {
         const sessionId = interaction.customId.replace('desti_cancel_', '');
         const session = destiSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
-        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut annuler.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut annuler.", flags: 64 });
         destiSessions.delete(sessionId);
         await interaction.update({ content: "❌ **Vote de destitution annulé.**", embeds: [], components: [] });
         return true;
@@ -3962,8 +3962,8 @@ async function handleSecurityInteraction(interaction) {
     if (interaction.isButton() && interaction.customId.startsWith('desti_confirm_')) {
         const sessionId = interaction.customId.replace('desti_confirm_', '');
         const session = destiSessions.get(sessionId);
-        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", ephemeral: true });
-        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut lancer le vote.", ephemeral: true });
+        if (!session) return interaction.reply({ content: "❌ Cette session a expiré.", flags: 64 });
+        if (interaction.user.id !== session.authorId) return interaction.reply({ content: "❌ Seul l'auteur peut lancer le vote.", flags: 64 });
 
         destiSessions.delete(sessionId);
         await interaction.deferUpdate();
@@ -3999,12 +3999,12 @@ async function handleSecurityInteraction(interaction) {
         const voteData = allVotes[interaction.message.id];
 
         if (!voteData || voteData.cloture) {
-            return interaction.reply({ content: "ℹ️ Ce vote est déjà clôturé ou introuvable.", ephemeral: true });
+            return interaction.reply({ content: "ℹ️ Ce vote est déjà clôturé ou introuvable.", flags: 64 });
         }
 
         if (interaction.customId === 'desti_vote_close') {
             if (interaction.user.id !== securityState.EPSYS_ID) {
-                return interaction.reply({ content: "❌ Seul **Epsys** peut clôturer ce vote manuellement avant la fin des 48h.", ephemeral: true });
+                return interaction.reply({ content: "❌ Seul **Epsys** peut clôturer ce vote manuellement avant la fin des 48h.", flags: 64 });
             }
             await interaction.deferUpdate();
             await cloturerVoteDestitution(interaction.message.id, interaction.user);
@@ -4012,11 +4012,11 @@ async function handleSecurityInteraction(interaction) {
         }
 
         if (!peutModerer(interaction.member)) {
-            return interaction.reply({ content: "❌ Seuls les modérateurs (et Epsys) peuvent participer à ce vote.", ephemeral: true });
+            return interaction.reply({ content: "❌ Seuls les modérateurs (et Epsys) peuvent participer à ce vote.", flags: 64 });
         }
 
         if (interaction.user.id === voteData.targetId) {
-            return interaction.reply({ content: "❌ Tu ne peux pas voter sur ta propre destitution !", ephemeral: true });
+            return interaction.reply({ content: "❌ Tu ne peux pas voter sur ta propre destitution !", flags: 64 });
         }
 
         const voterId = interaction.user.id;
@@ -4041,7 +4041,7 @@ async function handleSecurityInteraction(interaction) {
 
         await interaction.followUp({
             content: `🗳️ Ton vote anonyme (**${choixLabel}**) a bien été enregistré *(tu peux modifier ton choix jusqu'à la fin des 48h)*.`,
-            ephemeral: true
+            flags: 64
         }).catch(() => {});
         return true;
     }
@@ -4049,12 +4049,12 @@ async function handleSecurityInteraction(interaction) {
     // Bouton de bannissement rapide anti-phishing
     if (interaction.isButton() && interaction.customId.startsWith('antiphish_ban_')) {
         if (!estModo(interaction.member) && !interaction.member.permissions.has('BanMembers')) {
-            return interaction.reply({ content: "Permission insuffisante !", ephemeral: true });
+            return interaction.reply({ content: "Permission insuffisante !", flags: 64 });
         }
         const targetId = interaction.customId.replace('antiphish_ban_', '');
         await interaction.guild.members.ban(targetId, { reason: 'Compte piraté / Phishing détecté' })
             .then(() => interaction.reply(`✅ Le compte <@${targetId}> a été banni.`))
-            .catch(() => interaction.reply({ content: "Impossible de bannir ce membre.", ephemeral: true }));
+            .catch(() => interaction.reply({ content: "Impossible de bannir ce membre.", flags: 64 }));
         return true;
     }
 

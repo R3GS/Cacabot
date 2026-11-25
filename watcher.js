@@ -53,9 +53,9 @@ async function buildTwitchLivePayload() {
     const previewUrl = `https://static-cdn.jtvnw.net/previews-ttv/live_user_${TWITCH_USER}-1280x720.jpg?t=${Date.now()}`;
 
     const [titreRaw, jeuRaw, avatarRaw] = await Promise.all([
-        fetch(`https://decapi.me/twitch/title/${TWITCH_USER}`).then(r => r.text()).catch(() => 'Live Twitch !'),
-        fetch(`https://decapi.me/twitch/game/${TWITCH_USER}`).then(r => r.text()).catch(() => 'Just Chatting'),
-        fetch(`https://decapi.me/twitch/avatar/${TWITCH_USER}`).then(r => r.text()).catch(() => null)
+        fetch(`https://decapi.me/twitch/title/${TWITCH_USER}`, { signal: AbortSignal.timeout(10000) }).then(r => r.text()).catch(() => 'Live Twitch !'),
+        fetch(`https://decapi.me/twitch/game/${TWITCH_USER}`, { signal: AbortSignal.timeout(10000) }).then(r => r.text()).catch(() => 'Just Chatting'),
+        fetch(`https://decapi.me/twitch/avatar/${TWITCH_USER}`, { signal: AbortSignal.timeout(10000) }).then(r => r.text()).catch(() => null)
     ]);
 
     const titre = titreRaw.trim() || 'En direct sur Twitch !';
@@ -90,7 +90,7 @@ async function buildTwitchLivePayload() {
 
 async function verifierTwitchLive(client) {
     try {
-        const res = await fetch(`https://decapi.me/twitch/uptime/${TWITCH_USER}`).catch(() => null);
+        const res = await fetch(`https://decapi.me/twitch/uptime/${TWITCH_USER}`, { signal: AbortSignal.timeout(10000) }).catch(() => null);
         if (!res || !res.ok) return;
 
         const resUptime = (await res.text()).trim();

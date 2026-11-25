@@ -1,4 +1,6 @@
 require('dotenv').config();
+const { validateBackup, computeBackupChecksum } = require('./backup-validator.js');
+const { acquireInstanceGuard } = require('./instance-guard.js');
 
 let topData = { messages: {} };
 let birthdayData = { birthdays: {}, channels: {} };
@@ -78,6 +80,7 @@ async function loadAll() {
 
                 backupMessages.push(
                     ...lot.filter(m =>
+                        m.author?.id === client.user?.id &&
                         m.attachments.some(
                             attachment =>
                                 attachment.name === 'cacabot_backup.json'
@@ -116,16 +119,10 @@ async function loadAll() {
 
                     const parsed = await res.json();
 
-                    if (
-                        !parsed ||
-                        typeof parsed !== 'object' ||
-                        Array.isArray(parsed) ||
-                        !parsed.tcgData ||
-                        typeof parsed.tcgData !== 'object' ||
-                        !parsed.tcgData.users
-                    ) {
+                    const validation = validateBackup(parsed);
+                    if (!validation.valid) {
                         throw new Error(
-                            'Structure de sauvegarde invalide'
+                            'Structure de sauvegarde invalide : ' + validation.reason
                         );
                     }
 
@@ -312,6 +309,13 @@ function saveAll() {
             )
         };
 
+        // Empreinte calculée sur les données avant ajout de l'empreinte.
+        // La vérification est effectuée AVANT tout chargement en mémoire.
+        payload.integrity = {
+            algorithm: 'sha256',
+            value: computeBackupChecksum(payload)
+        };
+
         const jsonStr = JSON.stringify(payload, null, 2);
         const buffer = Buffer.from(jsonStr, 'utf-8');
 
@@ -326,73 +330,11 @@ function saveAll() {
         lastsaveSaveTime = new Date();
         console.log(`💾 Nouvelle sauvegarde postée dans #${channel.name}`);
 
-        // Conserver les 10 sauvegardes les plus récentes.
-        // Rechercher également les anciennes sauvegardes
-        // situées au-delà des 100 derniers messages.
-
-        const sauvegardes = [];
-        let avantMessageId = null;
-        let messagesExamines = 0;
-        let rechercheSauvegardesComplete = true;
-        const MAX_MESSAGES_NETTOYAGE = 1000;
-
-        while (messagesExamines < MAX_MESSAGES_NETTOYAGE) {
-            let messages;
-
-            try {
-                messages = await channel.messages.fetch({
-                    limit: 100,
-                    ...(avantMessageId
-                        ? { before: avantMessageId }
-                        : {})
-                });
-            } catch (err) {
-                rechercheSauvegardesComplete = false;
-                console.warn(
-                    '⚠️ Nettoyage des sauvegardes interrompu :',
-                    err
-                );
-                break;
-            }
-
-            if (!messages.size) break;
-
-            messagesExamines += messages.size;
-
-            const lot = [...messages.values()];
-
-            sauvegardes.push(
-                ...lot.filter(m =>
-                    m.attachments.some(
-                        attachment =>
-                            attachment.name === 'cacabot_backup.json'
-                    )
-                )
-            );
-
-            avantMessageId = lot[lot.length - 1].id;
-
-            if (messages.size < 100) break;
-        }
-
-        // Ne jamais supprimer de sauvegardes après une recherche interrompue.
-        // Conserver les 10 sauvegardes les plus récentes parmi celles trouvées.
-        if (rechercheSauvegardesComplete) {
-            for (const ancienneSauvegarde of sauvegardes.slice(10)) {
-                await ancienneSauvegarde.delete().catch(err => {
-                    console.warn(
-                        `⚠️ Impossible de supprimer l'ancienne sauvegarde ` +
-                        `${ancienneSauvegarde.id} :`,
-                        err
-                    );
-                });
-            }
-        } else {
-            console.warn(
-                '🛡️ Nettoyage annulé : recherche incomplète. ' +
-                'Aucune ancienne sauvegarde ne sera supprimée.'
-            );
-        }
+        // Protection des données : ne jamais supprimer automatiquement
+        // les sauvegardes historiques. Elles sont le dernier recours
+        // si la plus récente est endommagée ou incomplète.
+        // Toute politique de rétention devra être testée séparément
+        // sur une copie, avec validation d'intégrité préalable.
             } catch (err) {
                 console.error('Erreur sauvegarde Discord:', err);
                 throw err;
@@ -411,18 +353,30 @@ setInterval(() => {
 }, 30 * 60 * 1000);
 
 let saveEnAttente = null;
+let delaiReessaiSauvegarde = 10000;
 
-function demanderSauvegarde() {
-    if (!donneesChargees) return;
-    if (saveEnAttente) return;
+// Ne jamais perdre une demande de sauvegarde simplement parce que
+// Discord a temporairement refusé l'envoi. La file saveAll()
+// sérialise déjà les écritures ; un seul minuteur suffit ici.
+function programmerSauvegardeDifferee(delai) {
+    if (!donneesChargees || saveEnAttente) return;
 
-    saveEnAttente = setTimeout(() => {
+    saveEnAttente = setTimeout(async () => {
         saveEnAttente = null;
 
-        saveAll().catch(err => {
-            console.error('❌ Sauvegarde différée échouée :', err);
-        });
-    }, 10000);
+        try {
+            await saveAll();
+            delaiReessaiSauvegarde = 10000;
+        } catch (err) {
+            console.error('❌ Sauvegarde différée échouée ; nouvel essai programmé :', err);
+            delaiReessaiSauvegarde = Math.min(delaiReessaiSauvegarde * 2, 60000);
+            programmerSauvegardeDifferee(delaiReessaiSauvegarde);
+        }
+    }, delai);
+}
+
+function demanderSauvegarde() {
+    programmerSauvegardeDifferee(10000);
 }
 
 let arretEnCours = false;
@@ -566,20 +520,37 @@ async function arreterAvecSauvegarde(signal) {
         saveEnAttente = null;
     }
 
-    // Laisse une chance aux sauvegardes déjà demandées
-    // et enregistre une dernière fois l'état courant.
-    const sauvegardeFinale = saveAll();
+    // Un échec réseau transitoire pendant SIGTERM/SIGINT ne doit
+    // pas provoquer un abandon immédiat de la dernière sauvegarde.
+    // Le nombre d'essais est borné pour éviter de bloquer l'arrêt
+    // indéfiniment si Discord reste indisponible.
+    const MAX_ESSAIS_ARRET = 3;
+    let sauvegardeConfirmee = !donneesChargees;
 
-    try {
-        await sauvegardeFinale;
-        console.log('✅ Sauvegarde finale effectuée.');
-        process.exitCode = 0;
-    } catch (err) {
-        console.error('🚨 Sauvegarde finale échouée :', err);
-        process.exitCode = 1;
-    } finally {
-        process.exit();
+    for (let tentative = 1; tentative <= MAX_ESSAIS_ARRET && !sauvegardeConfirmee; tentative++) {
+        try {
+            await saveAll();
+            sauvegardeConfirmee = true;
+            console.log('✅ Sauvegarde finale effectuée.');
+        } catch (err) {
+            console.error(
+                `🚨 Sauvegarde finale échouée (essai ${tentative}/${MAX_ESSAIS_ARRET}) :`,
+                err
+            );
+            if (tentative < MAX_ESSAIS_ARRET) {
+                await new Promise(resolve => setTimeout(resolve, 2000 * tentative));
+            }
+        }
     }
+
+    if (!sauvegardeConfirmee) {
+        console.error(
+            '🚨 ARRÊT SANS CONFIRMATION DE SAUVEGARDE : ' +
+            'conserver toutes les anciennes sauvegardes Discord.'
+        );
+    }
+
+    process.exit(sauvegardeConfirmee ? 0 : 1);
 }
 
 process.on('SIGTERM', () => {
@@ -952,9 +923,112 @@ for (const p of lemonMilkPaths) {
             registerFont(p, { family: 'LemonMilk', weight: 'bold' });
             registerFont(p, { family: 'LemonMilk', weight: 'normal' });
             break;
-        } catch(e) {}
+        } catch (e) { console.warn('[INDEX] Chargement de police impossible :', p, e); }
     }
 }
+
+// Signaler les erreurs techniques dans le salon privé, sans spam ni mentions.
+const ERROR_REPORT_CHANNEL_ID = '1556891268498325554';
+const originalConsoleError = console.error.bind(console);
+const errorReportQueue = [];
+const errorReportRecent = new Map();
+let errorReportClient = null;
+let errorReportSending = false;
+let errorReportLastSent = 0;
+
+function sanitizeErrorReport(value) {
+    let str = String(value ?? '');
+    for (const secret of [process.env.TOKEN, process.env.DISCORD_TOKEN, process.env.GITHUB_TOKEN]) {
+        if (typeof secret === 'string' && secret.length >= 8) {
+            str = str.split(secret).join('[SECRET MASQUÉ]');
+        }
+    }
+    return str.replace(/(authorization\s*[:=]\s*(?:bot|bearer)\s+)[^\s]+/gi, '$1[MASQUÉ]');
+}
+
+function queueDiscordErrorReport(args) {
+    const error = args.find(item => item instanceof Error);
+    const context = args.filter(item => item !== error).map(item =>
+        typeof item === 'string' ? item : '[détails supplémentaires]'
+    ).join(' ');
+    const stack = error?.stack || '';
+    const frames = stack.split('\n').map(line => line.trim());
+    const source = frames.find(line =>
+        /\.js:\d+(:\d+)?/.test(line) && !line.includes('node_modules') && !line.includes('node:internal')
+    ) || frames.find(line => /\.js:\d+(:\d+)?/.test(line))
+      || 'Emplacement non disponible';
+    const title = sanitizeErrorReport(context || error?.message || 'Erreur non précisée').slice(0, 300);
+    const detail = sanitizeErrorReport(error?.message || context || 'Voir les journaux du bot').slice(0, 500);
+    const location = sanitizeErrorReport(source).slice(0, 350);
+    const key = [title, detail, location].join('|');
+    const now = Date.now();
+    const previous = errorReportRecent.get(key);
+    if (previous && now - previous < 10 * 60 * 1000) return;
+    errorReportRecent.set(key, now);
+    // Limiter la mémoire : retirer d'abord les anciennes erreurs, puis les plus vieilles.
+    if (errorReportRecent.size > 200) {
+        for (const [oldKey, timestamp] of errorReportRecent) {
+            if (now - timestamp > 10 * 60 * 1000) errorReportRecent.delete(oldKey);
+        }
+        while (errorReportRecent.size > 200) {
+            errorReportRecent.delete(errorReportRecent.keys().next().value);
+        }
+    }
+    if (errorReportQueue.length >= 30) errorReportQueue.shift();
+    errorReportQueue.push({ title, detail, location });
+    void flushDiscordErrorReports();
+}
+
+async function flushDiscordErrorReports() {
+    if (errorReportSending || !errorReportClient?.isReady?.() || !errorReportQueue.length) return;
+    errorReportSending = true;
+    try {
+        while (errorReportQueue.length && errorReportClient?.isReady?.()) {
+            const wait = Math.max(0, 2500 - (Date.now() - errorReportLastSent));
+            if (wait) await new Promise(resolve => setTimeout(resolve, wait));
+            const report = errorReportQueue[0];
+            const channel = await errorReportClient.channels.fetch(ERROR_REPORT_CHANNEL_ID);
+            if (!channel?.send) throw new Error('Salon de rapports introuvable ou inaccessible');
+            await channel.send({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xe74c3c)
+                        .setTitle('🚨 Cacabot a rencontré un problème')
+                        .addFields(
+                            { name: 'Problème', value: report.title.slice(0, 1024) || 'Erreur inconnue' },
+                            { name: 'Détail', value: report.detail.slice(0, 1024) || 'Aucun détail disponible' },
+                            { name: 'Fichier / ligne', value: report.location.slice(0, 1024) || 'Emplacement non disponible' }
+                        )
+                        .setTimestamp()
+                ],
+                allowedMentions: { parse: [] }
+            });
+            errorReportQueue.shift();
+            errorReportLastSent = Date.now();
+        }
+    } catch (err) {
+        originalConsoleError('[ERROR REPORTER] Envoi au salon impossible :', err);
+        // Ne pas bloquer les commandes si Discord refuse les alertes.
+        // Une prochaine erreur relancera l'envoi de la file en attente.
+    } finally {
+        errorReportSending = false;
+    }
+}
+
+console.error = (...args) => {
+    originalConsoleError(...args);
+    try { queueDiscordErrorReport(args); }
+    catch (err) { originalConsoleError('[ERROR REPORTER] Rapport impossible :', err); }
+};
+
+// Les avertissements Node fournissent une pile d'appels pour identifier leur origine.
+process.on('warning', warning => {
+    try {
+        queueDiscordErrorReport(['[NODE] ' + warning.name, warning]);
+    } catch (err) {
+        originalConsoleError('[ERROR REPORTER] Avertissement non transmis :', err);
+    }
+});
 
 const client = new Client({
     intents: [
@@ -967,6 +1041,11 @@ const client = new Client({
     ],
     partials: [Partials.Message, Partials.Channel, Partials.Reaction]
 });
+errorReportClient = client;
+
+// Les erreurs de connexion Discord passent aussi dans le salon de diagnostic.
+client.on('error', err => console.error('[DISCORD] Erreur du client :', err));
+client.on('shardError', err => console.error('[DISCORD] Erreur de connexion :', err));
 
 initToolsState({
     client,
@@ -1181,7 +1260,7 @@ async function disableButtons(interaction) {
             return newRow;
         });
         await msg.edit({ components: newRows });
-    } catch (e) {}
+    } catch (e) { if (e?.code !== 10008) console.warn('[INDEX] Désactivation des boutons échouée :', e); }
 }
 
 // =========================
@@ -1284,17 +1363,38 @@ async function disableButtons(interaction) {
             const diffSave = lastsaveSaveTime ? `${Math.floor((Date.now() - lastsaveSaveTime) / 60000)} min` : 'Jamais';
             const totalMembres = client.guilds.cache.get('720057528351850547')?.memberCount ?? 0;
 
+            const toutOk = modulesOk === modules.length;
             const embedDiag = new EmbedBuilder()
-                .setColor(modulesOk === modules.length ? 0x2ecc71 : 0xe74c3c)
-                .setTitle('🩺 RAPPORT DE SANTÉ COMPLET DE CACABOT')
-                .setDescription(`**État global :** ${modulesOk === modules.length ? '🟢 **100% des systèmes sont opérationnels !**' : '🔴 **Certains modules ont un problème !**'}\n\n` + rapport.join('\n'))
+                .setColor(toutOk ? 0x2ecc71 : 0xe67e22)
+                .setTitle('🩺 Cacabot • Tableau de santé')
+                .setDescription(
+                    `${toutOk ? '🟢 **Modules chargés avec succès**' : '🟠 **Certains modules sont à vérifier**'}\n` +
+                    `**${modulesOk}/${modules.length} contrôles structurels validés**`
+                )
                 .addFields(
-                    { name: '💾 Sauvegarde (#json)', value: `${backupOk} *(il y a ${diffSave})*`, inline: true },
-                    { name: '🌦️ API Météo', value: meteoOk, inline: true },
-                    { name: '🟣 Surveillance Twitch', value: twitchOk, inline: true },
-                    { name: '🔌 Latence WebSocket', value: `${wsPing}ms`, inline: true },
-                    { name: '⚡ RAM Dokploy', value: `${ramMb} Mo`, inline: true },
-                    { name: '👥 Membres en cache', value: `${totalMembres}`, inline: true }
+                    {
+                        name: '🧩 Modules disponibles',
+                        value: rapport.join('\n'),
+                        inline: false
+                    },
+                    {
+                        name: '💾 Persistance et services',
+                        value: `**Sauvegarde :** ${backupOk} (dernière : ${diffSave})\n` +
+                            `**Météo :** ${meteoOk}\n**Twitch :** ${twitchOk}`,
+                        inline: false
+                    },
+                    {
+                        name: '📡 Performances',
+                        value: `**Discord :** ${wsPing} ms\n**Mémoire :** ${ramMb} Mo\n` +
+                            `**Membres :** ${totalMembres}`,
+                        inline: true
+                    },
+                    {
+                        name: 'ℹ️ À savoir',
+                        value: 'Ces indicateurs vérifient la présence des modules et la disponibilité ' +
+                            'des services, pas toutes les fonctionnalités en conditions réelles.',
+                        inline: false
+                    }
                 )
                 .setFooter({ text: `Version ${getVersionString()} • Node.js ${process.version} • Dokploy` })
                 .setTimestamp();
@@ -1606,6 +1706,50 @@ function lireNombreCartesDiagnostic() {
     }
 }
 
+const DIAG_OWNER_ID = '436218312574107658';
+const DIAG_REDEPLOY_PREFIX = 'diag_redeploy:';
+
+function construireBoutonsRedeploiement() {
+    return [new ActionRowBuilder().addComponents(
+        ...[
+            ['minijeux', 'Mini-jeux', '🎮'],
+            ['roulette', 'Roulette', '🎰'],
+            ['tcg', 'RegaDex', '🃏']
+        ].map(([type, label, emoji]) =>
+            new ButtonBuilder()
+                .setCustomId(DIAG_REDEPLOY_PREFIX + type)
+                .setLabel(label)
+                .setEmoji(emoji)
+                .setStyle(ButtonStyle.Secondary)
+        )
+    )];
+}
+
+async function retirerAnciensBoutonsRedeploiement(salon, nouveauMessageId) {
+    // Limité aux 100 derniers messages, sans suppression ni édition
+    // d'autres contenus que les composants de nos annonces.
+    try {
+        const recents = await salon.messages.fetch({ limit: 100 });
+        for (const msg of recents.values()) {
+            if (
+                msg.id === nouveauMessageId ||
+                msg.author?.id !== salon.client.user?.id ||
+                !msg.content?.includes('Mise à jour faite, je suis de retour !') ||
+                !msg.components?.some(row =>
+                    row.components?.some(component =>
+                        component.customId?.startsWith(DIAG_REDEPLOY_PREFIX)
+                    )
+                )
+            ) continue;
+            await msg.edit({ components: [] }).catch(error =>
+                console.warn('[DIAG] Retrait des anciens boutons impossible :', error)
+            );
+        }
+    } catch (error) {
+        console.warn('[DIAG] Recherche des anciennes annonces impossible :', error);
+    }
+}
+
 function construireDiagnosticSpecialise(type, ownerId) {
     const diagnostics = {
         minijeux: {
@@ -1662,19 +1806,35 @@ function construireDiagnosticSpecialise(type, ownerId) {
     const diag = diagnostics[type] || diagnostics.minijeux;
     const controlesOk = diag.controles.filter(([, ok]) => ok).length;
 
+    const complet = controlesOk === diag.controles.length;
     const embed = new EmbedBuilder()
-        .setColor(controlesOk === diag.controles.length ? 0x2ecc71 : 0xe67e22)
+        .setColor(complet ? 0x2ecc71 : 0xe67e22)
         .setTitle(diag.titre)
         .setDescription(
-            `**Contrôles structurels : ${controlesOk}/${diag.controles.length}**\n\n` +
-            diag.controles.map(([nom, ok]) =>
-                `${ok ? '✅' : '❌'} ${nom}`
-            ).join('\n') +
-            '\n\n**Informations**\n' +
-            diag.informations.join('\n') +
-            '\n\n-# Ces contrôles vérifient les modules et les états disponibles, pas le résultat d’un test fonctionnel complet.'
+            `${complet ? '🟢 **Tous les contrôles sont validés**' : '🟠 **Attention : certains contrôles ont échoué**'}\n` +
+            `**${controlesOk} / ${diag.controles.length} vérifications réussies**`
         )
-        .setFooter({ text: `Cacabot ${getVersionString()} • Diagnostic ${type}` })
+        .addFields(
+            {
+                name: '🛡️ Vérifications des modules',
+                value: diag.controles.map(([nom, ok]) =>
+                    `${ok ? '🟢' : '🔴'} **${nom}** — ${ok ? 'Disponible' : 'À vérifier'}`
+                ).join('\n'),
+                inline: false
+            },
+            {
+                name: '📊 État actuel',
+                value: diag.informations.join('\n'),
+                inline: false
+            },
+            {
+                name: 'ℹ️ Lecture du diagnostic',
+                value: '🟢 Disponible = module chargé. 🔴 À vérifier = contrôle non validé. ' +
+                    'Cela ne remplace pas un test fonctionnel en conditions réelles.',
+                inline: false
+            }
+        )
+        .setFooter({ text: `Cacabot ${getVersionString()} • Diagnostic ${type} • Actualisé` })
         .setTimestamp();
 
     const navigation = new ActionRowBuilder().addComponents(
@@ -1723,6 +1883,29 @@ try {
         return;
     }
 
+    // Boutons des annonces de redéploiement : diagnostic privé,
+    // sans modifier le message public.
+    if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(DIAG_REDEPLOY_PREFIX)
+    ) {
+        if (interaction.user.id !== DIAG_OWNER_ID) {
+            await interaction.reply({
+                content: '⛔ Diagnostic réservé à Epsys.',
+                flags: MessageFlags.Ephemeral
+            });
+            return;
+        }
+        const type = interaction.customId.slice(DIAG_REDEPLOY_PREFIX.length);
+        if (['minijeux', 'roulette', 'tcg'].includes(type)) {
+            await interaction.reply({
+                ...construireDiagnosticSpecialise(type, interaction.user.id),
+                flags: MessageFlags.Ephemeral
+            });
+        }
+        return;
+    }
+
     // =========================
     //   BOUTONS DIAGNOSTICS (EPSYS)
     // =========================
@@ -1765,7 +1948,7 @@ try {
     // =========================
     if (interaction.isChatInputCommand()) {
         if (interaction.guildId !== '720057528351850547') {
-            return interaction.reply({ content: "Les commandes slash de Cacabot sont exclusivement réservées au serveur Regaïa !", ephemeral: true });
+            return interaction.reply({ content: "Les commandes slash de Cacabot sont exclusivement réservées au serveur Regaïa !", flags: 64 });
         }
 
         const aliasMap = {
@@ -1884,7 +2067,7 @@ try {
     // =========================
     if (interaction.isMessageContextMenuCommand()) {
         if (interaction.guildId !== '720057528351850547') {
-            return interaction.reply({ content: "Les commandes de Cacabot sont exclusivement réservées au serveur Regaïa !", ephemeral: true });
+            return interaction.reply({ content: "Les commandes de Cacabot sont exclusivement réservées au serveur Regaïa !", flags: 64 });
         }
         if (await handleToolsInteraction(interaction, client)) return;
         return;
@@ -1970,11 +2153,11 @@ try {
     console.error('Erreur interactionCreate:', err);
     try {
         if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: "Une erreur est survenue lors de l'exécution.", ephemeral: true }).catch(() => {});
+            await interaction.reply({ content: "Une erreur est survenue lors de l'exécution.", flags: 64 }).catch(() => {});
         } else if (interaction.deferred) {
-            await interaction.followUp({ content: "Une erreur est survenue lors de l'exécution.", ephemeral: true }).catch(() => {});
+            await interaction.followUp({ content: "Une erreur est survenue lors de l'exécution.", flags: 64 }).catch(() => {});
         }
-    } catch {}
+    } catch (replyError) { console.warn('[INDEX] Notification d’erreur impossible :', replyError); }
 }
 });
 
@@ -1984,12 +2167,15 @@ try {
 
 client.on('channelCreate', async (channel) => {
     if (channel.type === ChannelType.GuildText) {
-        await assurerWebhookRoulette(channel).catch(() => {});
+        await assurerWebhookRoulette(channel).catch(err => {
+            console.error('[INDEX] Création du webhook roulette échouée :', err);
+        });
     }
 });
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
     console.log(`✅ ${client.user.tag} est connecté`);
+    void flushDiscordErrorReports();
 
     // Enregistrement des commandes Slash (/)
     const slashCommands = [
@@ -2204,7 +2390,17 @@ client.once('ready', async () => {
 
     // Priorité absolue : charger les données persistantes
     // avant les requêtes de déploiement des commandes Discord.
-    await loadAll();
+    // Une exception dans un écouteur async "ready" ne ferme PAS
+    // automatiquement la connexion Discord. Refuser explicitement
+    // tout fonctionnement sans données validées.
+    try {
+        await loadAll();
+    } catch (error) {
+        donneesChargees = false;
+        console.error('🚨 ARRÊT DE SÉCURITÉ : restauration impossible.', error);
+        process.exit(1);
+        return;
+    }
 
     // Retrouver d'abord une éventuelle publication Discord
     // effectuée avant la dernière confirmation de sauvegarde.
@@ -2229,7 +2425,10 @@ client.once('ready', async () => {
     // Réessayer également sans redémarrer Cacabot lorsqu'une
     // attribution est restée en attente après une erreur réseau
     // ou un échec de sauvegarde.
+    let repriseRecompensesPenduEnCours = false;
     const repriseRecompensesPenduInterval = setInterval(async () => {
+        if (repriseRecompensesPenduEnCours) return;
+        repriseRecompensesPenduEnCours = true;
         try {
             // La réconciliation doit précéder la reprise des gains.
             await reconcilierPublicationPendu(client);
@@ -2240,6 +2439,8 @@ client.once('ready', async () => {
                 'ou de reprise échouée :',
                 error
             );
+        } finally {
+            repriseRecompensesPenduEnCours = false;
         }
     }, 60 * 1000);
 
@@ -2287,12 +2488,37 @@ client.once('ready', async () => {
     await scanSet1Cards(client);
     await backfillRecentOpeningsTcg(client);
     restaurerNotifsTcg(client);
-    setInterval(() => verifierInactiviteTradesTcg(client), 10 * 60 * 1000);
-    verifierBoosterHebdoTcg(client);
-    verifierQueteCommunautaireTcg(client);
+    scheduleNonOverlappingCheck('inactivité des échanges TCG', () => verifierInactiviteTradesTcg(client), 10 * 60 * 1000);
+    // Une vérification lente ne doit pas multiplier les appels Discord au tick suivant.
+    let boosterHebdoEnCours = false;
+    let queteCommunautaireEnCours = false;
+    async function verifierBoosterHebdoSansChevauchement() {
+        if (boosterHebdoEnCours) return;
+        boosterHebdoEnCours = true;
+        try {
+            await verifierBoosterHebdoTcg(client);
+        } catch (err) {
+            console.error('[INDEX] Vérification booster hebdomadaire échouée :', err);
+        } finally {
+            boosterHebdoEnCours = false;
+        }
+    }
+    async function verifierQueteCommunautaireSansChevauchement() {
+        if (queteCommunautaireEnCours) return;
+        queteCommunautaireEnCours = true;
+        try {
+            await verifierQueteCommunautaireTcg(client);
+        } catch (err) {
+            console.error('[INDEX] Vérification quête communautaire échouée :', err);
+        } finally {
+            queteCommunautaireEnCours = false;
+        }
+    }
+    void verifierBoosterHebdoSansChevauchement();
+    void verifierQueteCommunautaireSansChevauchement();
     setInterval(() => {
-        verifierBoosterHebdoTcg(client);
-        verifierQueteCommunautaireTcg(client);
+        void verifierBoosterHebdoSansChevauchement();
+        void verifierQueteCommunautaireSansChevauchement();
     }, 60 * 1000);
 
     // Réarmement des alertes roulette, votes publics et des rappels
@@ -2326,7 +2552,11 @@ client.once('ready', async () => {
 
                 if (nouveauCommitDetecte) {
                     const versionTexte = ` *(Version ${getVersionString()})*`;
-                    const msgRetour = await salonNotif.send(`✅ Mise à jour faite, je suis de retour !${versionTexte}\nLaisse-moi encore 10 secondes et tu pourras exéctuer des commandes...`);
+                    const msgRetour = await salonNotif.send({
+                        content: `✅ Mise à jour faite, je suis de retour !${versionTexte}\nLaisse-moi encore 10 secondes et tu pourras exécuter des commandes...`,
+                        components: construireBoutonsRedeploiement()
+                    });
+                    await retirerAnciensBoutonsRedeploiement(salonNotif, msgRetour.id);
                     setTimeout(async () => {
                         await msgRetour.edit(`✅ Mise à jour faite, je suis de retour !${versionTexte}\nTout est prêt :)`).catch(() => {});
                     }, 10000);
@@ -2376,9 +2606,25 @@ client.once('ready', async () => {
         }
     }, 60 * 1000);
 
-    setInterval(() => verifierHappyHour(client), 30 * 1000);
-    setInterval(() => verifierTwitchLive(client), 60 * 1000);
-    setInterval(() => verifierNouvellesVideosYouTube(), 3 * 60 * 1000); // Vérifie les vidéos YouTube toutes les 3 minutes
+    // Évite les vérifications réseau simultanées si un appel dépasse son intervalle.
+    function scheduleNonOverlappingCheck(label, task, intervalMs) {
+        let running = false;
+        return setInterval(async () => {
+            if (running) return;
+            running = true;
+            try {
+                await task();
+            } catch (err) {
+                console.error(`[INDEX] Vérification ${label} échouée :`, err);
+            } finally {
+                running = false;
+            }
+        }, intervalMs);
+    }
+
+    scheduleNonOverlappingCheck('Happy Hour', () => verifierHappyHour(client), 30 * 1000);
+    scheduleNonOverlappingCheck('Twitch', () => verifierTwitchLive(client), 60 * 1000);
+    scheduleNonOverlappingCheck('YouTube', () => verifierNouvellesVideosYouTube(), 3 * 60 * 1000); // Toutes les 3 minutes
 
     // Lancement et vérification automatique des mini-jeux (persisté contre les redéploiements)
     const verifierMotusAutomatique = async () => {
@@ -2394,7 +2640,7 @@ client.once('ready', async () => {
         if (h === 10 && m >= 0 && m < 5 && motusData.dateKey !== `${dateKey}_10h`) {
             motusData.dateKey = `${dateKey}_10h`;
             if (guildRegaia) await envoyerMotusQuotidien(guildRegaia, 10);
-            await saveAll().catch(() => {});
+            await saveAll().catch(err => console.error('[INDEX] Sauvegarde quotidienne échouée :', err));
         }
 
         // 2. Lancement du Rébus Regaïen à 15h00
@@ -2417,7 +2663,7 @@ client.once('ready', async () => {
         if (h === 19 && m >= 0 && m < 5 && motusData.dateKey !== `${dateKey}_19h`) {
             motusData.dateKey = `${dateKey}_19h`;
             if (guildRegaia) await envoyerMotusQuotidien(guildRegaia, 19);
-            await saveAll().catch(() => {});
+            await saveAll().catch(err => console.error('[INDEX] Sauvegarde quotidienne échouée :', err));
         }
 
         // 4. Lancement du Pendu Quotidien à 21h00 (7 lettres - 1h)
@@ -2489,7 +2735,7 @@ client.once('ready', async () => {
             demanderSauvegarde();
         }
     };
-    setInterval(verifierMotusAutomatique, 30 * 1000);
+    scheduleNonOverlappingCheck('mini-jeux', verifierMotusAutomatique, 30 * 1000);
 
     // Tâches de fond sans bloquer l'état du bot
     for (const guild of client.guilds.cache.values()) {
@@ -2511,7 +2757,11 @@ client.once('ready', async () => {
 client.on('messageReactionAdd', async (reaction, user) => {
     if (!donneesChargees) return;
 
-    await handleSecurityReactionAdd(reaction, user);
+    try {
+        await handleSecurityReactionAdd(reaction, user);
+    } catch (err) {
+        console.error('[INDEX] Réaction de sécurité échouée :', err);
+    }
 
     if (user.bot) return;
 
@@ -2539,13 +2789,16 @@ client.on('messageReactionAdd', async (reaction, user) => {
     await msg.channel.send({ 
         content: `Bah alors, **${memberNom}**, on m'envoie un doigt d'honneur ?`,
         flags: [MessageFlags.SuppressNotifications]
-    });
+    }).catch(err => console.error('[INDEX] Réponse à la réaction impossible :', err));
 });
 
 client.on('messageReactionRemove', async (reaction, user) => {
     if (!donneesChargees) return;
-
-    await handleSecurityReactionRemove(reaction, user);
+    try {
+        await handleSecurityReactionRemove(reaction, user);
+    } catch (err) {
+        console.error('[INDEX] Retrait de réaction de sécurité échoué :', err);
+    }
 });
 
 function estSessionMiniJeuActive(channelId) {
@@ -2577,20 +2830,26 @@ function estSessionMiniJeuActive(channelId) {
 const dernierAuteurParSalon = new Map();
 client.on('messageCreate', async (message) => {
     if (!donneesChargees) return;
+    try {
+        await handleRouletteCouronne(message, dernierAuteurParSalon);
 
-    await handleRouletteCouronne(message, dernierAuteurParSalon);
+        // Les malus textuels ne modifient pas les propositions
+        // pendant une session de Motus, Rébus ou Pendu.
+        if (estSessionMiniJeuActive(message.channelId)) return;
 
-    // Les malus textuels ne modifient pas les propositions
-    // pendant une session de Motus, Rébus ou Pendu.
-    if (estSessionMiniJeuActive(message.channelId)) return;
-
-    await handleRouletteTransfoMessage(message, client);
+        await handleRouletteTransfoMessage(message, client);
+    } catch (err) {
+        console.error('[INDEX] Traitement des effets roulette échoué :', err);
+    }
 });
 
 client.on('guildMemberUpdate', async (oldMember, newMember) => {
     if (!donneesChargees) return;
-
-    await handleRoulettePseudoLock(oldMember, newMember);
+    try {
+        await handleRoulettePseudoLock(oldMember, newMember);
+    } catch (err) {
+        console.error('[INDEX] Gestion du pseudo roulette échouée :', err);
+    }
 });
 
 // =========================
@@ -2609,8 +2868,16 @@ client.on('guildMemberAdd', async (member) => {
         );
     }
 
-    await handleWelcomeMemberAdd(member);
-    await handleSecurityMemberAdd(member);
+    try {
+        await handleWelcomeMemberAdd(member);
+    } catch (err) {
+        console.error('[INDEX] Accueil du nouveau membre échoué :', err);
+    }
+    try {
+        await handleSecurityMemberAdd(member);
+    } catch (err) {
+        console.error('[INDEX] Vérification de sécurité du nouveau membre échouée :', err);
+    }
 });
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
@@ -2620,7 +2887,30 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         const bpJoueur = battlePassData?.joueurs?.[newState.id];
         if (bpJoueur) bpJoueur.vocalCurrentSessionMinutes = 0;
     }
-    await handleVoiceStateUpdate(oldState, newState);
+    try {
+        await handleVoiceStateUpdate(oldState, newState);
+    } catch (err) {
+        console.error('[INDEX] Traitement du salon vocal échoué :', err);
+    }
 });
 
-client.login(process.env.TOKEN);
+// Ne pas ouvrir une session Discord si une autre instance locale
+// utilise déjà le même jeton. Le verrou est libéré par l'OS au crash.
+async function demarrerAvecVerrou() {
+    const verrou = await acquireInstanceGuard(process.env.TOKEN);
+    console.log('🔒 Verrou local Cacabot actif (port ' + verrou.port + ').');
+    try {
+        await client.login(process.env.TOKEN);
+    } catch (error) {
+        await verrou.release();
+        throw error;
+    }
+}
+
+demarrerAvecVerrou().catch(error => {
+    console.error('🚨 Démarrage Cacabot refusé :', error);
+    // Les minuteurs du bot existent déjà à ce stade : un simple
+    // exitCode laisserait un processus inactif tourner indéfiniment.
+    // Aucun état membre n'a été chargé ou modifié par cette étape.
+    process.exit(1);
+});

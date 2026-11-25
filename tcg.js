@@ -282,9 +282,10 @@ async function replySilent(target, payload) {
 async function replyTempSilent(message, payload, delayMs = 8000) {
     const sent = await replySilent(message, payload).catch(() => null);
     if (sent && typeof sent.delete === 'function') {
-        setTimeout(() => {
+        const timer = setTimeout(() => {
             sent.delete().catch(() => {});
         }, delayMs);
+        timer.unref?.();
     }
     return sent;
 }
@@ -317,13 +318,17 @@ function schedulePanelAutoDelete(msg, triggerMessage = null) {
         panelAutoDeleteTimers.delete(msg.id);
         if (boosterSessions.has(msg.id)) return;
         const refId = triggerMessage?.id || msg.reference?.messageId;
-        if (refId && msg.channel) {
-            const trig = triggerMessage || await msg.channel.messages.fetch(refId).catch(() => null);
-            if (trig && !trig.author?.bot) {
-                await trig.delete().catch(() => {});
+        try {
+            if (refId && msg.channel) {
+                const trig = triggerMessage || await msg.channel.messages.fetch(refId).catch(() => null);
+                if (trig && !trig.author?.bot) {
+                    await trig.delete().catch(() => {});
+                }
             }
+            await msg.delete().catch(() => {});
+        } catch (err) {
+            console.warn('[TCG] Nettoyage automatique du panneau échoué :', msg.id, err);
         }
-        await msg.delete().catch(() => {});
     }, PANEL_AUTO_DELETE_MS);
     timer.unref?.();
     panelAutoDeleteTimers.set(msg.id, timer);
@@ -466,12 +471,16 @@ function findExistingFile(dir, candidates) {
     }
     try {
         const files = fs.readdirSync(dir);
+        const normalizedFiles = new Map();
+        for (const file of files) {
+            const key = normalizeText(file);
+            if (!normalizedFiles.has(key)) normalizedFiles.set(key, file);
+        }
         for (const cand of candidates) {
-            const normCand = normalizeText(cand);
-            const match = files.find(f => normalizeText(f) === normCand);
+            const match = normalizedFiles.get(normalizeText(cand));
             if (match) return path.join(dir, match);
         }
-    } catch {}
+    } catch (err) { if (err?.code !== 'ENOENT') console.warn('[TCG] Recherche de fichier impossible :', dir, err); }
     return null;
 }
 
@@ -483,12 +492,16 @@ function findSubdir(parentDir, candidates) {
     }
     try {
         const entries = fs.readdirSync(parentDir, { withFileTypes: true }).filter(e => e.isDirectory());
-        for (const cand of candidates) {
-            const normCand = normalizeText(cand);
-            const match = entries.find(e => normalizeText(e.name) === normCand);
-            if (match) return path.join(parentDir, match.name);
+        const normalizedDirs = new Map();
+        for (const entry of entries) {
+            const key = normalizeText(entry.name);
+            if (!normalizedDirs.has(key)) normalizedDirs.set(key, entry.name);
         }
-    } catch {}
+        for (const cand of candidates) {
+            const match = normalizedDirs.get(normalizeText(cand));
+            if (match) return path.join(parentDir, match);
+        }
+    } catch (err) { if (err?.code !== 'ENOENT') console.warn('[TCG] Recherche de dossier impossible :', parentDir, err); }
     return null;
 }
 
@@ -1941,7 +1954,7 @@ function armerNotifBooster(userId, client) {
                     }).catch(() => {});
                 }
             }
-        } catch {}
+        } catch (err) { console.warn('[TCG] Notification différée échouée :', userId, err); }
     }, safeDelay);
 
     notifTimers.set(userId, timer);
@@ -2681,34 +2694,8 @@ function pickFocusCard(
         return weightedPick(rarityPool);
     }
 
-    const categoryWeights = availableCategories.map(category => ({
-        category,
-        weight: category === focusCategory
-            ? FOCUS_CATEGORY_WEIGHTS.selected
-            : FOCUS_CATEGORY_WEIGHTS.other
-    }));
-
-    const totalCategoryWeight = categoryWeights.reduce(
-        (sum, entry) => sum + entry.weight,
-        0
-    );
-
-    let categoryRoll = Math.random() * totalCategoryWeight;
-    let selectedCategory = categoryWeights[categoryWeights.length - 1].category;
-
-    for (const entry of categoryWeights) {
-        categoryRoll -= entry.weight;
-
-        if (categoryRoll <= 0) {
-            selectedCategory = entry.category;
-            break;
-        }
-    }
-
-    const finalPool = rarityPool.filter(
-        c => c.category === selectedCategory
-    );
-
+    // Focus filtre strictement la catégorie sélectionnée.
+    const finalPool = rarityPool.filter(c => c.category === focusCategory);
     return weightedPick(finalPool);
 }
 
@@ -2732,6 +2719,7 @@ function drawGodPackCards(
         // Ne retenir que les cartes autorisées par les poids
         // effectifs, y compris les punitions de rareté.
         const candidates = setPool.filter(c =>
+            (!focusCategory || c.category === focusCategory) &&
             c.rarity === targetRarity &&
             !pickedIds.has(c.id) &&
             getEffectiveCardWeight(
@@ -2994,6 +2982,7 @@ function drawBoosterCards(
             : RARITY_WEIGHTS;
 
         const rareCandidates = setPool.filter(c =>
+            (!focusCategory || c.category === focusCategory) &&
             c.rarity === 'Rare' &&
             !pickedIds.has(c.id) &&
             getEffectiveCardWeight(
@@ -3037,6 +3026,7 @@ function drawBoosterCards(
             : RARITY_WEIGHTS;
 
         let pool = setPool.filter(c =>
+            (!focusCategory || c.category === focusCategory) &&
             !(luckyActive && c.rarity === 'Commune') &&
             !pickedIds.has(c.id) &&
             getEffectiveCardWeight(
@@ -3934,7 +3924,7 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
             ctx.shadowBlur = 14;
             ctx.drawImage(logoImg, Math.round((W - logoW) / 2), 120, logoW, logoH);
             ctx.restore();
-        } catch {}
+        } catch (err) { console.warn('[TCG] Dessin du logo impossible :', err); }
     }
 
     // 3. Colonne gauche : Booster du Set + Boosters ouverts + Cartes totales du Set
@@ -3958,7 +3948,7 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
             ctx.shadowOffsetY = 12;
             ctx.drawImage(boosterImg, bx, boosterY, targetW, boosterH);
             ctx.restore();
-        } catch {}
+        } catch (err) { console.warn('[TCG] Dessin du booster impossible :', err); }
     }
 
     const setKey = String(setNumber);
@@ -4016,7 +4006,7 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
             ctx.clip();
             ctx.drawImage(avatarImg, ppX, ppY, ppSize, ppSize);
             ctx.restore();
-        } catch {}
+        } catch (err) { console.warn('[TCG] Dessin de l’avatar impossible :', err); }
     }
 
     ctx.save();
@@ -4870,7 +4860,7 @@ function buildGuidePayload(userId, fromHub = true, chapter = 'home') {
                 `### 🛒 Boutique RegaDex\n` +
                 `🎯 **Focus RegaDex (2 charges) :** ${STORE_PRICES.focus} pts\n` +
                 `• Choisis une catégorie avant chaque booster : Items, Personnages ou Références.\n` +
-                `• Catégorie choisie : **60 %** ; autres catégories : **20 %** chacune.\n` +
+                `• Catégorie choisie : **100 % des tirages ordinaires** ; autres catégories : **20 %** chacune.\n` +
                 `• Avec Focus : **1,5 % Full Art** et **0,4 % Négative**.\n` +
                 `• Les doublons restent possibles et aucune nouvelle carte n'est garantie.\n\n` +
                 `🎁 **Booster classique (3 cartes) :** ${STORE_PRICES.booster} pts\n` +
@@ -5618,7 +5608,7 @@ function scheduleCard3AutoRecap(member, session, client) {
         try {
             const dualPayload = await buildBoosterStepPayload(member, session);
             await session.message.edit({ content: null, ...dualPayload, attachments: [] });
-        } catch {}
+        } catch (err) { if (err?.code !== 10008) console.warn('[TCG] Récapitulatif automatique échoué :', err); }
         await triggerSessionPantheonIfNeeded(client, member, session).catch(() => {});
     }, CARD_3_AUTO_RECAP_MS);
     session.card3AutoRecapTimer.unref?.();
@@ -5639,9 +5629,10 @@ function scheduleBoosterInspectTimeout(member, session) {
         try {
             const recapPayload = await buildBoosterRecapPayload(member, session);
             await session.message.edit({ content: null, ...recapPayload, attachments: [] });
-        } catch {}
+        } catch (err) { if (err?.code !== 10008) console.warn('[TCG] Récapitulatif après inactivité échoué :', err); }
         await triggerSessionPantheonIfNeeded(tcgBridge.client, member, session).catch(() => {});
     }, BOOSTER_INSPECT_IDLE_MS);
+    session.inspectTimeout.unref?.();
 }
 
 async function disableBoosterOpenButtonOnMessage(message) {
@@ -6199,19 +6190,19 @@ async function triggerSessionPantheonIfNeeded(client, member, session) {
     if (isSandboxId(session.userId)) return;
 
     if (session.isGodPack) {
-        await envoyerGodPackPantheonTcg(client, member, session).catch(() => {});
+        await envoyerGodPackPantheonTcg(client, member, session).catch(err => console.error('[TCG] Annonce God Pack échouée :', err));
     } else {
         for (let i = 0; i < session.cards.length; i++) {
             const pulledCard = session.cards[i];
             if (pulledCard.rarity === 'Full Art' || pulledCard.rarity === 'Négative') {
-                await envoyerPantheonTcg(client, member, pulledCard, session.isNewFlags[i], session.luckyUsed).catch(() => {});
+                await envoyerPantheonTcg(client, member, pulledCard, session.isNewFlags[i], session.luckyUsed).catch(err => console.error('[TCG] Annonce de carte rare échouée :', err));
             }
         }
     }
 
     if (Array.isArray(session.pendingMasterSets) && session.pendingMasterSets.length > 0) {
         for (const sNum of session.pendingMasterSets) {
-            await envoyerMaitreDuSetPantheonTcg(client, member, sNum).catch(() => {});
+            await envoyerMaitreDuSetPantheonTcg(client, member, sNum).catch(err => console.error('[TCG] Annonce maître du set échouée :', err));
         }
     }
 }
@@ -6229,7 +6220,7 @@ async function showFocusChoice(
     if (boostersEnCours.has(userId)) {
         await interaction.reply({
             content: "⏳ Tu as déjà une ouverture de booster en cours.",
-            ephemeral: true
+            flags: 64
         });
         return;
     }
@@ -6237,7 +6228,7 @@ async function showFocusChoice(
     if (focusConfirmationsEnCours.has(userId)) {
         await interaction.reply({
             content: "⏳ Une confirmation d'ouverture est déjà en cours.",
-            ephemeral: true
+            flags: 64
         });
         return;
     }
@@ -6250,7 +6241,7 @@ async function showFocusChoice(
                 content:
                     "⚡ Tu as déjà un choix de demi-cooldown en attente.\n" +
                     "Termine ton choix ou attends son expiration.",
-                ephemeral: true
+                flags: 64
             });
             return;
         }
@@ -6266,7 +6257,7 @@ async function showFocusChoice(
                 content:
                     "🎯 Tu as déjà un menu Focus en attente.\n" +
                     "Termine ton choix sur ce menu ou attends son expiration.",
-                ephemeral: true
+                flags: 64
             });
             return;
         }
@@ -6283,7 +6274,7 @@ async function showFocusChoice(
     if (available <= 0) {
         await interaction.reply({
             content: "❌ Tu n'as aucun booster de ce type disponible.",
-            ephemeral: true
+            flags: 64
         });
         return;
     }
@@ -6314,8 +6305,8 @@ async function showFocusChoice(
         .setDescription(
             `Tu possèdes **${charges} charge(s) Focus**.\n\n` +
             `**Avec Focus :**\n` +
-            `• Catégorie choisie : **60 %**\n` +
-            `• Autres catégories : **20 % chacune**\n` +
+            `• Catégorie choisie : **100 % des tirages ordinaires**\n` +
+            `• Autres catégories : **exclues des tirages ordinaires**\n` +
             `• Full Art : **1,5 %** de poids de base\n` +
             `• Négative : **0,4 %** de poids de base\n\n` +
             `**Ouverture normale :** aucun Focus consommé.\n\n` +
@@ -6356,7 +6347,7 @@ async function showFocusChoice(
         await interaction.reply({
             embeds: [embed],
             components: [row],
-            ephemeral: true
+            flags: 64
         });
 
         // Expiration automatique du menu Focus.
@@ -6513,7 +6504,7 @@ async function showHalfCooldownChoice(
         } else {
             await interaction.reply({
                 ...payload,
-                ephemeral: true
+                flags: 64
             });
         }
 
@@ -6570,14 +6561,14 @@ async function startBoosterOpening(
     if (cardCatalog.length === 0) {
         const msg = `❌ Les cartes ${SET1_NAME} ne sont pas encore chargées.`;
         return targetResponder.replied || targetResponder.deferred
-            ? targetResponder.followUp({ content: msg, ephemeral: true })
+            ? targetResponder.followUp({ content: msg, flags: 64 })
             : replySilent(targetResponder, msg);
     }
 
     if (boostersEnCours.has(userId)) {
         const msg = "⏳ Tu as déjà une ouverture de booster en cours ! Attends la fin de l'animation.";
         return targetResponder.isRepliable?.()
-            ? targetResponder.reply({ content: msg, ephemeral: true })
+            ? targetResponder.reply({ content: msg, flags: 64 })
             : replySilent(targetResponder, msg);
     }
 
@@ -6586,7 +6577,7 @@ async function startBoosterOpening(
         if ((u.inventory?.fiveCardBooster || 0) <= 0) {
             const msg = "❌ Tu n'as aucun **Booster 5 cartes** dans ton inventaire (`!regadex store` pour en acheter).";
             return targetResponder.isRepliable?.()
-                ? targetResponder.reply({ content: msg, ephemeral: true })
+                ? targetResponder.reply({ content: msg, flags: 64 })
                 : replySilent(targetResponder, msg);
         }
     } else {
@@ -6609,7 +6600,7 @@ async function startBoosterOpening(
                 }
             }
             return targetResponder.isRepliable?.()
-                ? targetResponder.reply({ ...payload, ephemeral: true })
+                ? targetResponder.reply({ ...payload, flags: 64 })
                 : replySilent(targetResponder, payload);
         }
     }
@@ -6629,7 +6620,7 @@ async function startBoosterOpening(
             content:
                 "❌ Le demi-cooldown sélectionné n'est plus disponible.\n" +
                 "Aucun booster ni aucun bonus n'a été consommé.",
-            ephemeral: true
+            flags: 64
         });
     }
 
@@ -6743,6 +6734,15 @@ async function startBoosterOpening(
         if (!draw?.cards || draw.cards.length !== cardCount) {
             throw new Error(
                 `Tirage incomplet : ${draw?.cards?.length || 0}/${cardCount} cartes.`
+            );
+        }
+
+        // Ne jamais publier un Focus contenant une carte imposée
+        // hors catégorie : l'appelant restaure les ressources.
+        if (focusCategory && draw.cards.some(c => c.category !== focusCategory)) {
+            throw new Error(
+                'Focus incompatible avec une garantie hors catégorie : ' +
+                'ouverture annulée avant publication.'
             );
         }
 
@@ -7245,9 +7245,10 @@ async function startBoosterOpening(
                         await sentMsg.edit({ ...firstPayload, attachments: [] });
                         scheduleBoosterInspectTimeout(member, session);
                     }
-                } catch {}
+                } catch (err) { if (err?.code !== 10008) console.warn('[TCG] Animation du booster échouée :', err); }
             }
         }, BOOSTER_GIF_DELAY_MS);
+        session.gifTimeout.unref?.();
     } catch (err) {
         boostersEnCours.delete(userId);
 
@@ -7335,12 +7336,12 @@ async function startBoosterOpening(
                 if (targetResponder.deferred || targetResponder.replied) {
                     await targetResponder.followUp({
                         content: errorMessage,
-                        ephemeral: true
+                        flags: 64
                     });
                 } else {
                     await targetResponder.reply({
                         content: errorMessage,
-                        ephemeral: true
+                        flags: 64
                     });
                 }
             } else if (targetResponder.channel) {
@@ -8070,7 +8071,7 @@ async function sendBinderAccessWarning(targetResponder, requesterId, targetMembe
     );
 
     if (targetResponder.isRepliable?.()) {
-        return targetResponder.reply({ embeds: [embed], components: [row], ephemeral: true });
+        return targetResponder.reply({ embeds: [embed], components: [row], flags: 64 });
     }
     return replyPanelSilent(targetResponder, { embeds: [embed], components: [row] }, requesterId);
 }
@@ -8306,7 +8307,7 @@ function sendHoloTransformPicker(targetResponder, member, page = 0, fromHub = fa
     if (compatible.length === 0) {
         const msg = "❌ Tu ne possèdes actuellement aucune carte compatible pouvant être transformée en version Holographique.";
         return targetResponder.isRepliable?.()
-            ? targetResponder.reply({ content: msg, ephemeral: true })
+            ? targetResponder.reply({ content: msg, flags: 64 })
             : replySilent(targetResponder, msg);
     }
 
@@ -8383,7 +8384,7 @@ function sendNegativeTransformPicker(targetResponder, member, page = 0, fromHub 
     if (compatible.length === 0) {
         const msg = "❌ Tu ne possèdes actuellement aucune carte **Full Art** pouvant être transformée en version Négative.";
         return targetResponder.isRepliable?.()
-            ? targetResponder.reply({ content: msg, ephemeral: true })
+            ? targetResponder.reply({ content: msg, flags: 64 })
             : replySilent(targetResponder, msg);
     }
 
@@ -8507,13 +8508,13 @@ async function initiateTradePrompt(targetResponder, initiatorMember, targetMembe
     }
 
     if (targetMember.user?.bot || targetMember.bot) {
-        return targetResponder.reply({ content: "❌ Tu ne peux pas échanger avec un bot !", ephemeral: true });
+        return targetResponder.reply({ content: "❌ Tu ne peux pas échanger avec un bot !", flags: 64 });
     }
     if (targetMember.id === initiatorMember.id) {
-        return targetResponder.reply({ content: "❌ Tu ne peux pas échanger avec toi-même !", ephemeral: true });
+        return targetResponder.reply({ content: "❌ Tu ne peux pas échanger avec toi-même !", flags: 64 });
     }
     if (!hasTcgRole(targetMember)) {
-        return targetResponder.reply({ content: `❌ <@${targetMember.id}> n'a pas le rôle <@&${TCG_ROLE_ID}>.`, ephemeral: true });
+        return targetResponder.reply({ content: `❌ <@${targetMember.id}> n'a pas le rôle <@&${TCG_ROLE_ID}>.`, flags: 64 });
     }
 
     const confirmId = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
@@ -8526,7 +8527,8 @@ async function initiateTradePrompt(targetResponder, initiatorMember, targetMembe
         createdAt: Date.now()
     };
     pendingConfirms.set(confirmId, conf);
-    setTimeout(() => pendingConfirms.delete(confirmId), 15 * 60 * 1000);
+    const confirmExpiryTimer = setTimeout(() => pendingConfirms.delete(confirmId), 15 * 60 * 1000);
+    confirmExpiryTimer.unref?.();
 
     const payload = buildTradeConfirmPayload(confirmId, conf);
     return replySilent(targetResponder, payload);
@@ -9127,8 +9129,10 @@ async function executeTradeIfBothLocked(thread, trade, client) {
     }
 
     const guild = thread.guild;
-    const mA = await guild.members.fetch(idA).catch(() => null);
-    const mB = await guild.members.fetch(idB).catch(() => null);
+    const [mA, mB] = await Promise.all([
+        guild.members.fetch(idA).catch(() => null),
+        guild.members.fetch(idB).catch(() => null)
+    ]);
     const nameA = mA?.displayName || mA?.user?.username || idA;
     const nameB = mB?.displayName || mB?.user?.username || idB;
 
@@ -9804,7 +9808,7 @@ function walkProxyStats(dir) {
             } else if (entry.name.toLowerCase().endsWith('.png')) {
                 files++;
                 let sz = 0;
-                try { sz = fs.statSync(full).size; } catch {}
+                try { sz = fs.statSync(full).size; } catch (err) { if (err?.code !== 'ENOENT') console.warn('[TCG] Taille de proxy indisponible :', full, err); }
                 bytes += sz;
                 const parentName = path.basename(curr);
                 const dimKey = /^\d+x\d+$/.test(parentName) ? parentName : 'autre';
@@ -10445,7 +10449,7 @@ async function handleAdminTcgCommand(message, lowerContent) {
                     try {
                         fs.rmSync(path.join(TCG_PROXIES_DIR, entry), { recursive: true, force: true });
                         removedEntries++;
-                    } catch {}
+                    } catch (err) { console.warn('[TCG] Suppression de proxy impossible :', entry, err); }
                 }
             }
             lastProxyWriteError = null;
@@ -11049,17 +11053,17 @@ async function handleTcgSlash(interaction) {
     const member = interaction.member;
 
     if (!hasTcgRole(member)) {
-        await interaction.reply({ content: `🔒 Le **RegaDex TCG** est réservé aux membres ayant le rôle <@&${TCG_ROLE_ID}> ! (Récupère-le dans <#${ROLE_CHANNEL_ID}> pour accéder à <#${TCG_CHANNEL_ID}>.)`, ephemeral: true });
+        await interaction.reply({ content: `🔒 Le **RegaDex TCG** est réservé aux membres ayant le rôle <@&${TCG_ROLE_ID}> ! (Récupère-le dans <#${ROLE_CHANNEL_ID}> pour accéder à <#${TCG_CHANNEL_ID}>.)`, flags: 64 });
         return true;
     }
 
     if (sub === 'flex' && !isAllowedFlexChannel(interaction.channel)) {
-        await interaction.reply({ content: `⭐ La commande \`/regadex flex\` est uniquement autorisée dans <#${TCG_CHANNEL_ID}> et <#${SHITPOST_CHANNEL_ID}>.`, ephemeral: true });
+        await interaction.reply({ content: `⭐ La commande \`/regadex flex\` est uniquement autorisée dans <#${TCG_CHANNEL_ID}> et <#${SHITPOST_CHANNEL_ID}>.`, flags: 64 });
         return true;
     }
 
     if (sub !== 'flex' && !isAllowedTcgChannel(interaction.channel)) {
-        await interaction.reply({ content: `🃏 Le **RegaDex TCG** se joue exclusivement dans <#${TCG_CHANNEL_ID}> ! *(Seule la sous-commande \`/regadex flex\` est autorisée dans <#${TCG_CHANNEL_ID}> et <#${SHITPOST_CHANNEL_ID}>. Si tu n'y as pas accès, choisis ton rôle dans <#${ROLE_CHANNEL_ID}>.)*`, ephemeral: true });
+        await interaction.reply({ content: `🃏 Le **RegaDex TCG** se joue exclusivement dans <#${TCG_CHANNEL_ID}> ! *(Seule la sous-commande \`/regadex flex\` est autorisée dans <#${TCG_CHANNEL_ID}> et <#${SHITPOST_CHANNEL_ID}>. Si tu n'y as pas accès, choisis ton rôle dans <#${ROLE_CHANNEL_ID}>.)*`, flags: 64 });
         return true;
     }
 
@@ -11158,15 +11162,15 @@ async function handleTcgInteraction(interaction) {
     // 1. Menu Contextuel Utilisateur (Clic droit -> Applications -> 🔄 Échanger (RegaDex))
     if (interaction.isUserContextMenuCommand?.() && interaction.commandName === '🔄 Échanger (RegaDex)') {
         if (interaction.guildId !== GUILD_ID) {
-            await interaction.reply({ content: "Réservé au serveur Regaïa !", ephemeral: true });
+            await interaction.reply({ content: "Réservé au serveur Regaïa !", flags: 64 });
             return true;
         }
         if (!hasTcgRole(interaction.member)) {
-            await interaction.reply({ content: `🔒 Tu dois posséder le rôle <@&${TCG_ROLE_ID}>.`, ephemeral: true });
+            await interaction.reply({ content: `🔒 Tu dois posséder le rôle <@&${TCG_ROLE_ID}>.`, flags: 64 });
             return true;
         }
         if (!isAllowedTcgChannel(interaction.channel)) {
-            await interaction.reply({ content: `🃏 Lance les échanges dans <#${TCG_CHANNEL_ID}> !`, ephemeral: true });
+            await interaction.reply({ content: `🃏 Lance les échanges dans <#${TCG_CHANNEL_ID}> !`, flags: 64 });
             return true;
         }
         const targetMember = await interaction.guild.members.fetch(interaction.targetId).catch(() => null);
@@ -11189,7 +11193,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'close' && interaction.isButton()) {
         const ownerId = parts[2];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Seul l'auteur de ce menu peut le fermer !", ephemeral: true });
+            await interaction.reply({ content: "Seul l'auteur de ce menu peut le fermer !", flags: 64 });
             return true;
         }
         const msg = interaction.message;
@@ -11214,7 +11218,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'hub' && interaction.isButton()) {
         const ownerId = parts[2];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
+            await interaction.reply({ content: "Ce menu ne t'est pas destiné !", flags: 64 });
             return true;
         }
         const msg = interaction.message;
@@ -11263,7 +11267,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'help' && interaction.isButton()) {
         const ownerId = parts[2];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
             return true;
         }
         await interaction.update({ content: null, files: [], attachments: [], ...buildHelpPayload(ownerId) });
@@ -11276,7 +11280,7 @@ async function handleTcgInteraction(interaction) {
         const fromHub = parts[3] === '1';
         const showRarities = parts[4] === '1';
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
             return true;
         }
         const u = getOrCreateTcgUser(ownerId);
@@ -11294,7 +11298,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'hubflex' && interaction.isButton()) {
         const ownerId = parts[2];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
             return true;
         }
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
@@ -11310,7 +11314,7 @@ async function handleTcgInteraction(interaction) {
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({
                 content: "Pas pour toi 😌",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -11333,7 +11337,7 @@ async function handleTcgInteraction(interaction) {
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({
                 content: "Pas pour toi 😌",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -11358,7 +11362,7 @@ async function handleTcgInteraction(interaction) {
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({
                 content: "Pas pour toi 😌",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -11378,7 +11382,7 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[2];
         const fromHub = parts[3] === '1';
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
             return true;
         }
         const payload = buildCreditsPayload(ownerId, fromHub);
@@ -11394,7 +11398,7 @@ async function handleTcgInteraction(interaction) {
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({
                 content: "Ce bouton ne t'est pas destiné !",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -11419,7 +11423,7 @@ async function handleTcgInteraction(interaction) {
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({
                 content: "Ce bouton ne t'est pas destiné !",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -11445,7 +11449,7 @@ async function handleTcgInteraction(interaction) {
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({
                 content: "Ce menu Focus ne t'appartient pas !",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -11455,7 +11459,7 @@ async function handleTcgInteraction(interaction) {
         if (!pending || pending.token !== token) {
             await interaction.reply({
                 content: "❌ Ce choix Focus n'est plus valide. Relance une ouverture.",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -11483,7 +11487,7 @@ async function handleTcgInteraction(interaction) {
         if (!Object.prototype.hasOwnProperty.call(categoryByChoice, choice)) {
             await interaction.reply({
                 content: "❌ Choix Focus invalide.",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -11494,7 +11498,7 @@ async function handleTcgInteraction(interaction) {
         ) {
             await interaction.reply({
                 content: "⏳ Une ouverture est déjà en cours.",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -11550,7 +11554,7 @@ async function handleTcgInteraction(interaction) {
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({
                 content: "Ce menu demi-cooldown ne t'appartient pas !",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -11558,7 +11562,7 @@ async function handleTcgInteraction(interaction) {
         if (!['activate', 'keep'].includes(choice)) {
             await interaction.reply({
                 content: '❌ Choix demi-cooldown invalide.',
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -11568,7 +11572,7 @@ async function handleTcgInteraction(interaction) {
         if (!pending || pending.token !== token) {
             await interaction.reply({
                 content: "❌ Ce choix n'est plus valide. Relance une ouverture.",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -11592,7 +11596,7 @@ async function handleTcgInteraction(interaction) {
         ) {
             await interaction.reply({
                 content: '⏳ Une ouverture est déjà en cours.',
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -11648,17 +11652,17 @@ async function handleTcgInteraction(interaction) {
         const dir = parts[2];
         const ownerId = parts[3];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Ce booster ne t'appartient pas !", ephemeral: true });
+            await interaction.reply({ content: "Ce booster ne t'appartient pas !", flags: 64 });
             return true;
         }
         const session = boosterSessions.get(interaction.message.id);
         if (!session) {
-            await interaction.reply({ content: "⏳ Session d'ouverture expirée.", ephemeral: true });
+            await interaction.reply({ content: "⏳ Session d'ouverture expirée.", flags: 64 });
             return true;
         }
         if (dir === 'skip') {
             if (session.skipUsed) {
-                await interaction.reply({ content: "⏭️ Le bouton Skip n'est utilisable qu'une seule fois par ouverture !", ephemeral: true });
+                await interaction.reply({ content: "⏭️ Le bouton Skip n'est utilisable qu'une seule fois par ouverture !", flags: 64 });
                 return true;
             }
             if (session.gifTimeout) {
@@ -11704,14 +11708,14 @@ async function handleTcgInteraction(interaction) {
         const cardIndex = Number(parts[2]);
         const ownerId = parts[3];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: 'Ce booster ne t’appartient pas !', ephemeral: true });
+            await interaction.reply({ content: 'Ce booster ne t’appartient pas !', flags: 64 });
             return true;
         }
         const session = boosterSessions.get(interaction.message.id);
         if (!session || !session.hasReachedRecap || !session.secondChanceAvailable || session.secondChanceUsed ||
             !Number.isInteger(cardIndex) || cardIndex < 0 || cardIndex >= session.cards.length ||
             session.cards[cardIndex]?.rarity !== 'Commune') {
-            await interaction.reply({ content: '⏳ Cette relance n’est plus disponible.', ephemeral: true });
+            await interaction.reply({ content: '⏳ Cette relance n’est plus disponible.', flags: 64 });
             return true;
         }
         // Verrou immédiat contre les doubles clics.
@@ -11748,7 +11752,7 @@ async function handleTcgInteraction(interaction) {
                 content:
                     '❌ Impossible de relancer cette carte : ' +
                     'tu ne possèdes plus cet exemplaire dans ta collection.',
-                ephemeral: true
+                flags: 64
             });
 
             return true;
@@ -11794,7 +11798,7 @@ async function handleTcgInteraction(interaction) {
                 content:
                     '❌ Aucun tirage valide disponible pour cette relance. ' +
                     'Réessaie.',
-                ephemeral: true
+                flags: 64
             });
 
             return true;
@@ -11946,7 +11950,7 @@ async function handleTcgInteraction(interaction) {
         await interaction.editReply({ content: null, ...payload, attachments: [] });
         await interaction.followUp({
             content: `🔄 **Seconde Chance !** ${oldCard.name} → **${newCard.name}** (${newCard.rarity}).`,
-            ephemeral: true
+            flags: 64
         });
         return true;
     }
@@ -11955,12 +11959,12 @@ async function handleTcgInteraction(interaction) {
     if (action === 'brecap' && parts[2] === 'theme' && interaction.isButton()) {
         const ownerId = parts[3];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Ce booster ne t'appartient pas !", ephemeral: true });
+            await interaction.reply({ content: "Ce booster ne t'appartient pas !", flags: 64 });
             return true;
         }
         const session = boosterSessions.get(interaction.message.id);
         if (!session) {
-            await interaction.reply({ content: "⏳ Session d'ouverture expirée.", ephemeral: true });
+            await interaction.reply({ content: "⏳ Session d'ouverture expirée.", flags: 64 });
             return true;
         }
         const u = getOrCreateTcgUser(ownerId);
@@ -11983,11 +11987,11 @@ async function handleTcgInteraction(interaction) {
         const fromHub = parts[4] === '1';
         const ephemeralMode = parts[4] === 'ephem';
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
             return true;
         }
         if (isSandboxId(ownerId)) {
-            await interaction.reply({ content: "ℹ️ Mode test `!tcgx` : les notifications sont désactivées *(boosters déjà illimités)*.", ephemeral: true });
+            await interaction.reply({ content: "ℹ️ Mode test `!tcgx` : les notifications sont désactivées *(boosters déjà illimités)*.", flags: 64 });
             return true;
         }
         const data = getStoreData();
@@ -12006,7 +12010,7 @@ async function handleTcgInteraction(interaction) {
             }
             await interaction.reply({
                 ...buildNotifMenuPayload(interaction.member, u, false, null, true),
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -12050,7 +12054,7 @@ async function handleTcgInteraction(interaction) {
                 });
                 return true;
             }
-            await interaction.reply({ content: "🔕 Notifications booster désactivées.", ephemeral: true });
+            await interaction.reply({ content: "🔕 Notifications booster désactivées.", flags: 64 });
             return true;
         }
 
@@ -12088,7 +12092,7 @@ async function handleTcgInteraction(interaction) {
 
         await interaction.reply({
             content: confirmNote.replace(/\*/g, '**'),
-            ephemeral: true
+            flags: 64
         });
         await disableNotifButtonsOnMessage(interaction.message);
         return true;
@@ -12098,7 +12102,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'theme' && interaction.isButton()) {
         const ownerId = parts[2];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Ce bouton ne t'est pas destiné !", ephemeral: true });
+            await interaction.reply({ content: "Ce bouton ne t'est pas destiné !", flags: 64 });
             return true;
         }
         const u = getOrCreateTcgUser(ownerId);
@@ -12113,7 +12117,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'store' && interaction.isButton()) {
         const ownerId = parts[3];
         const fromHub = parts[4] === '1';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const u = getOrCreateTcgUser(ownerId);
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
         const payload = buildStorePayload(actorMember, u, fromHub);
@@ -12124,7 +12128,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'claim' && interaction.isButton()) {
         const ownerId = parts[3];
         const fromHub = parts[4] === '1';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const u = getOrCreateTcgUser(ownerId);
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
         const payload = buildClaimPayload(actorMember, u, fromHub);
@@ -12134,7 +12138,7 @@ async function handleTcgInteraction(interaction) {
 
     if (action === 'buyholocancel' && interaction.isButton()) {
         const ownerId = parts[2];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         await interaction.update({ content: '❌ Achat annulé.', embeds: [], components: [] });
         return true;
     }
@@ -12144,7 +12148,7 @@ async function handleTcgInteraction(interaction) {
         const fromHub = parts[3] === '1';
         const storeMsgId = parts[4] || '';
         const hubSuffix = fromHub ? ':1' : '';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
 
         const price = STORE_PRICES.holoTransform;
         const u = getOrCreateTcgUser(ownerId);
@@ -12197,7 +12201,7 @@ async function handleTcgInteraction(interaction) {
         const fromHub = parts[3] === '1';
         const storeMsgId = parts[4] || '';
         const hubSuffix = fromHub ? ':1' : '';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
 
         const price = STORE_PRICES.negativeTransform;
         const u = getOrCreateTcgUser(ownerId);
@@ -12251,7 +12255,7 @@ async function handleTcgInteraction(interaction) {
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({
                 content: 'Pas pour toi 😌',
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -12272,7 +12276,7 @@ async function handleTcgInteraction(interaction) {
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({
                 content: 'Pas pour toi 😌',
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -12280,7 +12284,7 @@ async function handleTcgInteraction(interaction) {
         if (!hasTcgRole(interaction.member) && interaction.user.id !== EPSYS_ID) {
             await interaction.reply({
                 content: '❌ Tu dois posséder le rôle Collectionneur.euse.',
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -12383,12 +12387,12 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[3];
         const fromHub = parts[4] === '1';
         const hubSuffix = fromHub ? ':1' : '';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
 
         const price = STORE_PRICES[itemKey];
         const u = getOrCreateTcgUser(ownerId);
         if (!price || u.points < price) {
-            await interaction.reply({ content: "❌ Tu n'as pas assez de points RegaDex !", ephemeral: true });
+            await interaction.reply({ content: "❌ Tu n'as pas assez de points RegaDex !", flags: 64 });
             return true;
         }
 
@@ -12402,7 +12406,7 @@ async function handleTcgInteraction(interaction) {
             ) {
                 await interaction.reply({
                     content: '⚠️ Cette offre est expirée ou déjà achetée. Rouvre le Store.',
-                    ephemeral: true
+                    flags: 64
                 });
                 return true;
             }
@@ -12438,7 +12442,7 @@ async function handleTcgInteraction(interaction) {
             await interaction.reply({
                 embeds: [confEmbed],
                 components: [confRow],
-                ephemeral: true
+                flags: 64
             });
 
             return true;
@@ -12473,7 +12477,7 @@ async function handleTcgInteraction(interaction) {
                     .setEmoji('❌')
                     .setStyle(ButtonStyle.Secondary)
             );
-            await interaction.reply({ embeds: [confEmbed], components: [confRow], ephemeral: true });
+            await interaction.reply({ embeds: [confEmbed], components: [confRow], flags: 64 });
             return true;
         }
 
@@ -12507,7 +12511,7 @@ async function handleTcgInteraction(interaction) {
                     .setEmoji('❌')
                     .setStyle(ButtonStyle.Secondary)
             );
-            await interaction.reply({ embeds: [confEmbed], components: [confRow], ephemeral: true });
+            await interaction.reply({ embeds: [confEmbed], components: [confRow], flags: 64 });
             return true;
         }
 
@@ -12534,8 +12538,8 @@ async function handleTcgInteraction(interaction) {
                     `Avant l'ouverture d'un booster, tu pourras choisir ` +
                     `une catégorie à favoriser : **Items**, **Personnages** ` +
                     `ou **Références**.\n\n` +
-                    `• Catégorie choisie : **60 %**\n` +
-                    `• Autres catégories : **20 % chacune**\n` +
+                    `• Catégorie choisie : **100 % des tirages ordinaires**\n` +
+                    `• Autres catégories : **exclues des tirages ordinaires**\n` +
                     `• Full Art : **1,5 %**\n` +
                     `• Négative : **0,4 %**\n\n` +
                     `⚠️ **Information importante — Fair-play**\n` +
@@ -12549,7 +12553,7 @@ async function handleTcgInteraction(interaction) {
 
             await interaction.reply({
                 embeds: [focusEmbed],
-                ephemeral: true
+                flags: 64
             });
 
             return true;
@@ -12626,7 +12630,7 @@ async function handleTcgInteraction(interaction) {
         const itemKey = parts[3];
         const ownerId = parts[4];
         const fromHub = parts[5] === '1';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
 
         const backRows = [
@@ -12650,7 +12654,7 @@ async function handleTcgInteraction(interaction) {
 
         const u = getOrCreateTcgUser(ownerId);
         if ((u.inventory[itemKey] || 0) <= 0) {
-            await interaction.reply({ content: "❌ Cet objet n'est plus dans ton inventaire.", ephemeral: true });
+            await interaction.reply({ content: "❌ Cet objet n'est plus dans ton inventaire.", flags: 64 });
             return true;
         }
 
@@ -12678,7 +12682,7 @@ async function handleTcgInteraction(interaction) {
         }
         if (itemKey === 'luckyBooster') {
             if (u.activeBonuses.luckyBooster) {
-                await interaction.reply({ content: "⚠️ Tu as déjà un bonus **Chanceux** actif pour ton prochain booster !", ephemeral: true });
+                await interaction.reply({ content: "⚠️ Tu as déjà un bonus **Chanceux** actif pour ton prochain booster !", flags: 64 });
                 return true;
             }
             u.inventory.luckyBooster -= 1;
@@ -12695,7 +12699,7 @@ async function handleTcgInteraction(interaction) {
         }
         if (itemKey === 'halfCooldown') {
             if (u.activeBonuses.halfCooldown) {
-                await interaction.reply({ content: "⚠️ Tu as déjà un bonus **Demi-cooldown** armé pour ton prochain booster !", ephemeral: true });
+                await interaction.reply({ content: "⚠️ Tu as déjà un bonus **Demi-cooldown** armé pour ton prochain booster !", flags: 64 });
                 return true;
             }
             u.inventory.halfCooldown -= 1;
@@ -12712,7 +12716,7 @@ async function handleTcgInteraction(interaction) {
         }
         if (itemKey === 'secondChance') {
             if (u.activeBonuses.secondChance) {
-                await interaction.reply({ content: '⚠️ Seconde Chance déjà armée pour ton prochain booster !', ephemeral: true });
+                await interaction.reply({ content: '⚠️ Seconde Chance déjà armée pour ton prochain booster !', flags: 64 });
                 return true;
             }
             u.inventory.secondChance -= 1;
@@ -12728,7 +12732,7 @@ async function handleTcgInteraction(interaction) {
             if (u.activeBonuses.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil) {
                 await interaction.reply({
                     content: `⚠️ Ton bonus **God Pack ×25** est déjà actif jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F> !`,
-                    ephemeral: true
+                    flags: 64
                 });
                 return true;
             }
@@ -12754,9 +12758,9 @@ async function handleTcgInteraction(interaction) {
         const itemKey = parts[2];
         const ownerId = parts[3];
         const fromHub = parts[4] === '1';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const u = getOrCreateTcgUser(ownerId);
-        if ((u.inventory[itemKey] || 0) <= 0) return interaction.reply({ content: "❌ Stock insuffisant.", ephemeral: true }), true;
+        if ((u.inventory[itemKey] || 0) <= 0) return interaction.reply({ content: "❌ Stock insuffisant.", flags: 64 }), true;
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
 
         if (itemKey === 'negativeTransform') {
@@ -12764,28 +12768,28 @@ async function handleTcgInteraction(interaction) {
             return true;
         }
         if (itemKey === 'luckyBooster') {
-            if (u.activeBonuses.luckyBooster) return interaction.reply({ content: "⚠️ Déjà actif sur ton prochain booster !", ephemeral: true }), true;
+            if (u.activeBonuses.luckyBooster) return interaction.reply({ content: "⚠️ Déjà actif sur ton prochain booster !", flags: 64 }), true;
             u.inventory.luckyBooster -= 1;
             u.activeBonuses.luckyBooster = true;
             if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
             await interaction.update(buildClaimPayload(actorMember, u, fromHub));
-            await interaction.followUp({ content: "🍀 **Prochain booster chanceux activé !**", ephemeral: true });
+            await interaction.followUp({ content: "🍀 **Prochain booster chanceux activé !**", flags: 64 });
             return true;
         }
         if (itemKey === 'halfCooldown') {
-            if (u.activeBonuses.halfCooldown) return interaction.reply({ content: "⚠️ Déjà armé sur ton prochain booster !", ephemeral: true }), true;
+            if (u.activeBonuses.halfCooldown) return interaction.reply({ content: "⚠️ Déjà armé sur ton prochain booster !", flags: 64 }), true;
             u.inventory.halfCooldown -= 1;
             u.activeBonuses.halfCooldown = true;
             if (!isSandboxId(ownerId)) tcgBridge.demanderSauvegarde();
             await interaction.update(buildClaimPayload(actorMember, u, fromHub));
-            await interaction.followUp({ content: "⚡ **Demi-cooldown armé !**", ephemeral: true });
+            await interaction.followUp({ content: "⚡ **Demi-cooldown armé !**", flags: 64 });
             return true;
         }
         if (itemKey === 'godPackBoost') {
             if (u.activeBonuses.godPackBoostUntil && Date.now() < u.activeBonuses.godPackBoostUntil) {
                 return interaction.reply({
                     content: `⚠️ Ton bonus **God Pack ×5** est déjà actif jusqu'au <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:F> !`,
-                    ephemeral: true
+                    flags: 64
                 }), true;
             }
             u.inventory.godPackBoost -= 1;
@@ -12794,7 +12798,7 @@ async function handleTcgInteraction(interaction) {
             await interaction.update(buildClaimPayload(actorMember, u, fromHub));
             await interaction.followUp({
                 content: `🌟 **Taux de God Pack ×25 (1% → 2,5%) activé pour 5 jours !** *(fin <t:${Math.floor(u.activeBonuses.godPackBoostUntil / 1000)}:R>)*`,
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -12808,7 +12812,7 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[2];
         const page = parseInt(parts[3], 10) || 0;
         const fromHub = parts[4] === '1';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
         await sendNegativeTransformPicker(interaction, actorMember, page, fromHub);
         return true;
@@ -12816,7 +12820,7 @@ async function handleTcgInteraction(interaction) {
 
     if (action === 'negpick' && interaction.isStringSelectMenu()) {
         const ownerId = parts[2];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
 
         const baseId = interaction.values[0];
         const baseCard = cardById.get(baseId);
@@ -12824,7 +12828,7 @@ async function handleTcgInteraction(interaction) {
         const u = getOrCreateTcgUser(ownerId);
 
         if (!baseCard || !negCard || baseCard.rarity !== 'Full Art' || (u.cards[baseId] || 0) < 1 || (u.inventory.negativeTransform || 0) < 1) {
-            await interaction.reply({ content: "❌ Transformation impossible (carte ou bonus manquant).", ephemeral: true });
+            await interaction.reply({ content: "❌ Transformation impossible (carte ou bonus manquant).", flags: 64 });
             return true;
         }
 
@@ -12877,7 +12881,7 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[2];
         const page = parseInt(parts[3], 10) || 0;
         const fromHub = parts[4] === '1';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
         await sendHoloTransformPicker(interaction, actorMember, page, fromHub);
         return true;
@@ -12885,7 +12889,7 @@ async function handleTcgInteraction(interaction) {
 
     if (action === 'holopick' && interaction.isStringSelectMenu()) {
         const ownerId = parts[2];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
 
         const baseId = interaction.values[0];
         const baseCard = cardById.get(baseId);
@@ -12893,7 +12897,7 @@ async function handleTcgInteraction(interaction) {
         const u = getOrCreateTcgUser(ownerId);
 
         if (!baseCard || !holoCard || (u.cards[baseId] || 0) < 1 || (u.inventory.holoTransform || 0) < 1) {
-            await interaction.reply({ content: "❌ Transformation impossible (carte ou bonus manquant).", ephemeral: true });
+            await interaction.reply({ content: "❌ Transformation impossible (carte ou bonus manquant).", flags: 64 });
             return true;
         }
 
@@ -12940,7 +12944,7 @@ async function handleTcgInteraction(interaction) {
 
         if (sub === 'pickuser' && interaction.isUserSelectMenu()) {
             const viewerId = parts[3];
-            if (!canControlTcgOwner(interaction.user.id, viewerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+            if (!canControlTcgOwner(interaction.user.id, viewerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
             const targetId = interaction.values[0];
             if (targetId === viewerId) {
                 await deferReplySilent(interaction);
@@ -12953,7 +12957,7 @@ async function handleTcgInteraction(interaction) {
             if (!targetMember) {
                 await interaction.reply({
                     content: "❌ Impossible de trouver ce membre.",
-                    ephemeral: true
+                    flags: 64
                 });
                 return true;
             }
@@ -12975,7 +12979,7 @@ async function handleTcgInteraction(interaction) {
             if (interaction.user.id !== viewerId) {
                 return interaction.reply({
                     content: "Pas pour toi 😌",
-                    ephemeral: true
+                    flags: 64
                 }), true;
             }
 
@@ -12983,7 +12987,7 @@ async function handleTcgInteraction(interaction) {
             if (!targetMember) {
                 await interaction.reply({
                     content: "❌ Impossible de trouver ce membre.",
-                    ephemeral: true
+                    flags: 64
                 });
                 return true;
             }
@@ -13000,7 +13004,7 @@ async function handleTcgInteraction(interaction) {
 
         if (sub === 'cancelask' && interaction.isButton()) {
             const viewerId = parts[3];
-            if (interaction.user.id !== viewerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+            if (interaction.user.id !== viewerId) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
             await interaction.update({ content: '❌ Demande de consultation annulée.', embeds: [], components: [] });
             return true;
         }
@@ -13008,7 +13012,7 @@ async function handleTcgInteraction(interaction) {
         if (sub === 'confirm' && interaction.isButton()) {
             const targetId = parts[3];
             const viewerId = parts[4];
-            if (interaction.user.id !== viewerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+            if (interaction.user.id !== viewerId) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
 
             await interaction.update({ content: `📨 Demande envoyée à <@${targetId}> *(avec mention)* !`, embeds: [], components: [] });
 
@@ -13035,7 +13039,7 @@ async function handleTcgInteraction(interaction) {
             const ownerId = parts[3];
             const viewerId = parts[4];
             if (interaction.user.id !== ownerId) {
-                await interaction.reply({ content: `Seul <@${ownerId}> peut répondre à cette demande !`, ephemeral: true });
+                await interaction.reply({ content: `Seul <@${ownerId}> peut répondre à cette demande !`, flags: 64 });
                 return true;
             }
             if (sub === 'deny') {
@@ -13055,7 +13059,7 @@ async function handleTcgInteraction(interaction) {
             const ownerId = parts[3];
             const viewerId = parts[4];
             const fromHub = parts[5] === '1';
-            if (!canControlTcgOwner(interaction.user.id, viewerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+            if (!canControlTcgOwner(interaction.user.id, viewerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
 
             const ownerMember = isSandboxId(ownerId)
                 ? buildTcgMemberProxy(interaction.member, TCGX_SANDBOX_ID)
@@ -13086,11 +13090,11 @@ async function handleTcgInteraction(interaction) {
         const ownedMode = normalizeBinderOwnedMode(parts[10]);
 
         if (!canControlTcgOwner(interaction.user.id, viewerId) && !canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Ce classeur n'est pas à toi !", ephemeral: true });
+            await interaction.reply({ content: "Ce classeur n'est pas à toi !", flags: 64 });
             return true;
         }
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "🔒 Tu ne peux inspecter en grand format que les cartes de ton propre classeur (anti-spoiler) !", ephemeral: true });
+            await interaction.reply({ content: "🔒 Tu ne peux inspecter en grand format que les cartes de ton propre classeur (anti-spoiler) !", flags: 64 });
             return true;
         }
 
@@ -13103,7 +13107,7 @@ async function handleTcgInteraction(interaction) {
         const ownedOnPage = slice.filter(c => (uOwner.cards?.[c.id] || 0) > 0);
 
         if (ownedOnPage.length === 0) {
-            await interaction.reply({ content: "🔒 Tu ne possèdes aucune carte sur cette page du classeur à inspecter !", ephemeral: true });
+            await interaction.reply({ content: "🔒 Tu ne possèdes aucune carte sur cette page du classeur à inspecter !", flags: 64 });
             return true;
         }
 
@@ -13136,7 +13140,7 @@ async function handleTcgInteraction(interaction) {
         const content = ownedOnPage.length > 25
             ? '🔎 **Choisis la carte à inspecter** *(25 premières cartes possédées de cette vue — change de grille ou utilise les filtres si besoin)* :'
             : '🔎 **Choisis une carte possédée de cette page à inspecter :**';
-        await interaction.reply({ content, components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
+        await interaction.reply({ content, components: [new ActionRowBuilder().addComponents(menu)], flags: 64 });
         return true;
     }
 
@@ -13144,11 +13148,11 @@ async function handleTcgInteraction(interaction) {
         const binderMsgId = parts[2];
         const ownerId = parts[3];
         const viewerId = parts[4];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const card = getCardByIdAny(interaction.values[0]);
         const uOwner = getOrCreateTcgUser(ownerId);
         if (!card || (uOwner.cards?.[card.id] || 0) <= 0) {
-            await interaction.reply({ content: "🔒 Tu ne possèdes pas cette carte !", ephemeral: true });
+            await interaction.reply({ content: "🔒 Tu ne possèdes pas cette carte !", flags: 64 });
             return true;
         }
         const binderMsg = await interaction.channel?.messages?.fetch(binderMsgId).catch(() => null);
@@ -13167,7 +13171,7 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[3];
         const viewerId = parts[4];
         if (!canControlTcgOwner(interaction.user.id, viewerId) && !canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Ce classeur n'est pas à toi !", ephemeral: true });
+            await interaction.reply({ content: "Ce classeur n'est pas à toi !", flags: 64 });
             return true;
         }
         const state = binderReturnStates.get(binderMsgId) || binderReturnStates.get(interaction.message.id) || {
@@ -13195,7 +13199,7 @@ async function handleTcgInteraction(interaction) {
         const ownedMode = normalizeBinderOwnedMode(parts[9]);
 
         if (!canControlTcgOwner(interaction.user.id, viewerId) && !canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Ce classeur n'est pas à toi !", ephemeral: true });
+            await interaction.reply({ content: "Ce classeur n'est pas à toi !", flags: 64 });
             return true;
         }
 
@@ -13313,7 +13317,7 @@ async function handleTcgInteraction(interaction) {
             fromHub = parts[9] === '1';
             ownedMode = normalizeBinderOwnedMode(parts[10]);
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "❌ Seul le propriétaire du classeur peut changer son thème Clair/Nuit.", ephemeral: true });
+                await interaction.reply({ content: "❌ Seul le propriétaire du classeur peut changer son thème Clair/Nuit.", flags: 64 });
                 return true;
             }
             const uOwner = getOrCreateTcgUser(ownerId);
@@ -13331,7 +13335,7 @@ async function handleTcgInteraction(interaction) {
             const rawPage = interaction.fields.getTextInputValue('page_number').trim();
             const pageNum = parseInt(rawPage, 10);
             if (!/^\d+$/.test(rawPage) || isNaN(pageNum) || pageNum < 1) {
-                await interaction.reply({ content: "❌ Merci d'entrer un numéro de page valide (nombre entier ≥ 1).", ephemeral: true });
+                await interaction.reply({ content: "❌ Merci d'entrer un numéro de page valide (nombre entier ≥ 1).", flags: 64 });
                 return true;
             }
             page = pageNum - 1;
@@ -13340,7 +13344,7 @@ async function handleTcgInteraction(interaction) {
         }
 
         if (!canControlTcgOwner(interaction.user.id, viewerId) && !canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Ce classeur n'est pas à toi !", ephemeral: true });
+            await interaction.reply({ content: "Ce classeur n'est pas à toi !", flags: 64 });
             return true;
         }
 
@@ -13366,7 +13370,7 @@ async function handleTcgInteraction(interaction) {
     if ((action === 'cartehub' || action === 'cartemissing') && interaction.isButton()) {
         const ownerId = parts[2];
         const page = parseInt(parts[3], 10) || 0;
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
         await interaction.update({
             content: null,
@@ -13379,7 +13383,7 @@ async function handleTcgInteraction(interaction) {
 
     if (action === 'cartemissingsel' && interaction.isStringSelectMenu()) {
         const ownerId = parts[2];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const selected = interaction.values[0];
         if (selected.startsWith('__page:')) {
             const nextPage = parseInt(selected.slice('__page:'.length), 10) || 0;
@@ -13393,7 +13397,7 @@ async function handleTcgInteraction(interaction) {
             return true;
         }
         const card = cardById.get(selected);
-        if (!card) return interaction.reply({ content: "❌ Carte introuvable.", ephemeral: true }), true;
+        if (!card) return interaction.reply({ content: "❌ Carte introuvable.", flags: 64 }), true;
         const u = getOrCreateTcgUser(ownerId);
         const payload = (u.cards?.[card.id] || 0) > 0
             ? buildSingleCardPayload(card, ownerId)
@@ -13404,7 +13408,7 @@ async function handleTcgInteraction(interaction) {
 
     if (action === 'cartesearch' && interaction.isButton()) {
         const ownerId = parts[2];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const modal = new ModalBuilder()
             .setCustomId(`tcg:cartemodalsub:${ownerId}`)
             .setTitle('Rechercher une carte RegaDex');
@@ -13421,7 +13425,7 @@ async function handleTcgInteraction(interaction) {
 
     if (action === 'cartemodalsub' && interaction.isModalSubmit()) {
         const ownerId = parts[2];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const query = interaction.fields.getTextInputValue('carte_query').trim();
         const u = getOrCreateTcgUser(ownerId);
         const res = resolveCardQuery(query);
@@ -13431,7 +13435,7 @@ async function handleTcgInteraction(interaction) {
                 await interaction.deferUpdate();
                 await interaction.editReply({ content: null, embeds: [], files: [], attachments: [], ...payload });
             } else {
-                await interaction.reply({ ...payload, ephemeral: true });
+                await interaction.reply({ ...payload, flags: 64 });
             }
         };
 
@@ -13476,7 +13480,7 @@ async function handleTcgInteraction(interaction) {
 
         await interaction.reply({
             content: `❌ Aucune carte du catalogue ne correspond à \`${query}\`.`,
-            ephemeral: true
+            flags: 64
         });
         return true;
     }
@@ -13486,7 +13490,7 @@ async function handleTcgInteraction(interaction) {
         const currentCardId = parts[3] || null;
         const rawSet = parts[4] || String(DEFAULT_SET_NUMBER);
         const activeSetNumber = rawSet === 'perso' ? 'perso' : (parseInt(rawSet, 10) || DEFAULT_SET_NUMBER);
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
 
         const selected = interaction.values[0];
         if (selected.startsWith('__page:') && currentCardId) {
@@ -13515,7 +13519,7 @@ async function handleTcgInteraction(interaction) {
         if (!card) {
             await interaction.reply({
                 content: '❌ Carte introuvable dans le catalogue.',
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -13541,7 +13545,7 @@ async function handleTcgInteraction(interaction) {
         const dir = parts[2];
         const currentCardId = parts[3];
         const ownerId = parts[4];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const u = getOrCreateTcgUser(ownerId);
         const currentCard = getCardByIdAny(currentCardId);
         const activeSetNumber = currentCard?.isPerso ? 'perso' : (currentCard?.setNumber || DEFAULT_SET_NUMBER);
@@ -13550,7 +13554,7 @@ async function handleTcgInteraction(interaction) {
             : getSetCatalog(activeSetNumber).filter(c => (u.cards?.[c.id] || 0) > 0);
         const ownedCards = setOwned.length > 0 ? setOwned : cardCatalog.filter(c => (u.cards?.[c.id] || 0) > 0);
         if (ownedCards.length === 0) {
-            await interaction.reply({ content: "🔒 Tu ne possèdes aucune carte dans ton RegaDex !", ephemeral: true });
+            await interaction.reply({ content: "🔒 Tu ne possèdes aucune carte dans ton RegaDex !", flags: 64 });
             return true;
         }
         let idx = ownedCards.findIndex(c => c.id === currentCardId);
@@ -13571,7 +13575,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'carteset' && interaction.isButton()) {
         const rawCurrentSet = parts[2] || String(DEFAULT_SET_NUMBER);
         const ownerId = parts[4];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const u = getOrCreateTcgUser(ownerId);
         const ownedPerso = persoCatalog.filter(c => (u.cards?.[c.id] || 0) > 0);
         const activeSets = getActiveSets();
@@ -13580,7 +13584,7 @@ async function handleTcgInteraction(interaction) {
             ...(ownedPerso.length > 0 ? [{ key: 'perso', label: 'Cartes Perso', setNum: 'perso' }] : [])
         ];
         if (targets.length <= 1) {
-            await interaction.reply({ content: "⏳ Aucun autre Set disponible pour le moment !", ephemeral: true });
+            await interaction.reply({ content: "⏳ Aucun autre Set disponible pour le moment !", flags: 64 });
             return true;
         }
         const curIdx = Math.max(0, targets.findIndex(t => t.key === rawCurrentSet));
@@ -13589,7 +13593,7 @@ async function handleTcgInteraction(interaction) {
             ? ownedPerso
             : getSetCatalog(nextTarget.setNum).filter(c => (u.cards?.[c.id] || 0) > 0);
         if (nextOwned.length === 0) {
-            await interaction.reply({ content: `🔒 Tu ne possèdes encore aucune carte dans **${nextTarget.label}** !`, ephemeral: true });
+            await interaction.reply({ content: `🔒 Tu ne possèdes encore aucune carte dans **${nextTarget.label}** !`, flags: 64 });
             return true;
         }
         await interaction.deferUpdate();
@@ -13607,7 +13611,7 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[3];
         const context = parts[4] || 'card';
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
             return true;
         }
         const card = cardById.get(cardId);
@@ -13615,7 +13619,7 @@ async function handleTcgInteraction(interaction) {
         const u = getOrCreateTcgUser(ownerId);
 
         if (!card || !holoCard || (u.cards?.[card.id] || 0) < 1 || (u.inventory?.holoTransform || 0) < 1) {
-            await interaction.reply({ content: "❌ Transformation impossible (carte ou bonus manquant).", ephemeral: true });
+            await interaction.reply({ content: "❌ Transformation impossible (carte ou bonus manquant).", flags: 64 });
             return true;
         }
 
@@ -13646,14 +13650,14 @@ async function handleTcgInteraction(interaction) {
                 .setStyle(ButtonStyle.Secondary)
         );
 
-        await interaction.reply({ embeds: [confEmbed], components: [row], ephemeral: true });
+        await interaction.reply({ embeds: [confEmbed], components: [row], flags: 64 });
         return true;
     }
 
     if (action === 'cardholocancel' && interaction.isButton()) {
         const ownerId = parts[2];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
             return true;
         }
         await interaction.update({ content: '❌ Transformation annulée.', embeds: [], components: [] });
@@ -13666,7 +13670,7 @@ async function handleTcgInteraction(interaction) {
         const context = parts[4] || 'card';
         const origMsgId = parts[5] || '';
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
             return true;
         }
         const card = cardById.get(cardId);
@@ -13730,7 +13734,7 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[3];
         const context = parts[4] || 'card';
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
             return true;
         }
         const card = cardById.get(cardId);
@@ -13738,7 +13742,7 @@ async function handleTcgInteraction(interaction) {
         const u = getOrCreateTcgUser(ownerId);
 
         if (!card || !negCard || card.rarity !== 'Full Art' || (u.cards?.[card.id] || 0) < 1 || (u.inventory?.negativeTransform || 0) < 1) {
-            await interaction.reply({ content: "❌ Transformation impossible (carte ou bonus manquant).", ephemeral: true });
+            await interaction.reply({ content: "❌ Transformation impossible (carte ou bonus manquant).", flags: 64 });
             return true;
         }
 
@@ -13771,7 +13775,7 @@ async function handleTcgInteraction(interaction) {
                 .setStyle(ButtonStyle.Secondary)
         );
 
-        await interaction.reply({ embeds: [confEmbed], components: [row], ephemeral: true });
+        await interaction.reply({ embeds: [confEmbed], components: [row], flags: 64 });
         return true;
     }
 
@@ -13781,7 +13785,7 @@ async function handleTcgInteraction(interaction) {
         const context = parts[4] || 'card';
         const origMsgId = parts[5] || '';
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
             return true;
         }
         const card = cardById.get(cardId);
@@ -13846,11 +13850,11 @@ async function handleTcgInteraction(interaction) {
         const cardId = parts[2];
         const ownerId = parts[3];
         if (!hasTcgRole(interaction.member) && interaction.user.id !== EPSYS_ID) {
-            await interaction.reply({ content: `🔒 Réservé aux membres ayant le rôle <@&${TCG_ROLE_ID}>.`, ephemeral: true });
+            await interaction.reply({ content: `🔒 Réservé aux membres ayant le rôle <@&${TCG_ROLE_ID}>.`, flags: 64 });
             return true;
         }
         if (isSandboxId(ownerId) && interaction.user.id !== EPSYS_ID) {
-            await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
             return true;
         }
 
@@ -13863,7 +13867,7 @@ async function handleTcgInteraction(interaction) {
         if (dups.length === 0) {
             await interaction.reply({
                 content: `😔 Personne sur le serveur ne possède ${cardTitle} en doublon pour le moment.`,
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -13881,7 +13885,7 @@ async function handleTcgInteraction(interaction) {
                 `👥 **Collectionneur·euses ayant ${cardTitle} en doublon (${dups.length}) :**\n` +
                 lines.join('\n') +
                 (dups.length > 20 ? `\n*...et ${dups.length - 20} autre(s) membre(s)*` : ''),
-            ephemeral: true
+            flags: 64
         });
         return true;
     }
@@ -13897,7 +13901,7 @@ async function handleTcgInteraction(interaction) {
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
                 await interaction.reply({
                     content: "Pas pour toi 😌",
-                    ephemeral: true
+                    flags: 64
                 });
                 return true;
             }
@@ -13905,7 +13909,7 @@ async function handleTcgInteraction(interaction) {
             if (!hasTcgRole(interaction.member) && interaction.user.id !== EPSYS_ID) {
                 await interaction.reply({
                     content: `🔒 Réservé aux membres ayant le rôle <@&${TCG_ROLE_ID}>.`,
-                    ephemeral: true
+                    flags: 64
                 });
                 return true;
             }
@@ -13916,7 +13920,7 @@ async function handleTcgInteraction(interaction) {
             if (wishlistIds.length === 0) {
                 await interaction.reply({
                     content: '❤️ Ta Wishlist est vide pour le moment.',
-                    ephemeral: true
+                    flags: 64
                 });
                 return true;
             }
@@ -14032,7 +14036,7 @@ async function handleTcgInteraction(interaction) {
             const fromHub = parts[4] === '1';
             const fromProfile = parts[5] === '1';
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+                await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
                 return true;
             }
             const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
@@ -14051,12 +14055,12 @@ async function handleTcgInteraction(interaction) {
             const context = parts[5] || 'card';
             const binderMsgId = parts[6] || null;
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+                await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
                 return true;
             }
             const card = cardById.get(cardId);
             if (!card) {
-                await interaction.reply({ content: "❌ Carte introuvable.", ephemeral: true });
+                await interaction.reply({ content: "❌ Carte introuvable.", flags: 64 });
                 return true;
             }
             const u = getOrCreateTcgUser(ownerId);
@@ -14066,7 +14070,7 @@ async function handleTcgInteraction(interaction) {
                 u.wishlist = u.wishlist.filter(id => id !== cardId);
                 feedback = `💔 \`${cardId}\` retirée de ta Wishlist.`;
             } else if (u.wishlist.length >= MAX_WISHLIST) {
-                await interaction.reply({ content: `⚠️ Ta Wishlist est déjà pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**).`, ephemeral: true });
+                await interaction.reply({ content: `⚠️ Ta Wishlist est déjà pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**).`, flags: 64 });
                 return true;
             } else {
                 u.wishlist.push(cardId);
@@ -14084,7 +14088,7 @@ async function handleTcgInteraction(interaction) {
                     components: buildBinderInspectPayload(card, ownerId, state?.viewerId || ownerId, binderMsgId || interaction.message?.id).components
                 });
             }
-            await interaction.followUp({ content: feedback, ephemeral: true });
+            await interaction.followUp({ content: feedback, flags: 64 });
             return true;
         }
 
@@ -14094,7 +14098,7 @@ async function handleTcgInteraction(interaction) {
             const fromHub = parts[5] === '1';
             const fromProfile = parts[6] === '1';
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+                await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
                 return true;
             }
             const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
@@ -14113,7 +14117,7 @@ async function handleTcgInteraction(interaction) {
             const fromProfile = parts[5] === '1';
             const addFilter = parts[6] || 'missing';
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+                await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
                 return true;
             }
             const selected = interaction.values[0];
@@ -14132,17 +14136,17 @@ async function handleTcgInteraction(interaction) {
 
             const card = cardById.get(selected);
             if (!card) {
-                await interaction.reply({ content: "❌ Carte introuvable.", ephemeral: true });
+                await interaction.reply({ content: "❌ Carte introuvable.", flags: 64 });
                 return true;
             }
             const u = getOrCreateTcgUser(ownerId);
             u.wishlist = getSanitizedWishlist(u);
             if (u.wishlist.includes(card.id)) {
-                await interaction.reply({ content: `ℹ️ \`${card.id}\` est déjà dans ta Wishlist.`, ephemeral: true });
+                await interaction.reply({ content: `ℹ️ \`${card.id}\` est déjà dans ta Wishlist.`, flags: 64 });
                 return true;
             }
             if (u.wishlist.length >= MAX_WISHLIST) {
-                await interaction.reply({ content: `⚠️ Ta Wishlist est déjà pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**).`, ephemeral: true });
+                await interaction.reply({ content: `⚠️ Ta Wishlist est déjà pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**).`, flags: 64 });
                 return true;
             }
             u.wishlist.push(card.id);
@@ -14161,7 +14165,7 @@ async function handleTcgInteraction(interaction) {
             const fromHub = parts[4] === '1';
             const fromProfile = parts[5] === '1';
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+                await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
                 return true;
             }
             const modal = new ModalBuilder()
@@ -14183,7 +14187,7 @@ async function handleTcgInteraction(interaction) {
             const fromHub = parts[4] === '1';
             const fromProfile = parts[5] === '1';
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+                await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
                 return true;
             }
             const query = interaction.fields.getTextInputValue('wish_query').trim();
@@ -14197,7 +14201,7 @@ async function handleTcgInteraction(interaction) {
                 if (matches.length > 0 && pickable.length === 0) {
                     await interaction.reply({
                         content: 'ℹ️ Toutes les cartes correspondant à cette recherche sont déjà dans ta Wishlist.',
-                        ephemeral: true
+                        flags: 64
                     });
                     return true;
                 }
@@ -14205,7 +14209,7 @@ async function handleTcgInteraction(interaction) {
                 if (pickable.length > 0 && u.wishlist.length >= MAX_WISHLIST) {
                     await interaction.reply({
                         content: `⚠️ Ta Wishlist est pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**).`,
-                        ephemeral: true
+                        flags: 64
                     });
                     return true;
                 }
@@ -14228,30 +14232,30 @@ async function handleTcgInteraction(interaction) {
                         content: `🔎 **${pickable.length}** carte(s) disponibles correspondent à \`${query}\` :` +
                             (pickable.length > 25 ? '\n-# Seuls les 25 premiers résultats sont affichés. Précise ta recherche.' : ''),
                         components: [new ActionRowBuilder().addComponents(menu)],
-                        ephemeral: true
+                        flags: 64
                     });
                     return true;
                 }
 
                 await interaction.reply({
                     content: `❌ Aucune carte échangeable trouvée pour \`${query}\`.`,
-                    ephemeral: true
+                    flags: 64
                 });
                 return true;
             }
             if (res.card.isPerso) {
                 await interaction.reply({
                     content: `❌ Les cartes personnalisées (\`${res.card.id}\`) sont **uniques et non échangeables**, impossible de les ajouter à la Wishlist.`,
-                    ephemeral: true
+                    flags: 64
                 });
                 return true;
             }
             if (u.wishlist.includes(res.card.id)) {
-                await interaction.reply({ content: `ℹ️ \`${res.card.id}\` est déjà dans ta Wishlist.`, ephemeral: true });
+                await interaction.reply({ content: `ℹ️ \`${res.card.id}\` est déjà dans ta Wishlist.`, flags: 64 });
                 return true;
             }
             if (u.wishlist.length >= MAX_WISHLIST) {
-                await interaction.reply({ content: `⚠️ Ta Wishlist est déjà pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**).`, ephemeral: true });
+                await interaction.reply({ content: `⚠️ Ta Wishlist est déjà pleine (**${MAX_WISHLIST}/${MAX_WISHLIST}**).`, flags: 64 });
                 return true;
             }
             u.wishlist.push(res.card.id);
@@ -14261,7 +14265,7 @@ async function handleTcgInteraction(interaction) {
             if (interaction.isFromMessage?.()) {
                 await interaction.update({ content: null, files: [], attachments: [], ...payload });
             } else {
-                await interaction.reply({ ...payload, ephemeral: true });
+                await interaction.reply({ ...payload, flags: 64 });
             }
             return true;
         }
@@ -14271,7 +14275,7 @@ async function handleTcgInteraction(interaction) {
             const fromHub = parts[4] === '1';
             const fromProfile = parts[5] === '1';
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+                await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
                 return true;
             }
             const cardId = interaction.values[0];
@@ -14293,7 +14297,7 @@ async function handleTcgInteraction(interaction) {
             const fromHub = parts[4] === '1';
             const fromProfile = parts[5] === '1';
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+                await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
                 return true;
             }
             const u = getOrCreateTcgUser(ownerId);
@@ -14314,11 +14318,11 @@ async function handleTcgInteraction(interaction) {
         const cardId = parts[2];
         const ownerId = parts[3];
         const context = parts[4] || 'card';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const card = getCardByIdAny(cardId);
         const u = getOrCreateTcgUser(ownerId);
         if (!card || (u.cards?.[card.id] || 0) <= 0) {
-            await interaction.reply({ content: "❌ Tu ne possèdes pas cette carte.", ephemeral: true });
+            await interaction.reply({ content: "❌ Tu ne possèdes pas cette carte.", flags: 64 });
             return true;
         }
         u.favoriteCardId = card.id;
@@ -14332,7 +14336,7 @@ async function handleTcgInteraction(interaction) {
                 await interaction.update({ components: cardPayload.components });
                 await interaction.followUp({
                     content: `⭐ Ta carte préférée est maintenant **${card.id} • ${card.name}** ! Tape \`!flex\` pour frimer !`,
-                    ephemeral: true
+                    flags: 64
                 });
                 return true;
             }
@@ -14341,7 +14345,7 @@ async function handleTcgInteraction(interaction) {
             await interaction.update({ components: cardPayload.components });
             await interaction.followUp({
                 content: `⭐ Ta carte préférée est maintenant **${card.id} • ${card.name}** ! Tape \`!flex\` pour frimer !`,
-                ephemeral: true
+                flags: 64
             });
             return true;
         } else if (context === 'binspect') {
@@ -14350,14 +14354,14 @@ async function handleTcgInteraction(interaction) {
             await interaction.update({ components: inspectPayload.components });
             await interaction.followUp({
                 content: `⭐ Ta carte préférée est maintenant **${card.id} • ${card.name}** ! Tape \`!flex\` pour frimer !`,
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
 
         await interaction.reply({
             content: `⭐ Ta carte préférée est maintenant **${card.id} • ${card.name}** ! Tape \`!flex\` pour frimer !`,
-            ephemeral: true
+            flags: 64
         });
         return true;
     }
@@ -14365,7 +14369,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'flexpage' && interaction.isButton()) {
         const ownerId = parts[2];
         const page = parseInt(parts[3], 10) || 0;
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
         await sendFlexPicker(interaction, actorMember, page);
         return true;
@@ -14373,11 +14377,11 @@ async function handleTcgInteraction(interaction) {
 
     if (action === 'flexset' && interaction.isStringSelectMenu()) {
         const ownerId = parts[2];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const card = getCardByIdAny(interaction.values[0]);
         const u = getOrCreateTcgUser(ownerId);
         if (!card || (u.cards[card.id] || 0) <= 0) {
-            await interaction.reply({ content: "❌ Tu ne possèdes pas cette carte.", ephemeral: true });
+            await interaction.reply({ content: "❌ Tu ne possèdes pas cette carte.", flags: 64 });
             return true;
         }
         u.favoriteCardId = card.id;
@@ -14397,7 +14401,7 @@ async function handleTcgInteraction(interaction) {
         const mode = parts[2];
         const ownerId = parts[3];
         const fromHub = parts[4] === '1';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const payload = {
             content: null,
             files: [],
@@ -14412,7 +14416,7 @@ async function handleTcgInteraction(interaction) {
     // ----- TRADE : SÉLECTION PARTENAIRE + CONFIRMATION + CRÉATION THREAD -----
     if (action === 'tradepick' && interaction.isUserSelectMenu()) {
         const initiatorId = parts[2];
-        if (interaction.user.id !== initiatorId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true }), true;
+        if (interaction.user.id !== initiatorId) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
         const targetMember = await interaction.guild.members.fetch(interaction.values[0]).catch(() => null);
         await interaction.message.delete().catch(() => {});
         await initiateTradePrompt(interaction, interaction.member, targetMember);
@@ -14424,13 +14428,13 @@ async function handleTcgInteraction(interaction) {
         const confirmId = parts[3];
         const conf = pendingConfirms.get(confirmId);
         if (!conf) {
-            await interaction.reply({ content: "⏳ Cette proposition d'échange a expiré.", ephemeral: true });
+            await interaction.reply({ content: "⏳ Cette proposition d'échange a expiré.", flags: 64 });
             return true;
         }
 
         if (sub === 'pub' || sub === 'talk') {
             if (interaction.user.id !== conf.initiatorId) {
-                await interaction.reply({ content: `Seul <@${conf.initiatorId}> peut régler les options du thread.`, ephemeral: true });
+                await interaction.reply({ content: `Seul <@${conf.initiatorId}> peut régler les options du thread.`, flags: 64 });
                 return true;
             }
             if (sub === 'pub') {
@@ -14445,7 +14449,7 @@ async function handleTcgInteraction(interaction) {
 
         if (sub === 'decline') {
             if (interaction.user.id !== conf.targetId && interaction.user.id !== conf.initiatorId) {
-                await interaction.reply({ content: "Cet échange ne te concerne pas !", ephemeral: true });
+                await interaction.reply({ content: "Cet échange ne te concerne pas !", flags: 64 });
                 return true;
             }
             pendingConfirms.delete(confirmId);
@@ -14455,7 +14459,7 @@ async function handleTcgInteraction(interaction) {
 
         if (sub === 'accept') {
             if (interaction.user.id !== conf.targetId) {
-                await interaction.reply({ content: `Seul <@${conf.targetId}> peut accepter cette proposition !`, ephemeral: true });
+                await interaction.reply({ content: `Seul <@${conf.targetId}> peut accepter cette proposition !`, flags: 64 });
                 return true;
             }
             pendingConfirms.delete(confirmId);
@@ -14515,14 +14519,14 @@ async function handleTcgInteraction(interaction) {
         const data = getStoreData();
         const trade = data.activeTrades?.[threadId];
         if (!trade || trade.closed) {
-            await interaction.reply({ content: "❌ Cet échange est terminé ou n'existe plus.", ephemeral: true });
+            await interaction.reply({ content: "❌ Cet échange est terminé ou n'existe plus.", flags: 64 });
             return true;
         }
 
         if (interaction.user.id !== trade.initiatorId && interaction.user.id !== trade.targetId) {
             await interaction.reply({
                 content: "❌ Seul.es les deux participant.es de l'échange peuvent utiliser ces contrôles.",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -14536,7 +14540,7 @@ async function handleTcgInteraction(interaction) {
                     'Les cartes ont déjà été transférées. ' +
                     'Attends les boutons permettant de continuer ' +
                     'ou de fermer cet échange.',
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -14606,7 +14610,7 @@ async function handleTcgInteraction(interaction) {
 
         if (sub === 'clear' && interaction.isButton()) {
             if (trade.offers[uid].length === 0) {
-                await interaction.reply({ content: "Ton offre est déjà vide.", ephemeral: true });
+                await interaction.reply({ content: "Ton offre est déjà vide.", flags: 64 });
                 return true;
             }
             trade.offers[uid] = [];
@@ -14620,7 +14624,7 @@ async function handleTcgInteraction(interaction) {
 
         if (sub === 'uok' && interaction.isButton()) {
             if (!trade.unfairConfirm || !trade.lockedOffers[trade.initiatorId] || !trade.lockedOffers[trade.targetId]) {
-                await interaction.reply({ content: "⏳ Cette demande de confirmation n'est plus active (les offres ont été modifiées ou déverrouillées).", ephemeral: true });
+                await interaction.reply({ content: "⏳ Cette demande de confirmation n'est plus active (les offres ont été modifiées ou déverrouillées).", flags: 64 });
                 return true;
             }
             trade.unfairConfirm.votes = trade.unfairConfirm.votes || {};
@@ -14662,7 +14666,7 @@ async function handleTcgInteraction(interaction) {
             if (trade.offers[uid].length >= 3) {
                 await interaction.reply({
                     content: "⚠️ Tu as déjà mis **3 cartes** (maximum par échange).",
-                    ephemeral: true
+                    flags: 64
                 });
                 return true;
             }
@@ -14675,7 +14679,7 @@ async function handleTcgInteraction(interaction) {
             if (tradables.length === 0) {
                 await interaction.reply({
                     content: "❌ Tu n'as aucune carte disponible dans ton inventaire.",
-                    ephemeral: true
+                    flags: 64
                 });
                 return true;
             }
@@ -14690,7 +14694,7 @@ async function handleTcgInteraction(interaction) {
                     page,
                     filterMode
                 ),
-                ephemeral: true
+                flags: 64
             });
 
             return true;
@@ -14731,7 +14735,7 @@ async function handleTcgInteraction(interaction) {
             if (trade.offers[uid].length >= 3) {
                 await interaction.reply({
                     content: '⚠️ Limite de 3 cartes atteinte.',
-                    ephemeral: true
+                    flags: 64
                 });
                 return true;
             }
@@ -14760,7 +14764,7 @@ async function handleTcgInteraction(interaction) {
             const remainingBefore =
                 (u.cards[cardId] || 0) - already;
             if (remainingBefore < 1) {
-                await interaction.reply({ content: "❌ Tu ne possèdes plus d'exemplaire disponible pour cette carte.", ephemeral: true });
+                await interaction.reply({ content: "❌ Tu ne possèdes plus d'exemplaire disponible pour cette carte.", flags: 64 });
                 return true;
             }
             const isLastCopy = remainingBefore === 1;
@@ -14808,7 +14812,7 @@ async function handleTcgInteraction(interaction) {
 
         if (sub === 'rem' && interaction.isButton()) {
             if (trade.offers[uid].length === 0) {
-                await interaction.reply({ content: "Ton offre est déjà vide.", ephemeral: true });
+                await interaction.reply({ content: "Ton offre est déjà vide.", flags: 64 });
                 return true;
             }
             const menu = new StringSelectMenuBuilder()
@@ -14822,7 +14826,7 @@ async function handleTcgInteraction(interaction) {
                         value: `${idx}:${cid}`
                     };
                 }));
-            await interaction.reply({ content: '➖ Quelle carte veux-tu retirer ?', components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
+            await interaction.reply({ content: '➖ Quelle carte veux-tu retirer ?', components: [new ActionRowBuilder().addComponents(menu)], flags: 64 });
             return true;
         }
 
@@ -14892,7 +14896,7 @@ async function handleTcgInteraction(interaction) {
 
         if (sub === 'modal' && interaction.isModalSubmit()) {
             if (trade.offers[uid].length >= 3) {
-                await interaction.reply({ content: "⚠️ Limite de 3 cartes atteinte.", ephemeral: true });
+                await interaction.reply({ content: "⚠️ Limite de 3 cartes atteinte.", flags: 64 });
                 return true;
             }
             const query = interaction.fields.getTextInputValue('card_query');
@@ -14900,7 +14904,7 @@ async function handleTcgInteraction(interaction) {
             if (res.card?.isPerso) {
                 await interaction.reply({
                     content: `❌ Les cartes personnalisées (\`${res.card.id}\`) sont **uniques et non échangeables** !`,
-                    ephemeral: true
+                    flags: 64
                 });
                 return true;
             }
@@ -14910,7 +14914,7 @@ async function handleTcgInteraction(interaction) {
                 const already = trade.offers[uid].filter(id => id === res.card.id).length;
                 const remainingBefore = (u.cards[res.card.id] || 0) - already;
                 if (remainingBefore < 1) {
-                    await interaction.reply({ content: `❌ Tu ne possèdes pas d'exemplaire disponible pour cette carte.`, ephemeral: true });
+                    await interaction.reply({ content: `❌ Tu ne possèdes pas d'exemplaire disponible pour cette carte.`, flags: 64 });
                     return true;
                 }
                 const isLastCopy = remainingBefore === 1;
@@ -14932,7 +14936,7 @@ async function handleTcgInteraction(interaction) {
                             `⚠️ **Attention :** c'est ta **dernière carte** ` +
                             `dans ton inventaire *(tu n'auras plus aucun ` +
                             `exemplaire après l'échange)*.`,
-                        ephemeral: true
+                        flags: 64
                     });
 
                     await refreshTradePanel(thread, trade);
@@ -14948,7 +14952,7 @@ async function handleTcgInteraction(interaction) {
                         content:
                             `✅ **${res.card.id} • ${res.card.name}** ` +
                             `ajoutée à ton offre !`,
-                        ephemeral: true
+                        flags: 64
                     });
 
                     await refreshTradePanel(thread, trade);
@@ -14963,7 +14967,7 @@ async function handleTcgInteraction(interaction) {
                 return (u.cards[c.id] || 0) - already >= 1;
             });
             if (tradableMatches.length === 0) {
-                await interaction.reply({ content: `❌ Aucune carte disponible trouvée pour \`${query}\`.`, ephemeral: true });
+                await interaction.reply({ content: `❌ Aucune carte disponible trouvée pour \`${query}\`.`, flags: 64 });
                 return true;
             }
 
@@ -14982,7 +14986,7 @@ async function handleTcgInteraction(interaction) {
                         value: c.id
                     };
                 }));
-            await interaction.reply({ content: '🔍 Choisis la carte à ajouter :', components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
+            await interaction.reply({ content: '🔍 Choisis la carte à ajouter :', components: [new ActionRowBuilder().addComponents(menu)], flags: 64 });
             return true;
         }
     }
@@ -14999,7 +15003,7 @@ async function handleTcgInteraction(interaction) {
         if (!trade || trade.closed) {
             await interaction.reply({
                 content: "❌ Ce thread est déjà clôturé.",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -15010,7 +15014,7 @@ async function handleTcgInteraction(interaction) {
         ) {
             await interaction.reply({
                 content: "Seul.es les deux participant.es peuvent voter !",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -15024,7 +15028,7 @@ async function handleTcgInteraction(interaction) {
                 content:
                     '⏳ **Ce message de décision est obsolète.**\n' +
                     'Utilise les boutons du dernier échange terminé.',
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -15039,7 +15043,7 @@ async function handleTcgInteraction(interaction) {
                 content:
                     '⏳ Ce panneau de décision est obsolète ou ' +
                     'n’a pas pu être restauré correctement.',
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -15056,7 +15060,7 @@ async function handleTcgInteraction(interaction) {
                 content:
                     '⏳ Ce choix n’est plus disponible. ' +
                     'Utilise les contrôles de l’échange actuel.',
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -15147,7 +15151,7 @@ async function handleTcgInteraction(interaction) {
                                 content:
                                     '❌ Impossible de relancer l’échange. ' +
                                     'Réessaie avec les boutons de décision.',
-                                ephemeral: true
+                                flags: 64
                             });
                         }
                     } catch (restoreError) {
@@ -15237,7 +15241,7 @@ async function handleTcgInteraction(interaction) {
     // ----- !TCGOPENLAST (EPSYS-ONLY) -----
     if (action === 'ol') {
         if (interaction.user.id !== EPSYS_ID) {
-            await interaction.reply({ content: "Réservé à Epsys 😌", ephemeral: true });
+            await interaction.reply({ content: "Réservé à Epsys 😌", flags: 64 });
             return true;
         }
         const sub = parts[2];
@@ -15247,7 +15251,7 @@ async function handleTcgInteraction(interaction) {
             const idx = parseInt(interaction.values[0], 10);
             const entry = list[idx];
             if (!entry) {
-                await interaction.reply({ content: "❌ Ouverture introuvable.", ephemeral: true });
+                await interaction.reply({ content: "❌ Ouverture introuvable.", flags: 64 });
                 return true;
             }
             await interaction.update(buildOpenLastDetailPayload(entry, idx, interaction.guild));
@@ -15263,7 +15267,7 @@ async function handleTcgInteraction(interaction) {
             const idx = parseInt(parts[3], 10);
             const entry = list[idx];
             if (!entry) {
-                await interaction.reply({ content: "❌ Ouverture introuvable.", ephemeral: true });
+                await interaction.reply({ content: "❌ Ouverture introuvable.", flags: 64 });
                 return true;
             }
             await interaction.deferUpdate();
@@ -15282,14 +15286,14 @@ async function handleTcgInteraction(interaction) {
     // ----- !TCGPULLCHANCE (EPSYS-ONLY) -----
     if (action === 'pc') {
         if (interaction.user.id !== EPSYS_ID) {
-            await interaction.reply({ content: "Réservé à Epsys 😌", ephemeral: true });
+            await interaction.reply({ content: "Réservé à Epsys 😌", flags: 64 });
             return true;
         }
         const sub = parts[2];
         const sessionId = parts[3];
         const session = pullChanceSessions.get(sessionId);
         if (!session) {
-            await interaction.reply({ content: "⏳ Session `!tcgpullchance` expirée. Relance la commande.", ephemeral: true });
+            await interaction.reply({ content: "⏳ Session `!tcgpullchance` expirée. Relance la commande.", flags: 64 });
             return true;
         }
         const data = getStoreData();
@@ -15335,7 +15339,7 @@ async function handleTcgInteraction(interaction) {
             if (!session.targetKey || !session.cardId) {
                 await interaction.reply({
                     content: "❌ Choisis une cible et une carte.",
-                    ephemeral: true
+                    flags: 64
                 });
                 return true;
             }
@@ -15343,7 +15347,7 @@ async function handleTcgInteraction(interaction) {
             if (session.mult === PULL_BOOST_ONCE && session.targetKey === PULL_BOOST_ROLE_KEY) {
                 await interaction.reply({
                     content: "❌ Pour garantir une carte au prochain booster, sélectionne d'abord un membre précis dans le menu « Ou choisir un·e membre spécifique... », puis clique à nouveau sur « Garantir au prochain booster ».",
-                    ephemeral: true
+                    flags: 64
                 });
                 return true;
             }
@@ -15388,14 +15392,14 @@ async function handleTcgInteraction(interaction) {
     // ----- !TCGPUNITION (EPSYS-ONLY) -----
     if (action === 'pun') {
         if (interaction.user.id !== EPSYS_ID) {
-            await interaction.reply({ content: "Réservé à Epsys 😌", ephemeral: true });
+            await interaction.reply({ content: "Réservé à Epsys 😌", flags: 64 });
             return true;
         }
         const sub = parts[2];
         const sessionId = parts[3];
         const session = punitionSessions.get(sessionId);
         if (!session) {
-            await interaction.reply({ content: "⏳ Session `!tcgpunition` expirée. Relance la commande.", ephemeral: true });
+            await interaction.reply({ content: "⏳ Session `!tcgpunition` expirée. Relance la commande.", flags: 64 });
             return true;
         }
         const data = getStoreData();
@@ -15405,7 +15409,7 @@ async function handleTcgInteraction(interaction) {
             const chosenId = interaction.values[0];
             const chosenMember = await interaction.guild.members.fetch(chosenId).catch(() => null);
             if (chosenMember?.user?.bot) {
-                await interaction.reply({ content: "❌ Impossible de cibler un bot.", ephemeral: true });
+                await interaction.reply({ content: "❌ Impossible de cibler un bot.", flags: 64 });
                 return true;
             }
             session.targetUserId = chosenId;
@@ -15468,7 +15472,7 @@ async function handleTcgInteraction(interaction) {
     // ----- !RGDXPROXIES SÉLECTEUR PAR SET (EPSYS-ONLY) -----
     if (action === 'proxy' && parts[2] === 'gen' && interaction.isStringSelectMenu()) {
         if (interaction.user.id !== EPSYS_ID) {
-            await interaction.reply({ content: "Réservé à Epsys 😌", ephemeral: true });
+            await interaction.reply({ content: "Réservé à Epsys 😌", flags: 64 });
             return true;
         }
         const scope = interaction.values[0];
@@ -15478,11 +15482,11 @@ async function handleTcgInteraction(interaction) {
 
         const prep = collectProxyJobs(scope);
         if (prep.jobs.length === 0) {
-            await interaction.reply({ content: `❌ Aucune carte chargée dans **${scopeLabel}** pour le moment.`, ephemeral: true });
+            await interaction.reply({ content: `❌ Aucune carte chargée dans **${scopeLabel}** pour le moment.`, flags: 64 });
             return true;
         }
         if (proxyWarmupRunning) {
-            await interaction.reply({ content: '⏳ Un warmup des proxies est déjà en cours !', ephemeral: true });
+            await interaction.reply({ content: '⏳ Un warmup des proxies est déjà en cours !', flags: 64 });
             return true;
         }
 
@@ -15511,7 +15515,7 @@ async function handleTcgInteraction(interaction) {
     // ----- !TCGPERSO VISUALISEUR ADMIN (EPSYS-ONLY) -----
     if (action === 'persoview') {
         if (interaction.user.id !== EPSYS_ID) {
-            await interaction.reply({ content: "Réservé à Epsys 😌", ephemeral: true });
+            await interaction.reply({ content: "Réservé à Epsys 😌", flags: 64 });
             return true;
         }
         const sub = parts[2];
@@ -15621,7 +15625,7 @@ function reduceTcgBoosterCooldown(userId, reductionMs = 3 * 60 * 60 * 1000, memb
 
 const recompensesMinijeuxEnCours = new Set();
 
-async function grantMinigameTcgPoints(client, userIds, points = 2, rewardKey = null) {
+async function attribuerPointsMinijeuInterne(client, userIds, points = 2, rewardKey = null) {
     if (!Array.isArray(userIds) || userIds.length === 0) return [];
 
     const c = client || tcgBridge.client;
@@ -15757,6 +15761,19 @@ async function grantMinigameTcgPoints(client, userIds, points = 2, rewardKey = n
     }
 
     return rewarded;
+}
+
+// Sérialiser toute l'attribution, sauvegarde incluse : deux appels
+// concurrents ne peuvent plus créditer le même rewardKey avant
+// confirmation de la première sauvegarde.
+let fileAttributionsMinijeux = Promise.resolve();
+
+function grantMinigameTcgPoints(client, userIds, points = 2, rewardKey = null) {
+    const operation = fileAttributionsMinijeux
+        .catch(() => {})
+        .then(() => attribuerPointsMinijeuInterne(client, userIds, points, rewardKey));
+    fileAttributionsMinijeux = operation.catch(() => {});
+    return operation;
 }
 
 module.exports = {

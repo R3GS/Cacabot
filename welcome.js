@@ -442,7 +442,7 @@ async function handleWelcomeSlash(interaction) {
     if (interaction.commandName !== 'welcome') return false;
 
     if (interaction.user.id !== welcomeState.EPSYS_ID) {
-        await interaction.reply({ content: "Cette commande est réservée à Epsys.", ephemeral: true });
+        await interaction.reply({ content: "Cette commande est réservée à Epsys.", flags: 64 });
         return true;
     }
 
@@ -467,7 +467,7 @@ async function handleWelcomeSlash(interaction) {
     await interaction.reply({
         embeds: [buildWelcomeConfigEmbed()],
         components: buildWelcomeConfigRows(),
-        ephemeral: true
+        flags: 64
     });
     return true;
 }
@@ -480,7 +480,7 @@ async function handleWelcomeInteraction(interaction) {
     if (!customId || !customId.startsWith('welcome_')) return false;
 
     if (interaction.user.id !== welcomeState.EPSYS_ID) {
-        await interaction.reply({ content: "Seule Epsys a accès à ce panneau.", ephemeral: true });
+        await interaction.reply({ content: "Seule Epsys a accès à ce panneau.", flags: 64 });
         return true;
     }
 
@@ -519,7 +519,7 @@ async function handleWelcomeInteraction(interaction) {
 
     // Tester l'affiche
     if (interaction.isButton() && customId === 'welcome_test_btn') {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
         try {
             const avatarUrl = interaction.user.displayAvatarURL({ extension: 'png', size: 512 });
             const cardBuffer = await generateWelcomeImage(avatarUrl, interaction.member?.displayName ?? interaction.user.username);
@@ -552,7 +552,7 @@ async function handleWelcomeInteraction(interaction) {
         const targetMember = await interaction.guild.members.fetch(targetUserId).catch(() => null);
 
         if (!targetMember) {
-            await interaction.reply({ content: "❌ Impossible de trouver ce membre sur le serveur.", ephemeral: true });
+            await interaction.reply({ content: "❌ Impossible de trouver ce membre sur le serveur.", flags: 64 });
             return true;
         }
 

@@ -18,11 +18,16 @@ function resolveRouletteBgPath() {
         if (!fs.existsSync(dir)) continue;
         try {
             const files = fs.readdirSync(dir);
+            const namesByLowercase = new Map();
+            for (const file of files) {
+                const key = file.toLowerCase();
+                if (!namesByLowercase.has(key)) namesByLowercase.set(key, file);
+            }
             for (const target of candidates) {
-                const found = files.find(f => f.toLowerCase() === target);
+                const found = namesByLowercase.get(target);
                 if (found) return path.join(dir, found);
             }
-        } catch {}
+        } catch (err) { if (err?.code !== 'ENOENT') console.warn('[ROULETTE] Recherche du fond impossible :', dir, err); }
     }
     return null;
 }
@@ -50,13 +55,17 @@ function scheduleRouletteHubAutoDelete(msg, triggerMessage = null) {
     const timer = setTimeout(async () => {
         rouletteHubAutoDeleteTimers.delete(msg.id);
         const refId = triggerMessage?.id || msg.reference?.messageId;
-        if (refId && msg.channel) {
-            const trig = triggerMessage || await msg.channel.messages.fetch(refId).catch(() => null);
-            if (trig && !trig.author?.bot) {
-                await trig.delete().catch(() => {});
+        try {
+            if (refId && msg.channel) {
+                const trig = triggerMessage || await msg.channel.messages.fetch(refId).catch(() => null);
+                if (trig && !trig.author?.bot) {
+                    await trig.delete().catch(() => {});
+                }
             }
+            await msg.delete().catch(() => {});
+        } catch (err) {
+            console.warn('[ROULETTE] Nettoyage automatique du hub échoué :', msg.id, err);
         }
-        await msg.delete().catch(() => {});
     }, ROULETTE_HUB_AUTO_DELETE_MS);
     timer.unref?.();
     rouletteHubAutoDeleteTimers.set(msg.id, timer);
@@ -95,6 +104,7 @@ function scheduleRltProxyRamClear() {
         rltAvatarProxyRam.clear();
         rltProxyRamTimer = null;
     }, RLT_PROXY_TTL_MS);
+    rltProxyRamTimer.unref?.();
 }
 
 function getMemberAvatarProxyInfo(member, size = 256) {
@@ -179,7 +189,7 @@ function walkRouletteProxyStats() {
                 bytes += st.size;
             }
         }
-    } catch {}
+    } catch (err) { if (err?.code !== 'ENOENT') console.warn('[ROULETTE] Statistiques des proxies indisponibles :', err); }
     return { files, bytes };
 }
 
@@ -196,7 +206,7 @@ function purgeRouletteProxies() {
             try {
                 fs.rmSync(path.join(ROULETTE_PROXIES_DIR, f), { recursive: true, force: true });
                 removed++;
-            } catch {}
+            } catch (err) { console.warn('[ROULETTE] Suppression de proxy impossible :', f, err); }
         }
     }
     rltLastProxyWriteError = null;
@@ -842,8 +852,8 @@ async function notifierMpInteractionRoulette(client, targetUserId, texte) {
         await user.send({
             content: texte,
             allowedMentions: { users: [targetUserId] }
-        }).catch(() => {});
-    } catch {}
+        }).catch((err) => { if (err?.code !== 50007) console.warn('[ROULETTE] Envoi du MP échoué :', err); });
+    } catch (err) { console.warn('[ROULETTE] Préparation du MP échouée :', err); }
 }
 
 function purgerVieuxEtatsRoulette() {
@@ -2070,14 +2080,14 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             if (estImmuniseRoulette(member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 3 minutes !`;
             if (estModoUser) return `🛡️ **${auteurNom}** est Modo : le mute de 3 minutes est annulé !`;
             annulerTiragesAGogo(member.id);
-            await member.timeout(3 * 60 * 1000, 'Roulette').catch(() => {});
+            await member.timeout(3 * 60 * 1000, 'Roulette').catch(err => console.error('[ROULETTE] Timeout 3 min échoué :', member.id, err));
             rouletteTimeoutUntil.set(member.id, Date.now() + 3 * 60 * 1000);
             return `**${auteurNom}** est mute pendant **3 minutes**.`;
         case 'malus-timeout-5min':
             if (estImmuniseRoulette(member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 5 minutes !`;
             if (estModoUser) return `🛡️ **${auteurNom}** est Modo : le mute de 5 minutes est annulé !`;
             annulerTiragesAGogo(member.id);
-            await member.timeout(5 * 60 * 1000, 'Roulette').catch(() => {});
+            await member.timeout(5 * 60 * 1000, 'Roulette').catch(err => console.error('[ROULETTE] Timeout 5 min échoué :', member.id, err));
             rouletteTimeoutUntil.set(member.id, Date.now() + 5 * 60 * 1000);
             return `**${auteurNom}** est mute pendant **5 minutes**.`;
         case 'malus-timeout-20min':
@@ -2087,7 +2097,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 rouletteCooldowns.set(member.id, Date.now() + 20 * 60 * 1000);
                 return `🛡️ **${auteurNom}** est Modo : le mute de 20 minutes est remplacé par un cooldown de **20 minutes**.`;
             }
-            await member.timeout(20 * 60 * 1000, 'Roulette').catch(() => {});
+            await member.timeout(20 * 60 * 1000, 'Roulette').catch(err => console.error('[ROULETTE] Timeout 20 min échoué :', member.id, err));
             rouletteTimeoutUntil.set(member.id, Date.now() + 20 * 60 * 1000);
             return `**${auteurNom}** est mute pendant **20 minutes**.`;
         case 'malus-exclu-heure':
@@ -2099,7 +2109,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             }
             return malusDiffere(message, auteurNom, 'Exclusion de 1 heure', 'exclu.e pendant **1 heure**', 'a été exclu.e pendant **1 heure**',
                 () => {
-                    member.timeout(60 * 60 * 1000, 'Roulette').catch(() => {});
+                    member.timeout(60 * 60 * 1000, 'Roulette').catch(err => console.error('[ROULETTE] Timeout 1 h échoué :', member.id, err));
                     rouletteTimeoutUntil.set(member.id, Date.now() + 60 * 60 * 1000);
                 });
         case 'malus-exclu-jour':
@@ -2112,7 +2122,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             }
             return malusDiffere(message, auteurNom, 'Exclusion de 1 jour', 'exclu.e pendant **1 jour**', 'a été exclu.e pendant **1 jour**',
                 () => {
-                    member.timeout(24 * 60 * 60 * 1000, 'Roulette').catch(() => {});
+                    member.timeout(24 * 60 * 60 * 1000, 'Roulette').catch(err => console.error('[ROULETTE] Timeout 1 jour échoué :', member.id, err));
                     rouletteTimeoutUntil.set(member.id, Date.now() + 24 * 60 * 60 * 1000);
                 });
         case 'malus-exclu-semaine':
@@ -2125,7 +2135,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             }
             return malusDiffere(message, auteurNom, 'Exclusion de 1 semaine', 'exclu.e pendant **1 semaine**', 'a été exclu.e pendant **1 semaine**',
                 () => {
-                    member.timeout(7 * 24 * 60 * 60 * 1000, 'Roulette').catch(() => {});
+                    member.timeout(7 * 24 * 60 * 60 * 1000, 'Roulette').catch(err => console.error('[ROULETTE] Timeout 1 semaine échoué :', member.id, err));
                     rouletteTimeoutUntil.set(member.id, Date.now() + 7 * 24 * 60 * 60 * 1000);
                 });
         case 'bonus-gif-ou-audio': {
@@ -2201,7 +2211,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'bonus-elu-roulette': {
             const roleId = '1553670290448457829';
             if (member.roles.cache.has(roleId)) return `**${auteurNom}** a déjà le rôle **Élu·e de la Roulette** — pas de doublon possible !`;
-            await member.roles.add(roleId).catch(() => {});
+            await member.roles.add(roleId).catch(err => console.error('[ROULETTE] Attribution du rôle échouée :', err));
             return `👑 **${auteurNom}** obtient le rôle **Élu·e de la Roulette** !`;
         }
         case 'bonus-role-superieur': {
@@ -2212,8 +2222,8 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             }
             if (rangActuel === ROULETTE_RANGS.length - 1) return `**${auteurNom}** est déjà **${ROULETTE_RANGS[rangActuel].label}**, le rang max !\nChoisis un autre bonus à la place dans le menu ci-dessous.`;
             const prochainRang = ROULETTE_RANGS[rangActuel + 1];
-            if (rangActuel > 0) await member.roles.remove(ROULETTE_RANGS[rangActuel].id).catch(() => {});
-            await member.roles.add(prochainRang.id).catch(() => {});
+            if (rangActuel > 0) await member.roles.remove(ROULETTE_RANGS[rangActuel].id).catch(err => console.error('[ROULETTE] Retrait du rang échoué :', err));
+            await member.roles.add(prochainRang.id).catch(err => console.error('[ROULETTE] Attribution du rang échouée :', err));
             return `**${auteurNom}** passe au rang **${prochainRang.label}** !`;
         }
         case 'bonus-legendaire': {
@@ -2221,9 +2231,9 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             const roleId = ROULETTE_RANGS[ROULETTE_RANGS.length - 1].id;
             if (member.roles.cache.has(roleId)) return `**${auteurNom}** est déjà **${ROULETTE_RANGS[ROULETTE_RANGS.length - 1].label}**, le rang max !\nChoisis un autre bonus à la place dans le menu ci-dessous.`;
             for (const rang of ROULETTE_RANGS) {
-                if (rang.id !== ROULETTE_RANGS[0].id && member.roles.cache.has(rang.id)) await member.roles.remove(rang.id).catch(() => {});
+                if (rang.id !== ROULETTE_RANGS[0].id && member.roles.cache.has(rang.id)) await member.roles.remove(rang.id).catch(err => console.error('[ROULETTE] Retrait du rôle échoué :', err));
             }
-            await member.roles.add(roleId).catch(() => {});
+            await member.roles.add(roleId).catch(err => console.error('[ROULETTE] Attribution du rôle échouée :', err));
             return `👑 **${auteurNom}** passe directement au rang **Regaïen·ne légendaire** !`;
         }
         case 'bonus-jackpot-boost': {
@@ -2251,7 +2261,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 rouletteCooldowns.set(member.id, Date.now() + 7 * 24 * 60 * 60 * 1000);
                 return `🛡️ **${auteurNom}** est Modo : le ban est remplacé par un cooldown de **1 semaine**.`;
             }
-            return malusDiffere(message, auteurNom, 'Ban définitif', 'banni.e du serveur', 'a été banni.e du serveur', () => member.ban({ reason: 'Roulette' }).catch(() => {}));
+            return malusDiffere(message, auteurNom, 'Ban définitif', 'banni.e du serveur', 'a été banni.e du serveur', () => member.ban({ reason: 'Roulette' }).catch(err => console.error('[ROULETTE] Bannissement échoué :', err)));
         case 'bonus-couronne':
             deverrouillerSucces(member.id, 'laristocrate', message.channel);
             rouletteCouronneUntil.set(member.id, Date.now() + 12 * 60 * 60 * 1000);
@@ -2816,6 +2826,19 @@ function buildVoteRouletteEmbed(membre, pourCount = 0, contreCount = 0, expireAt
         .setImage('attachment://rlt_vote.jpg');
 }
 
+async function encodeRouletteJpeg(canvas, quality) {
+    try {
+        return await new Promise((resolve, reject) => {
+            canvas.toBuffer((error, jpeg) => {
+                if (error) reject(error);
+                else resolve(jpeg);
+            }, 'image/jpeg', { quality });
+        });
+    } finally {
+        canvas.width = canvas.height = 0;
+    }
+}
+
 async function renderRouletteVoteCanvas(membre, pourCount = 0, contreCount = 0, expireAt = null, isTest = false) {
     const W = 1200, H = 560;
     const canvas = createCanvas(W, H);
@@ -2895,7 +2918,7 @@ async function renderRouletteVoteCanvas(membre, pourCount = 0, contreCount = 0, 
     ctx.font = 'bold 17px "LemonMilk", "Sans"';
     ctx.fillText(`TEMPS RESTANT : ${formatDureeCourte(restant)}`, W / 2, 488, W - 680);
 
-    return canvas.toBuffer('image/jpeg', { quality: 0.90 });
+    return encodeRouletteJpeg(canvas, 0.90);
 }
 
 function planifierMajCanvasVoteRoulette(msgId, voteData, client, guild) {
@@ -2934,9 +2957,10 @@ function planifierMajCanvasVoteRoulette(msgId, voteData, client, guild) {
                 components: [buildVoteRouletteRow(pourList.length, contreList.length, false)],
                 files: [att],
                 attachments: []
-            }).catch(() => {});
-        } catch {}
+            }).catch((err) => { if (err?.code !== 10008) console.warn('[ROULETTE] Modification du vote échouée :', err); });
+        } catch (err) { console.warn('[ROULETTE] Actualisation du vote échouée :', err); }
     }, 10000);
+    entry.timer.unref?.();
 
     rouletteVoteCanvasPending.set(msgId, entry);
 }
@@ -3064,7 +3088,7 @@ async function cloturerVoteRoulette(timerEntry, client) {
                 rouletteCooldowns.set(voteData.targetId, Date.now() + 24 * 60 * 60 * 1000);
                 sanctionTexte = `🛡️ <@${voteData.targetId}> est Modo : l'exclusion de **1 jour** est convertie en cooldown roulette de **24 heures**.`;
             } else {
-                if (membre) await membre.timeout(24 * 60 * 60 * 1000, 'Roulette - vote').catch(() => {});
+                if (membre) await membre.timeout(24 * 60 * 60 * 1000, 'Roulette - vote').catch(err => console.error('[ROULETTE] Sanction du vote impossible :', err));
                 rouletteTimeoutUntil.set(voteData.targetId, Date.now() + 24 * 60 * 60 * 1000);
                 sanctionTexte = `🔇 <@${voteData.targetId}> est condamné.e et **exclu.e pendant 1 jour** !`;
             }
@@ -3103,17 +3127,28 @@ function armerTimersVoteRoulette(msgId, voteData, client) {
     const timerEntry = { currentMsgId: msgId, interval: null, timeout: null };
 
     if (!voteData.isTest) {
+        let rappelEnCours = false;
         timerEntry.interval = setInterval(async () => {
-            const currentId = timerEntry.currentMsgId;
-            const ch = client?.channels.cache.get(voteData.channelId)
-                || await client?.channels.fetch(voteData.channelId).catch(() => null);
-            const currentMsg = ch ? await ch.messages.fetch(currentId).catch(() => null) : null;
-            if (currentMsg) await currentMsg.reply('🆙').catch(() => {});
+            if (rappelEnCours) return;
+            rappelEnCours = true;
+            try {
+                const currentId = timerEntry.currentMsgId;
+                const ch = client?.channels.cache.get(voteData.channelId)
+                    || await client?.channels.fetch(voteData.channelId).catch(() => null);
+                const currentMsg = ch ? await ch.messages.fetch(currentId).catch(() => null) : null;
+                if (currentMsg) await currentMsg.reply('🆙').catch(() => {});
+            } catch (err) {
+                console.warn('[ROULETTE] Rappel de vote échoué :', err);
+            } finally {
+                rappelEnCours = false;
+            }
         }, 55 * 60 * 1000);
     }
 
     timerEntry.timeout = setTimeout(() => {
-        cloturerVoteRoulette(timerEntry, client);
+        cloturerVoteRoulette(timerEntry, client).catch(err => {
+            console.error('[ROULETTE] Clôture automatique du vote échouée :', err);
+        });
     }, restantMs);
 
     rouletteVoteTimers.set(msgId, timerEntry);
@@ -3355,7 +3390,7 @@ async function drawCircularAvatar(ctx, memberOrUrl, cx, cy, radius, ringColor = 
     if (memberOrUrl && typeof memberOrUrl === 'object') {
         img = await loadAvatarProxy(memberOrUrl, 256);
     } else if (typeof memberOrUrl === 'string' && memberOrUrl) {
-        try { img = await loadImage(memberOrUrl); } catch {}
+        try { img = await loadImage(memberOrUrl); } catch (err) { console.warn('[ROULETTE] Chargement de l’avatar impossible :', err); }
     }
     if (img) {
         ctx.drawImage(img, cx - radius, cy - radius, radius * 2, radius * 2);
@@ -3883,7 +3918,7 @@ async function renderRouletteStateCanvas(cible, guildId = null) {
         ctx.fillText(inf.val, cx, 830);
     });
 
-    return canvas.toBuffer('image/jpeg', { quality: 0.92 });
+    return encodeRouletteJpeg(canvas, 0.92);
 }
 
 async function buildRouletteStatePayload(cible, guildId = null, authorId = null, viewMode = 'img', fromHub = false) {
@@ -4222,7 +4257,7 @@ async function renderRouletteAchievementsCanvas(cible, page = 0) {
         ctx.fillText(dateStr, cx + cardW / 2, cy + cardH - 26);
     }
 
-    return canvas.toBuffer('image/jpeg', { quality: 0.92 });
+    return encodeRouletteJpeg(canvas, 0.92);
 }
 
 async function buildRouletteAchievementsPayload(cible, page = 0, authorId = null, viewMode = 'img', fromHub = false) {
@@ -4476,7 +4511,7 @@ async function renderRouletteStatsCanvas(cible) {
         }
     }
 
-    return canvas.toBuffer('image/jpeg', { quality: 0.92 });
+    return encodeRouletteJpeg(canvas, 0.92);
 }
 
 async function buildRouletteStatsPayload(cible, authorId = null, viewMode = 'img', fromHub = false) {
@@ -4648,7 +4683,7 @@ async function renderRouletteCollectorPosterCanvas(membre, entry, lanceur = null
     ctx.font = 'bold 18px "LemonMilk", "Sans"';
     ctx.fillText(`REGAÏA • ${new Date().toLocaleDateString('fr-FR')}`, W / 2, 804);
 
-    return canvas.toBuffer('image/jpeg', { quality: 0.94 });
+    return encodeRouletteJpeg(canvas, 0.94);
 }
 
 async function buildHallOfFamePayload(membre, entry, lanceur = null, estPartage = false, isTest = false) {
@@ -5271,7 +5306,7 @@ async function renderRouletteTopCanvas(guild, entries, authorId, mode = 'succes'
     ctx.font = 'bold 22px "LemonMilk", "Sans"';
     ctx.fillText(posTxt, W / 2, 832, W - 140);
 
-    return canvas.toBuffer('image/jpeg', { quality: 0.92 });
+    return encodeRouletteJpeg(canvas, 0.92);
 }
 
 function buildRouletteTopEmbed(guild, authorId, mode = 'succes') {
@@ -6324,7 +6359,7 @@ function modifierStatRoulette(targetUserId, statKey, action, valeurDirecte = nul
 
 async function handleRouletteStatsInteraction(interaction) {
     if (interaction.user.id !== bridge.EPSYS_ID) {
-        return interaction.reply({ content: "Ce panneau est réservé à Epsys 😌", ephemeral: true });
+        return interaction.reply({ content: "Ce panneau est réservé à Epsys 😌", flags: 64 });
     }
 
     const id = interaction.customId;
@@ -6463,7 +6498,7 @@ async function handleRouletteStatsInteraction(interaction) {
         const num = parseInt(valStr, 10);
 
         if (isNaN(num) || num < 0) {
-            return interaction.reply({ content: "❌ Nombre invalide ! Entre un nombre entier positif.", ephemeral: true });
+            return interaction.reply({ content: "❌ Nombre invalide ! Entre un nombre entier positif.", flags: 64 });
         }
 
         const nouveau = modifierStatRoulette(targetUserId, selectedStat, 'set', num);
@@ -6569,7 +6604,7 @@ function buildSuccessGiveComponents(targetUserId, page = 0) {
 
 async function handleSuccessGiveInteraction(interaction) {
     if (interaction.user.id !== bridge.EPSYS_ID) {
-        return interaction.reply({ content: "Ce panneau est réservé à Epsys 😌", ephemeral: true });
+        return interaction.reply({ content: "Ce panneau est réservé à Epsys 😌", flags: 64 });
     }
 
     const id = interaction.customId;
@@ -6580,7 +6615,7 @@ async function handleSuccessGiveInteraction(interaction) {
         const targetUserId = interaction.values[0];
         const cible = interaction.guild?.members.cache.get(targetUserId);
         if (cible?.user?.bot) {
-            return interaction.reply({ content: "❌ Tu ne peux pas donner de succès à un bot !", ephemeral: true });
+            return interaction.reply({ content: "❌ Tu ne peux pas donner de succès à un bot !", flags: 64 });
         }
         const embed = buildSuccessGiveEmbed(interaction.guild, targetUserId, page);
         const components = buildSuccessGiveComponents(targetUserId, page);
@@ -7964,11 +7999,16 @@ async function handleRouletteMessage(message, response, client, helpers) {
             if (resultat.attenteChoix) rouletteChoixEnAttente.add(envoye.id);
             if (resultat.vote) await demarrerVoteRoulette(envoye, resultat.vote);
             if (resultat.differe) {
-                setTimeout(async () => {
-                    const embedFinal = await resultat.differe();
-                    memoriserResultatRoulette(envoye.id, embedFinal, resultat.outcomeId, resultat.gifOptions);
-                    envoye.edit({ embeds: [embedFinal] }).catch(() => {});
+                const timerDiffere = setTimeout(async () => {
+                    try {
+                        const embedFinal = await resultat.differe();
+                        memoriserResultatRoulette(envoye.id, embedFinal, resultat.outcomeId, resultat.gifOptions);
+                        await envoye.edit({ embeds: [embedFinal] }).catch(() => {});
+                    } catch (err) {
+                        console.warn('[ROULETTE] Résultat différé échoué :', err);
+                    }
                 }, 10000);
+                timerDiffere.unref?.();
             }
             return true;
         }
@@ -7999,7 +8039,7 @@ async function handleRouletteSlash(interaction, client) {
     if ((cmd === 'roulette' || cmd === 'rlt') && !estSalonSlashAutorise) {
         await interaction.reply({
             content: `🎰 La roulette et toutes ses commandes sont réservées au salon <#${ROULETTE_SALON_ID}> !`,
-            ephemeral: true
+            flags: 64
         });
         return true;
     }
@@ -8071,11 +8111,16 @@ async function handleRouletteSlash(interaction, client) {
             if (res.attenteChoix) rouletteChoixEnAttente.add(env.id);
             if (res.vote) await demarrerVoteRoulette(env, res.vote);
             if (res.differe) {
-                setTimeout(async () => {
-                    const embedFinal = await res.differe();
-                    memoriserResultatRoulette(env.id, embedFinal, res.outcomeId, res.gifOptions);
-                    env.edit({ embeds: [embedFinal] }).catch(() => {});
+                const timerDiffere = setTimeout(async () => {
+                    try {
+                        const embedFinal = await res.differe();
+                        memoriserResultatRoulette(env.id, embedFinal, res.outcomeId, res.gifOptions);
+                        await env.edit({ embeds: [embedFinal] }).catch(() => {});
+                    } catch (err) {
+                        console.warn('[ROULETTE] Résultat différé échoué :', err);
+                    }
                 }, 10000);
+                timerDiffere.unref?.();
             }
             return true;
         }
@@ -8270,7 +8315,7 @@ async function handleRouletteButton(interaction, client) {
     if (interaction.isButton() && customId.startsWith('rlt_close:')) {
         const ownerId = customId.split(':')[1];
         if (!canControlRouletteOwner(interaction.user.id, ownerId)) {
-            return interaction.reply({ content: "Seul l'auteur de ce menu peut le fermer !", ephemeral: true });
+            return interaction.reply({ content: "Seul l'auteur de ce menu peut le fermer !", flags: 64 });
         }
         const msg = interaction.message;
         cancelRouletteHubAutoDelete(msg?.id);
@@ -8295,13 +8340,13 @@ async function handleRouletteButton(interaction, client) {
         const voteData = rouletteVotesPublics.get(msgId);
 
         if (!voteData) {
-            return interaction.reply({ content: "Ce vote est trop ancien ou introuvable.", ephemeral: true });
+            return interaction.reply({ content: "Ce vote est trop ancien ou introuvable.", flags: 64 });
         }
         if (voteData.cloture || Date.now() >= voteData.expireAt) {
-            return interaction.reply({ content: "Ce vote public est déjà clôturé !", ephemeral: true });
+            return interaction.reply({ content: "Ce vote public est déjà clôturé !", flags: 64 });
         }
         if (!voteData.isTest && interaction.user.id === voteData.targetId) {
-            return interaction.reply({ content: "Tu n'as pas le droit de voter sur ton propre sort 😌", ephemeral: true });
+            return interaction.reply({ content: "Tu n'as pas le droit de voter sur ton propre sort 😌", flags: 64 });
         }
 
         if (!Array.isArray(voteData.pour)) voteData.pour = [];
@@ -8342,7 +8387,7 @@ async function handleRouletteButton(interaction, client) {
             components: [buildVoteRouletteRow(voteData.pour.length, voteData.contre.length, false)]
         });
         planifierMajCanvasVoteRoulette(msgId, voteData, client, interaction.guild);
-        await interaction.followUp({ content: feedback, ephemeral: true });
+        await interaction.followUp({ content: feedback, flags: 64 });
         return true;
     }
 
@@ -8352,34 +8397,34 @@ async function handleRouletteButton(interaction, client) {
         const outcomeId = parts.slice(4).join('_');
 
         if (interaction.user.id !== targetUserId) {
-            return interaction.reply({ content: "Ce n'est pas ton privilège de vote à utiliser 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ton privilège de vote à utiliser 😌", flags: 64 });
         }
 
         const charges = rouletteVoteRedirectCharges.get(targetUserId) || 0;
         if (charges <= 0) {
-            return interaction.reply({ content: "Tu n'as plus de charges de redirection de vote disponibles !", ephemeral: true });
+            return interaction.reply({ content: "Tu n'as plus de charges de redirection de vote disponibles !", flags: 64 });
         }
 
         const selectedId = interaction.values[0];
         if (selectedId === targetUserId) {
-            return interaction.reply({ content: "❌ Tu ne peux pas te renvoyer le malus à toi-même !", ephemeral: true });
+            return interaction.reply({ content: "❌ Tu ne peux pas te renvoyer le malus à toi-même !", flags: 64 });
         }
 
         const cible = interaction.guild?.members.cache.get(selectedId)
             || await interaction.guild?.members?.fetch?.(selectedId).catch(() => null);
         if (!cible) {
-            return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
+            return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", flags: 64 });
         }
         if (cible.user?.bot) {
-            return interaction.reply({ content: "❌ Les bots sont insensibles aux malus de la roulette !", ephemeral: true });
+            return interaction.reply({ content: "❌ Les bots sont insensibles aux malus de la roulette !", flags: 64 });
         }
         if (ROULETTE_ROLE_JOUEUR_ID && !cible.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID)) {
-            return interaction.reply({ content: `❌ **${cible.displayName}** ne participe pas à la roulette (rôle manquant) !`, ephemeral: true });
+            return interaction.reply({ content: `❌ **${cible.displayName}** ne participe pas à la roulette (rôle manquant) !`, flags: 64 });
         }
         if (estProtegeAntiAcharnement(cible.id)) {
             return interaction.reply({
                 content: ROULETTE_ANTI_ACHARNEMENT_MSG,
-                ephemeral: true
+                flags: 64
             });
         }
 
@@ -8452,7 +8497,7 @@ async function handleRouletteButton(interaction, client) {
         const resteMsg = restantes > 0 ? ` (${restantes} charge${restantes > 1 ? 's' : ''} restante${restantes > 1 ? 's' : ''})` : ' *(c\'était ta dernière charge !)*';
         await interaction.reply({
             content: `🎯 **${interaction.member.displayName}** utilise son privilège de vote populaire et renvoie le malus **${ROULETTE_NOMS[outcomeId] || outcomeId}** sur <@${cible.id}> !${resteMsg}\n> ${texteCible}`,
-            ephemeral: false
+            flags: 0
         });
         return true;
     }
@@ -8460,7 +8505,7 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('rlt_claim_menu_')) {
         const targetUserId = customId.split('_')[3];
         if (interaction.user.id !== targetUserId) {
-            return interaction.reply({ content: "Ce n'est pas ton inventaire 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ton inventaire 😌", flags: 64 });
         }
 
         const itemChoisi = interaction.values[0];
@@ -8469,14 +8514,14 @@ async function handleRouletteButton(interaction, client) {
         if ((itemChoisi === 'coupTriple' || itemChoisi === 'freeRoll1Min') && ROULETTE_COOLDOWN_EXEMPT.includes(targetUserId)) {
             return interaction.reply({
                 content: "❌ Tu es déjà exempté.e de cooldown en permanence ! Cet objet reste conservé dans ton inventaire.",
-                ephemeral: true
+                flags: 64
             });
         }
 
         if (itemChoisi === 'ticketSkip') {
             const finCd = rouletteCooldowns.get(targetUserId);
             if (!finCd || Date.now() >= finCd) {
-                return interaction.reply({ content: "❌ Tu n'as aucun cooldown actif à réinitialiser ! Ton **Coupe-file** est conservé dans ton inventaire.", ephemeral: true });
+                return interaction.reply({ content: "❌ Tu n'as aucun cooldown actif à réinitialiser ! Ton **Coupe-file** est conservé dans ton inventaire.", flags: 64 });
             }
         } else if (itemChoisi === 'eponge') {
             const nowCk = Date.now();
@@ -8490,7 +8535,7 @@ async function handleRouletteButton(interaction, client) {
                 if (nowCk < fin) aMalus = true;
             }
             if (!aMalus) {
-                return interaction.reply({ content: "❌ Tu n'as aucun malus textuel actif à effacer ! Ton **Éponge à malus** est conservée dans ton inventaire.", ephemeral: true });
+                return interaction.reply({ content: "❌ Tu n'as aucun malus textuel actif à effacer ! Ton **Éponge à malus** est conservée dans ton inventaire.", flags: 64 });
             }
         }
 
@@ -8518,13 +8563,13 @@ async function handleRouletteButton(interaction, client) {
             return interaction.reply({
                 content: `⚠️ Tu as déjà un effet **${dejaActifRaison}** actif ! Veux-tu vraiment activer celui-ci maintenant pour le cumuler ?`,
                 components: [rowConf],
-                ephemeral: true
+                flags: 64
             });
         }
 
         const consomme = consommerInventaireRoulette(targetUserId, itemChoisi);
         if (!consomme) {
-            return interaction.reply({ content: "Tu n'as plus cette récompense en réserve ou elle a déjà été activée !", ephemeral: true });
+            return interaction.reply({ content: "Tu n'as plus cette récompense en réserve ou elle a déjà été activée !", flags: 64 });
         }
 
         let messageConfirmation = "";
@@ -8601,7 +8646,7 @@ async function handleRouletteButton(interaction, client) {
             await interaction.followUp({
                 content: `✍️ **PSEUDO AU CHOIX (48h) :** Sélectionne ci-dessous le membre du serveur dont tu veux changer le pseudo :`,
                 components: [rowUser],
-                ephemeral: true
+                flags: 64
             });
             return true;
         } else if (itemChoisi === 'pseudoLockSemaine') {
@@ -8614,7 +8659,7 @@ async function handleRouletteButton(interaction, client) {
             await interaction.followUp({
                 content: `🗿 **GRAVÉ DANS LA ROCHE (7 JOURS) :** Sélectionne ci-dessous le membre du serveur dont tu veux verrouiller le pseudo :`,
                 components: [rowUser],
-                ephemeral: true
+                flags: 64
             });
             return true;
         } else if (itemChoisi === 'epingleSalon') {
@@ -8631,7 +8676,7 @@ async function handleRouletteButton(interaction, client) {
             collector.on('end', (collected, reason) => {
                 if (collected.size === 0) {
                     crediterInventaireRoulette(targetUserId, 'epingleSalon', 1);
-                    interaction.followUp({ content: `⏳ Temps écoulé ! Ton bonus **Message épinglé** a été replacé dans ton inventaire (\`!rlt claim\`).`, ephemeral: true }).catch(() => {});
+                    interaction.followUp({ content: `⏳ Temps écoulé ! Ton bonus **Message épinglé** a été replacé dans ton inventaire (\`!rlt claim\`).`, flags: 64 }).catch(() => {});
                 }
             });
         } else if (itemChoisi === 'redirectChoix') {
@@ -8644,7 +8689,7 @@ async function handleRouletteButton(interaction, client) {
             await interaction.followUp({
                 content: `🎯 **REDIRECTION DE MALUS AU CHOIX :** Sélectionne ci-dessous le membre qui subira ton prochain malus à ta place :`,
                 components: [rowUser],
-                ephemeral: true
+                flags: 64
             });
             return true;
         } else if (itemChoisi === 'redirectBonusChoix') {
@@ -8657,7 +8702,7 @@ async function handleRouletteButton(interaction, client) {
             await interaction.followUp({
                 content: `🎀 **REDIRECTION DE BONUS AU CHOIX :** Sélectionne ci-dessous le membre qui recevra ton prochain bonus à ta place :`,
                 components: [rowUser],
-                ephemeral: true
+                flags: 64
             });
             return true;
         } else if (itemChoisi === 'partageBonus') {
@@ -8670,7 +8715,7 @@ async function handleRouletteButton(interaction, client) {
             await interaction.followUp({
                 content: `🤝 **PARTAGE DE BONUS AU CHOIX :** Sélectionne ci-dessous le membre avec qui tu souhaites partager ton prochain bonus :`,
                 components: [rowUser],
-                ephemeral: true
+                flags: 64
             });
             return true;
         } else if (itemChoisi === 'echangeurPoison') {
@@ -8679,7 +8724,7 @@ async function handleRouletteButton(interaction, client) {
                 crediterInventaireRoulette(targetUserId, 'echangeurPoison', 1);
                 return interaction.reply({
                     content: "❌ **Aucun malus actif !** Tu n'as aucun malus à transférer pour le moment. Ton **Échangeur de poison** reste dans ton inventaire !",
-                    ephemeral: true
+                    flags: 64
                 });
             }
 
@@ -8702,7 +8747,7 @@ async function handleRouletteButton(interaction, client) {
             await interaction.followUp({
                 content: `🧪 **ÉCHANGEUR DE POISON :** Choisis d'abord le malus que tu souhaites transférer à quelqu'un :`,
                 components: [rowMalus],
-                ephemeral: true
+                flags: 64
             });
             return true;
         } else if (itemChoisi === 'diviseur') {
@@ -8710,7 +8755,7 @@ async function handleRouletteButton(interaction, client) {
                 crediterInventaireRoulette(targetUserId, 'diviseur', 1);
                 return interaction.reply({
                     content: "❌ C'est l'**Happy Hour** ! Le **Diviseur (2h)** ne s'applique pas pendant l'Happy Hour — il reste dans ton inventaire.",
-                    ephemeral: true
+                    flags: 64
                 });
             }
             const nowDiv = Date.now();
@@ -8749,19 +8794,19 @@ async function handleRouletteButton(interaction, client) {
         const isEphInv = Boolean(interaction.message?.flags?.has?.(MessageFlags.Ephemeral));
         await interaction.update(buildRouletteInventairePayload(member, targetUserId, { home: !isEphInv, close: true })).catch(() => {});
 
-        await interaction.followUp({ content: messageConfirmation, ephemeral: false });
+        await interaction.followUp({ content: messageConfirmation, flags: 0 });
         return true;
     }
 
     if (customId.startsWith('rlt_claim_freeroll_')) {
         const targetUserId = customId.split('_')[3];
         if (interaction.user.id !== targetUserId) {
-            return interaction.reply({ content: "Ce n'est pas ton cadeau 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ton cadeau 😌", flags: 64 });
         }
 
         const consomme = consommerInventaireRoulette(targetUserId, 'freeRoll1Min');
         if (!consomme) {
-            return interaction.reply({ content: "Tu n'as plus ce bonus en réserve ou il a déjà été activé !", ephemeral: true });
+            return interaction.reply({ content: "Tu n'as plus ce bonus en réserve ou il a déjà été activé !", flags: 64 });
         }
 
         const nowBtnFr = Date.now();
@@ -8786,7 +8831,7 @@ async function handleRouletteButton(interaction, client) {
 
         await interaction.reply({
             content: `⚡ **C'EST PARTI !** <@${targetUserId}>, tu as **1 minute chrono** de tirages à volonté et sans aucun cooldown ! Fais péter \`!rlt go\` ou les boutons ! 🎰`,
-            ephemeral: false
+            flags: 0
         });
         return true;
     }
@@ -8794,7 +8839,7 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('rlt_proxy:')) {
         const [, sub, ownerId] = customId.split(':');
         if (interaction.user.id !== ownerId && interaction.user.id !== bridge.EPSYS_ID) {
-            return interaction.reply({ content: "Réservé à Epsys 😌", ephemeral: true });
+            return interaction.reply({ content: "Réservé à Epsys 😌", flags: 64 });
         }
         if (sub === 'close') {
             await interaction.message.delete().catch(() => {});
@@ -8810,7 +8855,7 @@ async function handleRouletteButton(interaction, client) {
         }
         if (sub === 'warmup') {
             if (rltProxyWarmupRunning) {
-                return interaction.reply({ content: '⏳ Un warmup est déjà en cours !', ephemeral: true });
+                return interaction.reply({ content: '⏳ Un warmup est déjà en cours !', flags: 64 });
             }
             await interaction.update({
                 content: '🔥 **Warmup PP Roulette démarré...**\n⏳ Préparation des avatars membres dans `Roulette/Proxies`...',
@@ -8827,7 +8872,7 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('rlt_hub:')) {
         const [, action, authorId, origMsgId = ''] = customId.split(':');
         if (!canControlRouletteOwner(interaction.user.id, authorId)) {
-            return interaction.reply({ content: "Ce n'est pas ton hub roulette 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ton hub roulette 😌", flags: 64 });
         }
 
         if (action === 'close') {
@@ -8847,7 +8892,7 @@ async function handleRouletteButton(interaction, client) {
             }
             await interaction.reply({
                 ...buildRouletteInventairePayload(member, authorId, { home: false, close: true }),
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -8856,7 +8901,7 @@ async function handleRouletteButton(interaction, client) {
             if (interaction.message?.id && rouletteHubAutoDeleteTimers.has(interaction.message.id)) {
                 scheduleRouletteHubAutoDelete(interaction.message);
             }
-            await interaction.reply({ ...buildRouletteNotifMenuPayload(member, 'ephem'), ephemeral: true });
+            await interaction.reply({ ...buildRouletteNotifMenuPayload(member, 'ephem'), flags: 64 });
             return true;
         }
 
@@ -8921,9 +8966,9 @@ async function handleRouletteButton(interaction, client) {
 
         if (type === 'stats' || type === 'state') {
             const [, , targetId, nextView, authorId, hubFlag = '0'] = parts;
-            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", ephemeral: true });
+            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", flags: 64 });
             const cible = interaction.guild?.members?.cache?.get(targetId) || await interaction.guild?.members?.fetch?.(targetId).catch(() => null);
-            if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
+            if (!cible) return interaction.reply({ content: "Membre introuvable.", flags: 64 });
             await interaction.deferUpdate();
             const payload = type === 'stats'
                 ? await buildRouletteStatsPayload(cible, authorId, nextView, hubFlag === '1')
@@ -8934,9 +8979,9 @@ async function handleRouletteButton(interaction, client) {
 
         if (type === 'succes') {
             const [, , targetId, nextView, pageStr, authorId, hubFlag = '0'] = parts;
-            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", ephemeral: true });
+            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", flags: 64 });
             const cible = interaction.guild?.members?.cache?.get(targetId) || await interaction.guild?.members?.fetch?.(targetId).catch(() => null);
-            if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
+            if (!cible) return interaction.reply({ content: "Membre introuvable.", flags: 64 });
             await interaction.deferUpdate();
             const payload = await buildRouletteAchievementsPayload(cible, parseInt(pageStr, 10) || 0, authorId, nextView, hubFlag === '1');
             await interaction.editReply({ ...payload, files: payload.files ?? [], attachments: [] });
@@ -8945,7 +8990,7 @@ async function handleRouletteButton(interaction, client) {
 
         if (type === 'top') {
             const [, , nextView, mode, authorId, hubFlag = '0'] = parts;
-            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", ephemeral: true });
+            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", flags: 64 });
             await interaction.deferUpdate();
             const payload = await buildRouletteTopPayload(interaction.guild, authorId, mode, nextView, hubFlag === '1');
             await interaction.editReply({ ...payload, files: payload.files ?? [], attachments: [] });
@@ -8956,7 +9001,7 @@ async function handleRouletteButton(interaction, client) {
 
     if (customId.startsWith('rlt_top_mode:')) {
         const [, view, authorId, hubFlag = '0'] = customId.split(':');
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ton classement !", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ton classement !", flags: 64 });
         const mode = interaction.values[0];
         await interaction.deferUpdate();
         const payload = await buildRouletteTopPayload(interaction.guild, authorId, mode, view, hubFlag === '1');
@@ -8966,7 +9011,7 @@ async function handleRouletteButton(interaction, client) {
 
     if (customId.startsWith('rlt_probas:')) {
         const [, ctx, cat, authorId, outcomeId = '', failIndex = '0'] = customId.split(':');
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", flags: 64 });
         const payload = buildRoulettePaytablePayload(cat, ctx, authorId, outcomeId, failIndex);
         const components = [...(payload.components || [])];
         if (ctx === 'res' && rouletteChoixEnAttente.has(interaction.message.id) && components.length < 5) {
@@ -8981,12 +9026,12 @@ async function handleRouletteButton(interaction, client) {
         const decision = parts[1];
         if (decision === 'no') {
             const ownerId = parts[2];
-            if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
             return interaction.update({ content: '👌 D\'accord, l\'objet reste bien au chaud dans ton inventaire.', components: [] });
         }
         const itemChoisi = parts[2];
         const targetUserId = parts[3];
-        if (interaction.user.id !== targetUserId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+        if (interaction.user.id !== targetUserId) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
 
         const consomme = consommerInventaireRoulette(targetUserId, itemChoisi);
         if (!consomme) {
@@ -9034,14 +9079,14 @@ async function handleRouletteButton(interaction, client) {
         const view = parts[4] || 'img';
         const fromHub = parts[5] === '1';
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Ce n'est pas ton menu d'inspection 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ton menu d'inspection 😌", flags: 64 });
         }
 
         const cibleId = interaction.values[0];
-        if (cibleId === 'aucun') return interaction.reply({ content: "Aucun autre joueur éligible à inspecter.", ephemeral: true });
+        if (cibleId === 'aucun') return interaction.reply({ content: "Aucun autre joueur éligible à inspecter.", flags: 64 });
         const cible = interaction.guild.members.cache.get(cibleId) || await interaction.guild.members.fetch(cibleId).catch(() => null);
-        if (!cible) return interaction.reply({ content: "Membre introuvable sur le serveur.", ephemeral: true });
-        if (cible.user?.bot) return interaction.reply({ content: "❌ Impossible d'inspecter un bot !", ephemeral: true });
+        if (!cible) return interaction.reply({ content: "Membre introuvable sur le serveur.", flags: 64 });
+        if (cible.user?.bot) return interaction.reply({ content: "❌ Impossible d'inspecter un bot !", flags: 64 });
 
         await interaction.deferUpdate();
         if (type === 'state') {
@@ -9066,19 +9111,19 @@ async function handleRouletteButton(interaction, client) {
         const authorId = parts[3];
         const view = parts[4] || 'img';
         const fromHub = parts[5] === '1';
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", flags: 64 });
         const cible = interaction.guild.members.cache.get(cibleId) || await interaction.guild.members.fetch(cibleId).catch(() => null);
-        if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
+        if (!cible) return interaction.reply({ content: "Membre introuvable.", flags: 64 });
         await interaction.update(buildRouletteSecretAchievementsPayload(cible, authorId, view, fromHub));
         return true;
     }
 
     if (customId.startsWith('rlt_dex:')) {
         const [, cibleId, cat, pageStr, authorId, hubFlag = '0'] = customId.split(':');
-        if (!canControlRouletteOwner(interaction.user.id, authorId)) return interaction.reply({ content: "Ce n'est pas ta commande !", ephemeral: true });
+        if (!canControlRouletteOwner(interaction.user.id, authorId)) return interaction.reply({ content: "Ce n'est pas ta commande !", flags: 64 });
         await interaction.deferUpdate();
         const cible = interaction.guild.members.cache.get(cibleId) || await interaction.guild.members.fetch(cibleId).catch(() => null);
-        if (!cible) return interaction.followUp({ content: "Membre introuvable.", ephemeral: true });
+        if (!cible) return interaction.followUp({ content: "Membre introuvable.", flags: 64 });
         await interaction.editReply({
             ...buildRouletteDexPayload(cible, cat, parseInt(pageStr, 10) || 0, authorId, hubFlag === '1'),
             files: [],
@@ -9094,9 +9139,9 @@ async function handleRouletteButton(interaction, client) {
         const authorId = parts[4];
         const view = parts[5] || 'img';
         const fromHub = parts[6] === '1';
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", flags: 64 });
         const cible = interaction.guild.members.cache.get(cibleId) || await interaction.guild.members.fetch(cibleId).catch(() => null);
-        if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
+        if (!cible) return interaction.reply({ content: "Membre introuvable.", flags: 64 });
         await interaction.deferUpdate();
         const payload = await buildRouletteAchievementsPayload(cible, page, authorId, view, fromHub);
         await interaction.editReply({ ...payload, files: payload.files ?? [], attachments: [] });
@@ -9107,9 +9152,9 @@ async function handleRouletteButton(interaction, client) {
         const cibleId = parts[3];
         const authorId = parts[4];
         const fromHub = parts[5] === '1';
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ta commande !", flags: 64 });
         const cible = interaction.guild.members.cache.get(cibleId) || await interaction.guild.members.fetch(cibleId).catch(() => null);
-        if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
+        if (!cible) return interaction.reply({ content: "Membre introuvable.", flags: 64 });
         await interaction.deferUpdate();
         const payload = await buildRouletteStatsPayload(cible, authorId, 'img', fromHub);
         await interaction.editReply({ ...payload, files: payload.files ?? [], attachments: [] });
@@ -9117,20 +9162,20 @@ async function handleRouletteButton(interaction, client) {
     }
     if (customId.startsWith('roulette_id_')) {
         const [, , type, authorId] = customId.split('_');
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
         await interaction.update({ embeds: [buildRouletteTypeEmbed(type)] });
         return true;
     }
     if (customId.startsWith('roulette_probas_pres_')) {
         const authorId = customId.split('_')[3];
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", flags: 64 });
         const payload = buildRoulettePaytablePayload('bonus', 'pres', authorId);
         await interaction.update({ ...payload, files: [], attachments: [] });
         return true;
     }
     if (customId.startsWith('roulette_back_pres_')) {
         const authorId = customId.split('_')[3];
-        if (!canControlRouletteOwner(interaction.user.id, authorId)) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
+        if (!canControlRouletteOwner(interaction.user.id, authorId)) return interaction.reply({ content: "C'est pas ton tirage 😌", flags: 64 });
         const payload = buildRouletteHubPayload(authorId, interaction.guildId);
         await interaction.update({ content: null, ...payload, files: [], attachments: [] });
         if (interaction.message) scheduleRouletteHubAutoDelete(interaction.message);
@@ -9138,11 +9183,11 @@ async function handleRouletteButton(interaction, client) {
     }
     if (customId.startsWith('roulette_tenter_')) {
         const authorId = customId.split('_')[2];
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", flags: 64 });
         const res = await tirerEtConstruireResultatRoulette(authorId, interaction.guild, interaction.channel, client);
         if (res.cooldown) {
             const member = interaction.member || { id: authorId, displayName: interaction.user.username, user: interaction.user };
-            await interaction.reply({ ...buildCooldownQuickUsePayload(member, res.finCooldown), ephemeral: true });
+            await interaction.reply({ ...buildCooldownQuickUsePayload(member, res.finCooldown), flags: 64 });
             return true;
         }
         await interaction.deferUpdate();
@@ -9152,17 +9197,22 @@ async function handleRouletteButton(interaction, client) {
         if (res.attenteChoix) rouletteChoixEnAttente.add(interaction.message.id);
         if (res.vote) await demarrerVoteRoulette(interaction.message, res.vote);
         if (res.differe) {
-            setTimeout(async () => {
-                const embedFinal = await res.differe();
-                memoriserResultatRoulette(interaction.message.id, embedFinal, res.outcomeId, res.gifOptions);
-                interaction.message.edit({ embeds: [embedFinal] }).catch(() => {});
+            const timerDiffere = setTimeout(async () => {
+                try {
+                    const embedFinal = await res.differe();
+                    memoriserResultatRoulette(interaction.message.id, embedFinal, res.outcomeId, res.gifOptions);
+                    await interaction.message.edit({ embeds: [embedFinal] }).catch(() => {});
+                } catch (err) {
+                    console.warn('[ROULETTE] Résultat différé échoué :', err);
+                }
             }, 10000);
+            timerDiffere.unref?.();
         }
         return true;
     }
     if (customId.startsWith('roulette_fallback_')) {
         const authorId = customId.split('_')[2];
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", flags: 64 });
         await interaction.deferUpdate();
         const outcomeId = interaction.values[0];
         const auteurNom = interaction.member?.displayName ?? interaction.user.username;
@@ -9193,13 +9243,13 @@ async function handleRouletteButton(interaction, client) {
             const member = interaction.member || { id: interaction.user.id, displayName: interaction.user.username, user: interaction.user };
             await interaction.reply({
                 ...buildRouletteNotifMenuPayload(member, 'ephem'),
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
 
         if (ownerId && interaction.user.id !== ownerId) {
-            return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            return interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
         }
 
         const userId = ownerId || interaction.user.id;
@@ -9312,7 +9362,7 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('roulette_notif_mp') || customId.startsWith('roulette_notifmp_')) {
         const userId = interaction.user.id;
         const fin = rouletteCooldowns.get(userId) ?? 0;
-        if (Date.now() >= fin) return interaction.reply({ content: "Ton cooldown est déjà terminé ! 🎰", ephemeral: true });
+        if (Date.now() >= fin) return interaction.reply({ content: "Ton cooldown est déjà terminé ! 🎰", flags: 64 });
 
         rouletteNotifs.set(userId, 'MP');
         armerNotifRoulette(userId, 'MP', client);
@@ -9320,7 +9370,7 @@ async function handleRouletteButton(interaction, client) {
         const member = interaction.member || { id: userId, displayName: interaction.user.username, user: interaction.user };
         await interaction.reply({
             ...buildRouletteNotifMenuPayload(member, 'ephem', `✅ *C'est noté ! Je te préviendrai **en MP** <t:${Math.ceil(fin / 1000)}:R>.*`),
-            ephemeral: true
+            flags: 64
         });
         return true;
     }
@@ -9328,7 +9378,7 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('roulette_notif')) {
         const userId = interaction.user.id;
         const fin = rouletteCooldowns.get(userId) ?? 0;
-        if (Date.now() >= fin) return interaction.reply({ content: "Ton cooldown est déjà terminé ! 🎰", ephemeral: true });
+        if (Date.now() >= fin) return interaction.reply({ content: "Ton cooldown est déjà terminé ! 🎰", flags: 64 });
 
         rouletteNotifs.set(userId, interaction.channelId);
         armerNotifRoulette(userId, interaction.channelId, client);
@@ -9336,7 +9386,7 @@ async function handleRouletteButton(interaction, client) {
         const member = interaction.member || { id: userId, displayName: interaction.user.username, user: interaction.user };
         await interaction.reply({
             ...buildRouletteNotifMenuPayload(member, 'ephem', `✅ *C'est noté ! Je te préviendrai **dans ce salon** <t:${Math.ceil(fin / 1000)}:R>.*`),
-            ephemeral: true
+            flags: 64
         });
         return true;
     }
@@ -9344,7 +9394,7 @@ async function handleRouletteButton(interaction, client) {
         const member = interaction.member;
         return interaction.reply({
             ...buildRouletteInventairePayload(member, interaction.user.id, { home: false, close: true }),
-            ephemeral: true
+            flags: 64
         });
     }
 
@@ -9353,13 +9403,13 @@ async function handleRouletteButton(interaction, client) {
         const decision = parts[1];
         if (decision === 'no') {
             const ownerId = parts[2];
-            if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+            if (interaction.user.id !== ownerId) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
             return interaction.update({ content: "👌 D'accord, ton objet reste dans ton inventaire !", components: [] });
         }
 
         const itemKey = parts[2];
         const userId = parts[3];
-        if (interaction.user.id !== userId) return interaction.reply({ content: "Pas pour toi 😌", ephemeral: true });
+        if (interaction.user.id !== userId) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
 
         const consomme = consommerInventaireRoulette(userId, itemKey);
         if (!consomme) {
@@ -9429,13 +9479,18 @@ async function handleRouletteButton(interaction, client) {
         if (res.attenteChoix) rouletteChoixEnAttente.add(envoye.id);
         if (res.vote) await demarrerVoteRoulette(envoye, res.vote);
         if (res.differe) {
-            setTimeout(async () => {
-                const embedFinal = await res.differe();
-                const dFin = embedFinal?.data?.description || '';
-                if (dFin && !dFin.includes(tagUtilise)) embedFinal.setDescription(`${dFin}\n${tagUtilise}`);
-                memoriserResultatRoulette(envoye.id, embedFinal, res.outcomeId, res.gifOptions);
-                envoye.edit({ embeds: [embedFinal] }).catch(() => {});
+            const timerDiffere = setTimeout(async () => {
+                try {
+                    const embedFinal = await res.differe();
+                    const dFin = embedFinal?.data?.description || '';
+                    if (dFin && !dFin.includes(tagUtilise)) embedFinal.setDescription(`${dFin}\n${tagUtilise}`);
+                    memoriserResultatRoulette(envoye.id, embedFinal, res.outcomeId, res.gifOptions);
+                    await envoye.edit({ embeds: [embedFinal] }).catch(() => {});
+                } catch (err) {
+                    console.warn('[ROULETTE] Résultat différé échoué :', err);
+                }
             }, 10000);
+            timerDiffere.unref?.();
         }
         return true;
     }
@@ -9447,11 +9502,11 @@ async function handleRouletteButton(interaction, client) {
             const member = interaction.member || { id: clickerId, displayName: interaction.user.username, user: interaction.user };
             return interaction.reply({
                 ...buildCooldownQuickUsePayload(member, res.finCooldown),
-                ephemeral: true
+                flags: 64
             });
         }
 
-        await interaction.reply({ content: "🎲 Tirage envoyé dans le salon !", ephemeral: true }).catch(() => {});
+        await interaction.reply({ content: "🎲 Tirage envoyé dans le salon !", flags: 64 }).catch(() => {});
 
         const envoye = await interaction.channel.send({
             embeds: res.embeds,
@@ -9466,11 +9521,16 @@ async function handleRouletteButton(interaction, client) {
         if (res.attenteChoix) rouletteChoixEnAttente.add(envoye.id);
         if (res.vote) await demarrerVoteRoulette(envoye, res.vote);
         if (res.differe) {
-            setTimeout(async () => {
-                const embedFinal = await res.differe();
-                memoriserResultatRoulette(envoye.id, embedFinal, res.outcomeId, res.gifOptions);
-                envoye.edit({ embeds: [embedFinal] }).catch(() => {});
+            const timerDiffere = setTimeout(async () => {
+                try {
+                    const embedFinal = await res.differe();
+                    memoriserResultatRoulette(envoye.id, embedFinal, res.outcomeId, res.gifOptions);
+                    await envoye.edit({ embeds: [embedFinal] }).catch(() => {});
+                } catch (err) {
+                    console.warn('[ROULETTE] Résultat différé échoué :', err);
+                }
             }, 10000);
+            timerDiffere.unref?.();
         }
         return true;
     }
@@ -9487,7 +9547,7 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('rlt_claim_sel_')) {
         const [, , , actionType, targetUserId] = customId.split('_');
         if (interaction.user.id !== targetUserId) {
-            return interaction.reply({ content: "Ce n'est pas ton bonus à configurer 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ton bonus à configurer 😌", flags: 64 });
         }
         const selectedId = interaction.values[0];
         if (selectedId === 'aucun') {
@@ -9498,21 +9558,21 @@ async function handleRouletteButton(interaction, client) {
         const cible = interaction.guild?.members.cache.get(selectedId)
             || await interaction.guild?.members?.fetch?.(selectedId).catch(() => null);
         if (!cible) {
-            return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
+            return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", flags: 64 });
         }
         if (cible.user?.bot) {
-            return interaction.reply({ content: "❌ Tu ne peux pas sélectionner un bot !", ephemeral: true });
+            return interaction.reply({ content: "❌ Tu ne peux pas sélectionner un bot !", flags: 64 });
         }
         if (ROULETTE_ROLE_JOUEUR_ID && !cible.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID)) {
-            return interaction.reply({ content: `❌ **${cible.displayName}** ne participe pas à la roulette (rôle manquant) ! Choisis un.e autre joueur.euse.`, ephemeral: true });
+            return interaction.reply({ content: `❌ **${cible.displayName}** ne participe pas à la roulette (rôle manquant) ! Choisis un.e autre joueur.euse.`, flags: 64 });
         }
 
         if (actionType === 'redirectChoix') {
             if (cible.id === targetUserId) {
-                return interaction.reply({ content: "❌ Tu ne peux pas te renvoyer ton propre malus à toi-même !", ephemeral: true });
+                return interaction.reply({ content: "❌ Tu ne peux pas te renvoyer ton propre malus à toi-même !", flags: 64 });
             }
             if (estProtegeAntiAcharnement(cible.id)) {
-                return interaction.reply({ content: ROULETTE_ANTI_ACHARNEMENT_MSG, ephemeral: true });
+                return interaction.reply({ content: ROULETTE_ANTI_ACHARNEMENT_MSG, flags: 64 });
             }
             const liste = ajouterCibleListe(rouletteRedirectChoixCible, targetUserId, cible.id);
             bridge.demanderSauvegarde();
@@ -9526,7 +9586,7 @@ async function handleRouletteButton(interaction, client) {
 
         if (actionType === 'redirectBonusChoix') {
             if (cible.id === targetUserId) {
-                return interaction.reply({ content: "❌ Tu ne peux pas te rediriger ton bonus à toi-même !", ephemeral: true });
+                return interaction.reply({ content: "❌ Tu ne peux pas te rediriger ton bonus à toi-même !", flags: 64 });
             }
             const liste = ajouterCibleListe(rouletteRedirectBonusChoixCible, targetUserId, cible.id);
             bridge.demanderSauvegarde();
@@ -9540,7 +9600,7 @@ async function handleRouletteButton(interaction, client) {
 
         if (actionType === 'partageBonus') {
             if (cible.id === targetUserId) {
-                return interaction.reply({ content: "❌ Tu ne peux pas partager ton bonus avec toi-même !", ephemeral: true });
+                return interaction.reply({ content: "❌ Tu ne peux pas partager ton bonus avec toi-même !", flags: 64 });
             }
             const liste = ajouterCibleListe(roulettePartageBonusChoixCible, targetUserId, cible.id);
             bridge.demanderSauvegarde();
@@ -9576,7 +9636,7 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('rlt_poison_selmalus_')) {
         const targetUserId = customId.split('_')[3];
         if (interaction.user.id !== targetUserId) {
-            return interaction.reply({ content: "Ce n'est pas ton objet 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ton objet 😌", flags: 64 });
         }
         const malusChoisi = interaction.values[0];
         const rowUser = new ActionRowBuilder().addComponents(
@@ -9596,7 +9656,7 @@ async function handleRouletteButton(interaction, client) {
         const malusKey = parts.slice(4).join('_');
 
         if (interaction.user.id !== targetUserId) {
-            return interaction.reply({ content: "Ce n'est pas ton objet 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ton objet 😌", flags: 64 });
         }
 
         const selectedId = interaction.values[0];
@@ -9607,14 +9667,14 @@ async function handleRouletteButton(interaction, client) {
         }
         const cible = interaction.guild?.members.cache.get(selectedId)
             || await interaction.guild?.members?.fetch?.(selectedId).catch(() => null);
-        if (!cible) return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", ephemeral: true });
-        if (cible.user?.bot) return interaction.reply({ content: "❌ Tu ne peux pas transférer de malus à un bot !", ephemeral: true });
-        if (cible.id === targetUserId) return interaction.reply({ content: "❌ Tu ne peux pas t'envoyer ton propre malus !", ephemeral: true });
+        if (!cible) return interaction.reply({ content: "❌ Membre introuvable sur le serveur.", flags: 64 });
+        if (cible.user?.bot) return interaction.reply({ content: "❌ Tu ne peux pas transférer de malus à un bot !", flags: 64 });
+        if (cible.id === targetUserId) return interaction.reply({ content: "❌ Tu ne peux pas t'envoyer ton propre malus !", flags: 64 });
         if (ROULETTE_ROLE_JOUEUR_ID && !cible.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID)) {
-            return interaction.reply({ content: `❌ **${cible.displayName}** ne participe pas à la roulette (rôle manquant) !`, ephemeral: true });
+            return interaction.reply({ content: `❌ **${cible.displayName}** ne participe pas à la roulette (rôle manquant) !`, flags: 64 });
         }
         if (estProtegeAntiAcharnement(cible.id)) {
-            return interaction.reply({ content: ROULETTE_ANTI_ACHARNEMENT_MSG, ephemeral: true });
+            return interaction.reply({ content: ROULETTE_ANTI_ACHARNEMENT_MSG, flags: 64 });
         }
 
         const transfertResult = transfererMalus(targetUserId, cible.id, malusKey, interaction.guild);
@@ -9646,7 +9706,7 @@ async function handleRouletteButton(interaction, client) {
         const nouveauPseudo = interaction.fields.getTextInputValue('nouveau_pseudo_val').trim();
         const cible = interaction.guild?.members.cache.get(cibleId)
             || await interaction.guild?.members?.fetch?.(cibleId).catch(() => null);
-        if (!cible) return interaction.reply({ content: "Membre introuvable.", ephemeral: true });
+        if (!cible) return interaction.reply({ content: "Membre introuvable.", flags: 64 });
 
         const lockExistant = roulettePseudoLock.get(cible.id);
         const originalNickname = lockExistant?.originalNickname !== undefined ? lockExistant.originalNickname : (cible.nickname ?? null);
@@ -9660,7 +9720,7 @@ async function handleRouletteButton(interaction, client) {
 
         await interaction.reply({
             content: `✅ <@${cible.id}> est renommé·e en **${nouveauPseudo}** par <@${targetUserId}>, verrouillé pendant **${labelDuree}** !`,
-            ephemeral: false
+            flags: 0
         });
         return true;
     }
@@ -9668,12 +9728,12 @@ async function handleRouletteButton(interaction, client) {
     if (customId.startsWith('roulette_probas_res_')) {
         const [, , , authorId, outcomeId, failIndex] = customId.split('_');
         const payload = buildRoulettePaytablePayload('bonus', 'res', interaction.user.id, outcomeId, failIndex);
-        await interaction.reply({ ...payload, ephemeral: true });
+        await interaction.reply({ ...payload, flags: 64 });
         return true;
     }
     if (customId.startsWith('roulette_back_res_')) {
         const [, , , authorId, outcomeId, failIndex] = customId.split('_');
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "C'est pas ton tirage 😌", flags: 64 });
         const memo = rouletteResultats.get(interaction.message.id);
         let embed = memo?.embed || (memo?.data ? memo : null);
         const storedOutcomeId = memo?.outcomeId || outcomeId;
@@ -9773,14 +9833,20 @@ async function handleRouletteTransfoMessage(message, client) {
         }
     }
     if (!modifie) {
-        if (echoReplique) setTimeout(() => { message.reply(echoReplique).catch(() => {}); }, 1200);
+        if (echoReplique) {
+            const echoTimer = setTimeout(() => { message.reply(echoReplique).catch(() => {}); }, 1200);
+            echoTimer.unref?.();
+        }
         return;
     }
 
     const salonWebhook = message.channel.isThread() ? message.channel.parent : message.channel;
     const webhook = await assurerWebhookRoulette(salonWebhook);
     if (!webhook) {
-        if (echoReplique) setTimeout(() => { message.reply(echoReplique).catch(() => {}); }, 1200);
+        if (echoReplique) {
+            const echoTimer = setTimeout(() => { message.reply(echoReplique).catch(() => {}); }, 1200);
+            echoTimer.unref?.();
+        }
         return;
     }
 
@@ -9823,15 +9889,17 @@ async function handleRouletteTransfoMessage(message, client) {
         }
         if (!client.webhookDeletedMessages) client.webhookDeletedMessages = new Set();
         client.webhookDeletedMessages.add(message.id);
-        setTimeout(() => client.webhookDeletedMessages?.delete(message.id), 15000);
+        const deletedMessageTimer = setTimeout(() => client.webhookDeletedMessages?.delete(message.id), 15000);
+        deletedMessageTimer.unref?.();
         await message.delete().catch(() => {});
         if (echoReplique) {
-            setTimeout(() => {
+            const echoTimer = setTimeout(() => {
                 if (msgWebhook?.reply) msgWebhook.reply(echoReplique).catch(() => {});
                 else message.channel.send(echoReplique).catch(() => {});
             }, 1200);
+            echoTimer.unref?.();
         }
-    } catch {}
+    } catch (err) { console.warn('[ROULETTE] Traitement de la réplique échoué :', err); }
 }
 
 async function handleRoulettePseudoLock(oldMember, newMember) {
