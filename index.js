@@ -1577,6 +1577,50 @@ function lireNombreCartesDiagnostic() {
     }
 }
 
+const DIAG_OWNER_ID = '436218312574107658';
+const DIAG_REDEPLOY_PREFIX = 'diag_redeploy:';
+
+function construireBoutonsRedeploiement() {
+    return [new ActionRowBuilder().addComponents(
+        ...[
+            ['minijeux', 'Mini-jeux', '🎮'],
+            ['roulette', 'Roulette', '🎰'],
+            ['tcg', 'RegaDex', '🃏']
+        ].map(([type, label, emoji]) =>
+            new ButtonBuilder()
+                .setCustomId(DIAG_REDEPLOY_PREFIX + type)
+                .setLabel(label)
+                .setEmoji(emoji)
+                .setStyle(ButtonStyle.Secondary)
+        )
+    )];
+}
+
+async function retirerAnciensBoutonsRedeploiement(salon, nouveauMessageId) {
+    // Limité aux 100 derniers messages, sans suppression ni édition
+    // d'autres contenus que les composants de nos annonces.
+    try {
+        const recents = await salon.messages.fetch({ limit: 100 });
+        for (const msg of recents.values()) {
+            if (
+                msg.id === nouveauMessageId ||
+                msg.author?.id !== salon.client.user?.id ||
+                !msg.content?.includes('Mise à jour faite, je suis de retour !') ||
+                !msg.components?.some(row =>
+                    row.components?.some(component =>
+                        component.customId?.startsWith(DIAG_REDEPLOY_PREFIX)
+                    )
+                )
+            ) continue;
+            await msg.edit({ components: [] }).catch(error =>
+                console.warn('[DIAG] Retrait des anciens boutons impossible :', error)
+            );
+        }
+    } catch (error) {
+        console.warn('[DIAG] Recherche des anciennes annonces impossible :', error);
+    }
+}
+
 function construireDiagnosticSpecialise(type, ownerId) {
     const diagnostics = {
         minijeux: {
@@ -1633,19 +1677,35 @@ function construireDiagnosticSpecialise(type, ownerId) {
     const diag = diagnostics[type] || diagnostics.minijeux;
     const controlesOk = diag.controles.filter(([, ok]) => ok).length;
 
+    const complet = controlesOk === diag.controles.length;
     const embed = new EmbedBuilder()
-        .setColor(controlesOk === diag.controles.length ? 0x2ecc71 : 0xe67e22)
+        .setColor(complet ? 0x2ecc71 : 0xe67e22)
         .setTitle(diag.titre)
         .setDescription(
-            `**Contrôles structurels : ${controlesOk}/${diag.controles.length}**\n\n` +
-            diag.controles.map(([nom, ok]) =>
-                `${ok ? '✅' : '❌'} ${nom}`
-            ).join('\n') +
-            '\n\n**Informations**\n' +
-            diag.informations.join('\n') +
-            '\n\n-# Ces contrôles vérifient les modules et les états disponibles, pas le résultat d’un test fonctionnel complet.'
+            `${complet ? '🟢 **Tous les contrôles sont validés**' : '🟠 **Attention : certains contrôles ont échoué**'}\n` +
+            `**${controlesOk} / ${diag.controles.length} vérifications réussies**`
         )
-        .setFooter({ text: `Cacabot ${getVersionString()} • Diagnostic ${type}` })
+        .addFields(
+            {
+                name: '🛡️ Vérifications des modules',
+                value: diag.controles.map(([nom, ok]) =>
+                    `${ok ? '🟢' : '🔴'} **${nom}** — ${ok ? 'Disponible' : 'À vérifier'}`
+                ).join('\n'),
+                inline: false
+            },
+            {
+                name: '📊 État actuel',
+                value: diag.informations.join('\n'),
+                inline: false
+            },
+            {
+                name: 'ℹ️ Lecture du diagnostic',
+                value: '🟢 Disponible = module chargé. 🔴 À vérifier = contrôle non validé. ' +
+                    'Cela ne remplace pas un test fonctionnel en conditions réelles.',
+                inline: false
+            }
+        )
+        .setFooter({ text: `Cacabot ${getVersionString()} • Diagnostic ${type} • Actualisé` })
         .setTimestamp();
 
     const navigation = new ActionRowBuilder().addComponents(
@@ -1690,6 +1750,29 @@ try {
                 content: '⏳ Cacabot charge ses données. Réessaie dans quelques instants.',
                 flags: MessageFlags.Ephemeral
             }).catch(() => {});
+        }
+        return;
+    }
+
+    // Boutons des annonces de redéploiement : diagnostic privé,
+    // sans modifier le message public.
+    if (
+        interaction.isButton() &&
+        interaction.customId.startsWith(DIAG_REDEPLOY_PREFIX)
+    ) {
+        if (interaction.user.id !== DIAG_OWNER_ID) {
+            await interaction.reply({
+                content: '⛔ Diagnostic réservé à Epsys.',
+                flags: MessageFlags.Ephemeral
+            });
+            return;
+        }
+        const type = interaction.customId.slice(DIAG_REDEPLOY_PREFIX.length);
+        if (['minijeux', 'roulette', 'tcg'].includes(type)) {
+            await interaction.reply({
+                ...construireDiagnosticSpecialise(type, interaction.user.id),
+                flags: MessageFlags.Ephemeral
+            });
         }
         return;
     }
@@ -2307,7 +2390,11 @@ client.once('ready', async () => {
 
                 if (nouveauCommitDetecte) {
                     const versionTexte = ` *(Version ${getVersionString()})*`;
-                    const msgRetour = await salonNotif.send(`✅ Mise à jour faite, je suis de retour !${versionTexte}\nLaisse-moi encore 10 secondes et tu pourras exéctuer des commandes...`);
+                    const msgRetour = await salonNotif.send({
+                        content: `✅ Mise à jour faite, je suis de retour !${versionTexte}\nLaisse-moi encore 10 secondes et tu pourras exécuter des commandes...`,
+                        components: construireBoutonsRedeploiement()
+                    });
+                    await retirerAnciensBoutonsRedeploiement(salonNotif, msgRetour.id);
                     setTimeout(async () => {
                         await msgRetour.edit(`✅ Mise à jour faite, je suis de retour !${versionTexte}\nTout est prêt :)`).catch(() => {});
                     }, 10000);
