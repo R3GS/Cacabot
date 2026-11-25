@@ -1275,6 +1275,16 @@ function canControlTcgOwner(interactionUserId, ownerId) {
     return interactionUserId === ownerId;
 }
 
+function buildTcgOwnerMismatchMessage(interaction) {
+    const possibleOwners = String(interaction.customId || '').match(/\d{17,20}/g) || [];
+    const owner = possibleOwners
+        .map(id => interaction.guild?.members?.cache?.get(id))
+        .find(member => member && member.id !== interaction.user.id);
+    const ownerName = owner?.displayName || owner?.user?.username;
+    const safeOwnerName = ownerName ? `**${ownerName.replace(/@/g, '@\u200b')}**` : 'un autre membre';
+    return `Ce menu appartient à ${safeOwnerName}. Lance \`!tcg\` pour ouvrir le tien.`;
+}
+
 function buildTcgMemberProxy(realMember, userId) {
     if (!isSandboxId(userId)) return realMember;
     const baseName = realMember?.displayName || realMember?.user?.username || 'Epsys';
@@ -5264,12 +5274,10 @@ function buildNotifMenuPayload(member, u, fromHub = false, statusNote = null, ep
     );
 
     const rows = [row1, row2];
-    if (!ephemeralMode) {
-        rows.push(new ActionRowBuilder().addComponents(
-            buildAccueilButton(member.id),
-            buildCloseButton(member.id)
-        ));
-    }
+    rows.push(new ActionRowBuilder().addComponents(
+        buildAccueilButton(member.id),
+        buildCloseButton(member.id)
+    ));
 
     return { embeds: [embed], components: rows };
 }
@@ -11185,6 +11193,74 @@ async function handleTcgInteraction(interaction) {
     const action = parts[1];
     const client = interaction.client;
 
+    // Les actions personnelles depuis le hub d'un autre membre s'ouvrent
+    // dans un panneau éphémère propre au membre qui clique.
+    if (interaction.isButton() && parts[0] === 'tcg') {
+        const personalOwnerByAction = {
+            open: parts[2],
+            open5: parts[2],
+            profile: parts[2],
+            guide: parts[2],
+            notif: parts[3],
+            store: parts[3],
+            claim: parts[3],
+            top: parts[3]
+        };
+        const hubOwnerId = personalOwnerByAction[action];
+        if (hubOwnerId && hubOwnerId !== interaction.user.id &&
+            !canControlTcgOwner(interaction.user.id, hubOwnerId)) {
+            const viewerId = interaction.user.id;
+            const viewerMember = interaction.member;
+            const viewerProxy = buildTcgMemberProxy(viewerMember, viewerId);
+
+            if (action === 'open' || action === 'open5') {
+                await showFocusChoice(
+                    interaction,
+                    viewerProxy,
+                    false,
+                    action === 'open5' ? 'five' : 'normal'
+                );
+                return true;
+            }
+
+            const viewerData = getOrCreateTcgUser(viewerId);
+            let payload;
+
+            if (action === 'profile') {
+                payload = buildProfilePayload(viewerProxy, viewerData, false, false);
+            } else if (action === 'guide') {
+                payload = buildGuidePayload(viewerId, false);
+            } else if (action === 'notif') {
+                payload = buildNotifMenuPayload(viewerProxy, viewerData, false, null, true);
+            } else if (action === 'store') {
+                payload = buildStorePayload(viewerProxy, viewerData, false);
+            } else if (action === 'claim') {
+                payload = buildClaimPayload(viewerProxy, viewerData, false);
+            } else if (action === 'top') {
+                payload = {
+                    embeds: [buildTopEmbed(interaction.guild, 'total')],
+                    components: buildTopComponents(viewerId, 'total', false)
+                };
+            }
+
+            if (payload) {
+                await interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
+                return true;
+            }
+        }
+    }
+
+    if (action === 'binder' && parts[2] === 'open' && interaction.isButton()) {
+        const ownerId = parts[3];
+        if (ownerId !== interaction.user.id && !canControlTcgOwner(interaction.user.id, ownerId)) {
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+            const viewerMember = buildTcgMemberProxy(interaction.member, interaction.user.id);
+            const payload = await buildBinderReplyPayload(viewerMember, interaction.user.id, { fromHub: false });
+            await interaction.editReply(payload);
+            return true;
+        }
+    }
+
     if (interaction.message?.id && panelAutoDeleteTimers.has(interaction.message.id) && action !== 'close') {
         schedulePanelAutoDelete(interaction.message);
     }
@@ -11218,7 +11294,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'hub' && interaction.isButton()) {
         const ownerId = parts[2];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Ce menu ne t'est pas destiné !", flags: 64 });
+            await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
             return true;
         }
         const msg = interaction.message;
@@ -11267,7 +11343,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'help' && interaction.isButton()) {
         const ownerId = parts[2];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+            await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
             return true;
         }
         await interaction.update({ content: null, files: [], attachments: [], ...buildHelpPayload(ownerId) });
@@ -11280,7 +11356,7 @@ async function handleTcgInteraction(interaction) {
         const fromHub = parts[3] === '1';
         const showRarities = parts[4] === '1';
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+            await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
             return true;
         }
         const u = getOrCreateTcgUser(ownerId);
@@ -11298,7 +11374,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'hubflex' && interaction.isButton()) {
         const ownerId = parts[2];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+            await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
             return true;
         }
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
@@ -11313,7 +11389,7 @@ async function handleTcgInteraction(interaction) {
 
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({
-                content: "Pas pour toi 😌",
+                content: buildTcgOwnerMismatchMessage(interaction),
                 flags: 64
             });
             return true;
@@ -11336,7 +11412,7 @@ async function handleTcgInteraction(interaction) {
 
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({
-                content: "Pas pour toi 😌",
+                content: buildTcgOwnerMismatchMessage(interaction),
                 flags: 64
             });
             return true;
@@ -11361,7 +11437,7 @@ async function handleTcgInteraction(interaction) {
 
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({
-                content: "Pas pour toi 😌",
+                content: buildTcgOwnerMismatchMessage(interaction),
                 flags: 64
             });
             return true;
@@ -11382,7 +11458,7 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[2];
         const fromHub = parts[3] === '1';
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+            await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
             return true;
         }
         const payload = buildCreditsPayload(ownerId, fromHub);
@@ -11397,7 +11473,7 @@ async function handleTcgInteraction(interaction) {
 
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({
-                content: "Ce bouton ne t'est pas destiné !",
+                content: buildTcgOwnerMismatchMessage(interaction),
                 flags: 64
             });
             return true;
@@ -11422,7 +11498,7 @@ async function handleTcgInteraction(interaction) {
 
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({
-                content: "Ce bouton ne t'est pas destiné !",
+                content: buildTcgOwnerMismatchMessage(interaction),
                 flags: 64
             });
             return true;
@@ -11987,7 +12063,7 @@ async function handleTcgInteraction(interaction) {
         const fromHub = parts[4] === '1';
         const ephemeralMode = parts[4] === 'ephem';
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+            await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
             return true;
         }
         if (isSandboxId(ownerId)) {
@@ -12102,7 +12178,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'theme' && interaction.isButton()) {
         const ownerId = parts[2];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Ce bouton ne t'est pas destiné !", flags: 64 });
+            await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
             return true;
         }
         const u = getOrCreateTcgUser(ownerId);
@@ -12117,7 +12193,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'store' && interaction.isButton()) {
         const ownerId = parts[3];
         const fromHub = parts[4] === '1';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const u = getOrCreateTcgUser(ownerId);
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
         const payload = buildStorePayload(actorMember, u, fromHub);
@@ -12128,7 +12204,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'claim' && interaction.isButton()) {
         const ownerId = parts[3];
         const fromHub = parts[4] === '1';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const u = getOrCreateTcgUser(ownerId);
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
         const payload = buildClaimPayload(actorMember, u, fromHub);
@@ -12138,7 +12214,7 @@ async function handleTcgInteraction(interaction) {
 
     if (action === 'buyholocancel' && interaction.isButton()) {
         const ownerId = parts[2];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         await interaction.update({ content: '❌ Achat annulé.', embeds: [], components: [] });
         return true;
     }
@@ -12148,7 +12224,7 @@ async function handleTcgInteraction(interaction) {
         const fromHub = parts[3] === '1';
         const storeMsgId = parts[4] || '';
         const hubSuffix = fromHub ? ':1' : '';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
 
         const price = STORE_PRICES.holoTransform;
         const u = getOrCreateTcgUser(ownerId);
@@ -12201,7 +12277,7 @@ async function handleTcgInteraction(interaction) {
         const fromHub = parts[3] === '1';
         const storeMsgId = parts[4] || '';
         const hubSuffix = fromHub ? ':1' : '';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
 
         const price = STORE_PRICES.negativeTransform;
         const u = getOrCreateTcgUser(ownerId);
@@ -12254,7 +12330,7 @@ async function handleTcgInteraction(interaction) {
 
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({
-                content: 'Pas pour toi 😌',
+                content: buildTcgOwnerMismatchMessage(interaction),
                 flags: 64
             });
             return true;
@@ -12275,7 +12351,7 @@ async function handleTcgInteraction(interaction) {
 
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
             await interaction.reply({
-                content: 'Pas pour toi 😌',
+                content: buildTcgOwnerMismatchMessage(interaction),
                 flags: 64
             });
             return true;
@@ -12387,7 +12463,7 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[3];
         const fromHub = parts[4] === '1';
         const hubSuffix = fromHub ? ':1' : '';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
 
         const price = STORE_PRICES[itemKey];
         const u = getOrCreateTcgUser(ownerId);
@@ -12630,7 +12706,7 @@ async function handleTcgInteraction(interaction) {
         const itemKey = parts[3];
         const ownerId = parts[4];
         const fromHub = parts[5] === '1';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
 
         const backRows = [
@@ -12758,7 +12834,7 @@ async function handleTcgInteraction(interaction) {
         const itemKey = parts[2];
         const ownerId = parts[3];
         const fromHub = parts[4] === '1';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const u = getOrCreateTcgUser(ownerId);
         if ((u.inventory[itemKey] || 0) <= 0) return interaction.reply({ content: "❌ Stock insuffisant.", flags: 64 }), true;
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
@@ -12812,7 +12888,7 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[2];
         const page = parseInt(parts[3], 10) || 0;
         const fromHub = parts[4] === '1';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
         await sendNegativeTransformPicker(interaction, actorMember, page, fromHub);
         return true;
@@ -12820,7 +12896,7 @@ async function handleTcgInteraction(interaction) {
 
     if (action === 'negpick' && interaction.isStringSelectMenu()) {
         const ownerId = parts[2];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
 
         const baseId = interaction.values[0];
         const baseCard = cardById.get(baseId);
@@ -12881,7 +12957,7 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[2];
         const page = parseInt(parts[3], 10) || 0;
         const fromHub = parts[4] === '1';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
         await sendHoloTransformPicker(interaction, actorMember, page, fromHub);
         return true;
@@ -12889,7 +12965,7 @@ async function handleTcgInteraction(interaction) {
 
     if (action === 'holopick' && interaction.isStringSelectMenu()) {
         const ownerId = parts[2];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
 
         const baseId = interaction.values[0];
         const baseCard = cardById.get(baseId);
@@ -12944,7 +13020,7 @@ async function handleTcgInteraction(interaction) {
 
         if (sub === 'pickuser' && interaction.isUserSelectMenu()) {
             const viewerId = parts[3];
-            if (!canControlTcgOwner(interaction.user.id, viewerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+            if (!canControlTcgOwner(interaction.user.id, viewerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
             const targetId = interaction.values[0];
             if (targetId === viewerId) {
                 await deferReplySilent(interaction);
@@ -12978,7 +13054,7 @@ async function handleTcgInteraction(interaction) {
 
             if (interaction.user.id !== viewerId) {
                 return interaction.reply({
-                    content: "Pas pour toi 😌",
+                    content: buildTcgOwnerMismatchMessage(interaction),
                     flags: 64
                 }), true;
             }
@@ -13004,7 +13080,7 @@ async function handleTcgInteraction(interaction) {
 
         if (sub === 'cancelask' && interaction.isButton()) {
             const viewerId = parts[3];
-            if (interaction.user.id !== viewerId) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+            if (interaction.user.id !== viewerId) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
             await interaction.update({ content: '❌ Demande de consultation annulée.', embeds: [], components: [] });
             return true;
         }
@@ -13012,7 +13088,7 @@ async function handleTcgInteraction(interaction) {
         if (sub === 'confirm' && interaction.isButton()) {
             const targetId = parts[3];
             const viewerId = parts[4];
-            if (interaction.user.id !== viewerId) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+            if (interaction.user.id !== viewerId) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
 
             await interaction.update({ content: `📨 Demande envoyée à <@${targetId}> *(avec mention)* !`, embeds: [], components: [] });
 
@@ -13059,7 +13135,7 @@ async function handleTcgInteraction(interaction) {
             const ownerId = parts[3];
             const viewerId = parts[4];
             const fromHub = parts[5] === '1';
-            if (!canControlTcgOwner(interaction.user.id, viewerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+            if (!canControlTcgOwner(interaction.user.id, viewerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
 
             const ownerMember = isSandboxId(ownerId)
                 ? buildTcgMemberProxy(interaction.member, TCGX_SANDBOX_ID)
@@ -13148,7 +13224,7 @@ async function handleTcgInteraction(interaction) {
         const binderMsgId = parts[2];
         const ownerId = parts[3];
         const viewerId = parts[4];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const card = getCardByIdAny(interaction.values[0]);
         const uOwner = getOrCreateTcgUser(ownerId);
         if (!card || (uOwner.cards?.[card.id] || 0) <= 0) {
@@ -13370,7 +13446,7 @@ async function handleTcgInteraction(interaction) {
     if ((action === 'cartehub' || action === 'cartemissing') && interaction.isButton()) {
         const ownerId = parts[2];
         const page = parseInt(parts[3], 10) || 0;
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
         await interaction.update({
             content: null,
@@ -13383,7 +13459,7 @@ async function handleTcgInteraction(interaction) {
 
     if (action === 'cartemissingsel' && interaction.isStringSelectMenu()) {
         const ownerId = parts[2];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const selected = interaction.values[0];
         if (selected.startsWith('__page:')) {
             const nextPage = parseInt(selected.slice('__page:'.length), 10) || 0;
@@ -13408,7 +13484,7 @@ async function handleTcgInteraction(interaction) {
 
     if (action === 'cartesearch' && interaction.isButton()) {
         const ownerId = parts[2];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const modal = new ModalBuilder()
             .setCustomId(`tcg:cartemodalsub:${ownerId}`)
             .setTitle('Rechercher une carte RegaDex');
@@ -13425,7 +13501,7 @@ async function handleTcgInteraction(interaction) {
 
     if (action === 'cartemodalsub' && interaction.isModalSubmit()) {
         const ownerId = parts[2];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const query = interaction.fields.getTextInputValue('carte_query').trim();
         const u = getOrCreateTcgUser(ownerId);
         const res = resolveCardQuery(query);
@@ -13490,7 +13566,7 @@ async function handleTcgInteraction(interaction) {
         const currentCardId = parts[3] || null;
         const rawSet = parts[4] || String(DEFAULT_SET_NUMBER);
         const activeSetNumber = rawSet === 'perso' ? 'perso' : (parseInt(rawSet, 10) || DEFAULT_SET_NUMBER);
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
 
         const selected = interaction.values[0];
         if (selected.startsWith('__page:') && currentCardId) {
@@ -13545,7 +13621,7 @@ async function handleTcgInteraction(interaction) {
         const dir = parts[2];
         const currentCardId = parts[3];
         const ownerId = parts[4];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const u = getOrCreateTcgUser(ownerId);
         const currentCard = getCardByIdAny(currentCardId);
         const activeSetNumber = currentCard?.isPerso ? 'perso' : (currentCard?.setNumber || DEFAULT_SET_NUMBER);
@@ -13575,7 +13651,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'carteset' && interaction.isButton()) {
         const rawCurrentSet = parts[2] || String(DEFAULT_SET_NUMBER);
         const ownerId = parts[4];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const u = getOrCreateTcgUser(ownerId);
         const ownedPerso = persoCatalog.filter(c => (u.cards?.[c.id] || 0) > 0);
         const activeSets = getActiveSets();
@@ -13611,7 +13687,7 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[3];
         const context = parts[4] || 'card';
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+            await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
             return true;
         }
         const card = cardById.get(cardId);
@@ -13657,7 +13733,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'cardholocancel' && interaction.isButton()) {
         const ownerId = parts[2];
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+            await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
             return true;
         }
         await interaction.update({ content: '❌ Transformation annulée.', embeds: [], components: [] });
@@ -13670,7 +13746,7 @@ async function handleTcgInteraction(interaction) {
         const context = parts[4] || 'card';
         const origMsgId = parts[5] || '';
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+            await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
             return true;
         }
         const card = cardById.get(cardId);
@@ -13734,7 +13810,7 @@ async function handleTcgInteraction(interaction) {
         const ownerId = parts[3];
         const context = parts[4] || 'card';
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+            await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
             return true;
         }
         const card = cardById.get(cardId);
@@ -13785,7 +13861,7 @@ async function handleTcgInteraction(interaction) {
         const context = parts[4] || 'card';
         const origMsgId = parts[5] || '';
         if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+            await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
             return true;
         }
         const card = cardById.get(cardId);
@@ -13854,7 +13930,7 @@ async function handleTcgInteraction(interaction) {
             return true;
         }
         if (isSandboxId(ownerId) && interaction.user.id !== EPSYS_ID) {
-            await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+            await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
             return true;
         }
 
@@ -13900,7 +13976,7 @@ async function handleTcgInteraction(interaction) {
 
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
                 await interaction.reply({
-                    content: "Pas pour toi 😌",
+                    content: buildTcgOwnerMismatchMessage(interaction),
                     flags: 64
                 });
                 return true;
@@ -14036,7 +14112,7 @@ async function handleTcgInteraction(interaction) {
             const fromHub = parts[4] === '1';
             const fromProfile = parts[5] === '1';
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+                await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
                 return true;
             }
             const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
@@ -14055,7 +14131,7 @@ async function handleTcgInteraction(interaction) {
             const context = parts[5] || 'card';
             const binderMsgId = parts[6] || null;
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+                await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
                 return true;
             }
             const card = cardById.get(cardId);
@@ -14098,7 +14174,7 @@ async function handleTcgInteraction(interaction) {
             const fromHub = parts[5] === '1';
             const fromProfile = parts[6] === '1';
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+                await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
                 return true;
             }
             const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
@@ -14117,7 +14193,7 @@ async function handleTcgInteraction(interaction) {
             const fromProfile = parts[5] === '1';
             const addFilter = parts[6] || 'missing';
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+                await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
                 return true;
             }
             const selected = interaction.values[0];
@@ -14165,7 +14241,7 @@ async function handleTcgInteraction(interaction) {
             const fromHub = parts[4] === '1';
             const fromProfile = parts[5] === '1';
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+                await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
                 return true;
             }
             const modal = new ModalBuilder()
@@ -14187,7 +14263,7 @@ async function handleTcgInteraction(interaction) {
             const fromHub = parts[4] === '1';
             const fromProfile = parts[5] === '1';
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+                await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
                 return true;
             }
             const query = interaction.fields.getTextInputValue('wish_query').trim();
@@ -14275,7 +14351,7 @@ async function handleTcgInteraction(interaction) {
             const fromHub = parts[4] === '1';
             const fromProfile = parts[5] === '1';
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+                await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
                 return true;
             }
             const cardId = interaction.values[0];
@@ -14297,7 +14373,7 @@ async function handleTcgInteraction(interaction) {
             const fromHub = parts[4] === '1';
             const fromProfile = parts[5] === '1';
             if (!canControlTcgOwner(interaction.user.id, ownerId)) {
-                await interaction.reply({ content: "Pas pour toi 😌", flags: 64 });
+                await interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 });
                 return true;
             }
             const u = getOrCreateTcgUser(ownerId);
@@ -14318,7 +14394,7 @@ async function handleTcgInteraction(interaction) {
         const cardId = parts[2];
         const ownerId = parts[3];
         const context = parts[4] || 'card';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const card = getCardByIdAny(cardId);
         const u = getOrCreateTcgUser(ownerId);
         if (!card || (u.cards?.[card.id] || 0) <= 0) {
@@ -14369,7 +14445,7 @@ async function handleTcgInteraction(interaction) {
     if (action === 'flexpage' && interaction.isButton()) {
         const ownerId = parts[2];
         const page = parseInt(parts[3], 10) || 0;
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const actorMember = buildTcgMemberProxy(interaction.member, ownerId);
         await sendFlexPicker(interaction, actorMember, page);
         return true;
@@ -14377,7 +14453,7 @@ async function handleTcgInteraction(interaction) {
 
     if (action === 'flexset' && interaction.isStringSelectMenu()) {
         const ownerId = parts[2];
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const card = getCardByIdAny(interaction.values[0]);
         const u = getOrCreateTcgUser(ownerId);
         if (!card || (u.cards[card.id] || 0) <= 0) {
@@ -14401,7 +14477,7 @@ async function handleTcgInteraction(interaction) {
         const mode = parts[2];
         const ownerId = parts[3];
         const fromHub = parts[4] === '1';
-        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (!canControlTcgOwner(interaction.user.id, ownerId)) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const payload = {
             content: null,
             files: [],
@@ -14416,7 +14492,7 @@ async function handleTcgInteraction(interaction) {
     // ----- TRADE : SÉLECTION PARTENAIRE + CONFIRMATION + CRÉATION THREAD -----
     if (action === 'tradepick' && interaction.isUserSelectMenu()) {
         const initiatorId = parts[2];
-        if (interaction.user.id !== initiatorId) return interaction.reply({ content: "Pas pour toi 😌", flags: 64 }), true;
+        if (interaction.user.id !== initiatorId) return interaction.reply({ content: buildTcgOwnerMismatchMessage(interaction), flags: 64 }), true;
         const targetMember = await interaction.guild.members.fetch(interaction.values[0]).catch(() => null);
         await interaction.message.delete().catch(() => {});
         await initiateTradePrompt(interaction, interaction.member, targetMember);
