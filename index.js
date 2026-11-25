@@ -2585,5 +2585,8 @@ async function demarrerAvecVerrou() {
 
 demarrerAvecVerrou().catch(error => {
     console.error('🚨 Démarrage Cacabot refusé :', error);
-    process.exitCode = 1;
+    // Les minuteurs du bot existent déjà à ce stade : un simple
+    // exitCode laisserait un processus inactif tourner indéfiniment.
+    // Aucun état membre n'a été chargé ou modifié par cette étape.
+    process.exit(1);
 });
