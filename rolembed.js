@@ -203,7 +203,7 @@ async function handleRolembedInteraction(interaction) {
 
     // 1. Clic sur une catégorie principale -> Ouvre le panneau éphémère privé avec deferReply immédiat (anti-timeout)
     if (customId.startsWith('rolecat_')) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
         const catKey = customId.replace('rolecat_', '');
         const payload = buildCategoryEphemeralPayload(interaction.member, catKey);
         if (payload) {
@@ -220,7 +220,7 @@ async function handleRolembedInteraction(interaction) {
 
         const role = interaction.guild?.roles.cache.get(roleId);
         if (!role) {
-            await interaction.reply({ content: "❌ Ce rôle est introuvable !", ephemeral: true });
+            await interaction.reply({ content: "❌ Ce rôle est introuvable !", flags: 64 });
             return true;
         }
 
