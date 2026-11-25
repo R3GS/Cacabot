@@ -2211,7 +2211,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
         case 'bonus-elu-roulette': {
             const roleId = '1553670290448457829';
             if (member.roles.cache.has(roleId)) return `**${auteurNom}** a déjà le rôle **Élu·e de la Roulette** — pas de doublon possible !`;
-            await member.roles.add(roleId).catch(() => {});
+            await member.roles.add(roleId).catch(err => console.error('[ROULETTE] Attribution du rôle échouée :', err));
             return `👑 **${auteurNom}** obtient le rôle **Élu·e de la Roulette** !`;
         }
         case 'bonus-role-superieur': {
@@ -2222,8 +2222,8 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             }
             if (rangActuel === ROULETTE_RANGS.length - 1) return `**${auteurNom}** est déjà **${ROULETTE_RANGS[rangActuel].label}**, le rang max !\nChoisis un autre bonus à la place dans le menu ci-dessous.`;
             const prochainRang = ROULETTE_RANGS[rangActuel + 1];
-            if (rangActuel > 0) await member.roles.remove(ROULETTE_RANGS[rangActuel].id).catch(() => {});
-            await member.roles.add(prochainRang.id).catch(() => {});
+            if (rangActuel > 0) await member.roles.remove(ROULETTE_RANGS[rangActuel].id).catch(err => console.error('[ROULETTE] Retrait du rang échoué :', err));
+            await member.roles.add(prochainRang.id).catch(err => console.error('[ROULETTE] Attribution du rang échouée :', err));
             return `**${auteurNom}** passe au rang **${prochainRang.label}** !`;
         }
         case 'bonus-legendaire': {
@@ -2231,9 +2231,9 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             const roleId = ROULETTE_RANGS[ROULETTE_RANGS.length - 1].id;
             if (member.roles.cache.has(roleId)) return `**${auteurNom}** est déjà **${ROULETTE_RANGS[ROULETTE_RANGS.length - 1].label}**, le rang max !\nChoisis un autre bonus à la place dans le menu ci-dessous.`;
             for (const rang of ROULETTE_RANGS) {
-                if (rang.id !== ROULETTE_RANGS[0].id && member.roles.cache.has(rang.id)) await member.roles.remove(rang.id).catch(() => {});
+                if (rang.id !== ROULETTE_RANGS[0].id && member.roles.cache.has(rang.id)) await member.roles.remove(rang.id).catch(err => console.error('[ROULETTE] Retrait du rôle échoué :', err));
             }
-            await member.roles.add(roleId).catch(() => {});
+            await member.roles.add(roleId).catch(err => console.error('[ROULETTE] Attribution du rôle échouée :', err));
             return `👑 **${auteurNom}** passe directement au rang **Regaïen·ne légendaire** !`;
         }
         case 'bonus-jackpot-boost': {
@@ -2261,7 +2261,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 rouletteCooldowns.set(member.id, Date.now() + 7 * 24 * 60 * 60 * 1000);
                 return `🛡️ **${auteurNom}** est Modo : le ban est remplacé par un cooldown de **1 semaine**.`;
             }
-            return malusDiffere(message, auteurNom, 'Ban définitif', 'banni.e du serveur', 'a été banni.e du serveur', () => member.ban({ reason: 'Roulette' }).catch(() => {}));
+            return malusDiffere(message, auteurNom, 'Ban définitif', 'banni.e du serveur', 'a été banni.e du serveur', () => member.ban({ reason: 'Roulette' }).catch(err => console.error('[ROULETTE] Bannissement échoué :', err)));
         case 'bonus-couronne':
             deverrouillerSucces(member.id, 'laristocrate', message.channel);
             rouletteCouronneUntil.set(member.id, Date.now() + 12 * 60 * 60 * 1000);
@@ -4607,7 +4607,7 @@ async function verifierRoleGamblingAddict(membre) {
     const stats = rouletteStats.get(membre.id);
     if (!stats || stats.tirages < ROULETTE_ADDICT_SEUIL) return;
     if (membre.roles.cache.has(ROULETTE_ROLE_ADDICT_ID)) return;
-    await membre.roles.add(ROULETTE_ROLE_ADDICT_ID, `Gambling addict : ${stats.tirages} rolls`).catch(() => {});
+    await membre.roles.add(ROULETTE_ROLE_ADDICT_ID, `Gambling addict : ${stats.tirages} rolls`).catch(err => console.error('[ROULETTE] Attribution du rôle addict échouée :', err));
 }
 
 async function renderRouletteCollectorPosterCanvas(membre, entry, lanceur = null, estPartage = false, isHof = true, isTest = false) {
