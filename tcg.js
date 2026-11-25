@@ -5615,6 +5615,7 @@ function scheduleBoosterInspectTimeout(member, session) {
         } catch (err) { if (err?.code !== 10008) console.warn('[TCG] Récapitulatif après inactivité échoué :', err); }
         await triggerSessionPantheonIfNeeded(tcgBridge.client, member, session).catch(() => {});
     }, BOOSTER_INSPECT_IDLE_MS);
+    session.inspectTimeout.unref?.();
 }
 
 async function disableBoosterOpenButtonOnMessage(message) {
