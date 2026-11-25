@@ -417,18 +417,30 @@ setInterval(() => {
 }, 30 * 60 * 1000);
 
 let saveEnAttente = null;
+let delaiReessaiSauvegarde = 10000;
 
-function demanderSauvegarde() {
-    if (!donneesChargees) return;
-    if (saveEnAttente) return;
+// Ne jamais perdre une demande de sauvegarde simplement parce que
+// Discord a temporairement refusé l'envoi. La file saveAll()
+// sérialise déjà les écritures ; un seul minuteur suffit ici.
+function programmerSauvegardeDifferee(delai) {
+    if (!donneesChargees || saveEnAttente) return;
 
-    saveEnAttente = setTimeout(() => {
+    saveEnAttente = setTimeout(async () => {
         saveEnAttente = null;
 
-        saveAll().catch(err => {
-            console.error('❌ Sauvegarde différée échouée :', err);
-        });
-    }, 10000);
+        try {
+            await saveAll();
+            delaiReessaiSauvegarde = 10000;
+        } catch (err) {
+            console.error('❌ Sauvegarde différée échouée ; nouvel essai programmé :', err);
+            delaiReessaiSauvegarde = Math.min(delaiReessaiSauvegarde * 2, 60000);
+            programmerSauvegardeDifferee(delaiReessaiSauvegarde);
+        }
+    }, delai);
+}
+
+function demanderSauvegarde() {
+    programmerSauvegardeDifferee(10000);
 }
 
 let arretEnCours = false;
