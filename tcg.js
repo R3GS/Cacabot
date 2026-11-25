@@ -466,9 +466,13 @@ function findExistingFile(dir, candidates) {
     }
     try {
         const files = fs.readdirSync(dir);
+        const normalizedFiles = new Map();
+        for (const file of files) {
+            const key = normalizeText(file);
+            if (!normalizedFiles.has(key)) normalizedFiles.set(key, file);
+        }
         for (const cand of candidates) {
-            const normCand = normalizeText(cand);
-            const match = files.find(f => normalizeText(f) === normCand);
+            const match = normalizedFiles.get(normalizeText(cand));
             if (match) return path.join(dir, match);
         }
     } catch (err) { if (err?.code !== 'ENOENT') console.warn('[TCG] Recherche de fichier impossible :', dir, err); }
@@ -483,10 +487,14 @@ function findSubdir(parentDir, candidates) {
     }
     try {
         const entries = fs.readdirSync(parentDir, { withFileTypes: true }).filter(e => e.isDirectory());
+        const normalizedDirs = new Map();
+        for (const entry of entries) {
+            const key = normalizeText(entry.name);
+            if (!normalizedDirs.has(key)) normalizedDirs.set(key, entry.name);
+        }
         for (const cand of candidates) {
-            const normCand = normalizeText(cand);
-            const match = entries.find(e => normalizeText(e.name) === normCand);
-            if (match) return path.join(parentDir, match.name);
+            const match = normalizedDirs.get(normalizeText(cand));
+            if (match) return path.join(parentDir, match);
         }
     } catch (err) { if (err?.code !== 'ENOENT') console.warn('[TCG] Recherche de dossier impossible :', parentDir, err); }
     return null;
