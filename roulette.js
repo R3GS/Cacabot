@@ -22,7 +22,7 @@ function resolveRouletteBgPath() {
                 const found = files.find(f => f.toLowerCase() === target);
                 if (found) return path.join(dir, found);
             }
-        } catch {}
+        } catch (err) { if (err?.code !== 'ENOENT') console.warn('[ROULETTE] Recherche du fond impossible :', dir, err); }
     }
     return null;
 }
@@ -179,7 +179,7 @@ function walkRouletteProxyStats() {
                 bytes += st.size;
             }
         }
-    } catch {}
+    } catch (err) { if (err?.code !== 'ENOENT') console.warn('[ROULETTE] Statistiques des proxies indisponibles :', err); }
     return { files, bytes };
 }
 
@@ -196,7 +196,7 @@ function purgeRouletteProxies() {
             try {
                 fs.rmSync(path.join(ROULETTE_PROXIES_DIR, f), { recursive: true, force: true });
                 removed++;
-            } catch {}
+            } catch (err) { console.warn('[ROULETTE] Suppression de proxy impossible :', f, err); }
         }
     }
     rltLastProxyWriteError = null;
@@ -842,8 +842,8 @@ async function notifierMpInteractionRoulette(client, targetUserId, texte) {
         await user.send({
             content: texte,
             allowedMentions: { users: [targetUserId] }
-        }).catch(() => {});
-    } catch {}
+        }).catch((err) => { if (err?.code !== 50007) console.warn('[ROULETTE] Envoi du MP échoué :', err); });
+    } catch (err) { console.warn('[ROULETTE] Préparation du MP échouée :', err); }
 }
 
 function purgerVieuxEtatsRoulette() {
@@ -2934,8 +2934,8 @@ function planifierMajCanvasVoteRoulette(msgId, voteData, client, guild) {
                 components: [buildVoteRouletteRow(pourList.length, contreList.length, false)],
                 files: [att],
                 attachments: []
-            }).catch(() => {});
-        } catch {}
+            }).catch((err) => { if (err?.code !== 10008) console.warn('[ROULETTE] Modification du vote échouée :', err); });
+        } catch (err) { console.warn('[ROULETTE] Actualisation du vote échouée :', err); }
     }, 10000);
 
     rouletteVoteCanvasPending.set(msgId, entry);
@@ -3355,7 +3355,7 @@ async function drawCircularAvatar(ctx, memberOrUrl, cx, cy, radius, ringColor = 
     if (memberOrUrl && typeof memberOrUrl === 'object') {
         img = await loadAvatarProxy(memberOrUrl, 256);
     } else if (typeof memberOrUrl === 'string' && memberOrUrl) {
-        try { img = await loadImage(memberOrUrl); } catch {}
+        try { img = await loadImage(memberOrUrl); } catch (err) { console.warn('[ROULETTE] Chargement de l’avatar impossible :', err); }
     }
     if (img) {
         ctx.drawImage(img, cx - radius, cy - radius, radius * 2, radius * 2);
@@ -9842,7 +9842,7 @@ async function handleRouletteTransfoMessage(message, client) {
                 else message.channel.send(echoReplique).catch(() => {});
             }, 1200);
         }
-    } catch {}
+    } catch (err) { console.warn('[ROULETTE] Traitement de la réplique échoué :', err); }
 }
 
 async function handleRoulettePseudoLock(oldMember, newMember) {
