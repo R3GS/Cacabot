@@ -984,13 +984,17 @@ async function flushDiscordErrorReports() {
             const channel = await errorReportClient.channels.fetch(ERROR_REPORT_CHANNEL_ID);
             if (!channel?.send) throw new Error('Salon de rapports introuvable ou inaccessible');
             await channel.send({
-                content: [
-                    '🚨 **Cacabot a rencontré un problème**',
-                    '**Problème :** ' + report.title,
-                    '**Détail :** ' + report.detail,
-                    '**Fichier / ligne :** ' + report.location,
-                    '**Date :** <t:' + Math.floor(Date.now() / 1000) + ':F>'
-                ].join('\n').slice(0, 1950),
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xe74c3c)
+                        .setTitle('🚨 Cacabot a rencontré un problème')
+                        .addFields(
+                            { name: 'Problème', value: report.title.slice(0, 1024) || 'Erreur inconnue' },
+                            { name: 'Détail', value: report.detail.slice(0, 1024) || 'Aucun détail disponible' },
+                            { name: 'Fichier / ligne', value: report.location.slice(0, 1024) || 'Emplacement non disponible' }
+                        )
+                        .setTimestamp()
+                ],
                 allowedMentions: { parse: [] }
             });
             errorReportQueue.shift();
@@ -2146,7 +2150,7 @@ client.on('channelCreate', async (channel) => {
     }
 });
 
-client.once('ready', async () => {
+client.once('clientReady', async () => {
     console.log(`✅ ${client.user.tag} est connecté`);
     void flushDiscordErrorReports();
 
