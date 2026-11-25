@@ -282,9 +282,10 @@ async function replySilent(target, payload) {
 async function replyTempSilent(message, payload, delayMs = 8000) {
     const sent = await replySilent(message, payload).catch(() => null);
     if (sent && typeof sent.delete === 'function') {
-        setTimeout(() => {
+        const timer = setTimeout(() => {
             sent.delete().catch(() => {});
         }, delayMs);
+        timer.unref?.();
     }
     return sent;
 }
@@ -317,13 +318,17 @@ function schedulePanelAutoDelete(msg, triggerMessage = null) {
         panelAutoDeleteTimers.delete(msg.id);
         if (boosterSessions.has(msg.id)) return;
         const refId = triggerMessage?.id || msg.reference?.messageId;
-        if (refId && msg.channel) {
-            const trig = triggerMessage || await msg.channel.messages.fetch(refId).catch(() => null);
-            if (trig && !trig.author?.bot) {
-                await trig.delete().catch(() => {});
+        try {
+            if (refId && msg.channel) {
+                const trig = triggerMessage || await msg.channel.messages.fetch(refId).catch(() => null);
+                if (trig && !trig.author?.bot) {
+                    await trig.delete().catch(() => {});
+                }
             }
+            await msg.delete().catch(() => {});
+        } catch (err) {
+            console.warn('[TCG] Nettoyage automatique du panneau échoué :', msg.id, err);
         }
-        await msg.delete().catch(() => {});
     }, PANEL_AUTO_DELETE_MS);
     timer.unref?.();
     panelAutoDeleteTimers.set(msg.id, timer);
