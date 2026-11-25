@@ -6948,13 +6948,13 @@ async function startBoosterOpening(
                     attachments: []
                 });
             } else {
-                sentMsg = await targetResponder.reply(
+                await targetResponder.reply(
                     withSilent({
                         embeds: [gifEmbed],
-                        files,
-                        fetchReply: true
+                        files
                     })
                 );
+                sentMsg = await targetResponder.fetchReply();
 
                 disableBoosterOpenButtonOnMessage(
                     targetResponder.message
@@ -6971,13 +6971,13 @@ async function startBoosterOpening(
                     })
                 );
             } else {
-                sentMsg = await targetResponder.reply(
+                await targetResponder.reply(
                     withSilent({
                         embeds: [gifEmbed],
-                        files,
-                        fetchReply: true
+                        files
                     })
                 );
+                sentMsg = await targetResponder.fetchReply();
             }
 
         } else {
