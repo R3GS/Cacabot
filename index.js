@@ -1,4 +1,5 @@
 require('dotenv').config();
+const { validateBackup } = require('./backup-validator.js');
 
 let topData = { messages: {} };
 let birthdayData = { birthdays: {}, channels: {} };
@@ -117,16 +118,10 @@ async function loadAll() {
 
                     const parsed = await res.json();
 
-                    if (
-                        !parsed ||
-                        typeof parsed !== 'object' ||
-                        Array.isArray(parsed) ||
-                        !parsed.tcgData ||
-                        typeof parsed.tcgData !== 'object' ||
-                        !parsed.tcgData.users
-                    ) {
+                    const validation = validateBackup(parsed);
+                    if (!validation.valid) {
                         throw new Error(
-                            'Structure de sauvegarde invalide'
+                            'Structure de sauvegarde invalide : ' + validation.reason
                         );
                     }
 
