@@ -22,7 +22,7 @@ function createReporter() {
     }
     const context = vm.createContext({
         console: { error: (...args) => warnings.push(args) },
-        process: { env: { TOKEN: 'super-secret-test-token' } },
+        process: { env: { TOKEN: 'super-secret-test-token' }, on: () => {} },
         Date, Error, String, Map, Array, Math,
         setTimeout: (fn) => { fn(); return 1; },
         EmbedBuilder
@@ -57,4 +57,26 @@ test('diagnostic : les secrets ne sont pas envoyés dans les alertes', async () 
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(messages.length, 1);
     assert.ok(!JSON.stringify(messages[0]).includes('super-secret-test-token'));
+});
+
+test('diagnostic : les avertissements conservent le fichier et la ligne', async () => {
+    const { context, messages, channel } = createReporter();
+    context.globalTestClient = { isReady: () => true, channels: { fetch: async () => channel } };
+    vm.runInContext('errorReportClient = globalTestClient', context);
+    vm.runInContext(`console.error('Essai', Object.assign(new Error('Avertissement'), {
+        stack: 'Warning: Avertissement\\n    at action (/app/tcg.js:123:45)'
+    }))`, context);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.match(messages[0].embeds[0].data.fields[2].value, /tcg\.js:123:45/);
+});
+
+test('interactions : aucune ancienne option ephemeral ne subsiste dans les modules', () => {
+    const modules = ['index.js', 'tcg.js', 'roulette.js', 'interaction.js', 'battlepass.js',
+        'minijeux.js', 'security.js', 'welcome.js', 'rolembed.js', 'activity.js',
+        'pendu.js', 'embeds.js', 'suggestion.js', 'social.js', 'tools.js',
+        'help.js', 'youtube.js', 'anniversaire.js', 'quotes.js'];
+    for (const file of modules) {
+        const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
+        assert.doesNotMatch(source, /\bephemeral\s*:\s*(true|false)\b/, file);
+    }
 });
