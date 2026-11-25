@@ -8514,7 +8514,8 @@ async function initiateTradePrompt(targetResponder, initiatorMember, targetMembe
         createdAt: Date.now()
     };
     pendingConfirms.set(confirmId, conf);
-    setTimeout(() => pendingConfirms.delete(confirmId), 15 * 60 * 1000);
+    const confirmExpiryTimer = setTimeout(() => pendingConfirms.delete(confirmId), 15 * 60 * 1000);
+    confirmExpiryTimer.unref?.();
 
     const payload = buildTradeConfirmPayload(confirmId, conf);
     return replySilent(targetResponder, payload);
