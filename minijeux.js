@@ -786,8 +786,9 @@ async function handleMotusMessage(message, response, client, helpers) {
                             }
 
                             const longueurM2 = heureSessionMotus === 19 ? 7 : 6;
+                            const dateMotus = Number(String(dateSessionMotus).split('_', 1)[0]);
                             const nouveauMot = getMotDuJour(
-                                dateSessionMotus + 5555,
+                                dateMotus + 5555,
                                 longueurM2
                             );
 
