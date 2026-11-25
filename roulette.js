@@ -9829,14 +9829,20 @@ async function handleRouletteTransfoMessage(message, client) {
         }
     }
     if (!modifie) {
-        if (echoReplique) setTimeout(() => { message.reply(echoReplique).catch(() => {}); }, 1200);
+        if (echoReplique) {
+            const echoTimer = setTimeout(() => { message.reply(echoReplique).catch(() => {}); }, 1200);
+            echoTimer.unref?.();
+        }
         return;
     }
 
     const salonWebhook = message.channel.isThread() ? message.channel.parent : message.channel;
     const webhook = await assurerWebhookRoulette(salonWebhook);
     if (!webhook) {
-        if (echoReplique) setTimeout(() => { message.reply(echoReplique).catch(() => {}); }, 1200);
+        if (echoReplique) {
+            const echoTimer = setTimeout(() => { message.reply(echoReplique).catch(() => {}); }, 1200);
+            echoTimer.unref?.();
+        }
         return;
     }
 
@@ -9883,10 +9889,11 @@ async function handleRouletteTransfoMessage(message, client) {
         deletedMessageTimer.unref?.();
         await message.delete().catch(() => {});
         if (echoReplique) {
-            setTimeout(() => {
+            const echoTimer = setTimeout(() => {
                 if (msgWebhook?.reply) msgWebhook.reply(echoReplique).catch(() => {});
                 else message.channel.send(echoReplique).catch(() => {});
             }, 1200);
+            echoTimer.unref?.();
         }
     } catch (err) { console.warn('[ROULETTE] Traitement de la réplique échoué :', err); }
 }
