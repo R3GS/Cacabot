@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { validateBackup } = require('./backup-validator.js');
+const { validateBackup, computeBackupChecksum } = require('./backup-validator.js');
 const { acquireInstanceGuard } = require('./instance-guard.js');
 
 let topData = { messages: {} };
@@ -307,6 +307,13 @@ function saveAll() {
             roulette: Object.fromEntries(
                 Object.entries(ROULETTE_ETATS).map(([nom, map]) => [nom, Object.fromEntries(map)])
             )
+        };
+
+        // Empreinte calculée sur les données avant ajout de l'empreinte.
+        // La vérification est effectuée AVANT tout chargement en mémoire.
+        payload.integrity = {
+            algorithm: 'sha256',
+            value: computeBackupChecksum(payload)
         };
 
         const jsonStr = JSON.stringify(payload, null, 2);
