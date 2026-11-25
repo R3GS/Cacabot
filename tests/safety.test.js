@@ -8,7 +8,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 
-const { validateBackup } = require('../backup-validator.js');
+const { validateBackup, computeBackupChecksum } = require('../backup-validator.js');
 
 const fichiers = [
   "index.js",
@@ -148,4 +148,30 @@ test('sauvegardes : aucune suppression de message Discord de backup', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
     assert.doesNotMatch(source, /ancienneSauvegarde\.delete\(/);
     assert.match(source, /m\.author\?\.id === client\.user\?\.id/);
+});
+
+test('sauvegardes : une empreinte valide est acceptee sans modification', () => {
+    const backup = {
+        versionMajor: 3, messages: {},
+        tcgData: { users: { '123': { points: 500, cards: { a: 2 } } } },
+        battlePassData: {}, motusStats: {}, penduStats: {}, roulette: {}
+    };
+    backup.integrity = { algorithm: 'sha256', value: computeBackupChecksum(backup) };
+    const before = JSON.stringify(backup);
+    assert.equal(validateBackup(backup).valid, true);
+    assert.equal(JSON.stringify(backup), before);
+});
+
+test('sauvegardes : une alteration de solde ou de carte est refusee', () => {
+    const backup = {
+        versionMajor: 3, messages: {},
+        tcgData: { users: { '123': { points: 500, cards: { a: 2 } } } },
+        battlePassData: {}, motusStats: {}, penduStats: {}, roulette: {}
+    };
+    backup.integrity = { algorithm: 'sha256', value: computeBackupChecksum(backup) };
+    backup.tcgData.users['123'].points = 0;
+    assert.equal(validateBackup(backup).valid, false);
+    backup.tcgData.users['123'].points = 500;
+    backup.tcgData.users['123'].cards.a = 0;
+    assert.equal(validateBackup(backup).valid, false);
 });
