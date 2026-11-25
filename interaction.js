@@ -395,15 +395,20 @@ const { AttachmentBuilder } = require('discord.js');
 
 const SPIN_GIF_DIR = spinPath.resolve(process.cwd(), 'GIF', 'Spin');
 
-function buildSpinPayload(description) {
+async function buildSpinPayload(description) {
     let files = [];
 
     try {
-        const gifs = spinFs.readdirSync(SPIN_GIF_DIR)
-            .filter(file => file.toLowerCase().endsWith('.gif'))
-            .filter(file => spinFs.statSync(
-                spinPath.join(SPIN_GIF_DIR, file)
-            ).isFile());
+        const entries = await spinFs.promises.readdir(SPIN_GIF_DIR, { withFileTypes: true });
+        const gifs = [];
+        for (const entry of entries) {
+            if (!entry.name.toLowerCase().endsWith('.gif')) continue;
+
+            if (entry.isFile() || (entry.isSymbolicLink() &&
+                (await spinFs.promises.stat(spinPath.join(SPIN_GIF_DIR, entry.name))).isFile())) {
+                gifs.push(entry.name);
+            }
+        }
 
         if (gifs.length > 0) {
             const selected = gifs[Math.floor(Math.random() * gifs.length)];
@@ -587,7 +592,7 @@ async function runInteractionMessage(message, response, client, { findMemberByNa
             description = `🌀 **${auteurNom}** tourne avec **${cibleNom}** !`;
         }
 
-        const payload = buildSpinPayload(description);
+        const payload = await buildSpinPayload(description);
 
         if (!cible || cible.id === message.author.id) {
             const button = new ButtonBuilder()
@@ -1419,7 +1424,7 @@ async function runInteractionButton(interaction) {
             interaction.member?.displayName ??
             interaction.user.username;
 
-        const payload = buildSpinPayload(
+        const payload = await buildSpinPayload(
             `🌀 **${joinNom}** rejoint **${originalAuthorNom}** pour tourner !`
         );
 
@@ -1880,7 +1885,7 @@ async function handleInteractionSlash(interaction, client) {
                 ? `🌀 **${auteurNom}** tourne avec moi ! Wouuuh !`
                 : `🌀 **${auteurNom}** tourne avec **${cibleNom}** !`;
 
-        const payload = buildSpinPayload(description);
+        const payload = await buildSpinPayload(description);
 
         if (!cibleUser || cibleUser.id === auteurId) {
             payload.components = [

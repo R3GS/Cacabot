@@ -129,9 +129,12 @@ function buildActifRow(periode, authorId) {
     return new ActionRowBuilder().addComponents(jourBtn, semaineBtn, moisBtn);
 }
 
-function buildTopEmbed(page, authorId, guild) {
+function getSortedTop() {
+    return Object.entries(activityState.topData.messages).sort((a, b) => b[1] - a[1]);
+}
+
+function buildTopEmbed(page, authorId, guild, allSorted = getSortedTop()) {
     const PAGE_SIZE = 10;
-    const allSorted = Object.entries(activityState.topData.messages).sort((a, b) => b[1] - a[1]);
     const totalPages = Math.ceil(allSorted.length / PAGE_SIZE) || 1;
 
     const start = page * PAGE_SIZE;
@@ -169,9 +172,8 @@ function buildTopEmbed(page, authorId, guild) {
         .setFooter({ text: `Page ${page + 1}/${totalPages} • Compté depuis l'initialisation du bot` });
 }
 
-function buildTopRow(page, authorId) {
+function buildTopRow(page, authorId, allSorted = getSortedTop()) {
     const PAGE_SIZE = 10;
-    const allSorted = Object.entries(activityState.topData.messages).sort((a, b) => b[1] - a[1]);
     const totalPages = Math.ceil(allSorted.length / PAGE_SIZE) || 1;
 
     const userRank = allSorted.findIndex(([uid]) => uid === authorId);
@@ -442,15 +444,15 @@ async function handleActivityMessage(message, response) {
 
     // !top
     if (response?.needsTop) {
-        const allSorted = Object.entries(activityState.topData.messages).sort((a, b) => b[1] - a[1]);
+        const allSorted = getSortedTop();
         if (allSorted.length === 0) {
             await message.reply("Pas encore de données !");
             return true;
         }
         const totalPages = Math.ceil(allSorted.length / 10);
         await message.reply({
-            embeds: [buildTopEmbed(0, message.author.id, message.guild)],
-            components: totalPages > 1 ? [buildTopRow(0, message.author.id)] : []
+            embeds: [buildTopEmbed(0, message.author.id, message.guild, allSorted)],
+            components: totalPages > 1 ? [buildTopRow(0, message.author.id, allSorted)] : []
         });
         return true;
     }
@@ -499,12 +501,12 @@ async function handleActivitySlash(interaction) {
     }
 
     if (commandName === 'top') {
-        const allSorted = Object.entries(activityState.topData.messages).sort((a, b) => b[1] - a[1]);
+        const allSorted = getSortedTop();
         if (allSorted.length === 0) return interaction.reply({ content: "Pas encore de données !", flags: 64 });
         const totalPages = Math.ceil(allSorted.length / 10);
         return interaction.reply({
-            embeds: [buildTopEmbed(0, interaction.user.id, interaction.guild)],
-            components: totalPages > 1 ? [buildTopRow(0, interaction.user.id)] : []
+            embeds: [buildTopEmbed(0, interaction.user.id, interaction.guild, allSorted)],
+            components: totalPages > 1 ? [buildTopRow(0, interaction.user.id, allSorted)] : []
         });
     }
 
@@ -590,9 +592,10 @@ async function handleActivityButton(interaction) {
         else if (action === 'prev') targetPage = pageArg - 1;
         else if (action === 'myrank') targetPage = pageArg;
 
+        const allSorted = getSortedTop();
         return interaction.update({
-            embeds: [buildTopEmbed(targetPage, authorId, interaction.guild)],
-            components: [buildTopRow(targetPage, authorId)]
+            embeds: [buildTopEmbed(targetPage, authorId, interaction.guild, allSorted)],
+            components: [buildTopRow(targetPage, authorId, allSorted)]
         });
     }
 

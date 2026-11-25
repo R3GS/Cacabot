@@ -306,7 +306,7 @@ const ROULETTE_TEXT_MALUS_IDS = new Set([
     'malus-mots-melanges', 'malus-lettres-melangees', 'malus-mocking',
     'malus-begaiement', 'malus-publicite', 'malus-autocorrect', 'malus-oyez'
 ]);
-const ROULETTE_ROLE_ADDICT_ID = '1555245236249436160';
+const ROULETTE_ROLE_JOUEUR_ID = '1558968669751615528';
 const ROULETTE_ADDICT_SEUIL = 500;
 const ROULETTE_TAUX_ECHEC = 0.4;
 const ROULETTE_PITY_MALUS = 3;
@@ -2826,6 +2826,19 @@ function buildVoteRouletteEmbed(membre, pourCount = 0, contreCount = 0, expireAt
         .setImage('attachment://rlt_vote.jpg');
 }
 
+async function encodeRouletteJpeg(canvas, quality) {
+    try {
+        return await new Promise((resolve, reject) => {
+            canvas.toBuffer((error, jpeg) => {
+                if (error) reject(error);
+                else resolve(jpeg);
+            }, 'image/jpeg', { quality });
+        });
+    } finally {
+        canvas.width = canvas.height = 0;
+    }
+}
+
 async function renderRouletteVoteCanvas(membre, pourCount = 0, contreCount = 0, expireAt = null, isTest = false) {
     const W = 1200, H = 560;
     const canvas = createCanvas(W, H);
@@ -2905,7 +2918,7 @@ async function renderRouletteVoteCanvas(membre, pourCount = 0, contreCount = 0, 
     ctx.font = 'bold 17px "LemonMilk", "Sans"';
     ctx.fillText(`TEMPS RESTANT : ${formatDureeCourte(restant)}`, W / 2, 488, W - 680);
 
-    return canvas.toBuffer('image/jpeg', { quality: 0.90 });
+    return encodeRouletteJpeg(canvas, 0.90);
 }
 
 function planifierMajCanvasVoteRoulette(msgId, voteData, client, guild) {
@@ -3905,7 +3918,7 @@ async function renderRouletteStateCanvas(cible, guildId = null) {
         ctx.fillText(inf.val, cx, 830);
     });
 
-    return canvas.toBuffer('image/jpeg', { quality: 0.92 });
+    return encodeRouletteJpeg(canvas, 0.92);
 }
 
 async function buildRouletteStatePayload(cible, guildId = null, authorId = null, viewMode = 'img', fromHub = false) {
@@ -4244,7 +4257,7 @@ async function renderRouletteAchievementsCanvas(cible, page = 0) {
         ctx.fillText(dateStr, cx + cardW / 2, cy + cardH - 26);
     }
 
-    return canvas.toBuffer('image/jpeg', { quality: 0.92 });
+    return encodeRouletteJpeg(canvas, 0.92);
 }
 
 async function buildRouletteAchievementsPayload(cible, page = 0, authorId = null, viewMode = 'img', fromHub = false) {
@@ -4498,7 +4511,7 @@ async function renderRouletteStatsCanvas(cible) {
         }
     }
 
-    return canvas.toBuffer('image/jpeg', { quality: 0.92 });
+    return encodeRouletteJpeg(canvas, 0.92);
 }
 
 async function buildRouletteStatsPayload(cible, authorId = null, viewMode = 'img', fromHub = false) {
@@ -4602,14 +4615,6 @@ function updateRouletteStats(userId, outcomeId, entry, client) {
     }
 }
 
-async function verifierRoleGamblingAddict(membre) {
-    if (!membre) return;
-    const stats = rouletteStats.get(membre.id);
-    if (!stats || stats.tirages < ROULETTE_ADDICT_SEUIL) return;
-    if (membre.roles.cache.has(ROULETTE_ROLE_ADDICT_ID)) return;
-    await membre.roles.add(ROULETTE_ROLE_ADDICT_ID, `Gambling addict : ${stats.tirages} rolls`).catch(err => console.error('[ROULETTE] Attribution du rôle addict échouée :', err));
-}
-
 async function renderRouletteCollectorPosterCanvas(membre, entry, lanceur = null, estPartage = false, isHof = true, isTest = false) {
     const W = 1600, H = 900;
     const canvas = createCanvas(W, H);
@@ -4678,7 +4683,7 @@ async function renderRouletteCollectorPosterCanvas(membre, entry, lanceur = null
     ctx.font = 'bold 18px "LemonMilk", "Sans"';
     ctx.fillText(`REGAÏA • ${new Date().toLocaleDateString('fr-FR')}`, W / 2, 804);
 
-    return canvas.toBuffer('image/jpeg', { quality: 0.94 });
+    return encodeRouletteJpeg(canvas, 0.94);
 }
 
 async function buildHallOfFamePayload(membre, entry, lanceur = null, estPartage = false, isTest = false) {
@@ -4787,8 +4792,6 @@ async function envoyerHallOfShame(guild, membre, entry, lanceur = null) {
         flags: [MessageFlags.SuppressNotifications]
     }).catch(() => {});
 }
-
-const ROULETTE_ROLE_JOUEUR_ID = '1558968669751615528';
 
 function buildMenuChoixMembreRoulette(guild, authorId, customId, placeholder) {
     return new UserSelectMenuBuilder()
@@ -5303,7 +5306,7 @@ async function renderRouletteTopCanvas(guild, entries, authorId, mode = 'succes'
     ctx.font = 'bold 22px "LemonMilk", "Sans"';
     ctx.fillText(posTxt, W / 2, 832, W - 140);
 
-    return canvas.toBuffer('image/jpeg', { quality: 0.92 });
+    return encodeRouletteJpeg(canvas, 0.92);
 }
 
 function buildRouletteTopEmbed(guild, authorId, mode = 'succes') {
@@ -5536,7 +5539,6 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     if (entryTiree && entryTiree.type === 'bonus' && probaReelle(entryTiree) < ROULETTE_HOF_SEUIL) {
         deverrouillerSucces(authorId, 'hof', channel);
     }
-    verifierRoleGamblingAddict(membre).catch(() => {});
 
     // Succès secrets temporels
     if (estRouletteMauditeDoree()) {

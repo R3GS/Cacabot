@@ -257,7 +257,7 @@ async function verifierNouvellesVideosYouTube() {
 
             // Utilisation du flux RSS officiel (gratuit, 0 quota API consommé)
             const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${realId}`;
-            const res = await fetch(rssUrl);
+            const res = await fetch(rssUrl, { signal: AbortSignal.timeout(10000) });
             if (!res.ok) continue;
             const xml = await res.text();
 

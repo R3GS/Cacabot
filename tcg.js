@@ -3636,8 +3636,20 @@ async function renderBinderCanvas(targetUser, u, options) {
         ctx.fillText(`${card.id} • x${count}`, cx, cardY + cardH + 4, cellW - 8);
     }
 
+    let buffer;
+    try {
+        buffer = await new Promise((resolve, reject) => {
+            canvas.toBuffer((error, jpeg) => {
+                if (error) reject(error);
+                else resolve(jpeg);
+            }, 'image/jpeg', { quality: 0.90, progressive: false, chromaSubsampling: true });
+        });
+    } finally {
+        canvas.width = canvas.height = 0; // Libère la surface Cairo après l'encodage.
+    }
+
     return {
-        buffer: toJpeg(canvas, 0.90),
+        buffer,
         totalPages,
         safePage,
         ownedInView,
@@ -9117,8 +9129,10 @@ async function executeTradeIfBothLocked(thread, trade, client) {
     }
 
     const guild = thread.guild;
-    const mA = await guild.members.fetch(idA).catch(() => null);
-    const mB = await guild.members.fetch(idB).catch(() => null);
+    const [mA, mB] = await Promise.all([
+        guild.members.fetch(idA).catch(() => null),
+        guild.members.fetch(idB).catch(() => null)
+    ]);
     const nameA = mA?.displayName || mA?.user?.username || idA;
     const nameB = mB?.displayName || mB?.user?.username || idB;
 
