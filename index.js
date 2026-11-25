@@ -1937,7 +1937,7 @@ try {
     // =========================
     if (interaction.isChatInputCommand()) {
         if (interaction.guildId !== '720057528351850547') {
-            return interaction.reply({ content: "Les commandes slash de Cacabot sont exclusivement réservées au serveur Regaïa !", ephemeral: true });
+            return interaction.reply({ content: "Les commandes slash de Cacabot sont exclusivement réservées au serveur Regaïa !", flags: 64 });
         }
 
         const aliasMap = {
@@ -2056,7 +2056,7 @@ try {
     // =========================
     if (interaction.isMessageContextMenuCommand()) {
         if (interaction.guildId !== '720057528351850547') {
-            return interaction.reply({ content: "Les commandes de Cacabot sont exclusivement réservées au serveur Regaïa !", ephemeral: true });
+            return interaction.reply({ content: "Les commandes de Cacabot sont exclusivement réservées au serveur Regaïa !", flags: 64 });
         }
         if (await handleToolsInteraction(interaction, client)) return;
         return;
@@ -2142,9 +2142,9 @@ try {
     console.error('Erreur interactionCreate:', err);
     try {
         if (!interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: "Une erreur est survenue lors de l'exécution.", ephemeral: true }).catch(() => {});
+            await interaction.reply({ content: "Une erreur est survenue lors de l'exécution.", flags: 64 }).catch(() => {});
         } else if (interaction.deferred) {
-            await interaction.followUp({ content: "Une erreur est survenue lors de l'exécution.", ephemeral: true }).catch(() => {});
+            await interaction.followUp({ content: "Une erreur est survenue lors de l'exécution.", flags: 64 }).catch(() => {});
         }
     } catch (replyError) { console.warn('[INDEX] Notification d’erreur impossible :', replyError); }
 }
