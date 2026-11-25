@@ -155,7 +155,7 @@ async function handleSuggestionSlash(interaction) {
     if (cmd !== 'suggestion' && cmd !== 'sugg') return false;
 
     if (!SUGGESTION_CHANNEL_IDS.includes(interaction.channel.id)) {
-        await interaction.reply({ content: `💡 Les suggestions se font uniquement dans <#720079866199801937> ou <#1553957252925235311> !`, ephemeral: true });
+        await interaction.reply({ content: `💡 Les suggestions se font uniquement dans <#720079866199801937> ou <#1553957252925235311> !`, flags: 64 });
         return true;
     }
 
@@ -192,7 +192,7 @@ async function handleSuggestionButton(interaction) {
     const data = suggestionsData.get(msgId);
 
     if (!data) {
-        await interaction.reply({ content: "Cette suggestion est trop ancienne ou introuvable.", ephemeral: true });
+        await interaction.reply({ content: "Cette suggestion est trop ancienne ou introuvable.", flags: 64 });
         return true;
     }
 
@@ -200,7 +200,7 @@ async function handleSuggestionButton(interaction) {
     if (customId.startsWith('sugg_adm_')) {
         const estModo = interaction.member?.roles?.cache?.has('720081311716606004') || interaction.user.id === '436218312574107658';
         if (!estModo) {
-            return interaction.reply({ content: "Seul le staff ou Epsys peut définir le statut d'une suggestion 😌", ephemeral: true });
+            return interaction.reply({ content: "Seul le staff ou Epsys peut définir le statut d'une suggestion 😌", flags: 64 });
         }
 
         if (customId === 'sugg_adm_accepter') {
@@ -227,7 +227,7 @@ async function handleSuggestionButton(interaction) {
 
     // 2. Votes des membres
     if (data.verrouille) {
-        return interaction.reply({ content: "Les votes sont clos sur cette suggestion !", ephemeral: true });
+        return interaction.reply({ content: "Les votes sont clos sur cette suggestion !", flags: 64 });
     }
 
     const userId = interaction.user.id;
@@ -264,7 +264,7 @@ async function handleSuggestionButton(interaction) {
     const rows = buildSuggestionRow(data);
 
     await interaction.update({ embeds: [embed], components: rows });
-    await interaction.followUp({ content: feedback, ephemeral: true });
+    await interaction.followUp({ content: feedback, flags: 64 });
     return true;
 }
 
