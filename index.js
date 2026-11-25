@@ -963,9 +963,13 @@ function queueDiscordErrorReport(args) {
     const previous = errorReportRecent.get(key);
     if (previous && now - previous < 10 * 60 * 1000) return;
     errorReportRecent.set(key, now);
-    if (errorReportRecent.size > 250) {
+    // Limiter la mémoire : retirer d'abord les anciennes erreurs, puis les plus vieilles.
+    if (errorReportRecent.size > 200) {
         for (const [oldKey, timestamp] of errorReportRecent) {
-            if (now - timestamp > 10 * 60 * 1000 || errorReportRecent.size > 200) errorReportRecent.delete(oldKey);
+            if (now - timestamp > 10 * 60 * 1000) errorReportRecent.delete(oldKey);
+        }
+        while (errorReportRecent.size > 200) {
+            errorReportRecent.delete(errorReportRecent.keys().next().value);
         }
     }
     if (errorReportQueue.length >= 30) errorReportQueue.shift();
@@ -1002,6 +1006,8 @@ async function flushDiscordErrorReports() {
         }
     } catch (err) {
         originalConsoleError('[ERROR REPORTER] Envoi au salon impossible :', err);
+        // Ne pas bloquer les commandes si Discord refuse les alertes.
+        // Une prochaine erreur relancera l'envoi de la file en attente.
     } finally {
         errorReportSending = false;
     }
