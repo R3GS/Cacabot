@@ -952,9 +952,11 @@ function queueDiscordErrorReport(args) {
         typeof item === 'string' ? item : '[détails supplémentaires]'
     ).join(' ');
     const stack = error?.stack || '';
-    const source = stack.split('\n').map(line => line.trim()).find(line =>
-        /\.js:\d+:\d+/.test(line) && !line.includes('node_modules')
-    ) || 'Emplacement non disponible';
+    const frames = stack.split('\n').map(line => line.trim());
+    const source = frames.find(line =>
+        /\.js:\d+(:\d+)?/.test(line) && !line.includes('node_modules') && !line.includes('node:internal')
+    ) || frames.find(line => /\.js:\d+(:\d+)?/.test(line))
+      || 'Emplacement non disponible';
     const title = sanitizeErrorReport(context || error?.message || 'Erreur non précisée').slice(0, 300);
     const detail = sanitizeErrorReport(error?.message || context || 'Voir les journaux du bot').slice(0, 500);
     const location = sanitizeErrorReport(source).slice(0, 350);
@@ -1018,6 +1020,15 @@ console.error = (...args) => {
     try { queueDiscordErrorReport(args); }
     catch (err) { originalConsoleError('[ERROR REPORTER] Rapport impossible :', err); }
 };
+
+// Les avertissements Node fournissent une pile d'appels pour identifier leur origine.
+process.on('warning', warning => {
+    try {
+        queueDiscordErrorReport(['[NODE] ' + warning.name, warning]);
+    } catch (err) {
+        originalConsoleError('[ERROR REPORTER] Avertissement non transmis :', err);
+    }
+});
 
 const client = new Client({
     intents: [
