@@ -234,7 +234,7 @@ async function handleQuotesSlash(interaction) {
 
     const quotesData = quotesState.getQuotesData();
     if (quotesData.length === 0) {
-        await interaction.reply({ content: "📜 Aucune citation enregistrée pour l'instant !", ephemeral: true });
+        await interaction.reply({ content: "📜 Aucune citation enregistrée pour l'instant !", flags: 64 });
         return true;
     }
 
@@ -275,7 +275,7 @@ async function handleQuotesButton(interaction) {
         const index = quotesData.findIndex(q => q.id === quoteId);
 
         if (index === -1) {
-            return interaction.reply({ content: "Cette citation a déjà été supprimée !", ephemeral: true });
+            return interaction.reply({ content: "Cette citation a déjà été supprimée !", flags: 64 });
         }
 
         const q = quotesData[index];
@@ -283,7 +283,7 @@ async function handleQuotesButton(interaction) {
         const estAdmin = interaction.user.id === quotesState.EPSYS_ID || quotesState.estModo(interaction.member);
 
         if (!estAuteur && !estAdmin) {
-            return interaction.reply({ content: "❌ Tu ne peux supprimer que les citations que tu as enregistrées ou dont tu es l'auteur !", ephemeral: true });
+            return interaction.reply({ content: "❌ Tu ne peux supprimer que les citations que tu as enregistrées ou dont tu es l'auteur !", flags: 64 });
         }
 
         quotesData.splice(index, 1);
@@ -313,7 +313,7 @@ async function handleQuotesButton(interaction) {
     }
 
     if (pool.length === 0) {
-        await interaction.reply({ content: "Aucune citation trouvée !", ephemeral: true });
+        await interaction.reply({ content: "Aucune citation trouvée !", flags: 64 });
         return true;
     }
 
