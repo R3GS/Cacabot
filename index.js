@@ -520,20 +520,37 @@ async function arreterAvecSauvegarde(signal) {
         saveEnAttente = null;
     }
 
-    // Laisse une chance aux sauvegardes déjà demandées
-    // et enregistre une dernière fois l'état courant.
-    const sauvegardeFinale = saveAll();
+    // Un échec réseau transitoire pendant SIGTERM/SIGINT ne doit
+    // pas provoquer un abandon immédiat de la dernière sauvegarde.
+    // Le nombre d'essais est borné pour éviter de bloquer l'arrêt
+    // indéfiniment si Discord reste indisponible.
+    const MAX_ESSAIS_ARRET = 3;
+    let sauvegardeConfirmee = !donneesChargees;
 
-    try {
-        await sauvegardeFinale;
-        console.log('✅ Sauvegarde finale effectuée.');
-        process.exitCode = 0;
-    } catch (err) {
-        console.error('🚨 Sauvegarde finale échouée :', err);
-        process.exitCode = 1;
-    } finally {
-        process.exit();
+    for (let tentative = 1; tentative <= MAX_ESSAIS_ARRET && !sauvegardeConfirmee; tentative++) {
+        try {
+            await saveAll();
+            sauvegardeConfirmee = true;
+            console.log('✅ Sauvegarde finale effectuée.');
+        } catch (err) {
+            console.error(
+                `🚨 Sauvegarde finale échouée (essai ${tentative}/${MAX_ESSAIS_ARRET}) :`,
+                err
+            );
+            if (tentative < MAX_ESSAIS_ARRET) {
+                await new Promise(resolve => setTimeout(resolve, 2000 * tentative));
+            }
+        }
     }
+
+    if (!sauvegardeConfirmee) {
+        console.error(
+            '🚨 ARRÊT SANS CONFIRMATION DE SAUVEGARDE : ' +
+            'conserver toutes les anciennes sauvegardes Discord.'
+        );
+    }
+
+    process.exit(sauvegardeConfirmee ? 0 : 1);
 }
 
 process.on('SIGTERM', () => {
