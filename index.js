@@ -927,6 +927,88 @@ for (const p of lemonMilkPaths) {
     }
 }
 
+// Signaler les erreurs techniques dans le salon privé, sans spam ni mentions.
+const ERROR_REPORT_CHANNEL_ID = '1556891268498325554';
+const originalConsoleError = console.error.bind(console);
+const errorReportQueue = [];
+const errorReportRecent = new Map();
+let errorReportClient = null;
+let errorReportSending = false;
+let errorReportLastSent = 0;
+
+function sanitizeErrorReport(value) {
+    let str = String(value ?? '');
+    for (const secret of [process.env.TOKEN, process.env.DISCORD_TOKEN, process.env.GITHUB_TOKEN]) {
+        if (typeof secret === 'string' && secret.length >= 8) {
+            str = str.split(secret).join('[SECRET MASQUÉ]');
+        }
+    }
+    return str.replace(/(authorization\s*[:=]\s*(?:bot|bearer)\s+)[^\s]+/gi, '$1[MASQUÉ]');
+}
+
+function queueDiscordErrorReport(args) {
+    const error = args.find(item => item instanceof Error);
+    const context = args.filter(item => item !== error).map(item =>
+        typeof item === 'string' ? item : '[détails supplémentaires]'
+    ).join(' ');
+    const stack = error?.stack || '';
+    const source = stack.split('\n').map(line => line.trim()).find(line =>
+        /\.js:\d+:\d+/.test(line) && !line.includes('node_modules')
+    ) || 'Emplacement non disponible';
+    const title = sanitizeErrorReport(context || error?.message || 'Erreur non précisée').slice(0, 300);
+    const detail = sanitizeErrorReport(error?.message || context || 'Voir les journaux du bot').slice(0, 500);
+    const location = sanitizeErrorReport(source).slice(0, 350);
+    const key = [title, detail, location].join('|');
+    const now = Date.now();
+    const previous = errorReportRecent.get(key);
+    if (previous && now - previous < 10 * 60 * 1000) return;
+    errorReportRecent.set(key, now);
+    if (errorReportRecent.size > 250) {
+        for (const [oldKey, timestamp] of errorReportRecent) {
+            if (now - timestamp > 10 * 60 * 1000 || errorReportRecent.size > 200) errorReportRecent.delete(oldKey);
+        }
+    }
+    if (errorReportQueue.length >= 30) errorReportQueue.shift();
+    errorReportQueue.push({ title, detail, location });
+    void flushDiscordErrorReports();
+}
+
+async function flushDiscordErrorReports() {
+    if (errorReportSending || !errorReportClient?.isReady?.() || !errorReportQueue.length) return;
+    errorReportSending = true;
+    try {
+        while (errorReportQueue.length && errorReportClient?.isReady?.()) {
+            const wait = Math.max(0, 2500 - (Date.now() - errorReportLastSent));
+            if (wait) await new Promise(resolve => setTimeout(resolve, wait));
+            const report = errorReportQueue[0];
+            const channel = await errorReportClient.channels.fetch(ERROR_REPORT_CHANNEL_ID);
+            if (!channel?.send) throw new Error('Salon de rapports introuvable ou inaccessible');
+            await channel.send({
+                content: [
+                    '🚨 **Cacabot a rencontré un problème**',
+                    '**Problème :** ' + report.title,
+                    '**Détail :** ' + report.detail,
+                    '**Fichier / ligne :** ' + report.location,
+                    '**Date :** <t:' + Math.floor(Date.now() / 1000) + ':F>'
+                ].join('\n').slice(0, 1950),
+                allowedMentions: { parse: [] }
+            });
+            errorReportQueue.shift();
+            errorReportLastSent = Date.now();
+        }
+    } catch (err) {
+        originalConsoleError('[ERROR REPORTER] Envoi au salon impossible :', err);
+    } finally {
+        errorReportSending = false;
+    }
+}
+
+console.error = (...args) => {
+    originalConsoleError(...args);
+    try { queueDiscordErrorReport(args); }
+    catch (err) { originalConsoleError('[ERROR REPORTER] Rapport impossible :', err); }
+};
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -938,6 +1020,7 @@ const client = new Client({
     ],
     partials: [Partials.Message, Partials.Channel, Partials.Reaction]
 });
+errorReportClient = client;
 
 initToolsState({
     client,
@@ -2065,6 +2148,7 @@ client.on('channelCreate', async (channel) => {
 
 client.once('ready', async () => {
     console.log(`✅ ${client.user.tag} est connecté`);
+    void flushDiscordErrorReports();
 
     // Enregistrement des commandes Slash (/)
     const slashCommands = [
