@@ -2156,7 +2156,9 @@ try {
 
 client.on('channelCreate', async (channel) => {
     if (channel.type === ChannelType.GuildText) {
-        await assurerWebhookRoulette(channel).catch(() => {});
+        await assurerWebhookRoulette(channel).catch(err => {
+            console.error('[INDEX] Création du webhook roulette échouée :', err);
+        });
     }
 });
 
@@ -2777,8 +2779,11 @@ client.on('messageReactionAdd', async (reaction, user) => {
 
 client.on('messageReactionRemove', async (reaction, user) => {
     if (!donneesChargees) return;
-
-    await handleSecurityReactionRemove(reaction, user);
+    try {
+        await handleSecurityReactionRemove(reaction, user);
+    } catch (err) {
+        console.error('[INDEX] Retrait de réaction de sécurité échoué :', err);
+    }
 });
 
 function estSessionMiniJeuActive(channelId) {
