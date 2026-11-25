@@ -2947,6 +2947,7 @@ function planifierMajCanvasVoteRoulette(msgId, voteData, client, guild) {
             }).catch((err) => { if (err?.code !== 10008) console.warn('[ROULETTE] Modification du vote échouée :', err); });
         } catch (err) { console.warn('[ROULETTE] Actualisation du vote échouée :', err); }
     }, 10000);
+    entry.timer.unref?.();
 
     rouletteVoteCanvasPending.set(msgId, entry);
 }
