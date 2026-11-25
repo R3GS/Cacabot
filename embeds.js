@@ -340,16 +340,16 @@ async function handleEmbedMessage(message, response, client) {
 async function handleEmbedSlash(interaction, client) {
     if (interaction.commandName !== 'embed') return false;
     if (interaction.user.id !== EPSYS_ID) {
-        await interaction.reply({ content: "Cette commande est réservée à Epsys.", ephemeral: true });
+        await interaction.reply({ content: "Cette commande est réservée à Epsys.", flags: 64 });
         return true;
     }
 
     const msgIdOption = interaction.options.getString('modifier')?.trim();
     if (msgIdOption) {
         const targetMsg = await trouverMessageCacabot(interaction.guild, interaction.channel, msgIdOption);
-        if (!targetMsg) { await interaction.reply({ content: "Message introuvable ! Vérifie l'ID.", ephemeral: true }); return true; }
-        if (targetMsg.author.id !== client.user.id) { await interaction.reply({ content: "Ce message n'a pas été envoyé par Cacabot !", ephemeral: true }); return true; }
-        if (!targetMsg.embeds || targetMsg.embeds.length === 0) { await interaction.reply({ content: "Ce message ne contient aucun embed !", ephemeral: true }); return true; }
+        if (!targetMsg) { await interaction.reply({ content: "Message introuvable ! Vérifie l'ID.", flags: 64 }); return true; }
+        if (targetMsg.author.id !== client.user.id) { await interaction.reply({ content: "Ce message n'a pas été envoyé par Cacabot !", flags: 64 }); return true; }
+        if (!targetMsg.embeds || targetMsg.embeds.length === 0) { await interaction.reply({ content: "Ce message ne contient aucun embed !", flags: 64 }); return true; }
 
         const draft = rehydraterEmbedDepuisMessage(targetMsg);
         embedDrafts.set(interaction.user.id, draft);
@@ -375,7 +375,7 @@ async function handleEmbedInteraction(interaction, client) {
     // 1. Bouton initial ouverture formulaire
     if (interaction.isButton() && customId === 'open_embed_modal') {
         if (interaction.user.id !== EPSYS_ID) {
-            await interaction.reply({ content: "Ce bouton est réservé à Epsys.", ephemeral: true });
+            await interaction.reply({ content: "Ce bouton est réservé à Epsys.", flags: 64 });
             return true;
         }
         const draft = embedDrafts.get(interaction.user.id) ?? { fields: [], hasTimestamp: false };
@@ -446,7 +446,7 @@ async function handleEmbedInteraction(interaction, client) {
         const idx = parseInt(parts[5], 10);
         const channel = interaction.guild?.channels.cache.get(channelId);
         const targetMsg = await channel?.messages.fetch(messageId).catch(() => null);
-        if (!targetMsg) { await interaction.reply({ content: "❌ Message introuvable !", ephemeral: true }); return true; }
+        if (!targetMsg) { await interaction.reply({ content: "❌ Message introuvable !", flags: 64 }); return true; }
 
         const draft = rehydraterEmbedDepuisMessage(targetMsg, idx);
         embedDrafts.set(interaction.user.id, draft);
@@ -462,20 +462,20 @@ async function handleEmbedInteraction(interaction, client) {
         if (interaction.user.id !== EPSYS_ID) return true;
         const draft = embedDrafts.get(interaction.user.id);
         if (!draft || !draft.editingMessage) {
-            await interaction.reply({ content: "❌ Aucun message original lié à ce brouillon !", ephemeral: true });
+            await interaction.reply({ content: "❌ Aucun message original lié à ce brouillon !", flags: 64 });
             return true;
         }
         const { channelId, messageId, embedIndex = 0 } = draft.editingMessage;
         const targetChannel = interaction.guild?.channels.cache.get(channelId);
-        if (!targetChannel) { await interaction.reply({ content: "❌ Salon introuvable !", ephemeral: true }); return true; }
+        if (!targetChannel) { await interaction.reply({ content: "❌ Salon introuvable !", flags: 64 }); return true; }
 
         const targetMsg = await targetChannel.messages.fetch(messageId).catch(() => null);
-        if (!targetMsg) { await interaction.reply({ content: "❌ Message introuvable !", ephemeral: true }); return true; }
+        if (!targetMsg) { await interaction.reply({ content: "❌ Message introuvable !", flags: 64 }); return true; }
 
         const embedFinal = buildEmbedFromDraft(draft);
         const tousLesEmbeds = [...targetMsg.embeds];
         tousLesEmbeds[embedIndex] = embedFinal;
-        await targetMsg.edit({ embeds: tousLesEmbeds }).catch(err => interaction.reply({ content: `❌ Erreur : ${err.message}`, ephemeral: true }));
+        await targetMsg.edit({ embeds: tousLesEmbeds }).catch(err => interaction.reply({ content: `❌ Erreur : ${err.message}`, flags: 64 }));
 
         embedDrafts.delete(interaction.user.id);
         await interaction.update({ content: `✅ **L'embed #${embedIndex + 1} a été mis à jour avec succès sur [le message original](${targetMsg.url}) !**`, embeds: [], components: [] });
@@ -486,7 +486,7 @@ async function handleEmbedInteraction(interaction, client) {
         if (interaction.user.id !== EPSYS_ID) return true;
         const draft = embedDrafts.get(interaction.user.id);
         if (!draft || !draft.fields || draft.fields.length === 0) {
-            await interaction.reply({ content: "❌ Aucun champ à modifier !", ephemeral: true });
+            await interaction.reply({ content: "❌ Aucun champ à modifier !", flags: 64 });
             return true;
         }
         if (draft.fields.length === 1) {
@@ -501,7 +501,7 @@ async function handleEmbedInteraction(interaction, client) {
                 description: f.value.slice(0, 50) || 'Sans contenu',
                 value: String(i)
             })));
-        await interaction.reply({ content: "📝 **Quel champ souhaites-tu modifier ?**", components: [new ActionRowBuilder().addComponents(menu)], ephemeral: true });
+        await interaction.reply({ content: "📝 **Quel champ souhaites-tu modifier ?**", components: [new ActionRowBuilder().addComponents(menu)], flags: 64 });
         return true;
     }
 
@@ -511,7 +511,7 @@ async function handleEmbedInteraction(interaction, client) {
         const draft = embedDrafts.get(interaction.user.id);
         const index = parseInt(interaction.values[0], 10);
         if (!draft || !draft.fields || !draft.fields[index]) {
-            await interaction.reply({ content: "❌ Champ introuvable !", ephemeral: true });
+            await interaction.reply({ content: "❌ Champ introuvable !", flags: 64 });
             return true;
         }
         await interaction.showModal(buildEmbedFieldModal(draft.fields[index], index));
@@ -558,7 +558,7 @@ async function handleEmbedInteraction(interaction, client) {
                 components: buildEmbedControlRows(draft)
             };
             if (interaction.isFromMessage()) await interaction.update(payload);
-            else await interaction.reply({ ...payload, ephemeral: true });
+            else await interaction.reply({ ...payload, flags: 64 });
             return true;
         }
 
@@ -602,7 +602,7 @@ async function handleEmbedInteraction(interaction, client) {
                 components: buildEmbedControlRows(draft)
             };
             if (interaction.isFromMessage()) await interaction.update(payload);
-            else await interaction.reply({ ...payload, ephemeral: true });
+            else await interaction.reply({ ...payload, flags: 64 });
             return true;
         }
     }
