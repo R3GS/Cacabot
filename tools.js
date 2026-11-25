@@ -1405,7 +1405,7 @@ async function handleToolsSlash(interaction, client) {
 
     if (commandName === 'serveur') {
         const guild = interaction.guild;
-        if (!guild) return interaction.reply({ content: "Uniquement sur serveur.", ephemeral: true });
+        if (!guild) return interaction.reply({ content: "Uniquement sur serveur.", flags: 64 });
         await guild.fetch();
         const owner = await guild.fetchOwner();
         const createdAt = guild.createdAt.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -1445,10 +1445,10 @@ async function handleToolsSlash(interaction, client) {
 
     if (commandName === 'prune') {
         if (!interaction.member.permissions.has('ManageMessages') && interaction.user.id !== EPSYS_ID) {
-            return interaction.reply({ content: "Permission insuffisante !", ephemeral: true });
+            return interaction.reply({ content: "Permission insuffisante !", flags: 64 });
         }
         const count = interaction.options.getInteger('nombre');
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
         const deleted = await interaction.channel.bulkDelete(count, true).catch(() => null);
         return interaction.editReply(`🧹 **${deleted?.size ?? 0}** messages supprimés.`);
     }
@@ -1457,11 +1457,11 @@ async function handleToolsSlash(interaction, client) {
         const sub = interaction.options.getSubcommand();
         if (sub === 'stop') {
             if (!pomodoroSessions.has(interaction.channel.id)) {
-                return interaction.reply({ content: "Aucun pomodoro en cours !", ephemeral: true });
+                return interaction.reply({ content: "Aucun pomodoro en cours !", flags: 64 });
             }
             const s = pomodoroSessions.get(interaction.channel.id);
             if (s.ownerId !== interaction.user.id && interaction.user.id !== EPSYS_ID) {
-                return interaction.reply({ content: "Seule la personne qui a lancé ce pomodoro peut l'arrêter.", ephemeral: true });
+                return interaction.reply({ content: "Seule la personne qui a lancé ce pomodoro peut l'arrêter.", flags: 64 });
             }
             clearTimeout(s.timeout);
             await s.message.delete().catch(() => {});
@@ -1470,7 +1470,7 @@ async function handleToolsSlash(interaction, client) {
         }
         if (sub === 'lancer') {
             if (pomodoroSessions.has(interaction.channel.id)) {
-                return interaction.reply({ content: "Un pomodoro est déjà en cours !", ephemeral: true });
+                return interaction.reply({ content: "Un pomodoro est déjà en cours !", flags: 64 });
             }
             const workMenu = new StringSelectMenuBuilder()
                 .setCustomId(`pomo_setup_work_${interaction.user.id}_${interaction.channel.id}`)
@@ -1519,9 +1519,9 @@ async function handleToolsSlash(interaction, client) {
         }
         if (sub === 'remove') {
             const query = interaction.options.getString('nom').trim().toLowerCase();
-            if (!query) return interaction.reply({ content: "Indique un mot du rappel à supprimer.", ephemeral: true });
+            if (!query) return interaction.reply({ content: "Indique un mot du rappel à supprimer.", flags: 64 });
             const match = [...pendingRappels.entries()].find(([, r]) => r.targetId === interaction.user.id && r.texte.toLowerCase().includes(query));
-            if (!match) return interaction.reply({ content: "Rappel introuvable !", ephemeral: true });
+            if (!match) return interaction.reply({ content: "Rappel introuvable !", flags: 64 });
             clearTimeout(match[1].timeout);
             pendingRappels.delete(match[0]);
             return interaction.reply(`🗑️ Rappel supprimé : **${match[1].texte}**`);
@@ -1530,17 +1530,17 @@ async function handleToolsSlash(interaction, client) {
             const timeStr = interaction.options.getString('temps').toLowerCase();
             const texte = interaction.options.getString('message');
             const matchTemps = timeStr.match(/^(\d+)(min|h|s)$/);
-            if (!matchTemps) return interaction.reply({ content: "Format invalide ! (ex: `15min`)", ephemeral: true });
+            if (!matchTemps) return interaction.reply({ content: "Format invalide ! (ex: `15min`)", flags: 64 });
 
             const valeurTemps = Number(matchTemps[1]);
             const uniteTemps = matchTemps[2];
             const ms = valeurTemps * (uniteTemps === 'min' ? 60 * 1000 : uniteTemps === 'h' ? 60 * 60 * 1000 : 1000);
 
             if (!Number.isSafeInteger(ms) || ms <= 0 || ms > 24 * 60 * 60 * 1000) {
-                return interaction.reply({ content: "Durée invalide : utilise un délai supérieur à zéro et inférieur ou égal à 24 heures.", ephemeral: true });
+                return interaction.reply({ content: "Durée invalide : utilise un délai supérieur à zéro et inférieur ou égal à 24 heures.", flags: 64 });
             }
             if (!texte?.trim()) {
-                return interaction.reply({ content: "Ajoute le texte du rappel.", ephemeral: true });
+                return interaction.reply({ content: "Ajoute le texte du rappel.", flags: 64 });
             }
 
             scheduleRappel(interaction.channel.id, interaction.user.id, texte.trim(), ms);
@@ -1585,11 +1585,11 @@ async function handleToolsSlash(interaction, client) {
 
     if (commandName === 'up') {
         if (!estModoAutoriseUp(interaction.member, interaction.user.id)) {
-            return interaction.reply({ content: "🛡️ Seuls les modérateurs peuvent utiliser `/up` !", ephemeral: true });
+            return interaction.reply({ content: "🛡️ Seuls les modérateurs peuvent utiliser `/up` !", flags: 64 });
         }
 
         const ref = interaction.options.getString('message');
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
 
         const cibleMsg = await resolveMessagePourUp(ref, interaction.channel, interaction.guild, client);
         const res = await remonterMessageUtile(cibleMsg, client);
@@ -1610,10 +1610,10 @@ async function handleToolsInteraction(interaction, client) {
     // Menu contextuel Discord (clic droit -> Applications -> 🆙 Remonter (up))
     if (interaction.isMessageContextMenuCommand() && interaction.commandName === '🆙 Remonter (up)') {
         if (!estModoAutoriseUp(interaction.member, interaction.user.id)) {
-            return interaction.reply({ content: "🛡️ Seuls les modérateurs peuvent utiliser cette action !", ephemeral: true });
+            return interaction.reply({ content: "🛡️ Seuls les modérateurs peuvent utiliser cette action !", flags: 64 });
         }
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
         const cibleMsg = interaction.targetMessage;
         const res = await remonterMessageUtile(cibleMsg, client);
 
@@ -1628,13 +1628,13 @@ async function handleToolsInteraction(interaction, client) {
         if (!estAutoriseBug(interaction.user.id)) {
             return interaction.reply({
                 content: "🛡️ Tu n'as pas l'autorisation de résoudre les bugs.",
-                ephemeral: true
+                flags: 64
             });
         }
 
         const idx = parseInt(interaction.values[0], 10);
         if (isNaN(idx) || !bugsList[idx]) {
-            return interaction.reply({ content: "Bug introuvable ou déjà résolu.", ephemeral: true });
+            return interaction.reply({ content: "Bug introuvable ou déjà résolu.", flags: 64 });
         }
 
         const supprime = bugsList.splice(idx, 1)[0];
@@ -1656,7 +1656,7 @@ async function handleToolsInteraction(interaction, client) {
         }
 
         await interaction.update({ embeds: [embedMaj], components: componentsMaj });
-        await interaction.followUp({ content: `✅ **Bug n°${idx + 1} résolu :**\n> *« ${supprime.content ? supprime.content.slice(0, 80) : 'Image'} »* de **${supprime.author}**`, ephemeral: true });
+        await interaction.followUp({ content: `✅ **Bug n°${idx + 1} résolu :**\n> *« ${supprime.content ? supprime.content.slice(0, 80) : 'Image'} »* de **${supprime.author}**`, flags: 64 });
         return true;
     }
 
@@ -1667,7 +1667,7 @@ async function handleToolsInteraction(interaction, client) {
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('checklist_select_')) {
         const ownerId = interaction.customId.split('_')[2];
         if (interaction.user.id !== ownerId) {
-            return interaction.reply({ content: "Ce n'est pas ta checklist ! Tape `!checklist` pour gérer les tiennes.", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ta checklist ! Tape `!checklist` pour gérer les tiennes.", flags: 64 });
         }
 
         const checklistId = interaction.values[0];
@@ -1679,14 +1679,14 @@ async function handleToolsInteraction(interaction, client) {
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('checklist_delete_')) {
         const ownerId = interaction.customId.split('_')[2];
         if (interaction.user.id !== ownerId) {
-            return interaction.reply({ content: "Ce n'est pas ta checklist !", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ta checklist !", flags: 64 });
         }
 
         const checklistId = interaction.values[0];
         const lists = getUserChecklists(ownerId);
         const idx = lists.findIndex(c => c.id === checklistId);
         if (idx === -1) {
-            return interaction.reply({ content: "Checklist introuvable ou déjà supprimée.", ephemeral: true });
+            return interaction.reply({ content: "Checklist introuvable ou déjà supprimée.", flags: 64 });
         }
 
         const supprimee = lists.splice(idx, 1)[0];
@@ -1694,7 +1694,7 @@ async function handleToolsInteraction(interaction, client) {
 
         const payload = buildChecklistsOverviewPayload(ownerId, interaction.member || interaction.user);
         await interaction.update({ content: null, ...payload });
-        await interaction.followUp({ content: `🗑️ Checklist **${supprimee.title}** supprimée.`, ephemeral: true });
+        await interaction.followUp({ content: `🗑️ Checklist **${supprimee.title}** supprimée.`, flags: 64 });
         return true;
     }
 
@@ -1704,13 +1704,13 @@ async function handleToolsInteraction(interaction, client) {
         const checklistId = parts[3];
 
         if (interaction.user.id !== ownerId) {
-            return interaction.reply({ content: "Ce n'est pas ta checklist !", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ta checklist !", flags: 64 });
         }
 
         const lists = getUserChecklists(ownerId);
         const cl = lists.find(c => c.id === checklistId);
         if (!cl) {
-            return interaction.reply({ content: "Cette checklist n'existe plus.", ephemeral: true });
+            return interaction.reply({ content: "Cette checklist n'existe plus.", flags: 64 });
         }
 
         for (const taskId of interaction.values) {
@@ -1729,7 +1729,7 @@ async function handleToolsInteraction(interaction, client) {
     if (interaction.isButton() && interaction.customId.startsWith('checklist_back_')) {
         const ownerId = interaction.customId.split('_')[2];
         if (interaction.user.id !== ownerId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
+            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", flags: 64 });
         }
 
         const payload = buildChecklistsOverviewPayload(ownerId, interaction.member || interaction.user);
@@ -1740,7 +1740,7 @@ async function handleToolsInteraction(interaction, client) {
     if (interaction.isButton() && interaction.customId.startsWith('checklist_close_')) {
         const ownerId = interaction.customId.split('_')[2];
         if (interaction.user.id !== ownerId) {
-            return interaction.reply({ content: "Tu ne peux pas fermer ce panneau !", ephemeral: true });
+            return interaction.reply({ content: "Tu ne peux pas fermer ce panneau !", flags: 64 });
         }
         await interaction.message.delete().catch(() => {});
         return true;
@@ -1752,11 +1752,11 @@ async function handleToolsInteraction(interaction, client) {
         const checklistId = parts[3];
 
         if (interaction.user.id !== ownerId) {
-            return interaction.reply({ content: "Ce n'est pas ta checklist !", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ta checklist !", flags: 64 });
         }
 
         const cl = getUserChecklists(ownerId).find(c => c.id === checklistId);
-        if (!cl) return interaction.reply({ content: "Checklist introuvable.", ephemeral: true });
+        if (!cl) return interaction.reply({ content: "Checklist introuvable.", flags: 64 });
 
         const avant = cl.tasks.length;
         cl.tasks = cl.tasks.filter(t => !t.done);
@@ -1765,7 +1765,7 @@ async function handleToolsInteraction(interaction, client) {
 
         const payload = buildChecklistDetailPayload(ownerId, checklistId, interaction.member || interaction.user);
         await interaction.update({ content: null, ...payload });
-        await interaction.followUp({ content: `🧹 **${retirees}** tâche${retirees > 1 ? 's' : ''} terminée${retirees > 1 ? 's' : ''} retirée${retirees > 1 ? 's' : ''}.`, ephemeral: true });
+        await interaction.followUp({ content: `🧹 **${retirees}** tâche${retirees > 1 ? 's' : ''} terminée${retirees > 1 ? 's' : ''} retirée${retirees > 1 ? 's' : ''}.`, flags: 64 });
         return true;
     }
 
@@ -1775,26 +1775,26 @@ async function handleToolsInteraction(interaction, client) {
         const checklistId = parts[3];
 
         if (interaction.user.id !== ownerId) {
-            return interaction.reply({ content: "Ce n'est pas ta checklist !", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ta checklist !", flags: 64 });
         }
 
         const lists = getUserChecklists(ownerId);
         const idx = lists.findIndex(c => c.id === checklistId);
-        if (idx === -1) return interaction.reply({ content: "Checklist introuvable.", ephemeral: true });
+        if (idx === -1) return interaction.reply({ content: "Checklist introuvable.", flags: 64 });
 
         const supprimee = lists.splice(idx, 1)[0];
         toolsState.demanderSauvegarde?.();
 
         const payload = buildChecklistsOverviewPayload(ownerId, interaction.member || interaction.user);
         await interaction.update({ content: null, ...payload });
-        await interaction.followUp({ content: `🗑️ Checklist **${supprimee.title}** supprimée.`, ephemeral: true });
+        await interaction.followUp({ content: `🗑️ Checklist **${supprimee.title}** supprimée.`, flags: 64 });
         return true;
     }
 
     if (interaction.isButton() && interaction.customId.startsWith('checklist_newbtn_')) {
         const ownerId = interaction.customId.split('_')[2];
         if (interaction.user.id !== ownerId) {
-            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
+            return interaction.reply({ content: "Ce menu ne t'est pas destiné !", flags: 64 });
         }
 
         const modal = new ModalBuilder()
@@ -1831,11 +1831,11 @@ async function handleToolsInteraction(interaction, client) {
         const checklistId = parts[3];
 
         if (interaction.user.id !== ownerId) {
-            return interaction.reply({ content: "Ce n'est pas ta checklist !", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ta checklist !", flags: 64 });
         }
 
         const cl = getUserChecklists(ownerId).find(c => c.id === checklistId);
-        if (!cl) return interaction.reply({ content: "Checklist introuvable.", ephemeral: true });
+        if (!cl) return interaction.reply({ content: "Checklist introuvable.", flags: 64 });
 
         const modal = new ModalBuilder()
             .setCustomId(`checklist_modal_add_${ownerId}_${checklistId}`)
@@ -1856,7 +1856,7 @@ async function handleToolsInteraction(interaction, client) {
     if (interaction.isModalSubmit() && interaction.customId.startsWith('checklist_modal_new_')) {
         const ownerId = interaction.customId.split('_')[3];
         if (interaction.user.id !== ownerId) {
-            return interaction.reply({ content: "Action non autorisée.", ephemeral: true });
+            return interaction.reply({ content: "Action non autorisée.", flags: 64 });
         }
 
         const title = interaction.fields.getTextInputValue('cl_title').trim();
@@ -1896,12 +1896,12 @@ async function handleToolsInteraction(interaction, client) {
         const checklistId = parts[4];
 
         if (interaction.user.id !== ownerId) {
-            return interaction.reply({ content: "Action non autorisée.", ephemeral: true });
+            return interaction.reply({ content: "Action non autorisée.", flags: 64 });
         }
 
         const cl = getUserChecklists(ownerId).find(c => c.id === checklistId);
         if (!cl) {
-            return interaction.reply({ content: "Checklist introuvable.", ephemeral: true });
+            return interaction.reply({ content: "Checklist introuvable.", flags: 64 });
         }
 
         const rawTasks = interaction.fields.getTextInputValue('cl_tasks') || '';
@@ -1936,10 +1936,10 @@ async function handleToolsInteraction(interaction, client) {
         const delayStr = parts[3]; // '10min' ou '1h'
 
         if (interaction.user.id !== targetId) {
-            return interaction.reply({ content: "Ce rappel n'est pas pour toi !", ephemeral: true });
+            return interaction.reply({ content: "Ce rappel n'est pas pour toi !", flags: 64 });
         }
         const data = rappelReports.get(interaction.message.id);
-        if (!data) return interaction.reply({ content: "Ce rappel a expiré !", ephemeral: true });
+        if (!data) return interaction.reply({ content: "Ce rappel a expiré !", flags: 64 });
 
         const ms = delayStr === '10min' ? 10 * 60 * 1000 : 60 * 60 * 1000;
         const libelleTemps = delayStr === '10min' ? '10 minutes' : '1 heure';
@@ -1957,10 +1957,10 @@ async function handleToolsInteraction(interaction, client) {
     if (interaction.isButton() && interaction.customId.startsWith('rappel_report_')) {
         const targetId = interaction.customId.replace('rappel_report_', '');
         if (interaction.user.id !== targetId) {
-            return interaction.reply({ content: "Ce rappel n'est pas pour toi !", ephemeral: true });
+            return interaction.reply({ content: "Ce rappel n'est pas pour toi !", flags: 64 });
         }
         const data = rappelReports.get(interaction.message.id);
-        if (!data) return interaction.reply({ content: "Ce rappel a expiré !", ephemeral: true });
+        if (!data) return interaction.reply({ content: "Ce rappel a expiré !", flags: 64 });
 
         const delayMenu = new StringSelectMenuBuilder()
             .setCustomId(`rappel_delay_${targetId}`)
@@ -1979,9 +1979,9 @@ async function handleToolsInteraction(interaction, client) {
     // Menu Délai Rappel (Reporter)
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('rappel_delay_')) {
         const targetId = interaction.customId.replace('rappel_delay_', '');
-        if (interaction.user.id !== targetId) return interaction.reply({ content: "Ce rappel n'est pas pour toi !", ephemeral: true });
+        if (interaction.user.id !== targetId) return interaction.reply({ content: "Ce rappel n'est pas pour toi !", flags: 64 });
         const data = rappelReports.get(interaction.message.id);
-        if (!data) return interaction.reply({ content: "Ce rappel a expiré !", ephemeral: true });
+        if (!data) return interaction.reply({ content: "Ce rappel a expiré !", flags: 64 });
 
         const value = interaction.values[0];
         let ms = 0;
@@ -1997,7 +1997,7 @@ async function handleToolsInteraction(interaction, client) {
     if (interaction.isButton() && interaction.customId.startsWith('rappel_viewlist_')) {
         const targetId = interaction.customId.replace('rappel_viewlist_', '');
         if (interaction.user.id !== targetId) {
-            return interaction.reply({ content: "Ce n'est pas ta liste de rappels !", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ta liste de rappels !", flags: 64 });
         }
         const payload = buildRappelsListPayload(targetId);
         await interaction.update({ content: null, embeds: payload.embeds, components: payload.components });
@@ -2008,7 +2008,7 @@ async function handleToolsInteraction(interaction, client) {
     if (interaction.isStringSelectMenu() && interaction.customId.startsWith('rappel_delete_menu_')) {
         const targetId = interaction.customId.replace('rappel_delete_menu_', '');
         if (interaction.user.id !== targetId) {
-            return interaction.reply({ content: "Ce n'est pas ta liste de rappels !", ephemeral: true });
+            return interaction.reply({ content: "Ce n'est pas ta liste de rappels !", flags: 64 });
         }
 
         const idToDelete = interaction.values[0];
@@ -2022,7 +2022,7 @@ async function handleToolsInteraction(interaction, client) {
         await interaction.update({ embeds: payload.embeds, components: payload.components });
         await interaction.followUp({ 
             content: `🗑️ Rappel **${match ? match.texte : 'sélectionné'}** annulé avec succès !`, 
-            ephemeral: true 
+            flags: 64 
         });
         return true;
     }
@@ -2034,7 +2034,7 @@ async function handleToolsInteraction(interaction, client) {
         const authorId = parts[3];
         const channelId = parts[4];
 
-        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
+        if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce menu ne t'est pas destiné !", flags: 64 });
 
         const value = interaction.values[0];
         const fields = interaction.message.embeds[0].fields;
@@ -2096,8 +2096,8 @@ async function handleToolsInteraction(interaction, client) {
             const breakMin = parseInt(parts[5]);
             const reason = decodeURIComponent(parts[6] ?? 'Travail');
 
-            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ton pomodoro !", ephemeral: true });
-            if (pomodoroSessions.has(channelId)) return interaction.reply({ content: "Un pomodoro est déjà en cours ici !", ephemeral: true });
+            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce n'est pas ton pomodoro !", flags: 64 });
+            if (pomodoroSessions.has(channelId)) return interaction.reply({ content: "Un pomodoro est déjà en cours ici !", flags: 64 });
 
             await interaction.message.delete().catch(() => {});
             const channel = interaction.guild.channels.cache.get(channelId);
@@ -2107,15 +2107,15 @@ async function handleToolsInteraction(interaction, client) {
 
         const channelId = parts[2];
         const session = pomodoroSessions.get(channelId);
-        if (!session) return interaction.reply({ content: "Ce pomodoro n'existe plus !", ephemeral: true });
+        if (!session) return interaction.reply({ content: "Ce pomodoro n'existe plus !", flags: 64 });
         if (session.ownerId !== interaction.user.id && interaction.user.id !== EPSYS_ID) {
-            return interaction.reply({ content: "Seule la personne qui a lancé ce pomodoro peut le contrôler.", ephemeral: true });
+            return interaction.reply({ content: "Seule la personne qui a lancé ce pomodoro peut le contrôler.", flags: 64 });
         }
 
         if (action === 'join') {
             if (!session.participants) session.participants = [session.ownerId];
             if (session.participants.includes(interaction.user.id)) {
-                return interaction.reply({ content: "Tu fais déjà partie de cette session de travail !", ephemeral: true });
+                return interaction.reply({ content: "Tu fais déjà partie de cette session de travail !", flags: 64 });
             }
 
             session.participants.push(interaction.user.id);
@@ -2132,7 +2132,7 @@ async function handleToolsInteraction(interaction, client) {
 
         if (action === 'skip') {
             session.skip();
-            return interaction.reply({ content: "⏭️ Phase passée !", ephemeral: true });
+            return interaction.reply({ content: "⏭️ Phase passée !", flags: 64 });
         }
     }
 
