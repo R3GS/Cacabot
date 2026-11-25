@@ -431,7 +431,13 @@ const ROULETTE_BOOMER_FINS = [
     '.... de toute façon avec leurs téléphones greffés dans les mains.... 🤦‍♂️📵',
     '.... bon dimanche les loulous !! prenez soin de vous .. ☀️☕',
     '.... c\'est comme les 80 km/h une belle arnaque tout ça !!! 🚗💨',
-    '.... Amitiés sincères de Chantal et Daniel .... 💐🐕'
+    '.... Amitiés sincères de Chantal et Daniel .... 💐🐕',
+    '... ON NOUS CACHE TOUT !!!',
+    '... ET ÇA, C\'EST NORMAL ?',
+    '... PARTAGEZ AVANT SUPPRESSION !!!',
+    '... MOI, JE DIS ÇA...',
+    '... BISES À LA FAMILLE !!!',
+    '... AH, LES JEUNES...'
 ];
 
 const ROULETTE_EXISTENTIEL_FINS = [
@@ -446,7 +452,12 @@ const ROULETTE_EXISTENTIEL_FINS = [
     '\nl\'entropie gagne toujours à la fin. Bonne journée quand même.',
     '\non est juste des morceaux de viande qui attendent la fin sur un caillou flottant.',
     '\nnotre conscience n\'est qu\'un bug cosmique condamné à disparaître.',
-    '\nà l\'échelle géologique, ce message n\'aura servi rigoureusement à rien.'
+    '\nà l\'échelle géologique, ce message n\'aura servi rigoureusement à rien.',
+    '\nTout ça pour ça.',
+    '\nAu fond, ça ne change rien.',
+    '\nOn finira tous poussière.',
+    '\nMême les étoiles s\'éteignent.',
+    '\nBref, c\'est sûrement inutile.'
 ];
 
 const ROULETTE_LINKEDIN_FINS = [
@@ -459,7 +470,12 @@ const ROULETTE_LINKEDIN_FINS = [
     '\nJ\'ai refusé 15 offres pour vivre cette aventure humaine. La résilience n\'a pas de prix. 🔥 #WorkHard #ScaleUp',
     '\nCe café en terrasse m\'a appris plus sur le management 3.0 que 5 ans d\'école de commerce. ☕ #Authenticity',
     '\nAccepter l\'inconfort, c\'est scaler son capital humain. Et vous, quel a été votre déclic ? 🎯 #GrowthMindset',
-    '\nPartagez ce post si vous croyez encore à l\'intrapreneuriat bienveillant en 2026. 💬 #DeepWork #Synergie'
+    '\nPartagez ce post si vous croyez encore à l\'intrapreneuriat bienveillant en 2026. 💬 #DeepWork #Synergie',
+    '\nUne belle leçon de résilience.',
+    '\nRestons alignés sur nos valeurs.',
+    '\nMerci pour cette opportunité.',
+    '\nLa synergie fait la différence.',
+    '\nEt vous, quel est votre déclic ?'
 ];
 
 const ROULETTE_ECHO_REPLIQUES = [
@@ -469,7 +485,19 @@ const ROULETTE_ECHO_REPLIQUES = [
     "Oui c'est bien", "Arrête de poster stp.", "Gros malaise...",
     "-# *baille*", "Ok.", "C'est bien Éléonore on est contents.", "Bahh... C'est bien ?", "...Bref, qui a faim ?",
     "https://tenor.com/view/f%C3%A9licitations-je-sais-pas-quoi-te-dire-gif-4771894558253473942",
-    "T'avais vraiment besoin d'envoyer ça ?", "D'accord le clown 🤡", "Tu te relis des fois ?"
+    "T'avais vraiment besoin d'envoyer ça ?", "D'accord le clown 🤡", "Tu te relis des fois ?",
+    "Merci pour cette intervention.",
+    "Le silence était une option.",
+    "Je vais faire semblant d'avoir compris.",
+    "Tu voulais vraiment partager ça ?",
+    "Voilà voilà.",
+    "C'est une façon de voir les choses.",
+    "Je ne rebondirai pas là-dessus.",
+    "Merci, je suppose.",
+    "C'était une pensée, en effet.",
+    "Je vais garder ça en tête. Pas longtemps.",
+    "Je prends note. Peut-être.",
+    "Quelle contribution."
 ];
 
 const rouletteEchoUntil = new Map();
@@ -484,7 +512,13 @@ const ROULETTE_PUBS_SPONSOR = [
     '\n\n*Besoin d\'énergie ? [Red Bull](<https://www.redbull.com>) vous donne des aiiiles !*',
     '\n\n*Parce que vous le valez bien. [L\'Oréal Paris](<https://www.loreal-paris.fr>).*',
     '\n\n*Ce message est sponsorisé par [Spotify](<https://www.spotify.com>) : Écoutez vos titres favoris sans interruption.*',
-    '\n\n*Un break ? Prenez un [KitKat](<https://www.kitkat.fr>) !*'
+    '\n\n*Un break ? Prenez un [KitKat](<https://www.kitkat.fr>) !*',
+    '\n\n*Découvrez les dernières séries et les meilleurs films sur [Netflix](<https://www.netflix.com/fr/>).*',
+    '\n\n*Faites-vous plaisir chez [McDonald’s](<https://www.mcdonalds.fr/>) dès aujourd’hui.*',
+    '\n\n*Retrouvez tous vos équipements sportifs sur [Decathlon](<https://www.decathlon.fr/>).*',
+    '\n\n*Laissez parler votre imagination avec [LEGO](<https://www.lego.com/fr-fr>).*',
+    '\n\n*Réservez vos prochains voyages avec [SNCF Connect](<https://www.sncf-connect.com/>).*',
+    '\n\n*Envoyez vos colis simplement avec [La Poste](<https://www.laposte.fr/>).*'
 ];
 
 const ROULETTE_AUTOCORRECT_PHRASES = [
