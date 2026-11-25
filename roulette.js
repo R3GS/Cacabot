@@ -104,6 +104,7 @@ function scheduleRltProxyRamClear() {
         rltAvatarProxyRam.clear();
         rltProxyRamTimer = null;
     }, RLT_PROXY_TTL_MS);
+    rltProxyRamTimer.unref?.();
 }
 
 function getMemberAvatarProxyInfo(member, size = 256) {
@@ -9843,7 +9844,8 @@ async function handleRouletteTransfoMessage(message, client) {
         }
         if (!client.webhookDeletedMessages) client.webhookDeletedMessages = new Set();
         client.webhookDeletedMessages.add(message.id);
-        setTimeout(() => client.webhookDeletedMessages?.delete(message.id), 15000);
+        const deletedMessageTimer = setTimeout(() => client.webhookDeletedMessages?.delete(message.id), 15000);
+        deletedMessageTimer.unref?.();
         await message.delete().catch(() => {});
         if (echoReplique) {
             setTimeout(() => {
