@@ -2681,34 +2681,8 @@ function pickFocusCard(
         return weightedPick(rarityPool);
     }
 
-    const categoryWeights = availableCategories.map(category => ({
-        category,
-        weight: category === focusCategory
-            ? FOCUS_CATEGORY_WEIGHTS.selected
-            : FOCUS_CATEGORY_WEIGHTS.other
-    }));
-
-    const totalCategoryWeight = categoryWeights.reduce(
-        (sum, entry) => sum + entry.weight,
-        0
-    );
-
-    let categoryRoll = Math.random() * totalCategoryWeight;
-    let selectedCategory = categoryWeights[categoryWeights.length - 1].category;
-
-    for (const entry of categoryWeights) {
-        categoryRoll -= entry.weight;
-
-        if (categoryRoll <= 0) {
-            selectedCategory = entry.category;
-            break;
-        }
-    }
-
-    const finalPool = rarityPool.filter(
-        c => c.category === selectedCategory
-    );
-
+    // Focus filtre strictement la catégorie sélectionnée.
+    const finalPool = rarityPool.filter(c => c.category === focusCategory);
     return weightedPick(finalPool);
 }
 
@@ -2732,6 +2706,7 @@ function drawGodPackCards(
         // Ne retenir que les cartes autorisées par les poids
         // effectifs, y compris les punitions de rareté.
         const candidates = setPool.filter(c =>
+            (!focusCategory || c.category === focusCategory) &&
             c.rarity === targetRarity &&
             !pickedIds.has(c.id) &&
             getEffectiveCardWeight(
@@ -2994,6 +2969,7 @@ function drawBoosterCards(
             : RARITY_WEIGHTS;
 
         const rareCandidates = setPool.filter(c =>
+            (!focusCategory || c.category === focusCategory) &&
             c.rarity === 'Rare' &&
             !pickedIds.has(c.id) &&
             getEffectiveCardWeight(
@@ -3037,6 +3013,7 @@ function drawBoosterCards(
             : RARITY_WEIGHTS;
 
         let pool = setPool.filter(c =>
+            (!focusCategory || c.category === focusCategory) &&
             !(luckyActive && c.rarity === 'Commune') &&
             !pickedIds.has(c.id) &&
             getEffectiveCardWeight(
@@ -4858,7 +4835,7 @@ function buildGuidePayload(userId, fromHub = true, chapter = 'home') {
                 `### 🛒 Boutique RegaDex\n` +
                 `🎯 **Focus RegaDex (2 charges) :** ${STORE_PRICES.focus} pts\n` +
                 `• Choisis une catégorie avant chaque booster : Items, Personnages ou Références.\n` +
-                `• Catégorie choisie : **60 %** ; autres catégories : **20 %** chacune.\n` +
+                `• Catégorie choisie : **100 % des tirages ordinaires** ; autres catégories : **20 %** chacune.\n` +
                 `• Avec Focus : **1,5 % Full Art** et **0,4 % Négative**.\n` +
                 `• Les doublons restent possibles et aucune nouvelle carte n'est garantie.\n\n` +
                 `🎁 **Booster classique (3 cartes) :** ${STORE_PRICES.booster} pts\n` +
@@ -6302,8 +6279,8 @@ async function showFocusChoice(
         .setDescription(
             `Tu possèdes **${charges} charge(s) Focus**.\n\n` +
             `**Avec Focus :**\n` +
-            `• Catégorie choisie : **60 %**\n` +
-            `• Autres catégories : **20 % chacune**\n` +
+            `• Catégorie choisie : **100 % des tirages ordinaires**\n` +
+            `• Autres catégories : **exclues des tirages ordinaires**\n` +
             `• Full Art : **1,5 %** de poids de base\n` +
             `• Négative : **0,4 %** de poids de base\n\n` +
             `**Ouverture normale :** aucun Focus consommé.\n\n` +
@@ -12522,8 +12499,8 @@ async function handleTcgInteraction(interaction) {
                     `Avant l'ouverture d'un booster, tu pourras choisir ` +
                     `une catégorie à favoriser : **Items**, **Personnages** ` +
                     `ou **Références**.\n\n` +
-                    `• Catégorie choisie : **60 %**\n` +
-                    `• Autres catégories : **20 % chacune**\n` +
+                    `• Catégorie choisie : **100 % des tirages ordinaires**\n` +
+                    `• Autres catégories : **exclues des tirages ordinaires**\n` +
                     `• Full Art : **1,5 %**\n` +
                     `• Négative : **0,4 %**\n\n` +
                     `⚠️ **Information importante — Fair-play**\n` +
