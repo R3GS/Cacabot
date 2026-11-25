@@ -8125,7 +8125,8 @@ async function handleRouletteSlash(interaction, client) {
             return true;
         }
 
-        const sentHub = await interaction.reply({ ...buildRouletteHubPayload(interaction.user.id, interaction.guildId), fetchReply: true });
+        await interaction.reply(buildRouletteHubPayload(interaction.user.id, interaction.guildId));
+        const sentHub = await interaction.fetchReply();
         if (sentHub) scheduleRouletteHubAutoDelete(sentHub);
         return true;
     }

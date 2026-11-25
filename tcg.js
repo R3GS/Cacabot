@@ -343,9 +343,10 @@ async function replyPanelSilent(target, payload, ownerId = null) {
     let sent = null;
     if (target.isRepliable?.()) {
         if (target.deferred || target.replied) {
-            sent = await target.followUp({ ...data, fetchReply: true });
+            sent = await target.followUp(data);
         } else {
-            sent = await target.reply({ ...data, fetchReply: true });
+            await target.reply(data);
+            sent = await target.fetchReply();
         }
         schedulePanelAutoDelete(sent);
         return sent;
@@ -6966,8 +6967,7 @@ async function startBoosterOpening(
                 sentMsg = await targetResponder.followUp(
                     withSilent({
                         embeds: [gifEmbed],
-                        files,
-                        fetchReply: true
+                        files
                     })
                 );
             } else {

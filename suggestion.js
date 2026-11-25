@@ -172,7 +172,8 @@ async function handleSuggestionSlash(interaction) {
     const embed = buildSuggestionEmbed(data, interaction.member);
     const rows = buildSuggestionRow(data);
 
-    const sent = await interaction.reply({ embeds: [embed], components: rows, fetchReply: true });
+    await interaction.reply({ embeds: [embed], components: rows });
+    const sent = await interaction.fetchReply();
     const suggestionsData = suggestionBridge.getSuggestionsData();
     suggestionsData.set(sent.id, data);
     suggestionBridge.demanderSauvegarde();
