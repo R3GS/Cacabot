@@ -3133,7 +3133,9 @@ function armerTimersVoteRoulette(msgId, voteData, client) {
     }
 
     timerEntry.timeout = setTimeout(() => {
-        cloturerVoteRoulette(timerEntry, client);
+        cloturerVoteRoulette(timerEntry, client).catch(err => {
+            console.error('[ROULETTE] Clôture automatique du vote échouée :', err);
+        });
     }, restantMs);
 
     rouletteVoteTimers.set(msgId, timerEntry);
