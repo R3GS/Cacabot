@@ -467,7 +467,8 @@ async function lancerPenduQuotidien(guild, force = false) {
 
         const publicationPending = {
             token: publicationToken,
-            session: nouvelleSession,
+            // Figer l'intention avant l'envoi : ne pas partager l'objet mutable.
+            session: structuredClone(nouvelleSession),
             createdAt: Date.now(),
 
             // Identifier précisément la session remplacée.
