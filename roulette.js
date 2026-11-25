@@ -55,13 +55,17 @@ function scheduleRouletteHubAutoDelete(msg, triggerMessage = null) {
     const timer = setTimeout(async () => {
         rouletteHubAutoDeleteTimers.delete(msg.id);
         const refId = triggerMessage?.id || msg.reference?.messageId;
-        if (refId && msg.channel) {
-            const trig = triggerMessage || await msg.channel.messages.fetch(refId).catch(() => null);
-            if (trig && !trig.author?.bot) {
-                await trig.delete().catch(() => {});
+        try {
+            if (refId && msg.channel) {
+                const trig = triggerMessage || await msg.channel.messages.fetch(refId).catch(() => null);
+                if (trig && !trig.author?.bot) {
+                    await trig.delete().catch(() => {});
+                }
             }
+            await msg.delete().catch(() => {});
+        } catch (err) {
+            console.warn('[ROULETTE] Nettoyage automatique du hub échoué :', msg.id, err);
         }
-        await msg.delete().catch(() => {});
     }, ROULETTE_HUB_AUTO_DELETE_MS);
     timer.unref?.();
     rouletteHubAutoDeleteTimers.set(msg.id, timer);
