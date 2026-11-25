@@ -7236,6 +7236,7 @@ async function startBoosterOpening(
                 } catch (err) { if (err?.code !== 10008) console.warn('[TCG] Animation du booster échouée :', err); }
             }
         }, BOOSTER_GIF_DELAY_MS);
+        session.gifTimeout.unref?.();
     } catch (err) {
         boostersEnCours.delete(userId);
 
