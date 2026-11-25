@@ -1255,17 +1255,38 @@ async function disableButtons(interaction) {
             const diffSave = lastsaveSaveTime ? `${Math.floor((Date.now() - lastsaveSaveTime) / 60000)} min` : 'Jamais';
             const totalMembres = client.guilds.cache.get('720057528351850547')?.memberCount ?? 0;
 
+            const toutOk = modulesOk === modules.length;
             const embedDiag = new EmbedBuilder()
-                .setColor(modulesOk === modules.length ? 0x2ecc71 : 0xe74c3c)
-                .setTitle('🩺 RAPPORT DE SANTÉ COMPLET DE CACABOT')
-                .setDescription(`**État global :** ${modulesOk === modules.length ? '🟢 **100% des systèmes sont opérationnels !**' : '🔴 **Certains modules ont un problème !**'}\n\n` + rapport.join('\n'))
+                .setColor(toutOk ? 0x2ecc71 : 0xe67e22)
+                .setTitle('🩺 Cacabot • Tableau de santé')
+                .setDescription(
+                    `${toutOk ? '🟢 **Modules chargés avec succès**' : '🟠 **Certains modules sont à vérifier**'}\n` +
+                    `**${modulesOk}/${modules.length} contrôles structurels validés**`
+                )
                 .addFields(
-                    { name: '💾 Sauvegarde (#json)', value: `${backupOk} *(il y a ${diffSave})*`, inline: true },
-                    { name: '🌦️ API Météo', value: meteoOk, inline: true },
-                    { name: '🟣 Surveillance Twitch', value: twitchOk, inline: true },
-                    { name: '🔌 Latence WebSocket', value: `${wsPing}ms`, inline: true },
-                    { name: '⚡ RAM Dokploy', value: `${ramMb} Mo`, inline: true },
-                    { name: '👥 Membres en cache', value: `${totalMembres}`, inline: true }
+                    {
+                        name: '🧩 Modules disponibles',
+                        value: rapport.join('\n'),
+                        inline: false
+                    },
+                    {
+                        name: '💾 Persistance et services',
+                        value: `**Sauvegarde :** ${backupOk} (dernière : ${diffSave})\n` +
+                            `**Météo :** ${meteoOk}\n**Twitch :** ${twitchOk}`,
+                        inline: false
+                    },
+                    {
+                        name: '📡 Performances',
+                        value: `**Discord :** ${wsPing} ms\n**Mémoire :** ${ramMb} Mo\n` +
+                            `**Membres :** ${totalMembres}`,
+                        inline: true
+                    },
+                    {
+                        name: 'ℹ️ À savoir',
+                        value: 'Ces indicateurs vérifient la présence des modules et la disponibilité ' +
+                            'des services, pas toutes les fonctionnalités en conditions réelles.',
+                        inline: false
+                    }
                 )
                 .setFooter({ text: `Version ${getVersionString()} • Node.js ${process.version} • Dokploy` })
                 .setTimestamp();
