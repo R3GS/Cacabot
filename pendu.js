@@ -456,7 +456,9 @@ async function lancerPenduQuotidien(guild, force = false) {
             bonnesLettresParJoueur: {},
             dernierCoup: null,
             compteurMessagesLongs: 0,
-            messageId: null
+            messageId: null,
+            // Identifiant immuable, même si l'embed est republié plus bas.
+            sessionId: require('node:crypto').randomUUID()
         };
 
         const embed = buildPenduEmbed(nouvelleSession);
@@ -2092,7 +2094,8 @@ async function attribuerRecompensesRevelationPendu(
     }
 
     // Identifiant stable de la partie, y compris après redémarrage.
-    const rewardKey = `pendu:${session.dateKey}:${session.messageId || 'legacy'}`;
+    const rewardKey = session.recompensesRewardKey ||
+        `pendu:${session.dateKey}:${session.sessionId || session.messageId || 'legacy'}`;
 
     if (!session.recompensesClassementTraitees) {
         const stats = penduBridge.getPenduStats();
