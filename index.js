@@ -2465,9 +2465,25 @@ client.once('ready', async () => {
         }
     }, 60 * 1000);
 
+    // Évite les vérifications réseau simultanées si un appel dépasse son intervalle.
+    function scheduleNonOverlappingCheck(label, task, intervalMs) {
+        let running = false;
+        return setInterval(async () => {
+            if (running) return;
+            running = true;
+            try {
+                await task();
+            } catch (err) {
+                console.error(`[INDEX] Vérification ${label} échouée :`, err);
+            } finally {
+                running = false;
+            }
+        }, intervalMs);
+    }
+
     setInterval(() => verifierHappyHour(client), 30 * 1000);
-    setInterval(() => verifierTwitchLive(client), 60 * 1000);
-    setInterval(() => verifierNouvellesVideosYouTube(), 3 * 60 * 1000); // Vérifie les vidéos YouTube toutes les 3 minutes
+    scheduleNonOverlappingCheck('Twitch', () => verifierTwitchLive(client), 60 * 1000);
+    scheduleNonOverlappingCheck('YouTube', () => verifierNouvellesVideosYouTube(), 3 * 60 * 1000); // Toutes les 3 minutes
 
     // Lancement et vérification automatique des mini-jeux (persisté contre les redéploiements)
     const verifierMotusAutomatique = async () => {
@@ -2578,7 +2594,7 @@ client.once('ready', async () => {
             demanderSauvegarde();
         }
     };
-    setInterval(verifierMotusAutomatique, 30 * 1000);
+    scheduleNonOverlappingCheck('mini-jeux', verifierMotusAutomatique, 30 * 1000);
 
     // Tâches de fond sans bloquer l'état du bot
     for (const guild of client.guilds.cache.values()) {
