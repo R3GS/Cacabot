@@ -183,3 +183,11 @@ test('demarrage : echec de restauration provoque un arret explicite', () => {
     assert.match(source, /donneesChargees = false;\s*console\.error\('🚨 ARRÊT DE SÉCURITÉ/);
     assert.match(source, /process\.exit\(1\)/);
 });
+
+test('arret : sauvegarde finale reessayee et echec signale', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+    assert.match(source, /const MAX_ESSAIS_ARRET = 3/);
+    assert.match(source, /await saveAll\(\)/);
+    assert.match(source, /ARRÊT SANS CONFIRMATION DE SAUVEGARDE/);
+    assert.match(source, /process\.exit\(sauvegardeConfirmee \? 0 : 1\)/);
+});
