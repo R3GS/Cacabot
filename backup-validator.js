@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('node:crypto');
+
 // Validation sans mutation : refuser les sauvegardes tronquées plutôt
 // que démarrer avec des inventaires ou des statistiques vides.
 const isRecord = value =>
@@ -7,8 +9,29 @@ const isRecord = value =>
     typeof value === 'object' &&
     !Array.isArray(value);
 
+function computeBackupChecksum(payload) {
+    const clone = { ...payload };
+    delete clone.integrity;
+    return crypto.createHash('sha256')
+        .update(JSON.stringify(clone))
+        .digest('hex');
+}
+
 function validateBackup(payload) {
     if (!isRecord(payload)) return { valid: false, reason: 'racine invalide' };
+
+    // Compatibilité : les anciennes sauvegardes n'ont pas d'empreinte.
+    // Toute sauvegarde qui en fournit une doit impérativement la valider.
+    if ('integrity' in payload) {
+        if (
+            !isRecord(payload.integrity) ||
+            payload.integrity.algorithm !== 'sha256' ||
+            !/^[a-f0-9]{64}$/.test(payload.integrity.value || '') ||
+            computeBackupChecksum(payload) !== payload.integrity.value
+        ) {
+            return { valid: false, reason: 'empreinte de sauvegarde invalide' };
+        }
+    }
 
     // Une sauvegarde historique peut précéder l'ajout de certaines
     // fonctionnalités. Ne jamais exiger une section qui n'existait
@@ -63,4 +86,4 @@ function validateBackup(payload) {
     return { valid: true };
 }
 
-module.exports = { validateBackup };
+module.exports = { validateBackup, computeBackupChecksum };
