@@ -5748,16 +5748,33 @@ function buildBoosterRecapEmbed(member, session, u) {
     const nextTs = getNextBoosterTimestamp(u);
     const totalAvail = getTotalAvailableBoosters(u);
     const comp = getUserCompletionStats(u);
-    const pctSet = comp.totalSet > 0 ? Math.round((comp.uniqueCount / comp.totalSet) * 100) : 0;
 
-    const lines = session.cards.map((c, i) => {
-        const meta = RARITY_META[c.rarity] || RARITY_META['Commune'];
-        const tag = session.isNewFlags[i]
-            ? '🆕 Nouvelle'
-            : `🔁 Doublon (+${getDuplicatePoints(c)} pts)`;
+    const pctSet = comp.totalSet > 0
+        ? Math.round((comp.uniqueCount / comp.totalSet) * 100)
+        : 0;
 
-        return `${meta.emoji} **${c.id}** — **${c.name}** (*${c.rarity}*) • ${tag}`;
+    // Les emojis indiquent déjà la rareté et le statut de la carte.
+    // On conserve uniquement les informations utiles.
+    const lines = session.cards.map((card, i) => {
+        const meta = RARITY_META[card.rarity] || RARITY_META['Commune'];
+
+        const statut = session.isNewFlags[i]
+            ? '🆕'
+            : `🔁 +${getDuplicatePoints(card)} pts`;
+
+        return `${meta.emoji} **${card.id}** — **${card.name}** • ${statut}`;
     });
+
+    // Identifier les cartes du booster présentes sur la wishlist.
+    // On déduplique pour éviter plusieurs annonces de la même carte.
+    const wishlistIds = new Set(getSanitizedWishlist(u));
+    const wishlistObtenues = [
+        ...new Map(
+            session.cards
+                .filter(card => wishlistIds.has(card.id))
+                .map(card => [card.id, card])
+        ).values()
+    ];
 
     const bonusInfo = [];
 
@@ -5779,41 +5796,100 @@ function buildBoosterRecapEmbed(member, session, u) {
         );
     }
 
-    if (session.luckyUsed) bonusInfo.push('🍀 Booster Chanceux appliqué');
-    if (session.pityUsed) bonusInfo.push('✨ Pity appliquée (Rare garantie)');
-    if (session.halfCdUsed) bonusInfo.push('⚡ Demi-cooldown appliqué — recharge divisée par deux !');
-    if (session.triggeredNextPity) bonusInfo.push('🛡️ Que des Communes : ton **prochain** booster aura une **Rare** garantie !');
-    if (Array.isArray(session.unlockedMilestones) && session.unlockedMilestones.length > 0) {
+    if (session.luckyUsed) {
+        bonusInfo.push('🍀 Booster Chanceux appliqué');
+    }
+
+    if (session.pityUsed) {
+        bonusInfo.push('✨ Pity appliquée (Rare garantie)');
+    }
+
+    if (session.halfCdUsed) {
+        bonusInfo.push(
+            '⚡ Demi-cooldown appliqué — recharge divisée par deux !'
+        );
+    }
+
+    if (session.triggeredNextPity) {
+        bonusInfo.push(
+            '🛡️ Que des Communes : ton **prochain** booster aura une **Rare** garantie !'
+        );
+    }
+
+    if (
+        Array.isArray(session.unlockedMilestones) &&
+        session.unlockedMilestones.length > 0
+    ) {
         for (const ms of session.unlockedMilestones) {
-            const extraMaster = ms.pct === 100 ? ' & **+2 Boosters de Maître** (rang **Maître du Set** débloqué !)' : '';
-            bonusInfo.push(`🏆 **Palier de complétion ${ms.pct}% (${ms.setName}) atteint :** **+${ms.reward} pts RegaDex**${extraMaster} !`);
+            const extraMaster = ms.pct === 100
+                ? ' & **+2 Boosters de Maître** (rang **Maître du Set** débloqué !)'
+                : '';
+
+            bonusInfo.push(
+                `🏆 **Palier de complétion ${ms.pct}% (${ms.setName}) atteint :** ` +
+                `**+${ms.reward} pts RegaDex**${extraMaster} !`
+            );
         }
+    }
+
+    // Les cartes de wishlist sont affichées avec les autres événements
+    // du booster, avant les statistiques du joueur.
+    if (wishlistObtenues.length > 0) {
+        bonusInfo.push(
+            ...wishlistObtenues.map(card =>
+                `💖 **Carte de ta wishlist obtenue :** ${card.name} (${card.id}) !`
+            )
+        );
     }
 
     const cooldownLine = nextTs
         ? `\n⏱️ **Prochain booster gratuit :** <t:${Math.floor(nextTs / 1000)}:R>`
         : `\n✅ **Jauge gratuite pleine :** \`${u.freeBoosters}/${getMaxFreeBoosters(u)}\``;
 
-    const recapColor = session.isGodPack ? 0xFFD700 : (u.theme === 'W' ? 0xffffff : 0x111216);
-    const milestoneNote = session.milestoneBonusPts > 0 ? ` *(+${session.milestoneBonusPts} pts de palier)*` : '';
+    const recapColor = session.isGodPack
+        ? 0xFFD700
+        : (u.theme === 'W' ? 0xffffff : 0x111216);
+
+    const milestoneNote = session.milestoneBonusPts > 0
+        ? ` *(+${session.milestoneBonusPts} pts de palier)*`
+        : '';
+
     const recapTitle = session.isGodPack
         ? '🌟 RÉCAPITULATIF — GOD PACK ! 🌟'
-        : (session.fiveCardUsed ? `📊 Récapitulatif du Booster ${session.cards.length} Cartes` : '📊 Récapitulatif du Booster');
+        : (
+            session.fiveCardUsed
+                ? `📊 Récapitulatif du Booster ${session.cards.length} Cartes`
+                : '📊 Récapitulatif du Booster'
+        );
+
+    const sectionBonus = bonusInfo.length > 0
+        ? `\n\n${bonusInfo.join('\n')}`
+        : '';
+
+    const sectionStats =
+        `\n\n🪙 **Points RegaDex gagnés :** **+${session.ptsEarned} pts**${milestoneNote}` +
+        `\n💰 **Nouveau solde : ${u.points} points RegaDex**` +
+        `\n📚 **Progression ${SET1_NAME} :** **${comp.uniqueCount}/${comp.totalSet}** (${pctSet}%)` +
+        cooldownLine;
 
     return new EmbedBuilder()
         .setColor(recapColor)
-        .setAuthor({ name: `Booster ${SET1_NAME} de ${member.displayName}`, iconURL: member.displayAvatarURL({ dynamic: true }) })
+        .setAuthor({
+            name: `Booster ${SET1_NAME} de ${member.displayName}`,
+            iconURL: member.displayAvatarURL({ dynamic: true })
+        })
         .setTitle(recapTitle)
         .setDescription(
             lines.join('\n') +
-            `\n\n🪙 **Points RegaDex gagnés :** **+${session.ptsEarned} pts**${milestoneNote}` +
-            `\n💰 **Nouveau solde : ${u.points} points RegaDex**` +
-            `\n📚 **Progression ${SET1_NAME} :** **${comp.uniqueCount}/${comp.totalSet}** (${pctSet}%)` +
-            cooldownLine +
-            (bonusInfo.length > 0 ? `\n\n${bonusInfo.join('\n')}` : '')
+            sectionBonus +
+            sectionStats
         )
         .setImage('attachment://recap_booster.jpg')
-        .setFooter({ text: `Boosters restants : ${totalAvail} • Mode ${u.theme === 'W' ? 'Clair (W)' : 'Nuit (B)'}` });
+        .setFooter({
+            text:
+                `Boosters restants : ${totalAvail} • ` +
+                `Mode ${u.theme === 'W' ? 'Clair (W)' : 'Nuit (B)'}`
+        });
 }
 
 async function ensureSessionRecapBuffer(session, theme) {
@@ -8575,86 +8651,185 @@ async function refreshTradePanel(thread, trade) {
     await msg.edit(buildTradeThreadPayload(trade)).catch(() => {});
 }
 
-function buildTradeAddCardEphemeralPayload(trade, uid, page = 0, missingOnly = false) {
+function buildTradeAddCardEphemeralPayload(trade, uid, page = 0, filterMode = 0) {
+    // 0 : Toutes les cartes disponibles
+    // 1 : Cartes manquantes chez le partenaire
+    // 2 : Mes doublons qui manquent au partenaire
+    const mode = [0, 1, 2].includes(Number(filterMode))
+        ? Number(filterMode)
+        : 0;
+
     const allTradables = getTradableDuplicates(uid, trade.offers[uid]);
-    const partnerId = uid === trade.initiatorId ? trade.targetId : trade.initiatorId;
+    const partnerId = uid === trade.initiatorId
+        ? trade.targetId
+        : trade.initiatorId;
+
     const uPartner = getOrCreateTcgUser(partnerId);
     const u = getOrCreateTcgUser(uid);
+
     const offeredCount = {};
-    for (const id of trade.offers[uid]) offeredCount[id] = (offeredCount[id] || 0) + 1;
+    for (const id of trade.offers[uid]) {
+        offeredCount[id] = (offeredCount[id] || 0) + 1;
+    }
 
-    const partnerWishlist = getSanitizedWishlist(uPartner);
-    const partnerWishSet = new Set(partnerWishlist);
+    const partnerWishSet = new Set(getSanitizedWishlist(uPartner));
 
-    const baseFiltered = missingOnly
-        ? allTradables.filter(c => (uPartner.cards?.[c.id] || 0) <= 0)
-        : [...allTradables];
+    const filtered = allTradables
+        .filter(c => {
+            const partnerOwned = uPartner.cards?.[c.id] || 0;
+            const remaining = (u.cards?.[c.id] || 0) -
+                (offeredCount[c.id] || 0);
 
-    // Mettre en tête les cartes présentes dans la Wishlist du partenaire
-    const filtered = baseFiltered.sort((a, b) => {
-        const wa = partnerWishSet.has(a.id) ? 1 : 0;
-        const wb = partnerWishSet.has(b.id) ? 1 : 0;
-        if (wb !== wa) return wb - wa;
-        return a.sortIndex - b.sortIndex;
-    });
+            if (mode === 1) {
+                return partnerOwned === 0;
+            }
 
-    const missFlag = missingOnly ? '1' : '0';
-    const toggleBtn = new ButtonBuilder()
-        .setCustomId(`tcg:tr:addmiss:${trade.id}:${missingOnly ? '0' : '1'}`)
-        .setLabel(missingOnly ? 'Ce qui lui manque : ON' : 'Ce qui lui manque uniquement')
-        .setEmoji('🎯')
-        .setStyle(missingOnly ? ButtonStyle.Success : ButtonStyle.Secondary);
+            if (mode === 2) {
+                return partnerOwned === 0 && remaining >= 2;
+            }
+
+            return true;
+        })
+        .sort((a, b) => {
+            const wa = partnerWishSet.has(a.id) ? 1 : 0;
+            const wb = partnerWishSet.has(b.id) ? 1 : 0;
+
+            if (wb !== wa) return wb - wa;
+
+            return a.sortIndex - b.sortIndex;
+        });
+
+    const modes = [
+        {
+            label: 'Toutes mes cartes',
+            emoji: '📚',
+            description: 'Toutes les cartes disponibles'
+        },
+        {
+            label: 'Ce qui lui manque',
+            emoji: '🎯',
+            description: 'Cartes absentes de sa collection'
+        },
+        {
+            label: 'Mes doublons qui lui manquent',
+            emoji: '🔁',
+            description: 'Uniquement mes copies supplémentaires qu’il ne possède pas'
+        }
+    ];
+
+    const filterButtons = modes.map((option, index) =>
+        new ButtonBuilder()
+            .setCustomId(`tcg:tr:addmiss:${trade.id}:${index}`)
+            .setLabel(option.label)
+            .setEmoji(option.emoji)
+            .setStyle(
+                mode === index
+                    ? ButtonStyle.Success
+                    : ButtonStyle.Secondary
+            )
+            .setDisabled(mode === index)
+    );
+
+    const filterRow = new ActionRowBuilder()
+        .addComponents(filterButtons);
 
     if (filtered.length === 0) {
+        const emptyMessages = [
+            "❌ Tu n'as aucune carte disponible à proposer dans ton inventaire.",
+            '🎯 Aucune de tes cartes disponibles ne manque actuellement à ton partenaire.',
+            '🔁 Aucun de tes doublons disponibles ne manque actuellement à ton partenaire.'
+        ];
+
         return {
-            content: missingOnly
-                ? '🎯 Aucune de tes cartes disponibles ne manque actuellement à ton partenaire.'
-                : "❌ Tu n'as aucune carte disponible à proposer dans ton inventaire.",
-            components: missingOnly ? [new ActionRowBuilder().addComponents(toggleBtn)] : []
+            content: emptyMessages[mode],
+            components: [filterRow]
         };
     }
 
     const totalPages = Math.max(1, Math.ceil(filtered.length / 25));
-    const safePage = Math.max(0, Math.min(page, totalPages - 1));
-    const slice = filtered.slice(safePage * 25, (safePage + 1) * 25);
+    const safePage = Math.max(
+        0,
+        Math.min(Number(page) || 0, totalPages - 1)
+    );
+
+    const slice = filtered.slice(
+        safePage * 25,
+        (safePage + 1) * 25
+    );
 
     const menu = new StringSelectMenuBuilder()
         .setCustomId(`tcg:tr:addsel:${trade.id}`)
-        .setPlaceholder(`Choisir une carte à ajouter (Page ${safePage + 1}/${totalPages})...`)
+        .setPlaceholder(
+            `Choisir une carte à ajouter (Page ${safePage + 1}/${totalPages})...`
+        )
         .addOptions(slice.map(c => {
             const inWish = partnerWishSet.has(c.id);
-            const missingForPartner = (uPartner.cards?.[c.id] || 0) <= 0;
-            const remainingBeforeAdd = (u.cards[c.id] || 0) - (offeredCount[c.id] || 0);
-            const lastCopyTag = remainingBeforeAdd === 1 ? ' • ⚠️ Dernière copie' : '';
+            const missingForPartner =
+                (uPartner.cards?.[c.id] || 0) === 0;
+
+            const remainingBeforeAdd =
+                (u.cards?.[c.id] || 0) -
+                (offeredCount[c.id] || 0);
+
+            const lastCopyTag = remainingBeforeAdd === 1
+                ? ' • ⚠️ Dernière copie'
+                : '';
+
             return {
-                label: `${inWish ? '❤️ ' : ''}${c.id} • ${c.name}`.slice(0, 100),
-                description: `${c.rarity} • x${u.cards[c.id]}${inWish ? ' • ❤️ Wishlist' : ''}${missingForPartner ? ' • 🆕 Lui manque' : ''}${lastCopyTag}`.slice(0, 100),
+                label:
+                    `${inWish ? '❤️ ' : ''}${c.id} • ${c.name}`
+                        .slice(0, 100),
+
+                description:
+                    `${c.rarity} • x${u.cards[c.id]}` +
+                    `${inWish ? ' • ❤️ Wishlist' : ''}` +
+                    `${missingForPartner ? ' • 🆕 Lui manque' : ''}` +
+                    lastCopyTag,
+
                 value: c.id
             };
-        }));
+        }).map(option => ({
+            ...option,
+            description: option.description.slice(0, 100)
+        })));
 
-    const btnRow = new ActionRowBuilder();
+    const components = [
+        new ActionRowBuilder().addComponents(menu)
+    ];
+
     if (totalPages > 1) {
-        btnRow.addComponents(
-            new ButtonBuilder()
-                .setCustomId(`tcg:tr:addpage:${trade.id}:${safePage - 1}:${missFlag}`)
-                .setEmoji('◀️')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(safePage <= 0),
-            new ButtonBuilder()
-                .setCustomId(`tcg:tr:addpage:${trade.id}:${safePage + 1}:${missFlag}`)
-                .setEmoji('▶️')
-                .setStyle(ButtonStyle.Secondary)
-                .setDisabled(safePage >= totalPages - 1)
+        components.push(
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(
+                        `tcg:tr:addpage:${trade.id}:${safePage - 1}:${mode}`
+                    )
+                    .setEmoji('◀️')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(safePage <= 0),
+
+                new ButtonBuilder()
+                    .setCustomId(
+                        `tcg:tr:addpage:${trade.id}:${safePage + 1}:${mode}`
+                    )
+                    .setEmoji('▶️')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(safePage >= totalPages - 1)
+            )
         );
     }
-    btnRow.addComponents(toggleBtn);
+
+    components.push(filterRow);
+
+    const descriptions = [
+        '➕ Choisis une carte à ajouter à ton offre :',
+        '🎯 Choisis une carte qui manque à ton partenaire :',
+        '🔁 Choisis un de tes doublons que ton partenaire ne possède pas :'
+    ];
 
     return {
-        content: missingOnly
-            ? '🎯 Choisis une carte **qui manque à ton partenaire** :'
-            : '➕ Choisis une carte à ajouter à ton offre :',
-        components: [new ActionRowBuilder().addComponents(menu), btnRow]
+        content: descriptions[mode],
+        components
     };
 }
 
@@ -14473,30 +14648,70 @@ async function handleTcgInteraction(interaction) {
 
         if (sub === 'add' && interaction.isButton()) {
             if (trade.offers[uid].length >= 3) {
-                await interaction.reply({ content: "⚠️ Tu as déjà mis **3 cartes** (maximum par échange).", ephemeral: true });
+                await interaction.reply({
+                    content: "⚠️ Tu as déjà mis **3 cartes** (maximum par échange).",
+                    ephemeral: true
+                });
                 return true;
             }
-            const tradables = getTradableDuplicates(uid, trade.offers[uid]);
+
+            const tradables = getTradableDuplicates(
+                uid,
+                trade.offers[uid]
+            );
+
             if (tradables.length === 0) {
-                await interaction.reply({ content: "❌ Tu n'as aucune carte disponible dans ton inventaire.", ephemeral: true });
+                await interaction.reply({
+                    content: "❌ Tu n'as aucune carte disponible dans ton inventaire.",
+                    ephemeral: true
+                });
                 return true;
             }
+
             const page = parseInt(parts[4] || '0', 10);
-            const missingOnly = parts[5] === '1';
-            await interaction.reply({ ...buildTradeAddCardEphemeralPayload(trade, uid, page, missingOnly), ephemeral: true });
+            const filterMode = parseInt(parts[5] || '0', 10);
+
+            await interaction.reply({
+                ...buildTradeAddCardEphemeralPayload(
+                    trade,
+                    uid,
+                    page,
+                    filterMode
+                ),
+                ephemeral: true
+            });
+
             return true;
         }
 
         if (sub === 'addpage' && interaction.isButton()) {
             const page = parseInt(parts[4] || '0', 10);
-            const missingOnly = parts[5] === '1';
-            await interaction.update(buildTradeAddCardEphemeralPayload(trade, uid, page, missingOnly));
+            const filterMode = parseInt(parts[5] || '0', 10);
+
+            await interaction.update(
+                buildTradeAddCardEphemeralPayload(
+                    trade,
+                    uid,
+                    page,
+                    filterMode
+                )
+            );
+
             return true;
         }
 
         if (sub === 'addmiss' && interaction.isButton()) {
-            const missingOnly = parts[4] === '1';
-            await interaction.update(buildTradeAddCardEphemeralPayload(trade, uid, 0, missingOnly));
+            const filterMode = parseInt(parts[4] || '0', 10);
+
+            await interaction.update(
+                buildTradeAddCardEphemeralPayload(
+                    trade,
+                    uid,
+                    0,
+                    filterMode
+                )
+            );
+
             return true;
         }
 
@@ -15392,35 +15607,141 @@ function reduceTcgBoosterCooldown(userId, reductionMs = 3 * 60 * 60 * 1000, memb
     };
 }
 
-async function grantMinigameTcgPoints(client, userIds, points = 2) {
+const recompensesMinijeuxEnCours = new Set();
+
+async function grantMinigameTcgPoints(client, userIds, points = 2, rewardKey = null) {
     if (!Array.isArray(userIds) || userIds.length === 0) return [];
 
     const c = client || tcgBridge.client;
-    if (!c) return [];
+
+    if (!c) {
+        throw new Error(
+            '[RegaDex] Attribution mini-jeu impossible : client Discord absent.'
+        );
+    }
 
     const guild = c.guilds.cache.get(GUILD_ID)
-        || await c.guilds.fetch(GUILD_ID).catch(() => null);
+        || await c.guilds.fetch(GUILD_ID);
 
-    if (!guild) return [];
+    if (!guild) {
+        throw new Error(
+            '[RegaDex] Attribution mini-jeu impossible : serveur introuvable.'
+        );
+    }
+
+    const data = getStoreData();
+
+    if (
+        !data.minigameRewardLedger ||
+        typeof data.minigameRewardLedger !== 'object' ||
+        Array.isArray(data.minigameRewardLedger)
+    ) {
+        data.minigameRewardLedger = {};
+    }
 
     const rewarded = [];
     rewarded.balances = {};
 
-    for (const uid of [...new Set(userIds)]) {
-        const member = guild.members.cache.get(uid)
-            || await guild.members.fetch(uid).catch(() => null);
+    // Si un gagnant provoque une erreur après le crédit
+    // des précédents, conserver leurs crédits et leurs
+    // clés anti-doublons dans une sauvegarde immédiate.
+    let erreurAttribution = null;
 
-        if (member && hasTcgRole(member)) {
+    try {
+        for (const uid of [...new Set(userIds)]) {
+        const operationId = rewardKey ? `${rewardKey}:${uid}` : null;
+
+        if (
+            operationId &&
+            (
+                data.minigameRewardLedger[operationId] ||
+                recompensesMinijeuxEnCours.has(operationId)
+            )
+        ) {
+            continue;
+        }
+
+        if (operationId) recompensesMinijeuxEnCours.add(operationId);
+
+        try {
+            let member = guild.members.cache.get(uid);
+
+            if (!member) {
+                try {
+                    member = await guild.members.fetch(uid);
+                } catch (error) {
+                    // Un membre ayant réellement quitté le serveur
+                    // n'est plus éligible. Les autres erreurs doivent
+                    // déclencher une reprise ultérieure.
+                    if (error?.code === 10007) {
+                        continue;
+                    }
+
+                    throw error;
+                }
+            }
+
+            if (!member || !hasTcgRole(member)) continue;
+
             const u = getOrCreateTcgUser(uid);
             u.points = (u.points || 0) + points;
 
+            if (operationId) {
+                data.minigameRewardLedger[operationId] = {
+                    userId: uid,
+                    points,
+                    timestamp: Date.now()
+                };
+            }
+
             rewarded.push(uid);
             rewarded.balances[uid] = u.points;
+            } finally {
+                if (operationId) {
+                    recompensesMinijeuxEnCours.delete(operationId);
+                }
+            }
         }
+    } catch (error) {
+        erreurAttribution = error;
+
+        console.error(
+            '[RegaDex] Attribution mini-jeu interrompue après ' +
+            `${rewarded.length} crédit(s) :`,
+            error
+        );
     }
 
     if (rewarded.length > 0) {
         tcgBridge.demanderSauvegarde();
+
+        // Sauvegarder ensemble les soldes et le registre
+        // anti-doublons, même après une attribution partielle.
+        try {
+            await tcgBridge.saveAll();
+        } catch (error) {
+            console.error(
+                '[RegaDex] Sauvegarde immédiate des récompenses mini-jeux échouée :',
+                error
+            );
+
+            if (erreurAttribution) {
+                console.error(
+                    '[RegaDex] L’attribution partielle et sa sauvegarde ' +
+                    'ont toutes deux échoué.',
+                    erreurAttribution
+                );
+            }
+
+            throw error;
+        }
+    }
+
+    // Les gagnants déjà crédités sont sauvegardés.
+    // L'erreur remonte ensuite au Pendu pour permettre
+    // une reprise des joueurs qui n'ont pas été crédités.
+    if (erreurAttribution) {
+        throw erreurAttribution;
     }
 
     return rewarded;

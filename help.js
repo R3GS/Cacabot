@@ -125,6 +125,8 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
                 `### 🎛️ Effets & Cooldowns\n` +
                 `\`!reroll [@membre]\` • Réinitialise immédiatement le cooldown d'un·e membre\n` +
                 `\`!bonusforce [id] [@membre]\` / \`!malusforce [id] [@membre]\` • Impose un tirage\n` +
+                `\`!roulettechance\` *(ou \`!rltchance\`)* • Panneau Epsys-only pour modifier secrètement le prochain tirage d'un membre\n` +
+                `-# ↳ Bonus/Malus garanti au choix, Bonus ×2/×5, Malus ×2/×5, blocage Bonus/Malus/Nuls • Pity et boucliers respectés\n` +
                 `\`!rltid\` *(ou \`!rouletteid\`)* • Liste triée des IDs bonus, malus & spéciaux\n` +
                 `\`!removestate [@membre] [nom]\` • Retire un seul effet actif *(pseudo, mute, transfo...)*\n` +
                 `\`!rltgiveitem [id item] [@membre]\` • Donne un item du Battle Pass à un.e membre\n` +

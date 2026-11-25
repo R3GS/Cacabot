@@ -11,8 +11,14 @@ let motusData = { dateKey: 0, mot: '', termine: false, vainqueurId: null, tentat
 let motusStats = {}; // userId -> { victoires: number, parties: number }
 let rebusStats = {};
 let rebusLastDateKey = 0;
+let rebusSessionData = null;
 let penduData = { dateKey: 0, mot: '', lettresTrouvees: [], lettresFausses: [], erreursCollectives: 0, expireAt: 0, termine: false, vainqueurId: null, tentativesJoueurs: {}, compteurMessages: 0, messageId: null };
 let penduStats = {};
+
+// Intention de publication Pendu, indépendante de la session active.
+// Elle est enregistrée avant l'envoi du message Discord.
+let penduPublicationPending = null;
+
 let twitchLiveEnCours = false;
 let quotesData = []; // [{ id, texte, authorId, authorName, addedById, timestamp, channelId }]
 let welcomeData = { channelId: null, actif: true };
@@ -178,8 +184,24 @@ async function loadAll() {
         motusStats = jsonRecord.motusStats ?? {};
         rebusStats = jsonRecord.rebusStats ?? {};
         rebusLastDateKey = jsonRecord.rebusLastDateKey ?? 0;
+        rebusSessionData = jsonRecord.rebusSessionData ?? null;
         penduData = jsonRecord.penduData ?? { dateKey: 0, mot: '', lettresTrouvees: [], lettresFausses: [], erreursCollectives: 0, expireAt: 0, termine: false, vainqueurId: null, tentativesJoueurs: {}, compteurMessages: 0, messageId: null };
         penduStats = jsonRecord.penduStats ?? {};
+
+        penduPublicationPending =
+            jsonRecord.penduPublicationPending &&
+            typeof jsonRecord.penduPublicationPending === 'object' &&
+            !Array.isArray(jsonRecord.penduPublicationPending)
+                ? jsonRecord.penduPublicationPending
+                : null;
+
+        avertissementsRedemarrageMinijeux =
+            jsonRecord.avertissementsRedemarrageMinijeux &&
+            typeof jsonRecord.avertissementsRedemarrageMinijeux === 'object' &&
+            !Array.isArray(jsonRecord.avertissementsRedemarrageMinijeux)
+                ? { ...jsonRecord.avertissementsRedemarrageMinijeux }
+                : {};
+
         quotesData = jsonRecord.quotes ?? [];
         welcomeData = jsonRecord.welcomeData ?? { channelId: null, actif: true };
         warnsData = jsonRecord.warns ?? {};
@@ -269,8 +291,11 @@ function saveAll() {
             motusStats: motusStats,
             rebusStats: rebusStats,
             rebusLastDateKey: rebusLastDateKey,
+            rebusSessionData: rebusSessionData,
             penduData: penduData,
             penduStats: penduStats,
+            penduPublicationPending,
+            avertissementsRedemarrageMinijeux,
             quotes: quotesData,
             welcomeData: welcomeData,
             warns: warnsData,
@@ -308,6 +333,7 @@ function saveAll() {
         const sauvegardes = [];
         let avantMessageId = null;
         let messagesExamines = 0;
+        let rechercheSauvegardesComplete = true;
         const MAX_MESSAGES_NETTOYAGE = 1000;
 
         while (messagesExamines < MAX_MESSAGES_NETTOYAGE) {
@@ -321,6 +347,7 @@ function saveAll() {
                         : {})
                 });
             } catch (err) {
+                rechercheSauvegardesComplete = false;
                 console.warn(
                     '⚠️ Nettoyage des sauvegardes interrompu :',
                     err
@@ -348,15 +375,23 @@ function saveAll() {
             if (messages.size < 100) break;
         }
 
-        // On ne supprime jamais les 10 sauvegardes les plus récentes.
-        for (const ancienneSauvegarde of sauvegardes.slice(10)) {
-            await ancienneSauvegarde.delete().catch(err => {
-                console.warn(
-                    `⚠️ Impossible de supprimer l'ancienne sauvegarde ` +
-                    `${ancienneSauvegarde.id} :`,
-                    err
-                );
-            });
+        // Ne jamais supprimer de sauvegardes après une recherche interrompue.
+        // Conserver les 10 sauvegardes les plus récentes parmi celles trouvées.
+        if (rechercheSauvegardesComplete) {
+            for (const ancienneSauvegarde of sauvegardes.slice(10)) {
+                await ancienneSauvegarde.delete().catch(err => {
+                    console.warn(
+                        `⚠️ Impossible de supprimer l'ancienne sauvegarde ` +
+                        `${ancienneSauvegarde.id} :`,
+                        err
+                    );
+                });
+            }
+        } else {
+            console.warn(
+                '🛡️ Nettoyage annulé : recherche incomplète. ' +
+                'Aucune ancienne sauvegarde ne sera supprimée.'
+            );
         }
             } catch (err) {
                 console.error('Erreur sauvegarde Discord:', err);
@@ -392,11 +427,139 @@ function demanderSauvegarde() {
 
 let arretEnCours = false;
 
+// Messages de redémarrage à supprimer au prochain démarrage.
+// Structure : { [channelId]: messageId }
+let avertissementsRedemarrageMinijeux = {};
+
+async function envoyerAvertissementsRedemarrageMinijeux() {
+    const maintenant = Date.now();
+
+    const salonsActifs = [
+        {
+            channelId: MOTUS_CHANNEL_ID,
+            actif: Boolean(
+                motusData?.mot &&
+                !motusData.termine &&
+                motusData.expireAt > maintenant
+            )
+        },
+        {
+            channelId: PENDU_CHANNEL_ID,
+            actif: Boolean(
+                penduData?.mot &&
+                !penduData.termine &&
+                penduData.expireAt > maintenant
+            )
+        },
+        {
+            channelId: REBUS_CHANNEL_ID,
+            actif: Boolean(
+                rebusSessionData?.active &&
+                rebusSessionData.limite16hTimestamp > maintenant
+            )
+        }
+    ];
+
+    for (const { channelId, actif } of salonsActifs) {
+        if (!actif) continue;
+
+        try {
+            const salon = await client.channels.fetch(channelId);
+
+            if (!salon?.isTextBased()) continue;
+
+            const avertissement = await salon.send({
+                content:
+                    '🔄 **Redémarrage imminent de Cacabot !** ' +
+                    'Veuillez patienter quelques secondes avant de reprendre la partie.',
+                allowedMentions: { parse: [] }
+            });
+
+            avertissementsRedemarrageMinijeux[channelId] = avertissement.id;
+        } catch (error) {
+            console.error(
+                `[MINI-JEUX] Impossible de prévenir le salon ${channelId} :`,
+                error
+            );
+        }
+    }
+}
+
+async function restaurerAvertissementsRedemarrageMinijeux() {
+    const avertissements = {
+        ...avertissementsRedemarrageMinijeux
+    };
+
+    for (const [channelId, messageId] of Object.entries(avertissements)) {
+        try {
+            const salon = await client.channels.fetch(channelId);
+
+            if (!salon?.isTextBased()) continue;
+
+            const ancienMessage = await salon.messages
+                .fetch(messageId)
+                .catch(() => null);
+
+            if (ancienMessage) {
+                await ancienMessage.delete().catch(() => {});
+            }
+
+            const maintenant = Date.now();
+
+            const sessionActive =
+                (
+                    channelId === MOTUS_CHANNEL_ID &&
+                    motusData?.mot &&
+                    !motusData.termine &&
+                    motusData.expireAt > maintenant
+                ) ||
+                (
+                    channelId === PENDU_CHANNEL_ID &&
+                    penduData?.mot &&
+                    !penduData.termine &&
+                    penduData.expireAt > maintenant
+                ) ||
+                (
+                    channelId === REBUS_CHANNEL_ID &&
+                    rebusSessionData?.active &&
+                    rebusSessionData.limite16hTimestamp > maintenant
+                );
+
+            const contenu = sessionActive
+                ? '✅ **Cacabot est de retour !** La session a été restaurée, vous pouvez reprendre la partie.'
+                : '✅ **Cacabot est de retour !** La session précédente est terminée.';
+
+            const retour = await salon.send({
+                content: contenu,
+                allowedMentions: { parse: [] }
+            });
+
+            setTimeout(() => {
+                retour.delete().catch(() => {});
+            }, 30 * 1000);
+
+            delete avertissementsRedemarrageMinijeux[channelId];
+
+        } catch (error) {
+            console.error(
+                `[MINI-JEUX] Erreur lors du retour dans ${channelId} :`,
+                error
+            );
+        }
+    }
+
+    demanderSauvegarde();
+}
+
 async function arreterAvecSauvegarde(signal) {
     if (arretEnCours) return;
     arretEnCours = true;
 
     console.log(`🛑 ${signal} reçu, sauvegarde avant arrêt...`);
+
+    if (donneesChargees && client.isReady()) {
+        await envoyerAvertissementsRedemarrageMinijeux();
+    }
 
     if (saveEnAttente) {
         clearTimeout(saveEnAttente);
@@ -503,6 +666,7 @@ const {
     initMinijeuxState,
     envoyerMotusQuotidien,
     lancerSessionRebus,
+    restaurerSessionRebus,
     handleMotusMessage,
     handleMotusButton,
     handleMotusSlash,
@@ -518,7 +682,9 @@ const {
     lancerPenduQuotidien,
     handlePenduMessage,
     handlePenduSlash,
-    handlePenduButton
+    handlePenduButton,
+    reprendreRecompensesPendu,
+    reconcilierPublicationPendu
 } = require('./pendu.js');
 
 ///rolembed.js
@@ -546,11 +712,20 @@ initPenduState({
     setPenduData: (d) => { penduData = d; },
     getPenduStats: () => penduStats,
     setPenduStats: (s) => { penduStats = s; },
+
+    getPenduPublicationPending: () => penduPublicationPending,
+    setPenduPublicationPending: (publication) => {
+        penduPublicationPending = publication;
+    },
+
     getMotusStats: () => motusStats,
     getRebusStats: () => rebusStats,
     demanderSauvegarde: () => demanderSauvegarde(),
-    trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta),
-    grantTcgPoints: (uids, pts) => grantMinigameTcgPoints(client, uids, pts)
+    saveAll: () => saveAll(),
+    trackBattlePassProgress: (uid, type, amt, meta) =>
+        trackBattlePassProgress(uid, type, amt, meta),
+    grantTcgPoints: (uids, pts, rewardKey) =>
+        grantMinigameTcgPoints(client, uids, pts, rewardKey)
 });
 
 ///welcome.js
@@ -707,11 +882,15 @@ initMinijeuxState({
     setMotusStats: (s) => { motusStats = s; },
     getRebusStats: () => rebusStats,
     setRebusStats: (s) => { rebusStats = s; },
+    getRebusSession: () => rebusSessionData,
+    setRebusSession: (s) => { rebusSessionData = s; },
+    saveNow: () => saveAll(),
     getPenduStats: () => penduStats,
     setPenduStats: (s) => { penduStats = s; },
     demanderSauvegarde: () => demanderSauvegarde(),
     trackBattlePassProgress: (uid, type, amt, meta) => trackBattlePassProgress(uid, type, amt, meta),
-    grantTcgPoints: (uids, pts) => grantMinigameTcgPoints(client, uids, pts)
+    grantTcgPoints: (uids, pts, rewardKey) =>
+        grantMinigameTcgPoints(client, uids, pts, rewardKey)
 });
 
 ///tcg.js
@@ -1030,7 +1209,24 @@ async function disableButtons(interaction) {
         // =========================
         //  COMMANDE DIAGNOSTIC (EPSYS)
         // =========================
-        if (message.content.trim().toLowerCase() === '!diag' || message.content.trim().toLowerCase() === '!cacatest') {
+        const commandeDiagnostic = message.content.trim().toLowerCase();
+
+        if (
+            commandeDiagnostic === '!diag minijeux' ||
+            commandeDiagnostic === '!diag roulette' ||
+            commandeDiagnostic === '!diag tcg'
+        ) {
+            if (message.author.id !== '436218312574107658') return;
+
+            const type = commandeDiagnostic.split(' ')[1];
+
+            await message.reply(
+                construireDiagnosticSpecialise(type, message.author.id)
+            );
+            return;
+        }
+
+        if (commandeDiagnostic === '!diag' || commandeDiagnostic === '!cacatest') {
             if (message.author.id !== '436218312574107658') return;
 
             const sent = await message.reply('🔍 **Diagnostic de Cacabot en cours...** Analyse de tous les modules...');
@@ -1395,6 +1591,123 @@ async function disableButtons(interaction) {
 
 
     // =========================
+    //     DIAGNOSTICS SPÉCIALISÉS
+    // =========================
+
+function lireNombreCartesDiagnostic() {
+    try {
+        if (typeof getTcgCardsCount !== 'function') return 'Indisponible';
+
+        const total = getTcgCardsCount();
+        return Number.isFinite(total) ? total : 'Indisponible';
+    } catch (error) {
+        console.error('[DIAG TCG] Lecture du catalogue impossible :', error);
+        return 'Indisponible';
+    }
+}
+
+function construireDiagnosticSpecialise(type, ownerId) {
+    const diagnostics = {
+        minijeux: {
+            titre: '🎮 Diagnostic des mini-jeux',
+            controles: [
+                ['Module Motus', typeof handleMotusMessage === 'function'],
+                ['Module Rébus', typeof handleRebusMessage === 'function'],
+                ['Module Pendu', typeof handlePenduMessage === 'function'],
+                ['Restauration Rébus', typeof restaurerSessionRebus === 'function'],
+                ['État Rébus', typeof isRebusSessionActive === 'function']
+            ],
+            informations: [
+                `Rébus actif : **${isRebusSessionActive() ? 'Oui' : 'Non'}**`,
+                `Session Rébus sauvegardée : **${rebusSessionData?.active ? 'Active' : 'Inactive'}**`,
+                `Rébus en pause : **${rebusSessionData?.enPause ? 'Oui' : 'Non'}**`,
+                `Transition Rébus : **${rebusSessionData?.transition || 'Aucune'}**`,
+                `Manche Rébus : **${rebusSessionData?.manche || 0}/5**`,
+                `Échéance Rébus : **${rebusSessionData?.limite16hTimestamp ? `<t:${Math.floor(rebusSessionData.limite16hTimestamp / 1000)}:F>` : 'Aucune'}**`,
+                `Motus : **${!motusData?.mot ? 'Aucune partie chargée' : motusData.termine ? 'Terminé' : motusData.expireAt > Date.now() ? 'En cours' : 'Expiré'}**`,
+                `Pendu : **${!penduData?.mot ? 'Aucune partie chargée' : penduData.termine ? 'Terminé' : penduData.expireAt > Date.now() ? 'En cours' : 'Expiré'}**`
+            ]
+        },
+        roulette: {
+            titre: '🎰 Diagnostic Roulette',
+            controles: [
+                ['Module Roulette', typeof handleRouletteMessage === 'function'],
+                ['Boutons Roulette', typeof handleRouletteButton === 'function'],
+                ['Restauration notifications', typeof restaurerNotifsRoulette === 'function'],
+                ['États persistants', typeof ROULETTE_ETATS === 'object' && ROULETTE_ETATS !== null]
+            ],
+            informations: [
+                `Salon Roulette : <#1553954760900608091>`,
+                `Sauvegarde chargée : **${donneesChargees ? 'Oui' : 'Non'}**`,
+                `Latence Discord : **${client.ws.ping} ms**`
+            ]
+        },
+        tcg: {
+            titre: '🃏 Diagnostic RegaDex',
+            controles: [
+                ['Module TCG', typeof handleTcgMessage === 'function'],
+                ['Interactions TCG', typeof handleTcgInteraction === 'function'],
+                ['Catalogue chargé', typeof getTcgCardsCount === 'function' && lireNombreCartesDiagnostic() >= 109],
+                ['Sauvegarde utilisateurs', !!tcgData?.users],
+                ['Sauvegarde échanges', !!tcgData?.activeTrades]
+            ],
+            informations: [
+                `Cartes cataloguées : **${lireNombreCartesDiagnostic()}**`,
+                `Profils enregistrés : **${Object.keys(tcgData?.users || {}).length}**`,
+                `Sauvegarde chargée : **${donneesChargees ? 'Oui' : 'Non'}**`
+            ]
+        }
+    };
+
+    const diag = diagnostics[type] || diagnostics.minijeux;
+    const controlesOk = diag.controles.filter(([, ok]) => ok).length;
+
+    const embed = new EmbedBuilder()
+        .setColor(controlesOk === diag.controles.length ? 0x2ecc71 : 0xe67e22)
+        .setTitle(diag.titre)
+        .setDescription(
+            `**Contrôles structurels : ${controlesOk}/${diag.controles.length}**\n\n` +
+            diag.controles.map(([nom, ok]) =>
+                `${ok ? '✅' : '❌'} ${nom}`
+            ).join('\n') +
+            '\n\n**Informations**\n' +
+            diag.informations.join('\n') +
+            '\n\n-# Ces contrôles vérifient les modules et les états disponibles, pas le résultat d’un test fonctionnel complet.'
+        )
+        .setFooter({ text: `Cacabot ${getVersionString()} • Diagnostic ${type}` })
+        .setTimestamp();
+
+    const navigation = new ActionRowBuilder().addComponents(
+        ...[
+            ['minijeux', 'Mini-jeux', '🎮'],
+            ['roulette', 'Roulette', '🎰'],
+            ['tcg', 'RegaDex', '🃏']
+        ].map(([id, label, emoji]) =>
+            new ButtonBuilder()
+                .setCustomId(`diag_special:${ownerId}:${id}`)
+                .setLabel(label)
+                .setEmoji(emoji)
+                .setStyle(id === type ? ButtonStyle.Primary : ButtonStyle.Secondary)
+                .setDisabled(id === type)
+        )
+    );
+
+    const fermeture = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`diag_special:${ownerId}:fermer`)
+            .setLabel('Fermer')
+            .setEmoji('🔒')
+            .setStyle(ButtonStyle.Danger)
+    );
+
+    return {
+        embeds: [embed],
+        components: [navigation, fermeture],
+        allowedMentions: { parse: [] }
+    };
+}
+
+    // =========================
     //     LISTENER INTERACTIONS
     // =========================
 
@@ -1408,6 +1721,43 @@ try {
             }).catch(() => {});
         }
         return;
+    }
+
+    // =========================
+    //   BOUTONS DIAGNOSTICS (EPSYS)
+    // =========================
+    if (
+        interaction.isButton() &&
+        interaction.customId.startsWith('diag_special:')
+    ) {
+        const [, ownerId, action] = interaction.customId.split(':');
+
+        if (
+            interaction.user.id !== ownerId ||
+            interaction.user.id !== '436218312574107658'
+        ) {
+            await interaction.reply({
+                content: '⛔ Ce diagnostic est réservé à Epsys.',
+                flags: MessageFlags.Ephemeral
+            });
+            return;
+        }
+
+        if (action === 'fermer') {
+            await interaction.update({
+                components: [],
+                embeds: interaction.message.embeds,
+                content: null
+            });
+            return;
+        }
+
+        if (['minijeux', 'roulette', 'tcg'].includes(action)) {
+            await interaction.update(
+                construireDiagnosticSpecialise(action, ownerId)
+            );
+            return;
+        }
     }
 
     // =========================
@@ -1856,6 +2206,58 @@ client.once('ready', async () => {
     // avant les requêtes de déploiement des commandes Discord.
     await loadAll();
 
+    // Retrouver d'abord une éventuelle publication Discord
+    // effectuée avant la dernière confirmation de sauvegarde.
+    // En cas d'échec, le journal reste présent et bloque
+    // les nouveaux lancements, y compris forcés.
+    await reconcilierPublicationPendu(client).catch(error => {
+        console.error(
+            '[PENDU] Réconciliation de publication impossible :',
+            error
+        );
+    });
+
+    // Reprendre une attribution Pendu interrompue seulement
+    // après restauration des données Battle Pass et RegaDex.
+    await reprendreRecompensesPendu().catch(error => {
+        console.error(
+            '[PENDU] Reprise des récompenses impossible :',
+            error
+        );
+    });
+
+    // Réessayer également sans redémarrer Cacabot lorsqu'une
+    // attribution est restée en attente après une erreur réseau
+    // ou un échec de sauvegarde.
+    const repriseRecompensesPenduInterval = setInterval(async () => {
+        try {
+            // La réconciliation doit précéder la reprise des gains.
+            await reconcilierPublicationPendu(client);
+            await reprendreRecompensesPendu();
+        } catch (error) {
+            console.error(
+                '[PENDU] Nouvelle tentative de réconciliation ' +
+                'ou de reprise échouée :',
+                error
+            );
+        }
+    }, 60 * 1000);
+
+    repriseRecompensesPenduInterval.unref?.();
+
+    const serveurRebus = client.guilds.cache.get('720057528351850547')
+        || await client.guilds.fetch('720057528351850547').catch(() => null);
+
+    if (serveurRebus) {
+        await restaurerSessionRebus(serveurRebus).catch(error => {
+            console.error('[RÉBUS] Échec de restauration :', error);
+        });
+    }
+
+    // Supprime les avertissements de l'arrêt précédent
+    // et annonce le retour uniquement dans les salons concernés.
+    await restaurerAvertissementsRedemarrageMinijeux();
+
     const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     const REGAIA_GUILD_ID = '720057528351850547';
 
@@ -1995,11 +2397,20 @@ client.once('ready', async () => {
             await saveAll().catch(() => {});
         }
 
-        // 2. Lancement du Rébus Regaïen à 15h00 (5 manches de 5 minutes)
-        if (h === 15 && m >= 0 && m < 5 && rebusLastDateKey !== dateKey) {
-            rebusLastDateKey = dateKey;
-            if (guildRegaia) await lancerSessionRebus(guildRegaia);
-            await saveAll().catch(() => {});
+        // 2. Lancement du Rébus Regaïen à 15h00
+        if (
+            h === 15 &&
+            m >= 0 &&
+            m < 5 &&
+            rebusLastDateKey !== dateKey &&
+            guildRegaia
+        ) {
+            const lancementReussi = await lancerSessionRebus(guildRegaia);
+
+            if (lancementReussi) {
+                rebusLastDateKey = dateKey;
+                await saveAll().catch(console.error);
+            }
         }
 
         // 3. Lancement du Motus du soir à 19h00 (7 lettres - Difficile)
@@ -2010,10 +2421,38 @@ client.once('ready', async () => {
         }
 
         // 4. Lancement du Pendu Quotidien à 21h00 (7 lettres - 1h)
-        if (h === 21 && m >= 0 && m < 5 && penduData.dateKey !== dateKey) {
-            penduData.dateKey = dateKey;
-            if (guildRegaia) await lancerPenduQuotidien(guildRegaia);
-            await saveAll().catch(() => {});
+        if (
+            h === 21 &&
+            m >= 0 &&
+            m < 5 &&
+            penduData.dateKey !== dateKey
+        ) {
+            if (!guildRegaia) {
+                console.warn(
+                    '[PENDU] Lancement impossible : serveur Regaïa introuvable.'
+                );
+            } else {
+                // Ne pas inscrire la date avant le lancement :
+                // lancerPenduQuotidien() enregistre elle-même
+                // la nouvelle session après l'envoi Discord.
+                const lancementReussi = await lancerPenduQuotidien(
+                    guildRegaia
+                );
+
+                if (lancementReussi) {
+                    await saveAll().catch(error => {
+                        console.error(
+                            '[PENDU] Sauvegarde après lancement échouée :',
+                            error
+                        );
+                    });
+                } else {
+                    console.warn(
+                        '[PENDU] Lancement non confirmé. ' +
+                        'Nouvelle vérification au prochain passage.'
+                    );
+                }
+            }
         }
 
         // 5. Arrêt automatique du Pendu après 1h de jeu (à 22h00)

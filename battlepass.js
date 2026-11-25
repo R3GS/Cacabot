@@ -602,8 +602,45 @@ function ajouterXpEtMonteeDeNiveau(userId, p, xpBrut, titreQuete) {
 }
 
 function trackBattlePassProgress(userId, type, amount = 1, meta = {}) {
+    const options = meta && typeof meta === 'object' ? meta : {};
+    const eventKey = typeof options.eventKey === 'string'
+        ? options.eventKey
+        : null;
+
+    const bpData = bpBridge.getBattlePassData();
+
+    if (
+        !bpData.eventLedger ||
+        typeof bpData.eventLedger !== 'object' ||
+        Array.isArray(bpData.eventLedger)
+    ) {
+        bpData.eventLedger = {};
+    }
+
+    const operationId = eventKey
+        ? JSON.stringify([eventKey, userId, type])
+        : null;
+
+    if (
+        operationId &&
+        Object.prototype.hasOwnProperty.call(
+            bpData.eventLedger,
+            operationId
+        )
+    ) {
+        return false;
+    }
+
     const p = getOuCreerProfilBP(userId);
-    if (!p.actif) return;
+    if (!p.actif) return false;
+
+    // Les modifications de progression sont synchrones.
+    // Le registre et la progression seront inclus dans la même
+    // photographie JSON lors de la prochaine sauvegarde.
+    if (operationId) {
+        bpData.eventLedger[operationId] = Date.now();
+        bpBridge.demanderSauvegarde();
+    }
 
     let modifie = false;
 

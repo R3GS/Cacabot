@@ -822,11 +822,27 @@ function enregistrerRedirectRecu(userId) {
 }
 
 async function notifierMpInteractionRoulette(client, targetUserId, texte) {
-    if (!client || !targetUserId || !rouletteMpOptIn.get(targetUserId)) return;
+    if (!client || !targetUserId) return;
+
+    // Les interactions supplémentaires ne sont envoyées que si
+    // les notifications principales sont activées et si le membre
+    // a choisi le mode « Toutes les mentions ».
+    const notificationsActives =
+        Boolean(rouletteNotifRepeat.get(targetUserId)) ||
+        aUneNotifRouletteActive(targetUserId);
+
+    if (!notificationsActives || !rouletteMpOptIn.get(targetUserId)) return;
+
     try {
-        const user = client.users.cache.get(targetUserId) || await client.users.fetch(targetUserId).catch(() => null);
+        const user = client.users.cache.get(targetUserId) ||
+            await client.users.fetch(targetUserId).catch(() => null);
+
         if (!user) return;
-        await user.send({ content: texte }).catch(() => {});
+
+        await user.send({
+            content: texte,
+            allowedMentions: { users: [targetUserId] }
+        }).catch(() => {});
     } catch {}
 }
 
@@ -954,8 +970,14 @@ const ROULETTE_ETATS = {
 
 const rouletteDiviseurUntil = new Map();
 const rouletteDiscovered = new Map();
+const rouletteChanceModifiers = new Map();
+
 ROULETTE_ETATS.diviseur = rouletteDiviseurUntil;
 ROULETTE_ETATS.discovered = rouletteDiscovered;
+ROULETTE_ETATS.chanceModifiers = rouletteChanceModifiers;
+
+// Sessions des panneaux administrateur, non persistantes.
+const rouletteChancePanels = new Map();
 
 let bridge = {
     topData: { messages: {} },
@@ -1548,9 +1570,13 @@ function buildRouletteNotifMenuPayload(member, ctx = 'ephem', statusNote = null)
         ? '🔁 **Fréquence :** Tous tes prochains tirages'
         : '1️⃣ **Fréquence :** Uniquement le prochain tirage';
 
-    const mpInterText = mpInteractions
-        ? '📩 **Alertes MP interactions :** Activées *(Pickpocket, Poison, Redirections, fin Pseudo Lock)*'
-        : '🔕 **Alertes MP interactions :** Désactivées';
+    const notificationsActives = Boolean(currentNotif || isRepeat);
+
+    const mpInterText = !notificationsActives
+        ? ''
+        : mpInteractions
+            ? '\n📢 **Mode des mentions :** Toutes les mentions *(cooldown et interactions Roulette)*'
+            : '\n🔔 **Mode des mentions :** Cooldown uniquement';
 
     const displayName = member?.displayName || member?.user?.username || 'Membre';
     const avatarUrl = member?.displayAvatarURL?.({ dynamic: true }) || member?.user?.displayAvatarURL?.({ dynamic: true }) || null;
@@ -1595,18 +1621,34 @@ function buildRouletteNotifMenuPayload(member, ctx = 'ephem', statusNote = null)
             .setEmoji('🔁')
             .setStyle(isRepeat ? ButtonStyle.Success : ButtonStyle.Secondary)
             .setDisabled(isRepeat),
+
         new ButtonBuilder()
             .setCustomId(`roulette_notif:repeat_off:${userId}${ctxSuffix}`)
             .setLabel('Que le prochain tirage')
             .setEmoji('1️⃣')
             .setStyle(!isRepeat ? ButtonStyle.Primary : ButtonStyle.Secondary)
-            .setDisabled(!isRepeat),
-        new ButtonBuilder()
-            .setCustomId(`roulette_notif:mp_int_toggle:${userId}${ctxSuffix}`)
-            .setLabel(mpInteractions ? 'MP interactions ✓' : 'MP interactions')
-            .setEmoji('📩')
-            .setStyle(mpInteractions ? ButtonStyle.Success : ButtonStyle.Secondary)
+            .setDisabled(!isRepeat)
     );
+
+    // Le bouton de mentions supplémentaires n'existe que lorsque
+    // les notifications de cooldown sont activées.
+    if (notificationsActives) {
+        rowRepeat.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`roulette_notif:mp_int_toggle:${userId}${ctxSuffix}`)
+                .setLabel(
+                    mpInteractions
+                        ? 'Désactiver les mentions supplémentaires'
+                        : 'Activer toutes les mentions'
+                )
+                .setEmoji(mpInteractions ? '🔕' : '📢')
+                .setStyle(
+                    mpInteractions
+                        ? ButtonStyle.Secondary
+                        : ButtonStyle.Success
+                )
+        );
+    }
 
     const navRow = new ActionRowBuilder();
     if (ctx !== 'ephem') navRow.addComponents(buildRouletteAccueilButton(userId));
@@ -1682,46 +1724,181 @@ function piocherRoulette(pool, totalGlobal, defaut) {
     return defaut;
 }
 
+const ROULETTE_CHANCE_OPTIONS = [
+    { value: 'force_bonus', label: 'Bonus garanti', emoji: '🍀' },
+    { value: 'force_malus', label: 'Malus garanti', emoji: '😈' },
+    { value: 'bonus_x2', label: 'Bonus ×2', emoji: '📈' },
+    { value: 'bonus_x5', label: 'Bonus ×5', emoji: '🚀' },
+    { value: 'malus_x2', label: 'Malus ×2', emoji: '💀' },
+    { value: 'malus_x5', label: 'Malus ×5', emoji: '🔥' },
+    { value: 'block_bonus', label: 'Bloquer les bonus', emoji: '🚫' },
+    { value: 'block_malus', label: 'Bloquer les malus', emoji: '🛡️' },
+    { value: 'block_null', label: 'Bloquer les nuls', emoji: '🎯' }
+];
+
 function tirerRoulette(userId, guildId = null, isTcgCollector = false) {
     const pity = roulettePity.get(userId) ?? { malus: 0, nuls: 0 };
     const garanti = pity.malus >= ROULETTE_PITY_MALUS || pity.nuls >= ROULETTE_PITY_NULS;
     const poolEligible = ROULETTE_TABLE.filter(e => !e.tcgOnly || isTcgCollector);
 
-    let outcomeId;
-    if (garanti) {
-        const bonus = poolEligible.filter(e => e.type === 'bonus');
-        outcomeId = piocherRoulette(bonus, bonus.reduce((s, e) => s + e.poids, 0), bonus[bonus.length - 1].id);
-    } else {
-        const boostCharges = rouletteJackpotBoostCharges.get(userId) || 0;
-        const boostVal = boostCharges > 0 ? (rouletteJackpotBoostValue.get(userId) || 0.25) : 0;
-        const boostAnniv = bridge.estAnniversaireAujourdhui(guildId, userId) ? 0.50 : 0;
-        const totalJackpot = (rouletteJackpotBonus.get(userId) || 0) + boostVal + boostAnniv;
+    const modifier = rouletteChanceModifiers.get(userId);
+    let modifierActif = modifier || null;
 
-        if (totalJackpot > 0 && Math.random() < totalJackpot) {
-            const bonus = poolEligible.filter(e => e.type === 'bonus');
-            outcomeId = piocherRoulette(bonus, bonus.reduce((s, e) => s + e.poids, 0), bonus[bonus.length - 1].id);
+    // La pity reporte un malus garanti, sans le consommer.
+    if (garanti && modifier?.type === 'force_malus') {
+        modifierActif = null;
+    }
+
+    let outcomeId;
+
+    const tirerBonus = () => {
+        const bonus = poolEligible.filter(e => e.type === 'bonus');
+        return piocherRoulette(
+            bonus,
+            bonus.reduce((s, e) => s + e.poids, 0),
+            bonus[bonus.length - 1]?.id || 'aucun-resultat'
+        );
+    };
+
+    if (garanti) {
+        if (
+            modifierActif?.type === 'force_bonus' &&
+            poolEligible.some(e => e.id === modifierActif.outcomeId && e.type === 'bonus')
+        ) {
+            outcomeId = modifierActif.outcomeId;
         } else {
-            const total = poolEligible.reduce((s, e) => s + e.poids, 0);
+            outcomeId = tirerBonus();
+        }
+    } else if (
+        modifierActif?.type === 'force_bonus' ||
+        modifierActif?.type === 'force_malus'
+    ) {
+        const cible = poolEligible.find(e =>
+            e.id === modifierActif.outcomeId &&
+            e.type === (modifierActif.type === 'force_bonus' ? 'bonus' : 'malus')
+        );
+
+        outcomeId = cible?.id || null;
+    }
+
+    if (!outcomeId) {
+        const boostCharges = rouletteJackpotBoostCharges.get(userId) || 0;
+        const boostVal = boostCharges > 0
+            ? (rouletteJackpotBoostValue.get(userId) || 0.25)
+            : 0;
+
+        const boostAnniv = bridge.estAnniversaireAujourdhui(guildId, userId)
+            ? 0.50
+            : 0;
+
+        const totalJackpot =
+            (rouletteJackpotBonus.get(userId) || 0) +
+            boostVal +
+            boostAnniv;
+
+        // Une pity garantie reste prioritaire.
+        // Hors pity, les modifications de poids passent avant le jackpot.
+        if (garanti) {
+            outcomeId = tirerBonus();
+        } else if (
+            !modifierActif &&
+            totalJackpot > 0 &&
+            Math.random() < totalJackpot
+        ) {
+            outcomeId = tirerBonus();
+        } else {
+            let pool = poolEligible.map(e => ({ ...e }));
+
+            if (modifierActif?.type === 'bonus_x2') {
+                pool = pool.map(e => ({
+                    ...e,
+                    poids: e.type === 'bonus' ? e.poids * 2 : e.poids
+                }));
+            }
+
+            if (modifierActif?.type === 'bonus_x5') {
+                pool = pool.map(e => ({
+                    ...e,
+                    poids: e.type === 'bonus' ? e.poids * 5 : e.poids
+                }));
+            }
+
+            if (modifierActif?.type === 'malus_x2') {
+                pool = pool.map(e => ({
+                    ...e,
+                    poids: e.type === 'malus' ? e.poids * 2 : e.poids
+                }));
+            }
+
+            if (modifierActif?.type === 'malus_x5') {
+                pool = pool.map(e => ({
+                    ...e,
+                    poids: e.type === 'malus' ? e.poids * 5 : e.poids
+                }));
+            }
+
+            if (modifierActif?.type === 'block_bonus') {
+                pool = pool.filter(e => e.type !== 'bonus');
+            }
+
+            if (modifierActif?.type === 'block_malus') {
+                pool = pool.filter(e => e.type !== 'malus');
+            }
+
             const tauxEchec = getTauxEchecRoulette();
-            if (tauxEchec <= 0) {
-                outcomeId = piocherRoulette(poolEligible, total, poolEligible[poolEligible.length - 1].id);
+            const total = pool.reduce((s, e) => s + e.poids, 0);
+
+            // Les résultats nuls sont une issue distincte du tableau.
+            // Leur blocage redistribue les probabilités entre les autres issues.
+            const autoriserNul = modifierActif?.type !== 'block_null';
+
+            if (!pool.length || total <= 0) {
+                outcomeId = 'aucun-resultat';
+            } else if (!autoriserNul || tauxEchec <= 0) {
+                outcomeId = piocherRoulette(
+                    pool,
+                    total,
+                    pool[pool.length - 1].id
+                );
             } else {
-                outcomeId = piocherRoulette(poolEligible, total / (1 - tauxEchec), 'aucun-resultat');
+                outcomeId = piocherRoulette(
+                    pool,
+                    total / (1 - tauxEchec),
+                    'aucun-resultat'
+                );
             }
         }
     }
 
+    // Consommation au moment du tirage effectif.
+    // Le malus garanti reporté par la pity reste enregistré.
+    if (modifier && modifierActif) {
+        rouletteChanceModifiers.delete(userId);
+        bridge.demanderSauvegarde();
+    }
+
     const type = ROULETTE_TABLE.find(e => e.id === outcomeId)?.type;
+
     if (type === 'bonus') {
         roulettePity.delete(userId);
         rouletteJackpotBonus.delete(userId);
     } else if (type === 'malus') {
-        pity.malus++; roulettePity.set(userId, pity);
+        pity.malus++;
+        roulettePity.set(userId, pity);
     } else if (outcomeId === 'aucun-resultat') {
-        pity.nuls++; roulettePity.set(userId, pity);
+        pity.nuls++;
+        roulettePity.set(userId, pity);
+
         const actuel = rouletteJackpotBonus.get(userId) || 0;
-        rouletteJackpotBonus.set(userId, Math.min(ROULETTE_JACKPOT_MAX, actuel + ROULETTE_JACKPOT_INCREMENT));
+        rouletteJackpotBonus.set(
+            userId,
+            Math.min(
+                ROULETTE_JACKPOT_MAX,
+                actuel + ROULETTE_JACKPOT_INCREMENT
+            )
+        );
     }
+
     return outcomeId;
 }
 
@@ -3258,7 +3435,67 @@ function buildRoulettePresentationEmbed(authorId, guildId = null) {
         `• Boucliers : **${nbBoucliers}** en réserve`,
         `• Boost bonus : **+${totalBoostPct}%**`
     );
-    if (boostCharges > 0) statutLines.push(`• 📈 Jackpot Boost : **+${Math.round(boostVal * 100)}%** *(${boostCharges} tir.)*`);
+
+    if (boostCharges > 0) {
+        statutLines.push(
+            `• 📈 Jackpot Boost : **+${Math.round(boostVal * 100)}%** *(${boostCharges} tir.)*`
+        );
+    }
+
+    // Prévisualisation des protections actuellement disponibles.
+    // Cette section est informative : aucun effet n'est consommé.
+    const protectionsActives = [];
+
+    if (nbBoucliers > 0) {
+        protectionsActives.push(
+            `🛡️ **${nbBoucliers} bouclier${nbBoucliers > 1 ? 's' : ''}** ` +
+            '— protection contre les malus compatibles'
+        );
+    }
+
+    const finImmuniteTimeout = authorId
+        ? (rouletteImmuniteUntil.get(authorId) || 0)
+        : 0;
+
+    if (finImmuniteTimeout > now) {
+        protectionsActives.push(
+            `🔇 **Immunité au timeout** — fin <t:${Math.ceil(finImmuniteTimeout / 1000)}:R>`
+        );
+    }
+
+    const finAntiFeur = authorId
+        ? (rouletteAntiFeurUntil.get(authorId) || 0)
+        : 0;
+
+    if (finAntiFeur > now) {
+        protectionsActives.push(
+            `🛡️ **Anti-Feur** — fin <t:${Math.ceil(finAntiFeur / 1000)}:R>`
+        );
+    }
+
+    const chargesVote = authorId
+        ? (rouletteVoteRedirectCharges.get(authorId) || 0)
+        : 0;
+
+    if (chargesVote > 0) {
+        protectionsActives.push(
+            `🎯 **${chargesVote} redirection${chargesVote > 1 ? 's' : ''} de Vote public**`
+        );
+    }
+
+    if (protectionsActives.length > 0) {
+        statutLines.push(
+            '',
+            '🛡️ **Protections disponibles**',
+            ...protectionsActives
+        );
+    } else {
+        statutLines.push(
+            '',
+            '🛡️ **Protections disponibles**',
+            '• Aucune protection directe active'
+        );
+    }
 
     const armesList = [];
     if (authorId) {
@@ -4561,15 +4798,45 @@ async function envoyerPingRedirection(channel, resultat) {
     const liste = Array.isArray(resultat.pingsCible)
         ? resultat.pingsCible
         : (resultat.pingCible ? [resultat.pingCible] : []);
+
     if (liste.length === 0) return;
 
     const { MessageFlags } = require('discord.js');
-    const userIds = [...new Set(liste.map(p => p.id).filter(Boolean))];
-    const contenu = liste.map(p => p.texte).join('\n').slice(0, 2000);
+
+    const userIds = [...new Set(
+        liste.map(p => p.id).filter(Boolean)
+    )];
+
+    // Seuls les membres ayant activé les notifications principales
+    // ET le mode Toutes les mentions reçoivent un ping Discord.
+    const mentionsAutorisees = userIds.filter(userId => {
+        const notificationsActives =
+            Boolean(rouletteNotifRepeat.get(userId)) ||
+            aUneNotifRouletteActive(userId);
+
+        return notificationsActives &&
+            Boolean(rouletteMpOptIn.get(userId));
+    });
+
+    const contenu = liste
+        .map(p => p.texte)
+        .join('\n')
+        .slice(0, 2000);
+
     await channel.send({
         content: contenu,
-        flags: [MessageFlags.SuppressNotifications],
-        allowedMentions: { users: userIds }
+
+        // Ne pas neutraliser les notifications lorsqu'un membre
+        // a explicitement demandé à être mentionné.
+        ...(mentionsAutorisees.length === 0
+            ? { flags: [MessageFlags.SuppressNotifications] }
+            : {}),
+
+        allowedMentions: {
+            parse: [],
+            users: mentionsAutorisees,
+            repliedUser: false
+        }
     }).catch(() => {});
 }
 
@@ -6406,6 +6673,263 @@ async function handleSuccessGiveInteraction(interaction) {
     return false;
 }
 
+function buildRouletteChanceEmbed(session, guild, feedback = null) {
+    const target = session.targetId
+        ? guild?.members?.cache?.get(session.targetId)
+        : null;
+
+    const targetName = target?.displayName ||
+        (session.targetId ? `<@${session.targetId}>` : 'Aucun membre sélectionné');
+
+    const pending = session.targetId
+        ? rouletteChanceModifiers.get(session.targetId)
+        : null;
+
+    const pendingLabel = pending
+        ? ROULETTE_CHANCE_OPTIONS.find(o => o.value === pending.type)?.label || pending.type
+        : 'Aucun';
+
+    const outcome = pending?.outcomeId
+        ? ROULETTE_TABLE.find(e => e.id === pending.outcomeId)
+        : null;
+
+    return new EmbedBuilder()
+        .setColor(0xf1c40f)
+        .setTitle('🎰 Roulette Chance • Administration')
+        .setDescription(
+            `**Membre ciblé :** ${targetName}\n` +
+            `**Modificateur en attente :** ${pendingLabel}` +
+            (outcome ? ` — ${outcome.nom}` : '') +
+            `\n\n` +
+            `Sélectionne un membre, puis un modificateur.\n` +
+            `Les garanties permettent de choisir un résultat précis.\n\n` +
+            `**Fonctionnement :** une seule modification en attente par membre, ` +
+            `remplacée à chaque nouvelle attribution. Elle est consommée au prochain ` +
+            `tirage admissible.\n\n` +
+            `🍀 La pity reporte un malus garanti au tirage suivant.\n` +
+            `🛡️ Les protections et redirections restent actives.` +
+            (feedback ? `\n\n${feedback}` : '')
+        )
+        .setFooter({ text: 'Epsys-only • Configuration administrative' });
+}
+
+function buildRouletteChanceComponents(session) {
+    const rows = [];
+
+    rows.push(
+        new ActionRowBuilder().addComponents(
+            new UserSelectMenuBuilder()
+                .setCustomId('rchance:user')
+                .setPlaceholder('Choisir un membre du serveur')
+                .setMinValues(1)
+                .setMaxValues(1)
+        )
+    );
+
+    if (session.targetId) {
+        rows.push(
+            new ActionRowBuilder().addComponents(
+                new StringSelectMenuBuilder()
+                    .setCustomId('rchance:modifier')
+                    .setPlaceholder('Choisir un modificateur')
+                    .addOptions(
+                        ROULETTE_CHANCE_OPTIONS.map(option => ({
+                            label: option.label,
+                            value: option.value,
+                            emoji: option.emoji
+                        }))
+                    )
+            )
+        );
+    }
+
+    if (session.targetId && session.choosing) {
+        const type = session.choosing === 'force_bonus' ? 'bonus' : 'malus';
+        const eligible = ROULETTE_TABLE.filter(e => e.type === type);
+        const pageSize = 20;
+        const totalPages = Math.max(1, Math.ceil(eligible.length / pageSize));
+        session.page = Math.max(0, Math.min(session.page || 0, totalPages - 1));
+
+        const options = eligible
+            .slice(session.page * pageSize, (session.page + 1) * pageSize)
+            .map(e => ({
+                label: e.nom.slice(0, 100),
+                value: e.id,
+                description: e.id.slice(0, 100)
+            }));
+
+        if (options.length) {
+            rows.push(
+                new ActionRowBuilder().addComponents(
+                    new StringSelectMenuBuilder()
+                        .setCustomId('rchance:outcome')
+                        .setPlaceholder(`Choisir le ${type} exact • page ${session.page + 1}/${totalPages}`)
+                        .addOptions(options)
+                )
+            );
+        }
+
+        if (totalPages > 1) {
+            rows.push(
+                new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('rchance:prev')
+                        .setLabel('Précédent')
+                        .setStyle(ButtonStyle.Secondary)
+                        .setDisabled(session.page === 0),
+                    new ButtonBuilder()
+                        .setCustomId('rchance:next')
+                        .setLabel('Suivant')
+                        .setStyle(ButtonStyle.Secondary)
+                        .setDisabled(session.page >= totalPages - 1)
+                )
+            );
+        }
+    }
+
+    rows.push(
+        new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('rchance:clear')
+                .setLabel('Retirer le modificateur')
+                .setEmoji('🗑️')
+                .setStyle(ButtonStyle.Danger)
+                .setDisabled(!session.targetId),
+            new ButtonBuilder()
+                .setCustomId('rchance:close')
+                .setLabel('Fermer')
+                .setStyle(ButtonStyle.Secondary)
+        )
+    );
+
+    return rows;
+}
+
+async function handleRouletteChanceInteraction(interaction) {
+    if (!interaction.customId?.startsWith('rchance:')) return false;
+
+    if (interaction.user.id !== bridge.EPSYS_ID) {
+        await interaction.reply({
+            content: 'Ce panneau est réservé à Epsys.',
+            flags: MessageFlags.Ephemeral
+        });
+        return true;
+    }
+
+    const session = rouletteChancePanels.get(interaction.message.id);
+
+    if (!session) {
+        await interaction.reply({
+            content: 'Ce panneau a expiré. Relance `!roulettechance`.',
+            flags: MessageFlags.Ephemeral
+        });
+        return true;
+    }
+
+    const action = interaction.customId.slice('rchance:'.length);
+
+    if (action === 'close') {
+        rouletteChancePanels.delete(interaction.message.id);
+        await interaction.deferUpdate();
+        await interaction.message.delete().catch(() => {});
+        return true;
+    }
+
+    let feedback = null;
+
+    if (action === 'user' && interaction.isUserSelectMenu()) {
+        session.targetId = interaction.values[0];
+        session.choosing = null;
+        session.page = 0;
+    }
+
+    if (action === 'modifier' && interaction.isStringSelectMenu()) {
+        if (!session.targetId) {
+            feedback = '⚠️ Sélectionne d’abord un membre.';
+        } else {
+            const type = interaction.values[0];
+
+            if (!ROULETTE_CHANCE_OPTIONS.some(o => o.value === type)) {
+                feedback = '⚠️ Modificateur invalide.';
+            } else if (type === 'force_bonus' || type === 'force_malus') {
+                session.choosing = type;
+                session.page = 0;
+                feedback = '🎯 Choisis maintenant le résultat exact à garantir.';
+            } else {
+                rouletteChanceModifiers.set(session.targetId, { type });
+                bridge.demanderSauvegarde();
+                session.choosing = null;
+                feedback = '✅ Modificateur enregistré pour le prochain tirage.';
+            }
+        }
+    }
+
+    if (action === 'outcome' && interaction.isStringSelectMenu()) {
+        const type = session.choosing;
+        const outcomeId = interaction.values[0];
+        const expectedType = type === 'force_bonus'
+            ? 'bonus'
+            : type === 'force_malus'
+                ? 'malus'
+                : null;
+
+        const entry = ROULETTE_TABLE.find(e =>
+            e.id === outcomeId && e.type === expectedType
+        );
+
+        if (!session.targetId || !entry) {
+            feedback = '⚠️ Résultat invalide. Recommence la sélection.';
+        } else {
+            const target = await interaction.guild.members
+                .fetch(session.targetId)
+                .catch(() => null);
+
+            const isCollector = target && bridge.hasTcgCollectorRole
+                ? bridge.hasTcgCollectorRole(target)
+                : false;
+
+            if (entry.tcgOnly && !isCollector) {
+                feedback = '⚠️ Ce bonus nécessite le rôle Collectionneur RegaDex.';
+            } else {
+                rouletteChanceModifiers.set(session.targetId, {
+                    type,
+                    outcomeId: entry.id
+                });
+                bridge.demanderSauvegarde();
+                session.choosing = null;
+                feedback = `✅ Résultat garanti enregistré : **${entry.nom}**.`;
+            }
+        }
+    }
+
+    if (action === 'prev' || action === 'next') {
+        if (session.choosing) {
+            session.page = Math.max(
+                0,
+                (session.page || 0) + (action === 'next' ? 1 : -1)
+            );
+        }
+    }
+
+    if (action === 'clear') {
+        if (session.targetId) {
+            rouletteChanceModifiers.delete(session.targetId);
+            bridge.demanderSauvegarde();
+            session.choosing = null;
+            feedback = '🗑️ Modificateur supprimé.';
+        }
+    }
+
+    await interaction.update({
+        embeds: [
+            buildRouletteChanceEmbed(session, interaction.guild, feedback)
+        ],
+        components: buildRouletteChanceComponents(session)
+    });
+
+    return true;
+}
+
 function parseRouletteCommand(raw) {
     const tokens = raw.trim().split(/\s+/);
     const first = tokens[0]?.toLowerCase() || '';
@@ -6423,6 +6947,10 @@ function parseRouletteCommand(raw) {
     }
     if (['!successgive', '!succesgive', '!rltsuccessgive', '!rltsuccesgive'].includes(first)) {
         return { command: '!successgive', args: tokens.slice(1) };
+    }
+
+    if (['!roulettechance', '!rltchance'].includes(first)) {
+        return { command: '!roulettechance', args: tokens.slice(1) };
     }
 
     const directMap = {
@@ -6530,6 +7058,39 @@ async function handleRouletteMessage(message, response, client, helpers) {
     if (!parsed) return false;
 
     const { command, args } = parsed;
+
+    // ==========================================
+    //   COMMANDE !roulettechance (EPSYS-ONLY)
+    // ==========================================
+    if (command === '!roulettechance') {
+        if (message.author.id !== bridge.EPSYS_ID) {
+            await message.delete().catch(() => {});
+            return true;
+        }
+
+        if (!message.guild) {
+            await message.reply('Cette commande doit être utilisée dans un serveur.');
+            return true;
+        }
+
+        const session = {
+            targetId: null,
+            choosing: null,
+            page: 0
+        };
+
+        const panel = await message.channel.send({
+            embeds: [buildRouletteChanceEmbed(session, message.guild)],
+            components: buildRouletteChanceComponents(session),
+            allowedMentions: { parse: [] },
+            flags: MessageFlags.SuppressNotifications
+        });
+
+        rouletteChancePanels.set(panel.id, session);
+
+        await message.delete().catch(() => {});
+        return true;
+    }
 
     // ==========================================
     //   COMMANDE !stats set (EPSYS-ONLY)
@@ -7706,6 +8267,10 @@ async function handleRouletteButton(interaction, client) {
     const customId = interaction.customId;
     if (!customId) return false;
 
+    if (customId.startsWith('rchance:')) {
+        return handleRouletteChanceInteraction(interaction);
+    }
+
     // Dès qu'on quitte le Hub pour un tirage ou un autre panneau, on annule l'auto-suppression 20 min :
     // seul le Hub resté inactif 20 min s'auto-supprime (les menus secondaires et tirages restent).
     const resteSurHub = customId.startsWith('rlt_hub:claim:') || customId.startsWith('rlt_hub:notif:');
@@ -8653,20 +9218,44 @@ async function handleRouletteButton(interaction, client) {
         const fin = rouletteCooldowns.get(userId) ?? 0;
 
         if (sub === 'mp_int_toggle') {
-            const actif = Boolean(rouletteMpOptIn.get(userId));
-            if (actif) rouletteMpOptIn.delete(userId);
-            else rouletteMpOptIn.set(userId, true);
+            const notificationsActives =
+                Boolean(rouletteNotifRepeat.get(userId)) ||
+                aUneNotifRouletteActive(userId);
+
+            if (!notificationsActives) {
+                await interaction.update({
+                    content: null,
+                    ...buildRouletteNotifMenuPayload(
+                        member,
+                        ctx,
+                        '🔕 *Active d’abord les notifications de cooldown pour choisir le mode des mentions.*'
+                    )
+                });
+                return true;
+            }
+
+            const toutesMentionsActives =
+                Boolean(rouletteMpOptIn.get(userId));
+
+            if (toutesMentionsActives) {
+                rouletteMpOptIn.delete(userId);
+            } else {
+                rouletteMpOptIn.set(userId, true);
+            }
+
             bridge.demanderSauvegarde();
+
             await interaction.update({
                 content: null,
                 ...buildRouletteNotifMenuPayload(
                     member,
                     ctx,
-                    !actif
-                        ? '📩 *Alertes MP d\'interactions activées !*'
-                        : '🔕 *Alertes MP d\'interactions désactivées.*'
+                    toutesMentionsActives
+                        ? '🔔 *Mode Cooldown uniquement activé !*'
+                        : '📢 *Mode Toutes les mentions activé !*'
                 )
             });
+
             return true;
         }
 

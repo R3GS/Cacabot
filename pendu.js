@@ -57,9 +57,16 @@ let penduBridge = {
     setPenduData: () => {},
     getPenduStats: () => ({}),
     setPenduStats: () => {},
+
+    getPenduPublicationPending: () => null,
+    setPenduPublicationPending: () => {},
+
     getMotusStats: () => ({}),
     getRebusStats: () => ({}),
     demanderSauvegarde: () => {},
+    saveAll: async () => {
+        throw new Error('[PENDU] Sauvegarde immédiate non configurée.');
+    },
     trackBattlePassProgress: () => {},
     grantTcgPoints: async () => []
 };
@@ -74,12 +81,66 @@ function getPenduDateKey() {
     return paris.getFullYear() * 10000 + (paris.getMonth() + 1) * 100 + paris.getDate();
 }
 
-function getPenduWeekKey() {
-    const d = new Date();
-    const paris = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Paris' }));
-    const onejan = new Date(paris.getFullYear(), 0, 1);
-    const week = Math.ceil((((paris.getTime() - onejan.getTime()) / 86400000) + onejan.getDay() + 1) / 7);
-    return `${paris.getFullYear()}-W${week}`;
+function getPenduWeekKey(dateKey = null) {
+    let date;
+
+    if (
+        Number.isInteger(Number(dateKey)) &&
+        /^\d{8}$/.test(String(dateKey))
+    ) {
+        const valeur = String(dateKey);
+
+        const annee = Number(valeur.slice(0, 4));
+        const mois = Number(valeur.slice(4, 6));
+        const jour = Number(valeur.slice(6, 8));
+
+        date = new Date(Date.UTC(annee, mois - 1, jour));
+
+        // Rejeter une date impossible plutôt que de laisser
+        // Date normaliser silencieusement le mois ou le jour.
+        if (
+            date.getUTCFullYear() !== annee ||
+            date.getUTCMonth() !== mois - 1 ||
+            date.getUTCDate() !== jour
+        ) {
+            throw new Error(
+                `[PENDU] Date de session invalide : ${dateKey}`
+            );
+        }
+    } else {
+        const maintenant = new Date();
+
+        const parties = new Intl.DateTimeFormat('en-GB', {
+            timeZone: 'Europe/Paris',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        }).formatToParts(maintenant);
+
+        const valeur = type =>
+            Number(parties.find(partie => partie.type === type)?.value);
+
+        date = new Date(Date.UTC(
+            valeur('year'),
+            valeur('month') - 1,
+            valeur('day')
+        ));
+    }
+
+    // ISO 8601 : lundi = premier jour de la semaine.
+    const jourSemaine = date.getUTCDay() || 7;
+
+    // Le jeudi détermine l'année ISO.
+    date.setUTCDate(date.getUTCDate() + 4 - jourSemaine);
+
+    const anneeISO = date.getUTCFullYear();
+    const premierJanvier = new Date(Date.UTC(anneeISO, 0, 1));
+
+    const semaine = Math.ceil(
+        ((date - premierJanvier) / 86400000 + 1) / 7
+    );
+
+    return `${anneeISO}-W${semaine}`;
 }
 
 function getMotDuPendu(dateKey) {
@@ -114,7 +175,13 @@ function buildMasqueMot(mot, lettresTrouvees) {
 
 function buildPenduEmbed(session) {
     const expireTimestamp = Math.floor(session.expireAt / 1000);
-    const masque = buildMasqueMot(session.mot, session.lettresTrouvees);
+
+    // Révéler le mot dans l'embed principal une fois la partie terminée.
+    // Pendant une partie active, conserver uniquement les lettres trouvées.
+    const masque = session.termine
+        ? session.mot.split('').join(' ')
+        : buildMasqueMot(session.mot, session.lettresTrouvees);
+
     const erreursIndex = Math.min(session.erreursCollectives, PENDU_DESSINS.length - 1);
     const potence = PENDU_DESSINS[erreursIndex];
 
@@ -125,6 +192,7 @@ function buildPenduEmbed(session) {
     // Lettres disponibles (non encore tentées)
     const disponibles = alphabet.filter(l => !trouvees.includes(l) && !fausses.includes(l));
     const disposStr = disponibles.length > 0 ? `\`${disponibles.join(' ')}\`` : '*Toutes les lettres ont été tentées*';
+    const compteurDisponibles = `-# *${disponibles.length} lettre${disponibles.length > 1 ? 's' : ''} restante${disponibles.length > 1 ? 's' : ''}*`;
 
     // Lettres refusées barrées (ex: ~~A~~ • ~~I~~ • ~~M~~)
     const faussesTriees = [...new Set(fausses)].sort();
@@ -150,9 +218,28 @@ function buildPenduEmbed(session) {
 
     let participantsTxt = '';
     const entriesJoueurs = Object.entries(session.tentativesJoueurs || {});
+
     if (entriesJoueurs.length > 0) {
-        const liste = entriesJoueurs.map(([uid, nb]) => `<@${uid}> (${nb}/3)`).join(' • ');
-        participantsTxt = `👥 **Essais utilisés :** ${liste}\n\n`;
+        const limiteAffichage = 15;
+
+        const joueursAffiches = entriesJoueurs.slice(0, limiteAffichage);
+        const joueursSupplementaires = Math.max(
+            entriesJoueurs.length - limiteAffichage,
+            0
+        );
+
+        const liste = joueursAffiches
+            .map(([uid, nb]) => `<@${uid}> (${nb}/3)`)
+            .join(' • ');
+
+        participantsTxt =
+            `👥 **Participants (${entriesJoueurs.length}) — essais utilisés :** ${liste}` +
+            (
+                joueursSupplementaires > 0
+                    ? `\n-# … et ${joueursSupplementaires} autre(s) participant(s).`
+                    : ''
+            ) +
+            '\n\n';
     }
 
     // Alerte et couleur d'ambiance selon le stade de la potence
@@ -161,18 +248,32 @@ function buildPenduEmbed(session) {
     if (session.erreursCollectives === 4) {
         couleurEmbed = 0xe67e22; // Orange d'avertissement (2 vies restantes)
         alertePotence = `⚠️ **Attention :** Plus que **2 erreurs** avant le pendu !\n`;
-    } else if (session.erreursCollectives >= 5) {
-        couleurEmbed = 0xff0000; // Rouge sang d'alarme maximale (dernière vie !)
+    } else if (session.erreursCollectives >= 6) {
+        couleurEmbed = 0x7f1d1d;
+        alertePotence = `💀 **PENDU COMPLET : LES 6 ERREURS ONT ÉTÉ ATTEINTES !**\n`;
+    } else if (session.erreursCollectives === 5) {
+        couleurEmbed = 0xff0000;
         alertePotence = `🚨🚨 **DANGER MORTEL : PLUS QU'UNE SEULE ERREUR !** 🚨🚨\n`;
     }
 
+    const estModeTest = !session.dateKey;
+
     return new EmbedBuilder()
         .setColor(couleurEmbed)
-        .setTitle('🪢 LE PENDU QUOTIDIEN DE REGAÏA (21h00)')
+        .setTitle(
+            estModeTest
+                ? '🧪 PENDU — MODE TEST'
+                : '🪢 LE PENDU QUOTIDIEN DE REGAÏA (21h00)'
+        )
         .setDescription(
-            `📢 **Notification :** <@&1559041461230505994>\n\n` +
+            (
+                estModeTest
+                    ? `🧪 **Session de test — sans notification du rôle officiel**\n\n`
+                    : `📢 **Notification :** <@&1559041461230505994>\n\n`
+            ) +
             `🔤 **Mot de 7 lettres à deviner :**\n# \`${masque}\`\n\n` +
             `⌨️ **Disponibles :** ${disposStr}\n` +
+            `${compteurDisponibles}\n` +
             `❌ **Éliminées :** ${faussesStr}\n` +
             `📝 **Mots tentés :** \`${motsTentesStr}\`\n\n` +
             `${potence}\n` +
@@ -181,13 +282,30 @@ function buildPenduEmbed(session) {
             (dernierCoupTexte || '') +
             (participantsTxt || '') +
             `⏳ **Fin de la session :** <t:${expireTimestamp}:R> (à <t:${expireTimestamp}:t>)\n\n` +
-            `-# 🎯 **Règle :** 3 essais personnels par joueur (lettre ou mot de 7 lettres) • Écris directement dans ce salon.`
+            (
+                estModeTest
+                    ? `-# 🧪 **Mode test :** essais illimités • Propose une lettre ou un mot de 7 lettres dans ce salon.`
+                    : `-# 🎯 **Règle :** 3 essais personnels par joueur (lettre ou mot de 7 lettres) • Écris directement dans ce salon.`
+            )
         )
-        .setFooter({ text: 'Rendez-vous tous les soirs à 21h00 ! • !pendu pour voir le statut' });
+        .setFooter({
+            text: estModeTest
+                ? 'Mode test du Pendu • Aucun classement officiel'
+                : 'Rendez-vous tous les soirs à 21h00 ! • !pendu pour voir le statut'
+        });
 }
 
 function buildPenduRow(session) {
-    if (!session || session.termine) return [];
+    // Aucun bouton pour une session absente, terminée ou expirée.
+    if (
+        !session ||
+        session.termine ||
+        !Number.isFinite(session.expireAt) ||
+        Date.now() >= session.expireAt
+    ) {
+        return [];
+    }
+
     const nbVotes = (session.votesPacte || []).length;
     const estTropDangereux = session.erreursCollectives >= 5;
     const label = estTropDangereux 
@@ -203,44 +321,300 @@ function buildPenduRow(session) {
     return [new ActionRowBuilder().addComponents(btnPacte)];
 }
 
-async function lancerPenduQuotidien(guild) {
+let lancementPenduEnCours = false;
+
+async function lancerPenduQuotidien(guild, force = false) {
     const channel = guild.channels.cache.get(PENDU_CHANNEL_ID);
-    if (!channel) return;
+    if (!channel) {
+        console.warn('[PENDU] Salon officiel introuvable.');
+        return false;
+    }
+
+    if (lancementPenduEnCours) {
+        console.log('[PENDU] Un lancement est déjà en cours.');
+        return false;
+    }
 
     const dateKey = getPenduDateKey();
-    const mot = getMotDuPendu(dateKey);
-    const expireAt = Date.now() + 60 * 60 * 1000;
+    const sessionActuelle = penduBridge.getPenduData();
 
-    const nouvelleSession = {
-        dateKey,
-        mot,
-        lettresTrouvees: [],
-        lettresFausses: [],
-        motsTentes: [], // Liste collective des mots de 7 lettres tentés
-        erreursCollectives: 0,
-        expireAt,
-        termine: false,
-        vainqueurId: null,
-        coupDePoker: null, // Joueur ayant réussi la prime coup de poker
-        votesPacte: [],    // Votes en cours pour le pacte
-        tentativesJoueurs: {}, // userId -> totalEssais
-        bonnesLettresParJoueur: {}, // userId -> count
-        dernierCoup: null,
-        compteurMessagesLongs: 0,
-        messageId: null
-    };
+    // Cette protection s'applique également à !penduforce.
+    // Une publication incertaine ne doit jamais être rejouée
+    // avant réconciliation avec les messages Discord.
+    if (penduBridge.getPenduPublicationPending()) {
+        console.error(
+            '[PENDU] Lancement refusé : publication précédente ' +
+            'en attente de réconciliation.'
+        );
 
-    const embed = buildPenduEmbed(nouvelleSession);
+        return false;
+    }
 
-    const sent = await channel.send({
-        content: `📢 <@&1559041461230505994> **LE PENDU QUOTIDIEN DE 21H EST LANCÉ !** 🪢\nVenez deviner le mot mystère de 7 lettres !`,
-        embeds: [embed],
-        components: buildPenduRow(nouvelleSession)
-    });
+    if (!force && sessionActuelle?.dateKey === dateKey) {
+        console.log(
+            `[PENDU] Session du ${dateKey} déjà enregistrée : lancement ignoré.`
+        );
+        return false;
+    }
 
-    nouvelleSession.messageId = sent.id;
-    penduBridge.setPenduData(nouvelleSession);
-    penduBridge.demanderSauvegarde();
+    lancementPenduEnCours = true;
+
+    try {
+        // Une session terminée peut encore posséder des récompenses
+        // en attente de confirmation RegaDex.
+        //
+        // Ne jamais la remplacer avant d'avoir terminé et
+        // sauvegardé son attribution, même lors d'un lancement forcé.
+        // Une victoire historique sans marqueur ne doit jamais
+        // être récompensée automatiquement : elle peut déjà
+        // avoir été créditée par l'ancien système.
+        const attributionAncienneEnAttente = Boolean(
+            sessionActuelle?.termine &&
+            sessionActuelle.recompensesClassementTraitees === true &&
+            sessionActuelle.recompensesRevelationTraitees !== true
+        );
+
+        if (attributionAncienneEnAttente) {
+            console.warn(
+                '[PENDU] Récompenses de la session précédente en attente :',
+                sessionActuelle.recompensesRewardKey ||
+                sessionActuelle.messageId
+            );
+
+            try {
+                await attribuerRecompensesRevelationPendu(
+                    sessionActuelle,
+                    sessionActuelle.vainqueurId || null
+                );
+            } catch (error) {
+                console.error(
+                    '[PENDU] Nouvelle partie reportée : les récompenses ' +
+                    'de la précédente ne sont pas confirmées.',
+                    error
+                );
+
+                return false;
+            }
+
+            if (!sessionActuelle.recompensesRevelationTraitees) {
+                console.error(
+                    '[PENDU] Nouvelle partie refusée : ' +
+                    'attribution précédente toujours en attente.'
+                );
+
+                return false;
+            }
+        }
+
+        // Signaler les anciennes sessions ambiguës sans
+        // inventer une nouvelle attribution.
+        if (
+            sessionActuelle?.termine &&
+            !sessionActuelle.recompensesClassementTraitees &&
+            !sessionActuelle.recompensesRevelationTraitees
+        ) {
+            console.warn(
+                '[PENDU] Session historique sans marqueur de récompense :',
+                sessionActuelle.messageId,
+                'Aucune attribution automatique supplémentaire.'
+            );
+        }
+
+        // Enregistrer durablement la session précédente avant
+        // de créer et publier la nouvelle.
+        //
+        // Si la sauvegarde échoue, conserver l'ancienne session
+        // pour permettre une nouvelle tentative ultérieure.
+        try {
+            await penduBridge.saveAll();
+        } catch (error) {
+            console.error(
+                '[PENDU] Nouvelle partie reportée : sauvegarde ' +
+                'de la session précédente impossible.',
+                error
+            );
+
+            return false;
+        }
+
+        const mot = getMotDuPendu(dateKey);
+        const expireAt = Date.now() + 60 * 60 * 1000;
+
+        const nouvelleSession = {
+            dateKey,
+            mot,
+            lettresTrouvees: [],
+            lettresFausses: [],
+            motsTentes: [],
+            erreursCollectives: 0,
+            expireAt,
+            termine: false,
+            vainqueurId: null,
+            coupDePoker: null,
+            votesPacte: [],
+            tentativesJoueurs: {},
+            bonnesLettresParJoueur: {},
+            dernierCoup: null,
+            compteurMessagesLongs: 0,
+            messageId: null
+        };
+
+        const embed = buildPenduEmbed(nouvelleSession);
+
+        // Un identifiant aléatoire distingue les publications forcées
+        // successives, y compris lorsqu'elles ont la même date.
+        const publicationToken = require('node:crypto').randomUUID();
+
+        const publicationPending = {
+            token: publicationToken,
+            session: nouvelleSession,
+            createdAt: Date.now(),
+
+            // Identifier précisément la session remplacée.
+            // Nécessaire pour distinguer une reprise légitime
+            // d'une incohérence entre deux publications.
+            previousMessageId: sessionActuelle?.messageId || null
+        };
+
+        penduBridge.setPenduPublicationPending(publicationPending);
+
+        // Étape indispensable : sauvegarder l'intention AVANT
+        // de publier quoi que ce soit sur Discord.
+        try {
+            await penduBridge.saveAll();
+        } catch (error) {
+            penduBridge.setPenduPublicationPending(null);
+
+            console.error(
+                '[PENDU] Publication annulée : intention non sauvegardée.',
+                error
+            );
+
+            return false;
+        }
+
+        // Le token figure dans le message officiel.
+        // Il permettra de retrouver exactement cette publication.
+        const sent = await channel.send({
+            content:
+                `📢 <@&1559041461230505994> ` +
+                `**LE PENDU QUOTIDIEN DE 21H EST LANCÉ !** 🪢\n` +
+                `Venez deviner le mot mystère de 7 lettres !\n` +
+                `-# Référence Pendu : ${publicationToken}`,
+            embeds: [embed],
+            components: buildPenduRow(nouvelleSession)
+        });
+
+        nouvelleSession.messageId = sent.id;
+
+        // Le message Discord a été publié.
+        // La session devient active en mémoire, mais le journal
+        // reste présent tant que sa persistance n'est pas confirmée.
+        penduBridge.setPenduData(nouvelleSession);
+        penduBridge.demanderSauvegarde();
+
+        try {
+            // Première sauvegarde :
+            // enregistrer la session et son messageId tout en
+            // conservant l'intention de publication.
+            await penduBridge.saveAll();
+
+            // Le message et la session sont désormais retrouvables
+            // depuis une sauvegarde confirmée.
+            penduBridge.setPenduPublicationPending(null);
+
+            try {
+                // Deuxième sauvegarde :
+                // confirmer durablement la clôture du journal.
+                await penduBridge.saveAll();
+            } catch (error) {
+                // Si la clôture n'est pas confirmée, rétablir
+                // le journal afin de bloquer tout nouveau lancement.
+                penduBridge.setPenduPublicationPending(
+                    publicationPending
+                );
+
+                penduBridge.demanderSauvegarde();
+
+                console.error(
+                    '[PENDU] Session sauvegardée, mais clôture ' +
+                    'du journal non confirmée :',
+                    error
+                );
+            }
+
+            console.log(
+                '[PENDU] Nouvelle session publiée :',
+                nouvelleSession.messageId
+            );
+        } catch (error) {
+            // La publication Discord a réussi, mais pas la
+            // première sauvegarde de confirmation.
+            //
+            // Conserver le journal pour empêcher notamment
+            // un nouveau !penduforce dans le même processus.
+            penduBridge.setPenduPublicationPending(
+                publicationPending
+            );
+
+            penduBridge.demanderSauvegarde();
+
+            console.error(
+                '[PENDU] Message publié, sauvegarde non confirmée. ' +
+                'Nouveaux lancements bloqués jusqu’à réconciliation :',
+                error
+            );
+        }
+
+        // Fermer visuellement l'ancienne partie sans risquer
+        // d'annuler le lancement de la nouvelle.
+        if (
+            sessionActuelle?.messageId &&
+            sessionActuelle.messageId !== sent.id
+        ) {
+            try {
+                const ancienMessage = await channel.messages
+                    .fetch(sessionActuelle.messageId)
+                    .catch(() => null);
+
+                if (ancienMessage) {
+                    const ancienneSessionTerminee = {
+                        ...sessionActuelle,
+                        termine: true
+                    };
+
+                    await ancienMessage.edit({
+                        embeds: [buildPenduEmbed(ancienneSessionTerminee)],
+                        components: []
+                    });
+                }
+            } catch (error) {
+                console.warn(
+                    '[PENDU] Impossible de clôturer visuellement l’ancienne partie :',
+                    error
+                );
+            }
+        }
+
+        console.log(
+            `[PENDU] Session ${dateKey} lancée avec succès ` +
+            `(message ${sent.id}).`
+        );
+
+        return true;
+
+    } catch (error) {
+        console.error(
+            '[PENDU] Échec du lancement de la session :',
+            error
+        );
+
+        return false;
+
+    } finally {
+        // Libération garantie, même si Discord refuse l'envoi.
+        lancementPenduEnCours = false;
+    }
 }
 
 // ==========================================
@@ -265,20 +639,43 @@ function buildPenduGuideEmbed() {
 }
 
 function buildPenduStatsEmbed(cible) {
-    const stats = penduBridge.getPenduStats();
-    const s = stats[cible.id] ?? { victoires: 0, parties: 0, points: 0 };
-    const pct = s.parties > 0 ? Math.round((s.victoires / s.parties) * 100) : 0;
+    const stats = penduBridge.getPenduStats() || {};
+    const s = stats[cible.id] || {};
+
+    // Compatibilité avec les anciens profils et les champs manquants.
+    const nombreValide = (valeur) => {
+        const nombre = Number(valeur);
+        return Number.isFinite(nombre) && nombre >= 0 ? nombre : 0;
+    };
+
+    const victoires = nombreValide(s.victoires);
+    const parties = nombreValide(s.parties);
+    const points = nombreValide(s.points);
+
+    const pct = parties > 0
+        ? Math.round((victoires / parties) * 100)
+        : 0;
+
+    // Compatible avec GuildMember et User.
+    const nom = cible.displayName
+        || cible.globalName
+        || cible.user?.globalName
+        || cible.user?.username
+        || cible.username
+        || 'Joueur inconnu';
 
     return new EmbedBuilder()
         .setColor(0x9b59b6)
-        .setTitle(`🪢 Statistiques Pendu de ${cible.displayName}`)
+        .setTitle(`🪢 Statistiques Pendu de ${nom}`)
         .addFields(
-            { name: '🏆 Victoires', value: `**${s.victoires}**`, inline: true },
-            { name: '⭐ Points gagnés', value: `**${s.points}**`, inline: true },
-            { name: '🎮 Parties jouées', value: `**${s.parties}**`, inline: true },
+            { name: '🏆 Victoires', value: `**${victoires}**`, inline: true },
+            { name: '⭐ Points gagnés', value: `**${points}**`, inline: true },
+            { name: '🎮 Parties jouées', value: `**${parties}**`, inline: true },
             { name: '📈 Taux de réussite', value: `**${pct}%**`, inline: true }
         )
-        .setFooter({ text: 'Pendu Quotidien tous les soirs à 21h00 • Regaïa' });
+        .setFooter({
+            text: 'Pendu Quotidien tous les soirs à 21h00 • Regaïa'
+        });
 }
 
 function buildClassementHebdomadaireEmbed(guild, authorId) {
@@ -294,10 +691,25 @@ function buildClassementHebdomadaireEmbed(guild, authorId) {
     ]);
 
     const table = [];
+
+    const scoreValide = (valeur) => {
+        const nombre = Number(valeur);
+        return Number.isFinite(nombre) && nombre >= 0 ? nombre : 0;
+    };
+
     for (const uid of membresIds) {
-        const pPendu = penduStats[uid]?.hebdo?.[weekKey] || 0;
-        const pMotus = (motusStats[uid]?.hebdo?.[weekKey] || 0) * 3;
-        const pRebus = rebusStats[uid]?.hebdo?.[weekKey] || 0;
+        const pPendu = scoreValide(
+            penduStats[uid]?.hebdo?.[weekKey]
+        );
+
+        const pMotus = scoreValide(
+            motusStats[uid]?.hebdo?.[weekKey]
+        ) * 3;
+
+        const pRebus = scoreValide(
+            rebusStats[uid]?.hebdo?.[weekKey]
+        );
+
         const total = pPendu + pMotus + pRebus;
 
         if (total > 0) {
@@ -309,11 +721,14 @@ function buildClassementHebdomadaireEmbed(guild, authorId) {
     const top7 = table.slice(0, 7);
 
     const medailles = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣'];
+
     const lignes = top7.map((item, i) => {
-        const m = guild.members.cache.get(item.uid);
-        const nom = (m?.displayName || 'Ancien membre').slice(0, 14);
         const med = medailles[i];
-        return `${med} **${nom}**\n` +
+
+        // Les mentions fonctionnent même si le membre n'est pas en cache.
+        const joueur = `<@${item.uid}>`;
+
+        return `${med} ${joueur}\n` +
                `> 🟩 Motus : **${item.pMotus} pts** | 🧩 Rébus : **${item.pRebus} pts** | 🪢 Pendu : **${item.pPendu} pts**\n` +
                `> 🌟 **Total Semaine : ${item.total} pts**`;
     });
@@ -359,10 +774,25 @@ function buildTop10GlobalEmbed(guild, authorId) {
     ]);
 
     const table = [];
+
+    const scoreValide = (valeur) => {
+        const nombre = Number(valeur);
+        return Number.isFinite(nombre) && nombre >= 0 ? nombre : 0;
+    };
+
     for (const uid of membresIds) {
-        const pPendu = (penduStats[uid]?.points || 0);
-        const pMotus = (motusStats[uid]?.victoires || 0) * 3;
-        const pRebus = rebusStats[uid]?.points || 0;
+        const pPendu = scoreValide(
+            penduStats[uid]?.points
+        );
+
+        const pMotus = scoreValide(
+            motusStats[uid]?.victoires
+        ) * 3;
+
+        const pRebus = scoreValide(
+            rebusStats[uid]?.points
+        );
+
         const total = pPendu + pMotus + pRebus;
 
         if (total > 0) {
@@ -374,11 +804,14 @@ function buildTop10GlobalEmbed(guild, authorId) {
     const top10 = table.slice(0, 10);
 
     const medailles = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+
     const colonnes = top10.map((item, i) => {
-        const m = guild.members.cache.get(item.uid);
-        const nom = (m?.displayName || 'Membre').slice(0, 14);
         const med = medailles[i];
-        return `${med} **${nom}** — **${item.total} pts** (🟩 ${item.pMotus} | 🧩 ${item.pRebus} | 🪢 ${item.pPendu})`;
+
+        // Ne pas dépendre du cache des membres du serveur.
+        const joueur = `<@${item.uid}>`;
+
+        return `${med} ${joueur} — **${item.total} pts** (🟩 ${item.pMotus} | 🧩 ${item.pRebus} | 🪢 ${item.pPendu})`;
     });
 
     const embed = new EmbedBuilder()
@@ -419,6 +852,48 @@ async function handlePenduMessage(message, response, client, helpers) {
             return true;
         }
 
+        // Un test ne doit jamais intercepter les propositions
+        // destinées à la partie officielle du Pendu.
+        if (message.channel.id === PENDU_CHANNEL_ID) {
+            await message.reply(
+                "⛔ **Impossible de lancer un Pendu test dans le salon officiel !** " +
+                "Utilise un autre salon pour éviter de perturber la partie quotidienne."
+            );
+            return true;
+        }
+
+        const ancienneSession = penduTestSessions.get(message.channel.id);
+
+        if (ancienneSession) {
+            const testEncoreActif =
+                !ancienneSession.termine &&
+                Number.isFinite(ancienneSession.expireAt) &&
+                Date.now() < ancienneSession.expireAt;
+
+            if (testEncoreActif) {
+                await message.reply(
+                    "⚠️ Un test du Pendu est déjà actif dans ce salon. " +
+                    "Termine-le ou utilise son bouton « Stopper le mini-jeu » avant d'en lancer un autre."
+                );
+                return true;
+            }
+
+            // Nettoyage d'un ancien test terminé ou expiré.
+            penduTestSessions.delete(message.channel.id);
+
+            if (ancienneSession.messageId) {
+                const ancienMessage = await message.channel.messages
+                    .fetch(ancienneSession.messageId)
+                    .catch(() => null);
+
+                if (ancienMessage) {
+                    await ancienMessage.edit({
+                        components: []
+                    }).catch(console.error);
+                }
+            }
+        }
+
         const motAlea = PENDU_DICTIONNAIRE[Math.floor(Math.random() * PENDU_DICTIONNAIRE.length)];
         const expireAt = Date.now() + 60 * 60 * 1000;
 
@@ -426,6 +901,7 @@ async function handlePenduMessage(message, response, client, helpers) {
             mot: motAlea,
             lettresTrouvees: [],
             lettresFausses: [],
+            motsTentes: [],
             erreursCollectives: 0,
             expireAt,
             termine: false,
@@ -457,6 +933,33 @@ async function handlePenduMessage(message, response, client, helpers) {
     // Gestion du salon de test solo
     if (penduTestSessions.has(message.channel.id) && !message.content.startsWith('!')) {
         const sTest = penduTestSessions.get(message.channel.id);
+
+        // Nettoyage d'un test expiré lors du prochain message du salon.
+        if (sTest && !sTest.termine && Date.now() >= sTest.expireAt) {
+            sTest.termine = true;
+            penduTestSessions.delete(message.channel.id);
+
+            if (sTest.messageId) {
+                const ancienMessage = await message.channel.messages
+                    .fetch(sTest.messageId)
+                    .catch(() => null);
+
+                if (ancienMessage) {
+                    await ancienMessage.edit({
+                        embeds: [buildPenduEmbed(sTest)],
+                        components: []
+                    }).catch(console.error);
+                }
+            }
+
+            await message.channel.send(
+                `⏰ **[TEST] Temps écoulé !** Le test du Pendu est terminé.\n` +
+                `🔤 Le mot mystère était : **${sTest.mot}**.`
+            ).catch(console.error);
+
+            return false;
+        }
+
         if (sTest && !sTest.termine && Date.now() < sTest.expireAt) {
             // Une proposition au Pendu doit obligatoirement être un mot unique (pas une phrase de discussion)
             const motsMessage = message.content.trim().split(/\s+/);
@@ -465,17 +968,24 @@ async function handlePenduMessage(message, response, client, helpers) {
             }
 
             const rawGuess = message.content.trim().toUpperCase()
-                .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-                .replace(/[^A-Z]/g, "");
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-            // Si ce n'est ni 1 lettre ni un mot de 7 lettres : on ne touche pas au jeu !
-            if (rawGuess.length !== 1 && rawGuess.length !== 7) {
+            // Accepter uniquement une lettre ou un mot de 7 lettres,
+            // sans chiffres, ponctuation ni autres caractères parasites.
+            if (
+                !/^[A-Z]+$/.test(rawGuess) ||
+                (rawGuess.length !== 1 && rawGuess.length !== 7)
+            ) {
                 return false;
             }
 
             // Détection des doublons en mode test
-            const doublonTest = (rawGuess.length === 1 && (sTest.lettresTrouvees.includes(rawGuess) || sTest.lettresFausses.includes(rawGuess)))
-                || (rawGuess.length === 7 && sTest.lettresRefusees.includes(rawGuess));
+            const doublonTest =
+                (rawGuess.length === 1 &&
+                    (sTest.lettresTrouvees.includes(rawGuess) ||
+                     sTest.lettresFausses.includes(rawGuess))) ||
+                (rawGuess.length === 7 &&
+                    (sTest.motsTentes || []).includes(rawGuess));
 
             if (doublonTest) {
                 const terme = rawGuess.length === 1 ? `la lettre **« ${rawGuess} »**` : `le mot **« ${rawGuess} »**`;
@@ -497,8 +1007,17 @@ async function handlePenduMessage(message, response, client, helpers) {
             // Cas 1 : Mot complet de 7 lettres
             if (rawGuess.length === 7) {
                 if (rawGuess === sTest.mot) {
+                    const lettresRestantes = [
+                        ...new Set(
+                            sTest.mot.split('').filter(
+                                lettre => !sTest.lettresTrouvees.includes(lettre)
+                            )
+                        )
+                    ];
+
+                    sTest.bonnesLettres += lettresRestantes.length;
                     sTest.lettresTrouvees = [...new Set(sTest.mot.split(''))];
-                    sTest.bonnesLettres += 7;
+
                     sTest.dernierCoup = {
                         userId: message.author.id,
                         proposition: rawGuess,
@@ -506,7 +1025,15 @@ async function handlePenduMessage(message, response, client, helpers) {
                     };
                 } else {
                     sTest.erreursCollectives++;
-                    sTest.lettresRefusees.push(rawGuess);
+
+                    if (!sTest.motsTentes) {
+                        sTest.motsTentes = [];
+                    }
+
+                    if (!sTest.motsTentes.includes(rawGuess)) {
+                        sTest.motsTentes.push(rawGuess);
+                    }
+
                     sTest.dernierCoup = {
                         userId: message.author.id,
                         proposition: rawGuess,
@@ -550,13 +1077,22 @@ async function handlePenduMessage(message, response, client, helpers) {
                     }
                 }
 
+                const lettresIncorrectesTest = [
+                    ...new Set(sTest.lettresFausses || [])
+                ].sort();
+
+                const motsIncorrectsTest = [
+                    ...new Set(sTest.motsTentes || [])
+                ];
+
                 const embedVictoireTest = new EmbedBuilder()
                     .setColor(0x2ecc71)
                     .setTitle('🎉 [TEST] MOT DÉCOUVERT AVEC SUCCÈS !')
                     .setDescription(
                         `🔤 **Le mot était bien :** \`${sTest.mot}\`\n\n` +
                         `• **Erreurs commises :** ${sTest.erreursCollectives}/6\n` +
-                        `• **Lettres refusées :** \`${sTest.lettresRefusees.join(' ') || 'Aucune'}\``
+                        `• **Lettres incorrectes :** \`${lettresIncorrectesTest.join(' ') || 'Aucune'}\`\n` +
+                        `• **Mots incorrects :** \`${motsIncorrectsTest.join(', ') || 'Aucun'}\``
                     );
 
                 await message.channel.send({ embeds: [embedVictoireTest] });
@@ -576,6 +1112,14 @@ async function handlePenduMessage(message, response, client, helpers) {
                     }
                 }
 
+                const lettresFaussesTest = [
+                    ...new Set(sTest.lettresFausses || [])
+                ].sort();
+
+                const motsIncorrectsTest = [
+                    ...new Set(sTest.motsTentes || [])
+                ];
+
                 const embedDefaiteTest = new EmbedBuilder()
                     .setColor(0xe74c3c)
                     .setTitle('💀 [TEST] PENDU COMPLET ! (Fin de partie)')
@@ -583,7 +1127,8 @@ async function handlePenduMessage(message, response, client, helpers) {
                         `${PENDU_DESSINS[6]}\n` +
                         `Le nombre d'erreurs maximal (6/6) a été atteint !\n\n` +
                         `🔤 **Le mot mystère était :** \`${sTest.mot}\`\n\n` +
-                        `❌ **Lettres refusées :** \`${sTest.lettresRefusees.join(' ') || 'Aucune'}\``
+                        `❌ **Lettres incorrectes :** \`${lettresFaussesTest.join(' ') || 'Aucune'}\`\n` +
+                        `📝 **Mots incorrects :** \`${motsIncorrectsTest.join(', ') || 'Aucun'}\``
                     );
 
                 await message.channel.send({ embeds: [embedDefaiteTest] });
@@ -603,14 +1148,51 @@ async function handlePenduMessage(message, response, client, helpers) {
 
     // 1. Détection des propositions dans le salon officiel #pendu
     if (message.channel.id === PENDU_CHANNEL_ID && !message.content.startsWith('!')) {
+
+        // Fermer une session officielle expirée dès le prochain message.
+        if (
+            session.mot &&
+            !session.termine &&
+            Number.isFinite(session.expireAt) &&
+            now >= session.expireAt
+        ) {
+            session.termine = true;
+            penduBridge.demanderSauvegarde();
+
+            if (session.messageId) {
+                const ancienMessage = await message.channel.messages
+                    .fetch(session.messageId)
+                    .catch(() => null);
+
+                if (ancienMessage) {
+                    await ancienMessage.edit({
+                        embeds: [buildPenduEmbed(session)],
+                        components: []
+                    }).catch(console.error);
+                }
+            }
+
+            await message.channel.send(
+                `⏰ **TEMPS ÉCOULÉ !** La partie officielle du Pendu est terminée.\n` +
+                `🔤 Le mot mystère était : **${session.mot}**.`
+            ).catch(console.error);
+
+            return false;
+        }
+
         if (session.mot && !session.termine && session.expireAt && now < session.expireAt) {
             // Une proposition au Pendu doit être un mot unique (évite que "c'est bon" ou "ah ouais" fassent 7 lettres)
             const motsMessage = message.content.trim().split(/\s+/);
             const estMotUnique = (motsMessage.length === 1);
 
             const rawGuess = message.content.trim().toUpperCase()
-                .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-                .replace(/[^A-Z]/g, "");
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+            // Une proposition doit contenir uniquement des lettres.
+            // Les chiffres, symboles et ponctuations ne sont pas acceptés.
+            if (estMotUnique && !/^[A-Z]+$/.test(rawGuess)) {
+                return false;
+            }
 
             // Initialisation des structures de données
             if (!session.tentativesJoueurs) session.tentativesJoueurs = {};
@@ -667,20 +1249,59 @@ async function handlePenduMessage(message, response, client, helpers) {
                     penduBridge.trackBattlePassProgress?.(uid, 'pendu_premier', 1);
                 }
 
-                if (!penduStats[uid]) penduStats[uid] = { victoires: 0, parties: 0, points: 0, hebdo: {} };
+                if (!penduStats[uid]) {
+                    penduStats[uid] = {
+                        victoires: 0,
+                        parties: 0,
+                        points: 0,
+                        hebdo: {}
+                    };
+                }
+
+                // Normaliser les anciens profils avant toute incrémentation.
+                const statsJoueur = penduStats[uid];
+
+                for (const champ of ['victoires', 'parties', 'points']) {
+                    const valeur = Number(statsJoueur[champ]);
+
+                    statsJoueur[champ] =
+                        Number.isFinite(valeur) && valeur >= 0
+                            ? valeur
+                            : 0;
+                }
+
+                if (
+                    !statsJoueur.hebdo ||
+                    typeof statsJoueur.hebdo !== 'object' ||
+                    Array.isArray(statsJoueur.hebdo)
+                ) {
+                    statsJoueur.hebdo = {};
+                }
+
                 if (session.tentativesJoueurs[uid] === 1) {
-                    penduStats[uid].parties++;
+                    statsJoueur.parties++;
                     penduBridge.trackBattlePassProgress?.(uid, 'pendu_jours', 1);
                 }
 
                 // Cas 1 : Mot complet de 7 lettres
                 if (rawGuess.length === 7) {
                     if (rawGuess === motComplet) {
-                        const restantes = motComplet.split('').filter(l => !session.lettresTrouvees.includes(l));
+                        // Compter les lettres distinctes encore cachées,
+                        // et non leurs occurrences dans le mot.
+                        const restantes = [
+                            ...new Set(
+                                motComplet.split('').filter(
+                                    lettre => !session.lettresTrouvees.includes(lettre)
+                                )
+                            )
+                        ];
+
                         const estCoupDePoker = restantes.length >= 3;
+
                         if (estCoupDePoker) {
                             session.coupDePoker = uid;
                         }
+
                         session.bonnesLettresParJoueur[uid] += Math.max(restantes.length, 1);
                         session.lettresTrouvees = [...new Set(motComplet.split(''))];
                         session.dernierCoup = {
@@ -692,14 +1313,66 @@ async function handlePenduMessage(message, response, client, helpers) {
                         };
                     } else {
                         session.erreursCollectives++;
+
                         if (!session.motsTentes.includes(rawGuess)) {
                             session.motsTentes.push(rawGuess);
                         }
+
                         session.dernierCoup = {
                             userId: uid,
                             proposition: rawGuess,
                             statut: `❌ **Mot incorrect !** *(${essaisRestants}/3 essai${pluriel} restant${pluriel})*`
                         };
+
+                        // L'indice de survie doit aussi se déclencher
+                        // lorsque la quatrième erreur est un mot incorrect.
+                        if (
+                            session.erreursCollectives === 4 &&
+                            !session.indiceDonne
+                        ) {
+                            session.indiceDonne = true;
+
+                            const voyellesRestantes = [
+                                ...new Set(
+                                    motComplet.split('').filter(
+                                        lettre =>
+                                            'AEIOUY'.includes(lettre) &&
+                                            !session.lettresTrouvees.includes(lettre)
+                                    )
+                                )
+                            ];
+
+                            if (voyellesRestantes.length > 0) {
+                                await message.channel.send(
+                                    `🛡️ **INDICE DE SURVIE (4/6 erreurs) :** ` +
+                                    `Il reste encore **${voyellesRestantes.length} voyelle(s) différente(s)** ` +
+                                    `non découverte(s) dans ce mot !`
+                                );
+                            } else {
+                                const lettresRestantes = [
+                                    ...new Set(
+                                        motComplet.split('').filter(
+                                            lettre =>
+                                                !session.lettresTrouvees.includes(lettre)
+                                        )
+                                    )
+                                ];
+
+                                if (lettresRestantes.length > 0) {
+                                    const lettreOfferte = lettresRestantes[
+                                        Math.floor(Math.random() * lettresRestantes.length)
+                                    ];
+
+                                    session.lettresTrouvees.push(lettreOfferte);
+
+                                    await message.channel.send(
+                                        `🛡️ **INDICE DE SURVIE (4/6 erreurs) :** ` +
+                                        `La potence approche ! Cacabot vous offre ` +
+                                        `la lettre **« ${lettreOfferte} »** !`
+                                    );
+                                }
+                            }
+                        }
                     }
                 }
                 // Cas 2 : Lettre individuelle
@@ -727,14 +1400,45 @@ async function handlePenduMessage(message, response, client, helpers) {
                         // Indice de survie automatique déclenché à la 4ème erreur collective (sur 6)
                         if (session.erreursCollectives === 4 && !session.indiceDonne) {
                             session.indiceDonne = true;
-                            const voyellesRestantes = motComplet.split('').filter(l => 'AEIOUY'.includes(l) && !session.lettresTrouvees.includes(l));
+
+                            const voyellesRestantes = [
+                                ...new Set(
+                                    motComplet.split('').filter(
+                                        lettre =>
+                                            'AEIOUY'.includes(lettre) &&
+                                            !session.lettresTrouvees.includes(lettre)
+                                    )
+                                )
+                            ];
+
                             if (voyellesRestantes.length > 0) {
-                                await message.channel.send(`🛡️ **INDICE DE SURVIE (4/6 erreurs) :** Il reste encore **${voyellesRestantes.length} voyelle(s)** non découverte(s) dans ce mot !`);
+                                await message.channel.send(
+                                    `🛡️ **INDICE DE SURVIE (4/6 erreurs) :** ` +
+                                    `Il reste encore **${voyellesRestantes.length} voyelle(s) différente(s)** ` +
+                                    `non découverte(s) dans ce mot !`
+                                );
                             } else {
-                                const lettresRestantes = motComplet.split('').filter(l => !session.lettresTrouvees.includes(l));
-                                const lettreOfferte = lettresRestantes[Math.floor(Math.random() * lettresRestantes.length)];
-                                session.lettresTrouvees.push(lettreOfferte);
-                                await message.channel.send(`🛡️ **INDICE DE SURVIE (4/6 erreurs) :** La potence approche ! Cacabot vous offre la lettre **« ${lettreOfferte} »** !`);
+                                const lettresRestantes = [
+                                    ...new Set(
+                                        motComplet.split('').filter(
+                                            lettre => !session.lettresTrouvees.includes(lettre)
+                                        )
+                                    )
+                                ];
+
+                                if (lettresRestantes.length > 0) {
+                                    const lettreOfferte = lettresRestantes[
+                                        Math.floor(Math.random() * lettresRestantes.length)
+                                    ];
+
+                                    session.lettresTrouvees.push(lettreOfferte);
+
+                                    await message.channel.send(
+                                        `🛡️ **INDICE DE SURVIE (4/6 erreurs) :** ` +
+                                        `La potence approche ! Cacabot vous offre ` +
+                                        `la lettre **« ${lettreOfferte} »** !`
+                                    );
+                                }
                             }
                         }
                     }
@@ -746,57 +1450,70 @@ async function handlePenduMessage(message, response, client, helpers) {
                 if (motEntierementTrouve) {
                     session.termine = true;
 
-                    // Détection du score maximal de bonnes lettres
-                    let maxBonnes = 0;
-                    for (const score of Object.values(session.bonnesLettresParJoueur)) {
-                        if (score > maxBonnes) maxBonnes = score;
-                    }
-
-                    // Attribution de la victoire à TOUS les joueurs ex-æquo ayant ce score max
-                    const vainqueurs = Object.keys(session.bonnesLettresParJoueur).filter(
-                        pId => session.bonnesLettresParJoueur[pId] === maxBonnes && maxBonnes > 0
+                    // Toutes les victoires utilisent désormais
+                    // le même circuit de récompenses idempotent.
+                    const vainqueurs = await attribuerRecompensesRevelationPendu(
+                        session,
+                        uid
                     );
-                    if (vainqueurs.length === 0) vainqueurs.push(uid);
 
-                    session.vainqueurId = vainqueurs[0];
-                    const weekKey = getPenduWeekKey();
+                    const maxBonnes = Math.max(
+                        0,
+                        ...Object.values(
+                            session.bonnesLettresParJoueur || {}
+                        ).map(score => Number(score) || 0)
+                    );
 
-                    for (const vId of vainqueurs) {
-                        if (!penduStats[vId]) penduStats[vId] = { victoires: 0, parties: 0, points: 0, hebdo: {} };
-                        penduStats[vId].victoires++;
-                        penduStats[vId].points += 3;
+                    const tcgRewardPendu =
+                        vainqueurs.tcgRewardPendu || [];
 
-                        if (!penduStats[vId].hebdo) penduStats[vId].hebdo = {};
-                        penduStats[vId].hebdo[weekKey] = (penduStats[vId].hebdo[weekKey] || 0) + 3;
-
-                        penduBridge.trackBattlePassProgress?.(vId, 'pendu_win', 1);
-                        penduBridge.trackBattlePassProgress?.(vId, 'minijeu_win', 1);
-                    }
-
-                    // Attribution du bonus Coup de poker (+2 points pour avoir trouvé le mot complet avec >= 3 lettres cachées)
-                    if (session.coupDePoker) {
-                        const pokerId = session.coupDePoker;
-                        if (!penduStats[pokerId]) penduStats[pokerId] = { victoires: 0, parties: 0, points: 0, hebdo: {} };
-                        penduStats[pokerId].points += 2;
-                        if (!penduStats[pokerId].hebdo) penduStats[pokerId].hebdo = {};
-                        penduStats[pokerId].hebdo[weekKey] = (penduStats[pokerId].hebdo[weekKey] || 0) + 2;
-                    }
-
-                    for (const participantId of Object.keys(session.tentativesJoueurs)) {
-                        penduBridge.trackBattlePassProgress?.(participantId, 'pendu_victoire_collective', 1);
-                    }
-                    const tcgRewardPendu = await penduBridge.grantTcgPoints?.(vainqueurs, 2) || [];
                     penduBridge.demanderSauvegarde();
 
-                    // Bilan de chaque participant avec ses essais (sans liste individuelle répétée)
-                    const lignesParticipants = Object.keys(session.tentativesJoueurs).map(pId => {
-                        const m = message.guild.members.cache.get(pId);
-                        const nom = m?.displayName || `<@${pId}>`;
-                        const bonnes = session.bonnesLettresParJoueur[pId] || 0;
-                        const essais = session.tentativesJoueurs[pId] || 0;
-                        const couronne = vainqueurs.includes(pId) ? ' 👑' : '';
-                        return `• **${nom}**${couronne} : **${bonnes}** bonne(s) lettre(s) (${essais}/3 essai${essais > 1 ? 's' : ''})`;
-                    }).join('\n');
+                    // Bilan de victoire limité pour respecter la taille des embeds Discord.
+                    // Les statistiques et les récompenses restent attribuées à tous les joueurs.
+                    const participantsVictoire = Object.keys(
+                        session.tentativesJoueurs || {}
+                    );
+
+                    const limiteParticipantsVictoire = 20;
+
+                    // Afficher les vainqueurs en priorité.
+                    const participantsTries = [
+                        ...participantsVictoire.filter(pId => vainqueurs.includes(pId)),
+                        ...participantsVictoire.filter(pId => !vainqueurs.includes(pId))
+                    ];
+
+                    const lignesVictoire = participantsTries
+                        .slice(0, limiteParticipantsVictoire)
+                        .map(pId => {
+                            const bonnes = Number(
+                                session.bonnesLettresParJoueur?.[pId]
+                            ) || 0;
+
+                            const essais = Number(
+                                session.tentativesJoueurs[pId]
+                            ) || 0;
+
+                            const couronne = vainqueurs.includes(pId)
+                                ? ' 👑'
+                                : '';
+
+                            return `• <@${pId}>${couronne} : **${bonnes}** bonne(s) lettre(s) ` +
+                                `(${essais}/3 essai${essais > 1 ? 's' : ''})`;
+                        });
+
+                    const participantsSupplementaires = Math.max(
+                        participantsTries.length - limiteParticipantsVictoire,
+                        0
+                    );
+
+                    if (participantsSupplementaires > 0) {
+                        lignesVictoire.push(
+                            `*… et ${participantsSupplementaires} autre(s) participant(s).*`
+                        );
+                    }
+
+                    const lignesParticipants = lignesVictoire.join('\n');
 
                     let texteAnnonceVictoire = vainqueurs.length > 1
                         ? `🤝 **ÉGALITÉ AU SOMMET !** Victoire partagée entre ${vainqueurs.map(id => `<@${id}>`).join(' et ')} (avec **${maxBonnes}** bonne(s) lettre(s) chacun·e) !\n⭐ **Récompense :** +3 points au classement hebdo pour chacun·e !`
@@ -856,14 +1573,25 @@ async function handlePenduMessage(message, response, client, helpers) {
                     );
 
                     // Mise à jour finale de l'embed principal
+                    // Le bouton Pacte est supprimé dès la victoire.
                     if (session.messageId) {
-                        const msgEmbed = await message.channel.messages.fetch(session.messageId).catch(() => null);
+                        const msgEmbed = await message.channel.messages
+                            .fetch(session.messageId)
+                            .catch(() => null);
+
                         if (msgEmbed) {
-                            await msgEmbed.edit({ embeds: [buildPenduEmbed(session)] }).catch(() => {});
+                            await msgEmbed.edit({
+                                embeds: [buildPenduEmbed(session)],
+                                components: []
+                            }).catch(console.error);
                         }
                     }
 
-                    await message.channel.send({ embeds: [embedVictoire], components: [rowStats] });
+                    await message.channel.send({
+                        embeds: [embedVictoire],
+                        components: [rowStats]
+                    });
+
                     return true;
                 }
 
@@ -872,20 +1600,54 @@ async function handlePenduMessage(message, response, client, helpers) {
                     session.termine = true;
                     penduBridge.demanderSauvegarde();
 
+                    // Retirer le bouton Pacte de l'embed officiel.
                     if (session.messageId) {
-                        const msgEmbed = await message.channel.messages.fetch(session.messageId).catch(() => null);
+                        const msgEmbed = await message.channel.messages
+                            .fetch(session.messageId)
+                            .catch(() => null);
+
                         if (msgEmbed) {
-                            await msgEmbed.edit({ embeds: [buildPenduEmbed(session)] }).catch(() => {});
+                            await msgEmbed.edit({
+                                embeds: [buildPenduEmbed(session)],
+                                components: []
+                            }).catch(console.error);
                         }
                     }
 
-                    const lignesDefaite = Object.keys(session.tentativesJoueurs).map(pId => {
-                        const m = message.guild.members.cache.get(pId);
-                        const nom = m?.displayName || `<@${pId}>`;
-                        const bonnes = session.bonnesLettresParJoueur[pId] || 0;
-                        const essais = session.tentativesJoueurs[pId] || 0;
-                        return `• **${nom}** : **${bonnes}** bonne(s) lettre(s) (${essais}/3 essai${essais > 1 ? 's' : ''})`;
-                    }).join('\n');
+                    const participantsDefaite = Object.keys(
+                        session.tentativesJoueurs || {}
+                    );
+
+                    // Limiter le bilan affiché sans supprimer les statistiques.
+                    const limiteParticipants = 20;
+
+                    const lignesParticipants = participantsDefaite
+                        .slice(0, limiteParticipants)
+                        .map(pId => {
+                            const bonnes = Number(
+                                session.bonnesLettresParJoueur?.[pId]
+                            ) || 0;
+
+                            const essais = Number(
+                                session.tentativesJoueurs[pId]
+                            ) || 0;
+
+                            return `• <@${pId}> : **${bonnes}** bonne(s) lettre(s) ` +
+                                `(${essais}/3 essai${essais > 1 ? 's' : ''})`;
+                        });
+
+                    const participantsMasques = Math.max(
+                        participantsDefaite.length - limiteParticipants,
+                        0
+                    );
+
+                    if (participantsMasques > 0) {
+                        lignesParticipants.push(
+                            `*… et ${participantsMasques} autre(s) participant(s).*`
+                        );
+                    }
+
+                    const lignesDefaite = lignesParticipants.join('\n');
 
                     const faussesLettresFinal = (session.lettresFausses && session.lettresFausses.length > 0)
                         ? [...new Set(session.lettresFausses)].sort().join(' ') 
@@ -927,17 +1689,14 @@ async function handlePenduMessage(message, response, client, helpers) {
             if (rawContent.length > 1) {
                 session.compteurMessagesLongs = (session.compteurMessagesLongs || 0) + 1;
 
-                // Après 15 messages de discussion, renvoi de l'embed qui devient la nouvelle référence active
+                // Après 15 messages de discussion, replacer l'embed en bas du salon.
                 if (session.compteurMessagesLongs >= 15) {
-                    session.compteurMessagesLongs = 0;
+                    const ancienMessageId = session.messageId;
 
-                    // Option 1 : on supprime l'ancien embed pour éviter qu'il reste figé plus haut
-                    if (session.messageId) {
-                        const ancienMsg = await message.channel.messages.fetch(session.messageId).catch(() => null);
-                        if (ancienMsg) await ancienMsg.delete().catch(() => {});
-                    }
-
+                    // Envoyer d'abord le rappel pour préserver l'embed actif
+                    // si Discord refuse l'envoi du nouveau message.
                     const embedRappel = buildPenduEmbed(session);
+
                     const sentRappel = await message.channel.send({
                         content: '🔔 **Rappel du mot à deviner :**',
                         embeds: [embedRappel],
@@ -945,9 +1704,21 @@ async function handlePenduMessage(message, response, client, helpers) {
                         flags: [MessageFlags.SuppressNotifications]
                     });
 
-                    // Le nouveau message devient celui qui sera modifié par la suite !
+                    // Le nouveau message devient la référence officielle.
                     session.messageId = sentRappel.id;
+                    session.compteurMessagesLongs = 0;
                     penduBridge.demanderSauvegarde();
+
+                    // Supprimer l'ancien uniquement après l'envoi réussi.
+                    if (ancienMessageId && ancienMessageId !== sentRappel.id) {
+                        const ancienMsg = await message.channel.messages
+                            .fetch(ancienMessageId)
+                            .catch(() => null);
+
+                        if (ancienMsg) {
+                            await ancienMsg.delete().catch(console.error);
+                        }
+                    }
                 }
             }
         }
@@ -964,22 +1735,67 @@ async function handlePenduMessage(message, response, client, helpers) {
             return true;
         }
 
-        const lettresRestantes = session.mot.split('').filter(l => !session.lettresTrouvees.includes(l));
+        if (
+            !Number.isFinite(session.expireAt) ||
+            Date.now() >= session.expireAt
+        ) {
+            await message.reply("⏰ Cette partie de Pendu a expiré.");
+            return true;
+        }
+
+        const lettresRestantes = [
+            ...new Set(
+                session.mot.split('').filter(
+                    lettre => !session.lettresTrouvees.includes(lettre)
+                )
+            )
+        ];
+
         if (lettresRestantes.length === 0) {
             await message.reply("Toutes les lettres ont déjà été trouvées !");
             return true;
         }
 
-        const lettreOfferte = lettresRestantes[Math.floor(Math.random() * lettresRestantes.length)];
-        session.lettresTrouvees.push(lettreOfferte);
-        penduBridge.demanderSauvegarde();
+        const lettreOfferte = lettresRestantes[
+            Math.floor(Math.random() * lettresRestantes.length)
+        ];
 
-        if (session.messageId) {
-            const msgEmbed = await message.channel.messages.fetch(session.messageId).catch(() => null);
-            if (msgEmbed) await msgEmbed.edit({ embeds: [buildPenduEmbed(session)] }).catch(() => {});
+        session.lettresTrouvees.push(lettreOfferte);
+
+        const motComplete = session.mot
+            .split('')
+            .every(lettre => session.lettresTrouvees.includes(lettre));
+
+        if (motComplete) {
+            await attribuerRecompensesRevelationPendu(session);
         }
 
-        await message.channel.send(`💡 **Indice accordé par Epsys :** La lettre **« ${lettreOfferte} »** est présente dans le mot !`);
+        penduBridge.demanderSauvegarde();
+
+        const salonOfficiel = message.guild?.channels.cache.get(PENDU_CHANNEL_ID);
+
+        if (session.messageId && salonOfficiel) {
+            const msgEmbed = await salonOfficiel.messages
+                .fetch(session.messageId)
+                .catch(() => null);
+
+            if (msgEmbed) {
+                await msgEmbed.edit({
+                    embeds: [buildPenduEmbed(session)],
+                    components: motComplete ? [] : buildPenduRow(session)
+                }).catch(console.error);
+            }
+        }
+
+        await message.channel.send(
+            `💡 **Indice accordé par Epsys :** La lettre **« ${lettreOfferte} »** est présente dans le mot !` +
+            (
+                motComplete
+                    ? `\n\n🎉 **Le mot est entièrement révélé : « ${session.mot} » !** La partie est terminée.`
+                    : ''
+            )
+        );
+
         return true;
     }
 
@@ -990,14 +1806,53 @@ async function handlePenduMessage(message, response, client, helpers) {
             return true;
         }
 
-        // Annulation et fermeture de l'ancienne session
-        session.termine = true;
-        penduBridge.demanderSauvegarde();
-
-        await message.reply("♻️ **Session Pendu précédente fermée !** Lancement immédiat d'une toute nouvelle partie officielle (7 lettres, 6 erreurs collectives, 1h)...");
-        if (message.guild) {
-            await lancerPenduQuotidien(message.guild);
+        if (!message.guild) {
+            await message.reply(
+                "❌ Impossible de relancer le Pendu en dehors du serveur."
+            );
+            return true;
         }
+
+        // Le lancement forcé crée et enregistre la nouvelle session.
+        // Ne pas fermer l'ancienne avant d'avoir confirmé sa réussite.
+        const ancienneSession = session;
+        const ancienMessageId = ancienneSession.messageId;
+
+        const lancementReussi = await lancerPenduQuotidien(
+            message.guild,
+            true
+        );
+
+        if (!lancementReussi) {
+            await message.reply(
+                "❌ Le nouveau Pendu n'a pas pu être lancé. " +
+                "L'ancienne session est conservée."
+            );
+            return true;
+        }
+
+        // Le nouveau Pendu existe : retirer le bouton de l'ancien message.
+        if (ancienMessageId) {
+            const salonOfficiel = message.guild.channels.cache.get(
+                PENDU_CHANNEL_ID
+            );
+
+            const ancienMessage = await salonOfficiel?.messages
+                .fetch(ancienMessageId)
+                .catch(() => null);
+
+            if (ancienMessage) {
+                await ancienMessage.edit({
+                    components: []
+                }).catch(console.error);
+            }
+        }
+
+        await message.reply(
+            "♻️ **Ancienne session remplacée !** " +
+            "Un nouveau Pendu officiel de 7 lettres vient d'être lancé."
+        );
+
         return true;
     }
 
@@ -1008,15 +1863,12 @@ async function handlePenduMessage(message, response, client, helpers) {
         if (enCours) {
             // Si la commande est tapée dans le salon officiel du Pendu
             if (message.channel.id === PENDU_CHANNEL_ID) {
-                // Option 1 : on supprime l'ancien embed et la commande pour ne garder qu'un seul embed vivant tout en bas
-                if (session.messageId) {
-                    const ancienMsg = await message.channel.messages.fetch(session.messageId).catch(() => null);
-                    if (ancienMsg) await ancienMsg.delete().catch(() => {});
-                }
-
-                await message.delete().catch(() => {});
+                const ancienMessageId = session.messageId;
 
                 const embed = buildPenduEmbed(session);
+
+                // Envoyer d'abord le nouveau message pour ne jamais perdre
+                // l'embed actif si Discord refuse l'envoi.
                 const sent = await message.channel.send({
                     content: '🪢 **Partie de Pendu en cours (remise en bas du salon) :**',
                     embeds: [embed],
@@ -1025,6 +1877,21 @@ async function handlePenduMessage(message, response, client, helpers) {
 
                 session.messageId = sent.id;
                 penduBridge.demanderSauvegarde();
+
+                // L'ancien message n'est supprimé qu'après la réussite
+                // de l'envoi et l'enregistrement du nouveau.
+                if (ancienMessageId && ancienMessageId !== sent.id) {
+                    const ancienMsg = await message.channel.messages
+                        .fetch(ancienMessageId)
+                        .catch(() => null);
+
+                    if (ancienMsg) {
+                        await ancienMsg.delete().catch(console.error);
+                    }
+                }
+
+                await message.delete().catch(() => {});
+
                 return true;
             }
 
@@ -1067,15 +1934,39 @@ async function handlePenduMessage(message, response, client, helpers) {
 
     // 3. Commande !pendustats
     if (command === '!pendustats' || command === '!pendustat') {
-        let cible = message.mentions.members.first();
-        if (!cible) {
-            const query = message.content.trim().split(/\s+/).slice(1).join(" ");
-            if (query && helpers?.findMemberByName) cible = helpers.findMemberByName(message.guild, query).found;
+        const query = message.content.trim().split(/\s+/).slice(1).join(" ");
+
+        let cible = message.mentions.members.first() || null;
+
+        if (!cible && query && helpers?.findMemberByName) {
+            const resultat = await helpers.findMemberByName(message.guild, query);
+            cible = resultat?.found || null;
         }
-        if (!cible) cible = message.member;
+
+        // Une recherche explicite ne doit jamais afficher les
+        // statistiques de l'auteur si aucun membre n'a été trouvé.
+        if (query && !cible) {
+            await message.reply(
+                "❌ **Membre introuvable !** Vérifie le pseudo ou mentionne directement le membre.\n" +
+                "💡 Utilise `!pendustats` sans argument pour consulter tes propres statistiques."
+            );
+            return true;
+        }
+
+        if (!cible) {
+            cible = message.member;
+        }
+
+        if (!cible) {
+            await message.reply(
+                "❌ Impossible de récupérer les informations de ce membre."
+            );
+            return true;
+        }
 
         const embed = buildPenduStatsEmbed(cible);
         await message.reply({ embeds: [embed] });
+
         return true;
     }
 
@@ -1138,8 +2029,17 @@ async function handlePenduSlash(interaction) {
 
     if (cmd === 'pendustats') {
         const cibleUser = interaction.options.getUser('membre') ?? interaction.user;
-        const member = interaction.guild?.members.cache.get(cibleUser.id) ?? interaction.member;
-        return interaction.reply({ embeds: [buildPenduStatsEmbed(member)] });
+
+        const member = interaction.guild?.members.cache.get(cibleUser.id)
+            ?? await interaction.guild?.members.fetch(cibleUser.id).catch(() => null)
+            ?? {
+                id: cibleUser.id,
+                displayName: cibleUser.globalName || cibleUser.username
+            };
+
+        return interaction.reply({
+            embeds: [buildPenduStatsEmbed(member)]
+        });
     }
 
     if (cmd === 'pendutop') {
@@ -1154,6 +2054,192 @@ async function handlePenduSlash(interaction) {
 //  GESTION DES BOUTONS D'INTERACTION
 // ==========================================
 
+// Finalisation commune : victoire classique, indice ou Pacte.
+// Le classement et le Battle Pass sont enregistrés ensemble,
+// puis les récompenses TCG peuvent être reprises après redémarrage.
+async function attribuerRecompensesRevelationPendu(
+    session,
+    fallbackWinnerId = null
+) {
+    const scores = session.bonnesLettresParJoueur || {};
+    const maxBonnes = Math.max(
+        0,
+        ...Object.values(scores).map(valeur => {
+            const nombre = Number(valeur);
+            return Number.isFinite(nombre) && nombre >= 0 ? nombre : 0;
+        })
+    );
+
+    const vainqueurs = maxBonnes > 0
+        ? Object.keys(scores).filter(
+            id => Number(scores[id]) === maxBonnes
+        )
+        : fallbackWinnerId
+            ? [fallbackWinnerId]
+            : [];
+
+    // Conserver les gagnants déterminés lors de la première attribution.
+    const gagnants = Array.isArray(session.recompensesVainqueurs)
+        ? session.recompensesVainqueurs
+        : vainqueurs;
+
+    const resultat = [...gagnants];
+    resultat.tcgRewardPendu = [];
+
+    if (session.recompensesRevelationTraitees) {
+        return resultat;
+    }
+
+    // Identifiant stable de la partie, y compris après redémarrage.
+    const rewardKey = `pendu:${session.dateKey}:${session.messageId || 'legacy'}`;
+
+    if (!session.recompensesClassementTraitees) {
+        const stats = penduBridge.getPenduStats();
+
+        // Utiliser la semaine de lancement de la partie,
+        // jamais celle du redémarrage ou de la reprise.
+        const weekKey = session.recompensesWeekKey ||
+            getPenduWeekKey(session.dateKey);
+
+        const preparerStats = id => {
+            if (!stats[id]) {
+                stats[id] = {
+                    victoires: 0,
+                    parties: 0,
+                    points: 0,
+                    hebdo: {}
+                };
+            }
+
+            const joueur = stats[id];
+
+            for (const champ of ['victoires', 'parties', 'points']) {
+                const valeur = Number(joueur[champ]);
+                joueur[champ] =
+                    Number.isFinite(valeur) && valeur >= 0
+                        ? valeur
+                        : 0;
+            }
+
+            if (
+                !joueur.hebdo ||
+                typeof joueur.hebdo !== 'object' ||
+                Array.isArray(joueur.hebdo)
+            ) {
+                joueur.hebdo = {};
+            }
+
+            return joueur;
+        };
+
+        session.recompensesVainqueurs = [...gagnants];
+        session.recompensesWeekKey = weekKey;
+        session.recompensesRewardKey = rewardKey;
+        session.termine = true;
+        session.vainqueurId = gagnants[0] || null;
+
+        for (const id of gagnants) {
+            const joueur = preparerStats(id);
+
+            joueur.victoires++;
+            joueur.points += 3;
+            joueur.hebdo[weekKey] =
+                (Number(joueur.hebdo[weekKey]) || 0) + 3;
+
+            penduBridge.trackBattlePassProgress?.(
+                id,
+                'pendu_win',
+                1,
+                { eventKey: rewardKey }
+            );
+
+            penduBridge.trackBattlePassProgress?.(
+                id,
+                'minijeu_win',
+                1,
+                { eventKey: rewardKey }
+            );
+        }
+
+        if (session.coupDePoker) {
+            const joueur = preparerStats(session.coupDePoker);
+
+            joueur.points += 2;
+            joueur.hebdo[weekKey] =
+                (Number(joueur.hebdo[weekKey]) || 0) + 2;
+        }
+
+        for (const id of Object.keys(session.tentativesJoueurs || {})) {
+            penduBridge.trackBattlePassProgress?.(
+                id,
+                'pendu_victoire_collective',
+                1,
+                { eventKey: rewardKey }
+            );
+        }
+
+        // Aucune attente asynchrone avant ce marqueur.
+        // Les statistiques, le Battle Pass et ce marqueur
+        // seront sauvegardés dans le même fichier JSON.
+        session.recompensesClassementTraitees = true;
+        penduBridge.demanderSauvegarde();
+    }
+
+    // Ne jamais attribuer les points TCG avant que le classement
+    // et le Battle Pass soient sauvegardés avec leur marqueur.
+    await penduBridge.saveAll();
+
+    const gagnantsPersistes = session.recompensesVainqueurs || gagnants;
+    const clePersistante = session.recompensesRewardKey || rewardKey;
+
+    if (gagnantsPersistes.length > 0) {
+        // Une erreur Discord ou une sauvegarde RegaDex échouée
+        // doit interrompre la finalisation, sans marquer
+        // l'attribution comme terminée.
+        const attribution = await penduBridge.grantTcgPoints(
+            gagnantsPersistes,
+            2,
+            clePersistante
+        );
+
+        if (!Array.isArray(attribution)) {
+            throw new Error(
+                '[PENDU] Réponse RegaDex invalide : attribution non confirmée.'
+            );
+        }
+
+        // [] est valide si aucun gagnant ne possède le rôle requis.
+        // Les indisponibilités techniques sont désormais signalées
+        // par des exceptions dans tcg.js.
+        resultat.tcgRewardPendu = attribution;
+    }
+
+    // Confirmer la finalisation uniquement après le traitement
+    // RegaDex. Les registres persistants protègent les crédits
+    // déjà effectués si cette étape doit être rejouée.
+    session.recompensesRevelationTraitees = true;
+
+    try {
+        await penduBridge.saveAll();
+    } catch (error) {
+        // La confirmation n'est pas fiable : autoriser une reprise.
+        // Les points de classement ne seront pas réattribués,
+        // car recompensesClassementTraitees reste à true.
+        session.recompensesRevelationTraitees = false;
+        penduBridge.demanderSauvegarde();
+
+        console.error(
+            '[PENDU] Confirmation finale non sauvegardée ; ' +
+            'récompenses laissées en attente de reprise :',
+            error
+        );
+
+        throw error;
+    }
+
+    return resultat;
+}
+
 async function handlePenduButton(interaction) {
     if (!interaction.isButton()) return false;
     const customId = interaction.customId;
@@ -1161,29 +2247,72 @@ async function handlePenduButton(interaction) {
     // Gestion du Pacte du Pendu (Vote démocratique : 3 votes = 1 vie sacrifiée contre 1 lettre)
     if (customId === 'pendu_pacte_indice') {
         const session = penduBridge.getPenduData();
-        if (!session || !session.mot || session.termine) {
-            return interaction.reply({ content: "Aucune partie de Pendu n'est en cours !", ephemeral: true });
+        if (
+            !session ||
+            !session.mot ||
+            session.termine ||
+            !Number.isFinite(session.expireAt) ||
+            session.expireAt <= Date.now()
+        ) {
+            await interaction.followUp({
+                content: "Aucune partie de Pendu n'est actuellement en cours !",
+                ephemeral: true
+            });
+            return true;
         }
+
+        if (session.messageId !== interaction.message?.id) {
+            await interaction.followUp({
+                content: "⚠️ Ce bouton appartient à un ancien message du Pendu. Utilise celui de la partie actuelle !",
+                ephemeral: true
+            });
+            return true;
+        }
+
         if (session.erreursCollectives >= 5) {
-            return interaction.reply({ content: "⚠️ Trop dangereux ! Il ne reste qu'une seule erreur avant le pendu (5/6), vous ne pouvez plus sacrifier de vie !", ephemeral: true });
+            await interaction.followUp({
+                content: "⚠️ Trop dangereux ! Il ne reste qu'une seule erreur avant le pendu (5/6), vous ne pouvez plus sacrifier de vie !",
+                ephemeral: true
+            });
+            return true;
         }
+
         if (!session.votesPacte) session.votesPacte = [];
 
         const uid = interaction.user.id;
+
         if (session.votesPacte.includes(uid)) {
-            return interaction.reply({ content: "Tu as déjà voté pour ce pacte ! Attends que d'autres joueurs votent.", ephemeral: true });
+            await interaction.followUp({
+                content: "Tu as déjà voté pour ce pacte ! Attends que d'autres joueurs votent.",
+                ephemeral: true
+            });
+            return true;
         }
 
         session.votesPacte.push(uid);
 
         if (session.votesPacte.length < 3) {
             penduBridge.demanderSauvegarde();
+
             if (interaction.message?.editable) {
-                await interaction.update({ components: buildPenduRow(session) }).catch(() => {});
-            } else {
-                await interaction.deferUpdate().catch(() => {});
+                await interaction.editReply({
+                    components: buildPenduRow(session)
+                }).catch(error => {
+                    console.error(
+                        '[PENDU] Impossible d’actualiser les votes du Pacte :',
+                        error
+                    );
+                });
             }
-            await interaction.followUp({ content: `🕯️ <@${uid}> a voté pour le **Pacte du Pendu** (${session.votesPacte.length}/3 votes requis pour sacrifier 1 vie contre 1 indice) !`, ephemeral: false });
+
+            await interaction.followUp({
+                content:
+                    `🕯️ <@${uid}> a voté pour le **Pacte du Pendu** ` +
+                    `(${session.votesPacte.length}/3 votes requis pour ` +
+                    `sacrifier 1 vie contre 1 indice) !`,
+                ephemeral: false
+            });
+
             return true;
         }
 
@@ -1192,41 +2321,107 @@ async function handlePenduButton(interaction) {
         session.erreursCollectives++;
 
         const motComplet = session.mot;
-        const lettresRestantes = motComplet.split('').filter(l => !session.lettresTrouvees.includes(l));
-        
+
+        // Chaque lettre distincte possède la même probabilité d'être offerte.
+        const lettresRestantes = [
+            ...new Set(
+                motComplet.split('').filter(
+                    lettre => !session.lettresTrouvees.includes(lettre)
+                )
+            )
+        ];
+
         let lettreOfferte = null;
+
         if (lettresRestantes.length > 0) {
-            lettreOfferte = lettresRestantes[Math.floor(Math.random() * lettresRestantes.length)];
+            lettreOfferte = lettresRestantes[
+                Math.floor(Math.random() * lettresRestantes.length)
+            ];
+
             session.lettresTrouvees.push(lettreOfferte);
+        }
+
+        // Vérifier immédiatement si le Pacte complète le mot.
+        const motComplete = motComplet
+            .split('')
+            .every(lettre => session.lettresTrouvees.includes(lettre));
+
+        let vainqueursPacte = [];
+
+        // Verrouiller immédiatement la fin de partie.
+        // Les récompenses seront traitées après l'accusé de réception Discord.
+        if (motComplete) {
+            session.termine = true;
         }
 
         session.dernierCoup = {
             userId: uid,
             proposition: 'PACTE',
-            statut: lettreOfferte ? `🕯️ **Pacte scellé !** (+1 erreur) ➔ Lettre **« ${lettreOfferte} »** offerte !` : `🕯️ **Pacte scellé !** (+1 erreur)`
+            statut: lettreOfferte
+                ? `🕯️ **Pacte scellé !** (+1 erreur) ➔ Lettre **« ${lettreOfferte} »** offerte !`
+                : `🕯️ **Pacte scellé !** (+1 erreur)`
         };
 
         penduBridge.demanderSauvegarde();
 
+        // Le clic a déjà été reconnu avant son entrée dans la file.
+        // Actualiser le message sans répondre une deuxième fois.
         if (interaction.message?.editable) {
-            await interaction.update({ embeds: [buildPenduEmbed(session)], components: buildPenduRow(session) }).catch(() => {});
-        } else {
-            await interaction.deferUpdate().catch(() => {});
+            await interaction.editReply({
+                embeds: [buildPenduEmbed(session)],
+                components: buildPenduRow(session)
+            }).catch(error => {
+                console.error(
+                    '[PENDU] Impossible d’actualiser le Pacte :',
+                    error
+                );
+            });
+        }
+
+        // Les récompenses peuvent être traitées après l'accusé
+        // de réception, sans expiration de l'interaction.
+        if (motComplete) {
+            vainqueursPacte = await attribuerRecompensesRevelationPendu(session);
         }
 
         await interaction.channel.send({
-            content: `🕯️ **LE PACTE DU PENDU A ÉTÉ SCELLÉ !**\n3 membres ont voté : **1 erreur collective a été sacrifiée** (potence à **${session.erreursCollectives}/6**), mais Cacabot vous offre la lettre **« ${lettreOfferte} »** ! 🪢`
+            content:
+                `🕯️ **LE PACTE DU PENDU A ÉTÉ SCELLÉ !**\n` +
+                `3 membres ont voté : **1 erreur collective a été sacrifiée** ` +
+                `(potence à **${session.erreursCollectives}/6**), ` +
+                (
+                    lettreOfferte
+                        ? `mais Cacabot vous offre la lettre **« ${lettreOfferte} »** ! 🪢`
+                        : `mais aucune lettre ne restait à révéler. 🪢`
+                )
         });
 
-        // Si la lettre révélée par le pacte complète le mot !
-        if (motComplet.split('').every(l => session.lettresTrouvees.includes(l))) {
-            session.termine = true;
-            penduBridge.demanderSauvegarde();
+        // Si la lettre révélée par le Pacte complète le mot.
+        if (motComplete) {
             if (session.messageId) {
-                const msgEmbed = await interaction.channel.messages.fetch(session.messageId).catch(() => null);
-                if (msgEmbed) await msgEmbed.edit({ embeds: [buildPenduEmbed(session)], components: [] }).catch(() => {});
+                const msgEmbed = await interaction.channel.messages
+                    .fetch(session.messageId)
+                    .catch(() => null);
+
+                if (msgEmbed) {
+                    await msgEmbed.edit({
+                        embeds: [buildPenduEmbed(session)],
+                        components: []
+                    }).catch(console.error);
+                }
             }
-            await interaction.channel.send(`🎉 **LE PACTE A RÉVÉLÉ LA DERNIÈRE LETTRE !** Le mot était **« ${motComplet} »** ! Bravo à toute l'équipe !`);
+
+            const annonceVainqueurs = vainqueursPacte.length > 0
+                ? `\n🏆 **Vainqueur(s) :** ${vainqueursPacte.map(id => `<@${id}>`).join(', ')} ` +
+                  `— **+3 points** au classement et récompense RegaDex selon éligibilité.`
+                : `\n🏆 Aucun vainqueur individuel : aucune bonne lettre n'avait été trouvée par un joueur.`;
+
+            await interaction.channel.send(
+                `🎉 **LE PACTE A RÉVÉLÉ LA DERNIÈRE LETTRE !** ` +
+                `Le mot était **« ${motComplet} »** ! ` +
+                `Bravo à toute l'équipe !` +
+                annonceVainqueurs
+            );
         }
 
         return true;
@@ -1234,21 +2429,52 @@ async function handlePenduButton(interaction) {
 
     if (customId.startsWith('stop_test_pendu_')) {
         if (interaction.user.id !== EPSYS_ID) {
-            await interaction.reply({ content: "Seule Epsys peut arrêter ce test.", ephemeral: true });
+            await interaction.reply({
+                content: "Seule Epsys peut arrêter ce test.",
+                ephemeral: true
+            });
             return true;
         }
+
         const chId = customId.replace('stop_test_pendu_', '');
         const session = penduTestSessions.get(chId);
-        const motSecret = session ? session.mot : 'inconnu';
+
+        if (!session || session.messageId !== interaction.message?.id) {
+            await interaction.reply({
+                content: "⚠️ Ce bouton appartient à un ancien test du Pendu.",
+                ephemeral: true
+            });
+            return true;
+        }
+
+        const motSecret = session.mot;
         penduTestSessions.delete(chId);
+
         await interaction.update({ components: [] });
-        await interaction.channel.send(`🛑 **Test Pendu arrêté !** Le mot était : **${motSecret}**.`);
+
+        await interaction.channel.send(
+            `🛑 **Test Pendu arrêté !** Le mot était : **${motSecret}**.`
+        );
+
         return true;
     }
 
     if (customId === 'pendu_my_stats' || customId.startsWith('pendu_view_stats_')) {
-        const member = interaction.member;
-        return interaction.reply({ embeds: [buildPenduStatsEmbed(member)], ephemeral: true });
+        const utilisateur = interaction.user;
+
+        // Récupérer un véritable GuildMember lorsque c'est possible.
+        // Sinon, conserver l'identifiant fiable du compte Discord.
+        const membre = interaction.guild?.members.cache.get(utilisateur.id)
+            ?? await interaction.guild?.members.fetch(utilisateur.id).catch(() => null)
+            ?? {
+                id: utilisateur.id,
+                displayName: utilisateur.globalName || utilisateur.username
+            };
+
+        return interaction.reply({
+            embeds: [buildPenduStatsEmbed(membre)],
+            ephemeral: true
+        });
     }
 
     if (customId === 'pendu_view_guide') {
@@ -1256,28 +2482,291 @@ async function handlePenduButton(interaction) {
     }
 
     if (customId.startsWith('pendu_view_hebdo_') || customId.startsWith('pendu_hebdo_')) {
-        const authorId = customId.split('_')[3] || interaction.user.id;
+        const prefix = customId.startsWith('pendu_view_hebdo_')
+            ? 'pendu_view_hebdo_'
+            : 'pendu_hebdo_';
+
+        const authorId = customId.slice(prefix.length) || interaction.user.id;
         const { embed, row } = buildClassementHebdomadaireEmbed(interaction.guild, authorId);
+
         if (interaction.message?.editable) {
-            return interaction.update({ embeds: [embed], components: [row] });
+            return interaction.update({
+                embeds: [embed],
+                components: [row]
+            });
         }
-        return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
+
+        return interaction.reply({
+            embeds: [embed],
+            components: [row],
+            ephemeral: true
+        });
     }
 
     if (customId.startsWith('pendu_top10_')) {
-        const authorId = customId.split('_')[2];
-        const { embed, row } = buildTop10GlobalEmbed(interaction.guild, authorId);
-        return interaction.update({ embeds: [embed], components: [row] });
+        const authorId = customId.slice('pendu_top10_'.length)
+            || interaction.user.id;
+
+        const { embed, row } = buildTop10GlobalEmbed(
+            interaction.guild,
+            authorId
+        );
+
+        return interaction.update({
+            embeds: [embed],
+            components: [row]
+        });
     }
 
     return false;
 }
 
+// Réconcilier une publication dont l'intention a été sauvegardée
+// avant channel.send(), mais dont la confirmation est incertaine.
+async function reconcilierPublicationPendu(client) {
+    const pending = penduBridge.getPenduPublicationPending();
+
+    if (!pending) return false;
+
+    if (
+        typeof pending.token !== 'string' ||
+        !pending.token ||
+        !pending.session ||
+        typeof pending.session !== 'object'
+    ) {
+        console.error(
+            '[PENDU] Journal de publication invalide. ' +
+            'Lancement bloqué pour éviter un doublon.'
+        );
+
+        return false;
+    }
+
+    const channel = await client.channels.fetch(PENDU_CHANNEL_ID);
+
+    if (!channel?.messages?.fetch) {
+        throw new Error(
+            '[PENDU] Salon indisponible pour la réconciliation.'
+        );
+    }
+
+    let before = null;
+    let trouve = null;
+
+    // Rechercher au maximum les 1000 derniers messages.
+    // Si le message n'est pas trouvé, ne PAS en republier un :
+    // l'absence dans cette fenêtre n'est pas une preuve d'échec.
+    for (let page = 0; page < 10 && !trouve; page++) {
+        const messages = await channel.messages.fetch({
+            limit: 100,
+            ...(before ? { before } : {})
+        });
+
+        if (!messages.size) break;
+
+        const lot = [...messages.values()];
+
+        trouve = lot.find(message =>
+            message.author?.id === client.user?.id &&
+            typeof message.content === 'string' &&
+            message.content.includes(
+                `Référence Pendu : ${pending.token}`
+            )
+        );
+
+        before = lot[lot.length - 1].id;
+
+        if (messages.size < 100) break;
+    }
+
+    if (!trouve) {
+        console.error(
+            '[PENDU] Publication introuvable ou non confirmée. ' +
+            'Aucun nouveau message ne sera envoyé automatiquement.',
+            pending.token
+        );
+
+        return false;
+    }
+
+    const sessionActuelle = penduBridge.getPenduData();
+
+    const messageActuel = sessionActuelle?.messageId || null;
+    const messagePrecedent = pending.previousMessageId || null;
+
+    const memePublication = messageActuel === trouve.id;
+
+    const ancienneSessionAttendue =
+        messageActuel === messagePrecedent &&
+        sessionActuelle?.dateKey !== undefined;
+
+    // Une session portant déjà l'identifiant du nouveau
+    // message doit conserver intégralement sa progression.
+    //
+    // Sinon, seule la session explicitement enregistrée
+    // comme précédente peut être remplacée.
+    if (!memePublication && !ancienneSessionAttendue) {
+        console.error(
+            '[PENDU] Réconciliation refusée : incohérence ' +
+            'entre la session sauvegardée et le journal.',
+            {
+                messageActuel,
+                messagePrecedent,
+                messagePublication: trouve.id,
+                token: pending.token
+            }
+        );
+
+        return false;
+    }
+
+    // Ne jamais restaurer la copie initiale sur une partie
+    // déjà reconnue : cela effacerait les essais et les lettres.
+    const session = memePublication
+        ? sessionActuelle
+        : {
+            ...pending.session,
+            messageId: trouve.id
+        };
+
+    // Si le message est déjà celui de la session active,
+    // conserver intégralement son état actuel.
+    penduBridge.setPenduData(session);
+
+    try {
+        // Première sauvegarde : session restaurée + journal.
+        await penduBridge.saveAll();
+    } catch (error) {
+        // Conserver le journal : aucun nouveau lancement
+        // ne doit être autorisé dans cet état.
+        penduBridge.demanderSauvegarde();
+        throw error;
+    }
+
+    // La session restaurée est maintenant confirmée.
+    penduBridge.setPenduPublicationPending(null);
+
+    try {
+        // Deuxième sauvegarde : clôture du journal.
+        await penduBridge.saveAll();
+    } catch (error) {
+        // La clôture n'est pas confirmée.
+        // Réactiver le blocage jusqu'à une prochaine tentative.
+        penduBridge.setPenduPublicationPending(pending);
+        penduBridge.demanderSauvegarde();
+
+        throw error;
+    }
+
+    console.log(
+        '[PENDU] Publication récupérée et journal clôturé :',
+        trouve.id
+    );
+
+    return true;
+}
+
+// Reprendre une attribution interrompue après un redémarrage.
+// Ne concerne que les sessions utilisant le nouveau marqueur.
+async function reprendreRecompensesPendu() {
+    const session = penduBridge.getPenduData();
+
+    if (
+        !session ||
+        !session.termine ||
+        session.recompensesRevelationTraitees === true
+    ) {
+        return false;
+    }
+
+    // Ne reprendre que les attributions dont le classement
+    // possède déjà un marqueur explicite.
+    //
+    // Les sessions historiques peuvent avoir été récompensées
+    // avant l'introduction de ces marqueurs.
+    if (session.recompensesClassementTraitees !== true) {
+        return false;
+    }
+
+    if (
+        !Array.isArray(session.recompensesVainqueurs) ||
+        typeof session.recompensesRewardKey !== 'string' ||
+        !session.recompensesRewardKey
+    ) {
+        console.error(
+            '[PENDU] Reprise refusée : attribution marquée ' +
+            'mais données de récompense incomplètes.',
+            session.messageId
+        );
+
+        return false;
+    }
+
+    console.log(
+        '[PENDU] Reprise des récompenses interrompues :',
+        session.recompensesRewardKey
+    );
+
+    await attribuerRecompensesRevelationPendu(
+        session,
+        session.vainqueurId || null
+    );
+
+    return true;
+}
+
+// Sérialiser les opérations qui peuvent modifier une session Pendu.
+// Une erreur ne doit jamais bloquer les traitements suivants.
+let fileOperationsPendu = Promise.resolve();
+
+function executerOperationPendu(operation) {
+    const execution = fileOperationsPendu.then(operation);
+
+    fileOperationsPendu = execution.catch(error => {
+        console.error('[PENDU] Erreur dans une opération :', error);
+    });
+
+    return execution;
+}
+
 module.exports = {
     PENDU_CHANNEL_ID,
     initPenduState,
-    lancerPenduQuotidien,
-    handlePenduMessage,
+
+    reconcilierPublicationPendu: client =>
+        executerOperationPendu(
+            () => reconcilierPublicationPendu(client)
+        ),
+
+    reprendreRecompensesPendu: () =>
+        executerOperationPendu(
+            () => reprendreRecompensesPendu()
+        ),
+
+    lancerPenduQuotidien: (guild, force = false) =>
+        executerOperationPendu(
+            () => lancerPenduQuotidien(guild, force)
+        ),
+
+    handlePenduMessage: (message, response, client, helpers) =>
+        executerOperationPendu(
+            () => handlePenduMessage(message, response, client, helpers)
+        ),
+
     handlePenduSlash,
-    handlePenduButton
+
+    handlePenduButton: async interaction => {
+        if (
+            !interaction.isButton() ||
+            interaction.customId !== 'pendu_pacte_indice'
+        ) {
+            return handlePenduButton(interaction);
+        }
+
+        await interaction.deferUpdate();
+
+        return executerOperationPendu(
+            () => handlePenduButton(interaction)
+        );
+    }
 };

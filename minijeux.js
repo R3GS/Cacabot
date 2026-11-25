@@ -19,6 +19,9 @@ let minijeuxBridge = {
     setMotusStats: () => {},
     getRebusStats: () => ({}),
     setRebusStats: () => {},
+    getRebusSession: () => null,
+    setRebusSession: () => {},
+    saveNow: async () => {},
     getPenduStats: () => ({}),
     setPenduStats: () => {},
     demanderSauvegarde: () => {},
@@ -27,7 +30,38 @@ let minijeuxBridge = {
 };
 
 function initMinijeuxState(bridge) {
-    minijeuxBridge = bridge;
+    minijeuxBridge = { ...minijeuxBridge, ...bridge };
+}
+
+function sauvegarderEtatRebus() {
+    const {
+        timer,
+        limite16hTimer,
+        ...etatPersistant
+    } = rebusSession;
+
+    const snapshot = {
+        ...etatPersistant,
+
+        items: Array.isArray(etatPersistant.items)
+            ? etatPersistant.items.map(item =>
+                Array.isArray(item) ? [...item] : item
+            )
+            : [],
+
+        currentItem: Array.isArray(etatPersistant.currentItem)
+            ? [...etatPersistant.currentItem]
+            : null,
+
+        scores: {
+            ...(etatPersistant.scores || {})
+        },
+
+        sauvegardeAt: Date.now()
+    };
+
+    minijeuxBridge.setRebusSession(snapshot);
+    minijeuxBridge.demanderSauvegarde();
 }
 
 // Alias pour compatibilité
@@ -583,8 +617,10 @@ async function handleMotusMessage(message, response, client, helpers) {
         }
     }
 
-    // Vérification salon Motus (officiel ou salon dédié aux mini-jeux)
-    const estSalonMotus = message.channel.id === MOTUS_CHANNEL_ID || message.channel.id === '1556089022718152764';
+    // Les propositions Motus sont réservées au salon Motus.
+    // Le salon Rébus possède son propre traitement des réponses.
+    const estSalonMotus = message.channel.id === MOTUS_CHANNEL_ID;
+
     if (estSalonMotus && !message.content.startsWith('!')) {
         const now = Date.now();
         
@@ -638,22 +674,43 @@ async function handleMotusMessage(message, response, client, helpers) {
                     .setStyle(ButtonStyle.Secondary)
             );
 
-            const toutesLettresTentees = new Set(userTries.flatMap(t => t.split('')));
+            // Regroupe les lettres tentées par TOUS les joueurs de la manche.
+            // Les essais restent individuels, mais les indices sont collectifs.
+            const toutesLettresTentees = new Set(
+                Object.values(motusData.tentatives)
+                    .flatMap(tentativesJoueur =>
+                        tentativesJoueur.flatMap(mot => mot.split(''))
+                    )
+            );
+
             const lettresAbsentes = [...toutesLettresTentees]
                 .filter(l => !motDuJour.includes(l))
                 .sort()
                 .join(' ');
+
             const lettresRetenues = [...toutesLettresTentees]
                 .filter(l => motDuJour.includes(l))
                 .sort()
                 .join(' ');
 
-            const ligneAbsentes = lettresAbsentes.length > 0 
-                ? `\n> ❌ **Lettres absentes :** \`${lettresAbsentes}\`` 
+            // Clavier collectif : toutes les lettres qui n'ont encore
+            // été proposées par aucun joueur pendant cette manche.
+            const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+            const lettresRestantes = [...alphabet]
+                .filter(lettre => !toutesLettresTentees.has(lettre))
+                .join(' ');
+
+            const ligneAbsentes = lettresAbsentes.length > 0
+                ? `\n> ❌ **Lettres absentes :** \`${lettresAbsentes}\``
                 : '';
+
             const ligneRetenues = lettresRetenues.length > 0
                 ? `\n> ✅ **Lettres retenues :** \`${lettresRetenues}\``
                 : '';
+
+            const ligneRestantes =
+                `\n-# *Lettres restantes : ${lettresRestantes || 'Aucune'}*`;
 
             const { MessageFlags } = require('discord.js');
             if (rawGuess === motDuJour) {
@@ -681,7 +738,12 @@ async function handleMotusMessage(message, response, client, helpers) {
                     motusData.termine = true;
                     minijeuxBridge.demanderSauvegarde();
 
-                    const tcgRewardM1 = await minijeuxBridge.grantTcgPoints?.([message.author.id], 2) || [];
+                    const rewardKeyM1 = `motus:${motusData.dateKey}:${motusData.heureSession}:${mancheActuelle}`;
+                    const tcgRewardM1 = await minijeuxBridge.grantTcgPoints?.(
+                        [message.author.id],
+                        2,
+                        rewardKeyM1
+                    ) || [];
                     const soldeTcgM1 = tcgRewardM1.balances?.[message.author.id];
 
                     const ligneTcgM1 = tcgRewardM1.includes(message.author.id)
@@ -704,26 +766,66 @@ async function handleMotusMessage(message, response, client, helpers) {
 
                     await message.channel.send({ embeds: [embedManche1], components: [rowStats] });
 
+                    const sessionMotusEnAttente = motusData;
+                    const dateSessionMotus = motusData.dateKey;
+                    const heureSessionMotus = motusData.heureSession;
+
                     setTimeout(async () => {
-                        const dateKey = getMotusDateKey();
-                        const longueurM2 = motusData.heureSession === 19 ? 7 : 6;
-                        const nouveauMot = getMotDuJour(dateKey + 5555, longueurM2);
+                        try {
+                            const sessionActuelle = minijeuxBridge.getMotusData();
 
-                        motusData.mot = nouveauMot;
-                        motusData.longueur = longueurM2;
-                        motusData.manche = 2;
-                        motusData.termine = false;
-                        motusData.tentatives = {};
-                        motusData.expireAt = Date.now() + 60 * 60 * 1000;
+                            // Une autre session a remplacé celle qui attendait.
+                            if (
+                                sessionActuelle !== sessionMotusEnAttente ||
+                                !sessionActuelle.termine ||
+                                sessionActuelle.manche !== mancheActuelle ||
+                                sessionActuelle.dateKey !== dateSessionMotus ||
+                                sessionActuelle.heureSession !== heureSessionMotus
+                            ) {
+                                return;
+                            }
 
-                        const embedM2 = buildMotusEmbed(nouveauMot, dateKey, longueurM2, 2, 2);
-                        const sentM2 = await message.channel.send({
-                            content: `📢 **C'EST PARTI POUR LA MANCHE 2/2 !** Nouveau mot en jeu :`,
-                            embeds: [embedM2],
-                            components: [buildMotusActionRow()]
-                        });
-                        motusData.messageId = sentM2.id;
-                        minijeuxBridge.demanderSauvegarde();
+                            const longueurM2 = heureSessionMotus === 19 ? 7 : 6;
+                            const nouveauMot = getMotDuJour(
+                                dateSessionMotus + 5555,
+                                longueurM2
+                            );
+
+                            const embedM2 = buildMotusEmbed(
+                                nouveauMot,
+                                dateSessionMotus,
+                                longueurM2,
+                                2,
+                                2
+                            );
+
+                            const sentM2 = await message.channel.send({
+                                content: '📢 **C\'EST PARTI POUR LA MANCHE 2/2 !** Nouveau mot en jeu :',
+                                embeds: [embedM2],
+                                components: [buildMotusActionRow()]
+                            });
+
+                            // La session peut aussi avoir changé pendant l'envoi Discord.
+                            if (minijeuxBridge.getMotusData() !== sessionMotusEnAttente) {
+                                await sentM2.delete().catch(() => {});
+                                return;
+                            }
+
+                            sessionActuelle.mot = nouveauMot;
+                            sessionActuelle.longueur = longueurM2;
+                            sessionActuelle.manche = 2;
+                            sessionActuelle.termine = false;
+                            sessionActuelle.tentatives = {};
+                            sessionActuelle.expireAt = Date.now() + 60 * 60 * 1000;
+                            sessionActuelle.messageId = sentM2.id;
+
+                            minijeuxBridge.demanderSauvegarde();
+                        } catch (error) {
+                            console.error(
+                                '[MOTUS] Impossible de lancer la manche 2 :',
+                                error
+                            );
+                        }
                     }, 30000);
                     return true;
                 }
@@ -733,7 +835,12 @@ async function handleMotusMessage(message, response, client, helpers) {
                 motusData.vainqueurId = message.author.id;
                 minijeuxBridge.demanderSauvegarde();
 
-                const tcgRewardM2 = await minijeuxBridge.grantTcgPoints?.([message.author.id], 2) || [];
+                const rewardKeyM2 = `motus:${motusData.dateKey}:${motusData.heureSession}:${motusData.manche || 1}`;
+                const tcgRewardM2 = await minijeuxBridge.grantTcgPoints?.(
+                    [message.author.id],
+                    2,
+                    rewardKeyM2
+                ) || [];
                 const soldeTcgM2 = tcgRewardM2.balances?.[message.author.id];
 
                 const ligneTcgM2 = tcgRewardM2.includes(message.author.id)
@@ -767,7 +874,7 @@ async function handleMotusMessage(message, response, client, helpers) {
                     : `\n-# *Il te reste ${3 - essaiNum} essai${(3 - essaiNum) > 1 ? 's' : ''} !*`;
 
                 await message.reply({
-                    content: `**${lettresEspacées}**\n${grille} *(Essai ${essaiNum}/3)*${ligneAbsentes}${ligneRetenues}${infoReste}`,
+                    content: `**${lettresEspacées}**\n${grille} *(Essai ${essaiNum}/3)*${ligneAbsentes}${ligneRetenues}${ligneRestantes}${infoReste}`,
                     components: [rowOriginal],
                     flags: [MessageFlags.SuppressNotifications],
                     allowedMentions: { repliedUser: false }
@@ -1409,11 +1516,40 @@ function buildRebusEmbed(manche, item, expireAt) {
         .setFooter({ text: `Manche ${manche}/5 • Le/la premier.e qui trouve marque 1 point` });
 }
 
-async function lancerSessionRebus(guild) {
+let lancementRebusEnCours = false;
+
+async function lancerSessionRebus(guild, force = false) {
     const channel = guild.channels.cache.get(REBUS_CHANNEL_ID);
-    if (!channel) return;
+    if (!channel) return false;
+
+    if (lancementRebusEnCours) {
+        console.log('[RÉBUS] Lancement déjà en cours.');
+        return false;
+    }
 
     const dateKey = getMotusDateKey();
+
+    if (
+        !force &&
+        rebusSession.active &&
+        rebusSession.dateKey === dateKey
+    ) {
+        console.log(
+            `[RÉBUS] Session ${dateKey} déjà active : lancement ignoré.`
+        );
+        return false;
+    }
+
+    lancementRebusEnCours = true;
+
+    try {
+        return await executerLancementRebus(guild, channel, dateKey);
+    } finally {
+        lancementRebusEnCours = false;
+    }
+}
+
+async function executerLancementRebus(guild, channel, dateKey) {
     const theme = getRebusThemeDuJour(dateKey);
 
     const shuffled = [...theme.pool].sort(() => 0.5 - Math.random());
@@ -1438,6 +1574,7 @@ async function lancerSessionRebus(guild) {
     if (msAvant16h <= 0) msAvant16h = 60 * 60 * 1000;
 
     rebusSession = {
+        dateKey,
         active: true,
         enPause: false,
         aEuActiviteManche: false,
@@ -1451,8 +1588,14 @@ async function lancerSessionRebus(guild) {
         limite16hTimestamp: Date.now() + msAvant16h,
         limite16hTimer: setTimeout(() => verifierFin16hRebus(guild), msAvant16h),
         scores: {},
-        compteurMessages: 0
+        compteurMessages: 0,
+        transition: 'lancement_en_attente',
+        prochaineTransitionAt: Date.now() + 4000
     };
+
+    // Enregistrer les cinq énigmes et l'heure exacte
+    // du lancement de la première manche.
+    sauvegarderEtatRebus();
 
     const embedAnnonceRebus = new EmbedBuilder()
         .setColor(theme.couleur || 0xf39c12)
@@ -1471,13 +1614,32 @@ async function lancerSessionRebus(guild) {
         embeds: [embedAnnonceRebus]
     });
 
-    setTimeout(() => passerMancheSuivanteRebus(guild), 4000);
+    const sessionLancee = rebusSession;
+
+    setTimeout(() => {
+        if (
+            rebusSession === sessionLancee &&
+            rebusSession.active &&
+            rebusSession.manche === 0
+        ) {
+            passerMancheSuivanteRebus(guild).catch(console.error);
+        }
+    }, 4000);
+
+    return true;
 }
 
 function mettreEnPauseSessionRebus(channel, guild, mancheTerminee) {
     if (!rebusSession.active) return;
     rebusSession.enPause = true;
     rebusSession.currentItem = null;
+    rebusSession.expireAt = 0;
+    rebusSession.transition = 'pause';
+    rebusSession.prochaineTransitionAt = 0;
+
+    // Conserver explicitement la pause et supprimer
+    // les anciennes échéances de manche.
+    sauvegarderEtatRebus();
 
     const rowPause = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
@@ -1508,15 +1670,24 @@ function verifierFin16hRebus(guild) {
     if (rebusSession.timer) clearTimeout(rebusSession.timer);
     if (rebusSession.limite16hTimer) clearTimeout(rebusSession.limite16hTimer);
 
+    if (rebusSession.clotureEnCours) return;
+
     const scoresList = Object.entries(rebusSession.scores);
     if (scoresList.length > 0) {
-        channel.send("⏰ **Il est 16h00 !** Clôture officielle de la session du Rébus Regaïen :").catch(() => {});
-        terminerSessionRebus(channel);
+        channel.send(
+            "⏰ **Il est 16h00 !** Clôture officielle de la session du Rébus Regaïen :"
+        ).catch(console.error);
+
+        terminerSessionRebus(channel).catch(console.error);
     } else {
         rebusSession.active = false;
         rebusSession.enPause = false;
         rebusSession.currentItem = null;
-        minijeuxBridge.demanderSauvegarde();
+        rebusSession.expireAt = 0;
+        rebusSession.transition = 'annulee';
+        rebusSession.prochaineTransitionAt = 0;
+
+        sauvegarderEtatRebus();
 
         const embedAnnulation = new EmbedBuilder()
             .setColor(0xe74c3c)
@@ -1552,48 +1723,126 @@ async function passerMancheSuivanteRebus(guild) {
     rebusSession.aEuActiviteManche = false;
     rebusSession.indiceAffiche = false;
     rebusSession.enPause = false;
+    rebusSession.transition = 'manche_active';
+    rebusSession.prochaineTransitionAt = 0;
+
+    // Conserver la manche, son énigme et son échéance,
+    // sans garder une ancienne transition en attente.
+    sauvegarderEtatRebus();
 
     const { MessageFlags } = require('discord.js');
     const embed = buildRebusEmbed(rebusSession.manche, item, rebusSession.expireAt);
     await channel.send({ embeds: [embed], flags: [MessageFlags.SuppressNotifications] });
 
-    // Indice automatique à 2 min 30 (mi-temps), sans bouton d'indice manuel
+    // Indice automatique à 2 min 30 (mi-temps).
+    // Un indice ne doit jamais être envoyé pour une manche
+    // qui a été résolue, remplacée ou mise en pause.
     const mancheEnCours = rebusSession.manche;
+    const expireAtManche = rebusSession.expireAt;
+
     setTimeout(async () => {
-        if (!rebusSession.active || !rebusSession.currentItem || rebusSession.manche !== mancheEnCours || rebusSession.indiceAffiche) return;
-        rebusSession.indiceAffiche = true;
-        const indice = genererIndiceRebus(item);
-        await channel.send(indice);
-    }, 150 * 1000);
-
-    rebusSession.timer = setTimeout(async () => {
-        if (!rebusSession.active || !rebusSession.currentItem) return;
-
-        const titreReponse = item[1].charAt(0).toUpperCase() + item[1].slice(1);
-        rebusSession.currentItem = null;
-
-        await channel.send({
-            content: `⏰ **Temps écoulé !** Personne n'a trouvé la manche ${mancheEnCours}/5, c'était **${titreReponse}** !`
-        });
-
-        // Dernière manche atteinte : fin normale de la session
-        if (mancheEnCours >= 5) {
-            setTimeout(() => terminerSessionRebus(channel), 4000);
+        if (
+            !rebusSession.active ||
+            rebusSession.enPause ||
+            !rebusSession.currentItem ||
+            rebusSession.manche !== mancheEnCours ||
+            rebusSession.expireAt !== expireAtManche ||
+            rebusSession.indiceAffiche ||
+            Date.now() >= expireAtManche
+        ) {
             return;
         }
 
-        // Activité détectée pendant la manche : on enchaîne normalement
+        rebusSession.indiceAffiche = true;
+
+        // Conserver l'information pour qu'un redémarrage
+        // ne provoque pas l'envoi d'un second indice.
+        sauvegarderEtatRebus();
+
+        const indice = genererIndiceRebus(item);
+
+        await channel.send(indice).catch(error => {
+            console.error(
+                `[RÉBUS] Impossible d'envoyer l'indice de la manche ${mancheEnCours} :`,
+                error
+            );
+        });
+    }, 150 * 1000);
+
+    const sessionMinuterie = rebusSession;
+
+    rebusSession.timer = setTimeout(async () => {
+        if (
+            rebusSession !== sessionMinuterie ||
+            !rebusSession.active ||
+            rebusSession.enPause ||
+            !rebusSession.currentItem ||
+            rebusSession.manche !== mancheEnCours ||
+            rebusSession.expireAt !== expireAtManche
+        ) {
+            return;
+        }
+
+        const titreReponse =
+            item[1].charAt(0).toUpperCase() + item[1].slice(1);
+
+        rebusSession.timer = null;
+        rebusSession.currentItem = null;
+        rebusSession.expireAt = 0;
+
+        const transitionAt = Date.now() + 4000;
+
+        rebusSession.transition = 'manche_expiree';
+        rebusSession.prochaineTransitionAt = transitionAt;
+
+        sauvegarderEtatRebus();
+
+        await channel.send({
+            content: `⏰ **Temps écoulé !** Personne n'a trouvé la manche ${mancheEnCours}/5, c'était **${titreReponse}** !`
+        }).catch(console.error);
+
+        if (mancheEnCours >= 5) {
+            setTimeout(() => {
+                if (
+                    rebusSession === sessionMinuterie &&
+                    rebusSession.active &&
+                    rebusSession.manche === mancheEnCours &&
+                    rebusSession.transition === 'manche_expiree'
+                ) {
+                    terminerSessionRebus(channel).catch(console.error);
+                }
+            }, Math.max(0, transitionAt - Date.now()));
+            return;
+        }
+
         if (rebusSession.aEuActiviteManche) {
-            setTimeout(() => passerMancheSuivanteRebus(guild), 4000);
+            setTimeout(() => {
+                if (
+                    rebusSession === sessionMinuterie &&
+                    rebusSession.active &&
+                    rebusSession.manche === mancheEnCours &&
+                    rebusSession.transition === 'manche_expiree'
+                ) {
+                    passerMancheSuivanteRebus(guild).catch(console.error);
+                }
+            }, Math.max(0, transitionAt - Date.now()));
         } else {
-            // Inactivité totale : mise en PAUSE pour éviter de dérouler dans le vide
             mettreEnPauseSessionRebus(channel, guild, mancheEnCours);
         }
-    }, 5 * 60 * 1000);
+    }, Math.max(0, expireAtManche - Date.now()));
 }
 
 async function verifierReponseRebus(message) {
-    if (!rebusSession.active || !rebusSession.currentItem) return false;
+    if (
+        !rebusSession.active ||
+        rebusSession.enPause ||
+        !rebusSession.currentItem ||
+        !Number.isFinite(rebusSession.expireAt) ||
+        Date.now() >= rebusSession.expireAt ||
+        Date.now() >= rebusSession.limite16hTimestamp
+    ) {
+        return false;
+    }
 
     const raw = message.content.trim().toLowerCase();
     const guessNorm = normaliserRebus(raw);
@@ -1623,10 +1872,22 @@ async function verifierReponseRebus(message) {
 
     if (reponsesValides.includes(guessNorm) || isHSpecial) {
         clearTimeout(rebusSession.timer);
+        rebusSession.timer = null;
         rebusSession.currentItem = null;
+        rebusSession.expireAt = 0;
 
         const uid = message.author.id;
-        rebusSession.scores[uid] = (rebusSession.scores[uid] || 0) + 1;
+
+        rebusSession.scores[uid] =
+            (rebusSession.scores[uid] || 0) + 1;
+
+        // La manche n'est plus jouable.
+        // La prochaine manche sera lancée après le délai prévu.
+        rebusSession.transition = 'manche_resolue';
+        rebusSession.prochaineTransitionAt = Date.now() + 4000;
+
+        sauvegarderEtatRebus();
+
         minijeuxBridge.trackBattlePassProgress?.(uid, 'rebus_win', 1);
         minijeuxBridge.trackBattlePassProgress?.(uid, 'minijeu_win', 1);
 
@@ -1638,18 +1899,62 @@ async function verifierReponseRebus(message) {
             allowedMentions: { repliedUser: false }
         });
 
-        setTimeout(() => passerMancheSuivanteRebus(message.guild), 4000);
+        const sessionResolue = rebusSession;
+        const mancheResolue = rebusSession.manche;
+        const transitionAt = rebusSession.prochaineTransitionAt;
+
+        setTimeout(() => {
+            if (
+                rebusSession !== sessionResolue ||
+                !rebusSession.active ||
+                rebusSession.manche !== mancheResolue ||
+                rebusSession.transition !== 'manche_resolue'
+            ) {
+                return;
+            }
+
+            passerMancheSuivanteRebus(message.guild).catch(console.error);
+        }, Math.max(0, transitionAt - Date.now()));
+
         return true;
     }
     return false;
 }
 
 async function terminerSessionRebus(channel) {
-    clearTimeout(rebusSession.timer);
-    rebusSession.active = false;
-    rebusSession.currentItem = null;
+    // Empêcher deux clôtures simultanées dans le même processus.
+    if (rebusSession.clotureEnCours) return;
 
-    const scoresList = Object.entries(rebusSession.scores).sort((a, b) => b[1] - a[1]);
+    if (
+        !rebusSession.active &&
+        rebusSession.transition === 'terminee'
+    ) {
+        return;
+    }
+
+    rebusSession.clotureEnCours = true;
+
+    clearTimeout(rebusSession.timer);
+    clearTimeout(rebusSession.limite16hTimer);
+
+    rebusSession.timer = null;
+    rebusSession.limite16hTimer = null;
+
+    rebusSession.active = false;
+    rebusSession.enPause = false;
+    rebusSession.currentItem = null;
+    rebusSession.expireAt = 0;
+    rebusSession.prochaineTransitionAt = 0;
+
+    // Les récompenses ne sont pas encore attribuées.
+    // Cet état devra être traité par la restauration.
+    rebusSession.transition = 'cloture_en_cours';
+
+    sauvegarderEtatRebus();
+
+    const scoresList = Object.entries(rebusSession.scores)
+        .sort((a, b) => b[1] - a[1]);
+
     const rebusStats = minijeuxBridge.getRebusStats();
 
     if (scoresList.length === 0) {
@@ -1657,21 +1962,53 @@ async function terminerSessionRebus(channel) {
             .setColor(0xe74c3c)
             .setTitle('🏁 Fin du Rébus Regaïen')
             .setDescription(`Aucun point n'a été marqué aujourd'hui !\nRendez-vous demain à **15h00** pour une nouvelle session !`);
-        await channel.send({ embeds: [embedNul] });
-        minijeuxBridge.demanderSauvegarde();
+        rebusSession.transition = 'terminee';
+        rebusSession.clotureEnCours = false;
+        sauvegarderEtatRebus();
+
+        await channel.send({ embeds: [embedNul] }).catch(console.error);
         return;
     }
 
     const maxScore = scoresList[0][1];
     const weekKey = getMinijeuxWeekKey();
+    const sessionKey = String(rebusSession.dateKey);
+
     for (const [uid, pts] of scoresList) {
-        if (!rebusStats[uid]) rebusStats[uid] = { victoires: 0, points: 0, parties: 0, hebdo: {} };
-        rebusStats[uid].points += pts;
-        rebusStats[uid].parties++;
-        if (!rebusStats[uid].hebdo) rebusStats[uid].hebdo = {};
-        rebusStats[uid].hebdo[weekKey] = (rebusStats[uid].hebdo[weekKey] || 0) + pts;
-        if (pts === maxScore) rebusStats[uid].victoires++;
+        if (!rebusStats[uid]) {
+            rebusStats[uid] = {
+                victoires: 0,
+                points: 0,
+                parties: 0,
+                hebdo: {}
+            };
+        }
+
+        const stats = rebusStats[uid];
+
+        if (!stats.sessionsComptabilisees) {
+            stats.sessionsComptabilisees = {};
+        }
+
+        if (stats.sessionsComptabilisees[sessionKey]) {
+            continue;
+        }
+
+        stats.points += pts;
+        stats.parties++;
+
+        if (!stats.hebdo) stats.hebdo = {};
+
+        stats.hebdo[weekKey] =
+            (stats.hebdo[weekKey] || 0) + pts;
+
+        if (pts === maxScore) {
+            stats.victoires++;
+        }
+
+        stats.sessionsComptabilisees[sessionKey] = true;
     }
+
     minijeuxBridge.demanderSauvegarde();
 
     // Gestion propre des médailles avec ex-æquo (tous les premiers ont 🥇)
@@ -1683,7 +2020,19 @@ async function terminerSessionRebus(channel) {
     }).join('\n');
 
     const vainqueursIds = scoresList.filter(s => s[1] === maxScore).map(s => s[0]);
-    const tcgRewardRebus = await minijeuxBridge.grantTcgPoints?.(vainqueursIds, 2) || [];
+
+    const rewardKey = `rebus:${rebusSession.dateKey}`;
+
+    const tcgRewardRebus = await minijeuxBridge.grantTcgPoints?.(
+        vainqueursIds,
+        2,
+        rewardKey
+    ) || [];
+
+    // Enregistrer ensemble les statistiques et les crédits RegaDex
+    // avant de publier le podium.
+    await minijeuxBridge.saveNow();
+
     const vainqueurs = vainqueursIds.map(id => `<@${id}>`);
     let texteVictoire = vainqueurs.length > 1
         ? `🤝 **ÉGALITÉ AU SOMMET !** Victoire partagée entre ${vainqueurs.join(' et ')} (**${maxScore} pts**) !`
@@ -1712,11 +2061,16 @@ async function terminerSessionRebus(channel) {
     const rowStats = buildRebusActionRow();
 
     const { MessageFlags } = require('discord.js');
-    await channel.send({ 
-        embeds: [embedVictoire], 
+    await channel.send({
+        embeds: [embedVictoire],
         components: [rowStats],
         flags: [MessageFlags.SuppressNotifications]
     });
+
+    rebusSession.transition = 'terminee';
+    rebusSession.clotureEnCours = false;
+
+    sauvegarderEtatRebus();
 }
 
 async function handleRebusMessage(message, response, client, helpers) {
@@ -1850,22 +2204,98 @@ async function handleRebusMessage(message, response, client, helpers) {
         }
 
         rebusSession.enPause = false;
-        await message.channel.send(`▶️ Un membre est présent ! <@${message.author.id}> relance la partie. La manche **${rebusSession.manche + 1}/5** commence dans 4 secondes...`);
-        setTimeout(() => passerMancheSuivanteRebus(message.guild), 4000);
+        rebusSession.transition = 'reprise_en_attente';
+        rebusSession.prochaineTransitionAt = Date.now() + 4000;
+
+        sauvegarderEtatRebus();
+
+        const sessionReprise = rebusSession;
+        const manchePrecedente = rebusSession.manche;
+        const transitionAt = rebusSession.prochaineTransitionAt;
+
+        await message.channel.send(
+            `▶️ Un membre est présent ! <@${message.author.id}> relance la partie. La manche **${manchePrecedente + 1}/5** commence dans 4 secondes...`
+        ).catch(console.error);
+
+        setTimeout(() => {
+            if (
+                rebusSession !== sessionReprise ||
+                !rebusSession.active ||
+                rebusSession.enPause ||
+                rebusSession.manche !== manchePrecedente ||
+                rebusSession.transition !== 'reprise_en_attente'
+            ) {
+                return;
+            }
+
+            rebusSession.transition = 'transition_en_cours';
+            rebusSession.prochaineTransitionAt = 0;
+            sauvegarderEtatRebus();
+
+            passerMancheSuivanteRebus(message.guild).catch(console.error);
+        }, Math.max(0, transitionAt - Date.now()));
+
         return false;
     }
 
     // 2. Détection des réponses en cours dans le salon Rébus
-    if (message.channel.id === REBUS_CHANNEL_ID && rebusSession.active && rebusSession.currentItem && !message.content.startsWith('!')) {
-        rebusSession.aEuActiviteManche = true;
+    if (
+        message.channel.id === REBUS_CHANNEL_ID &&
+        rebusSession.active &&
+        !rebusSession.enPause &&
+        rebusSession.currentItem &&
+        !message.content.startsWith('!')
+    ) {
+        const sessionCourante = rebusSession;
+        const mancheCourante = rebusSession.manche;
+        const expireAt = rebusSession.expireAt;
+
+        if (
+            Date.now() >= expireAt ||
+            Date.now() >= rebusSession.limite16hTimestamp
+        ) {
+            return false;
+        }
+
+        if (!rebusSession.aEuActiviteManche) {
+            rebusSession.aEuActiviteManche = true;
+            sauvegarderEtatRebus();
+        }
+
         if (await verifierReponseRebus(message)) return true;
 
-        rebusSession.compteurMessages = (rebusSession.compteurMessages || 0) + 1;
+        // La réponse peut avoir été résolue ou la manche terminée
+        // pendant une opération Discord asynchrone.
+        if (
+            rebusSession !== sessionCourante ||
+            !rebusSession.active ||
+            rebusSession.enPause ||
+            !rebusSession.currentItem ||
+            rebusSession.manche !== mancheCourante ||
+            rebusSession.expireAt !== expireAt ||
+            Date.now() >= expireAt
+        ) {
+            return false;
+        }
+
+        rebusSession.compteurMessages =
+            (rebusSession.compteurMessages || 0) + 1;
+
         if (rebusSession.compteurMessages >= 15) {
             rebusSession.compteurMessages = 0;
-            const embedRappel = buildRebusEmbed(rebusSession.manche, rebusSession.currentItem, rebusSession.expireAt);
-            await message.channel.send({ content: '🔔 **Rappel du rébus à deviner :**', embeds: [embedRappel] });
+
+            const embedRappel = buildRebusEmbed(
+                rebusSession.manche,
+                rebusSession.currentItem,
+                rebusSession.expireAt
+            );
+
+            await message.channel.send({
+                content: '🔔 **Rappel du rébus à deviner :**',
+                embeds: [embedRappel]
+            }).catch(console.error);
         }
+
         return false;
     }
 
@@ -1885,7 +2315,7 @@ async function handleRebusMessage(message, response, client, helpers) {
 
         await message.reply("♻️ **Session Rébus précédente fermée !** Lancement immédiat d'une toute nouvelle session (5 manches de 5 min)...");
         if (message.guild) {
-            await lancerSessionRebus(message.guild);
+            await lancerSessionRebus(message.guild, true);
         }
         return true;
     }
@@ -1983,8 +2413,33 @@ async function handleRebusButton(interaction) {
         }
 
         rebusSession.enPause = false;
-        await interaction.reply({ content: `▶️ <@${interaction.user.id}> relance le Rébus ! La manche **${rebusSession.manche + 1}/5** commence dans 4 secondes...` });
-        setTimeout(() => passerMancheSuivanteRebus(interaction.guild), 4000);
+        rebusSession.transition = 'reprise_en_attente';
+        rebusSession.prochaineTransitionAt = Date.now() + 4000;
+
+        sauvegarderEtatRebus();
+
+        const sessionReprise = rebusSession;
+        const manchePrecedente = rebusSession.manche;
+        const transitionAt = rebusSession.prochaineTransitionAt;
+
+        await interaction.reply({
+            content: `▶️ <@${interaction.user.id}> relance le Rébus ! La manche **${manchePrecedente + 1}/5** commence dans 4 secondes...`
+        });
+
+        setTimeout(() => {
+            if (
+                rebusSession !== sessionReprise ||
+                !rebusSession.active ||
+                rebusSession.enPause ||
+                rebusSession.manche !== manchePrecedente ||
+                rebusSession.transition !== 'reprise_en_attente'
+            ) {
+                return;
+            }
+
+            passerMancheSuivanteRebus(interaction.guild).catch(console.error);
+        }, Math.max(0, transitionAt - Date.now()));
+
         return true;
     }
 
@@ -2268,6 +2723,209 @@ async function handleJeuPtsInteraction(interaction) {
     return false;
 }
 
+async function restaurerSessionRebus(guild) {
+    const etat = minijeuxBridge.getRebusSession?.();
+
+    if (!etat || typeof etat !== 'object') {
+        return false;
+    }
+
+    if (!etat.active && etat.transition !== 'cloture_en_cours') {
+        return false;
+    }
+
+    if (
+        !Array.isArray(etat.items) ||
+        etat.items.length !== 5 ||
+        !Number.isFinite(etat.limite16hTimestamp)
+    ) {
+        console.error('[RÉBUS] Sauvegarde de session invalide.');
+        return false;
+    }
+
+    const channel = guild.channels.cache.get(REBUS_CHANNEL_ID)
+        || await guild.channels.fetch(REBUS_CHANNEL_ID).catch(() => null);
+
+    if (!channel) return false;
+
+    if (rebusSession.timer) clearTimeout(rebusSession.timer);
+    if (rebusSession.limite16hTimer) clearTimeout(rebusSession.limite16hTimer);
+
+    rebusSession = {
+        ...etat,
+        items: etat.items.map(item => [...item]),
+        currentItem: Array.isArray(etat.currentItem)
+            ? [...etat.currentItem]
+            : null,
+        scores: { ...(etat.scores || {}) },
+        timer: null,
+        limite16hTimer: null,
+        clotureEnCours: false
+    };
+
+    const sessionRestauree = rebusSession;
+
+    if (rebusSession.transition === 'cloture_en_cours') {
+        console.log('[RÉBUS] Reprise d’une clôture interrompue.');
+
+        await terminerSessionRebus(channel);
+        return true;
+    }
+
+    const executerTransition = async () => {
+        const transitionsAutorisees = new Set([
+            'lancement_en_attente',
+            'manche_resolue',
+            'manche_expiree',
+            'reprise_en_attente'
+        ]);
+
+        if (
+            rebusSession !== sessionRestauree ||
+            !rebusSession.active ||
+            rebusSession.enPause ||
+            !transitionsAutorisees.has(rebusSession.transition) ||
+            (
+                Number(rebusSession.prochaineTransitionAt) > 0 &&
+                Date.now() < rebusSession.prochaineTransitionAt
+            )
+        ) {
+            return;
+        }
+
+        if (Date.now() >= rebusSession.limite16hTimestamp) {
+            return verifierFin16hRebus(guild);
+        }
+
+        rebusSession.transition = 'transition_en_cours';
+        rebusSession.prochaineTransitionAt = 0;
+        sauvegarderEtatRebus();
+
+        if (rebusSession.manche >= 5) {
+            return terminerSessionRebus(channel);
+        }
+
+        return passerMancheSuivanteRebus(guild);
+    };
+
+    const programmerTransition = () => {
+        const attente = Math.max(
+            0,
+            (Number(rebusSession.prochaineTransitionAt) || Date.now()) - Date.now()
+        );
+
+        setTimeout(() => {
+            executerTransition().catch(console.error);
+        }, attente);
+    };
+
+    const tempsRestant16h = rebusSession.limite16hTimestamp - Date.now();
+
+    if (tempsRestant16h <= 0) {
+        verifierFin16hRebus(guild);
+        return true;
+    }
+
+    rebusSession.limite16hTimer = setTimeout(
+        () => verifierFin16hRebus(guild),
+        tempsRestant16h
+    );
+
+    if (rebusSession.enPause) {
+        console.log('[RÉBUS] Session restaurée en pause.');
+        return true;
+    }
+
+    if (rebusSession.currentItem && rebusSession.expireAt > 0) {
+        const manche = rebusSession.manche;
+        const expireAt = rebusSession.expireAt;
+        const item = rebusSession.currentItem;
+
+        if (!rebusSession.indiceAffiche) {
+            const debutManche = expireAt - 5 * 60 * 1000;
+            const indiceAt = debutManche + 150 * 1000;
+
+            setTimeout(async () => {
+                if (
+                    rebusSession !== sessionRestauree ||
+                    !rebusSession.active ||
+                    rebusSession.enPause ||
+                    !rebusSession.currentItem ||
+                    rebusSession.manche !== manche ||
+                    rebusSession.expireAt !== expireAt ||
+                    rebusSession.indiceAffiche ||
+                    Date.now() >= expireAt
+                ) {
+                    return;
+                }
+
+                rebusSession.indiceAffiche = true;
+                sauvegarderEtatRebus();
+
+                await channel.send(genererIndiceRebus(item)).catch(console.error);
+            }, Math.max(0, indiceAt - Date.now()));
+        }
+
+        rebusSession.timer = setTimeout(async () => {
+            if (
+                rebusSession !== sessionRestauree ||
+                !rebusSession.active ||
+                rebusSession.enPause ||
+                !rebusSession.currentItem ||
+                rebusSession.manche !== manche ||
+                rebusSession.expireAt !== expireAt
+            ) {
+                return;
+            }
+
+            rebusSession.timer = null;
+            rebusSession.currentItem = null;
+            rebusSession.expireAt = 0;
+            rebusSession.transition = 'manche_expiree';
+            rebusSession.prochaineTransitionAt = Date.now() + 4000;
+
+            sauvegarderEtatRebus();
+
+            const titre = item[1].charAt(0).toUpperCase() + item[1].slice(1);
+
+            await channel.send(
+                `⏰ **Temps écoulé !** Personne n'a trouvé la manche ${manche}/5, c'était **${titre}** !`
+            ).catch(console.error);
+
+            if (manche >= 5 || rebusSession.aEuActiviteManche) {
+                programmerTransition();
+            } else {
+                rebusSession.prochaineTransitionAt = 0;
+                mettreEnPauseSessionRebus(channel, guild, manche);
+            }
+        }, Math.max(0, expireAt - Date.now()));
+
+        console.log(`[RÉBUS] Manche ${manche}/5 restaurée.`);
+        return true;
+    }
+
+    if (
+        rebusSession.manche === 0 ||
+        [
+            'manche_resolue',
+            'manche_expiree',
+            'reprise_en_attente',
+            'transition_en_cours'
+        ].includes(rebusSession.transition)
+    ) {
+        if (rebusSession.transition === 'transition_en_cours') {
+            rebusSession.transition = 'reprise_en_attente';
+        }
+
+        programmerTransition();
+        console.log('[RÉBUS] Transition restaurée.');
+        return true;
+    }
+
+    console.warn('[RÉBUS] État restauré sans minuterie identifiable.');
+    return true;
+}
+
 function isRebusSessionActive() {
     return Boolean(rebusSession.active);
 }
@@ -2289,6 +2947,7 @@ module.exports = {
     handleMotusButton,
     handleMotusSlash,
     lancerSessionRebus,
+    restaurerSessionRebus,
     handleRebusMessage,
     handleRebusButton,
     handleRebusSlash
