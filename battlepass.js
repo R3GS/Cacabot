@@ -1604,7 +1604,7 @@ async function handleBattlePassInteraction(interaction) {
     // 1. Soumission de la modale "Ajouter XP" par Epsys
     if (interaction.isModalSubmit() && interaction.customId.startsWith('bp_modal_addxp_')) {
         if (interaction.user.id !== bpBridge.EPSYS_ID) {
-            return interaction.reply({ content: "Action réservée à Epsys.", ephemeral: true });
+            return interaction.reply({ content: "Action réservée à Epsys.", flags: 64 });
         }
 
         const cibleId = interaction.customId.replace('bp_modal_addxp_', '');
@@ -1612,7 +1612,7 @@ async function handleBattlePassInteraction(interaction) {
         const xpAmount = parseInt(xpValeurStr, 10);
 
         if (isNaN(xpAmount) || xpAmount <= 0) {
-            return interaction.reply({ content: "❌ Montant d'XP invalide. Saisis un nombre entier positif.", ephemeral: true });
+            return interaction.reply({ content: "❌ Montant d'XP invalide. Saisis un nombre entier positif.", flags: 64 });
         }
 
         const p = getOuCreerProfilBP(cibleId);
@@ -1628,7 +1628,7 @@ async function handleBattlePassInteraction(interaction) {
 
         await interaction.reply({
             content: `⚡ **+${xpAmount} XP ajoutés avec succès à <@${cibleId}> !**\nNiveau actuel : **Niv. ${p.niveau}** (${p.xp}/${XP_PAR_NIVEAU} XP).`,
-            ephemeral: true
+            flags: 64
         });
         return true;
     }
@@ -1643,7 +1643,7 @@ async function handleBattlePassInteraction(interaction) {
         const targetId = parts[3];
 
         if (interaction.user.id !== bpBridge.EPSYS_ID) {
-            return interaction.reply({ content: "Ce bouton est réservé à Epsys.", ephemeral: true });
+            return interaction.reply({ content: "Ce bouton est réservé à Epsys.", flags: 64 });
         }
 
         const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
@@ -1670,7 +1670,7 @@ async function handleBattlePassInteraction(interaction) {
     // Action Admin Epsys : Forcer la complétion d'une quête
     if (id.startsWith('bp_questforce_select_')) {
         if (interaction.user.id !== bpBridge.EPSYS_ID) {
-            return interaction.reply({ content: "Cette action est réservée à Epsys.", ephemeral: true });
+            return interaction.reply({ content: "Cette action est réservée à Epsys.", flags: 64 });
         }
 
         const cibleId = id.replace('bp_questforce_select_', '');
@@ -1686,7 +1686,7 @@ async function handleBattlePassInteraction(interaction) {
         }
 
         if (!queteTrouvee || queteTrouvee.terminee) {
-            return interaction.reply({ content: "Cette quête a déjà été terminée ou n'existe plus.", ephemeral: true });
+            return interaction.reply({ content: "Cette quête a déjà été terminée ou n'existe plus.", flags: 64 });
         }
 
         // Complétion immédiate
@@ -1713,7 +1713,7 @@ async function handleBattlePassInteraction(interaction) {
         await interaction.update({ embeds: [embedMaj], components: [] });
         await interaction.followUp({
             content: `⚡ **Succès !** La quête **${queteTrouvee.desc}** (+${queteTrouvee.xp} XP) a été validée pour <@${cibleId}> !\nNiveau actuel : **Niv. ${p.niveau}** (${p.xp}/${XP_PAR_NIVEAU} XP).`,
-            ephemeral: true
+            flags: 64
         });
         return true;
     }
@@ -1726,7 +1726,7 @@ async function handleBattlePassInteraction(interaction) {
         bpBridge.demanderSauvegarde();
 
         if (choix === 'desactive') {
-            await interaction.reply({ content: '🔕 **Notifications MP désactivées !** Tu ne recevras plus de message privé de Cacabot.', ephemeral: true });
+            await interaction.reply({ content: '🔕 **Notifications MP désactivées !** Tu ne recevras plus de message privé de Cacabot.', flags: 64 });
             return true;
         }
 
@@ -1741,12 +1741,12 @@ async function handleBattlePassInteraction(interaction) {
         if (!testOk) {
             await interaction.reply({
                 content: `⚠️ **T'as fermé tes MP de la part des membres du serveur, je peux rien t'envoyer !**\nOuvre d'abord tes messages privés dans tes paramètres Discord si tu veux recevoir tes alertes 😉`,
-                ephemeral: true
+                flags: 64
             });
         } else {
             await interaction.reply({
                 content: `✅ **Préférences enregistrées !** Je viens de t'envoyer un message privé de test pour confirmer.`,
-                ephemeral: true
+                flags: 64
             });
         }
         return true;
@@ -1762,7 +1762,7 @@ async function handleBattlePassInteraction(interaction) {
     const targetId = isClaimAll ? authorId : (parts[3] || authorId);
 
     if (interaction.user.id !== authorId) {
-        return interaction.reply({ content: "Ce n'est pas ton menu 😌", ephemeral: true });
+        return interaction.reply({ content: "Ce n'est pas ton menu 😌", flags: 64 });
     }
 
     // Clic sur "🎁 Tout récupérer"
@@ -1785,7 +1785,7 @@ async function handleBattlePassInteraction(interaction) {
 
         const embedMaj = buildBPHomeEmbed(interaction.member);
         await interaction.update({ embeds: [embedMaj], components: buildBPButtons(authorId) });
-        await interaction.followUp({ content: descFeedback, ephemeral: true });
+        await interaction.followUp({ content: descFeedback, flags: 64 });
         return true;
     }
 
@@ -1851,7 +1851,7 @@ async function handleBattlePassInteraction(interaction) {
             .setFooter({ text: 'Sélectionne une option dans le menu ci-dessous' });
 
         const rowMenu = buildNotifSettingsRow(p.notifs);
-        await interaction.reply({ embeds: [embed], components: [rowMenu], ephemeral: true });
+        await interaction.reply({ embeds: [embed], components: [rowMenu], flags: 64 });
         return true;
     }
 
