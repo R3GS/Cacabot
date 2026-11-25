@@ -929,6 +929,29 @@ for (const p of lemonMilkPaths) {
 
 // Signaler les erreurs techniques dans le salon privé, sans spam ni mentions.
 const ERROR_REPORT_CHANNEL_ID = '1556891268498325554';
+const ERROR_REPORT_REPAIR_BUTTON_ID = 'error_report_mark_repaired';
+
+function buildErrorReportRepairRow(repaired = false) {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(ERROR_REPORT_REPAIR_BUTTON_ID)
+            .setLabel('Signalée comme réparée')
+            .setStyle(repaired ? ButtonStyle.Success : ButtonStyle.Secondary)
+            .setDisabled(repaired)
+    );
+}
+
+async function handleErrorReportRepair(interaction) {
+    if (interaction.channelId !== ERROR_REPORT_CHANNEL_ID ||
+        interaction.message.author.id !== interaction.client.user.id ||
+        interaction.user.id !== EPSYS_ID) {
+        await interaction.reply({ content: 'Action réservée à Epsys dans le salon des erreurs.', flags: MessageFlags.Ephemeral });
+        return;
+    }
+
+    await interaction.update({ components: [buildErrorReportRepairRow(true)] });
+}
+
 const originalConsoleError = console.error.bind(console);
 const errorReportQueue = [];
 const errorReportRecent = new Map();
@@ -1001,6 +1024,7 @@ async function flushDiscordErrorReports() {
                         )
                         .setTimestamp()
                 ],
+                components: [buildErrorReportRepairRow()],
                 allowedMentions: { parse: [] }
             });
             errorReportQueue.shift();
@@ -1873,6 +1897,11 @@ function construireDiagnosticSpecialise(type, ownerId) {
 
 client.on('interactionCreate', async (interaction) => {
 try {
+    if (interaction.isButton() && interaction.customId === ERROR_REPORT_REPAIR_BUTTON_ID) {
+        await handleErrorReportRepair(interaction);
+        return;
+    }
+
     if (!donneesChargees) {
         if (interaction.isRepliable()) {
             await interaction.reply({
