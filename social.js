@@ -818,7 +818,7 @@ async function handleSocialSlash(interaction) {
     }
 
     if (commandName === 'flip') {
-        if (flipEnCours) return interaction.reply({ content: "Un lancer est déjà en cours ! Attends ton tour.", ephemeral: true });
+        if (flipEnCours) return interaction.reply({ content: "Un lancer est déjà en cours ! Attends ton tour.", flags: 64 });
         flipEnCours = true;
         const aid = interaction.user.id;
         const nom = interaction.member?.displayName ?? interaction.user.username;
@@ -909,7 +909,7 @@ async function handleSocialInteraction(interaction) {
         if (id.startsWith('flip_simple_')) {
             const simpleAuthorId = id.split('_')[2];
             if (interaction.user.id !== simpleAuthorId) {
-                await interaction.reply({ content: "C'est pas à toi que je m'adresse, on jouera ensemble après son tour si tu veux.", ephemeral: true });
+                await interaction.reply({ content: "C'est pas à toi que je m'adresse, on jouera ensemble après son tour si tu veux.", flags: 64 });
                 return true;
             }
             const pileBtn = new ButtonBuilder().setCustomId(`flip_solo_pile_${simpleAuthorId}`).setLabel("Pile").setStyle(ButtonStyle.Secondary);
@@ -925,7 +925,7 @@ async function handleSocialInteraction(interaction) {
         if (id.startsWith('flip_cancel_')) {
             const cancelAuthorId = id.split('_')[2];
             if (interaction.user.id !== cancelAuthorId) {
-                await interaction.reply({ content: "Hé oh, pique pas ma pièce !", ephemeral: true });
+                await interaction.reply({ content: "Hé oh, pique pas ma pièce !", flags: 64 });
                 return true;
             }
             flipEnCours = false;
@@ -939,7 +939,7 @@ async function handleSocialInteraction(interaction) {
             const choix = parts[2];
             const soloAuthorId = parts[3];
             if (interaction.user.id !== soloAuthorId) {
-                await interaction.reply({ content: "Hé oh, pique pas ma pièce !", ephemeral: true });
+                await interaction.reply({ content: "Hé oh, pique pas ma pièce !", flags: 64 });
                 return true;
             }
             const campTexte = choix === 'pile' ? 'Pile' : 'Face';
@@ -958,7 +958,7 @@ async function handleSocialInteraction(interaction) {
         if (id.startsWith('flip_pari_')) {
             const pariAuthorId = id.split('_')[2];
             if (interaction.user.id !== pariAuthorId) {
-                await interaction.reply({ content: "C'est pas à toi que je m'adresse !", ephemeral: true });
+                await interaction.reply({ content: "C'est pas à toi que je m'adresse !", flags: 64 });
                 return true;
             }
             const pariEmbed = new EmbedBuilder()
@@ -991,10 +991,10 @@ async function handleSocialInteraction(interaction) {
             const autreChoix = choix === 'pile' ? 'face' : 'pile';
             const msgId = interaction.message.id;
             const pari = flipParis.get(msgId);
-            if (!pari) return interaction.reply({ content: "Ce pari n'existe plus !", ephemeral: true });
-            if (pari[choix]) return interaction.reply({ content: "Ce camp est déjà pris !", ephemeral: true });
+            if (!pari) return interaction.reply({ content: "Ce pari n'existe plus !", flags: 64 });
+            if (pari[choix]) return interaction.reply({ content: "Ce camp est déjà pris !", flags: 64 });
             if (pari[autreChoix] === (interaction.member?.displayName ?? interaction.user.username)) {
-                return interaction.reply({ content: "Hé oh, pique pas ma pièce !", ephemeral: true });
+                return interaction.reply({ content: "Hé oh, pique pas ma pièce !", flags: 64 });
             }
             const nom = interaction.member?.displayName ?? interaction.user.username;
             pari[choix] = nom;
@@ -1029,14 +1029,14 @@ async function handleSocialInteraction(interaction) {
             const parts = id.split('_');
             const authorId = parts[2];
             const cat = parts[3];
-            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce bouton ne t'est pas destiné !", ephemeral: true });
+            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce bouton ne t'est pas destiné !", flags: 64 });
             await sendBlague(interaction, cat, authorId);
             return true;
         }
 
         if (id.startsWith('blague_menu_back_')) {
             const authorId = id.split('_')[3];
-            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce bouton ne t'est pas destiné !", ephemeral: true });
+            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce bouton ne t'est pas destiné !", flags: 64 });
             const embed = new EmbedBuilder().setColor(0xe91e63).setTitle('🤣 Blagues').setDescription('Choisis une catégorie !');
             const menu = new StringSelectMenuBuilder().setCustomId(`blague_menu_${authorId}`).setPlaceholder('Choisis une catégorie').addOptions(
                 { label: '😊 Humour soft', value: 'soft' },
@@ -1051,7 +1051,7 @@ async function handleSocialInteraction(interaction) {
         // Bouton Question nouvelle
         if (id.startsWith('question_new_')) {
             const authorId = id.split('_')[2];
-            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce bouton ne t'est pas destiné !", ephemeral: true });
+            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce bouton ne t'est pas destiné !", flags: 64 });
             const embed = new EmbedBuilder().setColor(0x9b59b6).setTitle("❓ Question du soir").setDescription("Choisis une catégorie pour recevoir une question aléatoire !");
             await interaction.update({ embeds: [embed], components: [buildQuestionRow()] });
             return true;
@@ -1063,7 +1063,7 @@ async function handleSocialInteraction(interaction) {
 
         if (id.startsWith('blague_menu_')) {
             const authorId = id.split('_')[2];
-            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce menu ne t'est pas destiné !", ephemeral: true });
+            if (interaction.user.id !== authorId) return interaction.reply({ content: "Ce menu ne t'est pas destiné !", flags: 64 });
             await sendBlague(interaction, interaction.values[0], authorId);
             return true;
         }
