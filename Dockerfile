@@ -4,6 +4,6 @@ RUN apk add --no-cache git python3 make g++ cairo-dev pango-dev jpeg-dev giflib-
 COPY package*.json .
 RUN npm install
 COPY . .
-RUN mkdir -p /usr/share/fonts && cp *.[ot]tf /usr/share/fonts/ 2>/dev/null || true && fc-cache -fv
+RUN mkdir -p /usr/share/fonts && cp Assets/Fonts/*.[ot]tf /usr/share/fonts/ 2>/dev/null || true && fc-cache -fv
 ENV NODE_ENV=production
 CMD [ "node", "index.js" ]

@@ -909,7 +909,7 @@ initRouletteBridge({
 
 
 const lemonMilkPaths = [
-    './LEMONMILK-Bold.otf',
+    './Assets/Fonts/LEMONMILK-Bold.otf',
     './LemonMilk-Bold.otf',
     './lemonmilk-bold.otf',
     './LemonMilk.otf',
@@ -1613,8 +1613,8 @@ async function disableButtons(interaction) {
 
     // hé petit (Silencieux)
     if (response?.needsHePetit) {
-        await message.reply({ files: ['./monty.gif'], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
-        await message.channel.send({ files: ['./' + 'hé petit.mp3'], flags: [MessageFlags.SuppressNotifications] });
+        await message.reply({ files: ['./Assets/GIF/monty.gif'], flags: [MessageFlags.SuppressNotifications], allowedMentions: { repliedUser: false } });
+        await message.channel.send({ files: ['./Assets/Audio/hé petit.mp3'], flags: [MessageFlags.SuppressNotifications] });
         return;
     }
 

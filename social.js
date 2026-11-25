@@ -162,7 +162,7 @@ async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, 500, 160);
 
-    const bg = await loadImage('./lovecalcbg.png');
+    const bg = await loadImage('./Assets/Images/LoveCalc/lovecalcbg.png');
     ctx.drawImage(bg, 0, 0, 500, 160);
 
     const heartTop = 42;
@@ -178,7 +178,7 @@ async function generateLovecalcImage(avatar1Url, avatar2Url, percent) {
     ctx.drawImage(av1, 25, 25, 110, 110);
     ctx.drawImage(av2, 365, 25, 110, 110);
 
-    const cadres = await loadImage('./lovecalccadres.png');
+    const cadres = await loadImage('./Assets/Images/LoveCalc/lovecalccadres.png');
     ctx.drawImage(cadres, 0, 0, 500, 160);
 
     ctx.fillStyle = '#ffffff';
