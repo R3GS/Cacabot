@@ -327,80 +327,11 @@ function saveAll() {
         lastsaveSaveTime = new Date();
         console.log(`💾 Nouvelle sauvegarde postée dans #${channel.name}`);
 
-        // Conserver les 10 sauvegardes les plus récentes.
-        // Rechercher également les anciennes sauvegardes
-        // situées au-delà des 100 derniers messages.
-
-        const sauvegardes = [];
-        let avantMessageId = null;
-        let messagesExamines = 0;
-        let rechercheSauvegardesComplete = true;
-        const MAX_MESSAGES_NETTOYAGE = 1000;
-
-        while (messagesExamines < MAX_MESSAGES_NETTOYAGE) {
-            let messages;
-
-            try {
-                messages = await channel.messages.fetch({
-                    limit: 100,
-                    ...(avantMessageId
-                        ? { before: avantMessageId }
-                        : {})
-                });
-            } catch (err) {
-                rechercheSauvegardesComplete = false;
-                console.warn(
-                    '⚠️ Nettoyage des sauvegardes interrompu :',
-                    err
-                );
-                break;
-            }
-
-            if (!messages.size) break;
-
-            messagesExamines += messages.size;
-
-            const lot = [...messages.values()];
-
-            sauvegardes.push(
-                ...lot.filter(m =>
-                    m.author?.id === client.user?.id &&
-                    m.attachments.some(
-                        attachment =>
-                            attachment.name === 'cacabot_backup.json'
-                    )
-                )
-            );
-
-            avantMessageId = lot[lot.length - 1].id;
-
-            if (messages.size < 100) break;
-        }
-
-        // Ne jamais supprimer de sauvegardes après une recherche interrompue.
-        // Conserver les 10 sauvegardes les plus récentes parmi celles trouvées.
-        // Une limite de pagination atteinte ne prouve pas que l'historique
-        // complet a été examiné : ne supprimer aucune sauvegarde dans ce cas.
-        if (messagesExamines >= MAX_MESSAGES_NETTOYAGE) {
-            rechercheSauvegardesComplete = false;
-        }
-
-        if (rechercheSauvegardesComplete) {
-            for (const ancienneSauvegarde of sauvegardes.slice(10)) {
-                await ancienneSauvegarde.delete().catch(err => {
-                    console.warn(
-                        `⚠️ Impossible de supprimer l'ancienne sauvegarde ` +
-                        `${ancienneSauvegarde.id} :`,
-                        err
-                    );
-                });
-            }
-        } else {
-            console.warn(
-                '🛡️ Nettoyage annulé : recherche incomplète. ' +
-                'Aucune ancienne sauvegarde ne sera supprimée.'
-            );
-        }
+        // Protection des données : ne jamais supprimer automatiquement
+        // les sauvegardes historiques. Elles sont le dernier recours
+        // si la plus récente est endommagée ou incomplète.
+        // Toute politique de rétention devra être testée séparément
+        // sur une copie, avec validation d'intégrité préalable.
             } catch (err) {
                 console.error('Erreur sauvegarde Discord:', err);
                 throw err;
