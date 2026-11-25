@@ -2158,7 +2158,17 @@ client.once('ready', async () => {
 
     // Priorité absolue : charger les données persistantes
     // avant les requêtes de déploiement des commandes Discord.
-    await loadAll();
+    // Une exception dans un écouteur async "ready" ne ferme PAS
+    // automatiquement la connexion Discord. Refuser explicitement
+    // tout fonctionnement sans données validées.
+    try {
+        await loadAll();
+    } catch (error) {
+        donneesChargees = false;
+        console.error('🚨 ARRÊT DE SÉCURITÉ : restauration impossible.', error);
+        process.exit(1);
+        return;
+    }
 
     // Retrouver d'abord une éventuelle publication Discord
     // effectuée avant la dernière confirmation de sauvegarde.
