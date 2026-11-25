@@ -14689,8 +14689,11 @@ async function handleTcgInteraction(interaction) {
             trade.lockedOffers[uid] = !trade.lockedOffers[uid];
             trade.unfairConfirm = null;
             tcgBridge.demanderSauvegarde();
-            await interaction.update(buildTradeThreadPayload(trade));
+            // Acquitter le clic avant le transfert : si l'édition Discord
+            // échoue, les deux validations doivent quand même être traitées.
+            await interaction.deferUpdate();
             await executeTradeIfBothLocked(thread, trade, client);
+            await refreshTradePanel(thread, trade);
             return true;
         }
 
@@ -14716,8 +14719,15 @@ async function handleTcgInteraction(interaction) {
             trade.unfairConfirm.votes = trade.unfairConfirm.votes || {};
             trade.unfairConfirm.votes[uid] = true;
             if (trade.unfairConfirm.votes[trade.initiatorId] && trade.unfairConfirm.votes[trade.targetId]) {
-                await interaction.update({ content: "✅ **Double confirmation validée !** Exécution de l'échange...", embeds: [], components: [] });
-                await executeTradeIfBothLocked(thread, trade, client);
+                await interaction.deferUpdate();
+                const transferred = await executeTradeIfBothLocked(thread, trade, client);
+                await interaction.editReply({
+                    content: transferred
+                        ? '✅ **Double confirmation validée !** Les cartes ont été transférées.'
+                        : '⚠️ La validation n’a pas abouti. Consultez le panneau du trade dans le fil.',
+                    embeds: [],
+                    components: []
+                }).catch(() => {});
                 return true;
             }
             tcgBridge.demanderSauvegarde();
