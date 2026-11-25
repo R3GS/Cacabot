@@ -2810,20 +2810,26 @@ function estSessionMiniJeuActive(channelId) {
 const dernierAuteurParSalon = new Map();
 client.on('messageCreate', async (message) => {
     if (!donneesChargees) return;
+    try {
+        await handleRouletteCouronne(message, dernierAuteurParSalon);
 
-    await handleRouletteCouronne(message, dernierAuteurParSalon);
+        // Les malus textuels ne modifient pas les propositions
+        // pendant une session de Motus, Rébus ou Pendu.
+        if (estSessionMiniJeuActive(message.channelId)) return;
 
-    // Les malus textuels ne modifient pas les propositions
-    // pendant une session de Motus, Rébus ou Pendu.
-    if (estSessionMiniJeuActive(message.channelId)) return;
-
-    await handleRouletteTransfoMessage(message, client);
+        await handleRouletteTransfoMessage(message, client);
+    } catch (err) {
+        console.error('[INDEX] Traitement des effets roulette échoué :', err);
+    }
 });
 
 client.on('guildMemberUpdate', async (oldMember, newMember) => {
     if (!donneesChargees) return;
-
-    await handleRoulettePseudoLock(oldMember, newMember);
+    try {
+        await handleRoulettePseudoLock(oldMember, newMember);
+    } catch (err) {
+        console.error('[INDEX] Gestion du pseudo roulette échouée :', err);
+    }
 });
 
 // =========================
