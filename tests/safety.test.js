@@ -228,3 +228,30 @@ test('sauvegarde : empreinte conservee apres serialisation JSON Discord', () => 
     received.tcgData.users['42'].cards.rare++;
     assert.equal(validateBackup(received).valid, false);
 });
+
+test('redeploiement : trois boutons et retrait des anciens dans les 100 messages', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+    assert.match(source, /function construireBoutonsRedeploiement\(/);
+    assert.match(source, /\['minijeux', 'Mini-jeux', '🎮'\]/);
+    assert.match(source, /\['roulette', 'Roulette', '🎰'\]/);
+    assert.match(source, /\['tcg', 'RegaDex', '🃏'\]/);
+    assert.match(source, /salon\.messages\.fetch\(\{ limit: 100 \}\)/);
+    assert.match(source, /await msg\.edit\(\{ components: \[\] \}\)/);
+    assert.match(source, /retirerAnciensBoutonsRedeploiement\(salonNotif, msgRetour\.id\)/);
+});
+
+test('diagnostics : boutons de redeploiement prives et embeds structures', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+    assert.match(source, /interaction\.customId\.startsWith\(DIAG_REDEPLOY_PREFIX\)/);
+    assert.match(source, /interaction\.user\.id !== DIAG_OWNER_ID/);
+    assert.match(source, /flags: MessageFlags\.Ephemeral/);
+    assert.match(source, /name: '🛡️ Vérifications des modules'/);
+    assert.match(source, /name: '📊 État actuel'/);
+});
+
+test('focus : filtre strict et refus de publication hors categorie', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'tcg.js'), 'utf8');
+    assert.match(source, /const finalPool = rarityPool\.filter\(c => c\.category === focusCategory\)/);
+    assert.match(source, /\(!focusCategory \|\| c\.category === focusCategory\)/);
+    assert.match(source, /draw\.cards\.some\(c => c\.category !== focusCategory\)/);
+});
