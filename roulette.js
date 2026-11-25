@@ -2146,7 +2146,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             roulettePapayouDaily.set(member.id, rec);
             if (rec.count >= 3) deverrouillerSucces(member.id, 'fan-carlos', message.channel);
             if (!Array.isArray(message.files)) message.files = [];
-            if (!message.files.includes('./PAPAYOU.mp3')) message.files.push('./PAPAYOU.mp3');
+            if (!message.files.includes('./Assets/Audio/PAPAYOU.mp3')) message.files.push('./Assets/Audio/PAPAYOU.mp3');
             return `**${auteurNom}** a fait spawn un petit cadeau !`;
         }
         case 'bonus-anti-feur':

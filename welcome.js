@@ -24,7 +24,7 @@ const { createCanvas, loadImage, registerFont } = require('canvas');
 // ==========================================
 let lemonMilkChargee = false;
 const cheminsPossiblesPolice = [
-    './LEMONMILK-Bold.otf',
+    './Assets/Fonts/LEMONMILK-Bold.otf',
     './LemonMilk-Bold.otf',
     './lemonmilk-bold.otf',
     './LEMONMILK.otf',
@@ -53,13 +53,13 @@ if (!lemonMilkChargee) {
 }
 
 const WELCOME_BACKGROUNDS = [
-    ['./DHMISWelcome.png', './dhmiswelcome.png'],
-    ['./EndacopiaWelcome.png', './endacopiawelcome.png'],
-    ['./FNAFWelcome.png', './fnafwelcome.png'],
-    ['./KinitoPETWelcome.png', './kinitopetwelcome.png'],
-    ['./MouthwashingWelcome.png', './mouthwashingwelcome.png'],
-    ['./PoppyWelcome.png', './poppywelcome.png'],
-    ['./UndertaleWelcome.png', './undertalewelcome.png']
+    ['./Assets/Images/Welcome/DHMISWelcome.png', './Assets/Images/Welcome/dhmiswelcome.png'],
+    ['./Assets/Images/Welcome/EndacopiaWelcome.png', './Assets/Images/Welcome/endacopiawelcome.png'],
+    ['./Assets/Images/Welcome/FNAFWelcome.png', './Assets/Images/Welcome/fnafwelcome.png'],
+    ['./Assets/Images/Welcome/KinitoPETWelcome.png', './Assets/Images/Welcome/kinitopetwelcome.png'],
+    ['./Assets/Images/Welcome/MouthwashingWelcome.png', './Assets/Images/Welcome/mouthwashingwelcome.png'],
+    ['./Assets/Images/Welcome/PoppyWelcome.png', './Assets/Images/Welcome/poppywelcome.png'],
+    ['./Assets/Images/Welcome/UndertaleWelcome.png', './Assets/Images/Welcome/undertalewelcome.png']
 ];
 
 let welcomeState = {
@@ -192,8 +192,8 @@ async function chargerImageSecurisee(variantes) {
 async function generateWelcomeImage(avatarUrl, memberName) {
     try {
         const overlay = await chargerImageSecurisee([
-            './Bienvenue.png',
-            './bienvenue.png',
+            './Assets/Images/Welcome/Bienvenue.png',
+            './Assets/Images/Welcome/bienvenue.png',
             './assets/Bienvenue.png',
             './assets/bienvenue.png'
         ]);
