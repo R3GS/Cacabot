@@ -89,6 +89,7 @@ test('restauration : accepte une copie structurellement complète sans la modifi
 
 test('restauration : rejette les sauvegardes partielles sans effacer les inventaires', () => {
     const complete = {
+        versionMajor: 3,
         messages: {}, tcgData: { users: { '123': { points: 42 } } },
         battlePassData: {}, motusStats: {}, penduStats: {}, roulette: {}
     };
@@ -106,4 +107,32 @@ test('restauration : rejette les sauvegardes partielles sans effacer les inventa
 test('restauration : index utilise le validateur avant chargement', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
     assert.match(source, /validateBackup\(parsed\)/);
+});
+
+test('restauration : anciennes sauvegardes acceptées sans données inventées', () => {
+    const legacy = {
+        messages: { '123': 8 },
+        tcgData: { users: { '123': { points: 55, cards: { legendary: 2 } } } }
+    };
+    const before = JSON.stringify(legacy);
+    assert.equal(validateBackup(legacy).valid, true);
+    assert.equal(JSON.stringify(legacy), before);
+    assert.equal(legacy.tcgData.users['123'].cards.legendary, 2);
+
+    const corrupted = structuredClone(legacy);
+    corrupted.battlePassData = null;
+    assert.equal(validateBackup(corrupted).valid, false);
+});
+
+test('restauration : format v3 refuse une section manquante', () => {
+    const backup = {
+        versionMajor: 3, messages: {}, tcgData: { users: {} },
+        battlePassData: {}, motusStats: {}, penduStats: {}, roulette: {}
+    };
+    assert.equal(validateBackup(backup).valid, true);
+    for (const section of ['battlePassData', 'motusStats', 'penduStats', 'roulette']) {
+        const partial = structuredClone(backup);
+        delete partial[section];
+        assert.equal(validateBackup(partial).valid, false, section);
+    }
 });
