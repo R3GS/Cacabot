@@ -7,14 +7,14 @@ const path = require('node:path');
 const vm = require('node:vm');
 const test = require('node:test');
 
-function createHarness({ failSaveOnce = false, failFetchOnce = false } = {}) {
+function createHarness({ failSaveOnce = false, failFetchOnce = false, state = null } = {}) {
     const source = fs.readFileSync(path.join(__dirname, '..', 'tcg.js'), 'utf8');
     const begin = source.indexOf('const recompensesMinijeuxEnCours = new Set();');
     const end = source.indexOf('module.exports = {', begin);
     assert.ok(begin >= 0 && end > begin, 'bloc de recompenses introuvable');
 
-    const users = {};
-    const data = { minigameRewardLedger: {} };
+    const users = state?.users || {};
+    const data = state?.data || { minigameRewardLedger: {} };
     let saves = 0;
     let saveFailures = 0;
     let fetchFailures = 0;
@@ -85,4 +85,26 @@ test('recompenses : echec Discord puis reprise sans perdre le joueur', async () 
     await h.grant(null, ['a'], 2, 'pendu:fetch');
     assert.equal(h.users.a.points, 2);
     assert.equal(Object.keys(h.data.minigameRewardLedger).length, 1);
+});
+
+test('redemarrage simule : un registre sauvegarde bloque une deuxieme attribution', async () => {
+    const first = createHarness();
+    await first.grant(null, ['a'], 2, 'pendu:restart');
+    const saved = structuredClone({ users: first.users, data: first.data });
+    const restarted = createHarness({ state: saved });
+    await restarted.grant(null, ['a'], 2, 'pendu:restart');
+    assert.equal(restarted.users.a.points, 2);
+    assert.equal(Object.keys(restarted.data.minigameRewardLedger).length, 1);
+});
+
+test('redemarrage simule : un credit non sauvegarde est rejoue une seule fois', async () => {
+    const first = createHarness({ failSaveOnce: true });
+    const before = structuredClone({ users: first.users, data: first.data });
+    await assert.rejects(first.grant(null, ['a'], 2, 'pendu:crash'));
+    // Le processus disparait : seul le dernier etat persiste survit.
+    const restarted = createHarness({ state: before });
+    await restarted.grant(null, ['a'], 2, 'pendu:crash');
+    await restarted.grant(null, ['a'], 2, 'pendu:crash');
+    assert.equal(restarted.users.a.points, 2);
+    assert.equal(Object.keys(restarted.data.minigameRewardLedger).length, 1);
 });
