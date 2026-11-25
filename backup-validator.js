@@ -10,16 +10,30 @@ const isRecord = value =>
 function validateBackup(payload) {
     if (!isRecord(payload)) return { valid: false, reason: 'racine invalide' };
 
-    // Ces sections sont essentielles à la conservation des données.
+    // Une sauvegarde historique peut précéder l'ajout de certaines
+    // fonctionnalités. Ne jamais exiger une section qui n'existait
+    // pas encore dans les anciens formats.
+    const version3 = payload.versionMajor === 3;
     const required = [
         ['messages', payload.messages],
         ['tcgData', payload.tcgData],
         ['tcgData.users', payload.tcgData?.users],
-        ['battlePassData', payload.battlePassData],
-        ['motusStats', payload.motusStats],
-        ['penduStats', payload.penduStats],
-        ['roulette', payload.roulette]
+        ...(version3 ? [
+            ['battlePassData', payload.battlePassData],
+            ['motusStats', payload.motusStats],
+            ['penduStats', payload.penduStats],
+            ['roulette', payload.roulette]
+        ] : [])
     ];
+
+    // Même pour les sauvegardes historiques, une section présente
+    // mais corrompue doit provoquer un refus, jamais une conversion
+    // silencieuse en données vides.
+    for (const name of ['battlePassData', 'motusStats', 'penduStats', 'roulette']) {
+        if (name in payload && !isRecord(payload[name])) {
+            return { valid: false, reason: 'section invalide : ' + name };
+        }
+    }
 
     for (const [name, value] of required) {
         if (!isRecord(value)) {
