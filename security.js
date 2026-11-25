@@ -469,7 +469,7 @@ function initSecurityState(bridge) {
             setTimeout(() => verifierWarnsExpires(), 15000);
             setTimeout(() => verifierDestitutionsExpirees(), 15000);
         } else {
-            securityState.client.once('ready', () => {
+            securityState.client.once('clientReady', () => {
                 synchroniserTribunauxExistants();
                 setTimeout(() => verifierWarnsExpires(), 15000);
                 setTimeout(() => verifierDestitutionsExpirees(), 15000);
