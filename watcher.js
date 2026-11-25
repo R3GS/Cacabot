@@ -118,7 +118,6 @@ async function verifierTwitchLive(client) {
 //    SENTINELLES MESSAGES
 // =========================
 
-const DELAI_APERCU_REPOST_MS = 10_000;
 const PLATEFORMES_REPOST = [
     {
         motif: /https?:\/\/(?:www\.)?instagram\.com\/(?:reel|p)\/[^\s<>()]+/gi,
@@ -136,33 +135,6 @@ const PLATEFORMES_REPOST = [
         convertir: url => url.replace(/^https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)/i, 'https://fxtwitter.com')
     }
 ];
-
-function verifierApercuRepost(repost, urlOriginale) {
-    if (repost.embeds.length) return;
-
-    setTimeout(async () => {
-        try {
-            const actualise = await repost.fetch(true);
-            if (actualise.embeds.length) return;
-
-            if (urlOriginale.length > 512) {
-                // Discord limite les URL des boutons à 512 caractères.
-                await actualise.reply({
-                    content: `[Lien original](<${urlOriginale}>)`,
-                    allowedMentions: { repliedUser: false }
-                });
-                return;
-            }
-
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setLabel('Lien original').setStyle(ButtonStyle.Link).setURL(urlOriginale)
-            );
-            await actualise.edit({ components: [row] });
-        } catch (err) {
-            if (err?.code !== 10008) console.warn('[WATCHER] Vérification de l’aperçu du repost échouée :', err);
-        }
-    }, DELAI_APERCU_REPOST_MS).unref();
-}
 
 async function handleWatcherMessage(message) {
     // 1. Notification Shorts/TikTok Gappy
@@ -189,8 +161,21 @@ async function handleWatcherMessage(message) {
         const auteurNom = message.member?.displayName ?? message.author.username;
         await message.channel.send({ content: `**${auteurNom}** ${annonce}`, allowedMentions: { parse: [] } });
         for (const urlOriginale of new Set(liensOriginaux)) {
-            const repost = await message.channel.send({ content: convertir(urlOriginale), allowedMentions: { parse: [] } });
-            verifierApercuRepost(repost, urlOriginale);
+            const payload = { content: convertir(urlOriginale), allowedMentions: { parse: [] } };
+            // Discord limite les URL des boutons à 512 caractères.
+            if (urlOriginale.length > 512) {
+                const repost = await message.channel.send(payload);
+                await repost.reply({
+                    content: `[Lien original](<${urlOriginale}>)`,
+                    allowedMentions: { repliedUser: false }
+                });
+                continue;
+            }
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setLabel('Lien original').setStyle(ButtonStyle.Link).setURL(urlOriginale)
+            );
+            await message.channel.send({ ...payload, components: [row] });
         }
         aReposte = true;
     }
