@@ -2377,12 +2377,37 @@ client.once('ready', async () => {
     await scanSet1Cards(client);
     await backfillRecentOpeningsTcg(client);
     restaurerNotifsTcg(client);
-    setInterval(() => verifierInactiviteTradesTcg(client), 10 * 60 * 1000);
-    verifierBoosterHebdoTcg(client);
-    verifierQueteCommunautaireTcg(client);
+    scheduleNonOverlappingCheck('inactivité des échanges TCG', () => verifierInactiviteTradesTcg(client), 10 * 60 * 1000);
+    // Une vérification lente ne doit pas multiplier les appels Discord au tick suivant.
+    let boosterHebdoEnCours = false;
+    let queteCommunautaireEnCours = false;
+    async function verifierBoosterHebdoSansChevauchement() {
+        if (boosterHebdoEnCours) return;
+        boosterHebdoEnCours = true;
+        try {
+            await verifierBoosterHebdoTcg(client);
+        } catch (err) {
+            console.error('[INDEX] Vérification booster hebdomadaire échouée :', err);
+        } finally {
+            boosterHebdoEnCours = false;
+        }
+    }
+    async function verifierQueteCommunautaireSansChevauchement() {
+        if (queteCommunautaireEnCours) return;
+        queteCommunautaireEnCours = true;
+        try {
+            await verifierQueteCommunautaireTcg(client);
+        } catch (err) {
+            console.error('[INDEX] Vérification quête communautaire échouée :', err);
+        } finally {
+            queteCommunautaireEnCours = false;
+        }
+    }
+    void verifierBoosterHebdoSansChevauchement();
+    void verifierQueteCommunautaireSansChevauchement();
     setInterval(() => {
-        verifierBoosterHebdoTcg(client);
-        verifierQueteCommunautaireTcg(client);
+        void verifierBoosterHebdoSansChevauchement();
+        void verifierQueteCommunautaireSansChevauchement();
     }, 60 * 1000);
 
     // Réarmement des alertes roulette, votes publics et des rappels
