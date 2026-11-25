@@ -3075,7 +3075,7 @@ async function cloturerVoteRoulette(timerEntry, client) {
                 rouletteCooldowns.set(voteData.targetId, Date.now() + 24 * 60 * 60 * 1000);
                 sanctionTexte = `🛡️ <@${voteData.targetId}> est Modo : l'exclusion de **1 jour** est convertie en cooldown roulette de **24 heures**.`;
             } else {
-                if (membre) await membre.timeout(24 * 60 * 60 * 1000, 'Roulette - vote').catch(() => {});
+                if (membre) await membre.timeout(24 * 60 * 60 * 1000, 'Roulette - vote').catch(err => console.error('[ROULETTE] Sanction du vote impossible :', err));
                 rouletteTimeoutUntil.set(voteData.targetId, Date.now() + 24 * 60 * 60 * 1000);
                 sanctionTexte = `🔇 <@${voteData.targetId}> est condamné.e et **exclu.e pendant 1 jour** !`;
             }
