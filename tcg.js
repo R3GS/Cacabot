@@ -471,7 +471,7 @@ function findExistingFile(dir, candidates) {
             const match = files.find(f => normalizeText(f) === normCand);
             if (match) return path.join(dir, match);
         }
-    } catch {}
+    } catch (err) { if (err?.code !== 'ENOENT') console.warn('[TCG] Recherche de fichier impossible :', dir, err); }
     return null;
 }
 
@@ -488,7 +488,7 @@ function findSubdir(parentDir, candidates) {
             const match = entries.find(e => normalizeText(e.name) === normCand);
             if (match) return path.join(parentDir, match.name);
         }
-    } catch {}
+    } catch (err) { if (err?.code !== 'ENOENT') console.warn('[TCG] Recherche de dossier impossible :', parentDir, err); }
     return null;
 }
 
@@ -1941,7 +1941,7 @@ function armerNotifBooster(userId, client) {
                     }).catch(() => {});
                 }
             }
-        } catch {}
+        } catch (err) { console.warn('[TCG] Notification différée échouée :', userId, err); }
     }, safeDelay);
 
     notifTimers.set(userId, timer);
@@ -3899,7 +3899,7 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
             ctx.shadowBlur = 14;
             ctx.drawImage(logoImg, Math.round((W - logoW) / 2), 120, logoW, logoH);
             ctx.restore();
-        } catch {}
+        } catch (err) { console.warn('[TCG] Dessin du logo impossible :', err); }
     }
 
     // 3. Colonne gauche : Booster du Set + Boosters ouverts + Cartes totales du Set
@@ -3923,7 +3923,7 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
             ctx.shadowOffsetY = 12;
             ctx.drawImage(boosterImg, bx, boosterY, targetW, boosterH);
             ctx.restore();
-        } catch {}
+        } catch (err) { console.warn('[TCG] Dessin du booster impossible :', err); }
     }
 
     const setKey = String(setNumber);
@@ -3981,7 +3981,7 @@ async function renderMasterSetCanvas(member, u, setNumber = DEFAULT_SET_NUMBER) 
             ctx.clip();
             ctx.drawImage(avatarImg, ppX, ppY, ppSize, ppSize);
             ctx.restore();
-        } catch {}
+        } catch (err) { console.warn('[TCG] Dessin de l’avatar impossible :', err); }
     }
 
     ctx.save();
@@ -5583,7 +5583,7 @@ function scheduleCard3AutoRecap(member, session, client) {
         try {
             const dualPayload = await buildBoosterStepPayload(member, session);
             await session.message.edit({ content: null, ...dualPayload, attachments: [] });
-        } catch {}
+        } catch (err) { if (err?.code !== 10008) console.warn('[TCG] Récapitulatif automatique échoué :', err); }
         await triggerSessionPantheonIfNeeded(client, member, session).catch(() => {});
     }, CARD_3_AUTO_RECAP_MS);
     session.card3AutoRecapTimer.unref?.();
@@ -5604,7 +5604,7 @@ function scheduleBoosterInspectTimeout(member, session) {
         try {
             const recapPayload = await buildBoosterRecapPayload(member, session);
             await session.message.edit({ content: null, ...recapPayload, attachments: [] });
-        } catch {}
+        } catch (err) { if (err?.code !== 10008) console.warn('[TCG] Récapitulatif après inactivité échoué :', err); }
         await triggerSessionPantheonIfNeeded(tcgBridge.client, member, session).catch(() => {});
     }, BOOSTER_INSPECT_IDLE_MS);
 }
@@ -7219,7 +7219,7 @@ async function startBoosterOpening(
                         await sentMsg.edit({ ...firstPayload, attachments: [] });
                         scheduleBoosterInspectTimeout(member, session);
                     }
-                } catch {}
+                } catch (err) { if (err?.code !== 10008) console.warn('[TCG] Animation du booster échouée :', err); }
             }
         }, BOOSTER_GIF_DELAY_MS);
     } catch (err) {
@@ -9778,7 +9778,7 @@ function walkProxyStats(dir) {
             } else if (entry.name.toLowerCase().endsWith('.png')) {
                 files++;
                 let sz = 0;
-                try { sz = fs.statSync(full).size; } catch {}
+                try { sz = fs.statSync(full).size; } catch (err) { if (err?.code !== 'ENOENT') console.warn('[TCG] Taille de proxy indisponible :', full, err); }
                 bytes += sz;
                 const parentName = path.basename(curr);
                 const dimKey = /^\d+x\d+$/.test(parentName) ? parentName : 'autre';
@@ -10419,7 +10419,7 @@ async function handleAdminTcgCommand(message, lowerContent) {
                     try {
                         fs.rmSync(path.join(TCG_PROXIES_DIR, entry), { recursive: true, force: true });
                         removedEntries++;
-                    } catch {}
+                    } catch (err) { console.warn('[TCG] Suppression de proxy impossible :', entry, err); }
                 }
             }
             lastProxyWriteError = null;
