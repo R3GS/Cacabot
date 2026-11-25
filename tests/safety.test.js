@@ -48,10 +48,15 @@ test('sauvegardes : refus de démarrer sans données persistantes', () => {
     assert.match(source, /donneesChargees = false/);
 });
 
-test('sauvegardes : historique non supprimé après pagination incomplète', () => {
+test('sauvegardes : historique conservé sans suppression automatique', () => {
     const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
-    assert.match(source, /messagesExamines >= MAX_MESSAGES_NETTOYAGE/);
-    assert.match(source, /if \(rechercheSauvegardesComplete\)/);
+    assert.match(source, /ne jamais supprimer automatiquement/);
+    assert.doesNotMatch(source, /ancienneSauvegarde\.delete\(/);
+});
+
+test('sauvegardes : relance des écritures différées après un échec', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+    assert.match(source, /programmerSauvegardeDifferee\(delaiReessaiSauvegarde\)/);
 });
 
 test('Pendu : journal de publication et clé de récompense persistants', () => {
