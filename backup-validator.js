@@ -36,6 +36,15 @@ function validateBackup(payload) {
     // Une sauvegarde historique peut précéder l'ajout de certaines
     // fonctionnalités. Ne jamais exiger une section qui n'existait
     // pas encore dans les anciens formats.
+    // Ne pas traiter une version explicitement inconnue comme un
+    // ancien format : cela permettrait de contourner les sections v3.
+    if (
+        'versionMajor' in payload &&
+        (!Number.isInteger(payload.versionMajor) || payload.versionMajor < 1 || payload.versionMajor > 3)
+    ) {
+        return { valid: false, reason: 'version de sauvegarde inconnue' };
+    }
+
     const version3 = payload.versionMajor === 3;
     const required = [
         ['messages', payload.messages],
@@ -67,14 +76,36 @@ function validateBackup(payload) {
     // Une sauvegarde partielle ne doit jamais écraser un état complet.
     // Les sauvegardes historiques légitimes sont essayées dans l'ordre.
     const optionalRecords = [
-        'birthdayChannels', 'daily', 'weekly', 'monthly',
-        'reactionRoles', 'rebusStats', 'warns',
-        'destitutionVotes', 'suggestions'
+        'birthdays', 'birthdayChannels', 'birthdayLastAnnouncements',
+        'daily', 'weekly', 'monthly', 'youtubeWatch',
+        'reactionRoles', 'motusData', 'rebusStats', 'penduData',
+        'welcomeData', 'warns', 'destitutionVotes', 'suggestions',
+        'avertissementsRedemarrageMinijeux'
     ];
     for (const name of optionalRecords) {
         if (name in payload && !isRecord(payload[name])) {
             return { valid: false, reason: 'section invalide : ' + name };
         }
+    }
+
+    // Les tableaux/états présents doivent conserver leur type,
+    // sinon les valeurs par défaut du chargement masqueraient
+    // une corruption de données.
+    for (const name of ['quotes', 'bugs']) {
+        if (name in payload && !Array.isArray(payload[name])) {
+            return { valid: false, reason: 'section invalide : ' + name };
+        }
+    }
+    for (const name of ['penduPublicationPending', 'rebusSessionData']) {
+        if (name in payload && payload[name] !== null && !isRecord(payload[name])) {
+            return { valid: false, reason: 'section invalide : ' + name };
+        }
+    }
+    if (
+        'numeroBuild' in payload &&
+        (!Number.isInteger(payload.numeroBuild) || payload.numeroBuild < -1)
+    ) {
+        return { valid: false, reason: 'numéro de build invalide' };
     }
 
     for (const [id, user] of Object.entries(payload.tcgData.users)) {
