@@ -175,3 +175,11 @@ test('sauvegardes : une alteration de solde ou de carte est refusee', () => {
     backup.tcgData.users['123'].cards.a = 0;
     assert.equal(validateBackup(backup).valid, false);
 });
+
+test('demarrage : echec de restauration provoque un arret explicite', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+    assert.match(source, /try\s*\{\s*await loadAll\(\);\s*\}\s*catch\s*\(error\)/);
+    assert.match(source, /ARRÊT DE SÉCURITÉ : restauration impossible/);
+    assert.match(source, /donneesChargees = false;\s*console\.error\('🚨 ARRÊT DE SÉCURITÉ/);
+    assert.match(source, /process\.exit\(1\)/);
+});
