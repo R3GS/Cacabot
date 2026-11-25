@@ -990,7 +990,7 @@ async function handleMotusMessage(message, response, client, helpers) {
 
     if (interaction.customId.startsWith('stop_test_motus_')) {
         if (interaction.user.id !== EPSYS_ID) {
-            await interaction.reply({ content: "Seule Epsys peut arrêter ce test.", ephemeral: true });
+            await interaction.reply({ content: "Seule Epsys peut arrêter ce test.", flags: 64 });
             return true;
         }
         const chId = interaction.customId.replace('stop_test_motus_', '');
@@ -1008,19 +1008,19 @@ async function handleMotusMessage(message, response, client, helpers) {
         const longueur = motusData.longueur || 6;
         const mot = motusData.mot || getMotDuJour(dateKey, longueur);
         const embed = buildMotusEmbed(mot, dateKey, longueur, motusData.manche || 1, motusData.totalManches || 2);
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.reply({ embeds: [embed], flags: 64 });
         return true;
     }
 
     if (interaction.customId === 'motus_view_stats' || interaction.customId.startsWith('motus_view_stats_')) {
         const member = interaction.member;
         const embed = buildMotusStatsEmbed(member, interaction.user);
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.reply({ embeds: [embed], flags: 64 });
         return true;
     }
 
     if (interaction.customId === 'motus_view_guide') {
-        await interaction.reply({ embeds: [buildMotusGuideEmbed()], ephemeral: true });
+        await interaction.reply({ embeds: [buildMotusGuideEmbed()], flags: 64 });
         return true;
     }
 
@@ -2377,7 +2377,7 @@ async function handleRebusButton(interaction) {
 
     if (interaction.customId.startsWith('stop_test_rebus_')) {
         if (interaction.user.id !== EPSYS_ID) {
-            await interaction.reply({ content: "Seule Epsys peut arrêter ce test.", ephemeral: true });
+            await interaction.reply({ content: "Seule Epsys peut arrêter ce test.", flags: 64 });
             return true;
         }
         const chId = interaction.customId.replace('stop_test_rebus_', '');
@@ -2392,22 +2392,22 @@ async function handleRebusButton(interaction) {
     if (interaction.customId === 'rebus_view_stats') {
         const member = interaction.member;
         const embed = buildRebusStatsEmbed(member);
-        await interaction.reply({ embeds: [embed], ephemeral: true });
+        await interaction.reply({ embeds: [embed], flags: 64 });
         return true;
     }
 
     if (interaction.customId === 'rebus_view_guide') {
-        await interaction.reply({ embeds: [buildRebusGuideEmbed()], ephemeral: true });
+        await interaction.reply({ embeds: [buildRebusGuideEmbed()], flags: 64 });
         return true;
     }
 
     // Bouton de reprise de session mise en pause pour inactivité
     if (interaction.customId === 'rebus_reprendre') {
         if (!rebusSession.active || !rebusSession.enPause) {
-            return interaction.reply({ content: "La session n'est pas en pause actuellement.", ephemeral: true });
+            return interaction.reply({ content: "La session n'est pas en pause actuellement.", flags: 64 });
         }
         if (Date.now() >= rebusSession.limite16hTimestamp) {
-            await interaction.reply({ content: "⏰ Il est 16h00 passé, la session de rébus d'aujourd'hui est terminée !", ephemeral: true });
+            await interaction.reply({ content: "⏰ Il est 16h00 passé, la session de rébus d'aujourd'hui est terminée !", flags: 64 });
             verifierFin16hRebus(interaction.guild);
             return true;
         }
@@ -2447,7 +2447,7 @@ async function handleRebusButton(interaction) {
     if (interaction.customId.startsWith('rebus_demander_indice_')) {
         await interaction.reply({
             content: "💡 Le bouton d'indice manuel a été supprimé. L'indice arrive automatiquement à mi-temps.",
-            ephemeral: true
+            flags: 64
         });
         return true;
     }
@@ -2639,7 +2639,7 @@ function modifierStatMiniJeu(targetUserId, statKey, action, valeurDirecte = null
 
 async function handleJeuPtsInteraction(interaction) {
     if (interaction.user.id !== EPSYS_ID) {
-        return interaction.reply({ content: "Ce panneau est réservé à Epsys 😌", ephemeral: true });
+        return interaction.reply({ content: "Ce panneau est réservé à Epsys 😌", flags: 64 });
     }
 
     const id = interaction.customId;
@@ -2709,7 +2709,7 @@ async function handleJeuPtsInteraction(interaction) {
         const num = parseInt(valStr, 10);
 
         if (isNaN(num) || num < 0) {
-            return interaction.reply({ content: "❌ Nombre invalide ! Entre un nombre entier positif.", ephemeral: true });
+            return interaction.reply({ content: "❌ Nombre invalide ! Entre un nombre entier positif.", flags: 64 });
         }
 
         const nouveauScore = modifierStatMiniJeu(targetUserId, selectedStat, 'set', num);
