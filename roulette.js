@@ -18,8 +18,13 @@ function resolveRouletteBgPath() {
         if (!fs.existsSync(dir)) continue;
         try {
             const files = fs.readdirSync(dir);
+            const namesByLowercase = new Map();
+            for (const file of files) {
+                const key = file.toLowerCase();
+                if (!namesByLowercase.has(key)) namesByLowercase.set(key, file);
+            }
             for (const target of candidates) {
-                const found = files.find(f => f.toLowerCase() === target);
+                const found = namesByLowercase.get(target);
                 if (found) return path.join(dir, found);
             }
         } catch (err) { if (err?.code !== 'ENOENT') console.warn('[ROULETTE] Recherche du fond impossible :', dir, err); }
