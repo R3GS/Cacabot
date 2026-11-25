@@ -191,3 +191,40 @@ test('arret : sauvegarde finale reessayee et echec signale', () => {
     assert.match(source, /ARRÊT SANS CONFIRMATION DE SAUVEGARDE/);
     assert.match(source, /process\.exit\(sauvegardeConfirmee \? 0 : 1\)/);
 });
+
+test('restauration : les types invalides de sections presentes sont refuses', () => {
+    const base = {
+        versionMajor: 3, numeroBuild: 12,
+        messages: {}, tcgData: { users: {} },
+        battlePassData: {}, motusStats: {}, penduStats: {}, roulette: {},
+        birthdays: {}, birthdayLastAnnouncements: {}, youtubeWatch: {},
+        motusData: {}, penduData: {}, welcomeData: {},
+        quotes: [], bugs: [], penduPublicationPending: null,
+        rebusSessionData: null
+    };
+    assert.equal(validateBackup(base).valid, true);
+    for (const [key, bad] of [
+        ['birthdays', null], ['birthdayLastAnnouncements', []],
+        ['youtubeWatch', 1], ['motusData', []], ['penduData', null],
+        ['welcomeData', 'invalid'], ['quotes', {}], ['bugs', {}],
+        ['penduPublicationPending', []], ['rebusSessionData', false],
+        ['numeroBuild', '12'], ['versionMajor', 999]
+    ]) {
+        const corrupted = structuredClone(base);
+        corrupted[key] = bad;
+        assert.equal(validateBackup(corrupted).valid, false, key);
+    }
+});
+
+test('sauvegarde : empreinte conservee apres serialisation JSON Discord', () => {
+    const original = {
+        versionMajor: 3, messages: { 'a': 1 },
+        tcgData: { users: { '42': { points: 55, cards: { rare: 3 } } } },
+        battlePassData: {}, motusStats: {}, penduStats: {}, roulette: {}
+    };
+    original.integrity = { algorithm: 'sha256', value: computeBackupChecksum(original) };
+    const received = JSON.parse(JSON.stringify(original, null, 2));
+    assert.equal(validateBackup(received).valid, true);
+    received.tcgData.users['42'].cards.rare++;
+    assert.equal(validateBackup(received).valid, false);
+});
