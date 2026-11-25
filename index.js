@@ -2746,7 +2746,11 @@ client.once('clientReady', async () => {
 client.on('messageReactionAdd', async (reaction, user) => {
     if (!donneesChargees) return;
 
-    await handleSecurityReactionAdd(reaction, user);
+    try {
+        await handleSecurityReactionAdd(reaction, user);
+    } catch (err) {
+        console.error('[INDEX] Réaction de sécurité échouée :', err);
+    }
 
     if (user.bot) return;
 
@@ -2774,7 +2778,7 @@ client.on('messageReactionAdd', async (reaction, user) => {
     await msg.channel.send({ 
         content: `Bah alors, **${memberNom}**, on m'envoie un doigt d'honneur ?`,
         flags: [MessageFlags.SuppressNotifications]
-    });
+    }).catch(err => console.error('[INDEX] Réponse à la réaction impossible :', err));
 });
 
 client.on('messageReactionRemove', async (reaction, user) => {
