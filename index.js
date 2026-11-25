@@ -78,6 +78,7 @@ async function loadAll() {
 
                 backupMessages.push(
                     ...lot.filter(m =>
+                        m.author?.id === client.user?.id &&
                         m.attachments.some(
                             attachment =>
                                 attachment.name === 'cacabot_backup.json'
@@ -363,6 +364,7 @@ function saveAll() {
 
             sauvegardes.push(
                 ...lot.filter(m =>
+                    m.author?.id === client.user?.id &&
                     m.attachments.some(
                         attachment =>
                             attachment.name === 'cacabot_backup.json'
