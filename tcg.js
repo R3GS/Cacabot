@@ -6711,6 +6711,15 @@ async function startBoosterOpening(
             );
         }
 
+        // Ne jamais publier un Focus contenant une carte imposée
+        // hors catégorie : l'appelant restaure les ressources.
+        if (focusCategory && draw.cards.some(c => c.category !== focusCategory)) {
+            throw new Error(
+                'Focus incompatible avec une garantie hors catégorie : ' +
+                'ouverture annulée avant publication.'
+            );
+        }
+
         // Un Booster Chanceux ne doit jamais produire
         // de Commune, y compris lorsqu'une carte est
         // imposée par une garantie administrative.
