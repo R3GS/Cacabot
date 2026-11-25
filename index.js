@@ -1032,6 +1032,10 @@ const client = new Client({
 });
 errorReportClient = client;
 
+// Les erreurs de connexion Discord passent aussi dans le salon de diagnostic.
+client.on('error', err => console.error('[DISCORD] Erreur du client :', err));
+client.on('shardError', err => console.error('[DISCORD] Erreur de connexion :', err));
+
 initToolsState({
     client,
     getTopData: () => topData,
