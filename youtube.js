@@ -509,13 +509,13 @@ async function handleYoutubeSlash(interaction) {
 
     if (cmd === 'ytabo' || cmd === 'ytwatch') {
         if (interaction.user.id !== EPSYS_ID) {
-            await interaction.reply({ content: "Cette commande est réservée à Epsys.", ephemeral: true });
+            await interaction.reply({ content: "Cette commande est réservée à Epsys.", flags: 64 });
             return true;
         }
         await interaction.reply({
             embeds: [buildYtAboEmbed()],
             components: buildYtAboComponents(),
-            ephemeral: true
+            flags: 64
         });
         return true;
     }
@@ -682,7 +682,7 @@ async function handleYoutubeInteraction(interaction) {
         const authorId = parts[2];
 
         if (interaction.user.id !== authorId) {
-            await interaction.reply({ content: "C'est pas ta recherche !", ephemeral: true });
+            await interaction.reply({ content: "C'est pas ta recherche !", flags: 64 });
             return true;
         }
 
@@ -694,7 +694,7 @@ async function handleYoutubeInteraction(interaction) {
 
         const search = youtubeSearches.get(interaction.message.id);
         if (!search) {
-            await interaction.reply({ content: "Cette recherche a expiré !", ephemeral: true });
+            await interaction.reply({ content: "Cette recherche a expiré !", flags: 64 });
             return true;
         }
 
@@ -714,7 +714,7 @@ async function handleYoutubeInteraction(interaction) {
     // 2. Boutons du panneau !ytabo config
     if (interaction.isButton() && interaction.customId === 'ytabo_add_btn') {
         if (interaction.user.id !== EPSYS_ID) {
-            await interaction.reply({ content: "Réservé à Epsys.", ephemeral: true });
+            await interaction.reply({ content: "Réservé à Epsys.", flags: 64 });
             return true;
         }
 
@@ -763,7 +763,7 @@ async function handleYoutubeInteraction(interaction) {
 
         const channelInfo = await resolveChannelId(rawChaine);
         if (!channelInfo) {
-            await interaction.followUp({ content: `❌ Impossible de trouver la chaîne YouTube : \`${rawChaine}\``, ephemeral: true });
+            await interaction.followUp({ content: `❌ Impossible de trouver la chaîne YouTube : \`${rawChaine}\``, flags: 64 });
             return true;
         }
 
@@ -782,7 +782,7 @@ async function handleYoutubeInteraction(interaction) {
             embeds: [buildYtAboEmbed()],
             components: buildYtAboComponents()
         });
-        await interaction.followUp({ content: `✅ Abonnement ajouté pour **${channelInfo.title}** dans <#${salonId}> !`, ephemeral: true });
+        await interaction.followUp({ content: `✅ Abonnement ajouté pour **${channelInfo.title}** dans <#${salonId}> !`, flags: 64 });
         return true;
     }
 
@@ -801,14 +801,14 @@ async function handleYoutubeInteraction(interaction) {
             embeds: [buildYtAboEmbed()],
             components: buildYtAboComponents()
         });
-        await interaction.followUp({ content: `🗑️ Abonnement supprimé pour **${removedTitle}**.`, ephemeral: true });
+        await interaction.followUp({ content: `🗑️ Abonnement supprimé pour **${removedTitle}**.`, flags: 64 });
         return true;
     }
 
     // Bouton de test manuel
     if (interaction.isButton() && interaction.customId === 'ytabo_test_btn') {
         if (interaction.user.id !== EPSYS_ID) return true;
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 });
 
         const channels = getChannelsList();
         if (channels.length === 0) {
