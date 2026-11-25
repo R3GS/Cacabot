@@ -377,6 +377,12 @@ function saveAll() {
 
         // Ne jamais supprimer de sauvegardes après une recherche interrompue.
         // Conserver les 10 sauvegardes les plus récentes parmi celles trouvées.
+        // Une limite de pagination atteinte ne prouve pas que l'historique
+        // complet a été examiné : ne supprimer aucune sauvegarde dans ce cas.
+        if (messagesExamines >= MAX_MESSAGES_NETTOYAGE) {
+            rechercheSauvegardesComplete = false;
+        }
+
         if (rechercheSauvegardesComplete) {
             for (const ancienneSauvegarde of sauvegardes.slice(10)) {
                 await ancienneSauvegarde.delete().catch(err => {
