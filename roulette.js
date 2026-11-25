@@ -3113,12 +3113,21 @@ function armerTimersVoteRoulette(msgId, voteData, client) {
     const timerEntry = { currentMsgId: msgId, interval: null, timeout: null };
 
     if (!voteData.isTest) {
+        let rappelEnCours = false;
         timerEntry.interval = setInterval(async () => {
-            const currentId = timerEntry.currentMsgId;
-            const ch = client?.channels.cache.get(voteData.channelId)
-                || await client?.channels.fetch(voteData.channelId).catch(() => null);
-            const currentMsg = ch ? await ch.messages.fetch(currentId).catch(() => null) : null;
-            if (currentMsg) await currentMsg.reply('🆙').catch(() => {});
+            if (rappelEnCours) return;
+            rappelEnCours = true;
+            try {
+                const currentId = timerEntry.currentMsgId;
+                const ch = client?.channels.cache.get(voteData.channelId)
+                    || await client?.channels.fetch(voteData.channelId).catch(() => null);
+                const currentMsg = ch ? await ch.messages.fetch(currentId).catch(() => null) : null;
+                if (currentMsg) await currentMsg.reply('🆙').catch(() => {});
+            } catch (err) {
+                console.warn('[ROULETTE] Rappel de vote échoué :', err);
+            } finally {
+                rappelEnCours = false;
+            }
         }, 55 * 60 * 1000);
     }
 
