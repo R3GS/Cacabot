@@ -118,6 +118,52 @@ async function verifierTwitchLive(client) {
 //    SENTINELLES MESSAGES
 // =========================
 
+const DELAI_APERCU_REPOST_MS = 10_000;
+const PLATEFORMES_REPOST = [
+    {
+        motif: /https?:\/\/(?:www\.)?instagram\.com\/(?:reel|p)\/[^\s<>()]+/gi,
+        annonce: "a reposté cette publication Instagram !\n-# *(je change juste le lien pour que tout le monde y ait accès)*",
+        convertir: url => url.replace(/instagram\.com/i, 'kkinstagram.com')
+    },
+    {
+        motif: /https?:\/\/(?:vm\.|vt\.|www\.|m\.)?tiktok\.com\/[^\s<>()]+/gi,
+        annonce: "a reposté ce TikTok !\n-# *(je change juste le lien pour que tout le monde y ait accès)*",
+        convertir: url => url.replace(/tiktok\.com/i, 'kkclip.com')
+    },
+    {
+        motif: /https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/[a-zA-Z0-9_]+\/status\/[0-9]+[^\s<>()]*/gi,
+        annonce: "a partagé un tweet !\n-# *(lien converti pour l'affichage vidéo et médias)*",
+        convertir: url => url.replace(/^https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)/i, 'https://fxtwitter.com')
+    }
+];
+
+function verifierApercuRepost(repost, urlOriginale) {
+    if (repost.embeds.length) return;
+
+    setTimeout(async () => {
+        try {
+            const actualise = await repost.fetch(true);
+            if (actualise.embeds.length) return;
+
+            if (urlOriginale.length > 512) {
+                // Discord limite les URL des boutons à 512 caractères.
+                await actualise.reply({
+                    content: `[Lien original](<${urlOriginale}>)`,
+                    allowedMentions: { repliedUser: false }
+                });
+                return;
+            }
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setLabel('Lien original').setStyle(ButtonStyle.Link).setURL(urlOriginale)
+            );
+            await actualise.edit({ components: [row] });
+        } catch (err) {
+            if (err?.code !== 10008) console.warn('[WATCHER] Vérification de l’aperçu du repost échouée :', err);
+        }
+    }, DELAI_APERCU_REPOST_MS).unref();
+}
+
 async function handleWatcherMessage(message) {
     // 1. Notification Shorts/TikTok Gappy
     if (message.channel.id === '1460051840015269908' && message.author.id === '1525026449768321098') {
@@ -134,66 +180,23 @@ async function handleWatcherMessage(message) {
         }
     }
 
-    // 3. Remplacement liens Instagram (kkinstagram)
-    const instaRegex = /https?:\/\/(?:www\.)?instagram\.com\/(?:reel|p)\/[^\s]+/gi;
-    const instaMatches = message.content.match(instaRegex);
-    if (instaMatches) {
+    // 3 à 5. Remplacement des liens Instagram, TikTok et Twitter / X
+    let aReposte = false;
+    for (const { motif, annonce, convertir } of PLATEFORMES_REPOST) {
+        const liensOriginaux = message.content.match(motif);
+        if (!liensOriginaux) continue;
+
         const auteurNom = message.member?.displayName ?? message.author.username;
-        const liensConvertis = instaMatches.map(url => url.replace('instagram.com', 'kkinstagram.com'));
-
-        const row = new ActionRowBuilder().addComponents(
-            instaMatches.slice(0, 5).map((url, i) =>
-                new ButtonBuilder()
-                    .setLabel(instaMatches.length > 1 ? `🔗 Lien original ${i + 1}` : '🔗 Lien original')
-                    .setStyle(ButtonStyle.Link)
-                    .setURL(url)
-            )
-        );
-
-        await message.delete().catch(() => {});
-        await message.channel.send(`**${auteurNom}** a reposté cette publication Instagram !\n-# *(je change juste le lien pour que tout le monde y ait accès)*`);
-        setTimeout(() => {
-            message.channel.send({ content: liensConvertis.join('\n'), components: [row] }).catch(() => {});
-        }, 300);
-        return true;
+        await message.channel.send({ content: `**${auteurNom}** ${annonce}`, allowedMentions: { parse: [] } });
+        for (const urlOriginale of new Set(liensOriginaux)) {
+            const repost = await message.channel.send({ content: convertir(urlOriginale), allowedMentions: { parse: [] } });
+            verifierApercuRepost(repost, urlOriginale);
+        }
+        aReposte = true;
     }
 
-    // 4. Remplacement liens TikTok (kktiktok)
-    const tiktokRegex = /https?:\/\/(?:vm\.|vt\.|www\.|m\.)?tiktok\.com\/[^\s]+/gi;
-    const tiktokMatches = message.content.match(tiktokRegex);
-    if (tiktokMatches) {
-        const auteurNom = message.member?.displayName ?? message.author.username;
-        const convertUrl = (url) => url.replace(/(?:vm\.|vt\.|www\.|m\.)?tiktok\.com/i, (match) => {
-            if (/^vm\./i.test(match)) return 'vm.kkclip.com';
-            if (/^vt\./i.test(match)) return 'vt.kkclip.com';
-            if (/^m\./i.test(match)) return 'm.kkclip.com';
-            if (/^www\./i.test(match)) return 'www.kkclip.com';
-            return 'kkclip.com';
-        });
-        const liensConvertis = tiktokMatches.map(convertUrl);
-
+    if (aReposte) {
         await message.delete().catch(() => {});
-        await message.channel.send(`**${auteurNom}** a reposté ce TikTok !\n-# *(je change juste le lien pour que tout le monde y ait accès)*`);
-        setTimeout(() => {
-            message.channel.send(liensConvertis.join('\n')).catch(() => {});
-        }, 300);
-        return true;
-    }
-
-    // 5. Remplacement liens Twitter / X (fxtwitter)
-    const twitterRegex = /https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]+\/status\/[0-9]+[^\s]*)/gi;
-    const twitterMatches = message.content.match(twitterRegex);
-    if (twitterMatches) {
-        const auteurNom = message.member?.displayName ?? message.author.username;
-        const liensConvertis = twitterMatches.map(url => 
-            url.replace(/https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)/i, 'https://fxtwitter.com')
-        );
-
-        await message.delete().catch(() => {});
-        await message.channel.send(`**${auteurNom}** a partagé un tweet !\n-# *(lien converti pour l'affichage vidéo et médias)*`);
-        setTimeout(() => {
-            message.channel.send(liensConvertis.join('\n')).catch(() => {});
-        }, 300);
         return true;
     }
 
