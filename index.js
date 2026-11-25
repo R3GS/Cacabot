@@ -2848,8 +2848,16 @@ client.on('guildMemberAdd', async (member) => {
         );
     }
 
-    await handleWelcomeMemberAdd(member);
-    await handleSecurityMemberAdd(member);
+    try {
+        await handleWelcomeMemberAdd(member);
+    } catch (err) {
+        console.error('[INDEX] Accueil du nouveau membre échoué :', err);
+    }
+    try {
+        await handleSecurityMemberAdd(member);
+    } catch (err) {
+        console.error('[INDEX] Vérification de sécurité du nouveau membre échouée :', err);
+    }
 });
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
@@ -2859,7 +2867,11 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         const bpJoueur = battlePassData?.joueurs?.[newState.id];
         if (bpJoueur) bpJoueur.vocalCurrentSessionMinutes = 0;
     }
-    await handleVoiceStateUpdate(oldState, newState);
+    try {
+        await handleVoiceStateUpdate(oldState, newState);
+    } catch (err) {
+        console.error('[INDEX] Traitement du salon vocal échoué :', err);
+    }
 });
 
 // Ne pas ouvrir une session Discord si une autre instance locale
