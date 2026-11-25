@@ -2262,7 +2262,7 @@ async function handlePenduButton(interaction) {
         ) {
             await interaction.followUp({
                 content: "Aucune partie de Pendu n'est actuellement en cours !",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -2270,7 +2270,7 @@ async function handlePenduButton(interaction) {
         if (session.messageId !== interaction.message?.id) {
             await interaction.followUp({
                 content: "⚠️ Ce bouton appartient à un ancien message du Pendu. Utilise celui de la partie actuelle !",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -2278,7 +2278,7 @@ async function handlePenduButton(interaction) {
         if (session.erreursCollectives >= 5) {
             await interaction.followUp({
                 content: "⚠️ Trop dangereux ! Il ne reste qu'une seule erreur avant le pendu (5/6), vous ne pouvez plus sacrifier de vie !",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -2290,7 +2290,7 @@ async function handlePenduButton(interaction) {
         if (session.votesPacte.includes(uid)) {
             await interaction.followUp({
                 content: "Tu as déjà voté pour ce pacte ! Attends que d'autres joueurs votent.",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -2316,7 +2316,7 @@ async function handlePenduButton(interaction) {
                     `🕯️ <@${uid}> a voté pour le **Pacte du Pendu** ` +
                     `(${session.votesPacte.length}/3 votes requis pour ` +
                     `sacrifier 1 vie contre 1 indice) !`,
-                ephemeral: false
+                flags: 0
             });
 
             return true;
@@ -2437,7 +2437,7 @@ async function handlePenduButton(interaction) {
         if (interaction.user.id !== EPSYS_ID) {
             await interaction.reply({
                 content: "Seule Epsys peut arrêter ce test.",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -2448,7 +2448,7 @@ async function handlePenduButton(interaction) {
         if (!session || session.messageId !== interaction.message?.id) {
             await interaction.reply({
                 content: "⚠️ Ce bouton appartient à un ancien test du Pendu.",
-                ephemeral: true
+                flags: 64
             });
             return true;
         }
@@ -2479,12 +2479,12 @@ async function handlePenduButton(interaction) {
 
         return interaction.reply({
             embeds: [buildPenduStatsEmbed(membre)],
-            ephemeral: true
+            flags: 64
         });
     }
 
     if (customId === 'pendu_view_guide') {
-        return interaction.reply({ embeds: [buildPenduGuideEmbed()], ephemeral: true });
+        return interaction.reply({ embeds: [buildPenduGuideEmbed()], flags: 64 });
     }
 
     if (customId.startsWith('pendu_view_hebdo_') || customId.startsWith('pendu_hebdo_')) {
@@ -2505,7 +2505,7 @@ async function handlePenduButton(interaction) {
         return interaction.reply({
             embeds: [embed],
             components: [row],
-            ephemeral: true
+            flags: 64
         });
     }
 
