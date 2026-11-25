@@ -2706,6 +2706,59 @@ const ROULETTE_ITEMS_METADATA = {
     }
 };
 
+const ROULETTE_ITEM_ALIASES = {
+    epingle: 'epingleSalon',
+    messageepingle: 'epingleSalon'
+};
+
+function normalizeRouletteItemIdentifier(value) {
+    return String(value || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '');
+}
+
+function resolveRouletteItemKey(value) {
+    const query = normalizeRouletteItemIdentifier(value);
+    if (!query) return null;
+
+    const exactId = Object.keys(ROULETTE_ITEMS_METADATA).find(
+        id => normalizeRouletteItemIdentifier(id) === query
+    );
+    if (exactId) return exactId;
+
+    const alias = ROULETTE_ITEM_ALIASES[query];
+    if (alias && ROULETTE_ITEMS_METADATA[alias]) return alias;
+
+    const labelMatches = Object.entries(ROULETTE_ITEMS_METADATA)
+        .filter(([, meta]) => normalizeRouletteItemIdentifier(meta.label).includes(query))
+        .map(([id]) => id);
+    return labelMatches.length === 1 ? labelMatches[0] : null;
+}
+
+function findRouletteMemberByName(guild, query) {
+    const normalizedQuery = normalizeRouletteItemIdentifier(query.replace(/^@/, '').trim());
+    if (!guild || !normalizedQuery) return { found: null, multiple: false, candidates: [] };
+
+    const members = [...guild.members.cache.values()];
+    const getNames = member => [member.displayName, member.user?.username, member.user?.globalName]
+        .filter(Boolean)
+        .map(normalizeRouletteItemIdentifier);
+    const exact = members.filter(member => getNames(member).includes(normalizedQuery));
+    if (exact.length === 1) return { found: exact[0], multiple: false, candidates: [] };
+    if (exact.length > 1) {
+        return { found: null, multiple: true, candidates: exact.map(m => m.displayName || m.user.username) };
+    }
+
+    const partial = members.filter(member => getNames(member).some(name => name.includes(normalizedQuery)));
+    if (partial.length === 1) return { found: partial[0], multiple: false, candidates: [] };
+    if (partial.length > 1) {
+        return { found: null, multiple: true, candidates: partial.map(m => m.displayName || m.user.username) };
+    }
+    return { found: null, multiple: false, candidates: [] };
+}
+
 function buildInventaireEmbed(membre) {
     const inv = rouletteInventaire.get(membre.id) ?? {};
     const items = [];
@@ -7271,7 +7324,7 @@ async function handleRouletteMessage(message, response, client, helpers) {
         }
         if (command === '!itemid' || command === '!rltitemid') {
             const lignes = Object.entries(ROULETTE_ITEMS_METADATA).map(([id, meta]) =>
-                `**${meta.label}** — \`${id}\`\n-# *${meta.desc}*`
+                `**${meta.label}** — \`${id}\`${id === 'epingleSalon' ? ' *(alias accepté : `épingle`)*' : ''}\n-# *${meta.desc}*`
             );
             const embed = new EmbedBuilder()
                 .setColor(0xffd20a)
@@ -7292,9 +7345,9 @@ async function handleRouletteMessage(message, response, client, helpers) {
                 return true;
             }
 
-            const itemKey = Object.keys(ROULETTE_ITEMS_METADATA).find(k => k.toLowerCase() === rawItemId.toLowerCase());
+            const itemKey = resolveRouletteItemKey(rawItemId);
             if (!itemKey) {
-                await message.reply(`❌ Item inconnu : \`${rawItemId}\`. Fais \`!itemid\` pour voir la liste des identifiants.`);
+                await message.reply(`❌ Item inconnu ou ambigu : \`${rawItemId}\`. Fais \`!itemid\` et utilise l'identifiant exact de l'item.`);
                 return true;
             }
 
@@ -7340,8 +7393,8 @@ async function handleRouletteMessage(message, response, client, helpers) {
                     const uid = matchId[1];
                     cible = message.guild?.members?.cache?.get(uid)
                         || await message.guild?.members?.fetch?.(uid).catch(() => null);
-                } else if (bridge.findMemberByName) {
-                    const result = bridge.findMemberByName(message.guild, query);
+                } else {
+                    const result = findRouletteMemberByName(message.guild, query);
                     if (result?.multiple && bridge.askDisambiguation) {
                         return bridge.askDisambiguation(message, message.guild, result.candidates, async (user) => {
                             const mb = message.guild.members.cache.get(user.id)
