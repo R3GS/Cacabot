@@ -1383,10 +1383,10 @@ async function runInteractionButton(interaction) {
         const originalAuthorNom = interaction.guild?.members.cache.get(originalAuthorId)?.displayName || rawAuthorNom;
 
         if (interaction.user.id === originalAuthorId) {
-            return interaction.reply({ content: "Tu es déjà en fuite !", ephemeral: true });
+            return interaction.reply({ content: "Tu es déjà en fuite !", flags: 64 });
         }
         if (cibleId && interaction.user.id === cibleId) {
-            return interaction.reply({ content: "C'est toi qu'on fuit !", ephemeral: true });
+            return interaction.reply({ content: "C'est toi qu'on fuit !", flags: 64 });
         }
 
         const joinNom = interaction.member?.displayName ?? interaction.user.username;
@@ -1407,7 +1407,7 @@ async function runInteractionButton(interaction) {
         if (interaction.user.id === originalAuthorId) {
             return interaction.reply({
                 content: '🌀 Tu tournes déjà !',
-                ephemeral: true
+                flags: 64
             });
         }
 
@@ -1442,10 +1442,10 @@ async function runInteractionButton(interaction) {
         const clickerId = interaction.user.id;
 
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Tu peux pas t'embrasser toi-m\u00eame... \ud83d\udc80", ephemeral: true });
+            return interaction.reply({ content: "Tu peux pas t'embrasser toi-m\u00eame... \ud83d\udc80", flags: 64 });
         }
         if (clickerId !== targetId) {
-            return interaction.reply({ content: "Pas sympa de voler les bisous des autres :/", ephemeral: true });
+            return interaction.reply({ content: "Pas sympa de voler les bisous des autres :/", flags: 64 });
         }
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
@@ -1466,10 +1466,10 @@ async function runInteractionButton(interaction) {
         const clickerId = interaction.user.id;
 
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Tu peux pas te c\u00e2liner toi-m\u00eame... \ud83d\udc80", ephemeral: true });
+            return interaction.reply({ content: "Tu peux pas te c\u00e2liner toi-m\u00eame... \ud83d\udc80", flags: 64 });
         }
         if (clickerId !== targetId) {
-            return interaction.reply({ content: "Pas gentil de voler les c\u00e2lins des autres :/", ephemeral: true });
+            return interaction.reply({ content: "Pas gentil de voler les c\u00e2lins des autres :/", flags: 64 });
         }
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
@@ -1488,7 +1488,7 @@ async function runInteractionButton(interaction) {
         const originalAuthorNom = parts.slice(3).join("_");
 
         if (interaction.user.id === originalAuthorId) {
-            return interaction.reply({ content: "Tu danses d\u00e9j\u00e0 ! \ud83d\udd7a", ephemeral: true });
+            return interaction.reply({ content: "Tu danses d\u00e9j\u00e0 ! \ud83d\udd7a", flags: 64 });
         }
 
         const rejointNom = interaction.member?.displayName ?? interaction.user.username;
@@ -1508,10 +1508,10 @@ async function runInteractionButton(interaction) {
         const clickerId = interaction.user.id;
 
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Tu danses d\u00e9j\u00e0 ! \ud83d\udd7a", ephemeral: true });
+            return interaction.reply({ content: "Tu danses d\u00e9j\u00e0 ! \ud83d\udd7a", flags: 64 });
         }
         if (clickerId !== targetId) {
-            return interaction.reply({ content: "Non, tu n'es pas invit\u00e9.e sur le dancefloor cette fois !", ephemeral: true });
+            return interaction.reply({ content: "Non, tu n'es pas invit\u00e9.e sur le dancefloor cette fois !", flags: 64 });
         }
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
@@ -1531,10 +1531,10 @@ async function runInteractionButton(interaction) {
         const clickerId = interaction.user.id;
 
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Tu peux pas t'insulter toi-m\u00eame... \ud83d\udc80", ephemeral: true });
+            return interaction.reply({ content: "Tu peux pas t'insulter toi-m\u00eame... \ud83d\udc80", flags: 64 });
         }
         if (clickerId !== targetId) {
-            return interaction.reply({ content: "Reste en dehors de la bagarre, crois-moi...", ephemeral: true });
+            return interaction.reply({ content: "Reste en dehors de la bagarre, crois-moi...", flags: 64 });
         }
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
@@ -1553,7 +1553,7 @@ async function runInteractionButton(interaction) {
         const originalAuthorNom = parts.slice(3).join("_");
 
         if (interaction.user.id === originalAuthorId) {
-            return interaction.reply({ content: "Tu vas rire avec toi-m\u00eame...? Attends, tu te sens bien ?", ephemeral: true });
+            return interaction.reply({ content: "Tu vas rire avec toi-m\u00eame...? Attends, tu te sens bien ?", flags: 64 });
         }
 
         const reurNom = interaction.member?.displayName ?? interaction.user.username;
@@ -1575,10 +1575,10 @@ async function runInteractionButton(interaction) {
         const clickerId = interaction.user.id;
 
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Tu vas te rizz en retour ? Hein ?", ephemeral: true });
+            return interaction.reply({ content: "Tu vas te rizz en retour ? Hein ?", flags: 64 });
         }
         if (clickerId !== targetId) {
-            return interaction.reply({ content: "Ce rizz ne t'\u00e9tait pas adress\u00e9 \ud83d\ude14", ephemeral: true });
+            return interaction.reply({ content: "Ce rizz ne t'\u00e9tait pas adress\u00e9 \ud83d\ude14", flags: 64 });
         }
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
@@ -1601,10 +1601,10 @@ async function runInteractionButton(interaction) {
         const clickerId = interaction.user.id;
 
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Te tirer dessus ? Non. Tu n'es pas Kurt Cobain.", ephemeral: true });
+            return interaction.reply({ content: "Te tirer dessus ? Non. Tu n'es pas Kurt Cobain.", flags: 64 });
         }
         if (clickerId !== targetId) {
-            return interaction.reply({ content: "Reste \u00e0 couvert ! Ne t'embarque pas dans la fusillade !", ephemeral: true });
+            return interaction.reply({ content: "Reste \u00e0 couvert ! Ne t'embarque pas dans la fusillade !", flags: 64 });
         }
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
@@ -1626,10 +1626,10 @@ async function runInteractionButton(interaction) {
         const clickerId = interaction.user.id;
 
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Mais ne te frappe pas, voyons !", ephemeral: true });
+            return interaction.reply({ content: "Mais ne te frappe pas, voyons !", flags: 64 });
         }
         if (clickerId !== targetId) {
-            return interaction.reply({ content: "Non ! Reste en dehors de la bagarre !", ephemeral: true });
+            return interaction.reply({ content: "Non ! Reste en dehors de la bagarre !", flags: 64 });
         }
 
         const retourNom = interaction.member?.displayName ?? interaction.user.username;
@@ -1650,7 +1650,7 @@ async function runInteractionButton(interaction) {
         const clickerId = interaction.user.id;
 
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Tu est d\u00e9j\u00e0 mort(e)...", ephemeral: true });
+            return interaction.reply({ content: "Tu est d\u00e9j\u00e0 mort(e)...", flags: 64 });
         }
 
         const mourrantNom = interaction.member?.displayName ?? interaction.user.username;
@@ -1670,10 +1670,10 @@ async function runInteractionButton(interaction) {
         const targetId = parts[parts.length - 1];
 
         if (interaction.user.id === originalAuthorId) {
-            return interaction.reply({ content: "On a compris que t'avais pas la ref :(", ephemeral: true });
+            return interaction.reply({ content: "On a compris que t'avais pas la ref :(", flags: 64 });
         }
         if (interaction.user.id === targetId) {
-            return interaction.reply({ content: "Bah c'est ta ref", ephemeral: true });
+            return interaction.reply({ content: "Bah c'est ta ref", flags: 64 });
         }
 
         const palarefGifs = ["https://cdn.discordapp.com/attachments/1128032964924670053/1505882858311647262/tyson.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882865492164608/viktor.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866192617624/zidane.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866549260338/kaamelott.gif", "https://cdn.discordapp.com/attachments/1480756332373213275/1548362733408362578/michel-palareff-v0-r9ywzo3614u31.png?ex=6aa6c8aa&is=6aa5772a&hm=20f2c75585bd442371e0095f00b4f1ffbf94e00b2e5ed5b1e56c5b3fd2c0b313&", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/palaref.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882866867765278/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867262296094/ants.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867576606720/simpsons.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882867903758428/speed.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868205752430/kinger.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882868520456332/pomni.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882872769151027/stare.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873109020853/erivo.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873427923024/hidethepain.gif", "https://cdn.discordapp.com/attachments/1128032964924670053/1505882873746686022/chieng.gif"];
@@ -1698,10 +1698,10 @@ async function runInteractionButton(interaction) {
         const targetId = parts[parts.length - 1];
 
         if (interaction.user.id === originalAuthorId) {
-            return interaction.reply({ content: "On a compris que t'avais la ref :)", ephemeral: true });
+            return interaction.reply({ content: "On a compris que t'avais la ref :)", flags: 64 });
         }
         if (interaction.user.id === targetId) {
-            return interaction.reply({ content: "Bah c'est ta ref", ephemeral: true });
+            return interaction.reply({ content: "Bah c'est ta ref", flags: 64 });
         }
 
         const jailarefGifs = ["https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/f1/7d/7y2QyYzWIYksGnnK.gif", "https://cdn.discordapp.com/attachments/720079691041472572/1548362421079646481/caf5c232438734937f6e1cf4c7bc5411.png", "https://media1.tenor.com/m/13XpzbwtVnYAAAAC/dway-the-roc.gif", "https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/14/44/oqcpwYRAEpXGYqfyw.gif", "https://static2.klipy.com/ii/50d7c955398dfd7e3c8ba5281154280f/79/6d/eoUS3shzyQLpKm.gif", "https://static2.klipy.com/ii/d7aec6f6f171607374b2065c836f92f4/3d/31/08K8MgEk.gif", "https://static2.klipy.com/ii/4493325008d34b7bf8cd6813cd5c1619/64/b0/SdnOajVDadHUy.gif", "https://cdn.discordapp.com/attachments/720079691041472572/1548366731666268250/image2.gif", "https://static2.klipy.com/ii/9294a2e836d178ddc22430dd7765727e/44/86/6QBidjUuV1oBpAnHIw7o.gif"];
@@ -1727,7 +1727,7 @@ async function runInteractionButton(interaction) {
         const originalAuthorNom = parts.slice(3).join('_');
 
         if (interaction.user.id === originalAuthorId) {
-            return interaction.reply({ content: "Tu as d\u00e9j\u00e0 explos\u00e9 !", ephemeral: true });
+            return interaction.reply({ content: "Tu as d\u00e9j\u00e0 explos\u00e9 !", flags: 64 });
         }
 
         const explodeGifs = [
@@ -1771,10 +1771,10 @@ async function runInteractionButton(interaction) {
         const clickerId = interaction.user.id;
 
         if (clickerId === originalAuthorId) {
-            return interaction.reply({ content: "Tu peux pas te venger de ton propre ragebait.", ephemeral: true });
+            return interaction.reply({ content: "Tu peux pas te venger de ton propre ragebait.", flags: 64 });
         }
         if (clickerId !== targetId) {
-            return interaction.reply({ content: "Ce ragebait ne t'était pas adressé...", ephemeral: true });
+            return interaction.reply({ content: "Ce ragebait ne t'était pas adressé...", flags: 64 });
         }
 
         const vengeNom = interaction.member?.displayName ?? interaction.user.username;
@@ -1794,12 +1794,12 @@ async function runInteractionButton(interaction) {
         const targetId = parts[3];
 
         if (interaction.user.id === originalAuthorId) {
-            return interaction.reply({ content: "Tu as déjà pleuré...", ephemeral: true });
+            return interaction.reply({ content: "Tu as déjà pleuré...", flags: 64 });
         }
         if (targetId && targetId !== 'none' && interaction.user.id === targetId) {
             const authorMember = interaction.guild?.members.cache.get(originalAuthorId);
             const originalAuthorNom = authorMember?.displayName ?? 'cette personne';
-            return interaction.reply({ content: `C'est toi qui as fait pleurer **${originalAuthorNom}** !`, ephemeral: true });
+            return interaction.reply({ content: `C'est toi qui as fait pleurer **${originalAuthorNom}** !`, flags: 64 });
         }
 
         const originalMember = interaction.guild?.members.cache.get(originalAuthorId);
@@ -1860,14 +1860,14 @@ async function handleInteractionSlash(interaction, client) {
     const cibleNom = cibleMember?.displayName ?? cibleUser?.username;
 
     if (cmd === 'kiss') {
-        if (!cibleUser) return interaction.reply({ content: "Tu veux embrasser qui ?", ephemeral: true });
+        if (!cibleUser) return interaction.reply({ content: "Tu veux embrasser qui ?", flags: 64 });
         if (cibleUser.id === auteurId) return interaction.reply({ embeds: [buildKissEmbed(auteurNom, auteurNom).setDescription(`💋 **${auteurNom}** s'embrasse ! Attends... Comment c'est possible ?`)] });
         if (cibleUser.id === client.user.id) return interaction.reply({ embeds: [buildKissEmbed(auteurNom, "Cacabot").setDescription(`💋 **${auteurNom}** m'embrasse ! Awww merci <3`)] });
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`kiss_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("💋 Embrasser en retour").setStyle(ButtonStyle.Primary));
         return interaction.reply({ embeds: [buildKissEmbed(auteurNom, cibleNom)], components: [row] });
     }
     if (cmd === 'hug') {
-        if (!cibleUser) return interaction.reply({ content: "Tu veux câliner qui ?", ephemeral: true });
+        if (!cibleUser) return interaction.reply({ content: "Tu veux câliner qui ?", flags: 64 });
         if (cibleUser.id === auteurId) return interaction.reply({ embeds: [buildHugEmbed(auteurNom, auteurNom).setDescription(`🫂 **${auteurNom}** se fait un câlin... Ça va aller...`)] });
         if (cibleUser.id === client.user.id) return interaction.reply({ embeds: [buildHugEmbed(auteurNom, "Cacabot").setDescription(`🫂 **${auteurNom}** me fait un câlin !`)] });
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`hug_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🫂 Câliner en retour").setStyle(ButtonStyle.Primary));
@@ -1918,8 +1918,8 @@ async function handleInteractionSlash(interaction, client) {
         return interaction.reply({ embeds: [buildDanceEmbed(`💃 **${auteurNom}** danse avec **${cibleNom}** !`, false)], components: [row] });
     }
     if (cmd === 'insult') {
-        if (!cibleUser) return interaction.reply({ content: "Mentionne quelqu'un pour l'insulter !", ephemeral: true });
-        if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas t'insulter toi-même !", ephemeral: true });
+        if (!cibleUser) return interaction.reply({ content: "Mentionne quelqu'un pour l'insulter !", flags: 64 });
+        if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas t'insulter toi-même !", flags: 64 });
         if (cibleUser.id === client.user.id) return interaction.reply({ embeds: [buildInsultEmbed(`🖕 **${auteurNom}** m'insulte ! J'ai fait quoi ?!`)] });
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`insult_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🖕 Insulter en retour").setStyle(ButtonStyle.Primary));
         return interaction.reply({ embeds: [buildInsultEmbed(`🖕 **${auteurNom}** insulte **${cibleNom}** !`)], components: [row] });
@@ -1930,22 +1930,22 @@ async function handleInteractionSlash(interaction, client) {
         return interaction.reply({ embeds: [buildLaughEmbed(texte)], components: [row] });
     }
     if (cmd === 'rizz') {
-        if (!cibleUser) return interaction.reply({ content: "Choisis quelqu'un à rizz !", ephemeral: true });
-        if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te rizz toi-même !", ephemeral: true });
+        if (!cibleUser) return interaction.reply({ content: "Choisis quelqu'un à rizz !", flags: 64 });
+        if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te rizz toi-même !", flags: 64 });
         if (cibleUser.id === client.user.id) return interaction.reply({ embeds: [buildRizzEmbed(`🗿 **${auteurNom}** me rizz ! Eh beh 😊`)] });
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`rizz_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🗿 Rizz en retour").setStyle(ButtonStyle.Primary));
         return interaction.reply({ embeds: [buildRizzEmbed(`🗿 **${auteurNom}** rizz **${cibleNom}** !`)], components: [row] });
     }
     if (cmd === 'bang') {
-        if (!cibleUser) return interaction.reply({ content: "Mentionne la personne sur qui tu veux tirer !", ephemeral: true });
-        if (cibleUser.id === auteurId) return interaction.reply({ content: "Évite de te tirer dessus :(", ephemeral: true });
+        if (!cibleUser) return interaction.reply({ content: "Mentionne la personne sur qui tu veux tirer !", flags: 64 });
+        if (cibleUser.id === auteurId) return interaction.reply({ content: "Évite de te tirer dessus :(", flags: 64 });
         if (cibleUser.id === client.user.id) return interaction.reply({ embeds: [buildBangEmbed(`💥 **${auteurNom}** me tire dessus ! HÉ !`)] });
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`bang_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("💥 Riposter !").setStyle(ButtonStyle.Primary));
         return interaction.reply({ embeds: [buildBangEmbed(`💥 **${auteurNom}** tire sur **${cibleNom}** !`)], components: [row] });
     }
     if (cmd === 'punch') {
-        if (!cibleUser) return interaction.reply({ content: "Mentionne quelqu'un à frapper !", ephemeral: true });
-        if (cibleUser.id === auteurId) return interaction.reply({ content: "Ne te frappe pas toi-même !", ephemeral: true });
+        if (!cibleUser) return interaction.reply({ content: "Mentionne quelqu'un à frapper !", flags: 64 });
+        if (cibleUser.id === auteurId) return interaction.reply({ content: "Ne te frappe pas toi-même !", flags: 64 });
         if (cibleUser.id === client.user.id) return interaction.reply({ embeds: [buildPunchEmbed(`🤜 **${auteurNom}** me frappe ! Aïeuh !`)] });
         const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId(`punch_back_${auteurId}_${cibleUser.id}_${auteurNom}`).setLabel("🤜 Frapper en retour").setStyle(ButtonStyle.Primary));
         return interaction.reply({ embeds: [buildPunchEmbed(`🤜 **${auteurNom}** frappe **${cibleNom}** !`)], components: [row] });
@@ -1988,7 +1988,7 @@ async function handleInteractionSlash(interaction, client) {
         if (!cibleUser) {
             description = `😐 **${auteurNom}** n'a pas la ref...`;
         } else if (cibleUser.id === auteurId) {
-            return interaction.reply({ content: "Tu n'as pas ta propre ref ? ...Hein ?", ephemeral: true });
+            return interaction.reply({ content: "Tu n'as pas ta propre ref ? ...Hein ?", flags: 64 });
         } else if (cibleUser.id === client.user.id) {
             description = `😐 **${auteurNom}** n'a pas ma ref...`;
         } else {
@@ -2014,7 +2014,7 @@ async function handleInteractionSlash(interaction, client) {
         if (!cibleUser) {
             description = `😎 **${auteurNom}** a la ref !`;
         } else if (cibleUser.id === auteurId) {
-            return interaction.reply({ content: "Bah oui, t'as forcément ta propre ref...", ephemeral: true });
+            return interaction.reply({ content: "Bah oui, t'as forcément ta propre ref...", flags: 64 });
         } else if (cibleUser.id === client.user.id) {
             description = `😎 **${auteurNom}** a ma ref !`;
         } else {
@@ -2073,8 +2073,8 @@ async function handleInteractionSlash(interaction, client) {
         return interaction.reply({ embeds: [embed], components: [row] });
     }
     if (cmd === 'bait') {
-        if (!cibleUser) return interaction.reply({ content: "Choisis quelqu'un que tu veux ragebait !", ephemeral: true });
-        if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te ragebait toi-même !", ephemeral: true });
+        if (!cibleUser) return interaction.reply({ content: "Choisis quelqu'un que tu veux ragebait !", flags: 64 });
+        if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te ragebait toi-même !", flags: 64 });
 
         const baitGifs = [
             "https://cdn.discordapp.com/attachments/1072299294519988345/1304467586746028193/brandbird_4.gif",
@@ -2110,8 +2110,8 @@ async function handleInteractionSlash(interaction, client) {
         return interaction.reply({ embeds: [embed], components: [row] });
     }
     if (cmd === 'ban') {
-        if (!cibleUser) return interaction.reply({ content: "Choisis quelqu'un que tu veux bannir !", ephemeral: true });
-        if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te bannir toi-même ! Demande aux modos pour ça.", ephemeral: true });
+        if (!cibleUser) return interaction.reply({ content: "Choisis quelqu'un que tu veux bannir !", flags: 64 });
+        if (cibleUser.id === auteurId) return interaction.reply({ content: "Tu ne peux pas te bannir toi-même ! Demande aux modos pour ça.", flags: 64 });
 
         const banGifs = [
             "https://cdn.discordapp.com/attachments/1128032964924670053/1505557423686029352/cat-screaming-cat-disappearing.gif",
