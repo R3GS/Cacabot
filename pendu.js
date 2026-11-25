@@ -486,7 +486,9 @@ async function lancerPenduQuotidien(guild, force = false) {
         try {
             await penduBridge.saveAll();
         } catch (error) {
-            penduBridge.setPenduPublicationPending(null);
+            // Un échec réseau ne prouve pas que Discord n'a pas reçu
+            // la sauvegarde : garder le journal et bloquer un relancement.
+            penduBridge.setPenduPublicationPending(publicationPending);
 
             console.error(
                 '[PENDU] Publication annulée : intention non sauvegardée.',
@@ -2598,7 +2600,13 @@ async function reconcilierPublicationPendu(client) {
     const messageActuel = sessionActuelle?.messageId || null;
     const messagePrecedent = pending.previousMessageId || null;
 
-    const memePublication = messageActuel === trouve.id;
+    // Un rappel peut remplacer messageId après la publication initiale.
+    // L'identifiant de session, lui, ne change jamais.
+    const memePublication = messageActuel === trouve.id || (
+        typeof pending.session.sessionId === 'string' &&
+        pending.session.sessionId.length > 0 &&
+        sessionActuelle?.sessionId === pending.session.sessionId
+    );
 
     const ancienneSessionAttendue =
         messageActuel === messagePrecedent &&
