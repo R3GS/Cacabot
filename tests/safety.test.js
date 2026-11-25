@@ -136,3 +136,16 @@ test('restauration : format v3 refuse une section manquante', () => {
         assert.equal(validateBackup(partial).valid, false, section);
     }
 });
+
+test('demarrage : verrou local acquis avant ouverture de session Discord', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+    assert.match(source, /await acquireInstanceGuard\(process\.env\.TOKEN\)/);
+    assert.match(source, /await client\.login\(process\.env\.TOKEN\)/);
+    assert.doesNotMatch(source, /^client\.login\(process\.env\.TOKEN\);/m);
+});
+
+test('sauvegardes : aucune suppression de message Discord de backup', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'index.js'), 'utf8');
+    assert.doesNotMatch(source, /ancienneSauvegarde\.delete\(/);
+    assert.match(source, /m\.author\?\.id === client\.user\?\.id/);
+});
