@@ -2511,7 +2511,7 @@ client.once('ready', async () => {
         }, intervalMs);
     }
 
-    setInterval(() => verifierHappyHour(client), 30 * 1000);
+    scheduleNonOverlappingCheck('Happy Hour', () => verifierHappyHour(client), 30 * 1000);
     scheduleNonOverlappingCheck('Twitch', () => verifierTwitchLive(client), 60 * 1000);
     scheduleNonOverlappingCheck('YouTube', () => verifierNouvellesVideosYouTube(), 3 * 60 * 1000); // Toutes les 3 minutes
 
