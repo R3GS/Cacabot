@@ -368,6 +368,58 @@ function buildMotusActionRow() {
     );
 }
 
+function buildMiniJeuxHomeEmbed(game) {
+    const isMotus = game === 'motus';
+    return new EmbedBuilder()
+        .setColor(isMotus ? 0x00b0f4 : 0xf39c12)
+        .setTitle(isMotus ? '🟩 Menu Motus' : '🧩 Menu Rébus')
+        .setDescription('Choisis une option ci-dessous pour continuer.');
+}
+
+function buildMiniJeuxHomeRow(game, userId) {
+    const prefix = game === 'motus' ? 'motus' : 'rebus';
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`${prefix}_view_stats_${userId}`)
+            .setLabel('Mes stats')
+            .setEmoji('📊')
+            .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+            .setCustomId(`${prefix}_view_guide_${userId}`)
+            .setLabel('Guide')
+            .setEmoji('📘')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`minijeux:close:${game}:${userId}`)
+            .setLabel('Fermer')
+            .setEmoji('🗑️')
+            .setStyle(ButtonStyle.Danger)
+    );
+}
+
+function buildMiniJeuxNavigationRow(game, userId) {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`minijeux:home:${game}:${userId}`)
+            .setLabel('Retour')
+            .setEmoji('↩️')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(`minijeux:close:${game}:${userId}`)
+            .setLabel('Fermer')
+            .setEmoji('🗑️')
+            .setStyle(ButtonStyle.Danger)
+    );
+}
+
+function buildMiniJeuxOwnerMismatchMessage(interaction, ownerId) {
+    const member = interaction.guild?.members?.cache?.get(ownerId);
+    const name = member?.displayName || member?.user?.username;
+    const safeName = name ? `**${name.replace(/@/g, '@\u200b')}**` : 'un autre membre';
+    const command = interaction.customId.includes(':motus:') ? '!motus' : '!rebus';
+    return `Ce menu appartient à ${safeName}. Ouvre ton propre menu avec ${command}.`;
+}
+
 async function disableMinijeuxButtonsOnMessage(msg) {
     if (!msg || !Array.isArray(msg.components) || msg.components.length === 0) return;
     const disabledRows = msg.components.map(row => {
@@ -989,6 +1041,24 @@ async function handleMotusMessage(message, response, client, helpers) {
 
     if (!interaction.isButton()) return false;
 
+    const motusHomeMatch = interaction.customId.match(/^minijeux:(home|close):motus:(\d{17,20})$/);
+    if (motusHomeMatch) {
+        const [, action, ownerId] = motusHomeMatch;
+        if (interaction.user.id !== ownerId) {
+            await interaction.reply({ content: buildMiniJeuxOwnerMismatchMessage(interaction, ownerId), flags: 64 });
+            return true;
+        }
+        if (action === 'home') {
+            await interaction.update({
+                embeds: [buildMiniJeuxHomeEmbed('motus')],
+                components: [buildMiniJeuxHomeRow('motus', ownerId)]
+            });
+        } else {
+            await interaction.update({ content: '🗑️ Menu fermé.', embeds: [], components: [] });
+        }
+        return true;
+    }
+
     if (interaction.customId.startsWith('stop_test_motus_')) {
         if (interaction.user.id !== EPSYS_ID) {
             await interaction.reply({ content: "Seule Epsys peut arrêter ce test.", flags: 64 });
@@ -1016,12 +1086,12 @@ async function handleMotusMessage(message, response, client, helpers) {
     if (interaction.customId === 'motus_view_stats' || interaction.customId.startsWith('motus_view_stats_')) {
         const member = interaction.member;
         const embed = buildMotusStatsEmbed(member, interaction.user);
-        await interaction.reply({ embeds: [embed], flags: 64 });
+        await interaction.reply({ embeds: [embed], components: [buildMiniJeuxNavigationRow('motus', interaction.user.id)], flags: 64 });
         return true;
     }
 
-    if (interaction.customId === 'motus_view_guide') {
-        await interaction.reply({ embeds: [buildMotusGuideEmbed()], flags: 64 });
+    if (interaction.customId === 'motus_view_guide' || interaction.customId.startsWith('motus_view_guide_')) {
+        await interaction.reply({ embeds: [buildMotusGuideEmbed()], components: [buildMiniJeuxNavigationRow('motus', interaction.user.id)], flags: 64 });
         return true;
     }
 
@@ -2376,6 +2446,24 @@ async function handleRebusMessage(message, response, client, helpers) {
 async function handleRebusButton(interaction) {
     if (!interaction.isButton()) return false;
 
+    const rebusHomeMatch = interaction.customId.match(/^minijeux:(home|close):rebus:(\d{17,20})$/);
+    if (rebusHomeMatch) {
+        const [, action, ownerId] = rebusHomeMatch;
+        if (interaction.user.id !== ownerId) {
+            await interaction.reply({ content: buildMiniJeuxOwnerMismatchMessage(interaction, ownerId), flags: 64 });
+            return true;
+        }
+        if (action === 'home') {
+            await interaction.update({
+                embeds: [buildMiniJeuxHomeEmbed('rebus')],
+                components: [buildMiniJeuxHomeRow('rebus', ownerId)]
+            });
+        } else {
+            await interaction.update({ content: '🗑️ Menu fermé.', embeds: [], components: [] });
+        }
+        return true;
+    }
+
     if (interaction.customId.startsWith('stop_test_rebus_')) {
         if (interaction.user.id !== EPSYS_ID) {
             await interaction.reply({ content: "Seule Epsys peut arrêter ce test.", flags: 64 });
@@ -2390,15 +2478,15 @@ async function handleRebusButton(interaction) {
         return true;
     }
 
-    if (interaction.customId === 'rebus_view_stats') {
+    if (interaction.customId === 'rebus_view_stats' || interaction.customId.startsWith('rebus_view_stats_')) {
         const member = interaction.member;
         const embed = buildRebusStatsEmbed(member);
-        await interaction.reply({ embeds: [embed], flags: 64 });
+        await interaction.reply({ embeds: [embed], components: [buildMiniJeuxNavigationRow('rebus', interaction.user.id)], flags: 64 });
         return true;
     }
 
-    if (interaction.customId === 'rebus_view_guide') {
-        await interaction.reply({ embeds: [buildRebusGuideEmbed()], flags: 64 });
+    if (interaction.customId === 'rebus_view_guide' || interaction.customId.startsWith('rebus_view_guide_')) {
+        await interaction.reply({ embeds: [buildRebusGuideEmbed()], components: [buildMiniJeuxNavigationRow('rebus', interaction.user.id)], flags: 64 });
         return true;
     }
 

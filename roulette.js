@@ -1661,7 +1661,7 @@ function buildRouletteNotifMenuPayload(member, ctx = 'ephem', statusNote = null)
     }
 
     const navRow = new ActionRowBuilder();
-    if (ctx !== 'ephem') navRow.addComponents(buildRouletteAccueilButton(userId));
+    navRow.addComponents(buildRouletteAccueilButton(userId));
     navRow.addComponents(buildRouletteCloseButton(userId));
 
     return { embeds: [embed], components: [row, rowRepeat, navRow] };
@@ -1671,6 +1671,7 @@ function buildRowResultatRoulette(authorId, outcomeId, failIndex) {
     const hasNotif = aUneNotifRouletteActive(authorId);
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId('roulette_tour').setLabel('À mon tour').setEmoji('🎲').setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId(`rlt_result_state_${authorId}`).setLabel('Mon état').setEmoji('🧍').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`roulette_probas_res_${authorId}_${outcomeId}_${failIndex}`).setLabel('Probas').setEmoji('📊').setStyle(ButtonStyle.Secondary),
         new ButtonBuilder().setCustomId(`roulette_claim_btn_${authorId}`).setLabel('Inventaire').setEmoji('🎒').setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
@@ -9726,6 +9727,14 @@ async function handleRouletteButton(interaction, client) {
         return true;
     }
 
+    if (customId.startsWith('rlt_result_state_')) {
+        const membre = interaction.guild?.members.cache.get(interaction.user.id)
+            || await interaction.guild?.members.fetch(interaction.user.id).catch(() => null);
+        if (!membre) return interaction.reply({ content: 'Impossible de charger ton état Roulette.', flags: 64 });
+        const payload = await buildRouletteStatePayload(membre, interaction.guildId, interaction.user.id);
+        await interaction.reply({ ...payload, flags: 64 });
+        return true;
+    }
     if (customId.startsWith('roulette_probas_res_')) {
         const [, , , authorId, outcomeId, failIndex] = customId.split('_');
         const payload = buildRoulettePaytablePayload('bonus', 'res', interaction.user.id, outcomeId, failIndex);

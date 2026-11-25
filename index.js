@@ -1275,6 +1275,35 @@ async function askDisambiguation(message, guild, candidates, callback) {
     });
 }
 
+async function runMessageCommandWithLoading(message, command) {
+    if (!message.content?.trimStart().startsWith('!')) return command();
+
+    let loadingMessage = null;
+    let commandFinished = false;
+    const timer = setTimeout(async () => {
+        const sentMessage = await message.channel.send({
+            content: '⏳ Je prépare le résultat, ça prend un peu plus de temps que prévu…',
+            allowedMentions: { parse: [] }
+        }).catch(() => null);
+
+        // Si la commande s'est terminée pendant l'envoi, on supprime quand même
+        // le message pour éviter qu'un indicateur de chargement reste orphelin.
+        if (commandFinished) {
+            await sentMessage?.delete().catch(() => {});
+            return;
+        }
+        loadingMessage = sentMessage;
+    }, 5000);
+
+    try {
+        return await command();
+    } finally {
+        commandFinished = true;
+        clearTimeout(timer);
+        if (loadingMessage) await loadingMessage.delete().catch(() => {});
+    }
+}
+
 async function disableButtons(interaction) {
     try {
         const msg = interaction.message;
@@ -1301,12 +1330,32 @@ async function disableButtons(interaction) {
         }
         if (message.author.bot) return;
 
+        // Rend les commandes tolérantes aux accents, à la casse et aux espaces
+        // placés après le point d'exclamation, dans tous les modules.
+        if (message.content.trimStart().startsWith('!')) {
+            message = new Proxy(message, {
+                get(target, property) {
+                    if (property === 'content') {
+                        const content = Reflect.get(target, property, target);
+                        const match = content.match(/^\s*!\s*([^\s]+)([\s\S]*)$/);
+                        if (!match) return content;
+                        const command = match[1].normalize('NFD')
+                            .replace(/[\u0300-\u036f]/g, '')
+                            .toLowerCase();
+                        return '!' + command + match[2].replace(/^\s+/, ' ');
+                    }
+                    const value = Reflect.get(target, property, target);
+                    return typeof value === 'function' ? value.bind(target) : value;
+                }
+            });
+        }
+
         // Surveillance des threads d'échange RegaDex (activité 24h & blocage des tiers)
-        if (await handleTcgTradeThreadMessage(message)) return;
+        if (await runMessageCommandWithLoading(message, () => handleTcgTradeThreadMessage(message))) return;
 
         // Commande prioritaire Rolembed (Epsys-only)
         if (message.content.trim().toLowerCase().startsWith('!rolembed')) {
-            if (await handleRolembedMessage(message)) return;
+            if (await runMessageCommandWithLoading(message, () => handleRolembedMessage(message))) return;
         }
 
         // =========================
@@ -1428,32 +1477,32 @@ async function disableButtons(interaction) {
         }
 
         // Sentinelles, conversion de liens & surveillance
-        if (await handleWatcherMessage(message)) return;
+        if (await runMessageCommandWithLoading(message, () => handleWatcherMessage(message))) return;
 
         // =========================
         //   SALON DÉCODEUR D'EMOJIS
         // =========================
-        if (await handleRebusMessage(message, null, client, { findMemberByName })) return;
+        if (await runMessageCommandWithLoading(message, () => handleRebusMessage(message, null, client, { findMemberByName }))) return;
 
         // =========================
         //     SALON MOTUS DU JOUR
         // =========================
-        if (await handleMotusMessage(message, null, client, { findMemberByName })) return;
+        if (await runMessageCommandWithLoading(message, () => handleMotusMessage(message, null, client, { findMemberByName }))) return;
 
         // =========================
         //   SALON PENDU QUOTIDIEN
         // =========================
-        if (await handlePenduMessage(message, null, client, { findMemberByName })) return;
+        if (await runMessageCommandWithLoading(message, () => handlePenduMessage(message, null, client, { findMemberByName }))) return;
 
     // =========================
     //   SÉCURITÉ & MODÉRATION
     // =========================
-    if (await handleSecurityMessage(message)) return;
+    if (await runMessageCommandWithLoading(message, () => handleSecurityMessage(message))) return;
 
     // =========================
     //   COMMANDES ROULETTE
     // =========================
-    if (await handleRouletteMessage(message, null, client, { findMemberByName, askDisambiguation })) return;
+    if (await runMessageCommandWithLoading(message, () => handleRouletteMessage(message, null, client, { findMemberByName, askDisambiguation }))) return;
 
     // Ping Cacabot seul -> "Quoi ? (Feur)" (Silencieux - ignoré si malus textuel pour éviter de répondre à un message supprimé)
     const strippedMsg = message.content.replace(/<@!?1503495713097519355>/g, '').trim();
@@ -1574,42 +1623,42 @@ async function disableButtons(interaction) {
     if (!response && !isExplicitCommand) return;
 
 // Commandes RegaDex TCG (!regadex, !rgdx, !tcg, !booster, !classeur, !carte, !trade...)
-    if (await handleTcgMessage(message, { findMemberByName, askDisambiguation })) return;
+    if (await runMessageCommandWithLoading(message, () => handleTcgMessage(message, { findMemberByName, askDisambiguation }))) return;
 
 // Commandes Battle Pass (!bp, !pass)
-    if (await handleBattlePassMessage(message, { findMemberByName, askDisambiguation })) return;
+    if (await runMessageCommandWithLoading(message, () => handleBattlePassMessage(message, { findMemberByName, askDisambiguation }))) return;
 
     // Commandes YouTube (!youtube, !last, !stats)
-    if (await handleYoutubeMessage(message, response)) return;
+    if (await runMessageCommandWithLoading(message, () => handleYoutubeMessage(message, response))) return;
 
     // !animal
-    if (await handleAnimalMessage(message, response, client, { findMemberByName, askDisambiguation })) return;
+    if (await runMessageCommandWithLoading(message, () => handleAnimalMessage(message, response, client, { findMemberByName, askDisambiguation }))) return;
 
     // Commandes Bienvenue (!welcome, !bienvenue)
-    if (await handleWelcomeMessage(message, response)) return;
+    if (await runMessageCommandWithLoading(message, () => handleWelcomeMessage(message, response))) return;
 
     // Commandes Suggestions (!suggestion, !suggest, !sugg)
-    if (await handleSuggestionMessage(message, response)) return;
+    if (await runMessageCommandWithLoading(message, () => handleSuggestionMessage(message, response))) return;
 
     // Commandes sociales (!lovecalc, !topchef, !flip, !blague, !question, !sylvain, !bougetoi)
-    if (await handleSocialMessage(message, response, client, { findMemberByName, askDisambiguation })) return;
+    if (await runMessageCommandWithLoading(message, () => handleSocialMessage(message, response, client, { findMemberByName, askDisambiguation }))) return;
 
-    if (await handleInteractionMessage(message, response, client, { findMemberByName, askDisambiguation })) return;
+    if (await runMessageCommandWithLoading(message, () => handleInteractionMessage(message, response, client, { findMemberByName, askDisambiguation }))) return;
 
     // Commandes Motus (!motus, !motustats)
-    if (await handleMotusMessage(message, response, client, { findMemberByName })) return;
+    if (await runMessageCommandWithLoading(message, () => handleMotusMessage(message, response, client, { findMemberByName }))) return;
 
     // Commandes Rébus (!rebus, !rebusstats)
-    if (await handleRebusMessage(message, response, client, { findMemberByName })) return;
+    if (await runMessageCommandWithLoading(message, () => handleRebusMessage(message, response, client, { findMemberByName }))) return;
 
     // Commandes Quotes (!quote, !citation)
-    if (await handleQuotesMessage(message, response)) return;
+    if (await runMessageCommandWithLoading(message, () => handleQuotesMessage(message, response))) return;
 
     // Commandes Anniversaire (!anniversaire, !anniversairetest)
-    if (await handleAnniversaireMessage(message, response)) return;
+    if (await runMessageCommandWithLoading(message, () => handleAnniversaireMessage(message, response))) return;
 
     // Commandes Activité (!profil, !avatar, !actif, !top, !setmessages)
-    if (await handleActivityMessage(message, response)) return;
+    if (await runMessageCommandWithLoading(message, () => handleActivityMessage(message, response))) return;
 
     // hé petit (Silencieux)
     if (response?.needsHePetit) {
@@ -1654,10 +1703,10 @@ async function disableButtons(interaction) {
     }
 
     // !helpx
-    if (await handleHelpMessage(message, response)) return;
+    if (await runMessageCommandWithLoading(message, () => handleHelpMessage(message, response))) return;
 
     // Commandes Utilitaires (!pomodoro, !rappel, !prune, !ping, !meteo, !botinfo, !serveur, !say, !edit, !aternos)
-    if (await handleToolsMessage(message, response, client)) return;
+    if (await runMessageCommandWithLoading(message, () => handleToolsMessage(message, response, client))) return;
 
     // !lastsave
     if (response?.needsLastsave) {
@@ -1671,7 +1720,7 @@ async function disableButtons(interaction) {
     }
 
     // !embed (Epsys-only)
-    if (await handleEmbedMessage(message, response, client)) return;
+    if (await runMessageCommandWithLoading(message, () => handleEmbedMessage(message, response, client))) return;
 
     // !question est pris en charge par handleSocialMessage
 
