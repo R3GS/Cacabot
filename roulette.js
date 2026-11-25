@@ -2070,14 +2070,14 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             if (estImmuniseRoulette(member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 3 minutes !`;
             if (estModoUser) return `🛡️ **${auteurNom}** est Modo : le mute de 3 minutes est annulé !`;
             annulerTiragesAGogo(member.id);
-            await member.timeout(3 * 60 * 1000, 'Roulette').catch(() => {});
+            await member.timeout(3 * 60 * 1000, 'Roulette').catch(err => console.error('[ROULETTE] Timeout 3 min échoué :', member.id, err));
             rouletteTimeoutUntil.set(member.id, Date.now() + 3 * 60 * 1000);
             return `**${auteurNom}** est mute pendant **3 minutes**.`;
         case 'malus-timeout-5min':
             if (estImmuniseRoulette(member.id)) return `🛡️ **${auteurNom}** est immunisé·e et évite le mute de 5 minutes !`;
             if (estModoUser) return `🛡️ **${auteurNom}** est Modo : le mute de 5 minutes est annulé !`;
             annulerTiragesAGogo(member.id);
-            await member.timeout(5 * 60 * 1000, 'Roulette').catch(() => {});
+            await member.timeout(5 * 60 * 1000, 'Roulette').catch(err => console.error('[ROULETTE] Timeout 5 min échoué :', member.id, err));
             rouletteTimeoutUntil.set(member.id, Date.now() + 5 * 60 * 1000);
             return `**${auteurNom}** est mute pendant **5 minutes**.`;
         case 'malus-timeout-20min':
@@ -2087,7 +2087,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
                 rouletteCooldowns.set(member.id, Date.now() + 20 * 60 * 1000);
                 return `🛡️ **${auteurNom}** est Modo : le mute de 20 minutes est remplacé par un cooldown de **20 minutes**.`;
             }
-            await member.timeout(20 * 60 * 1000, 'Roulette').catch(() => {});
+            await member.timeout(20 * 60 * 1000, 'Roulette').catch(err => console.error('[ROULETTE] Timeout 20 min échoué :', member.id, err));
             rouletteTimeoutUntil.set(member.id, Date.now() + 20 * 60 * 1000);
             return `**${auteurNom}** est mute pendant **20 minutes**.`;
         case 'malus-exclu-heure':
@@ -2099,7 +2099,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             }
             return malusDiffere(message, auteurNom, 'Exclusion de 1 heure', 'exclu.e pendant **1 heure**', 'a été exclu.e pendant **1 heure**',
                 () => {
-                    member.timeout(60 * 60 * 1000, 'Roulette').catch(() => {});
+                    member.timeout(60 * 60 * 1000, 'Roulette').catch(err => console.error('[ROULETTE] Timeout 1 h échoué :', member.id, err));
                     rouletteTimeoutUntil.set(member.id, Date.now() + 60 * 60 * 1000);
                 });
         case 'malus-exclu-jour':
@@ -2112,7 +2112,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             }
             return malusDiffere(message, auteurNom, 'Exclusion de 1 jour', 'exclu.e pendant **1 jour**', 'a été exclu.e pendant **1 jour**',
                 () => {
-                    member.timeout(24 * 60 * 60 * 1000, 'Roulette').catch(() => {});
+                    member.timeout(24 * 60 * 60 * 1000, 'Roulette').catch(err => console.error('[ROULETTE] Timeout 1 jour échoué :', member.id, err));
                     rouletteTimeoutUntil.set(member.id, Date.now() + 24 * 60 * 60 * 1000);
                 });
         case 'malus-exclu-semaine':
@@ -2125,7 +2125,7 @@ async function appliquerEtDecrireResultat(outcomeId, message, auteurNom, failInd
             }
             return malusDiffere(message, auteurNom, 'Exclusion de 1 semaine', 'exclu.e pendant **1 semaine**', 'a été exclu.e pendant **1 semaine**',
                 () => {
-                    member.timeout(7 * 24 * 60 * 60 * 1000, 'Roulette').catch(() => {});
+                    member.timeout(7 * 24 * 60 * 60 * 1000, 'Roulette').catch(err => console.error('[ROULETTE] Timeout 1 semaine échoué :', member.id, err));
                     rouletteTimeoutUntil.set(member.id, Date.now() + 7 * 24 * 60 * 60 * 1000);
                 });
         case 'bonus-gif-ou-audio': {
