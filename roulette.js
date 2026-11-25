@@ -4580,14 +4580,6 @@ function updateRouletteStats(userId, outcomeId, entry, client) {
     }
 }
 
-async function verifierRoleGamblingAddict(membre) {
-    if (!membre) return;
-    const stats = rouletteStats.get(membre.id);
-    if (!stats || stats.tirages < ROULETTE_ADDICT_SEUIL) return;
-    if (membre.roles.cache.has(ROULETTE_ROLE_JOUEUR_ID)) return;
-    await membre.roles.add(ROULETTE_ROLE_JOUEUR_ID, `Gambling addict : ${stats.tirages} rolls`).catch(() => {});
-}
-
 async function renderRouletteCollectorPosterCanvas(membre, entry, lanceur = null, estPartage = false, isHof = true, isTest = false) {
     const W = 1600, H = 900;
     const canvas = createCanvas(W, H);
@@ -5512,7 +5504,6 @@ async function tirerEtConstruireResultatRoulette(authorId, guild, channel, clien
     if (entryTiree && entryTiree.type === 'bonus' && probaReelle(entryTiree) < ROULETTE_HOF_SEUIL) {
         deverrouillerSucces(authorId, 'hof', channel);
     }
-    verifierRoleGamblingAddict(membre).catch(() => {});
 
     // Succès secrets temporels
     if (estRouletteMauditeDoree()) {
