@@ -2483,7 +2483,7 @@ client.once('ready', async () => {
         if (h === 10 && m >= 0 && m < 5 && motusData.dateKey !== `${dateKey}_10h`) {
             motusData.dateKey = `${dateKey}_10h`;
             if (guildRegaia) await envoyerMotusQuotidien(guildRegaia, 10);
-            await saveAll().catch(() => {});
+            await saveAll().catch(err => console.error('[INDEX] Sauvegarde quotidienne échouée :', err));
         }
 
         // 2. Lancement du Rébus Regaïen à 15h00
@@ -2506,7 +2506,7 @@ client.once('ready', async () => {
         if (h === 19 && m >= 0 && m < 5 && motusData.dateKey !== `${dateKey}_19h`) {
             motusData.dateKey = `${dateKey}_19h`;
             if (guildRegaia) await envoyerMotusQuotidien(guildRegaia, 19);
-            await saveAll().catch(() => {});
+            await saveAll().catch(err => console.error('[INDEX] Sauvegarde quotidienne échouée :', err));
         }
 
         // 4. Lancement du Pendu Quotidien à 21h00 (7 lettres - 1h)
