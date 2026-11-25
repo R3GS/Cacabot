@@ -17,6 +17,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '20'
       - name: Tests hors ligne sans connexion Discord
         run: npm test
