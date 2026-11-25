@@ -15609,7 +15609,7 @@ function reduceTcgBoosterCooldown(userId, reductionMs = 3 * 60 * 60 * 1000, memb
 
 const recompensesMinijeuxEnCours = new Set();
 
-async function grantMinigameTcgPoints(client, userIds, points = 2, rewardKey = null) {
+async function attribuerPointsMinijeuInterne(client, userIds, points = 2, rewardKey = null) {
     if (!Array.isArray(userIds) || userIds.length === 0) return [];
 
     const c = client || tcgBridge.client;
@@ -15745,6 +15745,19 @@ async function grantMinigameTcgPoints(client, userIds, points = 2, rewardKey = n
     }
 
     return rewarded;
+}
+
+// Sérialiser toute l'attribution, sauvegarde incluse : deux appels
+// concurrents ne peuvent plus créditer le même rewardKey avant
+// confirmation de la première sauvegarde.
+let fileAttributionsMinijeux = Promise.resolve();
+
+function grantMinigameTcgPoints(client, userIds, points = 2, rewardKey = null) {
+    const operation = fileAttributionsMinijeux
+        .catch(() => {})
+        .then(() => attribuerPointsMinijeuInterne(client, userIds, points, rewardKey));
+    fileAttributionsMinijeux = operation.catch(() => {});
+    return operation;
 }
 
 module.exports = {
