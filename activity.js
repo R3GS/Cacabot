@@ -500,7 +500,7 @@ async function handleActivitySlash(interaction) {
 
     if (commandName === 'top') {
         const allSorted = Object.entries(activityState.topData.messages).sort((a, b) => b[1] - a[1]);
-        if (allSorted.length === 0) return interaction.reply({ content: "Pas encore de données !", ephemeral: true });
+        if (allSorted.length === 0) return interaction.reply({ content: "Pas encore de données !", flags: 64 });
         const totalPages = Math.ceil(allSorted.length / 10);
         return interaction.reply({
             embeds: [buildTopEmbed(0, interaction.user.id, interaction.guild)],
@@ -541,13 +541,13 @@ async function handleActivityButton(interaction) {
         const authorId = parts[4];
 
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Ce profil ne t'est pas destiné 😌", ephemeral: true });
+            return interaction.reply({ content: "Ce profil ne t'est pas destiné 😌", flags: 64 });
         }
 
         const cibleUser = interaction.guild?.members.cache.get(cibleId)?.user 
                        || await interaction.client.users.fetch(cibleId).catch(() => null);
 
-        if (!cibleUser) return interaction.reply({ content: "Membre introuvable !", ephemeral: true });
+        if (!cibleUser) return interaction.reply({ content: "Membre introuvable !", flags: 64 });
 
         const embed = (tab === 'back') 
             ? buildProfilEmbed(cibleUser, interaction.guild) 
@@ -565,7 +565,7 @@ async function handleActivityButton(interaction) {
         const authorId = parts[2];
 
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Ce bouton ne t'est pas destiné !", ephemeral: true });
+            return interaction.reply({ content: "Ce bouton ne t'est pas destiné !", flags: 64 });
         }
 
         return interaction.update({
@@ -582,7 +582,7 @@ async function handleActivityButton(interaction) {
         const pageArg = parseInt(parts[3], 10) || 0;
 
         if (interaction.user.id !== authorId) {
-            return interaction.reply({ content: "Ce bouton ne t'est pas destiné !", ephemeral: true });
+            return interaction.reply({ content: "Ce bouton ne t'est pas destiné !", flags: 64 });
         }
 
         let targetPage = pageArg;
