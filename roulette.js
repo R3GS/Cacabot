@@ -7995,11 +7995,16 @@ async function handleRouletteMessage(message, response, client, helpers) {
             if (resultat.attenteChoix) rouletteChoixEnAttente.add(envoye.id);
             if (resultat.vote) await demarrerVoteRoulette(envoye, resultat.vote);
             if (resultat.differe) {
-                setTimeout(async () => {
-                    const embedFinal = await resultat.differe();
-                    memoriserResultatRoulette(envoye.id, embedFinal, resultat.outcomeId, resultat.gifOptions);
-                    envoye.edit({ embeds: [embedFinal] }).catch(() => {});
+                const timerDiffere = setTimeout(async () => {
+                    try {
+                        const embedFinal = await resultat.differe();
+                        memoriserResultatRoulette(envoye.id, embedFinal, resultat.outcomeId, resultat.gifOptions);
+                        await envoye.edit({ embeds: [embedFinal] }).catch(() => {});
+                    } catch (err) {
+                        console.warn('[ROULETTE] Résultat différé échoué :', err);
+                    }
                 }, 10000);
+                timerDiffere.unref?.();
             }
             return true;
         }
@@ -8102,11 +8107,16 @@ async function handleRouletteSlash(interaction, client) {
             if (res.attenteChoix) rouletteChoixEnAttente.add(env.id);
             if (res.vote) await demarrerVoteRoulette(env, res.vote);
             if (res.differe) {
-                setTimeout(async () => {
-                    const embedFinal = await res.differe();
-                    memoriserResultatRoulette(env.id, embedFinal, res.outcomeId, res.gifOptions);
-                    env.edit({ embeds: [embedFinal] }).catch(() => {});
+                const timerDiffere = setTimeout(async () => {
+                    try {
+                        const embedFinal = await res.differe();
+                        memoriserResultatRoulette(env.id, embedFinal, res.outcomeId, res.gifOptions);
+                        await env.edit({ embeds: [embedFinal] }).catch(() => {});
+                    } catch (err) {
+                        console.warn('[ROULETTE] Résultat différé échoué :', err);
+                    }
                 }, 10000);
+                timerDiffere.unref?.();
             }
             return true;
         }
@@ -9183,11 +9193,16 @@ async function handleRouletteButton(interaction, client) {
         if (res.attenteChoix) rouletteChoixEnAttente.add(interaction.message.id);
         if (res.vote) await demarrerVoteRoulette(interaction.message, res.vote);
         if (res.differe) {
-            setTimeout(async () => {
-                const embedFinal = await res.differe();
-                memoriserResultatRoulette(interaction.message.id, embedFinal, res.outcomeId, res.gifOptions);
-                interaction.message.edit({ embeds: [embedFinal] }).catch(() => {});
+            const timerDiffere = setTimeout(async () => {
+                try {
+                    const embedFinal = await res.differe();
+                    memoriserResultatRoulette(interaction.message.id, embedFinal, res.outcomeId, res.gifOptions);
+                    await interaction.message.edit({ embeds: [embedFinal] }).catch(() => {});
+                } catch (err) {
+                    console.warn('[ROULETTE] Résultat différé échoué :', err);
+                }
             }, 10000);
+            timerDiffere.unref?.();
         }
         return true;
     }
