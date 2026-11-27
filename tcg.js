@@ -15872,6 +15872,13 @@ function grantMinigameTcgPoints(client, userIds, points = 2, rewardKey = null) {
     return operation;
 }
 
+function getPlayCatalog() {
+    return getActiveSets().flatMap(set => getSetCatalog(set.number))
+        .filter(card => card.filePath)
+        .map(card => ({ id: card.id, name: card.name, baseName: card.baseName,
+            numCode: card.numCode, rarity: card.rarity, filePath: card.filePath }));
+}
+
 function getPlayCards(userId) {
     const inventory = tcgBridge.getTcgData()?.users?.[userId]?.cards;
     if (!inventory) return [];
@@ -15898,6 +15905,7 @@ async function renderPlayBinder(viewer, requestedSet, page, theme) {
 
 module.exports = {
     getPlayCards,
+    getPlayCatalog,
     renderPlayBinder,
     TCG_ROLE_ID,
     TCG_CHANNEL_ID,

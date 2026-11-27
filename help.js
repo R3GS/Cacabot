@@ -567,7 +567,7 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
                 `*Pas besoin de commande pour jouer : écris directement ta proposition dans le salon !*\n\n` +
                 `-# 🔒 Accès : Récupère tes rôles de jeux dans <#1559082682313474059> ou <#1559324422165373008> pour voir les salons et participer !\n\n` +
                 `### 🃏 Mini-jeux RegaDex\n` +
-                `\`!play\` dans <#1575601558458994758> • Ouvre Vitrine à thème et les guides des mini-jeux.\n\n` +
+                `\`!play\` dans <#1575601558458994758> • Ouvre le menu des six mini-jeux RegaDex et leurs guides.\n\n` +
                 `### 🟩 Le Motus\n` +
                 `📅 Tous les jours à **10h00** (6 lettres) et **19h00** (7 lettres).\n` +
                 `Écris simplement ton mot dans le chat pendant la session.\n` +

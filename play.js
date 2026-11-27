@@ -9,7 +9,7 @@ const {
     TextInputStyle, UserSelectMenuBuilder
 } = require('discord.js');
 const { createCanvas, loadImage } = require('canvas');
-const { getPlayCards, renderPlayBinder } = require('./tcg.js');
+const { getPlayCards, getPlayCatalog, renderPlayBinder } = require('./tcg.js');
 
 const PLAY_CHANNEL_ID = '1575601558458994758';
 const STATE_PATH = process.env.REGADEX_PLAY_STATE_PATH || path.join(__dirname, '.play-threads.json');
@@ -27,13 +27,20 @@ const RATINGS = [
     ['love', 'J’adore !', 100, ButtonStyle.Primary]
 ];
 const GUIDES = {
-    vitrine: ['Vitrine à thème', 'Choisis 1 ou 2 cartes de ton classeur pour compléter la phrase. Les réponses défilent anonymement pendant 10 secondes chacune. Tu peux noter chaque réponse des autres. Une note manquante vaut Meh. J’adore ! s’utilise une fois sur les 5 manches.'],
-    cavale: ['Cartes en cavale', 'Retrouve le nom d’une carte à partir d’un détail zoomé.'],
-    casting: ['Casting de l’enfer', 'Défends une carte tirée au hasard lors d’un débat de cinq minutes.'],
-    devine: ['Devine-carte', 'Pose des questions au maître du jeu pour découvrir la carte secrète.'],
-    classement: ['Le Classement impossible', 'Classe quatre cartes selon la consigne, puis présente ta liste.'],
-    fmk: ['Fuck, Marry, Kill', 'Répartis trois cartes entre les trois choix et justifie-les.']
+    vitrine: ['Vitrine à thème', 'Complète la phrase avec 1 ou 2 cartes de ton classeur.', '🎭',
+        'Cinq manches. Cherche les cartes possédées par nom ou numéro dans les 90 secondes. Les réponses sont anonymes et défilent dix secondes chacune. Une note par réponse des autres. Sans vote, elle vaut Meh. J’adore ! s’utilise une fois sur les cinq manches.'],
+    cavale: ['Cartes en cavale', 'Reconnais les illustrations à partir de détails zoomés.', '🔍',
+        'Écris le nom dans le fil. Les petites fautes sont acceptées si le nom reste reconnaissable. L’image dézoome un peu chaque minute. Première bonne réponse gagnante, révélation au bout de cinq minutes maximum. Cinq cartes par partie.'],
+    casting: ['Casting de l’enfer', 'Défends ton candidat dans un débat de cinq minutes.', '🎙️',
+        'Deux volontaires tirés au sort, ou un duel à deux. Chacun peut changer de carte trois fois en privé avant de la verrouiller. Les cartes sont révélées ensemble. Le public vote à la fin du débat. En duel, les deux personnes votent.'],
+    devine: ['Devine-carte', 'Enquête à tour de rôle avec les réponses Oui ou Non du MJ.', '🕵️',
+        'Le MJ est tiré parmi les volontaires. Tu peux poser une question, proposer une carte en privé ou passer sans dépenser ton quota. Après deux tours expirés, tu peux revenir avec Reprendre ma place. Une dernière minute de réponses s’ouvre quand les questions sont épuisées.'],
+    classement: ['Le Classement impossible', 'Classe quatre cartes et défends ton choix devant la classe.', '📋',
+        'Les inscrits votent pour un tirage commun ou individuel. Tout le monde reçoit la même consigne. Verrouille ta liste en privé, puis présente-la à ton tour. Le salon vote pour le classement le mieux défendu ou le plus drôle.'],
+    fmk: ['Fuck, Marry, Kill', 'Trois cartes communes et un choix par carte.', '💌',
+        'Place les trois cartes en privé, verrouille le trio puis explique chaque choix. Tu as quatre minutes. Un trio verrouillé compte même sans justification. Après les résultats, le salon vote pour la meilleure justification.']
 };
+const MIN_PLAYERS = { vitrine: 2, cavale: 1, casting: 2, devine: 2, classement: 1, fmk: 1 };
 const PROMPTS = [
     'Cacabot a été remplacé par ___ pendant son congé maladie.',
     'Le serveur allait bien, jusqu’au jour où ___ est devenu modo.',
@@ -182,17 +189,26 @@ function chooseGameMenu(menu, guide) {
     const select = new StringSelectMenuBuilder().setCustomId(idFor(guide ? 'guidegame' : 'game', menu.id));
     if (guide) {
         const current = GUIDES[guide];
-        main.setDescription(current ? '**' + current[0] + '**\n' + current[1] : 'Choisis un mini-jeu pour lire son guide.');
-        select.setPlaceholder('Quel guide veux-tu lire ?').addOptions(Object.entries(GUIDES).map(([value, [label]]) => ({ label, value })));
+        main.setAuthor({ name: 'RegaDex · Guide des mini-jeux' })
+            .setDescription(current ? '**' + current[2] + ' ' + current[0] + '**\n\n' + current[3] : 'Choisis un mini-jeu pour lire ses règles.');
+        select.setPlaceholder('Quel guide veux-tu lire ?').addOptions(Object.entries(GUIDES).map(([value, [label, , emoji]]) => ({ label, value, emoji })));
         return { embeds: [main], components: [row(select), row(button(idFor('menu', menu.id), 'Retour'))] };
     }
-    main.setDescription('Choisis un mini-jeu ou consulte son guide.');
-    select.setPlaceholder('Choisir un mini-jeu').addOptions({ label: GUIDES.vitrine[0], value: 'vitrine' });
+    main.setAuthor({ name: 'RegaDex · Salon de jeu' })
+        .setDescription('Choisis un jeu ci-dessous. Cacabot ouvre un fil et laisse **30 secondes** pour rejoindre.')
+        .addFields(Object.values(GUIDES).map(([name, value, icon]) => ({ name: icon + ' ' + name, value, inline: true })))
+        .setFooter({ text: 'Parties ouvertes ou sur invitation · Vote pour le prochain jeu en fin de partie' });
+    select.setPlaceholder('Choisir un mini-jeu').addOptions(Object.entries(GUIDES).map(([value, [label, description, emoji]]) => ({ label, value, description, emoji })));
     return { embeds: [main], components: [row(select), row(button(idFor('guide', menu.id), 'Guide'))] };
 }
 
 function launchMenu(menu) {
-    const preview = embed('Vitrine à thème').setDescription('Choisis comment ouvrir les inscriptions. Le fil sera public.');
+    const [name, description, icon] = GUIDES[menu.game];
+    const preview = embed(icon + ' ' + name).setDescription(description + '\n\nLe fil est public. Choisis qui peut participer.')
+        .addFields(
+            { name: 'Ouvert', value: 'Les membres du salon peuvent s’inscrire.', inline: true },
+            { name: 'Sur invitation', value: 'Seuls les membres sélectionnés peuvent jouer.', inline: true }
+        ).setFooter({ text: '30 secondes d’inscription par partie' });
     return { embeds: [preview], components: [
         row(button(idFor('open', menu.id), 'Ouvert', ButtonStyle.Primary), button(idFor('invite', menu.id), 'Sur invitation')),
         row(button(idFor('menu', menu.id), 'Retour'))
@@ -203,6 +219,14 @@ async function handlePlayMessage(message) {
     if (message.author.bot) return false;
     const record = threadRecords.get(message.channelId);
     if (record && message.channel.parentId === PLAY_CHANNEL_ID) persistRecordActivity(record, message.client);
+    const session = sessions.get(message.channelId);
+    if (session?.game === 'cavale' && session.phase === 'game' && session.state?.step === 'guess' &&
+        session.players.has(message.author.id) && !message.content.trim().startsWith('!')) {
+        return enqueue(session, () => cavaleGuess(session, message)).catch(async error => {
+            await recoverSession(session, error);
+            return true;
+        });
+    }
     if (message.channelId !== PLAY_CHANNEL_ID || !/^!play$/i.test(message.content.trim())) return false;
     if (!recordsReady) {
         await message.reply({ content: 'Les mini-jeux sont en cours de chargement.', allowedMentions: { repliedUser: false } });
@@ -226,7 +250,7 @@ async function createSession(interaction, menu, invited = null) {
     try {
         await interaction.deferUpdate();
         const thread = await interaction.message.startThread({
-            name: 'Vitrine à thème · ' + cut(readPlayer(interaction).name, 65),
+            name: GUIDES[menu.game][0] + ' · ' + cut(readPlayer(interaction).name, 65),
             autoArchiveDuration: 60,
             reason: 'Mini-jeu créé via !play'
         });
@@ -234,10 +258,11 @@ async function createSession(interaction, menu, invited = null) {
         threadRecords.set(thread.id, record);
         scheduleCleanup(record, thread.client);
         saveThreadRecords();
+        if (thread.members.add) await thread.members.add(menu.owner).catch(error => console.warn('[PLAY] Inscription de l’hôte :', error));
 
         const hostPlayer = readPlayer(interaction);
         const session = {
-            thread, record, host: menu.owner, invited, allowLate: false, queue: Promise.resolve(),
+            thread, record, host: menu.owner, game: menu.game, invited, allowLate: false, queue: Promise.resolve(),
             players: new Map([[menu.owner, hostPlayer]]), people: new Map([[menu.owner, hostPlayer]]), pending: new Map(),
             optedOut: new Set(), results: new Map(), timer: null, round: 0
         };
@@ -249,7 +274,9 @@ async function createSession(interaction, menu, invited = null) {
             throw error;
         }
         menus.delete(menu.id);
-        await interaction.editReply({ embeds: [embed('Vitrine à thème').setDescription('La partie est ouverte dans <#' + thread.id + '>.')], components: [] });
+        await interaction.editReply({ embeds: [embed(GUIDES[session.game][0]).setDescription('La partie est ouverte dans <#' + thread.id + '>.')],
+            components: [row(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Ouvrir le fil')
+                .setURL('https://discord.com/channels/' + thread.guildId + '/' + thread.id))] });
     } finally {
         menu.launching = false;
     }
@@ -268,7 +295,7 @@ function sessionButtons(session, joinLabel = 'Rejoindre') {
 }
 
 function lobbyPayload(session) {
-    return { embeds: [embed('Vitrine à thème · Inscriptions').setDescription(
+    return { embeds: [embed(GUIDES[session.game][0] + ' · Inscriptions').setDescription(
         '**' + session.players.size + '** inscrit·es · ' +
         (session.invited ? 'Sur invitation' : 'Ouvert') + '\nDébut ' + expiry(session.deadline)
     )], components: [sessionButtons(session)] };
@@ -279,6 +306,9 @@ async function openLobby(session) {
     for (const [id, player] of session.pending) session.players.set(id, player);
     session.pending.clear();
     session.phase = 'lobby';
+    session.board = null;
+    session.state = null;
+    session.ballot = null;
     session.lobbyId = (session.lobbyId || 0) + 1;
     session.round = 0;
     session.scores = new Map();
@@ -288,14 +318,14 @@ async function openLobby(session) {
     session.usedPrompts = new Set();
     session.deadline = Date.now() + JOIN_MS;
     session.lobby = await session.thread.send(lobbyPayload(session));
-    phaseTimer(session, Math.max(1, session.deadline - Date.now()), () => startRound(session));
+    phaseTimer(session, Math.max(1, session.deadline - Date.now()), () => startSelectedGame(session));
 }
 
 async function updateLobby(session) {
     if (session.phase === 'lobby') await session.lobby.edit(lobbyPayload(session));
     else if (session.phase !== 'closed') {
         await session.lobby.edit({
-            embeds: [embed('Vitrine à thème · Partie en cours').setDescription('Les arrivées rejoignent la partie à la manche suivante.')],
+            embeds: [embed(GUIDES[session.game][0] + ' · Partie en cours').setDescription('Les arrivées rejoignent la partie à la manche suivante ou au prochain jeu.')],
             components: [sessionButtons(session, 'Rejoindre la prochaine manche')]
         });
     }
@@ -536,36 +566,18 @@ async function finishContinue(session) {
         session.optedOut.add(user);
         await session.thread.members.remove(user).catch(error => console.warn('[PLAY] Désinscription du fil :', error));
     }
-    if (!session.players.size || session.players.size + session.pending.size < 2) {
+    if (!session.players.size) {
         await closeSession(session, 'Session terminée. Merci d’avoir joué !');
         return;
     }
-    session.phase = 'nextGame';
-    session.nextVotes = new Set();
-    session.deadline = Date.now() + CONTINUE_MS;
-    session.nextMessage = await session.thread.send({
-        embeds: [embed('Prochain mini-jeu').setDescription('Votez pour la prochaine partie. Fin ' + expiry(session.deadline))],
-        components: [row(button(controlId(session, 'replay', session.lobbyId), 'Vitrine à thème', ButtonStyle.Primary))]
-    });
-    phaseTimer(session, Math.max(1, session.deadline - Date.now()), () => finishNextVote(session));
-}
-
-async function finishNextVote(session) {
-    clearTimeout(session.timer);
-    await session.nextMessage.edit({ components: [] });
-    if (!session.nextVotes.size) {
-        await closeSession(session, 'Aucun vote enregistré. La session est terminée.');
-        return;
-    }
-    if (!session.players.has(session.host)) session.host = session.players.keys().next().value || session.host;
-    await openLobby(session);
+    await nextGamePoll(session, new Set(session.players.keys()));
 }
 
 async function closeSession(session, reason) {
     session.phase = 'closed';
     clearTimeout(session.timer);
     await restoreSlowmode(session).catch(error => console.error('[PLAY] Restauration du mode lent :', error));
-    const messages = [session.lobby, session.board, session.continueMessage, session.nextMessage].filter(Boolean);
+    const messages = [session.lobby, session.board, session.continueMessage, session.ballot?.message].filter(Boolean);
     await Promise.allSettled(messages.map(message => message.edit({ components: [] })));
     await session.thread.send({ content: reason, allowedMentions: { parse: [] } }).catch(error => console.warn('[PLAY] Clôture :', error));
 }
@@ -772,7 +784,9 @@ async function menuInteraction(interaction, action, menu) {
         case 'menu': return interaction.update(chooseGameMenu(menu));
         case 'guide': return interaction.update(chooseGameMenu(menu, 'all'));
         case 'guidegame': return interaction.update(chooseGameMenu(menu, interaction.values[0]));
-        case 'game': return interaction.update(launchMenu(menu));
+        case 'game':
+            if (interaction.values && GUIDES[interaction.values[0]]) menu.game = interaction.values[0];
+            return menu.game ? interaction.update(launchMenu(menu)) : interaction.update(chooseGameMenu(menu));
         case 'open': return createSession(interaction, menu);
         case 'invite': {
             const users = new UserSelectMenuBuilder().setCustomId(idFor('inviteusers', menu.id))
@@ -860,7 +874,10 @@ async function sessionInteraction(interaction, session, action, parts) {
         const params = action === 'binderset' ? [interaction.values[0], 0, parts[0]] : parts;
         return showBinder(interaction, session, action, params);
     }
+    if (action === 'pages') return gameResultPages(interaction, session, parts);
     if (session.phase === 'closed') return privateResponse(interaction, 'Cette partie est terminée.');
+    if (action === 'ballot') return voteBallot(interaction, session, parts);
+    if (action === 'gameaction') return gameInteraction(interaction, session, parts);
     if (['join', 'late', 'cancel'].includes(action) && Number(parts[0]) !== session.lobbyId)
         return privateResponse(interaction, 'Ce menu d’inscription a expiré.');
     if (action === 'rate') return rateResponse(interaction, session, parts);
@@ -877,6 +894,7 @@ async function sessionInteraction(interaction, session, action, parts) {
         session.people.set(user, player);
         persistRecordActivity(session.record, interaction.client);
         await privateResponse(interaction, session.phase === 'lobby' ? 'Tu es inscrit·e !' : 'Tu rejoindras la prochaine manche ou session.');
+        if (session.thread.members.add) await session.thread.members.add(user).catch(error => console.warn('[PLAY] Inscription Discord :', error));
         if (session.phase === 'lobby') await updateLobby(session);
         return;
     }
@@ -891,23 +909,17 @@ async function sessionInteraction(interaction, session, action, parts) {
         }
         return;
     }
-    if (['yes', 'leave', 'replay'].includes(action)) {
-        const phase = action === 'replay' ? 'nextGame' : 'continue';
-        if (session.phase !== phase || Number(parts[0]) !== session.lobbyId || Date.now() >= session.deadline)
+    if (action === 'yes' || action === 'leave') {
+        if (session.phase !== 'continue' || Number(parts[0]) !== session.lobbyId || Date.now() >= session.deadline)
             return privateResponse(interaction, 'Ce vote est terminé.');
         if (!session.players.has(user)) return privateResponse(interaction, 'Ce vote est réservé au groupe de jeu.');
         persistRecordActivity(session.record, interaction.client);
         await interaction.deferUpdate();
-        if (action === 'replay') {
-            session.nextVotes.add(user);
-            if (session.nextVotes.size >= session.players.size) await finishNextVote(session);
-        } else {
-            session.continuing.delete(user);
-            session.leaving.delete(user);
-            (action === 'yes' ? session.continuing : session.leaving).add(user);
-            if (session.continuing.size + session.leaving.size >= session.players.size) await finishContinue(session);
-            else await session.continueMessage.edit(continuePayload(session));
-        }
+        session.continuing.delete(user);
+        session.leaving.delete(user);
+        (action === 'yes' ? session.continuing : session.leaving).add(user);
+        if (session.continuing.size + session.leaving.size >= session.players.size) await finishContinue(session);
+        else await session.continueMessage.edit(continuePayload(session));
         return;
     }
     return privateResponse(interaction, 'Ce bouton a expiré.');
@@ -923,7 +935,7 @@ async function handlePlayInteraction(interaction) {
             await menuInteraction(interaction, action, menu);
         else if (session && interaction.channelId === id && interaction.channel.parentId === PLAY_CHANNEL_ID) {
             // Les votes et formulaires sont acquittés aussitôt, même si un Canvas est en cours.
-            if (action === 'rate' || ['pick', 'query', 'search', 'prev', 'next', 'clear', 'swap', 'card', 'binder', 'browse', 'binderset', 'standing'].includes(action))
+            if (action === 'rate' || ['pick', 'query', 'search', 'prev', 'next', 'clear', 'swap', 'card', 'binder', 'browse', 'binderset', 'standing', 'pages'].includes(action))
                 await sessionInteraction(interaction, session, action, parts);
             else await enqueue(session, () => sessionInteraction(interaction, session, action, parts));
         } else await privateResponse(interaction, 'Ce menu a expiré. Lance une nouvelle partie avec !play.');
@@ -931,10 +943,1073 @@ async function handlePlayInteraction(interaction) {
         console.error('[PLAY] Interaction :', error);
         if (!interaction.deferred && !interaction.replied) await privateResponse(interaction, 'Le mini-jeu a rencontré une erreur.').catch(() => {});
         else await interaction.followUp({ content: 'Le mini-jeu a rencontré une erreur.', flags: MessageFlags.Ephemeral }).catch(() => {});
-        if (session && ['lock', 'join', 'late', 'cancel', 'yes', 'leave', 'replay'].includes(action))
+        if (session && ['lock', 'join', 'late', 'cancel', 'yes', 'leave', 'gameaction', 'ballot'].includes(action))
             await recoverSession(session, error);
     }
     return true;
+}
+
+
+// Parcours commun aux cinq autres jeux et aux votes entre parties.
+const CASTING_QUESTIONS = [
+    'Qui devrait représenter Regaïa devant un tribunal ?',
+    'Qui devrait gérer les plaintes du serveur pendant une semaine ?',
+    'Qui engagerais-tu pour sauver une soirée qui part en vrille ?',
+    'Qui ferait le meilleur remplaçant de Cacabot ?',
+    'À qui confierais-tu les clés du serveur pendant 24 heures ?'
+];
+const RANKING_PROMPTS = [
+    'Du plus au moins fiable pour garder ton chat.',
+    'Du premier au dernier que tu appellerais pour déménager.',
+    'Du plus au moins doué pour faire croire qu’il travaille.',
+    'Du plus au moins crédible pour présenter le journal de 20 heures.',
+    'Du premier au dernier à survivre à une nuit dans un château hanté.'
+];
+const FMK_LABELS = ['Fuck', 'Marry', 'Kill'];
+const answerKey = value => normalize(value ?? '').replace(/[^\p{Letter}\p{Number}]+/gu, ' ').trim();
+const nameKeys = card => new Set([answerKey(card.name), answerKey(card.baseName)].filter(Boolean));
+
+function promotePending(session) {
+    for (const [id, player] of session.pending) session.players.set(id, player);
+    session.pending.clear();
+}
+
+function sampleCards(count, excluded = new Set(), distinctNames = false) {
+    const cards = shuffled(getPlayCatalog()).filter(card => !excluded.has(card.id));
+    if (!distinctNames) return cards.slice(0, count);
+    const seen = new Set();
+    return cards.filter(card => {
+        const name = answerKey(card.baseName || card.name);
+        if (seen.has(name)) return false;
+        seen.add(name);
+        return true;
+    }).slice(0, count);
+}
+
+function gameTitle(session) {
+    const [name, , icon] = GUIDES[session.game];
+    return icon + ' ' + name;
+}
+
+function gameButton(session, action, label, style, argument = '') {
+    return button(controlId(session, 'gameaction', session.lobbyId, session.state.revision, action, argument), label, style);
+}
+
+function gameSelect(session, action, options, label) {
+    return new StringSelectMenuBuilder()
+        .setCustomId(controlId(session, 'gameaction', session.lobbyId, session.state.revision, action))
+        .setPlaceholder(label).addOptions(options);
+}
+
+function gameStep(session, step) {
+    clearTimeout(session.timer);
+    session.phase = 'game';
+    session.state.step = step;
+    session.state.revision++;
+    session.deadline = 0;
+}
+
+async function gameBoard(session, text, components = [], attachment = null, mentions = [], title = gameTitle(session)) {
+    const page = embed(title).setDescription(cut(text, 4000));
+    if (attachment) page.setImage('attachment://' + attachment.name);
+    const payload = { embeds: [page], components, allowedMentions: { parse: [], users: mentions } };
+    if (mentions.length) payload.content = mentions.map(id => '<@' + id + '>').join(' ');
+    else if (session.board) payload.content = null;
+    if (attachment) payload.files = [attachment];
+    if (session.board) await session.board.edit({ ...payload, attachments: [] });
+    else session.board = await session.thread.send(payload);
+}
+
+async function threadVoters(session) {
+    let ids = new Set(session.players.keys());
+    if (session.thread.members.fetch) {
+        try {
+            const present = new Set();
+            let after;
+            for (;;) {
+                const members = await session.thread.members.fetch({ cache: false, withMember: true, limit: 100, after });
+                for (const member of members.values()) {
+                    if (member.id !== session.thread.client.user.id && !member.guildMember?.user?.bot) present.add(member.id);
+                }
+                const last = members.lastKey();
+                if (members.size < 100 || !last || last === after) break;
+                after = last;
+            }
+            ids = present;
+        } catch (error) { console.warn('[PLAY] Lecture des personnes du fil :', error); }
+    }
+    for (const id of session.optedOut) ids.delete(id);
+    return ids;
+}
+
+async function startSelectedGame(session) {
+    promotePending(session);
+    if (session.players.size < MIN_PLAYERS[session.game]) {
+        await closeSession(session, 'Pas assez de personnes inscrites pour lancer ce jeu.');
+        return;
+    }
+    if (session.game === 'vitrine') return startRound(session);
+    session.state = { revision: 0, step: '' };
+    session.phase = 'game';
+    await updateLobby(session);
+    if (session.game === 'cavale') return startCavale(session);
+    if (session.game === 'casting') return startCasting(session);
+    if (session.game === 'devine') return startDevine(session);
+    if (session.game === 'classement') return startRanking(session);
+    return startSocialChoices(session, 'fmk');
+}
+
+async function finishGame(session, text, attachment = null, components = []) {
+    gameStep(session, 'finished');
+    await gameBoard(session, text, components, attachment);
+    await nextGamePoll(session, await threadVoters(session));
+}
+
+async function openBallot(session, { title, description, voters, options, choose, ms = CONTINUE_MS, canFinishEarly = () => true }) {
+    clearTimeout(session.timer);
+    session.phase = 'ballot';
+    const ballot = { id: session.ballotId = (session.ballotId || 0) + 1, voters, options,
+        votes: new Map(), choose, title, description, canFinishEarly };
+    session.ballot = ballot;
+    session.deadline = Date.now() + ms;
+    ballot.message = await session.thread.send(ballotPayload(session, ballot));
+    phaseTimer(session, Math.max(1, session.deadline - Date.now()), () => finishBallot(session, ballot));
+}
+
+function ballotPayload(session, ballot) {
+    const options = ballot.options;
+    const customId = controlId(session, 'ballot', ballot.id);
+    const controls = options.length > 25
+        ? new UserSelectMenuBuilder().setCustomId(customId).setPlaceholder('Sélectionner un·e participant·e')
+        : new StringSelectMenuBuilder().setCustomId(customId).setPlaceholder('Choisir ton vote')
+            .addOptions(options.map(({ value, label, emoji }) => ({ value, label: cut(label, 100), ...(emoji ? { emoji } : {}) })));
+    return { embeds: [embed(ballot.title).setDescription(ballot.description + '\n\n' +
+        ballot.votes.size + '/' + ballot.voters.size + ' votes · Fin ' + expiry(session.deadline))],
+        components: [row(controls)], allowedMentions: { parse: [] } };
+}
+
+async function voteBallot(interaction, session, [id]) {
+    const ballot = session.ballot;
+    const user = interaction.user.id;
+    const value = interaction.values?.[0];
+    if (session.phase !== 'ballot' || ballot?.id !== Number(id) || Date.now() >= session.deadline)
+        return privateResponse(interaction, 'Ce vote est clos.');
+    if (!ballot.voters.has(user)) return privateResponse(interaction, 'Ce vote ne t’est pas ouvert.');
+    if (!ballot.options.some(option => option.value === value)) return privateResponse(interaction, 'Ce choix ne fait pas partie du vote.');
+    ballot.votes.set(user, value);
+    persistRecordActivity(session.record, interaction.client);
+    await privateResponse(interaction, 'Ton vote est enregistré.');
+    if (ballot.votes.size >= ballot.voters.size && ballot.canFinishEarly(ballot.votes)) await finishBallot(session, ballot);
+    else await ballot.message.edit(ballotPayload(session, ballot));
+}
+
+async function finishBallot(session, ballot) {
+    if (session.ballot !== ballot || session.phase !== 'ballot') return;
+    clearTimeout(session.timer);
+    session.phase = 'game';
+    const counts = new Map();
+    for (const choice of ballot.votes.values()) counts.set(choice, (counts.get(choice) || 0) + 1);
+    const maximum = Math.max(0, ...counts.values());
+    const leaders = [...counts].filter(([, count]) => count === maximum).map(([value]) => value);
+    await ballot.message.edit({
+        embeds: [embed(ballot.title).setDescription(
+            ballot.votes.size ? ballot.options.filter(option => counts.has(option.value))
+                .map(option => '**' + escapeText(option.label) + '** · ' + counts.get(option.value)).join('\n').slice(0, 3800) : 'Aucun vote enregistré.'
+        )], components: []
+    });
+    await ballot.choose(leaders, ballot.votes);
+}
+
+async function nextGamePoll(session, voters) {
+    if (!voters.size) return closeSession(session, 'Session terminée. Merci d’avoir joué !');
+    const options = Object.entries(GUIDES).map(([value, [label, , emoji]]) => ({ value, label, emoji }));
+    await openBallot(session, { title: '🎮 Prochain mini-jeu', description: 'Choisis la suite. En cas d’égalité, Cacabot tire au sort.',
+        voters, options, choose: async (leaders, votes) => {
+            if (!leaders.length) return closeSession(session, 'Aucun vote enregistré. La session est terminée.');
+            const winner = leaders[randomInt(leaders.length)];
+            if (!session.players.has(session.host)) session.host = session.players.keys().next().value || votes.keys().next().value;
+            session.game = winner;
+            await session.thread.send({ embeds: [embed(gameTitle(session)).setDescription('Le vote a choisi ce mini-jeu. Les inscriptions ouvrent dans ce fil.')],
+                allowedMentions: { parse: [] } });
+            await openLobby(session);
+        }
+    });
+}
+
+function gameModal(session, op, title, fields) {
+    const modal = new ModalBuilder()
+        .setCustomId(controlId(session, 'gameaction', session.lobbyId, session.state.revision, op))
+        .setTitle(title);
+    for (const field of fields) {
+        modal.addComponents(row(new TextInputBuilder().setCustomId(field.id).setLabel(field.label)
+            .setStyle(field.paragraph ? TextInputStyle.Paragraph : TextInputStyle.Short)
+            .setRequired(field.required !== false).setMaxLength(field.max || 180)));
+    }
+    return modal;
+}
+
+function cardFile(card, name = 'carte.png') {
+    return new AttachmentBuilder(card.filePath, { name });
+}
+
+function distance(a, b) {
+    let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
+    let older;
+    for (let i = 1; i <= a.length; i++) {
+        const next = [i];
+        for (let j = 1; j <= b.length; j++) {
+            next[j] = Math.min(next[j - 1] + 1, previous[j] + 1, previous[j - 1] + Number(a[i - 1] !== b[j - 1]));
+            if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+                next[j] = Math.min(next[j], older[j - 2] + 1);
+            }
+        }
+        older = previous;
+        previous = next;
+    }
+    return previous[b.length];
+}
+
+function matchesCard(query, target, names) {
+    const guess = answerKey(query);
+    if (!guess || guess.length > 100) return false;
+    const expected = nameKeys(target);
+    if (expected.has(guess)) return true;
+    const threshold = guess.length >= 8 ? 2 : guess.length >= 4 ? 1 : 0;
+    if (!threshold || names.has(guess)) return false;
+    let best = Infinity;
+    for (const name of expected) best = Math.min(best, distance(guess, name));
+    return best <= threshold && ![...names].some(name => !expected.has(name) && Math.abs(guess.length - name.length) <= best && distance(guess, name) <= best);
+}
+
+async function startCavale(session) {
+    const state = session.state;
+    state.cards = sampleCards(5, new Set(), true);
+    if (!state.cards.length) return finishGame(session, 'Aucune carte disponible dans le catalogue.');
+    state.names = new Set(getPlayCatalog().flatMap(card => [...nameKeys(card)]));
+    state.index = 0;
+    await cavaleRound(session);
+}
+
+async function cavaleRound(session) {
+    const state = session.state;
+    if (state.index >= state.cards.length) {
+        const entries = ranked([...session.scores].map(([user, score]) => ({ user, score })));
+        const text = entries.length ? entries.map(item => '**#' + item.rank + '** · ' +
+            escapeText(session.people.get(item.user)?.name || 'Enquêteur') + ' · **' + item.score + '** carte(s)').join('\n') : 'Personne n’a trouvé de carte.';
+        return finishGame(session, '**Classement final**\n' + text);
+    }
+    promotePending(session);
+    gameStep(session, 'guess');
+    state.zoom = 0;
+    state.roundStarted = Date.now();
+    try {
+        state.image = await loadImage(state.cards[state.index].filePath);
+    } catch (error) {
+        console.warn('[PLAY] Illustration de Cartes en cavale indisponible :', error);
+        state.index++;
+        return cavaleRound(session);
+    }
+    await cavaleZoom(session);
+}
+
+async function cavaleZoom(session) {
+    const state = session.state;
+    const source = state.image;
+    const sourceSide = Math.min(source.width, source.height);
+    const side = sourceSide * (0.27 + state.zoom * 0.095);
+    const x = source.width * 0.49 - side / 2;
+    const y = source.height * 0.46 - side / 2;
+    const canvas = createCanvas(620, 620);
+    canvas.getContext('2d').drawImage(source, x, y, side, side, 0, 0, canvas.width, canvas.height);
+    await gameBoard(session, '**Carte ' + (state.index + 1) + '/' + state.cards.length +
+        '** · Indice ' + (state.zoom + 1) + '/5\nÉcris ta réponse dans le fil. Prochain indice ou révélation ' +
+        expiry(state.roundStarted + (state.zoom + 1) * 60_000) + '.', [],
+    new AttachmentBuilder(canvas.toBuffer('image/png'), { name: 'indice.png' }));
+    phaseTimer(session, Math.max(1, state.roundStarted + (state.zoom + 1) * 60_000 - Date.now()), async () => {
+        if (++state.zoom === 5) await revealCavale(session);
+        else await cavaleZoom(session);
+    });
+}
+
+async function cavaleGuess(session, message) {
+    if (session.phase !== 'game' || session.state.step !== 'guess' || !session.players.has(message.author.id)) return false;
+    const state = session.state;
+    if (Date.now() >= state.roundStarted + 300_000 || !matchesCard(message.content, state.cards[state.index], state.names)) return false;
+    await revealCavale(session, message.author.id);
+    return true;
+}
+
+async function revealCavale(session, winner = null) {
+    const state = session.state;
+    gameStep(session, 'reveal');
+    const card = state.cards[state.index];
+    if (winner) session.scores.set(winner, (session.scores.get(winner) || 0) + 1);
+    await gameBoard(session, '**' + escapeText(card.name) + '** · N° ' + card.numCode + '\n' +
+        (winner ? '<@' + winner + '> gagne la manche !' : 'Le délai de cinq minutes est terminé.'), [], cardFile(card));
+    state.image = null;
+    state.index++;
+    session.board = null; // Conserve la révélation pendant l’affichage de l’indice suivant.
+    phaseTimer(session, 3000, () => cavaleRound(session));
+}
+
+async function startDevine(session) {
+    const state = session.state;
+    state.volunteers = new Set();
+    gameStep(session, 'volunteer');
+    await gameBoard(session, 'Qui veut être maître du jeu ? Le MJ sera tiré au sort parmi les volontaires dans 30 secondes.',
+        [row(gameButton(session, 'volunteer', 'Être volontaire', ButtonStyle.Primary))]);
+    phaseTimer(session, JOIN_MS, () => setupDevine(session));
+}
+
+async function setupDevine(session) {
+    const state = session.state;
+    if (!state.volunteers.size) return finishGame(session, 'Aucun volontaire pour être MJ. On passe au vote du prochain jeu.');
+    state.mj = shuffled(state.volunteers)[0];
+    state.card = sampleCards(1, new Set(), true)[0];
+    if (!state.card) return finishGame(session, 'Le catalogue ne contient aucune carte disponible.');
+    state.names = new Set(getPlayCatalog().flatMap(card => [...nameKeys(card)]));
+    const ids = [...session.players.keys()].filter(id => id !== state.mj);
+    const limit = ids.length >= 5 ? 3 : ids.length >= 3 ? 4 : 5;
+    state.investigators = new Map(ids.map(id => [id, { left: limit, misses: 0, paused: false }]));
+    state.order = shuffled(ids);
+    state.cursor = 0;
+    state.log = [];
+    state.idleActors = new Set();
+    gameStep(session, 'mjReady');
+    await gameBoard(session, '<@' + state.mj + '> est MJ. Ouvre la carte secrète pour lancer l’enquête.',
+        [row(gameButton(session, 'secret', 'Ouvrir la carte secrète', ButtonStyle.Primary))], null, [state.mj]);
+    phaseTimer(session, CONTINUE_MS, () => openDevineStop(session));
+}
+
+function devineHistory(state) {
+    const lines = state.log.map(({ asker, question, answer }, i) =>
+        '**' + (i + 1) + '.** <@' + asker + '> · ' + escapeText(question) + ' → **' + answer + '**');
+    return lines;
+}
+
+function devineUtilities(session) {
+    return row(
+        button(controlId(session, 'binder'), 'Classeur'),
+        gameButton(session, 'history', 'Tout l’historique').setDisabled(!session.state.log?.length),
+        gameButton(session, 'return', 'Reprendre ma place').setDisabled(![...session.state.investigators.values()].some(p => p.paused))
+    );
+}
+
+async function devineBoard(session, status, controls, mentions = []) {
+    const lines = devineHistory(session.state);
+    const history = lines.slice(-6).join('\n') || 'Aucune réponse pour le moment.';
+    await gameBoard(session, status + '\n\n**Questions et réponses**\n' + history,
+        [...controls, devineUtilities(session)], null, mentions);
+}
+
+async function devineTurn(session, samePlayer = null) {
+    const state = session.state;
+    const withQuestions = [...state.investigators].filter(([, player]) => player.left > 0);
+    const available = state.order.filter(id => !state.investigators.get(id).paused);
+    if (!withQuestions.length) return devineLastChance(session);
+    if (!available.length || available.every(id => state.idleActors.has(id))) return devineDormant(session);
+    const finalQuestioner = withQuestions.length === 1 ? withQuestions[0][0] : null;
+    if (finalQuestioner && !available.includes(finalQuestioner)) return devineLastChance(session);
+    let current = samePlayer || finalQuestioner;
+    if (!current) {
+        for (let i = 0; i < state.order.length; i++) {
+            const candidate = state.order[state.cursor++ % state.order.length];
+            if (available.includes(candidate)) { current = candidate; break; }
+        }
+    }
+    if (!current) return devineDormant(session);
+    state.current = current;
+    state.lastQuestioner = Boolean(finalQuestioner);
+    state.pendingQuestion = null;
+    const investigator = state.investigators.get(current);
+    gameStep(session, 'turn');
+    const control = row(
+        gameButton(session, 'ask', 'Poser une question', ButtonStyle.Primary).setDisabled(!investigator.left),
+        gameButton(session, 'guess', 'Proposer une carte', ButtonStyle.Success),
+        gameButton(session, 'pass', finalQuestioner ? 'Passer aux dernières réponses' : 'Passer mon tour')
+    );
+    await devineBoard(session, 'Au tour de <@' + current + '> · **' + investigator.left + '** question(s) restante(s) · 1 minute.',
+        [control], [current]);
+    phaseTimer(session, CONTINUE_MS, () => devinePass(session, true));
+}
+
+async function devinePass(session, expired) {
+    const state = session.state;
+    const player = state.investigators.get(state.current);
+    if (expired && ++player.misses >= 2) player.paused = true;
+    if (!expired) player.misses = 0;
+    if (state.lastQuestioner) return devineLastChance(session);
+    state.idleActors.add(state.current);
+    await devineTurn(session);
+}
+
+async function devineDormant(session) {
+    gameStep(session, 'dormant');
+    await devineBoard(session, 'Personne n’a joué pendant le dernier tour de table. Une minute pour reprendre.',
+        [row(gameButton(session, 'resume', 'Reprendre la partie', ButtonStyle.Primary))]);
+    phaseTimer(session, CONTINUE_MS, () => finishDevine(session, 'Personne n’a repris la partie.'));
+}
+
+async function devineLastChance(session) {
+    gameStep(session, 'finalGuess');
+    session.state.finalGuesses = new Set();
+    await devineBoard(session, '**Dernière chance · 1 minute**\nChaque enquêteur peut tenter une dernière réponse en privé.',
+        [row(gameButton(session, 'guess', 'Proposer ma dernière carte', ButtonStyle.Success))]);
+    phaseTimer(session, CONTINUE_MS, () => finishDevine(session, 'Personne n’a trouvé pendant la dernière chance.'));
+}
+
+async function devineWaitingMJ(session) {
+    gameStep(session, 'waitingMJ');
+    const { mj, pendingQuestion } = session.state;
+    await devineBoard(session, '<@' + mj + '>, tu as une minute pour répondre à <@' + pendingQuestion.asker + '>.', [
+        row(gameButton(session, 'mjpanel', 'Ouvrir le pupitre MJ', ButtonStyle.Primary))
+    ], [mj]);
+    phaseTimer(session, CONTINUE_MS, () => openDevineStop(session));
+}
+
+async function openDevineStop(session) {
+    gameStep(session, 'stopVote');
+    const state = session.state;
+    state.stopVotes = new Set();
+    await showDevineStop(session);
+}
+
+async function showDevineStop(session) {
+    const state = session.state;
+    const mjAction = state.pendingQuestion
+        ? gameButton(session, 'mjpanel', 'Ouvrir le pupitre MJ', ButtonStyle.Primary)
+        : gameButton(session, 'secret', 'Ouvrir la carte secrète', ButtonStyle.Primary);
+    await devineBoard(session, 'Le MJ n’a pas répondu. Vous pouvez voter pour arrêter. **' +
+        state.stopVotes.size + '/' + Math.ceil(state.investigators.size / 2) + '** vote(s).', [
+        row(mjAction, gameButton(session, 'stop', 'Arrêter', ButtonStyle.Danger))
+    ]);
+}
+
+async function finishDevine(session, reason, winner = null) {
+    const state = session.state;
+    return finishGame(session, (winner ? '<@' + winner + '> a trouvé !' : reason) + '\n\n**' +
+        escapeText(state.card.name) + '** · N° ' + state.card.numCode, cardFile(state.card));
+}
+
+async function devineAction(interaction, session, op, argument) {
+    const state = session.state;
+    const user = interaction.user.id;
+    const investigator = state.investigators?.get(user);
+    const ack = async message => {
+        touchInteraction(session, interaction);
+        await privateResponse(interaction, message);
+    };
+    if (op === 'volunteer' && state.step === 'volunteer' && session.players.has(user)) {
+        state.volunteers.add(user);
+        return ack('Tu es volontaire pour être MJ.');
+    }
+    if (op === 'secret' && user === state.mj && ['mjReady', 'stopVote'].includes(state.step)) {
+        touchInteraction(session, interaction);
+        await interaction.reply({ content: 'Carte secrète : **' + escapeText(state.card.name) + '**',
+            files: [cardFile(state.card)], flags: MessageFlags.Ephemeral });
+        return devineTurn(session);
+    }
+    if (op === 'history' && state.log?.length) {
+        const lines = devineHistory(state);
+        const text = lines.join('\n');
+        touchInteraction(session, interaction);
+        if (text.length < 3900) return interaction.reply({ embeds: [embed('Historique de l’enquête').setDescription(text)],
+            flags: MessageFlags.Ephemeral, allowedMentions: { parse: [] } });
+        const plain = state.log.map((item, index) => (index + 1) + '. ' + item.question + ' — ' + item.answer).join('\n');
+        return interaction.reply({ files: [new AttachmentBuilder(Buffer.from(plain), { name: 'historique-enquete.txt' })],
+            flags: MessageFlags.Ephemeral });
+    }
+    if (op === 'return' && investigator?.paused && state.step !== 'finished') {
+        investigator.paused = false;
+        investigator.misses = 0;
+        await ack('Tu reprends ta place dans la rotation.');
+        if (state.step === 'dormant') {
+            state.idleActors.clear();
+            await devineTurn(session);
+        }
+        return;
+    }
+    if (op === 'resume' && state.step === 'dormant' && investigator) {
+        investigator.paused = false;
+        investigator.misses = 0;
+        state.idleActors.clear();
+        await ack('L’enquête reprend.');
+        return devineTurn(session);
+    }
+    if (op === 'stop' && state.step === 'stopVote' && investigator) {
+        state.stopVotes.add(user);
+        await ack('Ton vote d’arrêt est enregistré.');
+        if (state.stopVotes.size >= Math.ceil(state.investigators.size / 2)) return finishDevine(session, 'Les joueurs ont arrêté l’enquête.');
+        return showDevineStop(session);
+    }
+    if (op === 'mjpanel' && user === state.mj && state.pendingQuestion && ['waitingMJ', 'stopVote'].includes(state.step)) {
+        touchInteraction(session, interaction);
+        return interaction.reply({
+            embeds: [embed('Pupitre du MJ').setDescription('**Carte : ' + escapeText(state.card.name) + '**\n' +
+                escapeText(state.pendingQuestion.question))],
+            components: [row(gameButton(session, 'answer', 'Oui', ButtonStyle.Success, 'yes'),
+                gameButton(session, 'answer', 'Non', ButtonStyle.Danger, 'no'),
+                gameButton(session, 'answer', 'À reformuler', ButtonStyle.Secondary, 'retry'))],
+            flags: MessageFlags.Ephemeral
+        });
+    }
+    if (op === 'answer' && user === state.mj && state.pendingQuestion && ['waitingMJ', 'stopVote'].includes(state.step) &&
+        ['yes', 'no', 'retry'].includes(argument)) {
+        const question = state.pendingQuestion;
+        await ack(argument === 'retry' ? 'La question doit être reformulée.' : 'Ta réponse est enregistrée.');
+        if (argument === 'retry') {
+            state.log.push({ ...question, answer: 'À reformuler' });
+            return devineTurn(session, question.asker);
+        }
+        state.investigators.get(question.asker).left--;
+        state.log.push({ ...question, answer: argument === 'yes' ? 'Oui' : 'Non' });
+        state.idleActors.clear();
+        return devineTurn(session);
+    }
+    const onTurn = investigator && user === state.current && state.step === 'turn';
+    const inFinal = investigator && state.step === 'finalGuess' && !state.finalGuesses.has(user);
+    if (session.deadline > 0 && Date.now() >= session.deadline) return privateResponse(interaction, 'Le délai a expiré.');
+    if (op === 'pass' && onTurn) {
+        await ack('Tu passes sans dépenser de question.');
+        return devinePass(session, false);
+    }
+    if (op === 'ask' && onTurn && investigator.left) {
+        touchInteraction(session, interaction);
+        return interaction.showModal(gameModal(session, 'question', 'Poser une question', [{ id: 'text', label: 'Question pour le MJ', max: 240 }]));
+    }
+    if (op === 'question' && onTurn && investigator.left) {
+        const text = interaction.fields.getTextInputValue('text').trim();
+        if (!text) return privateResponse(interaction, 'Écris une question avant de valider.');
+        investigator.misses = 0;
+        state.pendingQuestion = { asker: user, question: text };
+        await ack('Ta question est transmise au MJ.');
+        return devineWaitingMJ(session);
+    }
+    if (op === 'guess' && (onTurn || inFinal)) {
+        touchInteraction(session, interaction);
+        return interaction.showModal(gameModal(session, 'guessSubmit', 'Proposer une carte', [{ id: 'text', label: 'Nom de la carte', max: 100 }]));
+    }
+    if (op === 'guessSubmit' && (onTurn || inFinal)) {
+        const guess = interaction.fields.getTextInputValue('text').trim();
+        if (!guess) return privateResponse(interaction, 'Indique le nom de la carte.');
+        if (inFinal) state.finalGuesses.add(user);
+        const correct = matchesCard(guess, state.card, state.names);
+        await ack(correct ? 'Bonne réponse !' : 'Ce n’est pas la bonne carte.');
+        if (correct) return finishDevine(session, '', user);
+        if (inFinal) return;
+        investigator.misses = 0;
+        state.idleActors.clear();
+        return devineTurn(session);
+    }
+    return privateResponse(interaction, 'Cette action ne t’est pas ouverte maintenant.');
+}
+
+async function startCasting(session) {
+    gameStep(session, 'castingSetup');
+    const group = session.players.size > 2 ? [
+        { value: 'group|bank', label: 'Groupe · Sujet préparé' },
+        { value: 'group|custom', label: 'Groupe · Sujet écrit par un membre' }
+    ] : [];
+    await gameBoard(session, 'L’hôte choisit le format du débat et l’origine de la question.', [row(gameSelect(session, 'castSetup', [
+        ...group, { value: 'duel|bank', label: '1 contre 1 · Sujet préparé' },
+        { value: 'duel|custom', label: '1 contre 1 · Sujet écrit par un membre' }
+    ], 'Choisir le format'))]);
+    phaseTimer(session, JOIN_MS, () => castingSetup(session, session.players.size > 2 ? 'group|bank' : 'duel|bank'));
+}
+
+async function castingSetup(session, value) {
+    const state = session.state;
+    const [mode, source] = value.split('|');
+    state.duel = mode === 'duel';
+    state.custom = source === 'custom';
+    state.volunteers = new Set();
+    gameStep(session, 'castVolunteer');
+    if (state.duel && session.players.size === 2) {
+        state.volunteers = new Set(session.players.keys());
+        return selectDebaters(session);
+    }
+    await gameBoard(session, 'Inscris-toi pour débattre. Deux volontaires seront tirés au sort dans 30 secondes.',
+        [row(gameButton(session, 'castVolunteer', 'Je veux débattre', ButtonStyle.Primary))]);
+    phaseTimer(session, JOIN_MS, () => selectDebaters(session));
+}
+
+async function selectDebaters(session) {
+    const state = session.state;
+    if (state.volunteers.size < 2) return finishGame(session, 'Il faut deux volontaires pour lancer le débat.');
+    state.debaters = shuffled(state.volunteers).slice(0, 2);
+    state.prompt = shuffled(CASTING_QUESTIONS)[0];
+    if (!state.custom) return castingCards(session);
+    const spectators = [...session.players.keys()].filter(id => !state.debaters.includes(id));
+    state.writer = shuffled(spectators.length ? spectators : state.debaters)[0];
+    gameStep(session, 'castPrompt');
+    await gameBoard(session, '<@' + state.writer + '>, tu as 45 secondes pour écrire la question du débat.',
+        [row(gameButton(session, 'castWrite', 'Écrire la question', ButtonStyle.Primary))], null, [state.writer]);
+    phaseTimer(session, 45_000, () => castingCards(session));
+}
+
+async function castingCards(session) {
+    const state = session.state;
+    const cards = sampleCards(2, new Set(), true);
+    if (cards.length < 2) return finishGame(session, 'Deux cartes différentes sont nécessaires pour le Casting.');
+    state.drawn = new Set(cards.map(card => card.id));
+    state.slots = new Map(state.debaters.map((id, i) => [id, { card: cards[i], remaining: 3, locked: false }]));
+    gameStep(session, 'castCards');
+    await gameBoard(session, '**' + escapeText(state.prompt) + '**\n\n' +
+        state.debaters.map(id => '<@' + id + '>').join(' contre ') + '\nVous avez 90 secondes pour verrouiller vos cartes privées.',
+    [row(gameButton(session, 'castPanel', 'Voir ma carte', ButtonStyle.Primary))], null, state.debaters);
+    phaseTimer(session, PICK_MS, () => castingDebate(session));
+}
+
+function castingPanel(session, slot) {
+    const view = embed('Ma carte · Casting').setDescription('**' + escapeText(slot.card.name) + '**\n' +
+        slot.remaining + '/3 changements restants' + (slot.locked ? ' · Carte verrouillée' : '')).setImage('attachment://carte.png');
+    return { embeds: [view], files: [cardFile(slot.card)], components: [row(
+        gameButton(session, 'castReroll', 'Changer de carte').setDisabled(slot.locked || slot.remaining === 0),
+        gameButton(session, 'castLock', 'Verrouiller', ButtonStyle.Success).setDisabled(slot.locked)
+    )] };
+}
+
+async function castingDebate(session) {
+    const state = session.state;
+    for (const slot of state.slots.values()) slot.locked = true;
+    gameStep(session, 'castDebate');
+    const cards = state.debaters.map(id => state.slots.get(id).card);
+    const art = await drawVoteCards(cards).catch(error => { console.warn('[PLAY] Cartes du Casting :', error); return null; });
+    await gameBoard(session, '**' + escapeText(state.prompt) + '**\n\n' +
+        state.debaters.map((id, i) => '<@' + id + '> défend **' + escapeText(cards[i].name) + '**').join('\n') +
+        '\n\nVous avez **5 minutes** pour débattre dans ce fil.', [],
+    art ? new AttachmentBuilder(art, { name: 'candidats.png' }) : null, state.debaters);
+    phaseTimer(session, 300_000, () => castingVote(session, false));
+}
+
+async function castingVote(session, second) {
+    const state = session.state;
+    const voters = state.duel ? new Set(state.debaters) : await threadVoters(session);
+    if (!state.duel) for (const id of state.debaters) voters.delete(id);
+    if (!voters.size) return finishGame(session, 'Le débat est terminé. Le public n’a désigné personne.');
+    const options = state.debaters.map(value => ({ value, label: session.people.get(value)?.name || 'Participant·e' }));
+    await openBallot(session, { title: second ? '🎙️ Départage du duel' : '🎙️ Qui vous a convaincus ?',
+        description: second ? 'Le duel est à 1–1. Mettez-vous d’accord sur la personne qui a remporté le débat.' :
+            'Vote pour la personne qui a le mieux défendu sa carte.',
+        voters, options,
+        canFinishEarly: votes => !state.duel || second || new Set(votes.values()).size === 1,
+        choose: async (leaders, votes) => {
+            if (state.duel && votes.size === 2 && leaders.length === 2 && !second) return castingVote(session, true);
+            if (leaders.length === 1) return finishGame(session, 'Le débat est remporté par <@' + leaders[0] + '>.');
+            return finishGame(session, leaders.length ? 'Le débat se termine sur un match nul.' : 'Le débat est terminé. Aucun vote enregistré.');
+        }
+    });
+}
+
+async function castingAction(interaction, session, op) {
+    const state = session.state;
+    const user = interaction.user.id;
+    const slot = state.slots?.get(user);
+    if (op === 'castSetup' && user === session.host && state.step === 'castingSetup' &&
+        /^(group|duel)\|(bank|custom)$/.test(interaction.values?.[0])) {
+        touchInteraction(session, interaction);
+        await interaction.deferUpdate();
+        return castingSetup(session, interaction.values[0]);
+    }
+    if (op === 'castVolunteer' && state.step === 'castVolunteer' && session.players.has(user)) {
+        state.volunteers.add(user);
+        touchInteraction(session, interaction);
+        return privateResponse(interaction, 'Ton inscription au tirage est enregistrée.');
+    }
+    if (op === 'castWrite' && state.step === 'castPrompt' && user === state.writer) {
+        touchInteraction(session, interaction);
+        return interaction.showModal(gameModal(session, 'castPrompt', 'Sujet du débat', [{ id: 'text', label: 'Ta question', max: 180 }]));
+    }
+    if (op === 'castPrompt' && state.step === 'castPrompt' && user === state.writer) {
+        const prompt = interaction.fields.getTextInputValue('text').trim();
+        if (!prompt) return privateResponse(interaction, 'Écris une question avant de valider.');
+        state.prompt = prompt;
+        touchInteraction(session, interaction);
+        await privateResponse(interaction, 'Le sujet est enregistré.');
+        return castingCards(session);
+    }
+    if (state.step !== 'castCards' || !slot) return privateResponse(interaction, 'Cette action ne t’est pas ouverte.');
+    if (op === 'castPanel') {
+        touchInteraction(session, interaction);
+        return interaction.reply({ ...castingPanel(session, slot), flags: MessageFlags.Ephemeral });
+    }
+    if (slot.locked) return privateResponse(interaction, 'Ta carte est déjà verrouillée.');
+    if (op === 'castReroll' && slot.remaining > 0) {
+        const card = sampleCards(1, state.drawn, true)[0];
+        if (!card) return privateResponse(interaction, 'Il ne reste plus de carte à tirer.');
+        slot.remaining--;
+        slot.card = card;
+        state.drawn.add(card.id);
+        touchInteraction(session, interaction);
+        return interaction.update({ ...castingPanel(session, slot), attachments: [] });
+    }
+    if (op === 'castLock') {
+        slot.locked = true;
+        touchInteraction(session, interaction);
+        await interaction.update({ ...castingPanel(session, slot), attachments: [] });
+        if ([...state.slots.values()].every(item => item.locked)) return castingDebate(session);
+        return;
+    }
+    return privateResponse(interaction, 'Cette action ne t’est pas ouverte.');
+}
+
+async function startRanking(session) {
+    gameStep(session, 'rankSetup');
+    await gameBoard(session, 'L’hôte choisit comment obtenir la consigne.', [row(
+        gameButton(session, 'rankBank', 'Consigne préparée', ButtonStyle.Primary),
+        gameButton(session, 'rankCustom', 'Consigne d’un membre')
+    )]);
+    phaseTimer(session, JOIN_MS, () => rankingSetup(session, false));
+}
+
+async function rankingSetup(session, custom) {
+    const state = session.state;
+    state.prompt = shuffled(RANKING_PROMPTS)[0];
+    if (!custom) return rankingModeVote(session);
+    state.writer = shuffled(session.players.keys())[0];
+    gameStep(session, 'rankWrite');
+    await gameBoard(session, '<@' + state.writer + '>, écris la consigne du classement dans les 45 secondes.',
+        [row(gameButton(session, 'rankWrite', 'Écrire la consigne', ButtonStyle.Primary))], null, [state.writer]);
+    phaseTimer(session, 45_000, () => rankingModeVote(session));
+}
+
+async function rankingModeVote(session) {
+    await openBallot(session, {
+        title: '📋 Quelles cartes pour le classement ?', description: escapeText(session.state.prompt),
+        voters: new Set(session.players.keys()), options: [
+            { value: 'common', label: 'Les mêmes cartes pour tout le monde' },
+            { value: 'random', label: 'Un tirage par personne' }
+        ], choose: leaders => startSocialChoices(session, 'classement', leaders.length ? shuffled(leaders)[0] : 'common')
+    });
+}
+
+async function startSocialChoices(session, kind, mode = 'common') {
+    const state = session.state;
+    state.kind = kind;
+    state.common = mode === 'common';
+    const size = kind === 'fmk' ? 3 : 4;
+    state.members = [...session.players.keys()];
+    const common = sampleCards(size, new Set(), true);
+    if (common.length < size) return finishGame(session, 'Le catalogue ne contient pas assez de cartes différentes pour ce jeu.');
+    state.slots = new Map(state.members.map(id => [id, { cards: state.common ? common : sampleCards(size, new Set(), true),
+        order: [], locked: false, reasons: null }]));
+    gameStep(session, 'socialChoices');
+    const ms = kind === 'fmk' ? 240_000 : 120_000;
+    state.choiceDeadline = Date.now() + ms;
+    const art = state.common ? await drawVoteCards(common).catch(error => { console.warn('[PLAY] Cartes du tirage :', error); return null; }) : null;
+    await gameBoard(session, (kind === 'fmk' ? 'Répartis ces cartes entre **Fuck**, **Marry** et **Kill**.' :
+        '**' + escapeText(state.prompt) + '**\n' + (state.common ? 'Tirage commun.' : 'Tirage individuel.')) +
+        '\nChoisis tes cartes en privé. Fin ' + expiry(state.choiceDeadline) + '.',
+    [row(gameButton(session, 'socialPanel', kind === 'fmk' ? 'Faire mes choix' : 'Faire mon classement', ButtonStyle.Primary))],
+    art ? new AttachmentBuilder(art, { name: 'tirage.png' }) : null);
+    phaseTimer(session, Math.max(1, state.choiceDeadline - Date.now()), () => finishSocialChoices(session));
+}
+
+function socialLabels(state) {
+    return state.kind === 'fmk' ? FMK_LABELS : ['1er', '2e', '3e', '4e'];
+}
+
+function socialLines(state, slot) {
+    return socialLabels(state).map((label, i) => '**' + label + '** · ' +
+        (slot.order[i] ? escapeText(slot.cards.find(card => card.id === slot.order[i]).name) : '—')).join('\n');
+}
+
+function socialPanel(session, slot) {
+    const state = session.state;
+    const display = embed(state.kind === 'fmk' ? 'Tes choix FMK' : 'Ton classement')
+        .setDescription(socialLines(state, slot) + (slot.locked ? '\n\nChoix verrouillés.' : ''));
+    if (slot.artAvailable) display.setImage('attachment://mes-cartes.png');
+    const remaining = slot.cards.filter(card => !slot.order.includes(card.id));
+    const components = [];
+    if (!slot.locked && remaining.length) components.push(row(gameSelect(session, 'socialPick',
+        remaining.map(card => ({ value: card.id, label: cut(card.name, 100), description: 'N° ' + card.numCode })),
+        'Carte pour ' + socialLabels(state)[slot.order.length])));
+    if (!slot.locked) components.push(row(
+        gameButton(session, 'socialReset', 'Recommencer').setDisabled(!slot.order.length),
+        gameButton(session, 'socialLock', 'Verrouiller', ButtonStyle.Success).setDisabled(remaining.length > 0)
+    ));
+    if (slot.locked && state.kind === 'fmk' && !slot.reasons) {
+        components.push(row(gameButton(session, 'socialReasons', 'Rédiger mes justifications', ButtonStyle.Primary)));
+    }
+    return { embeds: [display], components };
+}
+
+function fmkModal(session, slot) {
+    return gameModal(session, 'fmkReasons', 'Tes trois justifications', FMK_LABELS.map((label, i) => {
+        const card = slot.cards.find(item => item.id === slot.order[i]);
+        return { id: 'why' + i, label: cut(label + ' · ' + card.name, 45), paragraph: true, max: 4000, required: false };
+    }));
+}
+
+function socialAllReady(state) {
+    return [...state.slots.values()].every(slot => slot.locked && (state.kind !== 'fmk' || slot.reasons !== null));
+}
+
+async function socialAction(interaction, session, op) {
+    const state = session.state;
+    const user = interaction.user.id;
+    if ((op === 'rankBank' || op === 'rankCustom') && state.step === 'rankSetup' && user === session.host) {
+        touchInteraction(session, interaction);
+        await interaction.deferUpdate();
+        return rankingSetup(session, op === 'rankCustom');
+    }
+    if (op === 'rankWrite' && state.step === 'rankWrite' && user === state.writer) {
+        touchInteraction(session, interaction);
+        return interaction.showModal(gameModal(session, 'rankPrompt', 'Consigne du classement', [{ id: 'text', label: 'Ta consigne', max: 180 }]));
+    }
+    if (op === 'rankPrompt' && state.step === 'rankWrite' && user === state.writer) {
+        const prompt = interaction.fields.getTextInputValue('text').trim();
+        if (!prompt) return privateResponse(interaction, 'Écris une consigne avant de valider.');
+        state.prompt = prompt;
+        touchInteraction(session, interaction);
+        await privateResponse(interaction, 'La consigne est enregistrée.');
+        return rankingModeVote(session);
+    }
+    if (['presentDone', 'presentPass'].includes(op) && state.step === 'presenting' &&
+        [state.presenter, session.host].includes(user)) {
+        touchInteraction(session, interaction);
+        await interaction.deferUpdate();
+        return presentNext(session);
+    }
+    const slot = state.slots?.get(user);
+    if (state.step !== 'socialChoices' || !slot || Date.now() >= state.choiceDeadline)
+        return privateResponse(interaction, 'Ce choix ne t’est pas ouvert ou la sélection est terminée.');
+    if (op === 'socialPanel') {
+        touchInteraction(session, interaction);
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const art = !state.common ? await drawVoteCards(slot.cards).catch(error => { console.warn('[PLAY] Cartes du classement :', error); return null; }) : null;
+        slot.artAvailable = Boolean(art);
+        const payload = socialPanel(session, slot);
+        if (art) {
+            payload.files = [new AttachmentBuilder(art, { name: 'mes-cartes.png' })];
+        }
+        return interaction.editReply(payload);
+    }
+    if (op === 'fmkReasons' && state.kind === 'fmk' && slot.locked && !slot.reasons) {
+        slot.reasons = FMK_LABELS.map((_, i) => interaction.fields.getTextInputValue('why' + i).trim());
+        touchInteraction(session, interaction);
+        await privateResponse(interaction, 'Tes justifications sont enregistrées.');
+        if (socialAllReady(state)) await finishSocialChoices(session);
+        return;
+    }
+    if (op === 'socialReasons' && state.kind === 'fmk' && slot.locked && !slot.reasons) {
+        touchInteraction(session, interaction);
+        return interaction.showModal(fmkModal(session, slot));
+    }
+    if (slot.locked) return privateResponse(interaction, 'Tes choix sont verrouillés.');
+    if (op === 'socialPick') {
+        const value = interaction.values?.[0];
+        if (!slot.cards.some(card => card.id === value) || slot.order.includes(value))
+            return privateResponse(interaction, 'Cette carte est déjà placée ou indisponible.');
+        slot.order.push(value);
+    } else if (op === 'socialReset') slot.order = [];
+    else if (op === 'socialLock' && slot.order.length === slot.cards.length) {
+        slot.locked = true;
+        touchInteraction(session, interaction);
+        if (state.kind === 'fmk') return interaction.showModal(fmkModal(session, slot));
+        await interaction.update(socialPanel(session, slot));
+        if (socialAllReady(state)) await finishSocialChoices(session);
+        return;
+    } else return privateResponse(interaction, 'Complète la liste avant de la verrouiller.');
+    touchInteraction(session, interaction);
+    return interaction.update(socialPanel(session, slot));
+}
+
+async function fmkChart(common, slots) {
+    const canvas = createCanvas(1100, 650);
+    const ctx = canvas.getContext('2d');
+    stage(ctx, canvas.width, canvas.height);
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 44px Sans';
+    ctx.fillStyle = '#fff7e9';
+    ctx.fillText('FMK · Résultats', 550, 78);
+    const counts = common.map(card => ({
+        card, values: FMK_LABELS.map((_, index) => [...slots.values()]
+            .filter(slot => slot.locked && slot.order[index] === card.id).length)
+    }));
+    const max = Math.max(1, ...counts.flatMap(item => item.values));
+    const colors = ['#ec73b6', '#87ddb6', '#ad99ed'];
+    for (const [i, item] of counts.entries()) {
+        const x = 185 + i * 365;
+        await drawCard(ctx, item.card, x - 54, 102, 108, 151);
+        ctx.fillStyle = '#fff7e9';
+        ctx.font = 'bold 26px Sans';
+        ctx.fillText(item.card.name, x, 290, 316);
+        for (const [j, value] of item.values.entries()) {
+            const y = 338 + j * 68;
+            ctx.fillStyle = '#fff7e9';
+            ctx.textAlign = 'left';
+            ctx.font = 'bold 23px Sans';
+            ctx.fillText(FMK_LABELS[j], x - 124, y);
+            ctx.fillStyle = '#473452';
+            ctx.fillRect(x - 124, y + 12, 236, 15);
+            ctx.fillStyle = colors[j];
+            ctx.fillRect(x - 124, y + 12, 236 * value / max, 15);
+            ctx.fillStyle = '#fff7e9';
+            ctx.textAlign = 'right';
+            ctx.fillText(String(value), x + 115, y);
+        }
+        ctx.textAlign = 'center';
+    }
+    return canvas.toBuffer('image/png');
+}
+
+async function fmkPeopleCanvas(session, items, safe, pages) {
+    const canvas = createCanvas(1100, 180 + 115 * items.length);
+    const ctx = canvas.getContext('2d');
+    stage(ctx, canvas.width, canvas.height);
+    ctx.fillStyle = '#fff7e9';
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 40px Sans';
+    ctx.fillText('FMK · Choix · ' + (safe + 1) + '/' + pages, 550, 64);
+    const avatars = await Promise.all(items.map(([id]) => loadAvatar(session.people.get(id))));
+    for (const [i, [id, slot]] of items.entries()) {
+        const y = 111 + i * 115;
+        const player = session.people.get(id);
+        ctx.fillStyle = '#312044';
+        ctx.fillRect(46, y, 1008, 104);
+        drawAvatar(ctx, avatars[i], player, 100, y + 51, 32);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#fff7e9';
+        ctx.font = 'bold 25px Sans';
+        ctx.fillText(player?.name || 'Participant·e', 160, y + 39, 850);
+        ctx.font = '22px Sans';
+        if (!slot.locked) ctx.fillText('Vote nul', 160, y + 76);
+        else {
+            for (const [j, label] of FMK_LABELS.entries()) {
+                const card = slot.cards.find(item => item.id === slot.order[j]);
+                ctx.fillText(label + ' · ' + card.name, 160 + j * 292, y + 76, 272);
+            }
+        }
+        ctx.textAlign = 'center';
+    }
+    return canvas.toBuffer('image/png');
+}
+
+async function gameResultPages(interaction, session, [rawLobby, rawPage]) {
+    const lobby = Number(rawLobby);
+    const result = session.fmkResults?.get(lobby);
+    if (!result) return privateResponse(interaction, 'Ce résultat a expiré.');
+    if (interaction.message.flags?.has(MessageFlags.Ephemeral)) await interaction.deferUpdate();
+    else await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    touchInteraction(session, interaction);
+    const items = [...result.slots];
+    const pages = Math.max(1, Math.ceil(items.length / 4));
+    const page = Math.max(0, Math.min(Number(rawPage) || 0, pages - 1));
+    const selected = items.slice(page * 4, page * 4 + 4);
+    const display = embed('FMK · Choix des participant·es').setDescription(selected.map(([id, slot]) =>
+        '**' + escapeText(session.people.get(id)?.name || 'Participant·e') + '**\n' +
+        (slot.locked ? socialLines({ kind: 'fmk' }, slot) : 'Vote nul')).join('\n\n'))
+        .setFooter({ text: 'Page ' + (page + 1) + '/' + pages });
+    const canvas = await fmkPeopleCanvas(session, selected, page, pages).catch(error => {
+        console.warn('[PLAY] Canvas FMK des choix :', error);
+        return null;
+    });
+    if (canvas) display.setImage('attachment://fmk-choix.png');
+    await interaction.editReply({
+        embeds: [display], attachments: [], files: canvas ? [new AttachmentBuilder(canvas, { name: 'fmk-choix.png' })] : [],
+        components: pages > 1 ? [row(
+            button(controlId(session, 'pages', lobby, page - 1), 'Précédente').setDisabled(!page),
+            button(controlId(session, 'pages', lobby, page + 1), 'Suivante').setDisabled(page + 1 >= pages)
+        )] : []
+    });
+}
+
+async function publishFmk(session, state) {
+    if (!session.fmkResults) session.fmkResults = new Map();
+    session.fmkResults.set(session.lobbyId, { slots: state.slots });
+    const common = state.slots.values().next().value.cards;
+    const lines = common.map(card => '**' + escapeText(card.name) + '** — ' +
+        FMK_LABELS.map((label, i) => label + ' ' + [...state.slots.values()]
+            .filter(slot => slot.locked && slot.order[i] === card.id).length).join(' · '));
+    const invalid = [...state.slots.values()].filter(slot => !slot.locked).length;
+    const canvas = await fmkChart(common, state.slots).catch(error => { console.warn('[PLAY] Diagrammes FMK :', error); return null; });
+    const result = embed('💌 FMK · Résultats').setDescription(lines.join('\n') + '\n\n' + invalid + ' vote(s) nul(s).');
+    if (canvas) result.setImage('attachment://fmk-resultats.png');
+    await session.thread.send({
+        embeds: [result], files: canvas ? [new AttachmentBuilder(canvas, { name: 'fmk-resultats.png' })] : [],
+        components: [row(button(controlId(session, 'pages', session.lobbyId, 0), 'Voir les choix individuels'))], allowedMentions: { parse: [] }
+    });
+}
+
+async function finishSocialChoices(session) {
+    const state = session.state;
+    gameStep(session, 'socialReveal');
+    if (state.kind === 'fmk') await publishFmk(session, state);
+    state.presenters = state.members.filter(id => state.slots.get(id).locked);
+    if (!state.presenters.length) return finishGame(session, 'Personne n’a verrouillé ses choix à temps.');
+    state.presentIndex = 0;
+    await presentNext(session);
+}
+
+async function presentNext(session) {
+    const state = session.state;
+    const presenter = state.presenters[state.presentIndex++];
+    if (!presenter) return socialFinalVote(session);
+    if (session.board) await session.board.edit({ components: [] });
+    session.board = null;
+    state.presenter = presenter;
+    const slot = state.slots.get(presenter);
+    gameStep(session, 'presenting');
+    const choices = socialLines(state, slot);
+    const ms = state.kind === 'fmk' ? 30_000 : 60_000;
+    let details = '';
+    let attachment = null;
+    if (state.kind === 'fmk') {
+        const reasons = FMK_LABELS.map((label, index) => label + ' · ' +
+            (slot.reasons?.[index] || (slot.reasons ? 'Aucune justification' : 'Temps écoulé')));
+        details = '\n\n' + reasons.map(escapeText).join('\n\n');
+        if (details.length > 3300) {
+            details = '\n\nJustifications complètes dans le fichier joint.';
+            const display = embed(gameTitle(session)).setDescription('<@' + presenter + '> · ' + choices + details);
+            session.board = await session.thread.send({ embeds: [display], files: [
+                new AttachmentBuilder(Buffer.from(reasons.join('\n\n')), { name: 'justifications.txt' })
+            ], components: [row(gameButton(session, 'presentDone', 'J’ai fini', ButtonStyle.Success),
+                gameButton(session, 'presentPass', 'Passer'))], allowedMentions: { parse: [] }, content: '<@' + presenter + '>' });
+            phaseTimer(session, ms, () => presentNext(session));
+            return;
+        }
+    } else {
+        const art = await drawVoteCards(slot.order.map(id => slot.cards.find(card => card.id === id)))
+            .catch(error => { console.warn('[PLAY] Cartes présentées :', error); return null; });
+        if (art) attachment = new AttachmentBuilder(art, { name: 'classement.png' });
+    }
+    await gameBoard(session, '**Présentation ' + state.presentIndex + '/' + state.presenters.length + '**\n<@' + presenter + '>\n\n' +
+        choices + details + (state.kind === 'classement' ? '\n\nTu as une minute pour défendre ton classement.' : ''),
+    [row(gameButton(session, 'presentDone', 'J’ai fini', ButtonStyle.Success), gameButton(session, 'presentPass', 'Passer'))],
+    attachment, [presenter]);
+    phaseTimer(session, ms, () => presentNext(session));
+}
+
+async function socialFinalVote(session) {
+    const state = session.state;
+    const ids = state.kind === 'fmk' ? state.presenters.filter(id => state.slots.get(id).reasons?.some(Boolean)) : state.presenters;
+    if (!ids.length) return finishGame(session, 'Merci d’avoir joué ! Aucune justification à départager.');
+    const voters = await threadVoters(session);
+    if (!voters.size) return finishGame(session, 'Les présentations sont terminées.');
+    const title = state.kind === 'fmk' ? '💌 Vote pour la meilleure justification' : '📋 Vote pour le classement le mieux défendu ou le plus drôle';
+    await session.board?.edit({ components: [] });
+    session.board = null;
+    await openBallot(session, {
+        title, description: 'Sélectionne une personne.', voters,
+        options: ids.map(value => ({ value, label: session.people.get(value)?.name || 'Participant·e' })),
+        choose: leaders => finishGame(session, leaders.length ? '**' + (leaders.length > 1 ? 'Ex æquo' : 'Victoire') +
+            '** · ' + leaders.map(id => '<@' + id + '>').join(', ') : 'Aucun vote enregistré. Merci d’avoir joué !')
+    });
+}
+
+function touchInteraction(session, interaction) {
+    persistRecordActivity(session.record, interaction.client);
+}
+
+async function gameInteraction(interaction, session, [lobby, revision, op, argument]) {
+    const state = session.state;
+    if (!state || session.phase !== 'game' || session.lobbyId !== Number(lobby) || state.revision !== Number(revision) ||
+        (session.deadline > 0 && Date.now() >= session.deadline)) return privateResponse(interaction, 'Cette action a expiré.');
+    if (session.game === 'devine') return devineAction(interaction, session, op, argument);
+    if (session.game === 'casting') return castingAction(interaction, session, op);
+    if (session.game === 'classement' || session.game === 'fmk') return socialAction(interaction, session, op);
+    return privateResponse(interaction, 'Cette action n’est pas disponible.');
 }
 
 module.exports = { handlePlayMessage, handlePlayInteraction, restorePlayThreads };
