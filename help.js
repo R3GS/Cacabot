@@ -99,6 +99,8 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
                 `\`!rebus set [titre ou emojis rép]\` • Impose le rébus secret de la prochaine session\n` +
                 `\`!rebus indice\` • \`!pendu indice\` • Révèle un indice immédiat sur la partie en cours\n` +
                 `\`!jeupts [@membre]\` *(ou \`!points\`)* • Panneau interactif des points Motus, Rébus & Pendu\n\n` +
+                `### 🃏 Mini-jeux RegaDex\n` +
+                `\`!play\` dans <#1575601558458994758> • Le lanceur peut annuler depuis le fil de la partie.\n\n` +
                 `### 🧪 Sessions Solo de Test\n` +
                 `\`!motustest [6/7]\` • \`!rebustest\` • \`!pendutest\` • Parties de test dans le salon actuel`
             );
@@ -564,6 +566,8 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
                 `Cacabot anime des sessions automatiques à heures fixes dans les salons dédiés.\n` +
                 `*Pas besoin de commande pour jouer : écris directement ta proposition dans le salon !*\n\n` +
                 `-# 🔒 Accès : Récupère tes rôles de jeux dans <#1559082682313474059> ou <#1559324422165373008> pour voir les salons et participer !\n\n` +
+                `### 🃏 Mini-jeux RegaDex\n` +
+                `\`!play\` dans <#1575601558458994758> • Ouvre Vitrine à thème et les guides des mini-jeux.\n\n` +
                 `### 🟩 Le Motus\n` +
                 `📅 Tous les jours à **10h00** (6 lettres) et **19h00** (7 lettres).\n` +
                 `Écris simplement ton mot dans le chat pendant la session.\n` +

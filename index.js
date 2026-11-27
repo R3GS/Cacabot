@@ -628,6 +628,7 @@ const { handleInteractionMessage, handleInteractionButton, handleInteractionSlas
 
 ///help.js
 const { getHelpResponse, handleHelpMessage, handleHelpInteraction } = require('./help.js');
+const { handlePlayMessage, handlePlayInteraction, restorePlayThreads } = require('./play.js');
 
 ///minijeux.js
 const {
@@ -1349,6 +1350,8 @@ async function disableButtons(interaction) {
                 }
             });
         }
+
+        if (await handlePlayMessage(message)) return;
 
         // Surveillance des threads d'échange RegaDex (activité 24h & blocage des tiers)
         if (await runMessageCommandWithLoading(message, () => handleTcgTradeThreadMessage(message))) return;
@@ -2156,6 +2159,8 @@ try {
         return;
     }
 
+    if (await handlePlayInteraction(interaction)) return;
+
     // Interactions RegaDex TCG (boutons, menus, modals)
     if (await handleTcgInteraction(interaction)) return;
 
@@ -2598,6 +2603,8 @@ client.once('clientReady', async () => {
         void verifierBoosterHebdoSansChevauchement();
         void verifierQueteCommunautaireSansChevauchement();
     }, 60 * 1000);
+
+    void restorePlayThreads(client);
 
     // Réarmement des alertes roulette, votes publics et des rappels
     restaurerNotifsRoulette(client);

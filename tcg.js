@@ -15872,7 +15872,33 @@ function grantMinigameTcgPoints(client, userIds, points = 2, rewardKey = null) {
     return operation;
 }
 
+function getPlayCards(userId) {
+    const inventory = tcgBridge.getTcgData()?.users?.[userId]?.cards;
+    if (!inventory) return [];
+    return Object.keys(inventory)
+        .filter(id => inventory[id] > 0)
+        .map(getCardByIdAny)
+        .filter(card => card?.filePath)
+        .sort((a, b) => a.sortIndex - b.sortIndex)
+        .map(card => ({
+            id: card.id, name: card.name, numCode: card.numCode, filePath: card.filePath,
+            rarity: card.rarity, setLabel: card.setNumber ? getSetConfig(card.setNumber).shortName : 'Cartes Perso'
+        }));
+}
+
+async function renderPlayBinder(viewer, requestedSet, page, theme) {
+    const sets = getActiveSets().map(set => ({ id: set.number, name: set.name }));
+    const selected = sets.find(set => set.id === requestedSet) || sets[0];
+    const set = selected?.id || DEFAULT_SET_NUMBER;
+    const cards = Object.fromEntries(getSetCatalog(set).map(card => [card.id, 1]));
+    const rendered = await renderBinderCanvas(viewer, { cards, theme }, { setNumber: set, page });
+    return { buffer: rendered.buffer, page: rendered.safePage, totalPages: rendered.totalPages,
+        set, setName: getSetConfig(set).name, sets };
+}
+
 module.exports = {
+    getPlayCards,
+    renderPlayBinder,
     TCG_ROLE_ID,
     TCG_CHANNEL_ID,
     TCG_TEST_CHANNEL_ID,
