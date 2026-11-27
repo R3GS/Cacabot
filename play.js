@@ -218,7 +218,7 @@ function launchMenu(menu) {
 async function handlePlayMessage(message) {
     if (message.author.bot) return false;
     const record = threadRecords.get(message.channelId);
-    if (record && message.channel.parentId === PLAY_CHANNEL_ID) persistRecordActivity(record, message.client);
+    if (record) persistRecordActivity(record, message.client);
     const session = sessions.get(message.channelId);
     if (session?.game === 'cavale' && session.phase === 'game' && session.state?.step === 'guess' &&
         session.players.has(message.author.id) && !message.content.trim().startsWith('!')) {
@@ -282,6 +282,11 @@ async function createSession(interaction, menu, invited = null) {
     }
 }
 
+function editThreadMessage(session, message, payload) {
+    // Message#edit looks up the channel again. The game's thread manager already has the channel ID.
+    return session.thread.messages.edit(message.id, payload);
+}
+
 function controlId(session, action, ...rest) {
     return idFor(action, session.thread.id, ...rest);
 }
@@ -302,7 +307,7 @@ function lobbyPayload(session) {
 }
 
 async function openLobby(session) {
-    await session.lobby?.edit({ components: [] });
+    if (session.lobby) await editThreadMessage(session, session.lobby, { components: [] });
     for (const [id, player] of session.pending) session.players.set(id, player);
     session.pending.clear();
     session.phase = 'lobby';
@@ -322,9 +327,9 @@ async function openLobby(session) {
 }
 
 async function updateLobby(session) {
-    if (session.phase === 'lobby') await session.lobby.edit(lobbyPayload(session));
+    if (session.phase === 'lobby') await editThreadMessage(session, session.lobby, lobbyPayload(session));
     else if (session.phase !== 'closed') {
-        await session.lobby.edit({
+        await editThreadMessage(session, session.lobby, {
             embeds: [embed(GUIDES[session.game][0] + ' · Partie en cours').setDescription('Les arrivées rejoignent la partie à la manche suivante ou au prochain jeu.')],
             components: [sessionButtons(session, 'Rejoindre la prochaine manche')]
         });
@@ -433,7 +438,7 @@ async function startRatings(session) {
     session.phase = 'reveal';
     session.entries = shuffled([...session.answers.values()]);
     if (session.entries.length < 2) {
-        await session.board.edit({ embeds: [embed('Manche ' + session.round).setDescription('Il faut deux réponses valides pour ouvrir le vote.')], components: [] });
+        await editThreadMessage(session, session.board, { embeds: [embed('Manche ' + session.round).setDescription('Il faut deux réponses valides pour ouvrir le vote.')], components: [] });
         await finishRound(session);
         return;
     }
@@ -466,7 +471,7 @@ async function showRating(session) {
         (session.voteIndex + 1) + '/' + session.entries.length)
         .setDescription(escapeText(completePhrase(session.prompt, entry.cards))).setFooter({ text: '10 secondes pour voter • Sans note : Meh' });
     if (cardImage) page.setImage('attachment://reponse.png');
-    await session.board.edit({
+    await editThreadMessage(session, session.board, {
         embeds: [page], attachments: [], files: cardImage ? [new AttachmentBuilder(cardImage, { name: 'reponse.png' })] : [],
         components: [row(...RATINGS.map(([key, label, points, style]) => button(
             controlId(session, 'rate', session.lobbyId, session.round, session.voteIndex, key),
@@ -498,7 +503,7 @@ async function finishRound(session) {
         escapeText(session.people.get(entry.user)?.name || 'Participant·e') + ' · ' + entry.score + ' pts');
     const reveal = embed('Manche ' + session.round + ' · Réponses dévoilées');
     reveal.setDescription(cut(authors.join('\n') || 'Aucune réponse enregistrée.', 3900));
-    await session.board.edit({ embeds: [reveal], components: [], attachments: [] });
+    await editThreadMessage(session, session.board, { embeds: [reveal], components: [], attachments: [] });
     const top = ranked(session.entries.length >= 2 ? session.entries : []).filter(entry => entry.rank <= 3);
     for (const entry of top.filter(item => item.rank === 1)) {
         if (!session.best.length || entry.score > session.best[0].score) session.best = [];
@@ -558,7 +563,7 @@ function continuePayload(session) {
 
 async function finishContinue(session) {
     clearTimeout(session.timer);
-    await session.continueMessage.edit({ components: [] });
+    await editThreadMessage(session, session.continueMessage, { components: [] });
     for (const [user] of session.players) {
         if (!session.continuing.has(user)) session.players.delete(user);
     }
@@ -578,7 +583,7 @@ async function closeSession(session, reason) {
     clearTimeout(session.timer);
     await restoreSlowmode(session).catch(error => console.error('[PLAY] Restauration du mode lent :', error));
     const messages = [session.lobby, session.board, session.continueMessage, session.ballot?.message].filter(Boolean);
-    await Promise.allSettled(messages.map(message => message.edit({ components: [] })));
+    await Promise.allSettled(messages.map(message => editThreadMessage(session, message, { components: [] })));
     await session.thread.send({ content: reason, allowedMentions: { parse: [] } }).catch(error => console.warn('[PLAY] Clôture :', error));
 }
 
@@ -853,7 +858,7 @@ async function pickInteraction(interaction, session, action, parts) {
         session.answers.set(id, { user: id, cards: selected, votes: new Map(), score: 0 });
         await interaction.update({ embeds: [embed('Réponse enregistrée').setDescription(escapeText(completePhrase(session.prompt, selected)))], components: [] });
         if (session.answers.size >= session.roundPlayers.size) await startRatings(session);
-        else await session.board.edit(pickPayload(session));
+        else await editThreadMessage(session, session.board, pickPayload(session));
         return;
     }
     return interaction.update(draftPayload(session, id, draft));
@@ -919,7 +924,7 @@ async function sessionInteraction(interaction, session, action, parts) {
         session.leaving.delete(user);
         (action === 'yes' ? session.continuing : session.leaving).add(user);
         if (session.continuing.size + session.leaving.size >= session.players.size) await finishContinue(session);
-        else await session.continueMessage.edit(continuePayload(session));
+        else await editThreadMessage(session, session.continueMessage, continuePayload(session));
         return;
     }
     return privateResponse(interaction, 'Ce bouton a expiré.');
@@ -933,7 +938,7 @@ async function handlePlayInteraction(interaction) {
     try {
         if (menu && interaction.channelId === PLAY_CHANNEL_ID && interaction.message?.id === menu.messageId && menu.expires > Date.now())
             await menuInteraction(interaction, action, menu);
-        else if (session && interaction.channelId === id && interaction.channel.parentId === PLAY_CHANNEL_ID) {
+        else if (session && interaction.channelId === id) {
             // Les votes et formulaires sont acquittés aussitôt, même si un Canvas est en cours.
             if (action === 'rate' || ['pick', 'query', 'search', 'prev', 'next', 'clear', 'swap', 'card', 'binder', 'browse', 'binderset', 'standing', 'pages'].includes(action))
                 await sessionInteraction(interaction, session, action, parts);
@@ -1016,7 +1021,7 @@ async function gameBoard(session, text, components = [], attachment = null, ment
     if (mentions.length) payload.content = mentions.map(id => '<@' + id + '>').join(' ');
     else if (session.board) payload.content = null;
     if (attachment) payload.files = [attachment];
-    if (session.board) await session.board.edit({ ...payload, attachments: [] });
+    if (session.board) await editThreadMessage(session, session.board, { ...payload, attachments: [] });
     else session.board = await session.thread.send(payload);
 }
 
@@ -1100,7 +1105,7 @@ async function voteBallot(interaction, session, [id]) {
     persistRecordActivity(session.record, interaction.client);
     await privateResponse(interaction, 'Ton vote est enregistré.');
     if (ballot.votes.size >= ballot.voters.size && ballot.canFinishEarly(ballot.votes)) await finishBallot(session, ballot);
-    else await ballot.message.edit(ballotPayload(session, ballot));
+    else await editThreadMessage(session, ballot.message, ballotPayload(session, ballot));
 }
 
 async function finishBallot(session, ballot) {
@@ -1111,7 +1116,7 @@ async function finishBallot(session, ballot) {
     for (const choice of ballot.votes.values()) counts.set(choice, (counts.get(choice) || 0) + 1);
     const maximum = Math.max(0, ...counts.values());
     const leaders = [...counts].filter(([, count]) => count === maximum).map(([value]) => value);
-    await ballot.message.edit({
+    await editThreadMessage(session, ballot.message, {
         embeds: [embed(ballot.title).setDescription(
             ballot.votes.size ? ballot.options.filter(option => counts.has(option.value))
                 .map(option => '**' + escapeText(option.label) + '** · ' + counts.get(option.value)).join('\n').slice(0, 3800) : 'Aucun vote enregistré.'
@@ -1946,7 +1951,7 @@ async function presentNext(session) {
     const state = session.state;
     const presenter = state.presenters[state.presentIndex++];
     if (!presenter) return socialFinalVote(session);
-    if (session.board) await session.board.edit({ components: [] });
+    if (session.board) await editThreadMessage(session, session.board, { components: [] });
     session.board = null;
     state.presenter = presenter;
     const slot = state.slots.get(presenter);
@@ -1988,7 +1993,7 @@ async function socialFinalVote(session) {
     const voters = await threadVoters(session);
     if (!voters.size) return finishGame(session, 'Les présentations sont terminées.');
     const title = state.kind === 'fmk' ? '💌 Vote pour la meilleure justification' : '📋 Vote pour le classement le mieux défendu ou le plus drôle';
-    await session.board?.edit({ components: [] });
+    if (session.board) await editThreadMessage(session, session.board, { components: [] });
     session.board = null;
     await openBallot(session, {
         title, description: 'Sélectionne une personne.', voters,
