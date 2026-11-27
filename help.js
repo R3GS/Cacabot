@@ -100,8 +100,8 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
                 `\`!rebus indice\` • \`!pendu indice\` • Révèle un indice immédiat sur la partie en cours\n` +
                 `\`!jeupts [@membre]\` *(ou \`!points\`)* • Panneau interactif des points Motus, Rébus & Pendu\n\n` +
                 `### 🃏 Mini-jeux RegaDex\n` +
-                `\`!play\` dans <#1575601558458994758> • Le lanceur peut annuler depuis le fil de la partie.\n` +
-                `\`!playx\` dans <#1480756332373213275> • Tester les six jeux contre 1 à 3 bots (Epsys uniquement).\n\n` +
+                `\`!play\` dans <#1575601558458994758> • Calendrier et guides des mini-jeux publics de 17 h.\n` +
+                `\`!playx\` dans <#1480756332373213275> • Simuler le dimanche avec des bots (Epsys uniquement).\n\`!playx next\` avance le chrono, \`!playx stop\` arrête le test.\n\n` +
                 `### 🧪 Sessions Solo de Test\n` +
                 `\`!motustest [6/7]\` • \`!rebustest\` • \`!pendutest\` • Parties de test dans le salon actuel`
             );
@@ -568,7 +568,7 @@ function buildHelpCategoryEmbed(category, user, botAvatarUrl = null) {
                 `*Pas besoin de commande pour jouer : écris directement ta proposition dans le salon !*\n\n` +
                 `-# 🔒 Accès : Récupère tes rôles de jeux dans <#1559082682313474059> ou <#1559324422165373008> pour voir les salons et participer !\n\n` +
                 `### 🃏 Mini-jeux RegaDex\n` +
-                `\`!play\` dans <#1575601558458994758> • Ouvre le menu des six mini-jeux RegaDex et leurs guides.\n\n` +
+                `\`!play\` dans <#1575601558458994758> • Horaires et guides. Jeux publics à 17 h (Paris), votes le dimanche jusqu’à 18 h.\n\n` +
                 `### 🟩 Le Motus\n` +
                 `📅 Tous les jours à **10h00** (6 lettres) et **19h00** (7 lettres).\n` +
                 `Écris simplement ton mot dans le chat pendant la session.\n` +
