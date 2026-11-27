@@ -15872,11 +15872,28 @@ function grantMinigameTcgPoints(client, userIds, points = 2, rewardKey = null) {
     return operation;
 }
 
+function isPlayEligibleCard(card) {
+    return Boolean(
+        card?.filePath &&
+        !card.isHolo &&
+        !card.isNegative &&
+        card.rarity !== 'Full Art' &&
+        card.rarity !== 'Négative'
+    );
+}
+
 function getPlayCatalog() {
     return getActiveSets().flatMap(set => getSetCatalog(set.number))
-        .filter(card => card.filePath)
-        .map(card => ({ id: card.id, name: card.name, baseName: card.baseName,
-            numCode: card.numCode, rarity: card.rarity, filePath: card.filePath }));
+        .filter(isPlayEligibleCard)
+        .map(card => ({
+            id: card.id,
+            name: card.name,
+            baseName: card.baseName,
+            numCode: card.numCode,
+            rarity: card.rarity,
+            category: card.category,
+            filePath: card.filePath
+        }));
 }
 
 function getPlayCards(userId) {
@@ -15885,11 +15902,16 @@ function getPlayCards(userId) {
     return Object.keys(inventory)
         .filter(id => inventory[id] > 0)
         .map(getCardByIdAny)
-        .filter(card => card?.filePath)
+        .filter(isPlayEligibleCard)
         .sort((a, b) => a.sortIndex - b.sortIndex)
         .map(card => ({
-            id: card.id, name: card.name, numCode: card.numCode, filePath: card.filePath,
-            rarity: card.rarity, setLabel: card.setNumber ? getSetConfig(card.setNumber).shortName : 'Cartes Perso'
+            id: card.id,
+            name: card.name,
+            numCode: card.numCode,
+            filePath: card.filePath,
+            rarity: card.rarity,
+            category: card.category,
+            setLabel: card.setNumber ? getSetConfig(card.setNumber).shortName : 'Cartes Perso'
         }));
 }
 
