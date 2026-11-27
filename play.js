@@ -59,18 +59,18 @@ const RATINGS = [
     ['love', 'J’adore !', 100, ButtonStyle.Primary, '❤️']
 ];
 const GUIDES = {
-    vitrine: ['Vitrine à thème', 'Complète la phrase avec 1 ou 2 cartes de ton classeur.', '🎭',
+    vitrine: ['Vitrine à thème', 'Complète la phrase avec 1 ou 2 cartes du TCG.', '🎭',
         'Cinq manches. Cherche les cartes possédées par nom ou numéro en 2 minutes. Les réponses sont anonymes et défilent 20 secondes chacune. Une note par réponse des autres. Sans vote, elle vaut Meh. J’adore ! s’utilise une fois sur les cinq manches.'],
     cavale: ['Cartes en cavale', 'Reconnais les illustrations à partir de détails zoomés.', '🔍',
         'Écris le nom dans le fil. Les petites fautes sont acceptées si le nom reste reconnaissable. L’image dézoome un peu chaque minute. Première bonne réponse gagnante, révélation au bout de cinq minutes maximum. Cinq cartes par partie.'],
-    casting: ['Casting de l’enfer', 'Défends ton candidat dans un débat de cinq minutes.', '🎙️',
+    casting: ['Casting de l’enfer', 'Choisis un sujet, et défends ton candidat dans un débat de cinq minutes.', '🎙️',
         'Deux volontaires tirés au sort, ou un duel à deux. Chacun peut changer de carte trois fois en privé avant de la verrouiller. Les cartes sont révélées ensemble. Le public vote à la fin du débat. En duel, les deux personnes votent.'],
-    devine: ['Devine-carte', 'Enquête à tour de rôle avec les réponses Oui ou Non du MJ.', '🕵️',
+    devine: ['Devine-carte', 'Devine une carte à tour de rôle avec les réponses Oui/Non du MJ.', '🕵️',
         'Le MJ est tiré parmi les volontaires. Tu peux poser une question, proposer une carte en privé ou passer sans dépenser ton quota. Après deux tours expirés, tu peux revenir avec Reprendre ma place. Une dernière minute trente s’ouvre quand les questions sont épuisées.'],
-    classement: ['Le Classement impossible', 'Classe quatre cartes et défends ton choix devant la classe.', '📋',
+    classement: ['Le Classement impossible', 'Classe quatre cartes selon un sujet donné et défends ton choix devant le peuple.', '📋',
         'Les inscrits votent pour un tirage commun ou individuel. Tout le monde reçoit la même consigne. Verrouille ta liste en privé, puis présente-la à ton tour. Le salon vote pour le classement le mieux défendu ou le plus drôle.'],
-    fmk: ['Fuck, Marry, Kill', 'Trois cartes Personnage communes et un choix par carte.', '💌',
-        'Place les trois cartes Personnage en privé, verrouille le trio puis explique chaque choix. Tu as 4 min 30. Un trio verrouillé compte même sans justification. Après les résultats, le salon vote pour la meilleure justification.']
+    fmk: ['Fuck, Marry, Kill', 'Le jeu à la con parfait pour les cartes du TCG.', '💌',
+        'Place les trois cartes Personnage, verrouille le trio puis explique chaque choix. Tu as 4 min 30. Un trio verrouillé compte même sans justification. Après les résultats, le salon vote pour la meilleure justification ou le meilleur trio.']
 };
 const MIN_PLAYERS = { vitrine: 2, cavale: 1, casting: 2, devine: 2, classement: 1, fmk: 1 };
 const PROMPTS = [
