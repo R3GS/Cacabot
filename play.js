@@ -9,7 +9,7 @@ const {
     TextInputStyle, UserSelectMenuBuilder
 } = require('discord.js');
 const { createCanvas, loadImage } = require('canvas');
-const { getPlayCards, getPlayCatalog, renderPlayBinder } = require('./tcg.js');
+const { getPlayCards, getPlayCatalog, renderPlayBinder, grantMinigameTcgPoints } = require('./tcg.js');
 
 const REGAIA_GUILD_ID = '720057528351850547';
 const PLAY_CHANNEL_ID = '1575601558458994758';
@@ -26,6 +26,7 @@ const CONTINUE_MS = 90_000;
 const WRITE_MS = 75_000;
 const STOP_VOTE_MS = 120_000;
 const ROUND_COUNT = 5;
+const WIN_REWARD_POINTS = 3;
 const COLOR = 0xf1c40f;
 const SEP = '────────────────────────────────────────';
 const IGNORABLE_DISCORD_CODES = new Set([10003, 10008, 10062, 40060, 50001, 50013, 50083]);
@@ -61,9 +62,9 @@ const RATINGS = [
 const GUIDES = {
     vitrine: ['Blanc Manger Caca', 'Complète la phrase avec 1 ou 2 cartes du TCG.', '🎭',
         'Cinq manches. Cherche les cartes possédées par nom ou numéro en 2 minutes. Les réponses sont anonymes et défilent 20 secondes chacune. Une note par réponse des autres. Sans vote, elle vaut Meh. J’adore ! s’utilise une fois sur les cinq manches.'],
-    cavale: ['Cartes en cavale', 'Reconnais les illustrations à partir de détails zoomés.', '🔍',
+    cavale: ['Cartes zoomées', 'Reconnais les illustrations à partir de détails zoomés.', '🔍',
         'Écris le nom dans le fil. Les petites fautes sont acceptées si le nom reste reconnaissable. L’image dézoome un peu chaque minute. Première bonne réponse gagnante, révélation au bout de cinq minutes maximum. Cinq cartes par partie.'],
-    casting: ['Casting de l’enfer', 'Choisis un sujet, et défends ton candidat dans un débat de cinq minutes.', '🎙️',
+    casting: ['Débat de golmon', 'Choisis un sujet, et défends ton candidat dans un débat de cinq minutes.', '🎙️',
         'Deux volontaires tirés au sort, ou un duel à deux. Chacun peut changer de carte trois fois en privé avant de la verrouiller. Les cartes sont révélées ensemble. Le public vote à la fin du débat. En duel, les deux personnes votent.'],
     devine: ['Devine-carte', 'Devine une carte à tour de rôle avec les réponses Oui/Non du MJ.', '🕵️',
         'Le MJ est tiré parmi les volontaires. Tu peux poser une question, proposer une carte en privé ou passer sans dépenser ton quota. Après deux tours expirés, tu peux revenir avec Reprendre ma place. Une dernière minute trente s’ouvre quand les questions sont épuisées.'],
@@ -968,14 +969,13 @@ function bestResponseDescription(best) {
 
 async function showPodium(session) {
     session.phase = 'continue';
-    const entries = [];
-    for (const player of session.players.values()) entries.push({ user: player.id, score: session.scores.get(player.id) ?? 0 });
-    const standings = ranked(entries);
+    const standings = ranked([...session.scores].map(([user, score]) => ({ user, score })));
+    const reward = await rewardVictors(session, standings.filter(entry => entry.rank === 1).map(entry => entry.user));
     const top = standings.filter(entry => entry.rank <= 3);
     session.results.set(session.lobbyId, { entries: [...top.slice(3), ...standings.filter(entry => entry.rank > 3)], best: session.best });
     const best = bestResponseDescription(session.best);
     await sendResult(session, 'Blanc Manger Caca • Podium final', top.slice(0, 3), {
-        podium: true, description: best, best: session.best,
+        podium: true, description: best || 'Aucune réponse n’a été départagée.', best: session.best, reward,
         components: [row(button(controlId(session, 'standing', session.lobbyId, 0), 'Voir le classement', ButtonStyle.Secondary, '📊'))]
     });
     session.continuing = new Set();
@@ -1608,7 +1608,7 @@ async function castingVictoryCanvas(session, leaders, votes) {
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ff7675';
     ctx.font = 'bold 32px "LemonMilk", "Sans"';
-    ctx.fillText(leaders.length === 1 ? 'CASTING DE L’ENFER  •  VICTOIRE !' : 'CASTING DE L’ENFER  •  VERDICT', W / 2, 66, W - 160);
+    ctx.fillText(leaders.length === 1 ? 'DÉBAT DE GOLMON  •  VICTOIRE !' : 'DÉBAT DE GOLMON  •  VERDICT', W / 2, 66, W - 160);
     ctx.fillStyle = '#e2e8f0';
     ctx.font = '22px Sans';
     ctx.fillText(cleanCanvasText(state.prompt), W / 2, 112, W - 160);
@@ -1831,6 +1831,7 @@ async function sendResult(session, title, entries, options = {}) {
         escapeText(session.people.get(entry.user)?.name || 'Participant·e') + '** — `' + entry.score + ' ' + unit + '`');
     const description = [lines.join('\n'), options.description].filter(Boolean).join('\n' + SEP + '\n');
     if (description) result.setDescription(cut(description, 4096));
+    if (options.reward) result.addFields({ name: '🎁 Récompense RegaDex', value: cut(options.reward, 1024) });
     const image = await resultsCanvas(session, title, entries, options).catch(error => {
         console.warn('[PLAY] Canvas des résultats :', error);
         return null;
@@ -2404,8 +2405,26 @@ async function startSelectedGame(session) {
     return startSocialChoices(session, 'fmk');
 }
 
-async function finishGame(session, text, attachment = null, components = []) {
+async function rewardVictors(session, winners) {
+    if (session.test || !winners.length) return '';
+    const rewardKey = 'regadex-play:' + session.thread.id + ':' + session.lobbyId;
+    for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+            const credited = await grantMinigameTcgPoints(session.thread.client, winners, WIN_REWARD_POINTS, rewardKey);
+            if (!credited.length) return '';
+            const names = credited.map(id => playerRef(session, id)).join(', ');
+            return '**+' + WIN_REWARD_POINTS + ' pts RegaDex** · ' + names;
+        } catch (error) {
+            if (attempt === 1) console.error('[PLAY] Récompense RegaDex (' + rewardKey + ') :', error);
+        }
+    }
+    return '';
+}
+
+async function finishGame(session, text, attachment = null, components = [], winners = []) {
     gameStep(session, 'finished');
+    const reward = await rewardVictors(session, winners);
+    if (reward) text += '\n\n🎁 ' + reward;
     await gameBoard(session, text, components, attachment);
     await nextGamePoll(session, await threadVoters(session));
 }
@@ -2603,7 +2622,7 @@ async function cavaleRound(session) {
         if (entries.length) {
             const top = entries.filter(entry => entry.rank <= 3).slice(0, 3);
             const championCards = state.wonCards?.get(top[0]?.user) || [];
-            await sendResult(session, '🔍 Cartes en cavale • Podium', top, {
+            await sendResult(session, '🔍 Cartes zoomées • Podium', top, {
                 podium: true,
                 unit: 'carte(s)',
                 accent: '#e67e22',
@@ -2616,7 +2635,8 @@ async function cavaleRound(session) {
             ? entries.map(item => '**#' + item.rank + '** · **' + escapeText(session.people.get(item.user)?.name || 'Enquêteur') + '** — `' + item.score + ' carte(s)`').join('\n')
             : 'Personne n’a trouvé de carte sur cette manche.';
         session.board = null;
-        return finishGame(session, '**🏁 Fin de l’enquête**\n\n' + text);
+        return finishGame(session, '**🏁 Fin de l’enquête**\n\n' + text, null, [],
+            entries.filter(entry => entry.rank === 1).map(entry => entry.user));
     }
     promotePending(session);
     gameStep(session, 'guess');
@@ -2625,7 +2645,7 @@ async function cavaleRound(session) {
     try {
         state.image = await loadImage(state.cards[state.index].filePath);
     } catch (error) {
-        console.warn('[PLAY] Illustration de Cartes en cavale indisponible :', error);
+        console.warn('[PLAY] Illustration de Cartes zoomées indisponible :', error);
         state.index++;
         return cavaleRound(session);
     }
@@ -2674,7 +2694,7 @@ async function cavaleZoom(session) {
         [],
         new AttachmentBuilder(png, { name: 'indice.png' }),
         [],
-        '🔍 Cartes en cavale · Carte ' + (state.index + 1) + '/' + state.cards.length,
+        '🔍 Cartes zoomées · Carte ' + (state.index + 1) + '/' + state.cards.length,
         [
             { name: 'Niveau de zoom', value: progressBar(state.zoom + 1, 5, 5) + ' **Indice ' + (state.zoom + 1) + '/5**', inline: true },
             { name: 'Scores actuels', value: cavaleStandingsLine(session), inline: true }
@@ -2921,7 +2941,7 @@ async function finishDevine(session, reason, winner = null) {
         (winner ? '🎉 ' + playerRef(session, winner) + ' a démasqué la carte secrète !' : '🕵️ ' + reason) + '\n' + SEP + '\n' +
         '**' + escapeText(state.card.name) + '** · `N° ' + state.card.numCode + '`\n' +
         theme.emoji + ' *' + escapeText(state.card.rarity) + '* · ' + escapeText(cardSetLabel(state.card)),
-        attachment
+        attachment, [], winner ? [winner] : []
     );
 }
 
@@ -3089,7 +3109,7 @@ async function renderCastingVolunteers(session) {
             gameButton(session, 'castVolunteer', 'Je veux débattre', ButtonStyle.Primary, '', '🎙️'),
             gameButton(session, 'castDraw', 'Lancer le tirage', ButtonStyle.Success, '', '🎲').setDisabled(state.volunteers.size < 2)
         )],
-        null, [], '🎙️ Casting de l’enfer · Volontaires',
+        null, [], '🎙️ Débat de golmon · Volontaires',
         [{ name: 'Volontaires (' + state.volunteers.size + '/2 min)', value: list, inline: false }]
     );
 }
@@ -3145,7 +3165,7 @@ async function renderCastingCardsBoard(session, mentions = []) {
         '**Sujet du débat :** ' + escapeText(state.prompt) + '\n' + SEP + '\n' +
         'Les deux candidat·es choisissent et verrouillent leur carte en privé.\nFin du tirage ' + expiry(session.deadline),
         [row(gameButton(session, 'castPanel', 'Voir / changer ma carte', ButtonStyle.Primary, '', '🃏'))],
-        null, mentions, '🎙️ Casting de l’enfer · Préparation',
+        null, mentions, '🎙️ Débat de golmon · Préparation',
         [{ name: 'Candidat·es (' + lockedCount + '/2 prêt·es)', value: statusList, inline: false }]
     );
 }
@@ -3155,7 +3175,7 @@ async function castingCards(session) {
     clearTimeout(session.timer);
     clearTimeout(session.botTimer);
     const cards = sampleCards(2, new Set(), true);
-    if (cards.length < 2) return finishGame(session, 'Deux cartes différentes sont nécessaires pour le Casting.');
+    if (cards.length < 2) return finishGame(session, 'Deux cartes différentes sont nécessaires pour le Débat de golmon.');
     state.drawn = new Set(cards.map(card => card.id));
     state.slots = new Map(state.debaters.map((id, i) => [id, { card: cards[i], remaining: 3, locked: false }]));
     gameStep(session, 'castCards');
@@ -3166,7 +3186,7 @@ async function castingCards(session) {
 
 function castingPanel(session, slot) {
     const theme = cardTheme(slot.card);
-    const view = embed('🃏 Ma carte · Casting de l’enfer', gameColor('casting'))
+    const view = embed('🃏 Ma carte · Débat de golmon', gameColor('casting'))
         .setDescription(
             '**' + escapeText(slot.card.name) + '** · `N° ' + slot.card.numCode + '`\n' +
             theme.emoji + ' *' + escapeText(slot.card.rarity) + '* · ' + escapeText(cardSetLabel(slot.card)) + '\n' + SEP + '\n' +
@@ -3191,8 +3211,8 @@ async function castingDebate(session) {
     gameStep(session, 'castDebate');
     session.deadline = Date.now() + 300_000;
     const cards = state.debaters.map(id => state.slots.get(id).card);
-    const art = await drawVoteCards(cards, { header: 'CASTING DE L’ENFER • LES CANDIDATS', cardW: 230 })
-        .catch(error => { console.warn('[PLAY] Cartes du Casting :', error); return null; });
+    const art = await drawVoteCards(cards, { header: 'DÉBAT DE GOLMON • LES CANDIDATS', cardW: 230 })
+        .catch(error => { console.warn('[PLAY] Cartes du Débat de golmon :', error); return null; });
     await gameBoard(
         session,
         '**Sujet :** ' + escapeText(state.prompt) + '\n' + SEP + '\n' +
@@ -3226,13 +3246,17 @@ async function castingVote(session, second) {
             session.board = null;
             const poster = leaders.length
                 ? await castingVictoryCanvas(session, leaders, votes).catch(error => {
-                    console.warn('[PLAY] Canvas Casting :', error);
+                    console.warn('[PLAY] Canvas Débat de golmon :', error);
                     return null;
                 })
                 : null;
             const attachment = poster ? new AttachmentBuilder(poster, { name: 'casting-victoire.jpg' }) : null;
-            if (leaders.length === 1) return finishGame(session, '🏆 Le débat est remporté par ' + playerRef(session, leaders[0]) + ' !', attachment);
-            return finishGame(session, leaders.length ? '🤝 Le débat se termine sur un match nul.' : 'Le débat est terminé. Aucun vote enregistré.', attachment);
+            const result = leaders.length === 1
+                ? '🏆 Le débat est remporté par ' + playerRef(session, leaders[0]) + ' !'
+                : leaders.length
+                    ? '🤝 **Ex æquo** : ' + leaders.map(id => playerRef(session, id)).join(', ') + ' !'
+                    : 'Le débat est terminé. Aucun vote enregistré.';
+            return finishGame(session, result, attachment, [], leaders);
         }
     });
 }
@@ -3853,7 +3877,7 @@ async function socialFinalVote(session) {
                 leaders.length
                     ? (leaders.length > 1 ? '🤝 **Ex æquo** : ' : '🏆 **Victoire de** ') + leaders.map(id => playerRef(session, id)).join(', ') + ' !'
                     : 'Aucun vote enregistré. Merci d’avoir joué !',
-                attachment
+                attachment, [], leaders
             );
         }
     });
