@@ -3466,6 +3466,7 @@ function getFilteredSortedCards(categoryFilter, sortMode, u = null, ownedModeInp
 
 function getBinderGridConfig(perPageMode, totalInCategory) {
     if (perPageMode === '4' || perPageMode === '9') return { cols: 4, rows: 1, perPage: 4 };
+    if (perPageMode === '8') return { cols: 4, rows: 2, perPage: 8 };
     if (perPageMode === '18') return { cols: 6, rows: 3, perPage: 18 };
     if (perPageMode === '36') return { cols: 9, rows: 4, perPage: 36 };
     // Mode 'all'
@@ -3513,7 +3514,8 @@ async function renderBinderCanvas(targetUser, u, options) {
         perPageMode = '18',
         page = 0,
         sortMode = 'number',
-        rarityFilter = 'all'
+        rarityFilter = 'all',
+        playOnly = false
     } = options;
     const ownedMode = normalizeBinderOwnedMode(options.ownedMode ?? options.ownedOnly);
 
@@ -3528,7 +3530,10 @@ async function renderBinderCanvas(targetUser, u, options) {
 
     drawBackground(ctx, isLight ? 'W' : 'B', W, H);
 
-    const allCategoryCards = getFilteredSortedCards(category, sortMode, u, '0', rarityFilter, setNumber);
+    const rawCategoryCards = getFilteredSortedCards(category, sortMode, u, '0', rarityFilter, setNumber);
+    const allCategoryCards = playOnly
+        ? rawCategoryCards.filter(isPlayEligibleCard)
+        : rawCategoryCards;
     const cardsList = ownedMode === '1'
         ? allCategoryCards.filter(c => (u.cards?.[c.id] || 0) > 0)
         : (ownedMode === '2' ? allCategoryCards.filter(c => (u.cards?.[c.id] || 0) >= 2) : allCategoryCards);
@@ -3544,9 +3549,11 @@ async function renderBinderCanvas(targetUser, u, options) {
     const totalInView = allCategoryCards.length;
     const pct = totalInView > 0 ? Math.round((ownedInView / totalInView) * 100) : 0;
     const rarityLabel = isPersoView ? null : BINDER_RARITY_CODES[rarityFilter];
-    const baseLabel = isPersoView
-        ? 'RegaDex • Cartes Perso'
-        : (category === 'complet' ? `RegaDex • ${setCfg.shortName}` : `RegaDex • ${category}`);
+    const baseLabel = playOnly
+        ? `RegaDex Arcade • ${setCfg.shortName}`
+        : (isPersoView
+            ? 'RegaDex • Cartes Perso'
+            : (category === 'complet' ? `RegaDex • ${setCfg.shortName}` : `RegaDex • ${category}`));
     const headerTags = [];
     if (rarityLabel) headerTags.push(rarityLabel);
     if (ownedMode === '1' && !isPersoView) headerTags.push('Possédées');
@@ -3575,11 +3582,13 @@ async function renderBinderCanvas(targetUser, u, options) {
 
     ctx.textAlign = 'right';
     ctx.font = 'bold 20px "LemonMilk", "Sans"';
-    const rightSummary = ownedMode === '2'
-        ? `${cardsList.length} doublon${cardsList.length > 1 ? 's' : ''}  •  Page ${safePage + 1}/${totalPages}`
-        : (isPersoView
-            ? `${ownedInView} carte${ownedInView > 1 ? 's' : ''} perso  •  Page ${safePage + 1}/${totalPages}`
-            : `${ownedInView}/${totalInView} (${pct}%)  •  Page ${safePage + 1}/${totalPages}`);
+    const rightSummary = playOnly
+        ? `${cardsList.length} cartes éligibles  •  Page ${safePage + 1}/${totalPages}`
+        : (ownedMode === '2'
+            ? `${cardsList.length} doublon${cardsList.length > 1 ? 's' : ''}  •  Page ${safePage + 1}/${totalPages}`
+            : (isPersoView
+                ? `${ownedInView} carte${ownedInView > 1 ? 's' : ''} perso  •  Page ${safePage + 1}/${totalPages}`
+                : `${ownedInView}/${totalInView} (${pct}%)  •  Page ${safePage + 1}/${totalPages}`));
     ctx.fillText(rightSummary, W - 56, 49, maxSideW);
 
     // Logo du Set en premier plan, petit et centré tout en haut ([SET 2] dynamique par Set)
@@ -3645,7 +3654,8 @@ async function renderBinderCanvas(targetUser, u, options) {
         }
 
         ctx.fillStyle = owned ? textColor : subTextColor;
-        ctx.fillText(`${card.id} • x${count}`, cx, cardY + cardH + 4, cellW - 8);
+        const cellLabel = playOnly ? `${card.numCode} • ${card.name}` : `${card.id} • x${count}`;
+        ctx.fillText(cellLabel, cx, cardY + cardH + 4, cellW - 8);
     }
 
     let buffer;
@@ -15875,6 +15885,7 @@ function grantMinigameTcgPoints(client, userIds, points = 2, rewardKey = null) {
 function isPlayEligibleCard(card) {
     return Boolean(
         card?.filePath &&
+        !card.isPerso &&
         !card.isHolo &&
         !card.isNegative &&
         card.rarity !== 'Full Art' &&
@@ -15892,6 +15903,8 @@ function getPlayCatalog() {
             numCode: card.numCode,
             rarity: card.rarity,
             category: card.category,
+            setNumber: card.setNumber,
+            setLabel: getSetConfig(card.setNumber || DEFAULT_SET_NUMBER).shortName,
             filePath: card.filePath
         }));
 }
@@ -15907,22 +15920,33 @@ function getPlayCards(userId) {
         .map(card => ({
             id: card.id,
             name: card.name,
+            baseName: card.baseName,
             numCode: card.numCode,
             filePath: card.filePath,
             rarity: card.rarity,
             category: card.category,
+            setNumber: card.setNumber,
             setLabel: card.setNumber ? getSetConfig(card.setNumber).shortName : 'Cartes Perso'
         }));
 }
 
-async function renderPlayBinder(viewer, requestedSet, page, theme) {
+async function renderPlayBinder(viewer, requestedSet, page, theme, perPageMode = '18') {
     const sets = getActiveSets().map(set => ({ id: set.number, name: set.name }));
     const selected = sets.find(set => set.id === requestedSet) || sets[0];
     const set = selected?.id || DEFAULT_SET_NUMBER;
-    const cards = Object.fromEntries(getSetCatalog(set).map(card => [card.id, 1]));
-    const rendered = await renderBinderCanvas(viewer, { cards, theme }, { setNumber: set, page });
-    return { buffer: rendered.buffer, page: rendered.safePage, totalPages: rendered.totalPages,
-        set, setName: getSetConfig(set).name, sets };
+    const allowedSizes = ['4', '8', '18', '36'];
+    const safeSize = allowedSizes.includes(String(perPageMode)) ? String(perPageMode) : '18';
+    const cards = Object.fromEntries(getSetCatalog(set).filter(isPlayEligibleCard).map(card => [card.id, 1]));
+    const rendered = await renderBinderCanvas(viewer, { cards, theme }, { setNumber: set, perPageMode: safeSize, page, playOnly: true });
+    return {
+        buffer: rendered.buffer,
+        page: rendered.safePage,
+        totalPages: rendered.totalPages,
+        perPageMode: safeSize,
+        set,
+        setName: getSetConfig(set).name,
+        sets
+    };
 }
 
 module.exports = {
