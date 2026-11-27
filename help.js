@@ -100,7 +100,8 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
                 `\`!rebus indice\` • \`!pendu indice\` • Révèle un indice immédiat sur la partie en cours\n` +
                 `\`!jeupts [@membre]\` *(ou \`!points\`)* • Panneau interactif des points Motus, Rébus & Pendu\n\n` +
                 `### 🃏 Mini-jeux RegaDex\n` +
-                `\`!play\` dans <#1575601558458994758> • Le lanceur peut annuler depuis le fil de la partie.\n\n` +
+                `\`!play\` dans <#1575601558458994758> • Le lanceur peut annuler depuis le fil de la partie.\n` +
+                `\`!playx\` dans <#1480756332373213275> • Tester les six jeux contre 1 à 3 bots (Epsys uniquement).\n\n` +
                 `### 🧪 Sessions Solo de Test\n` +
                 `\`!motustest [6/7]\` • \`!rebustest\` • \`!pendutest\` • Parties de test dans le salon actuel`
             );
