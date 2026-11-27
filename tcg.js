@@ -6667,8 +6667,24 @@ async function startBoosterOpening(
     let boosterPublished = false;
 
     boostersEnCours.add(userId);
+    let interactionAcknowledgementFailed = false;
 
     try {
+        // Accuser réception des boutons avant le tirage et la préparation des assets.
+        // Discord invalide l'interaction si le premier accusé arrive trop tard.
+        if (
+            targetResponder.isButton?.() &&
+            !targetResponder.deferred &&
+            !targetResponder.replied
+        ) {
+            try {
+                await targetResponder.deferUpdate();
+            } catch (acknowledgementError) {
+                interactionAcknowledgementFailed = true;
+                throw acknowledgementError;
+            }
+        }
+
         if (isFiveCard) {
             u.inventory.fiveCardBooster -= 1;
         } else {
@@ -6905,9 +6921,7 @@ async function startBoosterOpening(
         );
 
         if (isFocusChoiceButton) {
-            // Accuser réception de l'interaction Focus.
-            await targetResponder.deferUpdate();
-
+            // L'interaction a déjà été acquittée au début de l'ouverture.
             if (!targetResponder.channel) {
                 throw new Error(
                     'Impossible de trouver le salon pour publier le booster Focus.'
@@ -6958,8 +6972,6 @@ async function startBoosterOpening(
             );
 
             if (!isExistingRecap) {
-                await targetResponder.deferUpdate();
-
                 sentMsg = await targetResponder.editReply({
                     content: null,
                     embeds: [gifEmbed],
@@ -6968,13 +6980,12 @@ async function startBoosterOpening(
                     attachments: []
                 });
             } else {
-                await targetResponder.reply(
+                sentMsg = await targetResponder.followUp(
                     withSilent({
                         embeds: [gifEmbed],
                         files
                     })
                 );
-                sentMsg = await targetResponder.fetchReply();
 
                 disableBoosterOpenButtonOnMessage(
                     targetResponder.message
@@ -7351,7 +7362,11 @@ async function startBoosterOpening(
               "si le récapitulatif ne s'affiche pas.";
 
         try {
-            if (targetResponder.isRepliable?.()) {
+            if (interactionAcknowledgementFailed) {
+                console.warn(
+                    `[RegaDex] Impossible de répondre à l'interaction expirée pour ${userId}.`
+                );
+            } else if (targetResponder.isRepliable?.()) {
                 if (targetResponder.deferred || targetResponder.replied) {
                     await targetResponder.followUp({
                         content: errorMessage,
