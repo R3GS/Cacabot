@@ -363,10 +363,25 @@ function chooseGameMenu(menu, guide) {
     return { embeds: [main], components: [row(button(idFor('guide', menu.id), 'Guides des mini-jeux', ButtonStyle.Primary, '📘'))] };
 }
 
+function testLaunchMenu(menu) {
+    return {
+        embeds: [embed('🧪 Session de test RegaDex', 0x3498db)
+            .setDescription('Choisis le mini-jeu et le nombre de bots simulés. Tu votes seul·e pour la suite.')],
+        components: [
+            row(new StringSelectMenuBuilder().setCustomId(idFor('testgame', menu.id)).setPlaceholder('Choisir le mini-jeu')
+                .addOptions(Object.entries(GUIDES).map(([value, [label, , emoji]]) => ({ label, value, emoji })))),
+            row(new StringSelectMenuBuilder().setCustomId(idFor('testbots', menu.id)).setPlaceholder('Nombre de bots')
+                .addOptions([1, 2, 3].map(value => ({ label: value + ' bot' + (value > 1 ? 's' : ''), value: String(value) })))),
+            row(button(idFor('teststart', menu.id), 'Lancer le test', ButtonStyle.Success, '🚀'))
+        ]
+    };
+}
+
 async function handlePlayMessage(message) {
     if (message.author.bot) return false;
     const session = sessions.get(message.channelId);
     const trimmed = message.content.trim();
+    const force = /^!tcgforce\s+(debat|blanc|zoom|devine|classement|fmk)$/i.exec(trimmed);
     const test = /^!playx(?: (next|stop))?$/i.exec(trimmed);
     if (test) {
         if (message.channelId !== PLAY_TEST_CHANNEL_ID || message.author.id !== PLAY_TEST_OWNER_ID) return false;
@@ -387,8 +402,10 @@ async function handlePlayMessage(message) {
             return true;
         }
         if (test[1]) return false;
-        const simulated = createArcadeSession(message.channel, { sunday: true, test: true, tester: readPlayer({ user: message.author, member: message.member }) });
-        await nextGamePoll(simulated, true).catch(error => recoverSession(simulated, error));
+        const menu = { id: message.id, owner: message.author.id, channelId: message.channelId, test: true, game: null, botCount: null, expires: Date.now() + IDLE_MS };
+        const reply = await message.reply(silent(testLaunchMenu(menu)));
+        menu.messageId = reply.id;
+        menus.set(menu.id, menu);
         return true;
     }
     if (session && !session.test && !['lobby', 'ready', 'closed'].includes(session.phase) && !session.ballot?.arcade &&
@@ -404,6 +421,20 @@ async function handlePlayMessage(message) {
             await recoverSession(session, error);
             return true;
         });
+    }
+    if (force) {
+        if (message.guildId !== REGAIA_GUILD_ID || message.channelId !== PLAY_CHANNEL_ID || message.author.id !== PLAY_TEST_OWNER_ID) return false;
+        if (sessions.has(message.channelId)) {
+            await message.reply(silent({ content: 'Une session est déjà en cours dans le salon.' }));
+            return true;
+        }
+        const games = { debat: 'casting', blanc: 'vitrine', zoom: 'cavale', devine: 'devine', classement: 'classement', fmk: 'fmk' };
+        const host = readPlayer({ user: message.author, member: message.member });
+        const session = createArcadeSession(message.channel, { sunday: false, tester: host, date: parisSlot().date });
+        session.game = games[force[1].toLowerCase()];
+        session.forceLaunch = true;
+        await openLobby(session);
+        return true;
     }
     if (!/^!play$/i.test(trimmed) || message.guildId !== REGAIA_GUILD_ID || message.channelId !== PLAY_CHANNEL_ID) return false;
     const menu = { id: message.id, owner: message.author.id, channelId: message.channelId, expires: Date.now() + IDLE_MS };
@@ -422,8 +453,8 @@ function readPlayer(interaction) {
     };
 }
 
-function createArcadeSession(channel, { test = false, tester = null, sunday, cutoff = Infinity, date = null }) {
-    const bots = new Map((test ? TEST_NAMES : []).map((name, i) => ['bot-' + i, { id: 'bot-' + i, name: name + ' [bot]' }]));
+function createArcadeSession(channel, { test = false, tester = null, sunday, cutoff = Infinity, date = null, botCount = 3 }) {
+    const bots = new Map((test ? TEST_NAMES.slice(0, botCount) : []).map((name, i) => ['bot-' + i, { id: 'bot-' + i, name: name + ' [bot]' }]));
     const people = new Map(tester ? [[tester.id, tester], ...bots] : []);
     const session = {
         id: date || randomUUID().slice(0, 18), channel, date, cutoff, sunday, test, tester, bots,
@@ -488,13 +519,14 @@ function lobbyPayload(session) {
         );
     return silent({ embeds: [page], components: [row(
         button(controlId(session, 'join', session.lobbyId), 'Rejoindre', ButtonStyle.Success, '🙋').setDisabled(session.test),
-        button(controlId(session, 'quit', session.lobbyId), 'Retirer mon inscription', ButtonStyle.Secondary, '↩️').setDisabled(session.test)
+        button(controlId(session, 'quit', session.lobbyId), 'Retirer mon inscription', ButtonStyle.Secondary, '↩️').setDisabled(session.test),
+        button(controlId(session, 'quick', session.lobbyId), 'Lancer maintenant', ButtonStyle.Primary, '⚡').setDisabled(session.test)
     )] });
 }
 
 async function openLobby(session) {
     if (!canStartAnother(session, GET_READY_MS + 1000)) return closeSession(session, 'Les inscriptions sont fermées. À demain, 17 h !');
-    session.players = session.test ? new Map([[session.tester.id, session.tester], ...session.bots]) : new Map();
+    session.players = session.test || session.forceLaunch ? new Map([[session.tester.id, session.tester], ...session.bots]) : new Map();
     session.host = session.tester?.id;
     session.phase = 'lobby';
     session.board = null;
@@ -1712,6 +1744,24 @@ async function showBinder(interaction, session, action, parts) {
 async function menuInteraction(interaction, action, menu) {
     if (interaction.user.id !== menu.owner) return privateResponse(interaction, 'Ce menu appartient à la personne qui a lancé !play.');
     switch (action) {
+        case 'testgame':
+            if (!menu.test || !GUIDES[interaction.values?.[0]]) return privateResponse(interaction, 'Choisis un mini-jeu valide.');
+            menu.game = interaction.values[0];
+            return interaction.update(testLaunchMenu(menu));
+        case 'testbots':
+            if (!menu.test || !['1', '2', '3'].includes(interaction.values?.[0])) return privateResponse(interaction, 'Choisis 1 à 3 bots.');
+            menu.botCount = Number(interaction.values[0]);
+            return interaction.update(testLaunchMenu(menu));
+        case 'teststart': {
+            if (!menu.test || !menu.game || !menu.botCount) return privateResponse(interaction, 'Choisis le jeu et le nombre de bots.');
+            await interaction.deferUpdate();
+            const owner = readPlayer(interaction);
+            const simulated = createArcadeSession(interaction.channel, { sunday: true, test: true, tester: owner, botCount: menu.botCount });
+            simulated.game = menu.game;
+            await openLobby(simulated);
+            menus.delete(menu.id);
+            return;
+        }
         case 'menu': return interaction.update(chooseGameMenu(menu));
         case 'guide': return interaction.update(chooseGameMenu(menu, 'all'));
         case 'guidegame': return interaction.update(chooseGameMenu(menu, interaction.values[0]));
@@ -1838,7 +1888,7 @@ async function sessionInteraction(interaction, session, action, parts) {
         return voteBallot(interaction, session, parts);
     }
     if (action === 'join' || action === 'quit') {
-        if (session.test || session.phase !== 'lobby' || Number(parts[0]) !== session.lobbyId || Date.now() >= session.deadline)
+        if (session.phase !== 'lobby' || Number(parts[0]) !== session.lobbyId || Date.now() >= session.deadline)
             return privateResponse(interaction, spectatorMessage(session));
         if (action === 'quit') return privateResponse(interaction,
             session.players.delete(user) ? 'Ton inscription est retirée.' : 'Tu n’étais pas inscrit·e.');
@@ -1846,6 +1896,12 @@ async function sessionInteraction(interaction, session, action, parts) {
         session.players.set(user, player);
         session.people.set(user, player);
         return privateResponse(interaction, '✅ Tu es inscrit·e ! Cacabot te mentionnera quand la partie sera prête.');
+    }
+    if (action === 'quick') {
+        if (session.phase !== 'lobby' || Number(parts[0]) !== session.lobbyId) return privateResponse(interaction, 'Les inscriptions sont closes.');
+        if (session.players.size < MIN_PLAYERS[session.game]) return privateResponse(interaction, 'Pas assez de participant·es pour lancer.');
+        await interaction.deferUpdate();
+        return announceStart(session);
     }
     if (!session.players.has(user)) return privateResponse(interaction, spectatorMessage(session));
     if (session.stopVoteActive) return privateResponse(interaction, '⏸️ La partie est en pause pendant le vote d’arrêt (`!stop`).');
@@ -1880,7 +1936,7 @@ async function handlePlayInteraction(interaction) {
         console.error('[PLAY] Interaction :', error);
         if (!interaction.deferred && !interaction.replied) await privateResponse(interaction, 'Le mini-jeu a rencontré une erreur.').catch(() => {});
         else await interaction.followUp({ content: 'Le mini-jeu a rencontré une erreur.', flags: MessageFlags.Ephemeral }).catch(() => {});
-        if (session && ['lock', 'join', 'quit', 'gameaction', 'ballot'].includes(action))
+        if (session && ['lock', 'join', 'quit', 'quick', 'gameaction', 'ballot'].includes(action))
             await recoverSession(session, error);
     }
     return true;
@@ -2124,7 +2180,11 @@ function ballotPayload(session, ballot) {
             .setAuthor({ name: 'Urne RegaDex · Vote en cours' })
             .setDescription(
                 ballot.description + '\n' + SEP + '\n' +
-                'Clôture ' + expiry(session.deadline)
+                options.map(option => {
+                    const game = GUIDES[option.value];
+                    return (option.emoji || '🎮') + ' **' + escapeText(option.label) + '**' +
+                        (game?.[1] ? ' · ' + escapeText(game[1]) : '');
+                }).join('\n') + '\n\n⏳ **Clôture** ' + expiry(session.deadline)
             )
             .setFooter({ text: 'Ton choix reste anonyme jusqu’à la clôture' })],
         components: [row(controls)],
@@ -2184,7 +2244,7 @@ async function nextGamePoll(session, initial = false) {
         description: session.sunday
             ? 'Tout le salon peut voter. En cas d’égalité, Cacabot tire au sort entre les choix en tête.'
             : 'Vote pour rejouer au même mini-jeu. Une majorité des votes exprimés doit être en faveur d’une nouvelle session.',
-        voters: new Set(session.bots.keys()), options, ms, arcade: true,
+        voters: new Set(session.test ? [session.tester.id] : []), options, ms, arcade: true,
         choose: async leaders => {
             if (!leaders.length || (!session.sunday && leaders.length !== 1))
                 return closeSession(session, 'Pas de nouvelle session. Merci d’avoir joué !');
@@ -3518,7 +3578,7 @@ async function runTestBot(session, id) {
     const interaction = mockInteraction(session, id);
     if (session.phase === 'ballot') {
         const ballot = session.ballot;
-        if (!ballot.voters.has(id) || ballot.votes.has(id)) return;
+        if (ballot.arcade || !ballot.voters.has(id) || ballot.votes.has(id)) return;
         const option = shuffled(ballot.options)[0];
         return voteBallot(mockInteraction(session, id, [option.value]), session, [ballot.id]);
     }
