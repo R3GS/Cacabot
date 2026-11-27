@@ -59,7 +59,7 @@ const RATINGS = [
     ['love', 'J’adore !', 100, ButtonStyle.Primary, '❤️']
 ];
 const GUIDES = {
-    vitrine: ['Vitrine à thème', 'Complète la phrase avec 1 ou 2 cartes du TCG.', '🎭',
+    vitrine: ['Blanc Manger Caca', 'Complète la phrase avec 1 ou 2 cartes du TCG.', '🎭',
         'Cinq manches. Cherche les cartes possédées par nom ou numéro en 2 minutes. Les réponses sont anonymes et défilent 20 secondes chacune. Une note par réponse des autres. Sans vote, elle vaut Meh. J’adore ! s’utilise une fois sur les cinq manches.'],
     cavale: ['Cartes en cavale', 'Reconnais les illustrations à partir de détails zoomés.', '🔍',
         'Écris le nom dans le fil. Les petites fautes sont acceptées si le nom reste reconnaissable. L’image dézoome un peu chaque minute. Première bonne réponse gagnante, révélation au bout de cinq minutes maximum. Cinq cartes par partie.'],
@@ -73,19 +73,20 @@ const GUIDES = {
         'Place les trois cartes Personnage, verrouille le trio puis explique chaque choix. Tu as 4 min 30. Un trio verrouillé compte même sans justification. Après les résultats, le salon vote pour la meilleure justification ou le meilleur trio.']
 };
 const MIN_PLAYERS = { vitrine: 2, cavale: 1, casting: 2, devine: 2, classement: 1, fmk: 1 };
+const PROMPT_BLANK = '〔…〕';
 const PROMPTS = [
-    'Cacabot a été remplacé par ___ pendant son congé maladie.',
-    'Le serveur allait bien, jusqu’au jour où ___ est devenu modo.',
-    'Pour entrer à Regaïa, il faut apporter ___.',
-    'La dernière chose qu’on a retrouvée dans les sauvegardes : ___.',
-    'La commu a demandé un nouveau set. Cacabot a livré ___.',
-    'La raison officielle du retard du prochain booster : ___.',
-    'Dans la prochaine mise à jour, ___ sera responsable du support.',
-    '___ et ___ ont décidé de refaire tout le serveur à 4 h du matin.',
-    'Le duo le moins crédible pour sauver Regaïa : ___ et ___.',
-    'J’ai demandé de l’aide à ___ et quelqu’un m’a envoyé ___.',
-    '___ partage désormais sa chambre avec ___.',
-    'Le premier débat de la soirée oppose ___ à ___.'
+    'Cacabot a été remplacé par 〔…〕 pendant son congé maladie.',
+    'Le serveur allait bien, jusqu’au jour où 〔…〕 est devenu modo.',
+    'Pour entrer à Regaïa, il faut apporter 〔…〕.',
+    'La dernière chose qu’on a retrouvée dans les sauvegardes : 〔…〕.',
+    'La commu a demandé un nouveau set. Cacabot a livré 〔…〕.',
+    'La raison officielle du retard du prochain booster : 〔…〕.',
+    'Dans la prochaine mise à jour, 〔…〕 sera responsable du support.',
+    '〔…〕 et 〔…〕 ont décidé de refaire tout le serveur à 4 h du matin.',
+    'Le duo le moins crédible pour sauver Regaïa : 〔…〕 et 〔…〕.',
+    'J’ai demandé de l’aide à 〔…〕 et quelqu’un m’a envoyé 〔…〕.',
+    '〔…〕 partage désormais sa chambre avec 〔…〕.',
+    'Le premier débat de la soirée oppose 〔…〕 à 〔…〕.'
 ];
 const STEP_TIPS = {
     volunteer: 'Être volontaire t’ajoute au tirage du maître du jeu.',
@@ -611,7 +612,7 @@ function pickPayload(session) {
         return (session.answers.has(uid) ? '✅ ' : '⏳ ') + pName;
     }).join(' • ');
 
-    const page = embed('🎭 Vitrine à thème • Manche ' + session.round + '/' + ROUND_COUNT, gameColor('vitrine'))
+    const page = embed('🎭 Blanc Manger Caca • Manche ' + session.round + '/' + ROUND_COUNT, gameColor('vitrine'))
         .setAuthor({ name: 'RegaDex Arcade • Choix des cartes' })
         .setDescription(
             '> **' + session.prompt + '**\n\n' +
@@ -639,9 +640,9 @@ async function startRound(session) {
     const cardCounts = new Map([...session.players.keys()].map(id => [id, playCardsFor(session, id).length]));
     const canPlayTwo = [...cardCounts.values()].filter(count => count >= 2).length >= 2;
     session.prompt = session.prompts.find(prompt => !session.usedPrompts.has(prompt) &&
-        (canPlayTwo || !prompt.includes('___', prompt.indexOf('___') + 3)));
+        (canPlayTwo || prompt.split(PROMPT_BLANK).length === 2));
     session.usedPrompts.add(session.prompt);
-    session.holes = session.prompt.match(/___/g).length;
+    session.holes = session.prompt.split(PROMPT_BLANK).length - 1;
     session.roundPlayers = new Set([...cardCounts].filter(([, count]) => count >= session.holes).map(([id]) => id));
     if (session.roundPlayers.size < 2) {
         await closeSession(session, 'Il faut au moins deux joueurs avec assez de cartes éligibles pour cette manche.');
@@ -732,7 +733,7 @@ function playingCards(session, player, draft) {
 
 function completePhrase(phrase, cards) {
     let index = 0;
-    return phrase.replace(/___/g, () => cards[index++]?.name || '___');
+    return phrase.replaceAll(PROMPT_BLANK, () => cards[index++]?.name || PROMPT_BLANK);
 }
 
 function draftPayload(session, user, draft) {
@@ -836,7 +837,7 @@ async function startRatings(session) {
         await finishRound(session);
         return;
     }
-    await applySlowmode(session, 21_600, 'Vote Vitrine à thème');
+    await applySlowmode(session, 21_600, 'Vote Blanc Manger Caca');
     session.voteIndex = 0;
     await showRating(session);
 }
@@ -932,7 +933,7 @@ async function showPodium(session) {
     const top = standings.filter(entry => entry.rank <= 3);
     session.results.set(session.lobbyId, { entries: [...top.slice(3), ...standings.filter(entry => entry.rank > 3)], best: session.best });
     const best = bestResponseDescription(session.best);
-    await sendResult(session, 'Vitrine à thème • Podium final', top.slice(0, 3), {
+    await sendResult(session, 'Blanc Manger Caca • Podium final', top.slice(0, 3), {
         podium: true, description: best, best: session.best,
         components: [row(button(controlId(session, 'standing', session.lobbyId, 0), 'Voir le classement', ButtonStyle.Secondary, '📊'))]
     });
@@ -1813,12 +1814,12 @@ async function standingsPayload(session, lobbyId, page) {
     ];
     const pages = Math.max(1, Math.ceil(lines.length / 3));
     const safe = Math.max(0, Math.min(page, pages - 1));
-    const view = embed('🏆 Vitrine à thème · Classement', gameColor('vitrine'))
+    const view = embed('🏆 Blanc Manger Caca · Classement', gameColor('vitrine'))
         .setAuthor({ name: 'RegaDex · Classement complet' })
         .setDescription(lines.slice(safe * 3, (safe + 1) * 3).join('\n') || 'Tout le classement figure sur le podium.')
         .setFooter({ text: 'Page ' + (safe + 1) + '/' + pages });
     const entries = results.entries.slice(safe * 3, (safe + 1) * 3);
-    const image = entries.length ? await resultsCanvas(session, 'Vitrine à thème · Classement', entries)
+    const image = entries.length ? await resultsCanvas(session, 'Blanc Manger Caca · Classement', entries)
         .catch(error => { console.warn('[PLAY] Canvas du classement :', error); return null; }) : null;
     if (image) view.setImage('attachment://classement.jpg');
     return {
