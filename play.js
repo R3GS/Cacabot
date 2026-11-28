@@ -20,6 +20,8 @@ const STATE_PATH = process.env.REGADEX_PLAY_STATE_PATH || path.join(__dirname, '
 const PLAY_ROLE_CHANNEL_ID = '1559082682313474059';
 const PARIS_TZ = 'Europe/Paris';
 const TCG_BG_PATH = path.resolve(process.cwd(), 'TCG', 'Assets', 'Background RegaDex B.jpg');
+const VITRINE_CLASSIC_BG_PATH = path.resolve(process.cwd(), 'Arcade', 'Backgrounds', 'Classic.jpg');
+const VITRINE_TOP_BG_PATH = path.resolve(process.cwd(), 'Assets', 'Backgrounds', 'Top.jpg');
 const IDLE_MS = 15 * 60_000;
 const JOIN_MS = 30_000;
 const READY_MS = 15_000;
@@ -168,7 +170,7 @@ const normalize = text => String(text)
     .replace(/\p{Diacritic}/gu, '')
     .trim()
     .toLowerCase();
-const cleanCanvasText = str => String(str || '')
+const cleanCanvasRaw = str => String(str || '')
     .replace(/<a?:\w+:\d+>/g, '')
     .replace(/<@!?\d+>/g, '@Membre')
     .replace(/\*\*|__|~~|`/g, '')
@@ -177,8 +179,8 @@ const cleanCanvasText = str => String(str || '')
     .replace(/〕/g, ']')
     .replace(/[\p{Extended_Pictographic}\uFE00-\uFE0F\u200D\u20E3]/gu, '')
     .replace(/[^\u0020-\u007E\u00A0-\u017F\u2013-\u2026\u20AC]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/\s+/g, ' ');
+const cleanCanvasText = str => cleanCanvasRaw(str).trim();
 const cut = (text, size) => String(text).slice(0, size).replace(/[\uD800-\uDBFF]$/, '');
 const expiry = time => '<t:' + Math.ceil(time / 1000) + ':R>';
 const idFor = (...parts) => ['play', ...parts].join(':');
@@ -980,6 +982,60 @@ function completePhrase(phrase, cards) {
     return phrase.replaceAll(PROMPT_BLANK, () => cards[index++]?.name || PROMPT_BLANK);
 }
 
+function formatPhraseMarkdown(phrase, cards) {
+    const parts = String(phrase || '').split(PROMPT_BLANK);
+    let out = escapeText(parts[0] || '');
+    for (let i = 1; i < parts.length; i++) {
+        const card = cards?.[i - 1];
+        out += (card ? '**' + escapeText(card.name) + '**' : escapeText(PROMPT_BLANK)) + escapeText(parts[i] || '');
+    }
+    return out;
+}
+
+function buildPhraseSegments(phrase, cards) {
+    const parts = String(phrase || '').split(PROMPT_BLANK);
+    const segments = [];
+    for (let i = 0; i < parts.length; i++) {
+        const chunk = cleanCanvasRaw(parts[i]);
+        if (chunk) segments.push({ text: chunk, bold: false });
+        if (i < parts.length - 1) {
+            const cardName = cleanCanvasText(cards?.[i]?.name || '') || cleanCanvasText(PROMPT_BLANK);
+            segments.push({ text: cardName, bold: true });
+        }
+    }
+    if (segments.length) {
+        segments[0].text = segments[0].text.replace(/^\s+/, '');
+        segments[segments.length - 1].text = segments[segments.length - 1].text.replace(/\s+$/, '');
+    }
+    return segments.filter(seg => seg.text.length > 0);
+}
+
+function drawCenteredSegments(ctx, segments, centerX, centerY, maxW, baseSize = 26, minSize = 13) {
+    let fontSize = baseSize;
+    const measureTotal = size => segments.reduce((sum, seg) => {
+        ctx.font = (seg.bold ? 'bold ' : '') + size + 'px Sans';
+        return sum + ctx.measureText(seg.text).width;
+    }, 0);
+    let totalW = measureTotal(fontSize);
+    while (totalW > maxW && fontSize > minSize) {
+        fontSize -= 1;
+        totalW = measureTotal(fontSize);
+    }
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    if (totalW > maxW) ctx.scale(maxW / totalW, 1);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#FFFFFF';
+    let cursorX = -totalW / 2;
+    for (const seg of segments) {
+        ctx.font = (seg.bold ? 'bold ' : '') + fontSize + 'px Sans';
+        ctx.fillText(seg.text, cursorX, 0);
+        cursorX += ctx.measureText(seg.text).width;
+    }
+    ctx.restore();
+}
+
 function draftPayload(session, user, draft) {
     const owned = playCardsFor(session, user);
     const cards = draft.cards.map(id => owned.find(c => c.id === id)).filter(Boolean);
@@ -1074,7 +1130,7 @@ async function showRating(session) {
     const page = embed('🎭 Manche ' + session.round + '/' + ROUND_COUNT + ' • Réponse ' +
         (session.voteIndex + 1) + '/' + session.entries.length, gameColor('vitrine'))
         .setAuthor({ name: 'RegaDex Arcade • Vote anonyme' })
-        .setDescription('> **' + escapeText(completePhrase(session.prompt, entry.cards)) + '**\n\n⏳ Clôture ' + expiry(session.deadline) + ' *— sans note, elle vaut Meh (0).*')
+        .setDescription('> ' + formatPhraseMarkdown(session.prompt, entry.cards) + '\n\n⏳ Clôture ' + expiry(session.deadline) + ' *— sans note, elle vaut Meh (0).*')
         .setFooter({ text: '❤️ J’adore ! est utilisable une fois par session • Tu ne notes que les réponses des autres' });
     if (cardImage) page.setImage('attachment://reponse.png');
     session.board = await session.channel.send(silent({
@@ -1139,7 +1195,7 @@ async function finishRound(session) {
 function bestResponseDescription(best) {
     if (!best.length) return '';
     const label = best.length === 1 ? '⭐ Meilleure réponse de la session' : '⭐ Meilleures réponses ex æquo';
-    const lines = best.map(entry => '• ' + escapeText(completePhrase(entry.prompt, entry.cards)) + ' — **' + entry.score + ' pts**');
+    const lines = best.map(entry => '• ' + formatPhraseMarkdown(entry.prompt, entry.cards) + ' — **' + entry.score + ' pts**');
     let description = '**' + label + '**\n';
     for (const line of lines) {
         if (description.length + line.length > 3800) break;
@@ -1264,11 +1320,20 @@ function drawRoundRect(ctx, x, y, w, h, r = 14) {
     ctx.closePath();
 }
 
-function drawGlassCard(ctx, x, y, w, h, { radius = 18, fill = 'rgba(17, 14, 29, 0.78)', border = 'rgba(255, 255, 255, 0.14)', lineWidth = 1.5 } = {}) {
+function drawGlassCard(ctx, x, y, w, h, { radius = 18, fill = 'rgba(17, 14, 29, 0.78)', border = 'rgba(255, 255, 255, 0.14)', lineWidth = 1.5, glow = null, glowBlur = 24 } = {}) {
     ctx.save();
     drawRoundRect(ctx, x, y, w, h, radius);
-    ctx.fillStyle = fill;
-    ctx.fill();
+    if (glow) {
+        ctx.save();
+        ctx.shadowColor = glow;
+        ctx.shadowBlur = glowBlur;
+        ctx.fillStyle = fill;
+        ctx.fill();
+        ctx.restore();
+    } else {
+        ctx.fillStyle = fill;
+        ctx.fill();
+    }
     if (border) {
         ctx.strokeStyle = border;
         ctx.lineWidth = lineWidth;
@@ -1298,13 +1363,26 @@ function drawFivePointStar(ctx, cx, cy, outerR, innerR, fillStyle, glow = null) 
     ctx.restore();
 }
 
+const playAssetCache = new Map();
+
+async function getPlayAssetImage(filePath) {
+    if (!filePath) return null;
+    if (playAssetCache.has(filePath)) return playAssetCache.get(filePath);
+    try {
+        if (fs.existsSync(filePath)) {
+            const img = await loadImage(filePath);
+            playAssetCache.set(filePath, img);
+            return img;
+        }
+    } catch (error) {
+        console.warn('[PLAY] Fond indisponible (' + path.basename(filePath) + ') :', error.message);
+    }
+    return null;
+}
+
 async function getPlayBgCanvas() {
     if (playBgCache) return playBgCache;
-    try {
-        if (fs.existsSync(TCG_BG_PATH)) playBgCache = await loadImage(TCG_BG_PATH);
-    } catch (error) {
-        console.warn('[PLAY] Fond RegaDex indisponible :', error.message);
-    }
+    playBgCache = await getPlayAssetImage(TCG_BG_PATH);
     return playBgCache;
 }
 
@@ -1494,19 +1572,28 @@ async function stage(ctx, width, height, opts = {}) {
         ctx.fillStyle = background;
         ctx.fillRect(0, 0, width, height);
     } else {
+        if (opts.blackBackdrop) {
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, width, height);
+        }
         const bg = opts.bg !== undefined ? opts.bg : await getPlayBgCanvas();
         if (bg) {
             const scale = Math.max(width / bg.width, height / bg.height);
             const bw = bg.width * scale;
             const bh = bg.height * scale;
+            ctx.save();
+            ctx.globalAlpha = opts.bgOpacity ?? 1;
             ctx.drawImage(bg, (width - bw) / 2, (height - bh) / 2, bw, bh);
-            const veil = ctx.createLinearGradient(0, 0, 0, height);
-            veil.addColorStop(0, 'rgba(11, 13, 24, 0.52)');
-            veil.addColorStop(0.55, 'rgba(16, 14, 30, 0.44)');
-            veil.addColorStop(1, 'rgba(8, 10, 20, 0.72)');
-            ctx.fillStyle = veil;
-            ctx.fillRect(0, 0, width, height);
-        } else {
+            ctx.restore();
+            if (!opts.plainStage) {
+                const veil = ctx.createLinearGradient(0, 0, 0, height);
+                veil.addColorStop(0, 'rgba(11, 13, 24, 0.52)');
+                veil.addColorStop(0.55, 'rgba(16, 14, 30, 0.44)');
+                veil.addColorStop(1, 'rgba(8, 10, 20, 0.72)');
+                ctx.fillStyle = veil;
+                ctx.fillRect(0, 0, width, height);
+            }
+        } else if (!opts.blackBackdrop) {
             const background = ctx.createLinearGradient(0, 0, 0, height);
             background.addColorStop(0, '#130e24');
             background.addColorStop(0.65, '#26143d');
@@ -1515,20 +1602,22 @@ async function stage(ctx, width, height, opts = {}) {
             ctx.fillRect(0, 0, width, height);
         }
 
-        for (const center of [width * 0.22, width * 0.78]) {
-            const beam = ctx.createRadialGradient(center, 0, 16, center, height * 0.28, height * 0.85);
-            beam.addColorStop(0, accent.startsWith('#') && accent.length === 7 ? accent + '30' : 'rgba(255, 210, 10, 0.20)');
-            beam.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            ctx.fillStyle = beam;
-            ctx.fillRect(0, 0, width, height);
+        if (!opts.plainStage) {
+            for (const center of [width * 0.22, width * 0.78]) {
+                const beam = ctx.createRadialGradient(center, 0, 16, center, height * 0.28, height * 0.85);
+                beam.addColorStop(0, accent.startsWith('#') && accent.length === 7 ? accent + '30' : 'rgba(255, 210, 10, 0.20)');
+                beam.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.fillStyle = beam;
+                ctx.fillRect(0, 0, width, height);
+            }
         }
     }
 
     if (opts.frame !== false && width >= 900) {
         drawGlassCard(ctx, 18, 14, width - 36, height - 28, {
             radius: 26,
-            fill: opts.darkGrayBg ? 'rgba(255, 255, 255, 0.02)' : 'rgba(10, 12, 22, 0.18)',
-            border: opts.darkGrayBg
+            fill: opts.plainStage || opts.darkGrayBg ? 'rgba(255, 255, 255, 0.02)' : 'rgba(10, 12, 22, 0.18)',
+            border: opts.plainStage || opts.darkGrayBg
                 ? 'rgba(255, 255, 255, 0.16)'
                 : (accent.startsWith('#') && accent.length === 7 ? accent + '66' : 'rgba(255, 210, 10, 0.4)'),
             lineWidth: 2.5
@@ -1550,10 +1639,22 @@ async function resultsCanvas(session, title, entries, options = {}) {
     const ctx = canvas.getContext('2d');
     const unit = options.unit || 'pts';
     const isVitrine = session.game === 'vitrine';
-    const bg = isVitrine ? null : await getPlayBgCanvas();
+    const isFinalVitrinePodium = isVitrine && Boolean(options.podium && !options.cards);
+    const vitrineBg = isVitrine
+        ? await getPlayAssetImage(isFinalVitrinePodium ? VITRINE_TOP_BG_PATH : VITRINE_CLASSIC_BG_PATH)
+        : null;
+    const bg = isVitrine ? vitrineBg : await getPlayBgCanvas();
     const accent = options.accent || '#FFD20A';
 
-    await stage(ctx, width, height, { bg, accent, darkGrayBg: isVitrine, noCornerStars: isVitrine });
+    await stage(ctx, width, height, {
+        bg,
+        accent,
+        blackBackdrop: isVitrine,
+        bgOpacity: isVitrine ? 0.5 : 1,
+        plainStage: isVitrine,
+        darkGrayBg: isVitrine && !bg,
+        noCornerStars: isVitrine
+    });
 
     drawGlassCard(ctx, 48, 28, width - 96, options.prompt ? 114 : 88, {
         radius: 20,
@@ -1578,9 +1679,9 @@ async function resultsCanvas(session, title, entries, options = {}) {
 
     const avatars = await Promise.all(entries.map(entry => loadAvatar(session.people.get(entry.user))));
     const rankPalette = {
-        1: { ring: '#FFD700', fill: 'rgba(42, 30, 10, 0.88)', border: '#FFD700', text: '#FFD700' },
-        2: { ring: '#D7DEEB', fill: 'rgba(26, 32, 48, 0.86)', border: '#D7DEEB', text: '#E2E8F0' },
-        3: { ring: '#CD7F32', fill: 'rgba(38, 24, 18, 0.86)', border: '#CD7F32', text: '#F4A261' }
+        1: { ring: '#FFD700', fill: 'rgba(42, 30, 10, 0.88)', border: '#FFD700', text: '#FFD700', glow: 'rgba(255, 215, 0, 0.35)' },
+        2: { ring: '#D7DEEB', fill: 'rgba(26, 32, 48, 0.86)', border: '#D7DEEB', text: '#E2E8F0', glow: 'rgba(215, 222, 235, 0.30)' },
+        3: { ring: '#CD7F32', fill: 'rgba(38, 24, 18, 0.86)', border: '#CD7F32', text: '#F4A261', glow: 'rgba(205, 127, 50, 0.35)' }
     };
 
     if (options.podium && !options.cards) {
@@ -1610,7 +1711,9 @@ async function resultsCanvas(session, title, entries, options = {}) {
                 radius: 22,
                 fill: style.fill,
                 border: style.border,
-                lineWidth: first ? 3 : 2
+                lineWidth: first ? 3 : 2,
+                glow: isVitrine ? style.glow : null,
+                glowBlur: 24
             });
 
             const cx = pod.x + pod.w / 2;
@@ -1655,10 +1758,14 @@ async function resultsCanvas(session, title, entries, options = {}) {
             ctx.textBaseline = 'middle';
             ctx.fillStyle = '#FFD700';
             ctx.font = 'bold 24px "LemonMilk", "Sans"';
-            ctx.fillText(cleanCanvasText('MEILLEURE RÉPONSE • ' + showcase.score + ' ' + unit), width / 2, extraY + 44, width - 220);
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = '26px Sans';
-            ctx.fillText(cleanCanvasText(completePhrase(showcase.prompt, showcase.cards)), width / 2, extraY + 122, width - 140);
+            ctx.fillText(cleanCanvasText('MEILLEURE RÉPONSE • ' + showcase.score + ' ' + unit), width / 2, extraY + 38, width - 220);
+            drawCenteredSegments(ctx, buildPhraseSegments(showcase.prompt, showcase.cards), width / 2, extraY + 96, width - 140, 26, 13);
+            const authorName = cleanCanvasText(session.people.get(showcase.user)?.name || 'Participant·e');
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.font = 'italic 20px Sans';
+            ctx.fillText('- ' + authorName, width / 2, extraY + 148, width - 160);
+            ctx.restore();
         } else if (options.bonusCards?.length) {
             drawGlassCard(ctx, 48, extraY, width - 96, 194, {
                 radius: 22,
