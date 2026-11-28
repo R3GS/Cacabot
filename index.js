@@ -628,7 +628,7 @@ const { handleInteractionMessage, handleInteractionButton, handleInteractionSlas
 
 ///help.js
 const { getHelpResponse, handleHelpMessage, handleHelpInteraction } = require('./help.js');
-const { handlePlayMessage, handlePlayInteraction, restorePlayThreads } = require('./play.js');
+const { handlePlayMessage, handlePlayInteraction, startPlayScheduler } = require('./play.js');
 
 ///minijeux.js
 const {
@@ -2604,7 +2604,7 @@ client.once('clientReady', async () => {
         void verifierQueteCommunautaireSansChevauchement();
     }, 60 * 1000);
 
-    void restorePlayThreads(client);
+    void startPlayScheduler(client);
 
     // Réarmement des alertes roulette, votes publics et des rappels
     restaurerNotifsRoulette(client);
