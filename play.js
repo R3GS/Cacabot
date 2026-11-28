@@ -3161,8 +3161,8 @@ async function cavaleZoom(session) {
     await stage(ctx, canvas.width, canvas.height, { accent: '#00bcd4', noCornerStars: true });
 
     drawGlassCard(ctx, 32, 18, canvas.width - 64, 54, { radius: 14, fill: 'rgba(13, 12, 24, 0.84)', border: 'rgba(0, 188, 212, 0.45)' });
-    drawFivePointStar(ctx, 90, 50, 11, 5, '#00bcd4', '#00bcd4');
-    drawFivePointStar(ctx, canvas.width - 90, 50, 11, 5, '#00bcd4', '#00bcd4');
+    drawFivePointStar(ctx, 90, 40, 11, 5, '#00bcd4', '#00bcd4');
+    drawFivePointStar(ctx, canvas.width - 90, 40, 11, 5, '#00bcd4', '#00bcd4');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#e0f7fa';
