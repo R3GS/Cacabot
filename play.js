@@ -9,20 +9,25 @@ const {
     TextInputStyle, UserSelectMenuBuilder
 } = require('discord.js');
 const { createCanvas, loadImage } = require('canvas');
-const { getPlayCards, getPlayCatalog, renderPlayBinder } = require('./tcg.js');
+const { getPlayCards, getPlayCatalog, renderPlayBinder, grantMinigameTcgPoints } = require('./tcg.js');
 
 const REGAIA_GUILD_ID = '720057528351850547';
 const PLAY_CHANNEL_ID = '1575601558458994758';
 const PLAY_TEST_CHANNEL_ID = '1480756332373213275';
 const PLAY_TEST_OWNER_ID = '436218312574107658';
 const TEST_NAMES = ['Moka', 'Pixel', 'Biscotte'];
-const STATE_PATH = process.env.REGADEX_PLAY_STATE_PATH || path.join(__dirname, '.play-threads.json');
+const STATE_PATH = process.env.REGADEX_PLAY_STATE_PATH || path.join(__dirname, '.play-schedule.json');
+const PLAY_ROLE_CHANNEL_ID = '1559082682313474059';
+const PARIS_TZ = 'Europe/Paris';
 const TCG_BG_PATH = path.resolve(process.cwd(), 'TCG', 'Assets', 'Background RegaDex B.jpg');
 const IDLE_MS = 15 * 60_000;
-const JOIN_MS = 60_000;
-const PICK_MS = 120_000;
-const RATE_MS = 20_000;
-const CONTINUE_MS = 90_000;
+const JOIN_MS = 30_000;
+const READY_MS = 15_000;
+const PICK_MS = 90_000;
+const RATE_MS = 10_000;
+const CONTINUE_MS = 60_000;
+const WEEKDAY_SESSION_LIMIT = 3;
+const SUNDAY_CUTOFF_HOUR = 18;
 const WRITE_MS = 75_000;
 const STOP_VOTE_MS = 120_000;
 const ROUND_COUNT = 5;
@@ -60,10 +65,10 @@ const RATINGS = [
 ];
 const GUIDES = {
     vitrine: ['Blanc Manger Caca', 'Complète la phrase avec 1 ou 2 cartes du TCG.', '🎭',
-        'Cinq manches. Cherche les cartes possédées par nom ou numéro en 2 minutes. Les réponses sont anonymes et défilent 20 secondes chacune. Une note par réponse des autres. Sans vote, elle vaut Meh. J’adore ! s’utilise une fois sur les cinq manches.'],
-    cavale: ['Cartes en cavale', 'Reconnais les illustrations à partir de détails zoomés.', '🔍',
-        'Écris le nom dans le fil. Les petites fautes sont acceptées si le nom reste reconnaissable. L’image dézoome un peu chaque minute. Première bonne réponse gagnante, révélation au bout de cinq minutes maximum. Cinq cartes par partie.'],
-    casting: ['Casting de l’enfer', 'Choisis un sujet, et défends ton candidat dans un débat de cinq minutes.', '🎙️',
+        'Cinq manches. Cherche les cartes par nom ou numéro en 90 secondes. Les réponses sont anonymes et défilent 10 secondes chacune. Une note par réponse des autres. Sans vote, elle vaut Meh. J’adore ! s’utilise une fois sur les cinq manches.'],
+    cavale: ['Cartes zoomées', 'Reconnais les illustrations à partir de détails zoomés.', '🔍',
+        'Écris le nom dans le salon. Les petites fautes sont acceptées si le nom reste reconnaissable. L’image dézoome un peu chaque minute. Première bonne réponse gagnante, révélation au bout de cinq minutes maximum. Cinq cartes par partie.'],
+    casting: ['Débat de golmon', 'Choisis un sujet, et défends ton candidat dans un débat de cinq minutes.', '🎙️',
         'Deux volontaires tirés au sort, ou un duel à deux. Chacun peut changer de carte trois fois en privé avant de la verrouiller. Les cartes sont révélées ensemble. Le public vote à la fin du débat. En duel, les deux personnes votent.'],
     devine: ['Devine-carte', 'Devine une carte à tour de rôle avec les réponses Oui/Non du MJ.', '🕵️',
         'Le MJ est tiré parmi les volontaires. Tu peux poser une question, proposer une carte en privé ou passer sans dépenser ton quota. Après deux tours expirés, tu peux revenir avec Reprendre ma place. Une dernière minute trente s’ouvre quand les questions sont épuisées.'],
@@ -141,7 +146,7 @@ const STEP_TIPS = {
     castVolunteer: 'Je veux débattre t’inscrit au tirage des deux candidats.',
     castPrompt: 'Écrire la question ouvre le formulaire de la personne désignée.',
     castCards: 'Voir / changer ma carte ouvre ton tirage en privé (3 relances max).',
-    castDebate: 'Débattez dans le fil • L’hôte peut passer au vote à tout moment.',
+    castDebate: 'Débattez dans le salon • L’hôte peut passer au vote à tout moment.',
     rankSetup: 'Consigne préparée tire une question • Consigne d’un membre désigne quelqu’un au hasard.',
     rankWrite: 'Écrire la consigne ouvre le formulaire de la personne désignée.',
     socialChoices: 'Ouvre ton panneau privé, place tes cartes puis verrouille.',
@@ -150,8 +155,9 @@ const STEP_TIPS = {
 
 const menus = new Map();
 const sessions = new Map();
-const threadRecords = new Map();
-let recordsReady = false;
+let playReady = false;
+let scheduleState = { weekKey: '', order: [], started: {}, daily: {} };
+let schedulerTimer = null;
 let playBgCache = null;
 
 const escapeText = text => String(text).replace(/[\\`*_~|<>]/g, '\\$&');
@@ -195,96 +201,183 @@ const silent = (payload, users = []) => ({
 });
 const privateResponse = (interaction, content) => interaction.reply({ content, flags: MessageFlags.Ephemeral });
 
-function saveThreadRecords() {
+function localParisParts(date = new Date()) {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+        timeZone: PARIS_TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+        weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+    }).formatToParts(date).map(part => [part.type, part.value]));
+    return parts;
+}
+function localDateKey(parts) { return parts.year + '-' + parts.month + '-' + parts.day; }
+function mondayOf(dateKey) {
+    const [year, month, day] = dateKey.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+    return date.toISOString().slice(0, 10);
+}
+function saveScheduleState() {
     fs.mkdirSync(path.dirname(STATE_PATH), { recursive: true });
     const temp = STATE_PATH + '.tmp';
-    const data = [...threadRecords.values()].map(({ id, parentId, lastActivity, slowmode }) => ({ id, parentId, lastActivity, slowmode }));
-    fs.writeFileSync(temp, JSON.stringify(data), { mode: 0o600 });
+    fs.writeFileSync(temp, JSON.stringify(scheduleState), { mode: 0o600 });
     fs.renameSync(temp, STATE_PATH);
 }
-
-function scheduleCleanup(record, client, delay = Math.max(1, record.lastActivity + IDLE_MS - Date.now())) {
-    clearTimeout(record.timer);
-    record.timer = setTimeout(() => {
-        const session = sessions.get(record.id);
-        const cleanup = () => deleteIdleThread(record, client);
-        void (session ? enqueue(session, cleanup) : cleanup())
-            .catch(error => {
-                console.error('[PLAY] Nettoyage du fil :', error);
-                if (threadRecords.has(record.id)) scheduleCleanup(record, client, 60_000);
-            });
-    }, delay);
-    record.timer.unref();
+function ensureScheduleWeek(dateKey) {
+    const monday = mondayOf(dateKey);
+    if (scheduleState.weekKey !== monday || !Array.isArray(scheduleState.order) || scheduleState.order.length !== Object.keys(GUIDES).length) {
+        scheduleState = { weekKey: monday, order: shuffled(Object.keys(GUIDES)), started: {}, daily: {} };
+        saveScheduleState();
+    }
 }
-
-function persistRecordActivity(record, client) {
-    record.lastActivity = Date.now();
-    scheduleCleanup(record, client);
-    try { saveThreadRecords(); } catch (error) { console.error('[PLAY] Persistances des fils :', error); }
+function weekdayGame(dateKey) {
+    ensureScheduleWeek(dateKey);
+    const weekday = new Date(dateKey + 'T00:00:00Z').getUTCDay();
+    if (weekday === 0) return null;
+    return scheduleState.order[(weekday + 6) % 7] || null;
 }
-
-async function deleteIdleThread(record, client) {
-    if (!threadRecords.has(record.id)) return;
-    if (Date.now() - record.lastActivity < IDLE_MS) {
-        scheduleCleanup(record, client);
-        return;
-    }
-    let thread;
-    try {
-        thread = await client.channels.fetch(record.id, { force: true });
-    } catch (error) {
-        if (error.code !== 10003) throw error;
-    }
-    if (Date.now() - record.lastActivity < IDLE_MS) {
-        scheduleCleanup(record, client);
-        return;
-    }
-    if (thread?.isThread() && thread.parentId === record.parentId && thread.ownerId === client.user.id) {
-        await thread.delete('Mini-jeu RegaDex inactif depuis 15 minutes').catch(error => {
-            if (error.code !== 10003) throw error;
-        });
-    }
-    const session = sessions.get(record.id);
-    if (session) {
-        clearTimeout(session.timer);
-        clearTimeout(session.botTimer);
-    }
-    sessions.delete(record.id);
-    threadRecords.delete(record.id);
-    saveThreadRecords();
+function nextPlayInfo(now = new Date()) {
+    const parts = localParisParts(now), today = localDateKey(parts);
+    const hour = Number(parts.hour), minute = Number(parts.minute);
+    const dow = new Date(today + 'T00:00:00Z').getUTCDay();
+    if (dow === 0 && hour < SUNDAY_CUTOFF_HOUR) return { date: today, sunday: true, game: null };
+    if (dow !== 0 && (hour < 17 || (hour === 17 && minute === 0))) return { date: today, sunday: false, game: weekdayGame(today) };
+    const date = new Date(today + 'T00:00:00Z');
+    date.setUTCDate(date.getUTCDate() + 1);
+    const key = date.toISOString().slice(0, 10);
+    if (date.getUTCDay() === 0) return { date: key, sunday: true, game: null };
+    return { date: key, sunday: false, game: weekdayGame(key) };
 }
-
-async function restorePlayThreads(client) {
-    try {
-        const saved = fs.existsSync(STATE_PATH) ? JSON.parse(fs.readFileSync(STATE_PATH, 'utf8')) : [];
-        for (const item of saved) {
-            if (!/^\d{17,22}$/.test(item.id) || !Number.isFinite(item.lastActivity)) continue;
-            const parentId = item.parentId || PLAY_CHANNEL_ID;
-            if (![PLAY_CHANNEL_ID, PLAY_TEST_CHANNEL_ID].includes(parentId)) continue;
-            const record = { ...item, parentId, timer: null };
-            threadRecords.set(record.id, record);
-            scheduleCleanup(record, client);
-            if (Number.isInteger(record.slowmode) && record.slowmode >= 0 && record.slowmode <= 21_600) {
-                try {
-                    const thread = await client.channels.fetch(record.id, { force: true });
-                    if (thread?.isThread() && thread.parentId === record.parentId && thread.ownerId === client.user.id && !thread.archived) {
-                        await thread.setRateLimitPerUser(record.slowmode, 'Reprise après redémarrage de Cacabot');
-                    }
-                    record.slowmode = null;
-                } catch (error) {
-                    if (IGNORABLE_DISCORD_CODES.has(error?.code)) {
-                        record.slowmode = null;
-                    }
-                    console.warn('[PLAY] Restauration du mode lent :', error?.code || error?.message || error);
+function playInfoEmbed(activeSession = null) {
+    const next = nextPlayInfo();
+    const date = new Date(next.date + 'T12:00:00Z');
+    const dateLabel = new Intl.DateTimeFormat('fr-FR', { timeZone: PARIS_TZ, weekday: 'long', day: 'numeric', month: 'long' }).format(date);
+    const chosen = next.sunday ? '🗳️ **Vote de la communauté** pour choisir le jeu' :
+        (GUIDES[next.game]?.[2] || '🎮') + ' **' + (GUIDES[next.game]?.[0] || 'Mini-jeu RegaDex') + '**';
+    const active = activeSession && activeSession.phase !== 'closed'
+        ? '\n\n### 🟢 Session en cours\n' + (activeSession.sunday && activeSession.phase === 'ballot' ? '🗳️ **Vote du dimanche en cours**' :
+            (GUIDES[activeSession.game]?.[2] || '🎮') + ' **' + (GUIDES[activeSession.game]?.[0] || 'Mini-jeu') + '**') +
+            ' — rejoins-la dans <#' + PLAY_CHANNEL_ID + '>.'
+        : '';
+    return embed('🎮 RegaDex Arcade · Les mini-jeux', 0x9b59b6)
+        .setAuthor({ name: 'Les rendez-vous RegaDex' })
+        .setDescription(
+            'Chaque jour à **17 h (heure de Paris)**, Cacabot ouvre une session publique dans <#' + PLAY_CHANNEL_ID + '>.\n' +
+            'Les inscriptions durent **30 secondes**, puis les personnes inscrites reçoivent **15 secondes** pour se préparer.\n\n' +
+            '### 🎲 Au programme\n' +
+            Object.entries(GUIDES).map(([id, [name, summary, icon]]) => icon + ' **' + name + '** — ' + summary).join('\n') +
+            '\n\n' + SEP + '\n\n### ⏰ Prochaine session\n' + chosen +
+            '\n📅 **' + dateLabel + ' à 17 h**\n\nRejoins <#' + PLAY_CHANNEL_ID + '> et appuie sur **Rejoindre** quand les inscriptions ouvrent.' +
+            '\nSi tu ne vois pas ce salon, prends le rôle correspondant dans <#' + PLAY_ROLE_CHANNEL_ID + '>. ' +
+            'Les tests Epsys se font avec !playx dans <#' + PLAY_TEST_CHANNEL_ID + '>. ' + active
+        )
+        .setFooter({ text: 'Du lundi au samedi : jeu planifié • Dimanche : vote libre entre 17 h et 18 h' });
+}
+async function announceTomorrow(channel) {
+    const date = new Date(localDateKey(localParisParts()) + 'T12:00:00Z');
+    date.setUTCDate(date.getUTCDate() + 1);
+    const key = date.toISOString().slice(0, 10);
+    const sunday = date.getUTCDay() === 0;
+    const dateLabel = new Intl.DateTimeFormat('fr-FR', { timeZone: PARIS_TZ, weekday: 'long', day: 'numeric', month: 'long' }).format(date);
+    const game = sunday ? '🗳️ **Vote de la communauté** pour choisir le mini-jeu' :
+        '🎮 **' + GUIDES[weekdayGame(key)][0] + '**';
+    await channel.send(silent({ embeds: [embed('📅 Prochain rendez-vous RegaDex', 0x5865f2)
+        .setDescription('La prochaine session aura lieu **' + dateLabel + ' à 17 h (heure de Paris)**.\n' + game)
+        .setFooter({ text: 'Rendez-vous dans le salon des mini-jeux à 17 h • !play pour le programme' })] }))
+        .catch(error => console.warn('[PLAY] Annonce du prochain rendez-vous :', error));
+}
+async function makeSession(channel, { host, game, test = false, invited = null, botCount = 0, startRound = 1, scheduled = false, sunday = false } = {}) {
+    const id = channel.id;
+    const existing = sessions.get(id);
+    if (existing && existing.phase !== 'closed') return existing;
+    const totalRounds = (game === 'vitrine' || game === 'cavale') ? ROUND_COUNT : 1;
+    const safeStartRound = test ? Math.min(totalRounds, Math.max(1, Number(startRound) || 1)) : 1;
+    const member = host && host !== channel.client.user.id ? channel.guild.members.cache.get(host) : null;
+    const hostPlayer = member
+        ? { id: host, name: member.displayName || member.user.username, avatar: member.user.displayAvatarURL({ extension: 'png', size: 128 }) }
+        : { id: channel.client.user.id, name: 'Cacabot', avatar: channel.client.user.displayAvatarURL({ extension: 'png', size: 128 }) };
+    const bots = new Map(test ? TEST_NAMES.slice(0, botCount).map((name, i) => ['bot-' + i, { id: 'bot-' + i, name: name + ' [bot]' }]) : []);
+    const players = new Map(host && !scheduled ? [[host, hostPlayer], ...bots] : [...bots]);
+    const session = {
+        channel, host: hostPlayer.id, game, invited, test, bots, allowLate: false, queue: Promise.resolve(),
+        players, people: new Map(players), pending: new Map(), optedOut: new Set(), results: new Map(),
+        timer: null, botTimer: null, round: 0, startRound: safeStartRound, roundStarted: false,
+        scheduled, sunday, scheduleDate: scheduled ? localDateKey(localParisParts()) : null,
+        runId: Date.now().toString(36) + '-' + randomInt(1_000_000_000).toString(36)
+    };
+    sessions.set(id, session);
+    return session;
+}
+async function launchScheduledSession(client, { game = null, sunday = false, dateKey }) {
+    const channel = await client.channels.fetch(PLAY_CHANNEL_ID).catch(() => null);
+    if (!channel?.isTextBased()) return;
+    if (sessions.get(channel.id)?.phase && sessions.get(channel.id).phase !== 'closed') return;
+    const session = await makeSession(channel, { host: client.user.id, game: game || 'vitrine', scheduled: true, sunday });
+    session.scheduleDate = dateKey;
+    if (sunday) {
+        const voters = new Set([...channel.guild.members.cache.values()].filter(member => !member.user.bot).map(member => member.id));
+        session.players.clear(); session.people.clear(); session.phase = 'ballot';
+        await openBallot(session, {
+            title: '🗳️ Dimanche RegaDex · Choisissez le jeu',
+            description: 'Votez pour le mini-jeu de cette session. Le vote se ferme dès que tout le monde a voté ou après une minute. En cas d’égalité, Cacabot tire au sort.',
+            voters, options: Object.entries(GUIDES).map(([value, [label, , emoji]]) => ({ value, label, emoji })), ms: 60_000,
+            choose: async (leaders, votes) => {
+                if (!leaders.length || Number(localParisParts().hour) >= SUNDAY_CUTOFF_HOUR) {
+                    return closeSession(session, 'Le vote est clos. La session dominicale s’arrête à 18 h.');
                 }
+                session.game = leaders[randomInt(leaders.length)];
+                const counts = new Map();
+                for (const value of votes.values()) counts.set(value, (counts.get(value) || 0) + 1);
+                const stats = Object.entries(GUIDES).map(([id, [name, , icon]]) => icon + ' **' + name + '** — ' + (counts.get(id) || 0) + ' vote(s)').join('\n');
+                await channel.send(silent({ embeds: [embed('📊 Résultat du vote dominical', gameColor(session.game))
+                    .setDescription('Le prochain jeu est **' + GUIDES[session.game][0] + '**.\n\n' + stats)] }));
+                await openLobby(session);
             }
-        }
-        if (saved.length) saveThreadRecords();
-    } catch (error) {
-        console.error('[PLAY] Lecture du registre des fils :', error);
-    } finally {
-        recordsReady = true;
+        });
+        await channel.send(silent({ embeds: [embed('☀️ Dimanche RegaDex · Le salon choisit', 0xf1c40f)
+            .setDescription('Vote public ouvert pendant **1 minute maximum**. Le vote est dans le message précédent. Après chaque partie, un nouveau vote déterminera la suite jusqu’à 18 h.')
+            .setFooter({ text: 'Égalité : tirage au sort • Cacabot ne vote pas' })] }));
+        return;
     }
+    await openLobby(session);
+}
+async function tickPlaySchedule(client) {
+    if (!playReady) return;
+    const parts = localParisParts(), dateKey = localDateKey(parts), hour = Number(parts.hour);
+    ensureScheduleWeek(dateKey);
+    if (hour < 17) return;
+    const dow = new Date(dateKey + 'T00:00:00Z').getUTCDay();
+    const active = sessions.get(PLAY_CHANNEL_ID);
+    if (active && active.phase !== 'closed') return;
+    if (dow === 0) {
+        if (hour >= SUNDAY_CUTOFF_HOUR || scheduleState.started[dateKey]) return;
+        scheduleState.started[dateKey] = true; saveScheduleState();
+        return launchScheduledSession(client, { sunday: true, dateKey });
+    }
+    if (scheduleState.started[dateKey]) return;
+    const game = weekdayGame(dateKey);
+    if (!game) return;
+    scheduleState.started[dateKey] = true;
+    scheduleState.daily[dateKey] = { sessions: 1, game };
+    saveScheduleState();
+    return launchScheduledSession(client, { game, dateKey });
+}
+async function startPlayScheduler(client) {
+    try {
+        if (fs.existsSync(STATE_PATH)) {
+            const saved = JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
+            if (saved && typeof saved === 'object' && !Array.isArray(saved))
+                scheduleState = { weekKey: saved.weekKey || '', order: saved.order || [], started: saved.started || {}, daily: saved.daily || {} };
+        }
+        ensureScheduleWeek(localDateKey(localParisParts()));
+    } catch (error) {
+        console.error('[PLAY] Lecture du calendrier :', error);
+        scheduleState = { weekKey: '', order: [], started: {}, daily: {} };
+        ensureScheduleWeek(localDateKey(localParisParts()));
+    }
+    playReady = true;
+    if (schedulerTimer) clearInterval(schedulerTimer);
+    schedulerTimer = setInterval(() => { void tickPlaySchedule(client).catch(error => console.error('[PLAY] Planification :', error)); }, 10_000);
+    schedulerTimer.unref?.();
+    await tickPlaySchedule(client);
 }
 
 function enqueue(session, action) {
@@ -300,7 +393,7 @@ function phaseTimer(session, ms, action) {
     session.deadline = Date.now() + ms;
     session.timer = setTimeout(() => {
         void enqueue(session, async () => {
-            if (sessions.get(session.thread.id) === session && session.timerRevision === revision && session.phase !== 'closed') {
+            if (sessions.get(session.channel.id) === session && session.timerRevision === revision && session.phase !== 'closed') {
                 await action();
             }
         }).catch(error => recoverSession(session, error));
@@ -343,7 +436,7 @@ function chooseGameMenu(menu, guide) {
 
     const intro = menu.test
         ? 'Choisis un mini-jeu, puis ajoute **1 à 3 adversaires simulés**.\nLes cartes et décisions des bots sont tirées au hasard.'
-        : 'Sélectionne un mini-jeu ci-dessous pour ouvrir un **fil de partie dédié**.\nL’hôte peut démarrer dès que le minimum est atteint *(ou après 60 s d’inscriptions)*.';
+        : 'Sélectionne un mini-jeu à tester dans ce salon. La partie sera simulée avec des bots et des résultats aléatoires.';
 
     const gameList = Object.entries(GUIDES).map(([key, [name, value, icon]]) => {
         const min = MIN_PLAYERS[key];
@@ -367,7 +460,10 @@ function chooseGameMenu(menu, guide) {
             emoji
         })));
 
-    return { embeds: [main], components: [row(select), row(button(idFor('guide', menu.id), 'Guide des jeux', ButtonStyle.Secondary, '📘'))] };
+    return { embeds: [main], components: [row(select), row(
+        button(idFor('guide', menu.id), 'Guide des jeux', ButtonStyle.Secondary, '📘'),
+        ...(menu.test ? [button(idFor('sundaytest', menu.id), 'Tester le dimanche', ButtonStyle.Primary, '☀️')] : [])
+    )] };
 }
 
 function launchMenu(menu) {
@@ -390,7 +486,7 @@ function launchMenu(menu) {
                 '⏱️ **Format :** ' + meta + '\n\n' +
                 '> Ajuste tes options ci-dessous puis clique sur **🚀 Lancer le test**.'
             )
-            .setFooter({ text: 'Dans le fil : ⚙️ Paramètres → ⏩ Avancer le chrono permet de passer les timers' });
+            .setFooter({ text: 'Dans le salon : !playx next avance le chrono, !playx stop ferme le test' });
         const rows = [
             row(new StringSelectMenuBuilder().setCustomId(idFor('bots', menu.id)).setPlaceholder('🤖 Nombre de bots')
                 .addOptions(TEST_NAMES.map((_, i) => ({
@@ -428,7 +524,7 @@ function launchMenu(menu) {
             '🎟️ **Sur invitation** — Seuls les membres choisis peuvent s’inscrire.\n\n' +
             '👥 **Minimum :** `' + min + '` joueur(s)  •  ⏱️ **Format :** ' + meta
         )
-        .setFooter({ text: 'Le fil reste visible en lecture • 60 s d’inscriptions max • !stop possible en fil' });
+        .setFooter({ text: 'Le jeu se déroule publiquement dans ce salon • !stop permet de demander l’arrêt' });
     return {
         embeds: [preview],
         components: [row(
@@ -441,52 +537,83 @@ function launchMenu(menu) {
 
 async function handlePlayMessage(message) {
     if (message.author.bot) return false;
-    const record = threadRecords.get(message.channelId);
-    if (record) persistRecordActivity(record, message.client);
-    const session = sessions.get(message.channelId);
     const trimmed = message.content.trim();
-    if (session && session.phase !== 'closed' && /^!stop$/i.test(trimmed)) {
-        return enqueue(session, () => triggerStopVote(session, message)).catch(async error => {
-            await recoverSession(session, error);
-            return true;
-        });
+    const active = sessions.get(message.channelId);
+    if (active && active.phase !== 'closed' && /^!stop$/i.test(trimmed)) {
+        return enqueue(active, () => triggerStopVote(active, message)).catch(async error => { await recoverSession(active, error); return true; });
     }
-    if (session?.game === 'cavale' && !session.stopVoteActive && session.phase === 'game' && session.state?.step === 'guess' &&
-        session.players.has(message.author.id) && !trimmed.startsWith('!')) {
-        return enqueue(session, () => cavaleGuess(session, message)).catch(async error => {
-            await recoverSession(session, error);
-            return true;
-        });
+    if (active?.game === 'cavale' && !active.stopVoteActive && active.phase === 'game' && active.state?.step === 'guess' &&
+        active.players.has(message.author.id) && !trimmed.startsWith('!')) {
+        return enqueue(active, () => cavaleGuess(active, message)).catch(async error => { await recoverSession(active, error); return true; });
     }
-    const test = /^!playx$/i.test(trimmed);
-    if (test && (message.channelId !== PLAY_TEST_CHANNEL_ID || message.author.id !== PLAY_TEST_OWNER_ID)) return false;
-    if (!test) {
-        if (!/^!play$/i.test(trimmed)) return false;
-        if (!message.guild || message.guild.id !== REGAIA_GUILD_ID) return false;
-        if (message.channelId !== PLAY_CHANNEL_ID) {
-            const warn = await message.reply(silent({
-                content: `🎮 <@${message.author.id}>, les mini-jeux **RegaDex Arcade** (\`!play\`) se lancent uniquement dans le salon dédié : <#${PLAY_CHANNEL_ID}>.`
-            })).catch(() => null);
-            if (warn) {
-                const t = setTimeout(() => {
-                    warn.delete().catch(() => {});
-                    message.delete().catch(() => {});
-                }, 8000);
-                t.unref?.();
+
+    const testMatch = trimmed.match(/^!playx(?:\s+(next|stop))?$/i);
+    if (testMatch) {
+        if (message.channelId !== PLAY_TEST_CHANNEL_ID || message.author.id !== PLAY_TEST_OWNER_ID) return false;
+        const action = testMatch[1]?.toLowerCase();
+        const testSession = sessions.get(message.channelId);
+        if (action === 'next') {
+            if (!testSession || testSession.phase === 'closed' || !testSession.advancePhase) {
+                await message.reply(silent({ content: 'Aucun chrono de test actif. Lance !playx pour préparer un test.' }));
+                return true;
             }
+            const advance = testSession.advancePhase;
+            clearTimeout(testSession.timer); clearTimeout(testSession.botTimer); testSession.timerRevision++;
+            await message.reply(silent({ content: '⏩ Chrono avancé. La prochaine étape du test démarre.' }));
+            await enqueue(testSession, advance);
             return true;
         }
-    }
-    if (!recordsReady) {
-        await message.reply(silent({ content: '⏳ Les mini-jeux sont en cours de chargement, réessaie dans quelques secondes.' }));
+        if (action === 'stop') {
+            if (!testSession || testSession.phase === 'closed') {
+                await message.reply(silent({ content: 'Aucun test actif à arrêter.' }));
+                return true;
+            }
+            await closeSession(testSession, 'Test arrêté par Epsys.');
+            await message.reply(silent({ content: '🛑 Test fermé.' }));
+            return true;
+        }
+        if (!playReady) {
+            await message.reply(silent({ content: '⏳ Le module RegaDex Arcade se charge encore. Réessaie dans quelques secondes.' }));
+            return true;
+        }
+        if (testSession && testSession.phase !== 'closed') {
+            await message.reply(silent({ content: 'Un test est déjà actif dans ce salon. Utilise !playx next pour avancer ou !playx stop pour l’arrêter.' }));
+            return true;
+        }
+        const menu = { id: message.id, owner: message.author.id, channelId: message.channelId, test: true, launching: false, expires: Date.now() + IDLE_MS };
+        const reply = await message.reply(silent(chooseGameMenu(menu)));
+        menu.messageId = reply.id; menus.set(menu.id, menu);
+        setTimeout(() => menus.delete(menu.id), IDLE_MS).unref();
         return true;
     }
-    const menu = { id: message.id, owner: message.author.id, channelId: message.channelId, test, launching: false, expires: Date.now() + IDLE_MS };
-    const reply = await message.reply(silent(chooseGameMenu(menu)));
-    menu.messageId = reply.id;
-    menus.set(menu.id, menu);
-    setTimeout(() => menus.delete(menu.id), IDLE_MS).unref();
-    return true;
+
+    const force = trimmed.match(/^!tcgforce\s+(\S+)$/i);
+    if (force) {
+        if (message.author.id !== PLAY_TEST_OWNER_ID || message.channelId !== PLAY_CHANNEL_ID) return false;
+        if (active && active.phase !== 'closed') {
+            await message.reply(silent({ content: 'Une session est déjà en cours dans le salon des mini-jeux. Termine-la avant de forcer un autre jeu.' }));
+            return true;
+        }
+        const aliases = { debat: 'casting', blanc: 'vitrine', zoom: 'cavale', devine: 'devine', classement: 'classement', fmk: 'fmk' };
+        const game = aliases[force[1].toLowerCase()];
+        if (!game) {
+            await message.reply(silent({ content: 'Jeu inconnu. Choix : debat, blanc, zoom, devine, classement ou fmk.' }));
+            return true;
+        }
+        const session = await makeSession(message.channel, { host: message.author.id, game });
+        await openLobby(session);
+        await message.reply(silent({ content: '🧪 Session publique forcée : **' + GUIDES[game][0] + '**. Inscription ouverte pendant 30 secondes.' }));
+        return true;
+    }
+
+    if (!/^!play$/i.test(trimmed)) return false;
+    if (!message.guild || message.guild.id !== REGAIA_GUILD_ID) return false;
+    if (!playReady) {
+        await message.reply(silent({ content: '⏳ Le calendrier des mini-jeux se charge encore. Réessaie dans quelques secondes.' }));
+        return true;
+    }
+    const reply = await message.reply({ embeds: [playInfoEmbed(sessions.get(PLAY_CHANNEL_ID))], allowedMentions: { parse: [] } });
+    return Boolean(reply);
 }
 
 function readPlayer(interaction) {
@@ -497,70 +624,77 @@ function readPlayer(interaction) {
     };
 }
 
-async function createSession(interaction, menu, invited = null, botCount = 0, startRound = 1) {
+async function startTestSundayVote(session) {
+    const voters = new Set(session.players.keys());
+    await session.channel.send(silent({ embeds: [embed('☀️ Simulation du dimanche', 0xf1c40f)
+        .setDescription('Les bots vont voter au hasard. Vote avec eux pour choisir le premier jeu, puis teste les scrutins après les parties. Les chronos restent accélérables avec !playx next.')]}));
+    await openBallot(session, {
+        title: '🗳️ Vote test · Choisissez le mini-jeu',
+        description: 'Vote aléatoire des bots activé. Le vote se ferme dès que tous les bots et Epsys ont répondu ou après une minute.',
+        voters, options: Object.entries(GUIDES).map(([value, [label, , emoji]]) => ({ value, label, emoji })), ms: 60_000,
+        choose: async (leaders, votes) => {
+            if (!leaders.length) return closeSession(session, 'Aucun choix enregistré. Simulation du dimanche terminée.');
+            session.game = leaders[randomInt(leaders.length)];
+            const counts = new Map();
+            for (const value of votes.values()) counts.set(value, (counts.get(value) || 0) + 1);
+            const stats = Object.entries(GUIDES).map(([id, [name, , icon]]) =>
+                icon + ' **' + name + '** — ' + (counts.get(id) || 0) + ' vote(s)').join('\n');
+            await session.channel.send(silent({ embeds: [embed('📊 Résultat simulé', gameColor(session.game))
+                .setDescription('Premier jeu : **' + GUIDES[session.game][0] + '**.\n\n' + stats)] }));
+            await openLobby(session);
+        }
+    });
+}
+
+async function createSession(interaction, menu, invited = null, botCount = 0, startRound = 1, sunday = false) {
     menu.launching = true;
     try {
         await interaction.deferUpdate();
-        const thread = await interaction.message.startThread({
-            name: (menu.test ? 'Test · ' : '') + GUIDES[menu.game][0] + ' · ' + cut(readPlayer(interaction).name, 55),
-            autoArchiveDuration: 60,
-            reason: menu.test ? 'Mini-jeu créé via !playx' : 'Mini-jeu créé via !play'
-        });
-        const record = { id: thread.id, parentId: menu.channelId, lastActivity: Date.now(), slowmode: null, timer: null };
-        threadRecords.set(thread.id, record);
-        scheduleCleanup(record, thread.client);
-        saveThreadRecords();
-        if (thread.members.add) await thread.members.add(menu.owner).catch(error => console.warn('[PLAY] Inscription de l’hôte :', error));
-
-        const totalRounds = (menu.game === 'vitrine' || menu.game === 'cavale') ? ROUND_COUNT : 1;
-        const safeStartRound = menu.test ? Math.min(totalRounds, Math.max(1, Number(startRound) || 1)) : 1;
-        const hostPlayer = readPlayer(interaction);
-        const bots = new Map(TEST_NAMES.slice(0, botCount).map((name, i) => ['bot-' + i, { id: 'bot-' + i, name: name + ' [bot]' }]));
-        const session = {
-            thread, record, host: menu.owner, game: menu.game, invited, test: menu.test, bots, allowLate: false, queue: Promise.resolve(),
-            players: new Map([[menu.owner, hostPlayer], ...bots]), people: new Map([[menu.owner, hostPlayer], ...bots]), pending: new Map(),
-            optedOut: new Set(), results: new Map(), timer: null, botTimer: null, round: 0, startRound: safeStartRound, roundStarted: false
-        };
-        sessions.set(thread.id, session);
-        try {
-            await openLobby(session);
-        } catch (error) {
-            await recoverSession(session, error);
-            throw error;
+        const channel = interaction.channel;
+        if (!channel?.isTextBased()) throw new Error('Salon de jeu inaccessible.');
+        const existing = sessions.get(channel.id);
+        if (existing && existing.phase !== 'closed') {
+            await interaction.editReply({ embeds: [embed('Une session est déjà active', 0xe67e22)
+                .setDescription('Le salon de test ne peut héberger qu’une session à la fois. Utilise !playx next ou !playx stop.')], components: [] });
+            return;
         }
+        const session = await makeSession(channel, {
+            host: menu.owner, game: menu.game, invited, test: menu.test, botCount, startRound
+        });
+        if (sunday && menu.test) {
+            session.sunday = true;
+            await startTestSundayVote(session);
+        } else await openLobby(session);
         menus.delete(menu.id);
         const [name, summary, icon] = GUIDES[session.game];
         await interaction.editReply({
-            embeds: [embed(icon + ' ' + name + ' • Fil ouvert', gameColor(session.game))
-                .setAuthor({ name: 'RegaDex Arcade • Session prête' })
-                .setDescription(summary + '\n' + SEP + '\n🧵 **Fil de jeu :** <#' + thread.id + '>')
-                .addFields({
-                    name: 'Dans le fil',
-                    value: session.test
-                        ? '🧪 Mode test avec **' + bots.size + ' bot(s)** • **Manche ' + safeStartRound + '/' + totalRounds + '**.\nUtilise **⚙️ Paramètres** dans le fil pour avancer le chrono.'
-                        : 'Clique sur **🙋 Rejoindre** dans le fil sous 60 secondes *(ou **▶️ Démarrer** si tu es l’hôte)*.'
-                })],
-            components: [row(new ButtonBuilder().setStyle(ButtonStyle.Link).setLabel('Ouvrir le fil')
-                .setURL('https://discord.com/channels/' + thread.guildId + '/' + thread.id))]
+            embeds: [embed(icon + ' ' + name + ' • Session publique', gameColor(session.game))
+                .setAuthor({ name: 'RegaDex Arcade' })
+                .setDescription(summary + '\n' + SEP + '\n' +
+                    (session.test
+                        ? '🧪 Test lancé dans ce salon avec **' + session.bots.size + ' bot(s)**, au départ de la manche **' + session.startRound + '/' + ((session.game === 'vitrine' || session.game === 'cavale') ? ROUND_COUNT : 1) + '**.\n**!playx next** avance le chrono ; **!playx stop** ferme le test.'
+                        : '🎮 Le jeu se déroule directement dans ce salon. L’inscription est ouverte pendant 30 secondes, puis les inscrit·es reçoivent 15 secondes avant le début.')
+                )],
+            components: []
         });
     } finally {
         menu.launching = false;
     }
 }
 
-async function editThreadMessage(session, message, payload) {
+async function editPlayMessage(session, message, payload) {
     if (!message) return null;
     try {
         const editPayload = { ...payload };
         delete editPayload.flags;
-        return await session.thread.messages.edit(message.id, editPayload);
+        return await session.channel.messages.edit(message.id, editPayload);
     } catch (error) {
         if (error?.code === 10008) {
             const hasContent = Boolean(payload?.embeds?.length || payload?.content);
             if (!hasContent) return null;
             const resend = { ...payload };
             delete resend.attachments;
-            return session.thread.send(resend).catch(() => null);
+            return session.channel.send(resend).catch(() => null);
         }
         if (IGNORABLE_DISCORD_CODES.has(error?.code)) {
             if (error.code === 10003) {
@@ -575,18 +709,21 @@ async function editThreadMessage(session, message, payload) {
 }
 
 function controlId(session, action, ...rest) {
-    return idFor(action, session.thread.id, ...rest);
+    return idFor(action, session.channel.id, ...rest);
 }
 
 function sessionButtons(session, joinLabel = 'Rejoindre') {
     if (session.phase === 'lobby') {
         const minRequired = MIN_PLAYERS[session.game] || 1;
+        if (session.scheduled) return [row(
+            button(controlId(session, 'join', session.lobbyId), joinLabel, ButtonStyle.Success, '🙋'),
+            button(controlId(session, 'quit', session.lobbyId), 'Me retirer', ButtonStyle.Secondary, '🚪')
+        )];
         return [
             row(
                 button(controlId(session, 'join', session.lobbyId), joinLabel, ButtonStyle.Success, '🙋').setDisabled(session.test),
                 button(controlId(session, 'quit', session.lobbyId), 'Quitter', ButtonStyle.Secondary, '🚪').setDisabled(session.test),
-                button(controlId(session, 'startnow', session.lobbyId), 'Démarrer', ButtonStyle.Primary, '▶️')
-                    .setDisabled(session.players.size < minRequired)
+                button(controlId(session, 'startnow', session.lobbyId), 'Démarrer', ButtonStyle.Primary, '▶️').setDisabled(session.players.size < minRequired)
             ),
             row(
                 button(controlId(session, 'late', session.lobbyId), 'Arrivées : ' + (session.allowLate ? 'ON' : 'OFF'), ButtonStyle.Secondary, '🔓').setDisabled(session.test),
@@ -595,6 +732,7 @@ function sessionButtons(session, joinLabel = 'Rejoindre') {
             )
         ];
     }
+    if (session.scheduled) return [];
     return [row(
         button(controlId(session, 'join', session.lobbyId), joinLabel, ButtonStyle.Primary, '🙋').setDisabled(session.test || !session.allowLate),
         button(controlId(session, 'quit', session.lobbyId), 'Quitter', ButtonStyle.Secondary, '🚪').setDisabled(session.test),
@@ -609,18 +747,18 @@ function lobbyPayload(session) {
     const totalRounds = (session.game === 'vitrine' || session.game === 'cavale') ? ROUND_COUNT : 1;
     const chosenRound = Math.min(totalRounds, Math.max(1, session.startRound || 1));
     const hostPlayer = session.people.get(session.host);
-    const list = [...session.players.values()].map(p => '• **' + escapeText(p.name) + '**' + (p.id === session.host ? ' 👑' : '')).join('\n') || '*Aucun·e inscrit·e*';
-
+    const list = [...session.players.values()].map(player => '• **' + escapeText(player.name) + '**' + (player.id === session.host ? ' 👑' : '')).join('\n') || '*Aucun·e inscrit·e*';
+    const timing = session.scheduled
+        ? '⏱️ **Inscriptions :** 30 secondes, puis 15 secondes de préparation avant le lancement automatique.'
+        : '⏱️ **Lancement automatique :** ' + expiry(session.deadline) + (session.test ? '' : ' *(ou dès que l’hôte clique sur **▶️ Démarrer**)*');
     const page = embed(icon + ' ' + name + ' • Inscriptions', gameColor(session.game))
         .setAuthor({
-            name: (session.test ? 'RegaDex Arcade • Test de ' : 'RegaDex Arcade • Salon de ') + (hostPlayer?.name || 'l’hôte'),
+            name: session.scheduled ? 'RegaDex Arcade • Session publique quotidienne' :
+                (session.test ? 'RegaDex Arcade • Test de ' : 'RegaDex Arcade • Salon de ') + (hostPlayer?.name || 'l’hôte'),
             iconURL: hostPlayer?.avatar || undefined
         })
-        .setDescription(
-            desc + '\n' + SEP + '\n' +
-            (session.test ? '🤖 **Bots :** `' + session.bots.size + '` • 🎯 **Manche choisie :** `' + chosenRound + '/' + totalRounds + '`\n' : '') +
-            '⏱️ **Lancement automatique :** ' + expiry(session.deadline) + ' *(ou dès que l’hôte clique sur **▶️ Démarrer**)*'
-        )
+        .setDescription(desc + '\n' + SEP + '\n' +
+            (session.test ? '🤖 **Bots :** `' + session.bots.size + '` • 🎯 **Manche choisie :** `' + chosenRound + '/' + totalRounds + '`\n' : '') + timing)
         .addFields(
             { name: '👥 Participant·es (' + session.players.size + ')', value: cut(list, 1024), inline: true },
             {
@@ -633,36 +771,50 @@ function lobbyPayload(session) {
             },
             { name: '📘 Comment jouer', value: cut(guide, 1024), inline: false }
         )
-        .setFooter({ text: 'RegaDex Arcade • Suppression auto après 15 min d’inactivité' });
-
+        .setFooter({ text: 'RegaDex Arcade • Inscriptions 30 s • Préparation 15 s' });
     return silent({ embeds: [page], components: sessionButtons(session) });
 }
 
 async function openLobby(session) {
-    if (session.lobby) await editThreadMessage(session, session.lobby, { components: [] });
+    if (session.lobby) await editPlayMessage(session, session.lobby, { components: [] });
     if (session.lobbyId) session.startRound = 1;
     session.roundStarted = false;
     for (const [id, player] of session.pending) session.players.set(id, player);
     session.pending.clear();
     session.phase = 'lobby';
-    session.board = null;
-    session.state = null;
-    session.ballot = null;
-    session.lobbyId = (session.lobbyId || 0) + 1;
-    session.round = 0;
-    session.scores = new Map();
-    session.loveUsed = new Set();
-    session.best = [];
-    session.prompts = shuffled(PROMPTS);
-    session.usedPrompts = new Set();
-    session.deadline = Date.now() + JOIN_MS;
-    session.lobby = await session.thread.send(lobbyPayload(session));
-    phaseTimer(session, Math.max(1, session.deadline - Date.now()), () => startSelectedGame(session));
+    session.board = null; session.state = null; session.ballot = null;
+    session.lobbyId = (session.lobbyId || 0) + 1; session.round = 0;
+    session.scores = new Map(); session.loveUsed = new Set(); session.best = [];
+    session.prompts = shuffled(PROMPTS); session.usedPrompts = new Set();
+    session.deadline = Date.now() + (session.test ? 1_000 : JOIN_MS);
+    if (session.scheduled && session.sunday && !session.test) {
+        const day = session.scheduleDate || localDateKey(localParisParts());
+        const daily = scheduleState.daily[day] || { sessions: 0, game: session.game };
+        daily.sessions++; daily.game = session.game; scheduleState.daily[day] = daily; saveScheduleState();
+    }
+    session.lobby = await session.channel.send(lobbyPayload(session));
+    phaseTimer(session, Math.max(1, session.deadline - Date.now()), () => prepareGameStart(session));
+}
+async function prepareGameStart(session) {
+    if (session.phase !== 'lobby') return;
+    await editPlayMessage(session, session.lobby, { components: [] });
+    if (!session.test) {
+        const ids = [...session.players.keys()].filter(id => !session.bots.has(id));
+        const mentions = ids.map(id => '<@' + id + '>').join(' ');
+        await session.channel.send({
+            ...silent({ content: (mentions ? mentions + '\n' : '') + '⏳ **Les inscriptions sont closes.** La partie commence dans 15 secondes. Préparez-vous !' }, ids),
+            allowedMentions: { parse: [], users: ids }
+        });
+        session.deadline = Date.now() + READY_MS;
+        phaseTimer(session, READY_MS, () => startSelectedGame(session));
+        return;
+    }
+    await startSelectedGame(session);
 }
 
 async function updateLobby(session) {
     if (session.phase === 'lobby') {
-        const updated = await editThreadMessage(session, session.lobby, lobbyPayload(session));
+        const updated = await editPlayMessage(session, session.lobby, lobbyPayload(session));
         if (updated) session.lobby = updated;
     } else if (session.phase !== 'closed') {
         const [name, , icon, guide] = GUIDES[session.game];
@@ -672,7 +824,7 @@ async function updateLobby(session) {
                 (session.test ? 'Mode test en cours.' : session.allowLate ? 'Les arrivées rejoignent dès la manche/partie suivante.' : 'Les arrivées en cours sont fermées.')
             )
             .addFields({ name: '📘 Rappel des règles', value: cut(guide, 1024), inline: false });
-        const updated = await editThreadMessage(session, session.lobby, {
+        const updated = await editPlayMessage(session, session.lobby, {
             embeds: [page],
             components: sessionButtons(session, 'Rejoindre ensuite')
         });
@@ -729,8 +881,8 @@ async function startRound(session) {
     session.answers = new Map();
     session.drafts = new Map();
     session.deadline = Date.now() + PICK_MS;
-    if (starting) await updateLobby(session);
-    session.board = await session.thread.send(pickPayload(session));
+    if (starting && session.lobby) await editPlayMessage(session, session.lobby, { components: [] });
+    session.board = await session.channel.send(pickPayload(session));
     phaseTimer(session, Math.max(1, session.deadline - Date.now()), () => startRatings(session));
 }
 
@@ -862,43 +1014,8 @@ function draftPayload(session, user, draft) {
     return { embeds: [preview], components };
 }
 
-async function applySlowmode(session, seconds, reason) {
-    try {
-        if (session.record.slowmode == null) {
-            session.record.slowmode = session.thread.rateLimitPerUser ?? 0;
-            try { saveThreadRecords(); } catch (err) { console.warn('[PLAY] Sauvegarde slowmode :', err); }
-        }
-        if (session.thread.archived) {
-            await session.thread.setArchived(false).catch(() => {});
-        }
-        await session.thread.setRateLimitPerUser(seconds, reason);
-    } catch (error) {
-        session.record.slowmode = null;
-        try { saveThreadRecords(); } catch {}
-        if (IGNORABLE_DISCORD_CODES.has(error?.code)) {
-            console.warn('[PLAY] Mode lent ignoré :', error.code || error.message);
-            return;
-        }
-        console.warn('[PLAY] Activation du mode lent impossible :', error);
-    }
-}
-
-async function restoreSlowmode(session) {
-    if (session.record.slowmode == null) return;
-    const previous = session.record.slowmode;
-    session.record.slowmode = null;
-    try { saveThreadRecords(); } catch (err) { console.warn('[PLAY] Sauvegarde slowmode :', err); }
-    try {
-        if (session.thread.archived) return;
-        await session.thread.setRateLimitPerUser(previous, 'Fin du vote RegaDex');
-    } catch (error) {
-        if (IGNORABLE_DISCORD_CODES.has(error?.code)) {
-            console.warn('[PLAY] Restauration du mode lent ignorée :', error.code || error.message);
-            return;
-        }
-        console.warn('[PLAY] Restauration du mode lent impossible :', error);
-    }
-}
+async function applySlowmode() {}
+async function restoreSlowmode() {}
 
 async function startRatings(session) {
     clearTimeout(session.timer);
@@ -906,7 +1023,7 @@ async function startRatings(session) {
     session.phase = 'reveal';
     session.entries = shuffled([...session.answers.values()]);
     if (session.entries.length < 2) {
-        const updated = await editThreadMessage(session, session.board, {
+        const updated = await editPlayMessage(session, session.board, {
             embeds: [embed('🎭 Manche ' + session.round + ' • Vote annulé', gameColor('vitrine')).setDescription('Il faut au moins deux réponses valides pour ouvrir le vote.')],
             components: []
         });
@@ -914,18 +1031,15 @@ async function startRatings(session) {
         await finishRound(session);
         return;
     }
-    await applySlowmode(session, 21_600, 'Vote Blanc Manger Caca');
     session.voteIndex = 0;
     await showRating(session);
 }
 
 async function showRating(session) {
     const entry = session.entries[session.voteIndex];
-    if (!entry) {
-        await finishRound(session);
-        return;
-    }
+    if (!entry) { await finishRound(session); return; }
     session.phase = 'reveal';
+    if (session.board) await editPlayMessage(session, session.board, { components: [] });
     const cardImage = await drawVoteCards(entry.cards).catch(error => {
         console.warn('[PLAY] Aperçu des cartes :', error);
         return null;
@@ -934,21 +1048,17 @@ async function showRating(session) {
     const page = embed('🎭 Manche ' + session.round + '/' + ROUND_COUNT + ' • Réponse ' +
         (session.voteIndex + 1) + '/' + session.entries.length, gameColor('vitrine'))
         .setAuthor({ name: 'RegaDex Arcade • Vote anonyme' })
-        .setDescription('> **' + escapeText(completePhrase(session.prompt, entry.cards)) + '**\n\n⏳ Clôture ' + expiry(session.deadline) + ' *— sans note, elle vaut Meh (`0`).*')
-        .setFooter({ text: '❤️ J’adore ! est utilisable 1 seule fois par session • Tu ne notes que les réponses des autres' });
+        .setDescription('> **' + escapeText(completePhrase(session.prompt, entry.cards)) + '**\n\n⏳ Clôture ' + expiry(session.deadline) + ' *— sans note, elle vaut Meh (0).*')
+        .setFooter({ text: '❤️ J’adore ! est utilisable une fois par session • Tu ne notes que les réponses des autres' });
     if (cardImage) page.setImage('attachment://reponse.png');
-    const updated = await editThreadMessage(session, session.board, silent({
+    session.board = await session.channel.send(silent({
         embeds: [page],
-        attachments: [],
         files: cardImage ? [new AttachmentBuilder(cardImage, { name: 'reponse.png' })] : [],
         components: [row(...RATINGS.map(([key, label, points, style, emoji]) => button(
             controlId(session, 'rate', session.lobbyId, session.round, session.voteIndex, key),
-            label + ' (' + (points > 0 ? '+' : '') + points + ')',
-            style,
-            emoji
+            label + ' (' + (points > 0 ? '+' : '') + points + ')', style, emoji
         )))]
     }));
-    if (updated) session.board = updated;
     session.phase = 'rating';
     phaseTimer(session, RATE_MS, async () => {
         for (const points of entry.votes.values()) entry.score += points;
@@ -974,8 +1084,8 @@ async function finishRound(session) {
         escapeText(session.people.get(entry.user)?.name || 'Participant·e') + ' — **' + entry.score + ' pts**');
     const reveal = embed('🎭 Manche ' + session.round + ' • Réponses dévoilées', gameColor('vitrine'))
         .setDescription(cut(authors.join('\n') || 'Aucune réponse enregistrée.', 3900));
-    const updated = await editThreadMessage(session, session.board, { embeds: [reveal], components: [], attachments: [] });
-    if (updated) session.board = updated;
+    if (session.board) await editPlayMessage(session, session.board, { components: [] });
+    session.board = await session.channel.send(silent({ embeds: [reveal] }));
     const top = ranked(session.entries.length >= 2 ? session.entries : []).filter(entry => entry.rank <= 3);
     for (const entry of top.filter(item => item.rank === 1)) {
         if (!session.best.length || entry.score > session.best[0].score) session.best = [];
@@ -1010,6 +1120,7 @@ async function showPodium(session) {
     const top = standings.filter(entry => entry.rank <= 3);
     session.results.set(session.lobbyId, { entries: [...top.slice(3), ...standings.filter(entry => entry.rank > 3)], best: session.best });
     const best = bestResponseDescription(session.best);
+    await rewardMinigameWinners(session, standings.filter(entry => entry.rank === 1).map(entry => entry.user));
     await sendResult(session, 'Blanc Manger Caca • Podium final', top.slice(0, 3), {
         podium: true, description: best, best: session.best,
         components: [row(button(controlId(session, 'standing', session.lobbyId, 0), 'Voir le classement', ButtonStyle.Secondary, '📊'))]
@@ -1017,58 +1128,75 @@ async function showPodium(session) {
     session.continuing = new Set();
     session.leaving = new Set();
     session.deadline = Date.now() + CONTINUE_MS;
-    session.continueMessage = await session.thread.send(continuePayload(session));
+    if (session.sunday) return nextGamePoll(session, await sessionVoters(session));
+    session.continueMessage = await session.channel.send(continuePayload(session));
     phaseTimer(session, Math.max(1, session.deadline - Date.now()), () => finishContinue(session));
 }
 
 function continuePayload(session) {
     const mentionList = set => [...set].map(id => '• ' + playerRef(session, id)).join('\n') || '*En attente*';
-    const page = embed('🔄 Continuer sur un autre mini-jeu ?', 0x3498db)
-        .setDescription('Choisis si tu restes pour le vote du prochain mini-jeu. Clôture ' + expiry(session.deadline))
+    const sunday = session.sunday;
+    const title = sunday ? '🗳️ Continuer avec un autre mini-jeu ?' : '🔁 Rejouer une session ?';
+    const desc = sunday
+        ? 'Indique si tu restes pour la suite. Les personnes qui restent participeront au vote du prochain jeu. Clôture ' + expiry(session.deadline)
+        : 'Indique si tu veux rejouer ' + (session.test ? 'ou arrêter le test' : '**' + (GUIDES[session.game]?.[0] || 'ce jeu') + '**') +
+          '. Les personnes qui quittent ne sont plus comptées. Clôture ' + expiry(session.deadline);
+    const page = embed(title, 0x3498db)
+        .setDescription(desc)
         .addFields(
             { name: '✅ Restent (' + session.continuing.size + ')', value: cut(mentionList(session.continuing), 1024), inline: true },
             { name: '👋 Quittent (' + session.leaving.size + ')', value: cut(mentionList(session.leaving), 1024), inline: true }
         );
-    return silent({
-        embeds: [page],
-        components: [row(
-            button(controlId(session, 'yes', session.lobbyId), 'Oui, on continue !', ButtonStyle.Success, '✅'),
-            button(controlId(session, 'leave', session.lobbyId), 'Non, je quitte', ButtonStyle.Secondary, '👋')
-        )]
-    });
+    return silent({ embeds: [page], components: [row(
+        button(controlId(session, 'yes', session.lobbyId), sunday ? 'Oui, voter pour la suite' : 'Oui, on rejoue', ButtonStyle.Success, '✅'),
+        button(controlId(session, 'leave', session.lobbyId), 'Non, je quitte', ButtonStyle.Secondary, '👋')
+    )] });
 }
 
 async function finishContinue(session) {
-    clearTimeout(session.timer);
-    clearTimeout(session.botTimer);
-    await editThreadMessage(session, session.continueMessage, { components: [] });
-    for (const [user] of session.players) {
+    clearTimeout(session.timer); clearTimeout(session.botTimer);
+    if (session.continueMessage) await editPlayMessage(session, session.continueMessage, { components: [] });
+    for (const user of [...session.players.keys()]) {
         if (!session.continuing.has(user) && !(session.test && session.bots.has(user))) session.players.delete(user);
     }
-    for (const user of session.leaving) {
-        session.optedOut.add(user);
-        if (!session.bots.has(user)) await session.thread.members.remove(user).catch(error => console.warn('[PLAY] Désinscription du fil :', error));
-    }
+    for (const user of session.leaving || []) session.optedOut.add(user);
     if (!session.players.size || (session.test && !session.continuing.has(PLAY_TEST_OWNER_ID))) {
-        await closeSession(session, 'Session terminée. Merci d’avoir joué !');
+        await closeSession(session, 'La session est terminée. Merci d’avoir joué !');
         return;
     }
-    await nextGamePoll(session, new Set(session.players.keys()));
+    if (session.test || session.sunday) {
+        if (session.sunday && Number(localParisParts().hour) >= SUNDAY_CUTOFF_HOUR) {
+            return closeSession(session, 'Le rendez-vous du dimanche se termine à 18 h.');
+        }
+        return nextGamePoll(session, await sessionVoters(session));
+    }
+    const day = session.scheduleDate || localDateKey(localParisParts());
+    const daily = scheduleState.daily[day] || { sessions: 1, game: session.game };
+    if (daily.sessions >= WEEKDAY_SESSION_LIMIT) {
+        return closeSession(session, 'Vous avez atteint les trois sessions du jour.');
+    }
+    daily.sessions++;
+    daily.game = session.game;
+    scheduleState.daily[day] = daily;
+    saveScheduleState();
+    await session.channel.send(silent({ embeds: [embed('🔁 Même mini-jeu, nouvelle session', gameColor(session.game))
+        .setDescription('Vous avez choisi de continuer. **' + GUIDES[session.game][0] + '** recommence dans 30 secondes, avec ' +
+            (WEEKDAY_SESSION_LIMIT - daily.sessions + 1) + ' session(s) restante(s) aujourd’hui.')
+        .setFooter({ text: 'Les inscriptions ferment dans 30 secondes, puis 15 secondes de préparation' })] }));
+    await openLobby(session);
 }
 
 async function closeSession(session, reason) {
-    session.phase = 'closed';
-    session.stopVoteActive = false;
-    session.pausedState = null;
-    clearTimeout(session.timer);
-    clearTimeout(session.botTimer);
+    if (session.phase === 'closed') return;
+    session.phase = 'closed'; session.stopVoteActive = false; session.pausedState = null;
+    clearTimeout(session.timer); clearTimeout(session.botTimer);
     await restoreSlowmode(session);
     const messages = [session.lobby, session.board, session.state?.statusMessage, session.continueMessage, session.ballot?.message].filter(Boolean);
-    await Promise.allSettled(messages.map(message => editThreadMessage(session, message, { components: [] })));
-    const page = embed('🏁 Session terminée', 0x95a5a6)
-        .setDescription(reason)
-        .setFooter({ text: 'Ce fil sera supprimé automatiquement après 15 min d’inactivité' });
-    await session.thread.send(silent({ embeds: [page] })).catch(error => console.warn('[PLAY] Clôture :', error));
+    await Promise.allSettled(messages.map(message => editPlayMessage(session, message, { components: [] })));
+    const page = embed('🏁 Session terminée', 0x95a5a6).setDescription(reason)
+        .setFooter({ text: 'Merci d’avoir joué à RegaDex Arcade !' });
+    await session.channel.send(silent({ embeds: [page] })).catch(error => console.warn('[PLAY] Clôture :', error));
+    if (session.scheduled && !session.test) await announceTomorrow(session.channel);
 }
 
 async function recoverSession(session, error) {
@@ -1644,7 +1772,7 @@ async function castingVictoryCanvas(session, leaders, votes) {
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ff7675';
     ctx.font = 'bold 32px "LemonMilk", "Sans"';
-    ctx.fillText(leaders.length === 1 ? 'CASTING DE L’ENFER  •  VICTOIRE !' : 'CASTING DE L’ENFER  •  VERDICT', W / 2, 66, W - 160);
+    ctx.fillText(leaders.length === 1 ? 'DÉBAT DE GOLMON  •  VICTOIRE !' : 'DÉBAT DE GOLMON  •  VERDICT', W / 2, 66, W - 160);
     ctx.fillStyle = '#e2e8f0';
     ctx.font = '22px Sans';
     ctx.fillText(cleanCanvasText(state.prompt), W / 2, 112, W - 160);
@@ -1872,7 +2000,7 @@ async function sendResult(session, title, entries, options = {}) {
         return null;
     });
     if (image) result.setImage('attachment://resultats.jpg');
-    await session.thread.send({
+    await session.channel.send({
         ...silent({
             embeds: [result],
             files: image ? [new AttachmentBuilder(image, { name: 'resultats.jpg' })] : [],
@@ -1919,8 +2047,7 @@ async function showBinder(interaction, session, action, parts) {
 
     if (action === 'binder') await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     else await interaction.deferUpdate();
-    persistRecordActivity(session.record, interaction.client);
-
+    
     const result = await renderPlayBinder(interaction.user, set, page, theme, size);
     const curSize = BINDER_SIZES.includes(result.perPageMode) ? result.perPageMode : size;
     const curIdx = BINDER_SIZES.indexOf(curSize);
@@ -1949,10 +2076,10 @@ async function showBinder(interaction, session, action, parts) {
 }
 
 async function menuInteraction(interaction, action, menu) {
-    if (interaction.user.id !== menu.owner) return privateResponse(interaction, 'Ce menu appartient à la personne qui a lancé !play.');
-    if (menu.launching) return privateResponse(interaction, 'Le fil est déjà en cours de création.');
+    if (interaction.user.id !== menu.owner) return privateResponse(interaction, 'Ce menu appartient à la personne qui a lancé la commande.');
+    if (menu.launching) return privateResponse(interaction, 'La session est déjà en cours d’ouverture.');
     switch (action) {
-        case 'menu': return interaction.update(chooseGameMenu(menu));
+        case 'menu': { menu.sunday = false; return interaction.update(chooseGameMenu(menu)); }
         case 'guide': return interaction.update(chooseGameMenu(menu, 'all'));
         case 'guidegame': return interaction.update(chooseGameMenu(menu, interaction.values[0]));
         case 'game':
@@ -1980,13 +2107,19 @@ async function menuInteraction(interaction, action, menu) {
             }
             return privateResponse(interaction, 'Manche invalide.');
         }
+        case 'sundaytest': {
+            if (!menu.test) return privateResponse(interaction, 'Cette option est réservée au mode test.');
+            menu.sunday = true; menu.game = 'vitrine'; menu.startRound = 1;
+            menu.botCount = Math.min(TEST_NAMES.length, Math.max(1, Number(menu.botCount) || 2));
+            return interaction.update(launchMenu(menu));
+        }
         case 'starttest': {
             if (!menu.test || !menu.game) return privateResponse(interaction, 'Ce lancement est indisponible.');
             const botsCount = Math.min(TEST_NAMES.length, Math.max(1, Number(menu.botCount) || 2));
             const startRound = (menu.game === 'vitrine' || menu.game === 'cavale')
                 ? Math.min(ROUND_COUNT, Math.max(1, Number(menu.startRound) || 1))
                 : 1;
-            return createSession(interaction, menu, null, botsCount, startRound);
+            return createSession(interaction, menu, null, botsCount, startRound, Boolean(menu.sunday));
         }
         case 'open': return !menu.test && menu.game ? createSession(interaction, menu) :
             privateResponse(interaction, 'Ce lancement est indisponible.');
@@ -2095,7 +2228,7 @@ async function pickInteraction(interaction, session, action, parts) {
         if (isEphemeralMsg) await interaction.update(confirmPayload);
         else await interaction.reply({ ...confirmPayload, flags: MessageFlags.Ephemeral });
         if (session.answers.size >= session.roundPlayers.size) await startRatings(session);
-        else await editThreadMessage(session, session.board, pickPayload(session));
+        else await editPlayMessage(session, session.board, pickPayload(session));
         return;
     }
     const payload = draftPayload(session, id, draft);
@@ -2111,8 +2244,7 @@ async function sessionInteraction(interaction, session, action, parts) {
         if (!session.results.has(lobby)) return privateResponse(interaction, 'Ce classement a expiré.');
         if (interaction.message.flags?.has(MessageFlags.Ephemeral)) await interaction.deferUpdate();
         else await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        persistRecordActivity(session.record, interaction.client);
-        return interaction.editReply(await standingsPayload(session, lobby, page));
+                return interaction.editReply(await standingsPayload(session, lobby, page));
     }
     if (action === 'binder' || action === 'browse' || action === 'binderset') {
         const params = action === 'binderset' ? [interaction.values[0], 0, parts[0], parts[1]] : parts;
@@ -2128,7 +2260,7 @@ async function sessionInteraction(interaction, session, action, parts) {
     if (['join', 'late', 'cancel', 'startnow', 'quit', 'settings', 'settingsLate', 'settingsInvite', 'settingsUsers', 'skipClock'].includes(action) && Number(parts[0]) !== session.lobbyId)
         return privateResponse(interaction, 'Ce menu d’inscription a expiré.');
     if (['settings', 'settingsLate', 'settingsInvite', 'settingsUsers', 'skipClock'].includes(action))
-        return threadSettings(interaction, session, action, parts);
+        return sessionSettings(interaction, session, action, parts);
     if (action === 'rate') return rateResponse(interaction, session, parts);
     if (['pick', 'query', 'search', 'prev', 'next', 'clear', 'clearfilter', 'swap', 'card', 'lock'].includes(action))
         return pickInteraction(interaction, session, action, parts);
@@ -2141,9 +2273,7 @@ async function sessionInteraction(interaction, session, action, parts) {
         const target = session.phase === 'lobby' ? session.players : session.pending;
         target.set(user, player);
         session.people.set(user, player);
-        persistRecordActivity(session.record, interaction.client);
-        await privateResponse(interaction, session.phase === 'lobby' ? '✅ Tu es inscrit·e !' : '✅ Tu rejoindras la prochaine manche ou session.');
-        if (session.thread.members.add) await session.thread.members.add(user).catch(error => console.warn('[PLAY] Inscription Discord :', error));
+                await privateResponse(interaction, session.phase === 'lobby' ? '✅ Tu es inscrit·e !' : '✅ Tu rejoindras la prochaine manche ou session.');
         if (session.phase === 'lobby') await updateLobby(session);
         return;
     }
@@ -2151,8 +2281,7 @@ async function sessionInteraction(interaction, session, action, parts) {
         if (session.test) return privateResponse(interaction, 'Indisponible en mode test.');
         if (!session.players.has(user) && !session.pending.has(user))
             return privateResponse(interaction, 'Tu n’es pas inscrit·e à cette partie.');
-        persistRecordActivity(session.record, interaction.client);
-        session.players.delete(user);
+                session.players.delete(user);
         session.pending.delete(user);
         if (session.phase !== 'lobby') session.optedOut.add(user);
         if (user === session.host) {
@@ -2169,7 +2298,7 @@ async function sessionInteraction(interaction, session, action, parts) {
             return;
         }
         await privateResponse(interaction, '🚪 Tu as quitté la partie.');
-        if (session.thread.members?.remove) await session.thread.members.remove(user).catch(error => console.warn('[PLAY] Retrait du fil :', error));
+        
         if (!session.players.size && !session.pending.size) await closeSession(session, 'Tous les participant·es ont quitté la partie.');
         return;
     }
@@ -2179,8 +2308,7 @@ async function sessionInteraction(interaction, session, action, parts) {
         if (session.players.size + session.pending.size < MIN_PLAYERS[session.game]) {
             return privateResponse(interaction, 'Il faut au moins **' + MIN_PLAYERS[session.game] + '** participant·es pour démarrer.');
         }
-        persistRecordActivity(session.record, interaction.client);
-        await interaction.deferUpdate();
+                await interaction.deferUpdate();
         await startSelectedGame(session);
         return;
     }
@@ -2205,7 +2333,7 @@ async function sessionInteraction(interaction, session, action, parts) {
         session.leaving.delete(user);
         (action === 'yes' ? session.continuing : session.leaving).add(user);
         if (session.continuing.size + session.leaving.size >= session.players.size) await finishContinue(session);
-        else await editThreadMessage(session, session.continueMessage, continuePayload(session));
+        else await editPlayMessage(session, session.continueMessage, continuePayload(session));
         return;
     }
     return privateResponse(interaction, 'Ce bouton a expiré.');
@@ -2278,10 +2406,10 @@ async function triggerStopVote(session, message) {
         return true;
     }
     if (session.stopVoteActive) {
-        await message.reply(silent({ content: '⏳ Un vote d’arrêt est déjà en cours dans ce fil.' })).catch(() => {});
+        await message.reply(silent({ content: '⏳ Un vote d’arrêt est déjà en cours dans ce salon.' })).catch(() => {});
         return true;
     }
-    const voters = await threadVoters(session);
+    const voters = await sessionVoters(session);
     for (const pid of session.players.keys()) voters.add(pid);
     if (session.test) for (const bid of session.bots.keys()) voters.delete(bid);
     if (!voters.size) return true;
@@ -2333,7 +2461,7 @@ async function resumeFromStopVote(session) {
     if (session.state?.roundStarted) session.state.roundStarted += pauseElapsed;
     if (session.state?.choiceDeadline) session.state.choiceDeadline += pauseElapsed;
 
-    await session.thread.send(silent({
+    await session.channel.send(silent({
         embeds: [embed('▶️ Reprise de la partie', gameColor(session.game))
             .setDescription('Le vote n’a pas atteint la majorité pour arrêter. Le chronomètre reprend là où il s’était arrêté.')]
     })).catch(() => {});
@@ -2342,7 +2470,7 @@ async function resumeFromStopVote(session) {
         session.phase = 'ballot';
         session.ballot = saved.ballot;
         session.deadline = Date.now() + saved.ballotDeadlineRemaining;
-        await editThreadMessage(session, saved.ballot.message, ballotPayload(session, saved.ballot));
+        await editPlayMessage(session, saved.ballot.message, ballotPayload(session, saved.ballot));
         phaseTimer(session, Math.max(1000, saved.ballotDeadlineRemaining), () => finishBallot(session, saved.ballot));
         return;
     }
@@ -2353,7 +2481,7 @@ async function resumeFromStopVote(session) {
         phaseTimer(session, Math.max(1000, saved.deadlineRemaining), saved.advancePhase);
     }
     if (saved.phase === 'lobby' && session.lobby) await updateLobby(session).catch(() => {});
-    else if (saved.phase === 'pick' && session.board) await editThreadMessage(session, session.board, pickPayload(session));
+    else if (saved.phase === 'pick' && session.board) await editPlayMessage(session, session.board, pickPayload(session));
     else if (saved.phase === 'game' && session.state?.step === 'socialChoices') await renderSocialBoard(session);
 }
 
@@ -2400,51 +2528,25 @@ function gameStep(session, step) {
 }
 
 async function gameBoard(session, text, components = [], attachment = null, mentions = [], title = gameTitle(session), fields = []) {
-    const keepAttachment = attachment === undefined;
-    const page = embed(title, gameColor(session.game))
-        .setAuthor({ name: 'RegaDex · Mini-jeux' })
-        .setDescription(cut(text, 4000));
+    const page = embed(title, gameColor(session.game)).setAuthor({ name: 'RegaDex · Mini-jeux' }).setDescription(cut(text, 4000));
     if (fields.length) page.addFields(fields);
     const tip = STEP_TIPS[session.state?.step];
     if (tip && components.length) page.setFooter({ text: cut(tip, 2048) });
     if (attachment) page.setImage('attachment://' + attachment.name);
-    else if (keepAttachment && session.board?.embeds?.[0]?.image?.url) {
-        page.setImage(session.board.embeds[0].image.url);
-    }
     const realMentions = mentions.filter(id => !session.bots.has(id));
     const payload = { embeds: [page], components, allowedMentions: { parse: [], users: realMentions } };
     if (realMentions.length) payload.content = realMentions.map(id => playerRef(session, id)).join(' ');
-    else if (session.board) payload.content = null;
     if (attachment) payload.files = [attachment];
-    if (session.board) {
-        const editPayload = keepAttachment ? payload : { ...payload, attachments: [] };
-        const updated = await editThreadMessage(session, session.board, editPayload);
-        if (updated) session.board = updated;
-    } else {
-        session.board = await session.thread.send(realMentions.length ? payload : silent(payload));
-    }
+    if (session.board) await editPlayMessage(session, session.board, { components: [] });
+    session.board = await session.channel.send(realMentions.length ? payload : silent(payload));
 }
 
-async function threadVoters(session) {
+async function sessionVoters(session) {
     if (session.test) return new Set(session.players.keys());
-    let ids = new Set(session.players.keys());
-    if (session.thread.members.fetch) {
-        try {
-            const present = new Set();
-            let after;
-            for (;;) {
-                const members = await session.thread.members.fetch({ cache: false, withMember: true, limit: 100, after });
-                for (const member of members.values()) {
-                    if (member.id !== session.thread.client.user.id && !member.guildMember?.user?.bot) present.add(member.id);
-                }
-                const last = members.lastKey();
-                if (members.size < 100 || !last || last === after) break;
-                after = last;
-            }
-            ids = present;
-        } catch (error) { console.warn('[PLAY] Lecture des personnes du fil :', error); }
-    }
-    for (const id of session.optedOut) ids.delete(id);
+    const ids = new Set([...session.channel.guild.members.cache.values()]
+        .filter(member => !member.user.bot && !session.optedOut.has(member.id))
+        .map(member => member.id));
+    for (const id of session.players.keys()) ids.add(id);
     return ids;
 }
 
@@ -2457,7 +2559,6 @@ async function startSelectedGame(session) {
     if (session.game === 'vitrine') return startRound(session);
     session.state = { revision: 0, step: '' };
     session.phase = 'game';
-    await updateLobby(session);
     if (session.game === 'cavale') return startCavale(session);
     if (session.game === 'casting') return startCasting(session);
     if (session.game === 'devine') return startDevine(session);
@@ -2465,10 +2566,44 @@ async function startSelectedGame(session) {
     return startSocialChoices(session, 'fmk');
 }
 
+async function rewardMinigameWinners(session, userIds) {
+    const winners = [...new Set((userIds || []).filter(id => id && !session.bots.has(id)))];
+    if (session.test || !winners.length) return [];
+    const key = 'play-' + session.runId + '-' + session.lobbyId + '-' + session.game;
+    try {
+        const rewarded = await grantMinigameTcgPoints(session.channel.client, winners, 3, key);
+        if (rewarded.length) {
+            const names = rewarded.map(id => playerRef(session, id)).join(', ');
+            await session.channel.send(silent({
+                content: '🏆 ' + names + ' gagne' + (rewarded.length > 1 ? 'nt' : '') + ' **+3 points RegaDex** pour cette victoire !',
+                allowedMentions: { parse: [], users: rewarded }
+            }));
+        }
+        return rewarded;
+    } catch (error) {
+        console.error('[PLAY] Récompense de victoire RegaDex :', error);
+        await session.channel.send(silent({ content: '⚠️ La récompense de victoire n’a pas pu être créditée. L’équipe a été avertie.' })).catch(() => {});
+        return [];
+    }
+}
+
 async function finishGame(session, text, attachment = null, components = []) {
     gameStep(session, 'finished');
+    if (session.board) await editPlayMessage(session, session.board, { components: [] });
     await gameBoard(session, text, components, attachment);
-    await nextGamePoll(session, await threadVoters(session));
+    if (session.sunday) {
+        if (session.scheduled && Number(localParisParts().hour) >= SUNDAY_CUTOFF_HOUR) {
+            await closeSession(session, 'La session est terminée. Le rendez-vous du dimanche se termine à 18 h.');
+            return;
+        }
+        return nextGamePoll(session, await sessionVoters(session));
+    }
+    session.phase = 'continue';
+    session.continuing = new Set();
+    session.leaving = new Set();
+    session.deadline = Date.now() + CONTINUE_MS;
+    session.continueMessage = await session.channel.send(continuePayload(session));
+    phaseTimer(session, CONTINUE_MS, () => finishContinue(session));
 }
 
 async function openBallot(session, { title, description, voters, options, choose, ms = CONTINUE_MS, canFinishEarly = () => true }) {
@@ -2481,7 +2616,7 @@ async function openBallot(session, { title, description, voters, options, choose
     };
     session.ballot = ballot;
     session.deadline = Date.now() + ms;
-    ballot.message = await session.thread.send(silent(ballotPayload(session, ballot)));
+    ballot.message = await session.channel.send(silent(ballotPayload(session, ballot)));
     phaseTimer(session, Math.max(1, session.deadline - Date.now()), () => finishBallot(session, ballot));
 }
 
@@ -2517,7 +2652,7 @@ async function voteBallot(interaction, session, [id]) {
     touchInteraction(session, interaction);
     await privateResponse(interaction, '✅ Ton vote est enregistré.');
     if (ballot.votes.size >= ballot.voters.size && ballot.canFinishEarly(ballot.votes)) await finishBallot(session, ballot);
-    else await editThreadMessage(session, ballot.message, ballotPayload(session, ballot));
+    else await editPlayMessage(session, ballot.message, ballotPayload(session, ballot));
 }
 
 async function finishBallot(session, ballot) {
@@ -2540,7 +2675,7 @@ async function finishBallot(session, ballot) {
             })
             .join('\n').slice(0, 3800)
         : 'Aucun vote enregistré.';
-    await editThreadMessage(session, ballot.message, {
+    await editPlayMessage(session, ballot.message, {
         embeds: [embed(ballot.title, gameColor(session.game)).setAuthor({ name: 'Résultat du scrutin' }).setDescription(summary)],
         components: []
     });
@@ -2548,12 +2683,14 @@ async function finishBallot(session, ballot) {
 }
 
 async function nextGamePoll(session, voters) {
-    if (session.test) voters = new Set([...voters].filter(id => !session.bots.has(id)));
+    if (session.test && !session.sunday) voters = new Set([...voters].filter(id => !session.bots.has(id)));
     if (!voters.size) return closeSession(session, 'Session terminée. Merci d’avoir joué !');
     const options = Object.entries(GUIDES).map(([value, [label, , emoji]]) => ({ value, label, emoji }));
     await openBallot(session, {
         title: '🎮 Prochain mini-jeu',
-        description: 'Choisissez le prochain jeu à enchaîner. En cas d’égalité, Cacabot départage au hasard.',
+        description: session.sunday
+            ? 'Votez pour le prochain mini-jeu à jouer avant 18 h. Le scrutin se ferme quand tout le monde a voté ou après une minute. En cas d’égalité, Cacabot tire au sort.'
+            : 'Choisissez le prochain jeu à enchaîner. En cas d’égalité, Cacabot départage au hasard.',
         voters, options, choose: async (leaders, votes) => {
             if (!leaders.length) return closeSession(session, 'Aucun vote enregistré. La session est terminée.');
             const winner = leaders[randomInt(leaders.length)];
@@ -2569,7 +2706,7 @@ async function nextGamePoll(session, voters) {
                     return (gid === winner ? '👑 ' : '• ') + gEmoji + ' **' + gName + '** — `' + cnt + ' vote' + (cnt > 1 ? 's' : '') + '`';
                 }).join('\n');
 
-            await session.thread.send(silent({
+            await session.channel.send(silent({
                 embeds: [embed(gameTitle(session), gameColor(winner))
                     .setAuthor({ name: 'RegaDex Arcade • Changement de mini-jeu' })
                     .setDescription(
@@ -2665,7 +2802,7 @@ async function cavaleRound(session) {
         if (entries.length) {
             const top = entries.filter(entry => entry.rank <= 3).slice(0, 3);
             const championCards = state.wonCards?.get(top[0]?.user) || [];
-            await sendResult(session, '🔍 Cartes en cavale • Podium', top, {
+            await sendResult(session, '🔍 Cartes zoomées • Podium', top, {
                 podium: true,
                 unit: 'carte(s)',
                 accent: '#e67e22',
@@ -2674,6 +2811,7 @@ async function cavaleRound(session) {
                 bonusLabel: 'CARTES DU CHAMPION'
             });
         }
+        await rewardMinigameWinners(session, entries.filter(entry => entry.rank === 1).map(entry => entry.user));
         const text = entries.length
             ? entries.map(item => '**#' + item.rank + '** · **' + escapeText(session.people.get(item.user)?.name || 'Enquêteur') + '** — `' + item.score + ' carte(s)`').join('\n')
             : 'Personne n’a trouvé de carte sur cette manche.';
@@ -2687,7 +2825,7 @@ async function cavaleRound(session) {
     try {
         state.image = await loadImage(state.cards[state.index].filePath);
     } catch (error) {
-        console.warn('[PLAY] Illustration de Cartes en cavale indisponible :', error);
+        console.warn('[PLAY] Illustration de Cartes zoomées indisponible :', error);
         state.index++;
         return cavaleRound(session);
     }
@@ -2698,7 +2836,7 @@ async function cavaleZoom(session) {
     const state = session.state;
     const source = state.image;
     const sourceSide = Math.min(source.width, source.height);
-    const side = sourceSide * (0.27 + state.zoom * 0.095);
+    const side = sourceSide * (0.10 + state.zoom * 0.09);
     const sx = Math.max(0, Math.min(source.width - side, source.width * 0.49 - side / 2));
     const sy = Math.max(0, Math.min(source.height - side, source.height * 0.46 - side / 2));
 
@@ -2726,17 +2864,17 @@ async function cavaleZoom(session) {
     ctx.textAlign = 'center';
     ctx.fillStyle = '#a5b4fc';
     ctx.font = 'bold 16px "LemonMilk", "Sans"';
-    ctx.fillText('ÉCRIS LE NOM DE LA CARTE DANS LE FIL', canvas.width / 2, 748);
+    ctx.fillText('ÉCRIS LE NOM DE LA CARTE DANS LE SALON', canvas.width / 2, 748);
 
     const png = exportPng(canvas);
     await gameBoard(
         session,
-        'Écris directement le nom de la carte dans le fil *(fautes légères tolérées)*.\n' +
+        'Écris directement le nom de la carte dans le salon *(fautes légères tolérées)*.\n' +
         'Prochain dézoom : ' + expiry(state.roundStarted + (state.zoom + 1) * 60_000),
         [],
         new AttachmentBuilder(png, { name: 'indice.png' }),
         [],
-        '🔍 Cartes en cavale · Carte ' + (state.index + 1) + '/' + state.cards.length,
+        '🔍 Cartes zoomées · Carte ' + (state.index + 1) + '/' + state.cards.length,
         [
             { name: 'Niveau de zoom', value: progressBar(state.zoom + 1, 5, 5) + ' **Indice ' + (state.zoom + 1) + '/5**', inline: true },
             { name: 'Scores actuels', value: cavaleStandingsLine(session), inline: true }
@@ -2971,13 +3109,14 @@ async function showDevineStop(session) {
 async function finishDevine(session, reason, winner = null) {
     const state = session.state;
     const theme = cardTheme(state.card);
-    if (session.board) await editThreadMessage(session, session.board, { components: [] });
+    if (session.board) await editPlayMessage(session, session.board, { components: [] });
     session.board = null;
     const poster = await devineVictoryCanvas(session, winner).catch(error => {
         console.warn('[PLAY] Canvas Devine-carte :', error);
         return null;
     });
     const attachment = poster ? new AttachmentBuilder(poster, { name: 'devine-victoire.jpg' }) : cardFile(state.card);
+    if (winner) await rewardMinigameWinners(session, [winner]);
     return finishGame(
         session,
         (winner ? '🎉 ' + playerRef(session, winner) + ' a démasqué la carte secrète !' : '🕵️ ' + reason) + '\n' + SEP + '\n' +
@@ -3151,7 +3290,7 @@ async function renderCastingVolunteers(session) {
             gameButton(session, 'castVolunteer', 'Je veux débattre', ButtonStyle.Primary, '', '🎙️'),
             gameButton(session, 'castDraw', 'Lancer le tirage', ButtonStyle.Success, '', '🎲').setDisabled(state.volunteers.size < 2)
         )],
-        null, [], '🎙️ Casting de l’enfer · Volontaires',
+        null, [], '🎙️ Débat de golmon · Volontaires',
         [{ name: 'Volontaires (' + state.volunteers.size + '/2 min)', value: list, inline: false }]
     );
 }
@@ -3207,7 +3346,7 @@ async function renderCastingCardsBoard(session, mentions = []) {
         '**Sujet du débat :** ' + escapeText(state.prompt) + '\n' + SEP + '\n' +
         'Les deux candidat·es choisissent et verrouillent leur carte en privé.\nFin du tirage ' + expiry(session.deadline),
         [row(gameButton(session, 'castPanel', 'Voir / changer ma carte', ButtonStyle.Primary, '', '🃏'))],
-        null, mentions, '🎙️ Casting de l’enfer · Préparation',
+        null, mentions, '🎙️ Débat de golmon · Préparation',
         [{ name: 'Candidat·es (' + lockedCount + '/2 prêt·es)', value: statusList, inline: false }]
     );
 }
@@ -3228,7 +3367,7 @@ async function castingCards(session) {
 
 function castingPanel(session, slot) {
     const theme = cardTheme(slot.card);
-    const view = embed('🃏 Ma carte · Casting de l’enfer', gameColor('casting'))
+    const view = embed('🃏 Ma carte · Débat de golmon', gameColor('casting'))
         .setDescription(
             '**' + escapeText(slot.card.name) + '** · `N° ' + slot.card.numCode + '`\n' +
             theme.emoji + ' *' + escapeText(slot.card.rarity) + '* · ' + escapeText(cardSetLabel(slot.card)) + '\n' + SEP + '\n' +
@@ -3253,13 +3392,13 @@ async function castingDebate(session) {
     gameStep(session, 'castDebate');
     session.deadline = Date.now() + 300_000;
     const cards = state.debaters.map(id => state.slots.get(id).card);
-    const art = await drawVoteCards(cards, { header: 'CASTING DE L’ENFER • LES CANDIDATS', cardW: 230 })
+    const art = await drawVoteCards(cards, { header: 'DÉBAT DE GOLMON • LES CANDIDATS', cardW: 230 })
         .catch(error => { console.warn('[PLAY] Cartes du Casting :', error); return null; });
     await gameBoard(
         session,
         '**Sujet :** ' + escapeText(state.prompt) + '\n' + SEP + '\n' +
         state.debaters.map((id, i) => '🎙️ ' + playerRef(session, id) + ' défend **' + escapeText(cards[i].name) + '**').join('\n') +
-        '\n\nVous avez **5 minutes** pour débattre dans ce fil. Fin ' + expiry(session.deadline),
+        '\n\nVous avez **5 minutes** pour débattre dans ce salon. Fin ' + expiry(session.deadline),
         [row(gameButton(session, 'castEndDebate', 'Passer au vote', ButtonStyle.Primary, '', '🗳️'))],
         art ? new AttachmentBuilder(art, { name: 'candidats.png' }) : null,
         state.debaters
@@ -3271,7 +3410,7 @@ async function castingVote(session, second) {
     const state = session.state;
     clearTimeout(session.timer);
     clearTimeout(session.botTimer);
-    const voters = state.duel ? new Set(state.debaters) : await threadVoters(session);
+    const voters = state.duel ? new Set(state.debaters) : await sessionVoters(session);
     if (!state.duel) for (const id of state.debaters) voters.delete(id);
     if (!voters.size) return finishGame(session, 'Le débat est terminé. Le public n’a désigné personne.');
     const options = state.debaters.map(value => ({ value, label: session.people.get(value)?.name || 'Participant·e', emoji: '🎙️' }));
@@ -3284,7 +3423,7 @@ async function castingVote(session, second) {
         canFinishEarly: votes => !state.duel || second || new Set(votes.values()).size === 1,
         choose: async (leaders, votes) => {
             if (state.duel && votes.size === 2 && leaders.length === 2 && !second) return castingVote(session, true);
-            if (session.board) await editThreadMessage(session, session.board, { components: [] });
+            if (session.board) await editPlayMessage(session, session.board, { components: [] });
             session.board = null;
             const poster = leaders.length
                 ? await castingVictoryCanvas(session, leaders, votes).catch(error => {
@@ -3293,6 +3432,7 @@ async function castingVote(session, second) {
                 })
                 : null;
             const attachment = poster ? new AttachmentBuilder(poster, { name: 'casting-victoire.jpg' }) : null;
+            if (leaders.length) await rewardMinigameWinners(session, leaders);
             if (leaders.length === 1) return finishGame(session, '🏆 Le débat est remporté par ' + playerRef(session, leaders[0]) + ' !', attachment);
             return finishGame(session, leaders.length ? '🤝 Le débat se termine sur un match nul.' : 'Le débat est terminé. Aucun vote enregistré.', attachment);
         }
@@ -3452,8 +3592,7 @@ async function renderSocialBoard(session, attachment = undefined) {
         );
     }
     const statusPayload = socialStatusPayload(session);
-    if (state.statusMessage) await editThreadMessage(session, state.statusMessage, statusPayload);
-    else state.statusMessage = await session.thread.send(silent(statusPayload));
+    state.statusMessage = await session.channel.send(silent(statusPayload));
 }
 
 async function startSocialChoices(session, kind, mode = 'common') {
@@ -3461,7 +3600,7 @@ async function startSocialChoices(session, kind, mode = 'common') {
     state.kind = kind;
     state.common = mode === 'common';
     if (session.board) {
-        await editThreadMessage(session, session.board, { components: [] }).catch(() => {});
+        await editPlayMessage(session, session.board, { components: [] }).catch(() => {});
         session.board = null;
     }
     state.statusMessage = null;
@@ -3794,7 +3933,7 @@ async function publishFmk(session, state) {
         .setAuthor({ name: 'RegaDex · Récapitulatif' })
         .setDescription(lines.join('\n') + (invalid ? '\n\n⚠️ `' + invalid + '` vote(s) nul(s).' : ''));
     if (canvas) result.setImage('attachment://fmk-resultats.png');
-    await session.thread.send({
+    await session.channel.send({
         ...silent({
             embeds: [result],
             files: canvas ? [new AttachmentBuilder(canvas, { name: 'fmk-resultats.png' })] : [],
@@ -3807,12 +3946,9 @@ async function publishFmk(session, state) {
 async function finishSocialChoices(session) {
     const state = session.state;
     gameStep(session, 'socialReveal');
-    if (session.board) await editThreadMessage(session, session.board, { components: [] });
-    if (state.statusMessage) {
-        await editThreadMessage(session, state.statusMessage, {
-            embeds: [embed('📋 Sélection terminée', gameColor(session.game)).setDescription('Passage à la présentation des choix.')]
-        }).catch(() => {});
-    }
+    if (session.board) await editPlayMessage(session, session.board, { components: [] });
+    await session.channel.send(silent({ embeds: [embed('📋 Sélection terminée', gameColor(session.game))
+        .setDescription('Passage à la présentation des choix.')] })).catch(() => {});
     session.board = null;
     state.statusMessage = null;
     if (state.kind === 'fmk') await publishFmk(session, state);
@@ -3826,7 +3962,7 @@ async function presentNext(session) {
     const state = session.state;
     const presenter = state.presenters[state.presentIndex++];
     if (!presenter) return socialFinalVote(session);
-    if (session.board) await editThreadMessage(session, session.board, { components: [] });
+    if (session.board) await editPlayMessage(session, session.board, { components: [] });
     session.board = null;
     state.presenter = presenter;
     const slot = state.slots.get(presenter);
@@ -3857,7 +3993,7 @@ async function presentNext(session) {
                 allowedMentions: { parse: [], users: realPresenter }
             };
             if (realPresenter.length) msgPayload.content = playerRef(session, presenter);
-            session.board = await session.thread.send(realPresenter.length ? msgPayload : silent(msgPayload));
+            session.board = await session.channel.send(realPresenter.length ? msgPayload : silent(msgPayload));
             phaseTimer(session, ms, () => presentNext(session));
             return;
         }
@@ -3890,10 +4026,10 @@ async function socialFinalVote(session) {
     const state = session.state;
     const ids = state.kind === 'fmk' ? state.presenters.filter(id => state.slots.get(id).reasons?.some(Boolean)) : state.presenters;
     if (!ids.length) return finishGame(session, 'Merci d’avoir joué ! Aucune justification à départager.');
-    const voters = await threadVoters(session);
+    const voters = await sessionVoters(session);
     if (!voters.size) return finishGame(session, 'Les présentations sont terminées.');
     const title = state.kind === 'fmk' ? '💌 Meilleure justification FMK' : '📋 Meilleur classement défendu';
-    if (session.board) await editThreadMessage(session, session.board, { components: [] });
+    if (session.board) await editPlayMessage(session, session.board, { components: [] });
     session.board = null;
     await openBallot(session, {
         title,
@@ -3901,7 +4037,7 @@ async function socialFinalVote(session) {
         voters,
         options: ids.map(value => ({ value, label: session.people.get(value)?.name || 'Participant·e', emoji: state.kind === 'fmk' ? '💌' : '📋' })),
         choose: async (leaders, votes) => {
-            if (session.board) await editThreadMessage(session, session.board, { components: [] });
+            if (session.board) await editPlayMessage(session, session.board, { components: [] });
             session.board = null;
             const poster = leaders.length
                 ? await (state.kind === 'fmk'
@@ -3913,6 +4049,7 @@ async function socialFinalVote(session) {
                 })
                 : null;
             const attachment = poster ? new AttachmentBuilder(poster, { name: 'victoire.jpg' }) : null;
+            if (leaders.length) await rewardMinigameWinners(session, leaders);
             return finishGame(
                 session,
                 leaders.length
@@ -3924,9 +4061,7 @@ async function socialFinalVote(session) {
     });
 }
 
-function touchInteraction(session, interaction) {
-    if (!session.bots.has(interaction.user.id)) persistRecordActivity(session.record, interaction.client);
-}
+function touchInteraction() {}
 
 async function gameInteraction(interaction, session, [lobby, revision, op, argument]) {
     if (session.stopVoteActive) return privateResponse(interaction, '⏸️ La partie est en pause pendant le vote d’arrêt (`!stop`).');
@@ -3950,7 +4085,7 @@ function playCardsFor(session, id) {
 }
 
 function settingsPayload(session, invites = false) {
-    const view = embed('⚙️ Paramètres du fil', gameColor(session.game)).setDescription(session.test
+    const view = embed('⚙️ Paramètres du test', gameColor(session.game)).setDescription(session.test
         ? 'Les adversaires sont simulés. Le chronomètre de cette étape peut être avancé pour tester la suivante.'
         : '**Accès :** ' + (session.invited ? '🎟️ Sur invitation' : '🌐 Ouvert') + ' · **Arrivées en cours :** ' + (session.allowLate ? '✅ Ouvertes' : '🔒 Fermées') +
         '\nLes personnes qui arrivent en cours de jeu entrent à la manche suivante.');
@@ -3970,7 +4105,7 @@ function settingsPayload(session, invites = false) {
     return { embeds: [view], components };
 }
 
-async function threadSettings(interaction, session, action, parts) {
+async function sessionSettings(interaction, session, action, parts) {
     if (interaction.user.id !== session.host) return privateResponse(interaction, 'Ces réglages sont réservés à l’hôte.');
     if (action === 'settings') {
         touchInteraction(session, interaction);
@@ -3984,7 +4119,7 @@ async function threadSettings(interaction, session, action, parts) {
         clearTimeout(session.botTimer);
         session.timerRevision++;
         touchInteraction(session, interaction);
-        await interaction.update({ embeds: [embed('⚙️ Paramètres du fil', gameColor(session.game)).setDescription('⏩ Chrono de test avancé.')], components: [] });
+        await interaction.update({ embeds: [embed('⚙️ Paramètres du test', gameColor(session.game)).setDescription('⏩ Chrono de test avancé.')], components: [] });
         return advance();
     }
     if (session.test) return privateResponse(interaction, 'Ces réglages sont réservés aux parties publiques.');
@@ -4010,7 +4145,7 @@ function mockInteraction(session, id, values = [], fields = {}) {
     const noop = async () => {};
     return {
         user: { id, username: session.bots.get(id).name, displayAvatarURL: () => null },
-        client: session.thread.client, values, fields: { getTextInputValue: key => fields[key] ?? '' },
+        client: session.channel.client, values, fields: { getTextInputValue: key => fields[key] ?? '' },
         reply: noop, update: noop, deferUpdate: noop, deferReply: noop, editReply: noop, showModal: noop
     };
 }
@@ -4019,7 +4154,7 @@ function scheduleTestBots(session, revision, ms) {
     const delay = Math.min(Math.max(1, ms - 50), 900 + randomInt(1101));
     session.botTimer = setTimeout(() => {
         void enqueue(session, async () => {
-            if (sessions.get(session.thread.id) !== session || session.timerRevision !== revision || session.phase === 'closed') return;
+            if (sessions.get(session.channel.id) !== session || session.timerRevision !== revision || session.phase === 'closed') return;
             await runTestBots(session, revision);
         }).catch(error => recoverSession(session, error));
     }, delay);
@@ -4070,7 +4205,7 @@ async function runTestBot(session, id) {
             const target = state.cards[state.index];
             const guess = randomInt(6) <= state.zoom ? target : shuffled(getPlayCatalog().filter(card => card.id !== target.id))[0];
             if (!guess) return;
-            await session.thread.send({
+            await session.channel.send({
                 content: '🤖 **' + escapeText(session.bots.get(id).name) + '** propose **' + escapeText(guess.name) + '**.',
                 allowedMentions: { parse: [] }
             });
@@ -4113,7 +4248,7 @@ async function runTestBot(session, id) {
             }
             break;
         case 'castDebate':
-            if (state.slots.has(id)) await session.thread.send({
+            if (state.slots.has(id)) await session.channel.send({
                 content: '🤖 **' + escapeText(session.bots.get(id).name) + '** défend **' +
                     escapeText(state.slots.get(id).card.name) + '** : ' + botReason(),
                 allowedMentions: { parse: [] }
@@ -4136,7 +4271,7 @@ async function runTestBot(session, id) {
         case 'presenting':
             if (state.presenter === id) {
                 if (state.kind === 'classement') {
-                    await session.thread.send({
+                    await session.channel.send({
                         content: '🤖 **' + escapeText(session.bots.get(id).name) + '** : ' + botReason(),
                         allowedMentions: { parse: [] }
                     });
@@ -4147,4 +4282,4 @@ async function runTestBot(session, id) {
     }
 }
 
-module.exports = { handlePlayMessage, handlePlayInteraction, restorePlayThreads };
+module.exports = { handlePlayMessage, handlePlayInteraction, startPlayScheduler };
