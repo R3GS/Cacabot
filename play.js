@@ -66,7 +66,7 @@ const RATINGS = [
 const GUIDES = {
     vitrine: ['Blanc Manger Caca', 'Complète la phrase avec 1 ou 2 cartes du TCG.', '🎭',
         'Cinq manches. Cherche les cartes par nom ou numéro en 90 secondes. Les réponses sont anonymes et défilent 10 secondes chacune. Une note par réponse des autres. Sans vote, elle vaut Meh. J’adore ! s’utilise une fois sur les cinq manches.'],
-    cavale: ['Cartes zoomées', 'Reconnais les illustrations à partir de détails zoomés.', '🔍',
+    cavale: ['Cartes zoom', 'Reconnais les illustrations à partir de détails zoomés.', '🔍',
         'Écris le nom dans le salon. Les petites fautes sont acceptées si le nom reste reconnaissable. L’image dézoome un peu chaque minute. Première bonne réponse gagnante, révélation au bout de cinq minutes maximum. Cinq cartes par partie.'],
     casting: ['Débat de golmon', 'Choisis un sujet, et défends ton candidat dans un débat de cinq minutes.', '🎙️',
         'Deux volontaires tirés au sort, ou un duel à deux. Chacun peut changer de carte trois fois en privé avant de la verrouiller. Les cartes sont révélées ensemble. Le public vote à la fin du débat. En duel, les deux personnes votent.'],
@@ -3118,7 +3118,7 @@ async function cavaleRound(session) {
         if (entries.length) {
             const top = entries.filter(entry => entry.rank <= 3).slice(0, 3);
             const championCards = state.wonCards?.get(top[0]?.user) || [];
-            await sendResult(session, '🔍 Cartes zoomées • Podium', top, {
+            await sendResult(session, '🔍 Cartes zoom • Podium', top, {
                 podium: true,
                 unit: 'carte(s)',
                 accent: '#e67e22',
@@ -3141,7 +3141,7 @@ async function cavaleRound(session) {
     try {
         state.image = await loadImage(state.cards[state.index].filePath);
     } catch (error) {
-        console.warn('[PLAY] Illustration de Cartes zoomées indisponible :', error);
+        console.warn('[PLAY] Illustration de Cartes zoom indisponible :', error);
         state.index++;
         return cavaleRound(session);
     }
@@ -3192,7 +3192,7 @@ async function cavaleZoom(session) {
         [],
         new AttachmentBuilder(png, { name: 'indice.png' }),
         [],
-        '🔍 Cartes zoomées · Carte ' + (state.index + 1) + '/' + state.cards.length,
+        '🔍 Cartes zoom · Carte ' + (state.index + 1) + '/' + state.cards.length,
         [
             { name: 'Niveau de zoom', value: progressBar(state.zoom + 1, 5, 5) + ' **Indice ' + (state.zoom + 1) + '/5**', inline: true },
             { name: 'Scores actuels', value: cavaleStandingsLine(session), inline: true }
