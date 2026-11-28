@@ -173,8 +173,10 @@ const cleanCanvasText = str => String(str || '')
     .replace(/<@!?\d+>/g, '@Membre')
     .replace(/\*\*|__|~~|`/g, '')
     .replace(/·/g, '•')
+    .replace(/〔/g, '[')
+    .replace(/〕/g, ']')
     .replace(/[\p{Extended_Pictographic}\uFE00-\uFE0F\u200D\u20E3]/gu, '')
-    .replace(/[^\u0020-\u007E\u00C0-\u017F\u2013-\u2022\u2026\u20AC\u3014\u3015]/g, '')
+    .replace(/[^\u0020-\u007E\u00A0-\u017F\u2013-\u2026\u20AC]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 const cut = (text, size) => String(text).slice(0, size).replace(/[\uD800-\uDBFF]$/, '');
@@ -1001,12 +1003,16 @@ function draftPayload(session, user, draft) {
     const controls = [
         button(controlId(session, 'query', ...key), 'Rechercher', ButtonStyle.Secondary, '🔎'),
         button(controlId(session, 'clearfilter', ...key), 'Effacer filtre', ButtonStyle.Secondary, '✖️').setDisabled(!queryText),
-        ...(session.holes === 2 ? [button(controlId(session, 'clear', ...key), 'Reset', ButtonStyle.Secondary, '🧹').setDisabled(cards.length === 0)] : []),
-        ...(session.holes === 2 ? [button(controlId(session, 'swap', ...key), 'Inverser', ButtonStyle.Secondary, '🔄').setDisabled(cards.length !== 2)] : []),
+        ...(session.holes > 1 ? [
+            button(controlId(session, 'clear', ...key), 'Reset', ButtonStyle.Secondary, '🧹').setDisabled(cards.length === 0),
+            button(controlId(session, 'swap', ...key), 'Inverser', ButtonStyle.Secondary, '🔄').setDisabled(cards.length !== 2)
+        ] : []),
         button(controlId(session, 'lock', ...key), 'Valider', ButtonStyle.Success, '✅').setDisabled(cards.length !== session.holes)
     ];
-    const components = [row(...controls), row(button(controlId(session, 'binder'), 'Ouvrir le classeur', ButtonStyle.Secondary, '📖'))];
-    if (cards.length < session.holes && available.length) {
+    const components = [row(...controls)];
+    const canPickFromMenu = cards.length < session.holes || session.holes === 1;
+    const navButtons = [];
+    if (canPickFromMenu && available.length) {
         const options = available.slice(draft.page * 25, (draft.page + 1) * 25).map(card => {
             const rEmoji = (RARITY_STYLE[card.rarity] || RARITY_STYLE.Commune).emoji;
             return {
@@ -1015,15 +1021,22 @@ function draftPayload(session, user, draft) {
                 description: cut(rEmoji + ' ' + card.rarity + ' • N° ' + card.numCode + ' • ' + cardSetLabel(card), 100)
             };
         });
+        const placeholder = queryText
+            ? 'Choisir parmi les résultats...'
+            : (session.holes === 1 && cards.length === 1 ? 'Changer de carte...' : 'Choisir une carte possédée...');
         components.unshift(row(new StringSelectMenuBuilder().setCustomId(controlId(session, 'card', ...key))
-            .setPlaceholder(queryText ? 'Choisir parmi les résultats...' : 'Choisir une carte possédée...').addOptions(options)));
-        if (pages > 1) components.push(row(
-            button(controlId(session, 'prev', ...key), 'Précédente', ButtonStyle.Secondary, '◀️').setDisabled(draft.page === 0),
-            button(controlId(session, 'next', ...key), 'Suivante', ButtonStyle.Secondary, '▶️').setDisabled(draft.page + 1 >= pages)
-        ));
-    } else if (cards.length < session.holes) {
+            .setPlaceholder(placeholder).addOptions(options)));
+        if (pages > 1) {
+            navButtons.push(
+                button(controlId(session, 'prev', ...key), 'Précédente', ButtonStyle.Secondary, '◀️').setDisabled(draft.page === 0),
+                button(controlId(session, 'next', ...key), 'Suivante', ButtonStyle.Secondary, '▶️').setDisabled(draft.page + 1 >= pages)
+            );
+        }
+    } else if (cards.length < session.holes || queryText) {
         preview.setFooter({ text: queryText ? 'Aucune carte trouvée pour ce filtre. Clique sur Effacer filtre.' : 'Aucune carte restante disponible.' });
     }
+    navButtons.push(button(controlId(session, 'pbinder', ...key), 'Classeur', ButtonStyle.Secondary, '📖'));
+    components.push(row(...navButtons));
     return { embeds: [preview], components };
 }
 
@@ -1100,26 +1113,27 @@ async function finishRound(session) {
         if (!session.best.length || entry.score > session.best[0].score) session.best = [];
         if (!session.best.length || entry.score === session.best[0].score) session.best.push({ ...entry, prompt: session.prompt });
     }
+    const isFinalRound = session.round >= ROUND_COUNT;
+    const footer = top.length
+        ? (isFinalRound
+            ? 'Podium final dans 10 secondes !'
+            : 'Début de la manche ' + (session.round + 1) + '/' + ROUND_COUNT + ' dans 10 secondes !')
+        : undefined;
     for (let i = 0; i < top.length; i += 3) {
         await sendResult(session, 'Manche ' + session.round + ' • Résultats', top.slice(i, i + 3), {
-            prompt: session.prompt, cards: true,
-            footer: session.round < ROUND_COUNT
-                ? 'Début de la manche ' + (session.round + 1) + '/' + ROUND_COUNT + ' dans 10 secondes !'
-                : 'Podium final dans 10 secondes !'
+            prompt: session.prompt,
+            cards: true,
+            footer: i + 3 >= top.length ? footer : undefined
         });
     }
 
-    if (session.round < ROUND_COUNT) {
-        if (top.length) {
-            session.phase = 'intermission';
-            phaseTimer(session, 10_000, () => startRound(session));
-        } else {
-            await startRound(session);
-        }
+    if (top.length) {
+        session.phase = 'intermission';
+        phaseTimer(session, 10_000, () => (isFinalRound ? showPodium(session) : startRound(session)));
         return;
     }
-    session.phase = 'intermission';
-    phaseTimer(session, 10_000, () => showPodium(session));
+    if (isFinalRound) await showPodium(session);
+    else await startRound(session);
 }
 
 function bestResponseDescription(best) {
@@ -1393,6 +1407,15 @@ async function drawCard(ctx, card, x, y, width, height, options = {}) {
     const radius = options.radius ?? 10;
 
     ctx.save();
+    if (options.angle) {
+        const cx = x + width / 2;
+        const cy = y + height / 2;
+        ctx.translate(cx, cy);
+        ctx.rotate(options.angle);
+        ctx.translate(-cx, -cy);
+    }
+
+    ctx.save();
     if (options.glow) {
         ctx.shadowColor = options.glow;
         ctx.shadowBlur = 18;
@@ -1420,6 +1443,8 @@ async function drawCard(ctx, card, x, y, width, height, options = {}) {
         ctx.stroke();
         ctx.restore();
     }
+
+    ctx.restore();
 }
 
 async function loadAvatar(player) {
@@ -1460,45 +1485,60 @@ function drawAvatar(ctx, avatar, player, x, y, radius, ringColor = '#a78bfa') {
 }
 
 async function stage(ctx, width, height, opts = {}) {
-    const bg = opts.bg !== undefined ? opts.bg : await getPlayBgCanvas();
-    if (bg) {
-        const scale = Math.max(width / bg.width, height / bg.height);
-        const bw = bg.width * scale;
-        const bh = bg.height * scale;
-        ctx.drawImage(bg, (width - bw) / 2, (height - bh) / 2, bw, bh);
-        const veil = ctx.createLinearGradient(0, 0, 0, height);
-        veil.addColorStop(0, 'rgba(11, 13, 24, 0.52)');
-        veil.addColorStop(0.55, 'rgba(16, 14, 30, 0.44)');
-        veil.addColorStop(1, 'rgba(8, 10, 20, 0.72)');
-        ctx.fillStyle = veil;
-        ctx.fillRect(0, 0, width, height);
-    } else {
+    const accent = opts.accent || '#FFD20A';
+    if (opts.darkGrayBg) {
         const background = ctx.createLinearGradient(0, 0, 0, height);
-        background.addColorStop(0, '#34363b');
-        background.addColorStop(0.55, '#202226');
-        background.addColorStop(1, '#101114');
+        background.addColorStop(0, '#2c2f36');
+        background.addColorStop(0.55, '#1e2026');
+        background.addColorStop(1, '#121317');
         ctx.fillStyle = background;
         ctx.fillRect(0, 0, width, height);
-    }
+    } else {
+        const bg = opts.bg !== undefined ? opts.bg : await getPlayBgCanvas();
+        if (bg) {
+            const scale = Math.max(width / bg.width, height / bg.height);
+            const bw = bg.width * scale;
+            const bh = bg.height * scale;
+            ctx.drawImage(bg, (width - bw) / 2, (height - bh) / 2, bw, bh);
+            const veil = ctx.createLinearGradient(0, 0, 0, height);
+            veil.addColorStop(0, 'rgba(11, 13, 24, 0.52)');
+            veil.addColorStop(0.55, 'rgba(16, 14, 30, 0.44)');
+            veil.addColorStop(1, 'rgba(8, 10, 20, 0.72)');
+            ctx.fillStyle = veil;
+            ctx.fillRect(0, 0, width, height);
+        } else {
+            const background = ctx.createLinearGradient(0, 0, 0, height);
+            background.addColorStop(0, '#130e24');
+            background.addColorStop(0.65, '#26143d');
+            background.addColorStop(1, '#0c0a18');
+            ctx.fillStyle = background;
+            ctx.fillRect(0, 0, width, height);
+        }
 
-    const accent = opts.accent || '#FFD20A';
-    if (!opts.monochrome) for (const center of [width * 0.22, width * 0.78]) {
-        const beam = ctx.createRadialGradient(center, 0, 16, center, height * 0.28, height * 0.85);
-        beam.addColorStop(0, accent.startsWith('#') && accent.length === 7 ? accent + '30' : 'rgba(255, 210, 10, 0.20)');
-        beam.addColorStop(1, 'rgba(0, 0, 0, 0)');
-        ctx.fillStyle = beam;
-        ctx.fillRect(0, 0, width, height);
+        for (const center of [width * 0.22, width * 0.78]) {
+            const beam = ctx.createRadialGradient(center, 0, 16, center, height * 0.28, height * 0.85);
+            beam.addColorStop(0, accent.startsWith('#') && accent.length === 7 ? accent + '30' : 'rgba(255, 210, 10, 0.20)');
+            beam.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.fillStyle = beam;
+            ctx.fillRect(0, 0, width, height);
+        }
     }
 
     if (opts.frame !== false && width >= 900) {
         drawGlassCard(ctx, 18, 14, width - 36, height - 28, {
             radius: 26,
-            fill: 'rgba(10, 12, 22, 0.18)',
-            border: accent.startsWith('#') && accent.length === 7 ? accent + '66' : 'rgba(255, 210, 10, 0.4)',
+            fill: opts.darkGrayBg ? 'rgba(255, 255, 255, 0.02)' : 'rgba(10, 12, 22, 0.18)',
+            border: opts.darkGrayBg
+                ? 'rgba(255, 255, 255, 0.16)'
+                : (accent.startsWith('#') && accent.length === 7 ? accent + '66' : 'rgba(255, 210, 10, 0.4)'),
             lineWidth: 2.5
         });
     }
 
+    if (!opts.noCornerStars) {
+        drawFivePointStar(ctx, 56, 52, 11, 5, accent, accent);
+        drawFivePointStar(ctx, width - 56, 52, 11, 5, accent, accent);
+    }
 }
 
 async function resultsCanvas(session, title, entries, options = {}) {
@@ -1509,14 +1549,16 @@ async function resultsCanvas(session, title, entries, options = {}) {
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
     const unit = options.unit || 'pts';
+    const isVitrine = session.game === 'vitrine';
+    const bg = isVitrine ? null : await getPlayBgCanvas();
     const accent = options.accent || '#FFD20A';
 
-    await stage(ctx, width, height, { bg: null, accent, monochrome: true });
+    await stage(ctx, width, height, { bg, accent, darkGrayBg: isVitrine, noCornerStars: isVitrine });
 
     drawGlassCard(ctx, 48, 28, width - 96, options.prompt ? 114 : 88, {
         radius: 20,
-        fill: 'rgba(12, 15, 26, 0.88)',
-        border: accent,
+        fill: isVitrine ? 'rgba(26, 28, 34, 0.90)' : 'rgba(12, 15, 26, 0.88)',
+        border: isVitrine ? 'rgba(255, 255, 255, 0.22)' : accent,
         lineWidth: 2.5
     });
 
@@ -1572,7 +1614,7 @@ async function resultsCanvas(session, title, entries, options = {}) {
             });
 
             const cx = pod.x + pod.w / 2;
-            const avR = 56;
+            const avR = isVitrine ? 56 : (first ? 66 : 52);
             const avY = pod.y + avR + 28;
             drawAvatar(ctx, avatars[pod.idx], player, cx, avY, avR, style.ring);
 
@@ -1601,10 +1643,14 @@ async function resultsCanvas(session, title, entries, options = {}) {
         if (showcase) {
             drawGlassCard(ctx, 48, extraY, width - 96, 194, {
                 radius: 22,
-                fill: 'rgba(16, 15, 32, 0.90)',
+                fill: isVitrine ? 'rgba(26, 28, 34, 0.92)' : 'rgba(16, 15, 32, 0.90)',
                 border: '#FFD700',
                 lineWidth: 2.5
             });
+            if (!isVitrine) {
+                drawFivePointStar(ctx, 96, extraY + 42, 13, 5, '#FFD700', '#FFD700');
+                drawFivePointStar(ctx, width - 96, extraY + 42, 13, 5, '#FFD700', '#FFD700');
+            }
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillStyle = '#FFD700';
@@ -1661,37 +1707,58 @@ async function resultsCanvas(session, title, entries, options = {}) {
         const player = session.people.get(entry.user);
         const x = 48 + colW * (positions[index] + 0.5);
         const first = entry.rank === 1;
-        const style = rankPalette[entry.rank] || { ring: '#a78bfa', fill: 'rgba(26, 22, 46, 0.84)', border: 'rgba(167, 139, 250, 0.45)', text: '#ffffff' };
+        const style = rankPalette[entry.rank] || (isVitrine
+            ? { ring: '#94a3b8', fill: 'rgba(34, 37, 45, 0.88)', border: 'rgba(255, 255, 255, 0.22)', text: '#ffffff' }
+            : { ring: '#a78bfa', fill: 'rgba(26, 22, 46, 0.84)', border: 'rgba(167, 139, 250, 0.45)', text: '#ffffff' });
 
         if (options.cards) {
             const cards = entry.cards || [];
-            const w = 154;
-            const h = Math.round(w * 1.4);
-            if (cards.length > 1) {
+            if (isVitrine && cards.length === 1) {
+                const w = 300;
+                const h = 420;
+                const t = cardTheme(cards[0]);
+                await drawCard(ctx, cards[0], x - w / 2, 176, w, h, { glow: t.glow, border: t.hex, radius: 14 });
+            } else if (isVitrine && cards.length === 2) {
+                const w = 240;
+                const h = 336;
+                const slots = [
+                    { cx: x - 68, cy: 342, angle: -0.055 },
+                    { cx: x + 68, cy: 436, angle: 0.055 }
+                ];
                 for (let cardIndex = 0; cardIndex < cards.length; cardIndex++) {
                     const card = cards[cardIndex];
+                    const pos = slots[cardIndex];
                     const t = cardTheme(card);
-                    const offset = cardIndex === 0 ? -42 : 38;
-                    await drawCard(ctx, card, x + offset - w / 2, 158 + cardIndex * 22, w, h, {
-                        glow: t.glow, border: t.hex, radius: 12
+                    await drawCard(ctx, card, pos.cx - w / 2, pos.cy - h / 2, w, h, {
+                        glow: t.glow, border: t.hex, radius: 13, angle: pos.angle
                     });
                 }
-            } else if (cards[0]) {
-                const t = cardTheme(cards[0]);
-                await drawCard(ctx, cards[0], x - w / 2, 158, w, h, {
-                    glow: t.glow, border: t.hex, radius: 12
-                });
+            } else {
+                for (let cardIndex = 0; cardIndex < cards.length; cardIndex++) {
+                    const card = cards[cardIndex];
+                    const w = isVitrine ? 160 : (first ? 168 : 146);
+                    const t = cardTheme(card);
+                    await drawCard(
+                        ctx, card,
+                        x - (cards.length * (w + 14) - 14) / 2 + cardIndex * (w + 14),
+                        172, w, w * 1.4,
+                        { glow: t.glow, border: t.hex, radius: 12 }
+                    );
+                }
             }
         }
 
-        const avatarY = options.cards ? 450 : 240;
-        const avatarRadius = 48;
-        drawAvatar(ctx, avatars[index], player, x, avatarY, avatarRadius, style.ring);
-        const top = options.cards ? 510 : avatarY + 62;
+        const avatarR = isVitrine ? 46 : (first ? 54 : 44);
+        const avatarY = isVitrine ? (options.cards ? 688 : 260) : (options.cards ? 496 : 240);
+        drawAvatar(ctx, avatars[index], player, x, avatarY, avatarR, style.ring);
+        const blockHeight = isVitrine ? (options.cards ? 122 : 140) : null;
+        const top = isVitrine
+            ? (options.cards ? stageHeight - 28 - blockHeight : avatarY + avatarR + 16)
+            : (avatarY + (first ? 68 : 58));
+        const finalBlockHeight = blockHeight || (stageHeight - 36 - top);
         const blockWidth = Math.min(390, colW - 28);
-        const blockHeight = options.cards ? 264 : stageHeight - 36 - top;
 
-        drawGlassCard(ctx, x - blockWidth / 2, top, blockWidth, blockHeight, {
+        drawGlassCard(ctx, x - blockWidth / 2, top, blockWidth, finalBlockHeight, {
             radius: 18,
             fill: style.fill,
             border: style.border,
@@ -1702,11 +1769,11 @@ async function resultsCanvas(session, title, entries, options = {}) {
         ctx.textBaseline = 'top';
         ctx.fillStyle = style.text;
         ctx.font = 'bold 24px "LemonMilk", "Sans"';
-        ctx.fillText(cleanCanvasText('#' + entry.rank + '  •  ' + (player?.name || 'Participant')), x, top + 20, blockWidth - 28);
+        ctx.fillText(cleanCanvasText('#' + entry.rank + '  •  ' + (player?.name || 'Participant')), x, top + (isVitrine ? 18 : 20), blockWidth - 28);
 
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 42px "LemonMilk", "Sans"';
-        ctx.fillText(cleanCanvasText(entry.score + ' ' + unit), x, top + 64, blockWidth - 28);
+        ctx.font = 'bold ' + (isVitrine ? 38 : 42) + 'px "LemonMilk", "Sans"';
+        ctx.fillText(cleanCanvasText(entry.score + ' ' + unit), x, top + (isVitrine ? 56 : 64), blockWidth - 28);
     }
 
     return encodeJpeg(canvas, 0.92);
@@ -2064,18 +2131,16 @@ async function standingsPayload(session, lobbyId, page) {
 
 const BINDER_SIZES = ['4', '8', '18', '36'];
 
-async function showBinder(interaction, session, action, parts) {
+async function showBinder(interaction, session, action, parts, pickContext = null) {
     const [rawSet, rawPage, rawTheme, rawSize] = parts;
     const set = Number(rawSet) || 1;
     const page = Number(rawPage) || 0;
     const theme = rawTheme === 'W' ? 'W' : 'B';
     const size = BINDER_SIZES.includes(rawSize) ? rawSize : '18';
 
-    const replacingPicker = action === 'binder' && session.game === 'vitrine' &&
-        Boolean(interaction.message?.flags?.has(MessageFlags.Ephemeral));
-    if (action === 'binder' && !replacingPicker) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    if (action === 'binder') await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     else await interaction.deferUpdate();
-    
+
     const result = await renderPlayBinder(interaction.user, set, page, theme, size);
     const curSize = BINDER_SIZES.includes(result.perPageMode) ? result.perPageMode : size;
     const curIdx = BINDER_SIZES.indexOf(curSize);
@@ -2084,22 +2149,26 @@ async function showBinder(interaction, session, action, parts) {
     const biggerPage = Math.floor((result.page * Number(curSize)) / Number(biggerSize));
     const smallerPage = Math.floor((result.page * Number(curSize)) / Number(smallerSize));
 
+    const navAction = pickContext ? 'pbrowse' : 'browse';
+    const setAction = pickContext ? 'pbinderset' : 'binderset';
+    const ctxParts = pickContext ? [pickContext.lobbyId, pickContext.round, pickContext.owner] : [];
+
     const view = embed('📖 RegaDex • Classeur des mini-jeux', gameColor(session.game))
         .setAuthor({ name: 'Cartes classiques éligibles (hors Holo, Full Art & Négative)' })
         .setDescription('**' + escapeText(result.setName) + '** • Grille **' + curSize + '** cartes/page')
         .setImage('attachment://classeur.jpg')
         .setFooter({ text: 'Page ' + (result.page + 1) + '/' + result.totalPages + ' • Thème ' + (theme === 'W' ? 'Clair' : 'Nuit') });
     const components = [row(
-        button(controlId(session, 'browse', result.set, result.page - 1, theme, curSize), 'Précédente', ButtonStyle.Secondary, '⬅️').setDisabled(result.page === 0),
-        button(controlId(session, 'browse', result.set, result.page + 1, theme, curSize), 'Suivante', ButtonStyle.Secondary, '➡️').setDisabled(result.page + 1 >= result.totalPages),
-        button(controlId(session, 'browse', result.set, biggerPage, theme, biggerSize), 'Agrandir', ButtonStyle.Primary, '🔍').setDisabled(curIdx === 0),
-        button(controlId(session, 'browse', result.set, smallerPage, theme, smallerSize), 'Réduire', ButtonStyle.Secondary, '🔎').setDisabled(curIdx === BINDER_SIZES.length - 1),
-        button(controlId(session, 'browse', result.set, result.page, theme === 'W' ? 'B' : 'W', curSize), 'Thème', ButtonStyle.Secondary, '🎨')
+        button(controlId(session, navAction, ...ctxParts, result.set, result.page - 1, theme, curSize), 'Précédente', ButtonStyle.Secondary, '⬅️').setDisabled(result.page === 0),
+        button(controlId(session, navAction, ...ctxParts, result.set, result.page + 1, theme, curSize), 'Suivante', ButtonStyle.Secondary, '➡️').setDisabled(result.page + 1 >= result.totalPages),
+        button(controlId(session, navAction, ...ctxParts, result.set, biggerPage, theme, biggerSize), 'Agrandir', ButtonStyle.Primary, '🔍').setDisabled(curIdx === 0),
+        button(controlId(session, navAction, ...ctxParts, result.set, smallerPage, theme, smallerSize), 'Réduire', ButtonStyle.Secondary, '🔎').setDisabled(curIdx === BINDER_SIZES.length - 1),
+        button(controlId(session, navAction, ...ctxParts, result.set, result.page, theme === 'W' ? 'B' : 'W', curSize), 'Thème', ButtonStyle.Secondary, '🎨')
     )];
-    if (result.sets.length > 1) components.push(row(new StringSelectMenuBuilder().setCustomId(controlId(session, 'binderset', theme, curSize))
+    if (result.sets.length > 1) components.push(row(new StringSelectMenuBuilder().setCustomId(controlId(session, setAction, ...ctxParts, theme, curSize))
         .setPlaceholder('Changer de set').addOptions(result.sets.map(item => ({ label: item.name, value: String(item.id), default: item.id === result.set })))));
-    if (session.game === 'vitrine' && interaction.message?.flags?.has(MessageFlags.Ephemeral)) {
-        components.push(row(button(controlId(session, 'backpick', session.lobbyId, session.round, interaction.user.id), 'Retour au choix de la carte', ButtonStyle.Primary, '↩️')));
+    if (pickContext) {
+        components.push(row(button(controlId(session, 'pback', ...ctxParts), 'Retour', ButtonStyle.Secondary, '⬅️')));
     }
     await interaction.editReply({
         embeds: [view], components, attachments: [], files: [new AttachmentBuilder(result.buffer, { name: 'classeur.jpg' })]
@@ -2221,9 +2290,6 @@ async function pickInteraction(interaction, session, action, parts) {
     if (action === 'pick') {
         return interaction.reply({ ...draftPayload(session, id, draft), flags: MessageFlags.Ephemeral });
     }
-    if (action === 'backpick') {
-        return interaction.update(draftPayload(session, id, draft));
-    }
     if (action === 'query') {
         return interaction.showModal(searchModal(session, id, draft));
     }
@@ -2244,10 +2310,16 @@ async function pickInteraction(interaction, session, action, parts) {
     if (action === 'swap') draft.cards.reverse();
     if (action === 'card') {
         const selected = interaction.values[0];
-        if (draft.cards.length < session.holes && playingCards(session, id, draft).some(card => card.id === selected)) {
-            draft.cards.push(selected);
-            draft.query = '';
-            draft.page = 0;
+        if (playingCards(session, id, draft).some(card => card.id === selected)) {
+            if (session.holes === 1) {
+                draft.cards = [selected];
+                draft.query = '';
+                draft.page = 0;
+            } else if (draft.cards.length < session.holes) {
+                draft.cards.push(selected);
+                draft.query = '';
+                draft.page = 0;
+            }
         }
     }
     if (action === 'lock') {
@@ -2257,7 +2329,7 @@ async function pickInteraction(interaction, session, action, parts) {
         session.answers.set(id, { user: id, cards: selected, votes: new Map(), score: 0 });
         const confirmPayload = {
             embeds: [embed('✅ Réponse enregistrée (secrète)', gameColor('vitrine')).setDescription('> **' + escapeText(completePhrase(session.prompt, selected)) + '**')],
-            components: []
+            components: [], files: [], attachments: []
         };
         if (isEphemeralMsg) await interaction.update(confirmPayload);
         else await interaction.reply({ ...confirmPayload, flags: MessageFlags.Ephemeral });
@@ -2266,7 +2338,7 @@ async function pickInteraction(interaction, session, action, parts) {
         return;
     }
     const payload = draftPayload(session, id, draft);
-    if (isEphemeralMsg) return interaction.update(payload);
+    if (isEphemeralMsg) return interaction.update({ ...payload, files: [], attachments: [] });
     return interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
 }
 
@@ -2284,6 +2356,19 @@ async function sessionInteraction(interaction, session, action, parts) {
         const params = action === 'binderset' ? [interaction.values[0], 0, parts[0], parts[1]] : parts;
         return showBinder(interaction, session, action, params);
     }
+    if (action === 'pbinder' || action === 'pbrowse' || action === 'pbinderset') {
+        if (session.phase === 'closed') return privateResponse(interaction, 'Cette partie est terminée.');
+        if (session.stopVoteActive) return privateResponse(interaction, '⏸️ La partie est en pause pendant le vote d’arrêt (`!stop`).');
+        const [lobbyId, round, owner, ...rest] = parts;
+        if (session.phase !== 'pick' || Number(lobbyId) !== session.lobbyId || Number(round) !== session.round || Date.now() >= session.deadline)
+            return privateResponse(interaction, 'La sélection de cette manche est terminée.');
+        if (!session.roundPlayers.has(user) || (owner && owner !== user))
+            return privateResponse(interaction, 'Cette sélection ne t’est pas ouverte.');
+        const params = action === 'pbinder'
+            ? [1, 0, 'B', '18']
+            : (action === 'pbinderset' ? [interaction.values[0], 0, rest[0], rest[1]] : rest);
+        return showBinder(interaction, session, action, params, { lobbyId, round, owner: user });
+    }
     if (action === 'pages') return gameResultPages(interaction, session, parts);
     if (session.phase === 'closed') return privateResponse(interaction, 'Cette partie est terminée.');
     if (action === 'ballot') return voteBallot(interaction, session, parts);
@@ -2296,8 +2381,8 @@ async function sessionInteraction(interaction, session, action, parts) {
     if (['settings', 'settingsLate', 'settingsInvite', 'settingsUsers', 'skipClock'].includes(action))
         return sessionSettings(interaction, session, action, parts);
     if (action === 'rate') return rateResponse(interaction, session, parts);
-    if (['pick', 'query', 'search', 'prev', 'next', 'clear', 'clearfilter', 'swap', 'card', 'lock', 'backpick'].includes(action))
-        return pickInteraction(interaction, session, action, parts);
+    if (['pick', 'query', 'search', 'prev', 'next', 'clear', 'clearfilter', 'swap', 'card', 'lock', 'pback'].includes(action))
+        return pickInteraction(interaction, session, action === 'pback' ? 'back' : action, parts);
     if (action === 'join') {
         if (session.test || session.optedOut.has(user) || (session.invited && !session.invited.has(user)))
             return privateResponse(interaction, 'Cette partie ne t’est pas ouverte.');
@@ -2386,7 +2471,7 @@ async function handlePlayInteraction(interaction) {
                 await privateResponse(interaction, 'Cette session de test est réservée à Epsys.');
                 return true;
             }
-            if (action === 'rate' || ['pick', 'query', 'search', 'prev', 'next', 'clear', 'clearfilter', 'swap', 'card', 'binder', 'browse', 'binderset', 'standing', 'pages'].includes(action))
+            if (action === 'rate' || ['pick', 'query', 'search', 'prev', 'next', 'clear', 'clearfilter', 'swap', 'card', 'binder', 'browse', 'binderset', 'pbinder', 'pbrowse', 'pbinderset', 'pback', 'standing', 'pages'].includes(action))
                 await sessionInteraction(interaction, session, action, parts);
             else await enqueue(session, () => sessionInteraction(interaction, session, action, parts));
         } else await privateResponse(interaction, 'Ce menu a expiré. Lance une nouvelle partie avec `!play`.');
