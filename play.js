@@ -838,24 +838,38 @@ function pickPayload(session) {
     const statusLines = [...session.roundPlayers].map(uid => {
         const pName = escapeText(session.people.get(uid)?.name || 'Membre');
         return (session.answers.has(uid) ? '✅ ' : '⏳ ') + pName;
-    }).join(' • ');
+    }).join('  •  ');
 
-    const page = embed('🎭 Blanc Manger Caca • Manche ' + session.round + '/' + ROUND_COUNT, gameColor('vitrine'))
-        .setAuthor({ name: 'RegaDex Arcade • Choix des cartes' })
+    const botAvatar = session.channel.client.user?.displayAvatarURL?.({ extension: 'png', size: 64 });
+    const page = embed('🎭 Manche ' + session.round + '/' + ROUND_COUNT + ' · À vous de jouer', gameColor('vitrine'))
+        .setAuthor({
+            name: 'REGADEX ARCADE  •  BLANC MANGER CACA',
+            iconURL: botAvatar || undefined
+        })
         .setDescription(
+            '## ✍️ La phrase à compléter\n' +
             '> **' + session.prompt + '**\n\n' +
-            '`' + progressBar(done, total, 12) + '` **' + done + '/' + total + '** réponses • Fin ' + expiry(session.deadline) + '\n' +
-            SEP + '\n' +
-            '🃏 **Cartes à placer :** `' + session.holes + '`\n' +
-            '👥 **Statut :** ' + cut(statusLines, 900)
+            'Choisis tes cartes dans le classeur : **' + session.holes + '** carte' + (session.holes > 1 ? 's' : '') +
+            ' à placer pour composer ta réponse.\n' +
+            '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+            '📥 **Réponses reçues**\n' + progressBar(done, total, 14) + '  **' + done + '/' + total + '**' +
+            '   ·   ⏳ **' + expiry(session.deadline) + '**'
         )
-        .setFooter({ text: 'Sélection 100% anonyme • Seules tes cartes classiques sont utilisables' });
+        .addFields({
+            name: '👥 Joueurs de cette manche',
+            value: cut(statusLines || '*Personne*', 900),
+            inline: false
+        })
+        .setFooter({
+            text: 'Réponse anonyme jusqu’au vote  •  Tes boutons apparaissent en privé  •  Manche ' +
+                session.round + ' sur ' + ROUND_COUNT
+        });
 
     return silent({
         embeds: [page],
         components: [row(
             button(controlId(session, 'pick', session.lobbyId, session.round), 'Choisir ma réponse', ButtonStyle.Primary, '🃏'),
-            button(controlId(session, 'binder'), 'Classeur', ButtonStyle.Secondary, '📖')
+            button(controlId(session, 'binder'), 'Ouvrir le classeur', ButtonStyle.Secondary, '📖')
         )]
     });
 }
@@ -1080,12 +1094,8 @@ function ranked(entries) {
 async function finishRound(session) {
     session.phase = 'reveal';
     await restoreSlowmode(session);
-    const authors = session.entries.map((entry, index) => '**' + (index + 1) + '.** ' +
-        escapeText(session.people.get(entry.user)?.name || 'Participant·e') + ' — **' + entry.score + ' pts**');
-    const reveal = embed('🎭 Manche ' + session.round + ' • Réponses dévoilées', gameColor('vitrine'))
-        .setDescription(cut(authors.join('\n') || 'Aucune réponse enregistrée.', 3900));
     if (session.board) await editPlayMessage(session, session.board, { components: [] });
-    session.board = await session.channel.send(silent({ embeds: [reveal] }));
+
     const top = ranked(session.entries.length >= 2 ? session.entries : []).filter(entry => entry.rank <= 3);
     for (const entry of top.filter(item => item.rank === 1)) {
         if (!session.best.length || entry.score > session.best[0].score) session.best = [];
@@ -1096,8 +1106,17 @@ async function finishRound(session) {
             prompt: session.prompt, cards: true
         });
     }
-    if (session.round < ROUND_COUNT) await startRound(session);
-    else await showPodium(session);
+
+    if (session.round < ROUND_COUNT) {
+        if (top.length) {
+            session.phase = 'intermission';
+            phaseTimer(session, 10_000, () => startRound(session));
+        } else {
+            await startRound(session);
+        }
+        return;
+    }
+    await showPodium(session);
 }
 
 function bestResponseDescription(best) {
