@@ -101,8 +101,8 @@ function buildHelpxCategoryEmbed(category, user, botAvatarUrl = null) {
                 `\`!jeupts [@membre]\` *(ou \`!points\`)* • Panneau interactif des points Motus, Rébus & Pendu\n\n` +
                 `### 🃏 Mini-jeux RegaDex\n` +
                 `\`!play\` dans <#1575601558458994758> • Calendrier et guides des mini-jeux publics de 17 h.\n` +
-                `\`!playx\` dans <#1480756332373213275> • Choisir le jeu et 1 à 3 bots (Epsys uniquement).\n\`!playx next\` avance le chrono, \`!playx stop\` arrête le test.\n` +
-                `\`!tcgforce [debat|blanc|zoom|devine|classement|fmk]\` • Lancer immédiatement un mini-jeu public (Epsys uniquement).\n\n` +
+                `\`!playx\` dans <#1480756332373213275> • Choisir un jeu et 1 à 3 bots (Epsys uniquement). Le bouton **Tester le dimanche** simule les votes aléatoires.\n\`!playx next\` avance le chrono, \`!playx stop\` arrête le test.\n` +
+                `\`!tcgforce [debat|blanc|zoom|devine|classement|fmk]\` • Forcer un jeu public dans le salon dédié (Epsys uniquement, inscriptions 30 s).\n\n` +
                 `\`!motustest [6/7]\` • \`!rebustest\` • \`!pendutest\` • Parties de test dans le salon actuel`
             );
     }
