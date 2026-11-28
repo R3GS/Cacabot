@@ -3080,7 +3080,7 @@ const CAVALE_IGNORED_WORDS = new Set([
 ]);
 
 function cavaleMeaningfulTokens(value) {
-    return answerKey(value).split(/\\s+/).filter(token =>
+    return answerKey(value).split(/\s+/).filter(token =>
         token.length >= 3 && !CAVALE_IGNORED_WORDS.has(token)
     );
 }
