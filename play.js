@@ -1690,8 +1690,9 @@ async function stage(ctx, width, height, opts = {}) {
     }
 
     if (!opts.noCornerStars) {
-        drawFivePointStar(ctx, 56, 52, 11, 5, accent, accent);
-        drawFivePointStar(ctx, width - 56, 52, 11, 5, accent, accent);
+        const starInset = Number.isFinite(opts.starInset) ? opts.starInset : 56;
+        drawFivePointStar(ctx, starInset, 52, 11, 5, accent, accent);
+        drawFivePointStar(ctx, width - starInset, 52, 11, 5, accent, accent);
     }
 }
 
@@ -3130,7 +3131,7 @@ async function cavaleZoom(session) {
 
     const canvas = createCanvas(720, 780);
     const ctx = canvas.getContext('2d');
-    await stage(ctx, canvas.width, canvas.height, { accent: '#00bcd4' });
+    await stage(ctx, canvas.width, canvas.height, { accent: '#00bcd4', starInset: 90 });
 
     drawGlassCard(ctx, 32, 18, canvas.width - 64, 54, { radius: 14, fill: 'rgba(13, 12, 24, 0.84)', border: 'rgba(0, 188, 212, 0.45)' });
     ctx.textAlign = 'center';
