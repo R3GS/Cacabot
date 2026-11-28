@@ -3067,6 +3067,33 @@ function matchesCard(query, target, names) {
     return best <= threshold && ![...names].some(name => !expected.has(name) && Math.abs(guess.length - name.length) <= best && distance(guess, name) <= best);
 }
 
+const CAVALE_IGNORED_WORDS = new Set([
+    'a', 'à', 'au', 'aux', 'avec', 'ce', 'ces', 'cette', 'ceux', 'chaque', 'chez',
+    'comme', 'dans', 'de', 'des', 'du', 'elle', 'elles', 'en', 'entre', 'est', 'et',
+    'eux', 'il', 'ils', 'je', 'la', 'le', 'les', 'leur', 'leurs', 'lui', 'ma', 'mais',
+    'me', 'meme', 'mes', 'moi', 'mon', 'ne', 'nos', 'notre', 'nous', 'on', 'ou', 'par',
+    'pas', 'pour', 'que', 'quel', 'quelle', 'quelles', 'quels', 'qui', 'sa', 'sans',
+    'se', 'ses', 'son', 'sous', 'sur', 'ta', 'te', 'tes', 'toi', 'ton', 'tous', 'tout',
+    'toute', 'toutes', 'tu', 'un', 'une', 'vos', 'votre', 'vous', 'y', 'c', 'd', 'j',
+    'l', 'm', 'n', 's', 't', 'qu', 'the', 'and', 'for', 'from', 'of', 'to', 'in', 'on',
+    'at', 'by', 'with', 'a', 'an'
+]);
+
+function cavaleMeaningfulTokens(value) {
+    return answerKey(value).split(/\\s+/).filter(token =>
+        token.length >= 3 && !CAVALE_IGNORED_WORDS.has(token)
+    );
+}
+
+function matchesCavaleCard(query, target, names) {
+    const guess = answerKey(query);
+    if (!guess || guess.length > 100) return false;
+    if (matchesCard(guess, target, names)) return true;
+
+    const expectedTokens = new Set([...nameKeys(target)].flatMap(cavaleMeaningfulTokens));
+    return cavaleMeaningfulTokens(guess).some(token => expectedTokens.has(token));
+}
+
 function cavaleStandingsLine(session) {
     const entries = ranked([...session.scores].map(([user, score]) => ({ user, score })));
     return entries.length
@@ -3180,7 +3207,7 @@ async function cavaleZoom(session) {
 async function cavaleGuess(session, message) {
     if (session.stopVoteActive || session.phase !== 'game' || session.state.step !== 'guess' || !session.players.has(message.author.id)) return false;
     const state = session.state;
-    if (Date.now() >= state.roundStarted + 300_000 || !matchesCard(message.content, state.cards[state.index], state.names)) return false;
+    if (Date.now() >= state.roundStarted + 300_000 || !matchesCavaleCard(message.content, state.cards[state.index], state.names)) return false;
     await revealCavale(session, message.author.id);
     return true;
 }
