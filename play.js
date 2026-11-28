@@ -20,8 +20,6 @@ const STATE_PATH = process.env.REGADEX_PLAY_STATE_PATH || path.join(__dirname, '
 const PLAY_ROLE_CHANNEL_ID = '1559082682313474059';
 const PARIS_TZ = 'Europe/Paris';
 const TCG_BG_PATH = path.resolve(process.cwd(), 'TCG', 'Assets', 'Background RegaDex B.jpg');
-const VITRINE_CLASSIC_BG_PATH = path.resolve(process.cwd(), 'Arcade', 'Backgrounds', 'Classic.jpg');
-const VITRINE_TOP_BG_PATH = path.resolve(process.cwd(), 'Assets', 'Backgrounds', 'Top.jpg');
 const IDLE_MS = 15 * 60_000;
 const JOIN_MS = 30_000;
 const READY_MS = 15_000;
@@ -1364,6 +1362,43 @@ function drawFivePointStar(ctx, cx, cy, outerR, innerR, fillStyle, glow = null) 
 }
 
 const playAssetCache = new Map();
+const missingAssetLogged = new Set();
+
+function findSubdirCI(parentDir, name) {
+    if (!parentDir || !fs.existsSync(parentDir)) return null;
+    const direct = path.join(parentDir, name);
+    try {
+        if (fs.existsSync(direct) && fs.statSync(direct).isDirectory()) return direct;
+        const target = name.toLowerCase();
+        const hit = fs.readdirSync(parentDir, { withFileTypes: true })
+            .find(entry => entry.isDirectory() && entry.name.toLowerCase() === target);
+        return hit ? path.join(parentDir, hit.name) : null;
+    } catch {
+        return null;
+    }
+}
+
+function findImageInSegments(baseDir, folderSegments, baseNames) {
+    let dir = baseDir;
+    for (const seg of folderSegments) {
+        dir = findSubdirCI(dir, seg);
+        if (!dir) return null;
+    }
+    try {
+        const files = fs.readdirSync(dir);
+        const exts = ['.jpg', '.jpeg', '.png', '.webp'];
+        for (const base of baseNames) {
+            for (const ext of exts) {
+                const target = (base + ext).toLowerCase();
+                const hit = files.find(f => f.toLowerCase() === target);
+                if (hit) return path.join(dir, hit);
+            }
+        }
+    } catch {
+        return null;
+    }
+    return null;
+}
 
 async function getPlayAssetImage(filePath) {
     if (!filePath) return null;
@@ -1378,6 +1413,36 @@ async function getPlayAssetImage(filePath) {
         console.warn('[PLAY] Fond indisponible (' + path.basename(filePath) + ') :', error.message);
     }
     return null;
+}
+
+async function getVitrineBg(isFinal) {
+    const cacheKey = isFinal ? 'vitrine:top' : 'vitrine:classic';
+    if (playAssetCache.has(cacheKey)) return playAssetCache.get(cacheKey);
+    const roots = [...new Set([process.cwd(), __dirname])];
+    const folderCandidates = isFinal
+        ? [['Assets', 'Backgrounds'], ['Arcade', 'Backgrounds'], ['Arcade', 'Assets', 'Backgrounds'], ['TCG', 'Assets', 'Backgrounds'], ['Assets'], ['Arcade']]
+        : [['Arcade', 'Backgrounds'], ['Arcade', 'Assets', 'Backgrounds'], ['Assets', 'Backgrounds'], ['TCG', 'Assets', 'Backgrounds'], ['Arcade']];
+    const nameCandidates = isFinal ? ['Top', 'Final', 'Podium'] : ['Classic', 'Classique'];
+    let resolved = null;
+    for (const root of roots) {
+        for (const segs of folderCandidates) {
+            resolved = findImageInSegments(root, segs, nameCandidates);
+            if (resolved) break;
+        }
+        if (resolved) break;
+    }
+    if (!resolved) {
+        if (!missingAssetLogged.has(cacheKey)) {
+            missingAssetLogged.add(cacheKey);
+            let rootDirs = [];
+            try { rootDirs = fs.readdirSync(process.cwd()); } catch {}
+            console.warn('[PLAY] Fond vitrine introuvable (' + cacheKey + ') | cwd=' + process.cwd() + ' | contenu=' + rootDirs.join(', '));
+        }
+        return null;
+    }
+    const img = await getPlayAssetImage(resolved);
+    if (img) playAssetCache.set(cacheKey, img);
+    return img;
 }
 
 async function getPlayBgCanvas() {
@@ -1640,10 +1705,7 @@ async function resultsCanvas(session, title, entries, options = {}) {
     const unit = options.unit || 'pts';
     const isVitrine = session.game === 'vitrine';
     const isFinalVitrinePodium = isVitrine && Boolean(options.podium && !options.cards);
-    const vitrineBg = isVitrine
-        ? await getPlayAssetImage(isFinalVitrinePodium ? VITRINE_TOP_BG_PATH : VITRINE_CLASSIC_BG_PATH)
-        : null;
-    const bg = isVitrine ? vitrineBg : await getPlayBgCanvas();
+    const bg = isVitrine ? await getVitrineBg(isFinalVitrinePodium) : await getPlayBgCanvas();
     const accent = options.accent || '#FFD20A';
 
     await stage(ctx, width, height, {
@@ -1652,7 +1714,7 @@ async function resultsCanvas(session, title, entries, options = {}) {
         blackBackdrop: isVitrine,
         bgOpacity: isVitrine ? 0.5 : 1,
         plainStage: isVitrine,
-        darkGrayBg: isVitrine && !bg,
+        darkGrayBg: false,
         noCornerStars: isVitrine
     });
 
