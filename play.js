@@ -834,13 +834,59 @@ async function updateLobby(session) {
     }
 }
 
-function pickPayload(session) {
+function drawWrappedLemonMilk(ctx, value, centerX, centerY, maxW, maxH, baseSize = 42, minSize = 20) {
+    const words = cleanCanvasText(value).split(/\s+/).filter(Boolean);
+    if (!words.length) return;
+    const makeLines = fontSize => {
+        ctx.font = 'bold ' + fontSize + 'px "LemonMilk", "Sans"';
+        const lines = [];
+        let line = '';
+        for (const word of words) {
+            const candidate = line ? line + ' ' + word : word;
+            if (line && ctx.measureText(candidate).width > maxW) { lines.push(line); line = word; }
+            else line = candidate;
+        }
+        if (line) lines.push(line);
+        return lines;
+    };
+    let fontSize = baseSize;
+    let lines = makeLines(fontSize);
+    while (fontSize > minSize && lines.length * fontSize * 1.28 > maxH) { fontSize--; lines = makeLines(fontSize); }
+    ctx.save();
+    ctx.fillStyle = '#f4f7fb';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold ' + fontSize + 'px "LemonMilk", "Sans"';
+    const lineHeight = fontSize * 1.28;
+    const startY = centerY - ((lines.length - 1) * lineHeight) / 2;
+    lines.forEach((line, index) => ctx.fillText(line, centerX, startY + index * lineHeight, maxW));
+    ctx.restore();
+}
+
+async function phraseCanvas(value) {
+    const width = 1200;
+    const height = 420;
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+    await stage(ctx, width, height, { accent: '#00bcd4', noCornerStars: true });
+    drawGlassCard(ctx, 36, 30, width - 72, height - 60, {
+        radius: 22,
+        fill: 'rgba(13, 12, 24, 0.84)',
+        border: 'rgba(0, 188, 212, 0.55)',
+        lineWidth: 2.5
+    });
+    drawWrappedLemonMilk(ctx, value, width / 2, height / 2, width - 150, height - 112, 46, 22);
+    return exportPng(canvas);
+}
+
+async function pickPayload(session) {
     const done = session.answers.size;
     const total = session.roundPlayers.size;
     const statusLines = [...session.roundPlayers].map(uid => {
         const pName = escapeText(session.people.get(uid)?.name || 'Membre');
         return (session.answers.has(uid) ? '✅ ' : '⏳ ') + pName;
     }).join('  •  ');
+    const phraseImage = await phraseCanvas(session.prompt);
 
     const botAvatar = session.channel.client.user?.displayAvatarURL?.({ extension: 'png', size: 64 });
     const page = embed('🎭 Manche ' + session.round + '/' + ROUND_COUNT + ' · À vous de jouer', gameColor('vitrine'))
@@ -850,13 +896,14 @@ function pickPayload(session) {
         })
         .setDescription(
             '## ✍️ La phrase à compléter\n' +
-            '> **' + session.prompt + '**\n\n' +
-            'Choisis tes cartes dans le classeur : **' + session.holes + '** carte' + (session.holes > 1 ? 's' : '') +
+            'La phrase est affichée dans le visuel ci-dessous. Choisis tes cartes dans le classeur : ' +
+            '**' + session.holes + '** carte' + (session.holes > 1 ? 's' : '') +
             ' à placer pour composer ta réponse.\n' +
             '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n' +
             '📥 **Réponses reçues**\n' + progressBar(done, total, 14) + '  **' + done + '/' + total + '**' +
             '   ·   ⏳ **' + expiry(session.deadline) + '**'
         )
+        .setImage('attachment://phrase.png')
         .addFields({
             name: '👥 Joueurs de cette manche',
             value: cut(statusLines || '*Personne*', 900),
@@ -869,9 +916,8 @@ function pickPayload(session) {
 
     return silent({
         embeds: [page],
-        components: [row(
-            button(controlId(session, 'pick', session.lobbyId, session.round), 'Choisir ma réponse', ButtonStyle.Primary, '🃏')
-        )]
+        files: [new AttachmentBuilder(phraseImage, { name: 'phrase.png' })],
+        components: [row(button(controlId(session, 'pick', session.lobbyId, session.round), 'Choisir ma réponse', ButtonStyle.Primary, '🃏'))]
     });
 }
 
@@ -897,7 +943,7 @@ async function startRound(session) {
     session.drafts = new Map();
     session.deadline = Date.now() + PICK_MS;
     if (starting && session.lobby) await editPlayMessage(session, session.lobby, { components: [] });
-    session.board = await session.channel.send(pickPayload(session));
+    session.board = await session.channel.send(await pickPayload(session));
     phaseTimer(session, Math.max(1, session.deadline - Date.now()), () => startRatings(session));
 }
 
@@ -1034,7 +1080,7 @@ function drawCenteredSegments(ctx, segments, centerX, centerY, maxW, baseSize = 
     ctx.restore();
 }
 
-function draftPayload(session, user, draft) {
+async function draftPayload(session, user, draft) {
     const owned = playCardsFor(session, user);
     const cards = draft.cards.map(id => owned.find(c => c.id === id)).filter(Boolean);
     const key = [session.lobbyId, session.round, user];
@@ -1044,14 +1090,16 @@ function draftPayload(session, user, draft) {
     const queryText = String(draft.query || '').trim();
     const chosenLine = cards.length ? '\n🃏 **Sélection :** ' + cards.map(c => '**' + escapeText(c.name) + '**').join(' · ') : '';
     const filterLine = queryText ? '\n🔎 **Filtre actif :** `' + escapeText(cut(queryText, 60)) + '` (' + available.length + ' résultat' + (available.length > 1 ? 's' : '') + ')' : '';
+    const phraseImage = await phraseCanvas(completePhrase(session.prompt, cards));
     const preview = embed('🃏 Ta réponse • Manche ' + session.round + '/' + ROUND_COUNT, gameColor('vitrine'))
         .setDescription(
-            '> **' + escapeText(completePhrase(session.prompt, cards)) + '**\n\n' +
+            'Ta phrase complétée est affichée dans le visuel ci-dessous.\n\n' +
             '📦 **Cartes choisies :** `' + cards.length + '/' + session.holes + '`' +
             chosenLine +
             filterLine +
             (session.answers.has(user) ? '\n✅ *Ta réponse précédente est déjà enregistrée.*' : '')
         )
+        .setImage('attachment://phrase.png')
         .setFooter({ text: 'Page ' + (draft.page + 1) + '/' + pages + ' • ' + available.length + ' carte' + (available.length > 1 ? 's' : '') + ' disponible' + (available.length > 1 ? 's' : '') });
 
     const controls = [
@@ -1091,7 +1139,7 @@ function draftPayload(session, user, draft) {
     }
     navButtons.push(button(controlId(session, 'pbinder', ...key), 'Classeur', ButtonStyle.Secondary, '📖'));
     components.push(row(...navButtons));
-    return { embeds: [preview], components };
+    return { embeds: [preview], attachments: [], files: [new AttachmentBuilder(phraseImage, { name: 'phrase.png' })], components };
 }
 
 async function applySlowmode() {}
@@ -1120,7 +1168,7 @@ async function showRating(session) {
     if (!entry) { await finishRound(session); return; }
     session.phase = 'reveal';
     if (session.board) await editPlayMessage(session, session.board, { components: [] });
-    const cardImage = await drawVoteCards(entry.cards).catch(error => {
+    const cardImage = await drawVoteCards(entry.cards, { phrase: completePhrase(session.prompt, entry.cards), accent: '#00bcd4' }).catch(error => {
         console.warn('[PLAY] Aperçu des cartes :', error);
         return null;
     });
@@ -1128,7 +1176,7 @@ async function showRating(session) {
     const page = embed('🎭 Manche ' + session.round + '/' + ROUND_COUNT + ' • Réponse ' +
         (session.voteIndex + 1) + '/' + session.entries.length, gameColor('vitrine'))
         .setAuthor({ name: 'RegaDex Arcade • Vote anonyme' })
-        .setDescription('> ' + formatPhraseMarkdown(session.prompt, entry.cards) + '\n\n⏳ Clôture ' + expiry(session.deadline) + ' *— sans note, elle vaut Meh (0).*')
+        .setDescription('Regarde la phrase et les cartes dans le visuel, puis note cette réponse.\n\n⏳ Clôture ' + expiry(session.deadline) + ' *— sans note, elle vaut Meh (0).*')
         .setFooter({ text: '❤️ J’adore ! est utilisable une fois par session • Tu ne notes que les réponses des autres' });
     if (cardImage) page.setImage('attachment://reponse.png');
     session.board = await session.channel.send(silent({
@@ -1469,19 +1517,25 @@ function encodeJpeg(canvas, quality = 0.92) {
 
 async function drawVoteCards(cards, options = {}) {
     const count = Math.max(1, cards.length);
+    const phrase = options.phrase ? cleanCanvasText(options.phrase) : '';
     const cardW = options.cardW || 212;
     const cardH = Math.round(cardW * 1.4);
     const gap = options.gap || 28;
     const padX = 44;
     const numbered = Boolean(options.numbered);
-    const headerH = options.header ? (numbered ? 92 : 70) : (numbered ? 46 : 24);
+    const headerH = phrase ? 244 : (options.header ? (numbered ? 92 : 70) : (numbered ? 46 : 24));
     const width = Math.max(540, padX * 2 + count * cardW + (count - 1) * gap);
     const height = headerH + cardH + 80;
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
     const bg = await getPlayBgCanvas();
 
-    await stage(ctx, width, height, { bg, accent: options.accent || '#a78bfa' });
+    await stage(ctx, width, height, { bg, accent: options.accent || '#a78bfa', noCornerStars: Boolean(phrase) });
+
+    if (phrase) {
+        drawGlassCard(ctx, 26, 14, width - 52, headerH - 24, { radius: 14, fill: 'rgba(13, 12, 24, 0.84)', border: 'rgba(0, 188, 212, 0.55)', lineWidth: 2 });
+        drawWrappedLemonMilk(ctx, phrase, width / 2, 14 + (headerH - 24) / 2, width - 92, headerH - 48, 32, 18);
+    }
 
     if (options.header) {
         drawGlassCard(ctx, 26, 14, width - 52, 48, { radius: 14, fill: 'rgba(12, 15, 26, 0.86)', border: options.accent || '#a78bfa', lineWidth: 2 });
@@ -1733,9 +1787,7 @@ async function resultsCanvas(session, title, entries, options = {}) {
     ctx.fillText(cleanCanvasText(title), width / 2, options.prompt ? 64 : 72, width - 160);
 
     if (options.prompt) {
-        ctx.fillStyle = '#cbd5e1';
-        ctx.font = '22px Sans';
-        ctx.fillText(cleanCanvasText(options.prompt), width / 2, 114, width - 140);
+        drawWrappedLemonMilk(ctx, options.prompt, width / 2, 114, width - 140, 48, 24, 17);
     }
 
     if (!entries.length) return encodeJpeg(canvas, 0.92);
@@ -1822,7 +1874,7 @@ async function resultsCanvas(session, title, entries, options = {}) {
             ctx.fillStyle = '#FFD700';
             ctx.font = 'bold 24px "LemonMilk", "Sans"';
             ctx.fillText(cleanCanvasText('MEILLEURE RÉPONSE • ' + showcase.score + ' ' + unit), width / 2, extraY + 38, width - 220);
-            drawCenteredSegments(ctx, buildPhraseSegments(showcase.prompt, showcase.cards), width / 2, extraY + 96, width - 140, 26, 13);
+            drawWrappedLemonMilk(ctx, completePhrase(showcase.prompt, showcase.cards), width / 2, extraY + 120, width - 140, 112, 28, 17);
             const authorName = cleanCanvasText(session.people.get(showcase.user)?.name || 'Participant·e');
             ctx.save();
             ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
@@ -2458,7 +2510,7 @@ async function pickInteraction(interaction, session, action, parts) {
     const isEphemeralMsg = Boolean(interaction.message?.flags?.has(MessageFlags.Ephemeral));
 
     if (action === 'pick') {
-        return interaction.reply({ ...draftPayload(session, id, draft), flags: MessageFlags.Ephemeral });
+        return interaction.reply({ ...await draftPayload(session, id, draft), flags: MessageFlags.Ephemeral });
     }
     if (action === 'query') {
         return interaction.showModal(searchModal(session, id, draft));
@@ -2466,7 +2518,7 @@ async function pickInteraction(interaction, session, action, parts) {
     if (action === 'search') {
         draft.query = interaction.fields.getTextInputValue('query').trim();
         draft.page = 0;
-        const payload = draftPayload(session, id, draft);
+        const payload = await draftPayload(session, id, draft);
         if (isEphemeralMsg) return interaction.update(payload);
         return interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
     }
@@ -2497,18 +2549,21 @@ async function pickInteraction(interaction, session, action, parts) {
         const selected = draft.cards.map(cardId => owned.find(card => card.id === cardId));
         if (selected.length !== session.holes || selected.some(card => !card)) return privateResponse(interaction, 'Choisis toutes les cartes dans ton classeur.');
         session.answers.set(id, { user: id, cards: selected, votes: new Map(), score: 0 });
+        const confirmImage = await phraseCanvas(completePhrase(session.prompt, selected));
         const confirmPayload = {
-            embeds: [embed('✅ Réponse enregistrée (secrète)', gameColor('vitrine')).setDescription('> **' + escapeText(completePhrase(session.prompt, selected)) + '**')],
-            components: [], files: [], attachments: []
+            embeds: [embed('✅ Réponse enregistrée (secrète)', gameColor('vitrine'))
+                .setDescription('Ta réponse est enregistrée et restera anonyme jusqu’au vote.')
+                .setImage('attachment://phrase.png')],
+            components: [], attachments: [], files: [new AttachmentBuilder(confirmImage, { name: 'phrase.png' })]
         };
         if (isEphemeralMsg) await interaction.update(confirmPayload);
         else await interaction.reply({ ...confirmPayload, flags: MessageFlags.Ephemeral });
         if (session.answers.size >= session.roundPlayers.size) await startRatings(session);
-        else await editPlayMessage(session, session.board, pickPayload(session));
+        else await editPlayMessage(session, session.board, await pickPayload(session));
         return;
     }
-    const payload = draftPayload(session, id, draft);
-    if (isEphemeralMsg) return interaction.update({ ...payload, files: [], attachments: [] });
+    const payload = await draftPayload(session, id, draft);
+    if (isEphemeralMsg) return interaction.update(payload);
     return interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
 }
 
@@ -2770,7 +2825,7 @@ async function resumeFromStopVote(session) {
         phaseTimer(session, Math.max(1000, saved.deadlineRemaining), saved.advancePhase);
     }
     if (saved.phase === 'lobby' && session.lobby) await updateLobby(session).catch(() => {});
-    else if (saved.phase === 'pick' && session.board) await editPlayMessage(session, session.board, pickPayload(session));
+    else if (saved.phase === 'pick' && session.board) await editPlayMessage(session, session.board, await pickPayload(session));
     else if (saved.phase === 'game' && session.state?.step === 'socialChoices') await renderSocialBoard(session);
 }
 
