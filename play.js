@@ -174,7 +174,7 @@ const cleanCanvasText = str => String(str || '')
     .replace(/\*\*|__|~~|`/g, '')
     .replace(/·/g, '•')
     .replace(/[\p{Extended_Pictographic}\uFE00-\uFE0F\u200D\u20E3]/gu, '')
-    .replace(/[^\u0020-\u007E\u00C0-\u017F\u2013-\u2022\u20AC]/g, '')
+    .replace(/[^\u0020-\u007E\u00C0-\u017F\u2013-\u2022\u2026\u20AC\u3014\u3015]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 const cut = (text, size) => String(text).slice(0, size).replace(/[\uD800-\uDBFF]$/, '');
@@ -868,8 +868,7 @@ function pickPayload(session) {
     return silent({
         embeds: [page],
         components: [row(
-            button(controlId(session, 'pick', session.lobbyId, session.round), 'Choisir ma réponse', ButtonStyle.Primary, '🃏'),
-            button(controlId(session, 'binder'), 'Ouvrir le classeur', ButtonStyle.Secondary, '📖')
+            button(controlId(session, 'pick', session.lobbyId, session.round), 'Choisir ma réponse', ButtonStyle.Primary, '🃏')
         )]
     });
 }
@@ -1002,11 +1001,11 @@ function draftPayload(session, user, draft) {
     const controls = [
         button(controlId(session, 'query', ...key), 'Rechercher', ButtonStyle.Secondary, '🔎'),
         button(controlId(session, 'clearfilter', ...key), 'Effacer filtre', ButtonStyle.Secondary, '✖️').setDisabled(!queryText),
-        button(controlId(session, 'clear', ...key), 'Reset', ButtonStyle.Secondary, '🧹').setDisabled(cards.length === 0),
-        button(controlId(session, 'swap', ...key), 'Inverser', ButtonStyle.Secondary, '🔄').setDisabled(cards.length !== 2),
+        ...(session.holes === 2 ? [button(controlId(session, 'clear', ...key), 'Reset', ButtonStyle.Secondary, '🧹').setDisabled(cards.length === 0)] : []),
+        ...(session.holes === 2 ? [button(controlId(session, 'swap', ...key), 'Inverser', ButtonStyle.Secondary, '🔄').setDisabled(cards.length !== 2)] : []),
         button(controlId(session, 'lock', ...key), 'Valider', ButtonStyle.Success, '✅').setDisabled(cards.length !== session.holes)
     ];
-    const components = [row(...controls)];
+    const components = [row(...controls), row(button(controlId(session, 'binder'), 'Ouvrir le classeur', ButtonStyle.Secondary, '📖'))];
     if (cards.length < session.holes && available.length) {
         const options = available.slice(draft.page * 25, (draft.page + 1) * 25).map(card => {
             const rEmoji = (RARITY_STYLE[card.rarity] || RARITY_STYLE.Commune).emoji;
@@ -1103,7 +1102,10 @@ async function finishRound(session) {
     }
     for (let i = 0; i < top.length; i += 3) {
         await sendResult(session, 'Manche ' + session.round + ' • Résultats', top.slice(i, i + 3), {
-            prompt: session.prompt, cards: true
+            prompt: session.prompt, cards: true,
+            footer: session.round < ROUND_COUNT
+                ? 'Début de la manche ' + (session.round + 1) + '/' + ROUND_COUNT + ' dans 10 secondes !'
+                : 'Podium final dans 10 secondes !'
         });
     }
 
@@ -1116,7 +1118,8 @@ async function finishRound(session) {
         }
         return;
     }
-    await showPodium(session);
+    session.phase = 'intermission';
+    phaseTimer(session, 10_000, () => showPodium(session));
 }
 
 function bestResponseDescription(best) {
@@ -1471,15 +1474,15 @@ async function stage(ctx, width, height, opts = {}) {
         ctx.fillRect(0, 0, width, height);
     } else {
         const background = ctx.createLinearGradient(0, 0, 0, height);
-        background.addColorStop(0, '#130e24');
-        background.addColorStop(0.65, '#26143d');
-        background.addColorStop(1, '#0c0a18');
+        background.addColorStop(0, '#34363b');
+        background.addColorStop(0.55, '#202226');
+        background.addColorStop(1, '#101114');
         ctx.fillStyle = background;
         ctx.fillRect(0, 0, width, height);
     }
 
     const accent = opts.accent || '#FFD20A';
-    for (const center of [width * 0.22, width * 0.78]) {
+    if (!opts.monochrome) for (const center of [width * 0.22, width * 0.78]) {
         const beam = ctx.createRadialGradient(center, 0, 16, center, height * 0.28, height * 0.85);
         beam.addColorStop(0, accent.startsWith('#') && accent.length === 7 ? accent + '30' : 'rgba(255, 210, 10, 0.20)');
         beam.addColorStop(1, 'rgba(0, 0, 0, 0)');
@@ -1496,8 +1499,6 @@ async function stage(ctx, width, height, opts = {}) {
         });
     }
 
-    drawFivePointStar(ctx, 56, 52, 11, 5, accent, accent);
-    drawFivePointStar(ctx, width - 56, 52, 11, 5, accent, accent);
 }
 
 async function resultsCanvas(session, title, entries, options = {}) {
@@ -1508,10 +1509,9 @@ async function resultsCanvas(session, title, entries, options = {}) {
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
     const unit = options.unit || 'pts';
-    const bg = await getPlayBgCanvas();
     const accent = options.accent || '#FFD20A';
 
-    await stage(ctx, width, height, { bg, accent });
+    await stage(ctx, width, height, { bg: null, accent, monochrome: true });
 
     drawGlassCard(ctx, 48, 28, width - 96, options.prompt ? 114 : 88, {
         radius: 20,
@@ -1572,7 +1572,7 @@ async function resultsCanvas(session, title, entries, options = {}) {
             });
 
             const cx = pod.x + pod.w / 2;
-            const avR = first ? 66 : 52;
+            const avR = 56;
             const avY = pod.y + avR + 28;
             drawAvatar(ctx, avatars[pod.idx], player, cx, avY, avR, style.ring);
 
@@ -1605,8 +1605,6 @@ async function resultsCanvas(session, title, entries, options = {}) {
                 border: '#FFD700',
                 lineWidth: 2.5
             });
-            drawFivePointStar(ctx, 96, extraY + 42, 13, 5, '#FFD700', '#FFD700');
-            drawFivePointStar(ctx, width - 96, extraY + 42, 13, 5, '#FFD700', '#FFD700');
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillStyle = '#FFD700';
@@ -1667,23 +1665,31 @@ async function resultsCanvas(session, title, entries, options = {}) {
 
         if (options.cards) {
             const cards = entry.cards || [];
-            await Promise.all(cards.map((card, cardIndex) => {
-                const w = first ? 168 : 146;
-                const t = cardTheme(card);
-                return drawCard(
-                    ctx, card,
-                    x - (cards.length * (w + 14) - 14) / 2 + cardIndex * (w + 14),
-                    172, w, w * 1.4,
-                    { glow: t.glow, border: t.hex, radius: 12 }
-                );
-            }));
+            const w = 154;
+            const h = Math.round(w * 1.4);
+            if (cards.length > 1) {
+                for (let cardIndex = 0; cardIndex < cards.length; cardIndex++) {
+                    const card = cards[cardIndex];
+                    const t = cardTheme(card);
+                    const offset = cardIndex === 0 ? -42 : 38;
+                    await drawCard(ctx, card, x + offset - w / 2, 158 + cardIndex * 22, w, h, {
+                        glow: t.glow, border: t.hex, radius: 12
+                    });
+                }
+            } else if (cards[0]) {
+                const t = cardTheme(cards[0]);
+                await drawCard(ctx, cards[0], x - w / 2, 158, w, h, {
+                    glow: t.glow, border: t.hex, radius: 12
+                });
+            }
         }
 
-        const avatarY = options.cards ? 496 : 240;
-        drawAvatar(ctx, avatars[index], player, x, avatarY, first ? 54 : 44, style.ring);
-        const top = avatarY + (first ? 68 : 58);
+        const avatarY = options.cards ? 450 : 240;
+        const avatarRadius = 48;
+        drawAvatar(ctx, avatars[index], player, x, avatarY, avatarRadius, style.ring);
+        const top = options.cards ? 510 : avatarY + 62;
         const blockWidth = Math.min(390, colW - 28);
-        const blockHeight = stageHeight - 36 - top;
+        const blockHeight = options.cards ? 264 : stageHeight - 36 - top;
 
         drawGlassCard(ctx, x - blockWidth / 2, top, blockWidth, blockHeight, {
             radius: 18,
@@ -2014,6 +2020,7 @@ async function sendResult(session, title, entries, options = {}) {
         escapeText(session.people.get(entry.user)?.name || 'Participant·e') + '** — `' + entry.score + ' ' + unit + '`');
     const description = [lines.join('\n'), options.description].filter(Boolean).join('\n' + SEP + '\n');
     if (description) result.setDescription(cut(description, 4096));
+    if (options.footer) result.setFooter({ text: options.footer });
     const image = await resultsCanvas(session, title, entries, options).catch(error => {
         console.warn('[PLAY] Canvas des résultats :', error);
         return null;
@@ -2064,7 +2071,9 @@ async function showBinder(interaction, session, action, parts) {
     const theme = rawTheme === 'W' ? 'W' : 'B';
     const size = BINDER_SIZES.includes(rawSize) ? rawSize : '18';
 
-    if (action === 'binder') await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const replacingPicker = action === 'binder' && session.game === 'vitrine' &&
+        Boolean(interaction.message?.flags?.has(MessageFlags.Ephemeral));
+    if (action === 'binder' && !replacingPicker) await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     else await interaction.deferUpdate();
     
     const result = await renderPlayBinder(interaction.user, set, page, theme, size);
@@ -2089,6 +2098,9 @@ async function showBinder(interaction, session, action, parts) {
     )];
     if (result.sets.length > 1) components.push(row(new StringSelectMenuBuilder().setCustomId(controlId(session, 'binderset', theme, curSize))
         .setPlaceholder('Changer de set').addOptions(result.sets.map(item => ({ label: item.name, value: String(item.id), default: item.id === result.set })))));
+    if (session.game === 'vitrine' && interaction.message?.flags?.has(MessageFlags.Ephemeral)) {
+        components.push(row(button(controlId(session, 'backpick', session.lobbyId, session.round, interaction.user.id), 'Retour au choix de la carte', ButtonStyle.Primary, '↩️')));
+    }
     await interaction.editReply({
         embeds: [view], components, attachments: [], files: [new AttachmentBuilder(result.buffer, { name: 'classeur.jpg' })]
     });
@@ -2209,6 +2221,9 @@ async function pickInteraction(interaction, session, action, parts) {
     if (action === 'pick') {
         return interaction.reply({ ...draftPayload(session, id, draft), flags: MessageFlags.Ephemeral });
     }
+    if (action === 'backpick') {
+        return interaction.update(draftPayload(session, id, draft));
+    }
     if (action === 'query') {
         return interaction.showModal(searchModal(session, id, draft));
     }
@@ -2281,7 +2296,7 @@ async function sessionInteraction(interaction, session, action, parts) {
     if (['settings', 'settingsLate', 'settingsInvite', 'settingsUsers', 'skipClock'].includes(action))
         return sessionSettings(interaction, session, action, parts);
     if (action === 'rate') return rateResponse(interaction, session, parts);
-    if (['pick', 'query', 'search', 'prev', 'next', 'clear', 'clearfilter', 'swap', 'card', 'lock'].includes(action))
+    if (['pick', 'query', 'search', 'prev', 'next', 'clear', 'clearfilter', 'swap', 'card', 'lock', 'backpick'].includes(action))
         return pickInteraction(interaction, session, action, parts);
     if (action === 'join') {
         if (session.test || session.optedOut.has(user) || (session.invited && !session.invited.has(user)))
